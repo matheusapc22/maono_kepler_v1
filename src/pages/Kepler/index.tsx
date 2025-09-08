@@ -93,8 +93,6 @@ const KeplerGl = injectComponents([
   replaceDatasetSection(),
 ]);
 
-/* eslint-enable no-unused-vars */
-
 // This implements the default behavior from styled-components v5
 function shouldForwardProp(propName, target) {
   if (typeof target === "string") {
