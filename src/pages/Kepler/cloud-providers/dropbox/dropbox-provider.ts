@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
+// @ts-nocheck
 
 // Dropbox SDK (UMD build)
 import * as DropboxSDK from "dropbox";
