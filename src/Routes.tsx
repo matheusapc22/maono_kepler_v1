@@ -1,23 +1,69 @@
-import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router";
+// AppRoutes.tsx
+import React, { lazy, Suspense, useEffect } from "react";
+import { Routes, Route, useLocation } from "react-router";
+import {
+  getCloudProvider,
+  DEFAULT_CLOUD_PROVIDER,
+} from "./pages/Kepler/cloud-providers";
 
-const KeplerAppRoutes = lazy(() => import("./pages/Kepler"));
+const KeplerApp = lazy(() => import("./pages/Kepler"));
 
-const AppRoutes = () => {
+const WithSuspense: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
+  <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
+    {children}
+  </Suspense>
+);
+
+const AuthCallback: React.FC = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const authProvider = getCloudProvider(DEFAULT_CLOUD_PROVIDER);
+
+    // @ts-expect-error: Unresolved
+    const token = authProvider.getAccessTokenFromLocation(location);
+
+    if (window.opener) {
+      window.opener.postMessage({ token }, window.location.origin);
+
+      if (typeof window.close === "function") {
+        window.close();
+      }
+    }
+  }, [location]);
+
+  return (
+    <div style={{ padding: 16 }}>
+      Authenticating… you can close this window.
+    </div>
+  );
+};
+
+const NotFound: React.FC = () => (
+  <div style={{ padding: 16 }}>Page not found.</div>
+);
+
+const AppRoutes: React.FC = () => {
   return (
     <Routes>
+      <Route path="/" element={<KeplerApp />} />
+      <Route path="/auth" element={<AuthCallback />} />
       <Route
-        path="/"
+        path="map"
         element={
-          <Suspense>
-            <KeplerAppRoutes />
-          </Suspense>
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
         }
       />
+      <Route path="(:id)" element={<KeplerApp />} />
+      <Route path="map/:provider" element={<KeplerApp />} />
+      <Route path="demo/map" element={<KeplerApp />} />
+      <Route path="demo/map/:provider" element={<KeplerApp />} />
 
-      <Route path="map" element={<KeplerAppRoutes />} />
-      <Route path="(:id)" element={<KeplerAppRoutes />} />
-      <Route path="map/:provider" element={<KeplerAppRoutes />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };

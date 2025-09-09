@@ -26,3 +26,7 @@ body {
 .file-drop-target > :last-child > :last-child {
   display: none;
 }
+
+.export-cloud-modal :last-child > :first-child > :last-child .title {
+  font-size: 0 !important;
+}
