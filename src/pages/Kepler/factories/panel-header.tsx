@@ -9,15 +9,12 @@ import {
   USER_GUIDE_DOC,
 } from "@kepler.gl/constants";
 import Logo from "../../../assets/images/logo-2.png";
+import checkAdminUser from "../utils/is-admin-user";
 
 export function CustomPanelHeaderFactory(...deps) {
   const PanelHeader = PanelHeaderFactory(...deps);
   const defaultActionItems = PanelHeader.defaultProps.actionItems;
-
-  const queryString = window.location.search;
-  const params = new URLSearchParams(queryString);
-  const adminUserParameter = params.get("user");
-  const isAdminUser = adminUserParameter === "admin";
+  const isAdminUser = checkAdminUser();
 
   const CustomKeplerLogo = () => {
     /*
