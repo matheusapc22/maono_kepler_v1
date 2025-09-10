@@ -20,6 +20,7 @@ import keplerGlReducer, {
 import KeplerGlSchema from "@kepler.gl/schemas";
 import { KeplerTable } from "@kepler.gl/table";
 import { getApplicationConfig } from "@kepler.gl/utils";
+import { LOCALE_CODES } from "@kepler.gl/localization";
 
 // import {getApplicationConfig, initApplicationConfig} from '@kepler.gl/utils';
 // import keplerGlDuckdbPlugin, {KeplerGlDuckDbTable, DuckDBWasmAdapter} from '@kepler.gl/duckdb';
@@ -102,6 +103,7 @@ const demoReducer = combineReducers({
     // we are going to set the mapbox access token to be used
     // in the exported file
     uiState: {
+      locale: LOCALE_CODES.pt,
       exportMap: {
         ...DEFAULT_EXPORT_MAP,
         [EXPORT_MAP_FORMATS.HTML]: {
