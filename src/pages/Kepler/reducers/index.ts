@@ -37,6 +37,7 @@ import {
 
 import { CLOUD_PROVIDERS_CONFIGURATION } from "../constants/default-settings";
 import { generateHashId } from "../utils/strings";
+import checkAdminUser from "../utils/is-admin-user";
 
 // initialize kepler demo-app with DuckDB plugin
 /*
@@ -57,7 +58,7 @@ initApplicationConfig({
   useArrowProgressiveLoading: false
 });
 */
-
+const isAdminUser = checkAdminUser();
 const { DEFAULT_MAP_CONTROLS } = uiStateUpdaters;
 
 // INITIAL_APP_STATE
@@ -113,7 +114,18 @@ const demoReducer = combineReducers({
         },
       },
       mapControls: {
-        ...DEFAULT_MAP_CONTROLS,
+        ...(!isAdminUser
+          ? {
+              mapLegend: {
+                show: true,
+                active: false,
+                disableClose: false,
+                activeMapIndex: 0,
+                disableEdit: false,
+              },
+            }
+          : DEFAULT_MAP_CONTROLS),
+
         // TODO find a better way not to add extra controls optionally - from plugin?
         ...((getApplicationConfig().plugins || []).some(
           (p) => p.name === "duckdb"
