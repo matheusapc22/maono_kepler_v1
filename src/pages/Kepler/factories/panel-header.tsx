@@ -30,21 +30,6 @@ export function CustomPanelHeaderFactory(...deps) {
     );
   };
 
-  // const ShareButton = connect((root: any, own: any) => ({
-  //   rootState: root,
-  //   keplerGlId: own.id,
-  // }))((props: any) => {
-  //   return (
-  //     <button
-  //       className="px-2 py-1 border rounded border-white text-white"
-  //       title="Share URL"
-  //       onClick={props?.onShareMap}
-  //     >
-  //       Share
-  //     </button>
-  //   );
-  // });
-
   PanelHeader.defaultProps = {
     ...PanelHeader.defaultProps,
     logoComponent: CustomKeplerLogo,

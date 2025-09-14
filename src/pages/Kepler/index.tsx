@@ -81,8 +81,11 @@ import {
 import { injectComponents } from "@kepler.gl/components";
 import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
+import { replaceSidePanel } from "./factories/side-panel";
 
 const KeplerGl = injectComponents([
+  // @ts-expect-error: Unresolved
+  replaceSidePanel(),
   // @ts-expect-error: Unresolved
   replaceLoadDataModal(),
   // @ts-expect-error: Unresolved
