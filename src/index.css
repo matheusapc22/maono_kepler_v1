@@ -34,3 +34,7 @@ body {
 .side-panel__tabs .side-panel__tab:nth-child(3) {
   display: none;
 }
+
+.hide-layer-header .layer-manager-header {
+  display: none !important;
+}

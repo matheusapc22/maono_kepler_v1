@@ -2,7 +2,13 @@
 // Copyright contributors to the kepler.gl project
 // @ts-nocheck
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import AutoSizer from "react-virtualized/dist/commonjs/AutoSizer";
 import styled, { ThemeProvider, StyleSheetManager } from "styled-components";
 import Window from "global/window";
@@ -82,6 +88,7 @@ import { injectComponents } from "@kepler.gl/components";
 import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
 import { replaceSidePanel } from "./factories/side-panel";
+import checkAdminUser from "./utils/is-admin-user";
 
 const KeplerGl = injectComponents([
   // @ts-expect-error: Unresolved
@@ -660,6 +667,8 @@ const App = (props) => {
     _replaceSyncedFilterWTripLayer,
   ]);
 
+  const isAdminUser = useMemo(() => checkAdminUser(), []);
+
   return (
     <StyleSheetManager shouldForwardProp={shouldForwardProp}>
       <ThemeProvider theme={theme}>
@@ -687,7 +696,10 @@ const App = (props) => {
             >
               <Announcement onDisable={_disableBanner} />
             </Banner>
-            <div style={CONTAINER_STYLE}>
+            <div
+              style={CONTAINER_STYLE}
+              className={!isAdminUser ? "hide-layer-header" : ""}
+            >
               <PanelGroup direction="horizontal">
                 <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
                   <PanelGroup direction="vertical">
