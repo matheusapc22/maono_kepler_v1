@@ -38,3 +38,7 @@ body {
 .hide-layer-header .layer-manager-header {
   display: none !important;
 }
+
+.hide-layer-toggle-option .layer-panel-toggle-option {
+  display: none !important;
+}

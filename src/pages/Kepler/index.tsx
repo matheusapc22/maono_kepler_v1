@@ -698,7 +698,9 @@ const App = (props) => {
             </Banner>
             <div
               style={CONTAINER_STYLE}
-              className={!isAdminUser ? "hide-layer-header" : ""}
+              className={
+                !isAdminUser ? "hide-layer-header hide-layer-toggle-option" : ""
+              }
             >
               <PanelGroup direction="horizontal">
                 <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
