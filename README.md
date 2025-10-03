@@ -1,69 +1,72 @@
-# React + TypeScript + Vite
+# Maono
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Este repositório contém a aplicação web (Vite + React) e uma API em Node.js que utiliza PostgreSQL via Prisma para persistir dados de usuários, projetos e camadas.
 
-Currently, two official plugins are available:
+## Front-end
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Os scripts originais do Vite continuam disponíveis:
 
-## Expanding the ESLint configuration
+```bash
+# Instalação das dependências do front-end
+yarn install
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Ambiente de desenvolvimento
+yarn dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Back-end
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+A API está localizada em `server/` e utiliza PostgreSQL. Utilize o `yarn` ou `npm` de sua preferência dentro desse diretório.
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Configuração do banco
+
+1. Crie um banco de dados PostgreSQL acessível pela aplicação.
+2. Copie `server/.env.example` para `server/.env` e ajuste a variável `DATABASE_URL` com as credenciais do seu banco.
+
+```bash
+cd server
+cp .env.example .env
+# Edite o arquivo gerado para ajustar usuário, senha e host
 ```
+
+### Instalação e geração do cliente Prisma
+
+```bash
+cd server
+yarn install
+# ou npm install
+
+yarn run generate
+```
+
+### Migrações
+
+O esquema está versionado em `server/prisma/schema.prisma` e as migrações SQL vivem em `server/prisma/migrations/`.
+
+Para aplicar as migrações no banco configurado no `.env`, execute:
+
+```bash
+cd server
+yarn run migrate
+```
+
+Em ambientes de desenvolvimento é possível utilizar o Prisma CLI diretamente:
+
+```bash
+npx prisma migrate dev --name init
+```
+
+### Executando a API
+
+```bash
+cd server
+yarn run dev
+```
+
+A API ficará disponível em `http://localhost:3001` com os seguintes endpoints principais:
+
+- `GET /health` – Verificação simples de funcionamento.
+- Rotas administrativas em `/admin` para criação e atualização de usuários e projetos.
+- Rotas de membros em `/members` para consultar projetos de um usuário e gerenciar camadas.
+
+A API lê as credenciais de banco a partir de `server/.env` durante o bootstrap e inicializa uma conexão do Prisma com PostgreSQL. Em caso de falha de conexão ou erros de consulta, as rotas retornam status HTTP 500 com uma mensagem amigável.
