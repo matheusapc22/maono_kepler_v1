@@ -136,6 +136,11 @@ const GlobalStyle = styled.div`
     text-decoration: none;
     color: ${(props) => props.theme.labelColor};
   }
+  
+  /* Ocultar rótulos de tipo de camada mostrados sob cada título de camada */
+  . tipo_de_título_da_camada {
+    exibição : nenhuma;
+  }
 `;
 
 const CONTAINER_STYLE = {
