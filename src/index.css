@@ -42,3 +42,11 @@ body {
 .hide-layer-toggle-option .layer-panel-toggle-option {
   display: none !important;
 }
+
+.maplibre-attribution-container {
+  display: none !important;
+}
+
+.file-upload__message > *:not(.replacement) {
+    display: none !important;
+  }

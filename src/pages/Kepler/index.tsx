@@ -89,6 +89,7 @@ import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
 import { replaceSidePanel } from "./factories/side-panel";
 import checkAdminUser from "./utils/is-admin-user";
+// import OverrideUploadMessage from "./components/override-upload-message";
 
 const KeplerGl = injectComponents([
   // @ts-expect-error: Unresolved
@@ -725,6 +726,7 @@ const App = (props) => {
                           />
                         )}
                       </AutoSizer>
+                      {/* <OverrideUploadMessage /> */}
                     </Panel>
 
                     {isSqlPanelOpen && (
