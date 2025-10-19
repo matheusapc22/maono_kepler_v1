@@ -89,6 +89,8 @@ import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
 import { replaceSidePanel } from "./factories/side-panel";
 import checkAdminUser from "./utils/is-admin-user";
+import MapUrlLoader from "./map-url-loader";
+import { useHideMapAttribution } from "../../hooks/useHideMapAttrition";
 // import OverrideUploadMessage from "./components/override-upload-message";
 
 const KeplerGl = injectComponents([
@@ -670,89 +672,100 @@ const App = (props) => {
 
   const isAdminUser = useMemo(() => checkAdminUser(), []);
 
-  return (
-    <StyleSheetManager shouldForwardProp={shouldForwardProp}>
-      <ThemeProvider theme={theme}>
-        <GlobalStyle
-        // this is to apply the same modal style as kepler.gl core
-        // because styled-components doesn't always return a node
-        // https://github.com/styled-components/styled-components/issues/617
-        // ref={node => {
-        //   node ? (this.root = node) : null;
-        // }}
-        >
-          <ScreenshotWrapper
-            startScreenCapture={
-              props.demo.aiAssistant.screenshotToAsk.startScreenCapture
-            }
-            setScreenCaptured={_setScreenCaptured}
-            setStartScreenCapture={_setStartScreenCapture}
-            className="h-screen"
-          >
-            <Banner
-              show={showBanner}
-              height={BannerHeight}
-              bgColor="#2E7CF6"
-              onClose={hideBanner}
-            >
-              <Announcement onDisable={_disableBanner} />
-            </Banner>
-            <div
-              style={CONTAINER_STYLE}
-              className={
-                !isAdminUser ? "hide-layer-header hide-layer-toggle-option" : ""
-              }
-            >
-              <PanelGroup direction="horizontal">
-                <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
-                  <PanelGroup direction="vertical">
-                    <Panel defaultSize={isSqlPanelOpen ? 60 : 100}>
-                      <AutoSizer>
-                        {({ height, width }) => (
-                          <KeplerGl
-                            mapboxApiAccessToken={
-                              CLOUD_PROVIDERS_CONFIGURATION.MAPBOX_TOKEN
-                            }
-                            id="map"
-                            getState={keplerGlGetState}
-                            width={width}
-                            height={height}
-                            cloudProviders={CLOUD_PROVIDERS}
-                            localeMessages={messages}
-                            onExportToCloudSuccess={onExportFileSuccess}
-                            onLoadCloudMapSuccess={onLoadCloudMapSuccess}
-                            featureFlags={DEFAULT_FEATURE_FLAGS}
-                            onViewStateChange={onViewStateChange}
-                          />
-                        )}
-                      </AutoSizer>
-                      {/* <OverrideUploadMessage /> */}
-                    </Panel>
+  useEffect(() => {
+    dispatch(toggleModal(null));
+  }, [dispatch]);
 
-                    {isSqlPanelOpen && (
-                      <>
-                        <StyledResizeHandle />
-                        <Panel defaultSize={40} minSize={20}>
-                          <SqlPanel initialSql={query.sql || ""} />
-                        </Panel>
-                      </>
-                    )}
-                  </PanelGroup>
-                </Panel>
-                {isAiAssistantPanelOpen && (
-                  <>
-                    <StyledVerticalResizeHandle />
-                    <Panel defaultSize={30} minSize={20}>
-                      <AiAssistantPanel />
-                    </Panel>
-                  </>
-                )}
-              </PanelGroup>
-            </div>
-          </ScreenshotWrapper>
-        </GlobalStyle>
-      </ThemeProvider>
-    </StyleSheetManager>
+  useHideMapAttribution();
+
+  return (
+    <>
+      <MapUrlLoader />
+      <StyleSheetManager shouldForwardProp={shouldForwardProp}>
+        <ThemeProvider theme={theme}>
+          <GlobalStyle
+          // this is to apply the same modal style as kepler.gl core
+          // because styled-components doesn't always return a node
+          // https://github.com/styled-components/styled-components/issues/617
+          // ref={node => {
+          //   node ? (this.root = node) : null;
+          // }}
+          >
+            <ScreenshotWrapper
+              startScreenCapture={
+                props.demo.aiAssistant.screenshotToAsk.startScreenCapture
+              }
+              setScreenCaptured={_setScreenCaptured}
+              setStartScreenCapture={_setStartScreenCapture}
+              className="h-screen"
+            >
+              <Banner
+                show={showBanner}
+                height={BannerHeight}
+                bgColor="#2E7CF6"
+                onClose={hideBanner}
+              >
+                <Announcement onDisable={_disableBanner} />
+              </Banner>
+              <div
+                style={CONTAINER_STYLE}
+                className={
+                  !isAdminUser
+                    ? "hide-layer-header hide-layer-toggle-option"
+                    : ""
+                }
+              >
+                <PanelGroup direction="horizontal">
+                  <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
+                    <PanelGroup direction="vertical">
+                      <Panel defaultSize={isSqlPanelOpen ? 60 : 100}>
+                        <AutoSizer>
+                          {({ height, width }) => (
+                            <KeplerGl
+                              mapboxApiAccessToken={
+                                CLOUD_PROVIDERS_CONFIGURATION.MAPBOX_TOKEN
+                              }
+                              id="map"
+                              getState={keplerGlGetState}
+                              width={width}
+                              height={height}
+                              cloudProviders={CLOUD_PROVIDERS}
+                              localeMessages={messages}
+                              onExportToCloudSuccess={onExportFileSuccess}
+                              onLoadCloudMapSuccess={onLoadCloudMapSuccess}
+                              featureFlags={DEFAULT_FEATURE_FLAGS}
+                              onViewStateChange={onViewStateChange}
+                            />
+                          )}
+                        </AutoSizer>
+                        {/* <OverrideUploadMessage /> */}
+                      </Panel>
+
+                      {isSqlPanelOpen && (
+                        <>
+                          <StyledResizeHandle />
+                          <Panel defaultSize={40} minSize={20}>
+                            <SqlPanel initialSql={query.sql || ""} />
+                          </Panel>
+                        </>
+                      )}
+                    </PanelGroup>
+                  </Panel>
+                  {isAiAssistantPanelOpen && (
+                    <>
+                      <StyledVerticalResizeHandle />
+                      <Panel defaultSize={30} minSize={20}>
+                        <AiAssistantPanel />
+                      </Panel>
+                    </>
+                  )}
+                </PanelGroup>
+              </div>
+            </ScreenshotWrapper>
+          </GlobalStyle>
+        </ThemeProvider>
+      </StyleSheetManager>
+    </>
   );
 };
 

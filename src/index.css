@@ -43,10 +43,6 @@ body {
   display: none !important;
 }
 
-.maplibre-attribution-container {
+.file-upload__message > *:not(.replacement) {
   display: none !important;
 }
-
-.file-upload__message > *:not(.replacement) {
-    display: none !important;
-  }

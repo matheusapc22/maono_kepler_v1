@@ -51,6 +51,8 @@ if (Window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__) {
   });
 }
 
+export type RootState = ReturnType<typeof reducers>;
+
 export default createStore(
   reducers,
   initialState,
