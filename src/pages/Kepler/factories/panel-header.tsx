@@ -5,10 +5,9 @@
 import { PanelHeaderFactory, Icons } from "@kepler.gl/components";
 import {
   BUG_REPORT_LINK,
-  KEPLER_GL_VERSION,
   USER_GUIDE_DOC,
 } from "@kepler.gl/constants";
-import Logo from "../../../assets/images/logo-2.png";
+import Logo from "../../../assets/images/Logo_Maono.png";
 import checkAdminUser from "../utils/is-admin-user";
 
 export function CustomPanelHeaderFactory(...deps) {
@@ -22,10 +21,7 @@ export function CustomPanelHeaderFactory(...deps) {
      */
     return (
       <div className="flex flex-col">
-        <img className="w-40 -mt-2" src={Logo} />
-        <span className="text-[10px] ml-20 -mt-3 text-white">
-          {KEPLER_GL_VERSION}
-        </span>
+        <img className="w-40 -mt-2" src={Logo} alt="Logo Maõno" />
       </div>
     );
   };
@@ -63,6 +59,7 @@ export function CustomPanelHeaderFactory(...deps) {
         ]
       : [],
   };
+
   return PanelHeader;
 }
 
