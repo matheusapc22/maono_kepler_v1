@@ -1,12 +1,14 @@
 // AppRoutes.tsx
 import React, { lazy, Suspense, useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router";
+import { Navigate, Routes, Route, useLocation } from "react-router";
 import {
   getCloudProvider,
   DEFAULT_CLOUD_PROVIDER,
 } from "./pages/Kepler/cloud-providers";
 
 const KeplerApp = lazy(() => import("./pages/Kepler"));
+const LoginPage = lazy(() => import("./pages/Login"));
+const ProjectsPage = lazy(() => import("./pages/Projects"));
 
 const WithSuspense: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -48,7 +50,31 @@ const NotFound: React.FC = () => (
 const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      <Route path="/" element={<KeplerApp />} />
+      <Route path="/" element={<Navigate to="/projects" replace />} />
+      <Route
+        path="/login"
+        element={
+          <WithSuspense>
+            <LoginPage />
+          </WithSuspense>
+        }
+      />
+      <Route
+        path="/projects"
+        element={
+          <WithSuspense>
+            <ProjectsPage />
+          </WithSuspense>
+        }
+      />
+      <Route
+        path="/projects/:projectSlug/map"
+        element={
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
+        }
+      />
       <Route path="/auth" element={<AuthCallback />} />
       <Route
         path="map"
