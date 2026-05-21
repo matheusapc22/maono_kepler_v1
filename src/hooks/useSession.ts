@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { getSession, MaonoProject, MaonoUser } from "../lib/api";
+import { getSession } from "../lib/api";
+import type { MaonoProject, MaonoUser } from "../lib/api";
 
 export type UseSessionState = {
   loading: boolean;
