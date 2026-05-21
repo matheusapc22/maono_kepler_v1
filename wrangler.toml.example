@@ -1,0 +1,18 @@
+# Exemplo de configuração local para Cloudflare Pages Functions + D1.
+# Copie para wrangler.toml se quiser testar localmente.
+# Na Cloudflare Pages, configure o binding D1 pelo painel:
+# Pages > maono-kepler-v1 > Settings > Functions > D1 database bindings
+
+name = "maono-kepler-v1"
+compatibility_date = "2026-05-21"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "maono_maps"
+database_id = "COLE_AQUI_O_DATABASE_ID_DO_D1"
+
+# Secrets necessários na Cloudflare Pages:
+# DROPBOX_APP_KEY
+# DROPBOX_APP_SECRET
+# DROPBOX_REFRESH_TOKEN
