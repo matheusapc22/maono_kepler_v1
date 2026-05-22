@@ -146,7 +146,7 @@ async function updateProject(env, projectId, body) {
   }
 }
 
-async function deleteProject(env, projectId, hardDelete = false) {
+async function deleteProject(env, projectId, hardDelete = true) {
   const current = await getProjectById(env, projectId);
 
   if (!current) {
@@ -211,7 +211,7 @@ export async function onRequest(context) {
 
     if (request.method === "DELETE") {
       const url = new URL(request.url);
-      const hardDelete = url.searchParams.get("hard") === "true";
+      const hardDelete = url.searchParams.get("deactivate") !== "true";
       const { project, error } = await deleteProject(env, projectId, hardDelete);
 
       if (error) return error;
@@ -223,11 +223,11 @@ export async function onRequest(context) {
         details: { projectId, slug: project.slug, name: project.name },
       });
 
-      return jsonResponse({ ok: true });
+      return jsonResponse({ ok: true, deleted: hardDelete, deactivated: !hardDelete });
     }
 
     return methodNotAllowed(["GET", "PUT", "PATCH", "DELETE"]);
   } catch (error) {
     return errorResponse(error.message, error.status || 500, error.code || "ADMIN_PROJECT_ERROR");
   }
-} 
+}
