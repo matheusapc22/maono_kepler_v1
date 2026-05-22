@@ -8,27 +8,6 @@ type DropboxEntry = {
   id?: string;
 };
 
-type ProjectValidation = {
-  valid: boolean;
-  message: string;
-  rootPath: string;
-  fileName: string;
-  checks: {
-    fileExists: boolean;
-    jsonValid: boolean;
-    hasDatasets: boolean;
-    hasConfig: boolean;
-    hasKeplerStructure: boolean;
-    canLoadMap: boolean;
-  };
-  details: {
-    datasetsCount: number;
-    configSections: string[];
-    errors: string[];
-    warnings: string[];
-  };
-};
-
 type DropboxBrowserProps = {
   currentRootPath: string;
   currentConfigFile: string;
@@ -69,20 +48,11 @@ function buildPreviewUrl(rootPath: string, fileName: string) {
   const cleanFileName = String(fileName || "").trim();
   if (!cleanRootPath || !cleanFileName) return "";
 
-  const previewJsonUrl = `/api/dropbox/preview?rootPath=${encodeURIComponent(
-    cleanRootPath
-  )}&fileName=${encodeURIComponent(cleanFileName)}`;
+  const previewJsonUrl = `/api/dropbox/preview-file/${encodeURIComponent(
+    cleanFileName
+  )}?rootPath=${encodeURIComponent(cleanRootPath)}`;
 
-  return `/map?mapUrl=${encodeURIComponent(previewJsonUrl)}`;
-}
-
-function ValidationRow({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <li className={ok ? "text-emerald-100" : "text-red-100"}>
-      <span className="mr-2">{ok ? "✅" : "❌"}</span>
-      {label}
-    </li>
-  );
+  return `/map?mapUrl=${encodeURIComponent(previewJsonUrl)}&preview=admin`;
 }
 
 const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
@@ -93,8 +63,7 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
   const [path, setPath] = useState(() => normalizePath(currentRootPath || "/projects"));
   const [entries, setEntries] = useState<DropboxEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [validation, setValidation] = useState<ProjectValidation | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState("");
 
   const previewUrl = useMemo(
@@ -132,50 +101,10 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
     }
   }
 
-  async function validateProjectFile(rootPath = currentRootPath, fileName = currentConfigFile) {
-    const cleanRootPath = normalizePath(rootPath);
-    const cleanFileName = String(fileName || "").trim();
-
-    if (!cleanRootPath || !cleanFileName) {
-      setValidation(null);
-      return;
-    }
-
-    setValidating(true);
-    setError("");
-
-    try {
-      const data = await fetch("/api/dropbox/validate", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          dropboxRootPath: cleanRootPath,
-          defaultConfigFile: cleanFileName,
-        }),
-      }).then(readJson);
-
-      setValidation(data.validation || null);
-    } catch (err) {
-      setValidation(null);
-      setError(err instanceof Error ? err.message : "Erro ao validar arquivo Dropbox.");
-    } finally {
-      setValidating(false);
-    }
-  }
-
   useEffect(() => {
     loadFolder(normalizePath(currentRootPath || "/projects"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    validateProjectFile(currentRootPath, currentConfigFile);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRootPath, currentConfigFile]);
 
   function handleOpenFolder(entry: DropboxEntry) {
     const nextPath = entry.pathDisplay || entry.pathLower || `${path}/${entry.name}`;
@@ -188,12 +117,13 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
       folderPath,
       fileName: entry.name,
     });
-    validateProjectFile(folderPath, entry.name);
   }
 
   function handlePreview() {
     if (!previewUrl) return;
+    setPreviewLoading(true);
     window.open(previewUrl, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => setPreviewLoading(false), 1200);
   }
 
   return (
@@ -202,7 +132,7 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
         <div>
           <h3 className="font-semibold">Selecionar arquivo no Dropbox</h3>
           <p className="mt-1 text-xs text-white/60">
-            Navegue pela pasta do app Dropbox e selecione o JSON principal do projeto.
+            Navegue pela pasta do app Dropbox, selecione o JSON e use a pré-visualização rápida no painel admin.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -250,87 +180,21 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
       <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h4 className="text-sm font-semibold">Validação do projeto</h4>
+            <h4 className="text-sm font-semibold">Pré-visualização rápida</h4>
             <p className="mt-1 text-xs text-white/60">
-              O sistema testa se o arquivo existe, se é JSON válido e se possui estrutura compatível com Kepler.
+              Abre o JSON selecionado em uma nova aba do Kepler apenas para o administrador. Essa opção não aparece para clientes.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-50"
-              type="button"
-              disabled={validating || !currentRootPath || !currentConfigFile}
-              onClick={() => validateProjectFile(currentRootPath, currentConfigFile)}
-            >
-              {validating ? "Validando..." : "Validar agora"}
-            </button>
-            <button
-              className="rounded-lg border border-emerald-300/30 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-50"
-              type="button"
-              disabled={!previewUrl || validation?.valid === false}
-              onClick={handlePreview}
-              title="Abre o arquivo selecionado em uma nova aba do mapa para pré-visualização."
-            >
-              Pré-visualizar mapa
-            </button>
-          </div>
-        </div>
-
-        {validation ? (
-          <div
-            className={
-              validation.valid
-                ? "mt-3 rounded-xl border border-emerald-300/40 bg-emerald-500/15 p-3"
-                : "mt-3 rounded-xl border border-red-300/40 bg-red-500/15 p-3"
-            }
+          <button
+            className="rounded-lg border border-emerald-300/30 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-50"
+            type="button"
+            disabled={!previewUrl || previewLoading}
+            onClick={handlePreview}
+            title="Abre o arquivo selecionado em uma nova aba do mapa para pré-visualização."
           >
-            <p className={validation.valid ? "text-sm font-semibold text-emerald-100" : "text-sm font-semibold text-red-100"}>
-              {validation.valid ? "✅" : "❌"} {validation.message}
-            </p>
-
-            <ul className="mt-3 grid gap-1 text-xs md:grid-cols-2">
-              <ValidationRow label="Arquivo existe no Dropbox" ok={validation.checks.fileExists} />
-              <ValidationRow label="JSON válido" ok={validation.checks.jsonValid} />
-              <ValidationRow label="Possui datasets" ok={validation.checks.hasDatasets} />
-              <ValidationRow label="Possui config" ok={validation.checks.hasConfig} />
-              <ValidationRow label="Estrutura compatível com Kepler" ok={validation.checks.hasKeplerStructure} />
-              <ValidationRow label="Pode ser carregado pelo mapa" ok={validation.checks.canLoadMap} />
-            </ul>
-
-            <div className="mt-3 text-xs text-white/70">
-              Datasets: <strong>{validation.details.datasetsCount}</strong>
-              {validation.details.configSections.length > 0 && (
-                <span> · Seções config: <strong>{validation.details.configSections.join(", ")}</strong></span>
-              )}
-            </div>
-
-            {validation.details.errors.length > 0 && (
-              <div className="mt-3 text-xs text-red-100">
-                <strong>Erros:</strong>
-                <ul className="mt-1 list-disc pl-5">
-                  {validation.details.errors.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {validation.details.warnings.length > 0 && (
-              <div className="mt-3 text-xs text-yellow-100">
-                <strong>Avisos:</strong>
-                <ul className="mt-1 list-disc pl-5">
-                  {validation.details.warnings.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="mt-3 text-xs text-white/60">
-            Selecione um arquivo ou clique em validar para conferir o projeto antes de salvar.
-          </p>
-        )}
+            {previewLoading ? "Abrindo..." : "Pré-visualizar mapa"}
+          </button>
+        </div>
       </div>
 
       {error && (
