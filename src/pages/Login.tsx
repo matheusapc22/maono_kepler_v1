@@ -1,4 +1,5 @@
-import React, { FormEvent, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
