@@ -21,6 +21,30 @@ function normalizeSlug(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function makeShortId(length = 6) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+}
+
+async function generateUniqueProjectSlug(env, baseSlug) {
+  const base = normalizeSlug(baseSlug) || "projeto";
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = `${base}-${makeShortId(6)}`;
+    const existing = await env.DB.prepare(
+      `SELECT id FROM projects WHERE slug = ? LIMIT 1`
+    )
+      .bind(candidate)
+      .first();
+
+    if (!existing) return candidate;
+  }
+
+  return `${base}-${Date.now().toString(36)}-${makeShortId(4)}`;
+}
+
 function requireAdmin(user) {
   if (user?.role !== "admin") {
     return errorResponse("Apenas administradores podem acessar este recurso.", 403, "FORBIDDEN");
@@ -120,13 +144,19 @@ export async function onRequest(context) {
 
     const body = await readJsonBody(request);
     const name = normalizeText(body?.name || file.name || file.file_name);
-    const slug = normalizeSlug(body?.slug || name);
     const description = normalizeText(body?.description || `Projeto criado a partir de ${file.file_name}.`);
     const shouldCopyOrganizationAccess = body?.copyOrganizationAccess !== false;
 
-    if (!name || !slug) {
-      return errorResponse("Informe nome e identificador válidos para o projeto.", 400, "PROJECT_DATA_REQUIRED");
+    if (!name) {
+      return errorResponse("Informe um nome válido para o projeto.", 400, "PROJECT_DATA_REQUIRED");
     }
+
+    const baseSlug = normalizeSlug(
+      body?.slug || `${file.organization_slug || "org"}-${name}`
+    );
+    const slug = body?.autoGenerateSlug === false && body?.slug
+      ? normalizeSlug(body.slug)
+      : await generateUniqueProjectSlug(env, baseSlug);
 
     let project;
 
