@@ -2,6 +2,7 @@ import { getCookie } from "./http.js";
 
 export const SESSION_COOKIE_NAME = "maono_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
+const PASSWORD_HASH_ITERATIONS = 100000;
 
 function toHex(buffer) {
   return [...new Uint8Array(buffer)]
@@ -47,7 +48,7 @@ export async function hashPassword(password, saltHex = null) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 150000,
+      iterations: PASSWORD_HASH_ITERATIONS,
       hash: "SHA-256",
     },
     keyMaterial,
