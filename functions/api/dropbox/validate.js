@@ -43,6 +43,52 @@ function baseValidation(rootPath, fileName) {
   };
 }
 
+function resolveSavedKeplerConfig(rawConfig) {
+  if (!isObject(rawConfig)) {
+    return null;
+  }
+
+  // Formato oficial de mapa salvo pelo schema do Kepler:
+  // { config: { version: 'v1', config: { visState, mapState, mapStyle } } }
+  if (isObject(rawConfig.config)) {
+    return rawConfig.config;
+  }
+
+  // Formato já processado para addDataToMap:
+  // { config: { visState, mapState, mapStyle } }
+  return rawConfig;
+}
+
+function validateDataset(dataset, index, validation) {
+  if (!isObject(dataset)) {
+    validation.details.errors.push(`Dataset ${index + 1}: precisa ser um objeto.`);
+    return;
+  }
+
+  // Formato oficial salvo pelo KeplerGLSchema:
+  // { version: 'v1', data: { id, label, color, allData, fields } }
+  const datasetData = isObject(dataset.data) ? dataset.data : dataset;
+
+  if (!isObject(datasetData)) {
+    validation.details.errors.push(`Dataset ${index + 1}: propriedade data ausente ou inválida.`);
+    return;
+  }
+
+  const hasFields = Array.isArray(datasetData.fields);
+  const hasRows = Array.isArray(datasetData.rows);
+  const hasAllData = Array.isArray(datasetData.allData);
+
+  if (!hasFields) {
+    validation.details.errors.push(`Dataset ${index + 1}: fields ausente ou inválido.`);
+  }
+
+  if (!hasRows && !hasAllData) {
+    validation.details.warnings.push(
+      `Dataset ${index + 1}: não encontrei rows nem allData. O Kepler pode abrir sem dados nesse dataset.`
+    );
+  }
+}
+
 function validateKeplerObject(parsed, validation) {
   if (!isObject(parsed)) {
     validation.details.errors.push("A raiz do JSON precisa ser um objeto.");
@@ -51,10 +97,10 @@ function validateKeplerObject(parsed, validation) {
   }
 
   const datasets = Array.isArray(parsed.datasets) ? parsed.datasets : null;
-  const config = isObject(parsed.config) ? parsed.config : null;
+  const normalizedConfig = resolveSavedKeplerConfig(parsed.config);
 
   validation.checks.hasDatasets = Boolean(datasets);
-  validation.checks.hasConfig = Boolean(config);
+  validation.checks.hasConfig = Boolean(normalizedConfig);
   validation.details.datasetsCount = datasets ? datasets.length : 0;
 
   if (!datasets) {
@@ -63,49 +109,33 @@ function validateKeplerObject(parsed, validation) {
     validation.details.warnings.push("A lista datasets está vazia. O mapa pode abrir sem camadas/dados.");
   }
 
-  if (!config) {
+  if (!normalizedConfig) {
     validation.details.errors.push("A propriedade config não foi encontrada ou não é um objeto.");
   } else {
     const requiredSections = ["visState", "mapState", "mapStyle"];
-    validation.details.configSections = requiredSections.filter((section) => isObject(config[section]));
+    validation.details.configSections = requiredSections.filter((section) =>
+      isObject(normalizedConfig[section])
+    );
 
     for (const section of requiredSections) {
-      if (!isObject(config[section])) {
-        validation.details.errors.push(`A seção config.${section} não foi encontrada ou não é um objeto.`);
+      if (!isObject(normalizedConfig[section])) {
+        validation.details.errors.push(
+          `A seção config.${section} não foi encontrada ou não é um objeto.`
+        );
       }
     }
   }
 
   if (datasets) {
-    datasets.forEach((dataset, index) => {
-      if (!isObject(dataset)) {
-        validation.details.errors.push(`Dataset ${index + 1}: precisa ser um objeto.`);
-        return;
-      }
-
-      if (!isObject(dataset.data)) {
-        validation.details.errors.push(`Dataset ${index + 1}: propriedade data ausente ou inválida.`);
-        return;
-      }
-
-      if (!Array.isArray(dataset.data.fields)) {
-        validation.details.errors.push(`Dataset ${index + 1}: data.fields ausente ou inválido.`);
-      }
-
-      if (!Array.isArray(dataset.data.rows) && !Array.isArray(dataset.data.allData)) {
-        validation.details.warnings.push(
-          `Dataset ${index + 1}: não encontrei data.rows nem data.allData. O Kepler pode abrir sem dados nesse dataset.`
-        );
-      }
-    });
+    datasets.forEach((dataset, index) => validateDataset(dataset, index, validation));
   }
 
   validation.checks.hasKeplerStructure = Boolean(
     datasets &&
-      config &&
-      isObject(config.visState) &&
-      isObject(config.mapState) &&
-      isObject(config.mapStyle)
+      normalizedConfig &&
+      isObject(normalizedConfig.visState) &&
+      isObject(normalizedConfig.mapState) &&
+      isObject(normalizedConfig.mapStyle)
   );
 
   validation.checks.canLoadMap = Boolean(
