@@ -64,6 +64,18 @@ async function readJson(response: Response) {
   return data;
 }
 
+function buildPreviewUrl(rootPath: string, fileName: string) {
+  const cleanRootPath = normalizePath(rootPath);
+  const cleanFileName = String(fileName || "").trim();
+  if (!cleanRootPath || !cleanFileName) return "";
+
+  const previewJsonUrl = `/api/dropbox/preview?rootPath=${encodeURIComponent(
+    cleanRootPath
+  )}&fileName=${encodeURIComponent(cleanFileName)}`;
+
+  return `/map?mapUrl=${encodeURIComponent(previewJsonUrl)}`;
+}
+
 function ValidationRow({ label, ok }: { label: string; ok: boolean }) {
   return (
     <li className={ok ? "text-emerald-100" : "text-red-100"}>
@@ -84,6 +96,11 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<ProjectValidation | null>(null);
   const [error, setError] = useState("");
+
+  const previewUrl = useMemo(
+    () => buildPreviewUrl(currentRootPath, currentConfigFile),
+    [currentRootPath, currentConfigFile]
+  );
 
   const sortedEntries = useMemo(() => {
     return [...entries].sort((a, b) => {
@@ -174,6 +191,11 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
     validateProjectFile(folderPath, entry.name);
   }
 
+  function handlePreview() {
+    if (!previewUrl) return;
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <section className="mt-6 rounded-2xl border border-white/10 bg-black/10 p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -233,14 +255,25 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
               O sistema testa se o arquivo existe, se é JSON válido e se possui estrutura compatível com Kepler.
             </p>
           </div>
-          <button
-            className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-50"
-            type="button"
-            disabled={validating || !currentRootPath || !currentConfigFile}
-            onClick={() => validateProjectFile(currentRootPath, currentConfigFile)}
-          >
-            {validating ? "Validando..." : "Validar agora"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-50"
+              type="button"
+              disabled={validating || !currentRootPath || !currentConfigFile}
+              onClick={() => validateProjectFile(currentRootPath, currentConfigFile)}
+            >
+              {validating ? "Validando..." : "Validar agora"}
+            </button>
+            <button
+              className="rounded-lg border border-emerald-300/30 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-50"
+              type="button"
+              disabled={!previewUrl || validation?.valid === false}
+              onClick={handlePreview}
+              title="Abre o arquivo selecionado em uma nova aba do mapa para pré-visualização."
+            >
+              Pré-visualizar mapa
+            </button>
+          </div>
         </div>
 
         {validation ? (
