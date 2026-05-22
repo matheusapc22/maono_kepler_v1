@@ -62,30 +62,41 @@ async function updateOrganizationFile(env, fileId, body) {
   return { file: updated };
 }
 
+async function deactivateLinkedProjects(env, fileId) {
+  const { results } = await env.DB.prepare(
+    `SELECT id, name, slug FROM projects WHERE organization_file_id = ? AND active = 1`
+  )
+    .bind(fileId)
+    .all();
+
+  const linkedProjects = results || [];
+
+  if (!linkedProjects.length) return [];
+
+  await env.DB.batch([
+    ...linkedProjects.map((project) =>
+      env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(project.id)
+    ),
+    ...linkedProjects.map((project) =>
+      env.DB.prepare(`UPDATE projects SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(project.id)
+    ),
+  ]);
+
+  return linkedProjects;
+}
+
 async function deleteOrganizationFile(env, fileId, hardDeleteDropbox) {
   const current = await getOrganizationFile(env, fileId);
   if (!current) {
     return { error: errorResponse("Arquivo não encontrado.", 404, "ORGANIZATION_FILE_NOT_FOUND") };
   }
 
-  const linkedProject = await env.DB.prepare(
-    `SELECT id, name FROM projects WHERE organization_file_id = ? AND active = 1 LIMIT 1`
-  )
-    .bind(fileId)
-    .first();
-
-  if (linkedProject) {
-    return {
-      error: errorResponse(
-        `Este arquivo está vinculado ao projeto ativo ${linkedProject.name}. Desative ou edite o projeto antes de excluir o arquivo.`,
-        409,
-        "ORGANIZATION_FILE_LINKED_PROJECT"
-      ),
-    };
-  }
+  const deactivatedProjects = await deactivateLinkedProjects(env, fileId);
 
   await env.DB.prepare(
-    `UPDATE organization_files SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+    `UPDATE organization_files
+     SET active = 0, is_project = 0, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
   )
     .bind(fileId)
     .run();
@@ -94,7 +105,7 @@ async function deleteOrganizationFile(env, fileId, hardDeleteDropbox) {
     await deleteDropboxPath(env, current.dropbox_path);
   }
 
-  return { file: current };
+  return { file: current, deactivatedProjects };
 }
 
 export async function onRequest(context) {
@@ -134,16 +145,27 @@ export async function onRequest(context) {
     if (request.method === "DELETE") {
       const url = new URL(request.url);
       const hardDeleteDropbox = url.searchParams.get("dropbox") === "true";
-      const { file, error } = await deleteOrganizationFile(env, fileId, hardDeleteDropbox);
+      const { file, deactivatedProjects, error } = await deleteOrganizationFile(env, fileId, hardDeleteDropbox);
       if (error) return error;
 
       await logAudit(env, {
         userId: user.id,
         action: hardDeleteDropbox ? "admin.organization_files.delete_dropbox" : "admin.organization_files.deactivate",
-        details: { fileId, dropboxPath: file.dropbox_path },
+        details: {
+          fileId,
+          dropboxPath: file.dropbox_path,
+          deactivatedProjects: deactivatedProjects.map((project) => ({
+            id: project.id,
+            slug: project.slug,
+            name: project.name,
+          })),
+        },
       });
 
-      return jsonResponse({ ok: true });
+      return jsonResponse({
+        ok: true,
+        deactivatedProjects: deactivatedProjects.length,
+      });
     }
 
     return methodNotAllowed(["GET", "PUT", "PATCH", "DELETE"]);
