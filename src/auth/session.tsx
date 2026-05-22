@@ -22,6 +22,18 @@ type MaonoProject = {
   accessLevel: "owner" | "editor" | "viewer" | string;
 };
 
+type PublicSession = {
+  authenticated: boolean;
+  user: MaonoUser | null;
+  projects: MaonoProject[];
+};
+
+declare global {
+  interface Window {
+    __MAONO_SESSION__?: PublicSession;
+  }
+}
+
 type SessionState = {
   authenticated: boolean;
   loading: boolean;
@@ -34,11 +46,7 @@ type SessionState = {
 
 const SessionContext = createContext<SessionState | null>(null);
 
-function publishSessionToWindow(session: {
-  authenticated: boolean;
-  user: MaonoUser | null;
-  projects: MaonoProject[];
-}) {
+function publishSessionToWindow(session: PublicSession) {
   window.__MAONO_SESSION__ = session;
 }
 
