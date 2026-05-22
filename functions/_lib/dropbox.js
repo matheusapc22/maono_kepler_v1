@@ -4,11 +4,18 @@ const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
 const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
 const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder";
+const DROPBOX_CREATE_FOLDER_URL = "https://api.dropboxapi.com/2/files/create_folder_v2";
 
 function joinDropboxPath(rootPath, fileName) {
   const cleanRoot = String(rootPath || "").replace(/\/+$/, "");
   const cleanFile = String(fileName || "").replace(/^\/+/, "");
   return `${cleanRoot}/${cleanFile}`;
+}
+
+function normalizeDropboxFolderPath(path) {
+  const cleanPath = String(path || "").trim().replace(/\/+$/g, "");
+  if (!cleanPath || cleanPath === "/") return "";
+  return cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
 }
 
 async function getDropboxAccessToken(env) {
@@ -39,6 +46,52 @@ async function getDropboxAccessToken(env) {
 
   const data = await response.json();
   return data.access_token;
+}
+
+async function createDropboxFolderWithToken(accessToken, path) {
+  const normalizedPath = normalizeDropboxFolderPath(path);
+  if (!normalizedPath) return null;
+
+  const response = await fetch(DROPBOX_CREATE_FOLDER_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      path: normalizedPath,
+      autorename: false,
+    }),
+  });
+
+  if (response.ok) {
+    return await response.json();
+  }
+
+  const text = await response.text();
+
+  // Se a pasta já existe, está tudo certo.
+  if (text.includes("path/conflict/folder") || text.includes("path/conflict")) {
+    return null;
+  }
+
+  throw new Error(`Falha ao criar pasta Dropbox ${normalizedPath}: ${response.status} ${text}`);
+}
+
+export async function ensureDropboxFolder(env, path) {
+  const accessToken = await getDropboxAccessToken(env);
+  const normalizedPath = normalizeDropboxFolderPath(path);
+  if (!normalizedPath) return null;
+
+  const parts = normalizedPath.split("/").filter(Boolean);
+  let current = "";
+
+  for (const part of parts) {
+    current = `${current}/${part}`;
+    await createDropboxFolderWithToken(accessToken, current);
+  }
+
+  return { path: normalizedPath };
 }
 
 export async function listDropboxFolder(env, path = "") {
@@ -90,7 +143,10 @@ export async function downloadDropboxTextFile(env, rootPath, fileName) {
 
 export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
   const accessToken = await getDropboxAccessToken(env);
-  const path = joinDropboxPath(rootPath, fileName);
+  const normalizedRootPath = normalizeDropboxFolderPath(rootPath);
+  const path = joinDropboxPath(normalizedRootPath, fileName);
+
+  await ensureDropboxFolder(env, normalizedRootPath);
 
   const response = await fetch(DROPBOX_UPLOAD_URL, {
     method: "POST",
