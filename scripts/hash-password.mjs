@@ -1,6 +1,7 @@
 import { webcrypto } from "node:crypto";
 
 const password = process.argv[2];
+const PASSWORD_HASH_ITERATIONS = 100000;
 
 if (!password) {
   console.error("Uso: node scripts/hash-password.mjs sua-senha");
@@ -27,7 +28,7 @@ async function hashPassword(value) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 150000,
+      iterations: PASSWORD_HASH_ITERATIONS,
       hash: "SHA-256",
     },
     keyMaterial,
