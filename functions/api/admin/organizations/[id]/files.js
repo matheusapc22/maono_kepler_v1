@@ -32,6 +32,15 @@ function inferFileType(fileName) {
 }
 
 function publicOrganizationFile(row) {
+  const linkedProject = row.project_id
+    ? {
+        id: row.project_id,
+        name: row.project_name,
+        slug: row.project_slug,
+        active: Boolean(row.project_active),
+      }
+    : null;
+
   return {
     id: row.id,
     organizationId: row.organization_id,
@@ -41,6 +50,7 @@ function publicOrganizationFile(row) {
     fileType: row.file_type,
     sizeBytes: row.size_bytes,
     isProject: Boolean(row.is_project),
+    linkedProject,
     active: Boolean(row.active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -71,15 +81,31 @@ async function getOrganization(env, organizationId) {
 
 async function listOrganizationFiles(env, organizationId) {
   const { results } = await env.DB.prepare(
-    `SELECT *
+    `SELECT
+      organization_files.*,
+      projects.id AS project_id,
+      projects.name AS project_name,
+      projects.slug AS project_slug,
+      projects.active AS project_active
      FROM organization_files
-     WHERE organization_id = ?
-     ORDER BY active DESC, file_type ASC, name ASC`
+     LEFT JOIN projects ON projects.organization_file_id = organization_files.id
+     WHERE organization_files.organization_id = ?
+     ORDER BY organization_files.active DESC, organization_files.file_type ASC, organization_files.name ASC, projects.active DESC`
   )
     .bind(organizationId)
     .all();
 
-  return results || [];
+  const rows = results || [];
+  const byFile = new Map();
+
+  for (const row of rows) {
+    const previous = byFile.get(row.id);
+    if (!previous || (!previous.project_active && row.project_active)) {
+      byFile.set(row.id, row);
+    }
+  }
+
+  return Array.from(byFile.values());
 }
 
 async function upsertOrganizationFile(env, organization, file, requestedName) {
