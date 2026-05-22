@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
+import AdminDropboxBrowser from "./AdminDropboxBrowser";
 
 type AdminProject = {
   id: number;
@@ -208,6 +209,15 @@ const AdminPage: React.FC = () => {
     });
     setLastGeneratedPassword("");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleSelectDropboxFile(selection: { folderPath: string; fileName: string }) {
+    setProjectForm((current) => ({
+      ...current,
+      dropboxRootPath: selection.folderPath,
+      defaultConfigFile: selection.fileName,
+    }));
+    setSuccess(`Arquivo Dropbox selecionado: ${selection.folderPath}/${selection.fileName}`);
   }
 
   async function handleSaveProject(event: FormEvent<HTMLFormElement>) {
@@ -505,6 +515,12 @@ const AdminPage: React.FC = () => {
               <label className="block md:col-span-2"><span className="text-sm text-white/75">Status</span><select className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400" style={selectStyle} value={projectForm.active ? "active" : "inactive"} onChange={(event) => setProjectForm((current) => ({ ...current, active: event.target.value === "active" }))}><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label>
               <div className="flex flex-wrap gap-3 md:col-span-2"><button className="rounded-xl bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-400 disabled:opacity-60" type="submit" disabled={savingProject}>{savingProject ? "Salvando..." : isEditingProject ? "Salvar alterações" : "Criar projeto"}</button>{isEditingProject && <button className="rounded-xl border border-white/20 px-5 py-3 font-semibold text-white hover:bg-white/10" type="button" onClick={resetProjectForm}>Limpar formulário</button>}</div>
             </form>
+
+            <AdminDropboxBrowser
+              currentRootPath={projectForm.dropboxRootPath}
+              currentConfigFile={projectForm.defaultConfigFile}
+              onSelectFile={handleSelectDropboxFile}
+            />
           </section>
         </div>
 
