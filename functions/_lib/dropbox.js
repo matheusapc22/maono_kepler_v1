@@ -3,6 +3,7 @@ import { requireEnv } from "./http.js";
 const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
 const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
+const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder";
 
 function joinDropboxPath(rootPath, fileName) {
   const cleanRoot = String(rootPath || "").replace(/\/+$/, "");
@@ -38,6 +39,33 @@ async function getDropboxAccessToken(env) {
 
   const data = await response.json();
   return data.access_token;
+}
+
+export async function listDropboxFolder(env, path = "") {
+  const accessToken = await getDropboxAccessToken(env);
+
+  const response = await fetch(DROPBOX_LIST_FOLDER_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      path,
+      recursive: false,
+      include_deleted: false,
+      include_has_explicit_shared_members: false,
+      include_mounted_folders: true,
+      include_non_downloadable_files: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Falha ao listar pasta Dropbox ${path || "/"}: ${response.status} ${text}`);
+  }
+
+  return await response.json();
 }
 
 export async function downloadDropboxTextFile(env, rootPath, fileName) {
