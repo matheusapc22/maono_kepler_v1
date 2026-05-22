@@ -358,14 +358,9 @@ const AdminFilesPage: React.FC = () => {
   }
 
   async function handleCreateProjectFromFile(file: OrganizationFile) {
-    const defaultSlug = slugify(file.name || file.fileName.replace(/\.json$/i, ""));
     const projectName = window.prompt("Nome do projeto:", file.name || file.fileName.replace(/\.json$/i, ""));
 
     if (!projectName) return;
-
-    const projectSlug = window.prompt("Identificador do projeto:", defaultSlug);
-
-    if (!projectSlug) return;
 
     const confirmed = window.confirm(
       "Criar projeto a partir deste JSON e copiar os usuários vinculados à organização para o projeto?"
@@ -387,7 +382,6 @@ const AdminFilesPage: React.FC = () => {
         },
         body: JSON.stringify({
           name: projectName,
-          slug: slugify(projectSlug),
           copyOrganizationAccess: true,
         }),
       }).then(readJson);
@@ -635,43 +629,51 @@ const AdminFilesPage: React.FC = () => {
 
           <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
             <h2 className="text-lg font-semibold">Organizações cadastradas</h2>
-            <p className="mt-1 text-sm text-white/60">Selecione uma organização para gerenciar arquivos e usuários.</p>
-            <div className="mt-4 max-h-[420px] overflow-auto rounded-xl border border-white/10">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="text-white/60">
-                  <tr>
-                    <th className="border-b border-white/10 px-4 py-3">Organização</th>
-                    <th className="border-b border-white/10 px-4 py-3">Dropbox</th>
-                    <th className="border-b border-white/10 px-4 py-3">Resumo</th>
-                    <th className="border-b border-white/10 px-4 py-3">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {organizations.length === 0 ? (
-                    <tr><td className="px-4 py-4 text-white/60" colSpan={4}>Nenhuma organização cadastrada.</td></tr>
-                  ) : organizations.map((organization) => (
-                    <tr key={organization.id} className={selectedOrganizationId === organization.id ? "border-b border-white/5 bg-blue-500/10" : "border-b border-white/5"}>
-                      <td className="px-4 py-3">
-                        <div className="font-medium">{organization.name}</div>
-                        <div className="text-xs text-blue-200">{organization.slug}</div>
-                        <div className="text-xs text-white/50">{organization.active ? "Ativa" : "Inativa"}</div>
-                      </td>
-                      <td className="px-4 py-3 text-white/70">{organization.dropboxRootPath}</td>
-                      <td className="px-4 py-3 text-white/70">
-                        {organization.fileCount || 0} arquivos · {organization.projectCount || 0} projetos · {organization.userCount || 0} usuários
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button className="rounded-lg border border-emerald-300/30 px-3 py-1 text-emerald-100 hover:bg-emerald-500/20" type="button" onClick={() => setSelectedOrganizationId(organization.id)}>Gerenciar</button>
-                          <button className="rounded-lg border border-blue-300/30 px-3 py-1 text-blue-100 hover:bg-blue-500/20" type="button" onClick={() => handleEditOrganization(organization)}>Editar</button>
-                          <button className="rounded-lg border border-red-300/30 px-3 py-1 text-red-100 hover:bg-red-500/20" type="button" onClick={() => handleDeleteOrganization(organization, false)}>Desativar</button>
-                          <button className="rounded-lg border border-red-300/30 px-3 py-1 text-red-100 hover:bg-red-500/20" type="button" onClick={() => handleDeleteOrganization(organization, true)}>Excluir Dropbox</button>
+            <p className="mt-1 text-sm text-white/60">Clique em qualquer card para selecionar e gerenciar arquivos e usuários.</p>
+            <div className="mt-4 grid max-h-[460px] gap-3 overflow-auto pr-1">
+              {organizations.length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-white/60">Nenhuma organização cadastrada.</div>
+              ) : organizations.map((organization) => {
+                const selected = selectedOrganizationId === organization.id;
+                return (
+                  <div
+                    key={organization.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedOrganizationId(organization.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") setSelectedOrganizationId(organization.id);
+                    }}
+                    className={
+                      selected
+                        ? "cursor-pointer rounded-2xl border border-blue-300/60 bg-blue-500/20 p-4 shadow-lg shadow-blue-950/30 transition hover:bg-blue-500/25"
+                        : "cursor-pointer rounded-2xl border border-white/10 bg-black/10 p-4 transition hover:border-blue-300/40 hover:bg-white/10"
+                    }
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold">{organization.name}</h3>
+                          <span className={organization.active ? "rounded-full bg-emerald-500/20 px-2 py-1 text-xs text-emerald-100" : "rounded-full bg-red-500/20 px-2 py-1 text-xs text-red-100"}>
+                            {organization.active ? "Ativa" : "Inativa"}
+                          </span>
+                          {selected && <span className="rounded-full bg-blue-500/30 px-2 py-1 text-xs text-blue-100">Selecionada</span>}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <p className="mt-1 text-xs text-blue-200">{organization.slug}</p>
+                        <p className="mt-2 break-all text-sm text-white/70">{organization.dropboxRootPath}</p>
+                        <p className="mt-2 text-xs text-white/55">
+                          {organization.fileCount || 0} arquivos · {organization.projectCount || 0} projetos · {organization.userCount || 0} usuários
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 md:justify-end">
+                        <button className="rounded-lg border border-blue-300/30 px-3 py-1 text-blue-100 hover:bg-blue-500/20" type="button" onClick={(event) => { event.stopPropagation(); handleEditOrganization(organization); }}>Editar</button>
+                        <button className="rounded-lg border border-red-300/30 px-3 py-1 text-red-100 hover:bg-red-500/20" type="button" onClick={(event) => { event.stopPropagation(); handleDeleteOrganization(organization, false); }}>Desativar</button>
+                        <button className="rounded-lg border border-red-300/30 px-3 py-1 text-red-100 hover:bg-red-500/20" type="button" onClick={(event) => { event.stopPropagation(); handleDeleteOrganization(organization, true); }}>Excluir Dropbox</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
         </div>
