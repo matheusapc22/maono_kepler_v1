@@ -35,6 +35,18 @@ type AdminAccess = {
   };
 };
 
+const fieldStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
+  WebkitTextFillColor: "#0f172a",
+  caretColor: "#0f172a",
+};
+
+const selectStyle: React.CSSProperties = {
+  ...fieldStyle,
+  colorScheme: "light",
+};
+
 async function readJson(response: Response) {
   const data = await response.json();
   if (!response.ok || data?.ok === false) {
@@ -272,7 +284,8 @@ const AdminPage: React.FC = () => {
               <label className="block">
                 <span className="text-sm text-white/75">Nome</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={fieldStyle}
                   value={projectForm.name}
                   onChange={(event) => {
                     const name = event.target.value;
@@ -289,7 +302,8 @@ const AdminPage: React.FC = () => {
               <label className="block">
                 <span className="text-sm text-white/75">Slug</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={fieldStyle}
                   value={projectForm.slug}
                   onChange={(event) => setProjectForm((current) => ({ ...current, slug: slugify(event.target.value) }))}
                   required
@@ -299,7 +313,8 @@ const AdminPage: React.FC = () => {
               <label className="block md:col-span-2">
                 <span className="text-sm text-white/75">Descrição</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={fieldStyle}
                   value={projectForm.description}
                   onChange={(event) => setProjectForm((current) => ({ ...current, description: event.target.value }))}
                 />
@@ -308,7 +323,8 @@ const AdminPage: React.FC = () => {
               <label className="block">
                 <span className="text-sm text-white/75">Pasta Dropbox</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={fieldStyle}
                   value={projectForm.dropboxRootPath}
                   onChange={(event) => setProjectForm((current) => ({ ...current, dropboxRootPath: event.target.value }))}
                   placeholder="/projects/cliente-a"
@@ -319,7 +335,8 @@ const AdminPage: React.FC = () => {
               <label className="block">
                 <span className="text-sm text-white/75">Arquivo JSON</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={fieldStyle}
                   value={projectForm.defaultConfigFile}
                   onChange={(event) => setProjectForm((current) => ({ ...current, defaultConfigFile: event.target.value }))}
                   required
@@ -348,7 +365,8 @@ const AdminPage: React.FC = () => {
               <label className="block">
                 <span className="text-sm text-white/75">Usuário</span>
                 <select
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={selectStyle}
                   value={accessForm.userId}
                   onChange={(event) => setAccessForm((current) => ({ ...current, userId: event.target.value }))}
                   required
@@ -365,7 +383,8 @@ const AdminPage: React.FC = () => {
               <label className="block">
                 <span className="text-sm text-white/75">Projeto</span>
                 <select
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={selectStyle}
                   value={accessForm.projectId}
                   onChange={(event) => setAccessForm((current) => ({ ...current, projectId: event.target.value }))}
                   required
@@ -382,7 +401,8 @@ const AdminPage: React.FC = () => {
               <label className="block">
                 <span className="text-sm text-white/75">Permissão</span>
                 <select
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-white px-4 py-3 text-slate-900 outline-none"
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={selectStyle}
                   value={accessForm.accessLevel}
                   onChange={(event) => setAccessForm((current) => ({ ...current, accessLevel: event.target.value }))}
                 >
