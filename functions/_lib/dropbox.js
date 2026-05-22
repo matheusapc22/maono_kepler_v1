@@ -5,17 +5,24 @@ const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
 const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
 const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder";
 const DROPBOX_CREATE_FOLDER_URL = "https://api.dropboxapi.com/2/files/create_folder_v2";
+const DROPBOX_DELETE_URL = "https://api.dropboxapi.com/2/files/delete_v2";
 
-function joinDropboxPath(rootPath, fileName) {
-  const cleanRoot = String(rootPath || "").replace(/\/+$/, "");
-  const cleanFile = String(fileName || "").replace(/^\/+/, "");
-  return `${cleanRoot}/${cleanFile}`;
-}
-
-function normalizeDropboxFolderPath(path) {
+export function normalizeDropboxFolderPath(path) {
   const cleanPath = String(path || "").trim().replace(/\/+$/g, "");
   if (!cleanPath || cleanPath === "/") return "";
   return cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+}
+
+export function normalizeDropboxPath(path) {
+  const cleanPath = String(path || "").trim().replace(/\/+$/g, "");
+  if (!cleanPath || cleanPath === "/") return "";
+  return cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+}
+
+export function joinDropboxPath(rootPath, fileName) {
+  const cleanRoot = normalizeDropboxFolderPath(rootPath);
+  const cleanFile = String(fileName || "").replace(/^\/+/, "");
+  return `${cleanRoot}/${cleanFile}`;
 }
 
 async function getDropboxAccessToken(env) {
@@ -70,7 +77,6 @@ async function createDropboxFolderWithToken(accessToken, path) {
 
   const text = await response.text();
 
-  // Se a pasta já existe, está tudo certo.
   if (text.includes("path/conflict/folder") || text.includes("path/conflict")) {
     return null;
   }
@@ -96,6 +102,7 @@ export async function ensureDropboxFolder(env, path) {
 
 export async function listDropboxFolder(env, path = "") {
   const accessToken = await getDropboxAccessToken(env);
+  const normalizedPath = normalizeDropboxFolderPath(path);
 
   const response = await fetch(DROPBOX_LIST_FOLDER_URL, {
     method: "POST",
@@ -104,7 +111,7 @@ export async function listDropboxFolder(env, path = "") {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      path,
+      path: normalizedPath,
       recursive: false,
       include_deleted: false,
       include_has_explicit_shared_members: false,
@@ -115,7 +122,32 @@ export async function listDropboxFolder(env, path = "") {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Falha ao listar pasta Dropbox ${path || "/"}: ${response.status} ${text}`);
+    throw new Error(`Falha ao listar pasta Dropbox ${normalizedPath || "/"}: ${response.status} ${text}`);
+  }
+
+  return await response.json();
+}
+
+export async function deleteDropboxPath(env, path) {
+  const accessToken = await getDropboxAccessToken(env);
+  const normalizedPath = normalizeDropboxPath(path);
+
+  if (!normalizedPath) {
+    throw new Error("Não é permitido excluir a raiz do Dropbox.");
+  }
+
+  const response = await fetch(DROPBOX_DELETE_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ path: normalizedPath }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Falha ao excluir caminho Dropbox ${normalizedPath}: ${response.status} ${text}`);
   }
 
   return await response.json();
@@ -142,12 +174,12 @@ export async function downloadDropboxTextFile(env, rootPath, fileName) {
 }
 
 export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
-  const accessToken = await getDropboxAccessToken(env);
   const normalizedRootPath = normalizeDropboxFolderPath(rootPath);
   const path = joinDropboxPath(normalizedRootPath, fileName);
 
   await ensureDropboxFolder(env, normalizedRootPath);
 
+  const accessToken = await getDropboxAccessToken(env);
   const response = await fetch(DROPBOX_UPLOAD_URL, {
     method: "POST",
     headers: {
