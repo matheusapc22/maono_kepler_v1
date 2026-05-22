@@ -36,6 +36,8 @@ function publicAdminProject(project) {
     description: project.description,
     dropboxRootPath: project.dropbox_root_path,
     defaultConfigFile: project.default_config_file,
+    organizationId: project.organization_id,
+    organizationFileId: project.organization_file_id,
     active: Boolean(project.active),
     createdAt: project.created_at,
     updatedAt: project.updated_at,
@@ -51,6 +53,8 @@ async function getProjectById(env, projectId) {
       description,
       dropbox_root_path,
       default_config_file,
+      organization_id,
+      organization_file_id,
       active,
       created_at,
       updated_at
@@ -60,6 +64,24 @@ async function getProjectById(env, projectId) {
   )
     .bind(projectId)
     .first();
+}
+
+async function syncOrganizationFileProjectFlag(env, organizationFileId) {
+  if (!organizationFileId) return;
+
+  const activeProject = await env.DB.prepare(
+    `SELECT id FROM projects WHERE organization_file_id = ? AND active = 1 LIMIT 1`
+  )
+    .bind(organizationFileId)
+    .first();
+
+  await env.DB.prepare(
+    `UPDATE organization_files
+     SET is_project = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  )
+    .bind(activeProject ? 1 : 0, organizationFileId)
+    .run();
 }
 
 async function updateProject(env, projectId, body) {
@@ -113,6 +135,8 @@ async function updateProject(env, projectId, body) {
       .bind(name, slug, description || null, dropboxRootPath, defaultConfigFile, active, projectId)
       .first();
 
+    await syncOrganizationFileProjectFlag(env, updated.organization_file_id);
+
     return { project: updated };
   } catch (error) {
     if (String(error.message || "").includes("UNIQUE")) {
@@ -122,17 +146,26 @@ async function updateProject(env, projectId, body) {
   }
 }
 
-async function deleteProject(env, projectId) {
+async function deleteProject(env, projectId, hardDelete = false) {
   const current = await getProjectById(env, projectId);
 
   if (!current) {
     return { error: errorResponse("Projeto não encontrado.", 404, "PROJECT_NOT_FOUND") };
   }
 
-  await env.DB.batch([
-    env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(projectId),
-    env.DB.prepare(`DELETE FROM projects WHERE id = ?`).bind(projectId),
-  ]);
+  if (hardDelete) {
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(projectId),
+      env.DB.prepare(`DELETE FROM projects WHERE id = ?`).bind(projectId),
+    ]);
+  } else {
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(projectId),
+      env.DB.prepare(`UPDATE projects SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(projectId),
+    ]);
+  }
+
+  await syncOrganizationFileProjectFlag(env, current.organization_file_id);
 
   return { project: current };
 }
@@ -170,21 +203,23 @@ export async function onRequest(context) {
         userId: user.id,
         projectId: project.id,
         action: "admin.projects.update",
-        details: { slug: project.slug },
+        details: { slug: project.slug, active: Boolean(project.active) },
       });
 
       return jsonResponse({ ok: true, project: publicAdminProject(project) });
     }
 
     if (request.method === "DELETE") {
-      const { project, error } = await deleteProject(env, projectId);
+      const url = new URL(request.url);
+      const hardDelete = url.searchParams.get("hard") === "true";
+      const { project, error } = await deleteProject(env, projectId, hardDelete);
 
       if (error) return error;
 
       await logAudit(env, {
         userId: user.id,
         projectId: null,
-        action: "admin.projects.delete",
+        action: hardDelete ? "admin.projects.delete" : "admin.projects.deactivate",
         details: { projectId, slug: project.slug, name: project.name },
       });
 
@@ -195,4 +230,4 @@ export async function onRequest(context) {
   } catch (error) {
     return errorResponse(error.message, error.status || 500, error.code || "ADMIN_PROJECT_ERROR");
   }
-}
+} 
