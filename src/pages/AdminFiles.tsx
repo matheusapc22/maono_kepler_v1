@@ -123,6 +123,7 @@ const AdminFilesPage: React.FC = () => {
   const [savingFile, setSavingFile] = useState(false);
   const [savingOrgUser, setSavingOrgUser] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [transformingFileId, setTransformingFileId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -133,6 +134,10 @@ const AdminFilesPage: React.FC = () => {
   );
 
   const activeUsers = useMemo(() => users.filter((item) => item.active), [users]);
+
+  function isJsonKeplerCandidate(file: OrganizationFile) {
+    return file.active && file.fileName.toLowerCase().endsWith(".json");
+  }
 
   async function refreshOrganizations(nextSelectedId?: number | null) {
     const [organizationsData, usersData] = await Promise.all([
@@ -349,6 +354,53 @@ const AdminFilesPage: React.FC = () => {
       setError(err instanceof Error ? err.message : "Erro ao enviar arquivo.");
     } finally {
       setSavingFile(false);
+    }
+  }
+
+  async function handleCreateProjectFromFile(file: OrganizationFile) {
+    const defaultSlug = slugify(file.name || file.fileName.replace(/\.json$/i, ""));
+    const projectName = window.prompt("Nome do projeto:", file.name || file.fileName.replace(/\.json$/i, ""));
+
+    if (!projectName) return;
+
+    const projectSlug = window.prompt("Identificador do projeto:", defaultSlug);
+
+    if (!projectSlug) return;
+
+    const confirmed = window.confirm(
+      "Criar projeto a partir deste JSON e copiar os usuários vinculados à organização para o projeto?"
+    );
+
+    if (!confirmed) return;
+
+    setTransformingFileId(file.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      await fetch(`/api/admin/organization-files/${file.id}/project`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          name: projectName,
+          slug: slugify(projectSlug),
+          copyOrganizationAccess: true,
+        }),
+      }).then(readJson);
+
+      setSuccess("Projeto criado a partir do arquivo. Os usuários da organização foram vinculados ao projeto.");
+      if (selectedOrganizationId) {
+        await refreshOrganizationDetails(selectedOrganizationId);
+        await refreshOrganizations(selectedOrganizationId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao transformar arquivo em projeto.");
+    } finally {
+      setTransformingFileId(null);
     }
   }
 
@@ -658,19 +710,20 @@ const AdminFilesPage: React.FC = () => {
               </form>
 
               <div className="mt-6 overflow-x-auto rounded-xl border border-white/10">
-                <table className="w-full min-w-[980px] text-left text-sm">
+                <table className="w-full min-w-[1100px] text-left text-sm">
                   <thead className="text-white/60">
                     <tr>
                       <th className="border-b border-white/10 px-4 py-3">Arquivo gerenciado</th>
                       <th className="border-b border-white/10 px-4 py-3">Tipo</th>
                       <th className="border-b border-white/10 px-4 py-3">Tamanho</th>
                       <th className="border-b border-white/10 px-4 py-3">Status</th>
+                      <th className="border-b border-white/10 px-4 py-3">Projeto</th>
                       <th className="border-b border-white/10 px-4 py-3">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {organizationFiles.length === 0 ? (
-                      <tr><td className="px-4 py-4 text-white/60" colSpan={5}>Nenhum arquivo gerenciado ainda. Envie um arquivo pelo formulário acima.</td></tr>
+                      <tr><td className="px-4 py-4 text-white/60" colSpan={6}>Nenhum arquivo gerenciado ainda. Envie um arquivo pelo formulário acima.</td></tr>
                     ) : organizationFiles.map((file) => (
                       <tr key={file.id} className="border-b border-white/5">
                         <td className="px-4 py-3">
@@ -680,6 +733,24 @@ const AdminFilesPage: React.FC = () => {
                         <td className="px-4 py-3 text-white/70">{file.fileType}</td>
                         <td className="px-4 py-3 text-white/70">{formatBytes(file.sizeBytes)}</td>
                         <td className="px-4 py-3">{file.active ? "Ativo" : "Inativo"}</td>
+                        <td className="px-4 py-3">
+                          {file.isProject ? (
+                            <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-100">
+                              Já é projeto
+                            </span>
+                          ) : isJsonKeplerCandidate(file) ? (
+                            <button
+                              className="rounded-lg border border-emerald-300/30 px-3 py-1 text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-50"
+                              type="button"
+                              disabled={transformingFileId === file.id}
+                              onClick={() => handleCreateProjectFromFile(file)}
+                            >
+                              {transformingFileId === file.id ? "Criando..." : "Transformar em projeto"}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-white/50">Não aplicável</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
                             <button className="rounded-lg border border-red-300/30 px-3 py-1 text-red-100 hover:bg-red-500/20" type="button" onClick={() => handleDeleteFile(file, false)}>Desativar</button>
@@ -726,7 +797,7 @@ const AdminFilesPage: React.FC = () => {
 
         <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6">
           <h2 className="text-lg font-semibold">Usuários vinculados à organização</h2>
-          <p className="mt-1 text-sm text-white/60">Este acesso é por pasta/organização. Depois poderemos criar regras específicas por arquivo ou projeto.</p>
+          <p className="mt-1 text-sm text-white/60">Este acesso é por pasta/organização. Ao transformar um JSON em projeto, os usuários da organização são copiados para o projeto.</p>
 
           {selectedOrganizationId ? (
             <>
