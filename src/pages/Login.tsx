@@ -4,6 +4,13 @@ import { useNavigate, useSearchParams } from "react-router";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
 
+const inputStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
+  WebkitTextFillColor: "#0f172a",
+  caretColor: "#0f172a",
+};
+
 const LoginPage: React.FC = () => {
   const { authenticated, loading, login } = useSession();
   const navigate = useNavigate();
@@ -53,7 +60,8 @@ const LoginPage: React.FC = () => {
           <label className="block">
             <span className="text-sm text-white/80">E-mail</span>
             <input
-              className="mt-1 w-full rounded-xl border border-white/15 bg-white/95 px-4 py-3 text-slate-900 outline-none focus:ring-2 focus:ring-blue-400"
+              className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+              style={inputStyle}
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -65,7 +73,8 @@ const LoginPage: React.FC = () => {
           <label className="block">
             <span className="text-sm text-white/80">Senha</span>
             <input
-              className="mt-1 w-full rounded-xl border border-white/15 bg-white/95 px-4 py-3 text-slate-900 outline-none focus:ring-2 focus:ring-blue-400"
+              className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+              style={inputStyle}
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
