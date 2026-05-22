@@ -10,6 +10,7 @@ const KeplerApp = lazy(() => import("./pages/Kepler"));
 const LoginPage = lazy(() => import("./pages/Login"));
 const ProjectsPage = lazy(() => import("./pages/Projects"));
 const AdminPage = lazy(() => import("./pages/Admin"));
+const AdminFilesPage = lazy(() => import("./pages/AdminFiles"));
 
 const WithSuspense: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -73,6 +74,14 @@ const AppRoutes: React.FC = () => {
         element={
           <WithSuspense>
             <AdminPage />
+          </WithSuspense>
+        }
+      />
+      <Route
+        path="/admin/files"
+        element={
+          <WithSuspense>
+            <AdminFilesPage />
           </WithSuspense>
         }
       />
