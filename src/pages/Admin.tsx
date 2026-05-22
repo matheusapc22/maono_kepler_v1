@@ -35,6 +35,15 @@ type AdminAccess = {
   };
 };
 
+const EMPTY_PROJECT_FORM = {
+  name: "",
+  slug: "",
+  description: "",
+  dropboxRootPath: "/projects/",
+  defaultConfigFile: "config.kepler.json",
+  active: true,
+};
+
 const fieldStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   color: "#0f172a",
@@ -75,14 +84,9 @@ const AdminPage: React.FC = () => {
   const [success, setSuccess] = useState("");
   const [savingProject, setSavingProject] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
 
-  const [projectForm, setProjectForm] = useState({
-    name: "",
-    slug: "",
-    description: "",
-    dropboxRootPath: "/projects/",
-    defaultConfigFile: "config.kepler.json",
-  });
+  const [projectForm, setProjectForm] = useState(EMPTY_PROJECT_FORM);
 
   const [accessForm, setAccessForm] = useState({
     userId: "",
@@ -91,6 +95,7 @@ const AdminPage: React.FC = () => {
   });
 
   const isAdmin = user?.role === "admin";
+  const isEditingProject = editingProjectId !== null;
 
   async function refreshAdminData() {
     setError("");
@@ -143,7 +148,25 @@ const AdminPage: React.FC = () => {
     navigate("/login", { replace: true });
   }
 
-  async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+  function resetProjectForm() {
+    setEditingProjectId(null);
+    setProjectForm(EMPTY_PROJECT_FORM);
+  }
+
+  function handleEditProject(project: AdminProject) {
+    setEditingProjectId(project.id);
+    setProjectForm({
+      name: project.name,
+      slug: project.slug,
+      description: project.description || "",
+      dropboxRootPath: project.dropboxRootPath,
+      defaultConfigFile: project.defaultConfigFile,
+      active: project.active,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleSaveProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSavingProject(true);
     setError("");
@@ -155,8 +178,13 @@ const AdminPage: React.FC = () => {
         slug: projectForm.slug || slugify(projectForm.name),
       };
 
-      await fetch("/api/admin/projects", {
-        method: "POST",
+      const url = isEditingProject
+        ? `/api/admin/projects/${editingProjectId}`
+        : "/api/admin/projects";
+      const method = isEditingProject ? "PUT" : "POST";
+
+      await fetch(url, {
+        method,
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
@@ -165,19 +193,45 @@ const AdminPage: React.FC = () => {
         body: JSON.stringify(payload),
       }).then(readJson);
 
-      setProjectForm({
-        name: "",
-        slug: "",
-        description: "",
-        dropboxRootPath: "/projects/",
-        defaultConfigFile: "config.kepler.json",
-      });
-      setSuccess("Projeto criado com sucesso.");
+      setSuccess(
+        isEditingProject
+          ? "Projeto atualizado com sucesso."
+          : "Projeto criado com sucesso."
+      );
+      resetProjectForm();
       await refreshAdminData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao criar projeto.");
+      setError(err instanceof Error ? err.message : "Erro ao salvar projeto.");
     } finally {
       setSavingProject(false);
+    }
+  }
+
+  async function handleDeleteProject(project: AdminProject) {
+    const confirmed = window.confirm(
+      `Excluir o projeto \"${project.name}\"? Isso remove o cadastro e os vínculos de acesso, mas não apaga o arquivo no Dropbox.`
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+    setSuccess("");
+
+    try {
+      await fetch(`/api/admin/projects/${project.id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }).then(readJson);
+
+      if (editingProjectId === project.id) {
+        resetProjectForm();
+      }
+
+      setSuccess("Projeto excluído com sucesso.");
+      await refreshAdminData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao excluir projeto.");
     }
   }
 
@@ -275,12 +329,29 @@ const AdminPage: React.FC = () => {
 
         <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h2 className="text-lg font-semibold">Novo Projeto</h2>
-            <p className="mt-1 text-sm text-white/60">
-              Cadastre um projeto apontando para uma pasta e um JSON no Dropbox.
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">
+                  {isEditingProject ? "Editar Projeto" : "Novo Projeto"}
+                </h2>
+                <p className="mt-1 text-sm text-white/60">
+                  {isEditingProject
+                    ? "Atualize o cadastro, a pasta Dropbox ou o arquivo JSON do projeto."
+                    : "Cadastre um projeto apontando para uma pasta e um JSON no Dropbox."}
+                </p>
+              </div>
+              {isEditingProject && (
+                <button
+                  className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10"
+                  type="button"
+                  onClick={resetProjectForm}
+                >
+                  Cancelar edição
+                </button>
+              )}
+            </div>
 
-            <form onSubmit={handleCreateProject} className="mt-5 grid gap-4 md:grid-cols-2">
+            <form onSubmit={handleSaveProject} className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="block">
                 <span className="text-sm text-white/75">Nome</span>
                 <input
@@ -300,7 +371,7 @@ const AdminPage: React.FC = () => {
               </label>
 
               <label className="block">
-                <span className="text-sm text-white/75">Slug</span>
+                <span className="text-sm text-white/75">Identificador do projeto</span>
                 <input
                   className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
                   style={fieldStyle}
@@ -343,14 +414,45 @@ const AdminPage: React.FC = () => {
                 />
               </label>
 
-              <div className="md:col-span-2">
+              <label className="block md:col-span-2">
+                <span className="text-sm text-white/75">Status</span>
+                <select
+                  className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400"
+                  style={selectStyle}
+                  value={projectForm.active ? "active" : "inactive"}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({
+                      ...current,
+                      active: event.target.value === "active",
+                    }))
+                  }
+                >
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                </select>
+              </label>
+
+              <div className="flex flex-wrap gap-3 md:col-span-2">
                 <button
                   className="rounded-xl bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-400 disabled:opacity-60"
                   type="submit"
                   disabled={savingProject}
                 >
-                  {savingProject ? "Criando..." : "Criar projeto"}
+                  {savingProject
+                    ? "Salvando..."
+                    : isEditingProject
+                    ? "Salvar alterações"
+                    : "Criar projeto"}
                 </button>
+                {isEditingProject && (
+                  <button
+                    className="rounded-xl border border-white/20 px-5 py-3 font-semibold text-white hover:bg-white/10"
+                    type="button"
+                    onClick={resetProjectForm}
+                  >
+                    Limpar formulário
+                  </button>
+                )}
               </div>
             </form>
           </section>
@@ -426,15 +528,16 @@ const AdminPage: React.FC = () => {
         <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6">
           <h2 className="text-lg font-semibold">Projetos cadastrados</h2>
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <table className="w-full min-w-[1040px] text-left text-sm">
               <thead className="text-white/60">
                 <tr>
                   <th className="border-b border-white/10 py-3 pr-4">Projeto</th>
-                  <th className="border-b border-white/10 py-3 pr-4">Slug</th>
+                  <th className="border-b border-white/10 py-3 pr-4">Identificador</th>
                   <th className="border-b border-white/10 py-3 pr-4">Dropbox</th>
                   <th className="border-b border-white/10 py-3 pr-4">Arquivo</th>
                   <th className="border-b border-white/10 py-3 pr-4">Acessos</th>
                   <th className="border-b border-white/10 py-3 pr-4">Status</th>
+                  <th className="border-b border-white/10 py-3 pr-4">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -446,6 +549,24 @@ const AdminPage: React.FC = () => {
                     <td className="py-3 pr-4 text-white/70">{project.defaultConfigFile}</td>
                     <td className="py-3 pr-4">{project.accessCount}</td>
                     <td className="py-3 pr-4">{project.active ? "Ativo" : "Inativo"}</td>
+                    <td className="py-3 pr-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="rounded-lg border border-blue-300/30 px-3 py-1 text-blue-100 hover:bg-blue-500/20"
+                          type="button"
+                          onClick={() => handleEditProject(project)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          className="rounded-lg border border-red-300/30 px-3 py-1 text-red-100 hover:bg-red-500/20"
+                          type="button"
+                          onClick={() => handleDeleteProject(project)}
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
