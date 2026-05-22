@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "./fallback-ui-styles";
+import "./auto-project-id";
 import App from "./App.tsx";
 import { Provider } from "react-redux";
 import store from "./store";
