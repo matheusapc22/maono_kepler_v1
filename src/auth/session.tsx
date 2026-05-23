@@ -20,6 +20,11 @@ type MaonoProject = {
   slug: string;
   description?: string;
   accessLevel: "owner" | "editor" | "viewer" | string;
+  active?: boolean;
+  dropboxRootPath?: string;
+  defaultConfigFile?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type PublicSession = {
