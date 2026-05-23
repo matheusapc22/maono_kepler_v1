@@ -44,6 +44,19 @@ async function updateLinkedOrganizationFileSize(env, project, sizeBytes) {
     .run();
 }
 
+async function markProjectConfigUpdated(env, projectId) {
+  const updated = await env.DB.prepare(
+    `UPDATE projects
+     SET updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+     RETURNING *`
+  )
+    .bind(projectId)
+    .first();
+
+  return updated;
+}
+
 export async function onRequest(context) {
   const { request, env, params } = context;
 
@@ -107,6 +120,7 @@ export async function onRequest(context) {
 
     await uploadDropboxTextFile(env, project.dropbox_root_path, fileName, content);
     await updateLinkedOrganizationFileSize(env, project, sizeBytes);
+    const updatedProject = await markProjectConfigUpdated(env, project.id);
 
     await logAudit(env, {
       userId: user.id,
@@ -122,7 +136,7 @@ export async function onRequest(context) {
 
     return jsonResponse({
       ok: true,
-      project: publicProject(project),
+      project: publicProject({ ...project, ...updatedProject }),
       fileName,
       dropboxRootPath: project.dropbox_root_path,
       sizeBytes,
