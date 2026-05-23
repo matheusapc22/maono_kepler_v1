@@ -141,7 +141,7 @@ function SidebarIconButton({ label, icon, expanded, active = false, count, onCli
         </span>
       )}
       {expanded && typeof count === "number" && (
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
+        <span className="rounded-full border border-blue-300/20 bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-100">
           {count}
         </span>
       )}
@@ -156,8 +156,8 @@ function SidebarIconButton({ label, icon, expanded, active = false, count, onCli
       onClick={onClick}
       className={
         active
-          ? "flex w-full items-center gap-2 rounded-2xl bg-rose-50 px-2 py-2 font-semibold text-slate-950"
-          : "flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+          ? "flex w-full items-center gap-2 rounded-2xl border border-blue-400/30 bg-blue-500/15 px-2 py-2 font-semibold text-white shadow-sm"
+          : "flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
       }
     >
       {content}
@@ -167,10 +167,10 @@ function SidebarIconButton({ label, icon, expanded, active = false, count, onCli
 
 function SidebarSectionTitle({ children, expanded }: { children: React.ReactNode; expanded: boolean }) {
   if (!expanded) {
-    return <div className="my-3 h-px bg-slate-200" />;
+    return <div className="my-3 h-px bg-white/10" />;
   }
 
-  return <div className="mb-2 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{children}</div>;
+  return <div className="mb-2 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-blue-200/80">{children}</div>;
 }
 
 const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
@@ -189,20 +189,20 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
     <aside
       className={
         expanded
-          ? "flex w-[296px] shrink-0 flex-col border-r border-slate-200 bg-[#fafafa] transition-all duration-300"
-          : "flex w-20 shrink-0 flex-col border-r border-slate-200 bg-[#fafafa] transition-all duration-300"
+          ? "flex w-[296px] shrink-0 flex-col border-r border-slate-700 bg-[#111827] text-slate-100 shadow-2xl shadow-black/20 transition-all duration-300"
+          : "flex w-20 shrink-0 flex-col border-r border-slate-700 bg-[#111827] text-slate-100 shadow-2xl shadow-black/20 transition-all duration-300"
       }
     >
       <div className={expanded ? "flex h-20 items-center justify-between px-7" : "flex h-20 flex-col items-center justify-center gap-2 px-3"}>
         {expanded ? (
           <img src={Logo} alt="Maõno" className="h-11 w-auto object-contain" />
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-black text-white">M</div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-yellow-400/30 bg-yellow-500/15 text-sm font-black text-yellow-100">M</div>
         )}
         <button
           type="button"
           onClick={() => setExpanded((current) => !current)}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-600 bg-[#0f172a] text-slate-200 shadow-sm transition hover:border-blue-300/40 hover:bg-slate-800 hover:text-white"
           title={expanded ? "Recolher barra lateral" : "Expandir barra lateral"}
           aria-label={expanded ? "Recolher barra lateral" : "Expandir barra lateral"}
         >
@@ -212,13 +212,13 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
 
       <div className={expanded ? "px-7 pb-7 pt-2" : "px-3 pb-5 pt-2"}>
         <div className={expanded ? "flex items-center gap-3 rounded-2xl px-1 py-2" : "flex flex-col items-center gap-2 rounded-2xl py-2"}>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-yellow-400/30 bg-[#0f172a] text-sm font-bold text-yellow-100">
             {getInitials(user?.name || user?.email)}
           </div>
           {expanded && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-slate-950">{workspaceName}</p>
-              <p className="truncate text-xs text-slate-500">{user?.email}</p>
+              <p className="truncate text-sm font-bold text-white">{workspaceName}</p>
+              <p className="truncate text-xs text-slate-400">{user?.email}</p>
             </div>
           )}
         </div>
@@ -253,15 +253,15 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
 
         <div className="mt-2">
           {expanded ? (
-            <label className="flex items-center gap-2 rounded-2xl px-2 py-2 text-slate-700 transition hover:bg-slate-100 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500">
+            <label className="flex items-center gap-2 rounded-2xl px-2 py-2 text-slate-300 transition hover:bg-white/10 focus-within:bg-[#0f172a] focus-within:ring-2 focus-within:ring-blue-500/30">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400">
                 <SearchIcon />
               </span>
               <input
                 value={searchQuery}
                 onChange={(event) => onSearchQueryChange(event.target.value)}
                 placeholder="Buscar"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-500"
+                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
               />
             </label>
           ) : (
@@ -270,7 +270,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
               onClick={() => setExpanded(true)}
               title="Buscar"
               aria-label="Buscar"
-              className="flex w-full items-center justify-center rounded-2xl px-2 py-2 text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+              className="flex w-full items-center justify-center rounded-2xl px-2 py-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-xl">
                 <SearchIcon />
@@ -293,7 +293,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
               to="/admin"
               title="Painel Admin"
               aria-label="Painel Admin"
-              className="flex items-center gap-2 rounded-2xl px-2 py-2 text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+              className="flex items-center gap-2 rounded-2xl px-2 py-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
                 <SettingsIcon />
@@ -306,7 +306,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
             onClick={onLogout}
             title="Sair"
             aria-label="Sair"
-            className="flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+            className="flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
               <LogoutIcon />
@@ -317,9 +317,9 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
       </nav>
 
       {expanded && (
-        <div className="m-5 rounded-2xl bg-blue-50 p-5 text-sm text-blue-900">
-          <p className="font-bold">Maõno Maps</p>
-          <p className="mt-2 leading-5 text-blue-700">
+        <div className="m-5 rounded-2xl border border-blue-400/20 bg-[#0f172a] p-5 text-sm text-slate-200">
+          <p className="font-bold text-white">Maõno Maps</p>
+          <p className="mt-2 leading-5 text-blue-100/80">
             Acesse os mapas liberados para sua conta e acompanhe as últimas atualizações dos projetos.
           </p>
         </div>
