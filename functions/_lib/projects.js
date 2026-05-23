@@ -9,10 +9,12 @@ export async function listProjectsForUser(env, user) {
         projects.dropbox_root_path,
         projects.default_config_file,
         projects.active,
+        projects.created_at,
+        projects.updated_at,
         'owner' AS access_level
       FROM projects
       WHERE projects.active = 1
-      ORDER BY projects.name ASC`
+      ORDER BY projects.updated_at DESC, projects.name ASC`
     ).all();
 
     return results || [];
@@ -27,12 +29,14 @@ export async function listProjectsForUser(env, user) {
       projects.dropbox_root_path,
       projects.default_config_file,
       projects.active,
+      projects.created_at,
+      projects.updated_at,
       user_projects.access_level
     FROM user_projects
     INNER JOIN projects ON projects.id = user_projects.project_id
     WHERE user_projects.user_id = ?
       AND projects.active = 1
-    ORDER BY projects.name ASC`
+    ORDER BY projects.updated_at DESC, projects.name ASC`
   )
     .bind(user.id)
     .all();
@@ -51,6 +55,8 @@ export async function getAuthorizedProject(env, user, slug) {
         projects.dropbox_root_path,
         projects.default_config_file,
         projects.active,
+        projects.created_at,
+        projects.updated_at,
         'owner' AS access_level
       FROM projects
       WHERE projects.slug = ?
@@ -72,6 +78,8 @@ export async function getAuthorizedProject(env, user, slug) {
       projects.dropbox_root_path,
       projects.default_config_file,
       projects.active,
+      projects.created_at,
+      projects.updated_at,
       user_projects.access_level
     FROM user_projects
     INNER JOIN projects ON projects.id = user_projects.project_id
@@ -93,6 +101,11 @@ export function publicProject(project) {
     slug: project.slug,
     description: project.description,
     accessLevel: project.access_level,
+    active: Boolean(project.active),
+    dropboxRootPath: project.dropbox_root_path,
+    defaultConfigFile: project.default_config_file,
+    createdAt: project.created_at,
+    updatedAt: project.updated_at,
   };
 }
 
