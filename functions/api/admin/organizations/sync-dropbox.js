@@ -50,7 +50,7 @@ function requireAdmin(user) {
   }
 }
 
-function publicOrganization(row, syncStatus = "synced", filesSynced = 0) {
+function publicOrganization(row, syncStatus = "synced", filesSynced = 0, projectsLinked = 0) {
   return {
     id: row.id,
     name: row.name,
@@ -60,6 +60,7 @@ function publicOrganization(row, syncStatus = "synced", filesSynced = 0) {
     active: Boolean(row.active),
     syncStatus,
     filesSynced,
+    projectsLinked,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -113,11 +114,58 @@ async function upsertOrganizationFromFolder(env, folderEntry) {
   return { organization: created, status: "created" };
 }
 
+async function linkExistingProjectsToOrganizationFile(env, organization, file) {
+  const { results } = await env.DB.prepare(
+    `SELECT id
+     FROM projects
+     WHERE active = 1
+       AND (
+         organization_file_id = ?
+         OR (
+           LOWER(dropbox_root_path) = LOWER(?)
+           AND LOWER(default_config_file) = LOWER(?)
+         )
+         OR LOWER(TRIM(dropbox_root_path, '/') || '/' || TRIM(default_config_file, '/')) = LOWER(TRIM(?, '/'))
+       )`
+  )
+    .bind(
+      file.id,
+      organization.dropbox_root_path,
+      file.file_name,
+      file.dropbox_path
+    )
+    .all();
+
+  const projects = results || [];
+
+  if (projects.length) {
+    await env.DB.batch(
+      projects.map((project) =>
+        env.DB.prepare(
+          `UPDATE projects
+           SET organization_id = ?, organization_file_id = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`
+        ).bind(organization.id, file.id, project.id)
+      )
+    );
+
+    await env.DB.prepare(
+      `UPDATE organization_files
+       SET is_project = 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    )
+      .bind(file.id)
+      .run();
+  }
+
+  return projects.length;
+}
+
 async function upsertOrganizationFileFromDropboxEntry(env, organization, fileEntry) {
   const fileName = normalizeText(fileEntry.name);
   const dropboxPath = normalizeDropboxFolderPath(fileEntry.path_display || fileEntry.path_lower);
 
-  if (!fileName || !dropboxPath) return null;
+  if (!fileName || !dropboxPath) return { file: null, projectsLinked: 0 };
 
   const fileType = inferFileType(fileName);
   const sizeBytes = Number(fileEntry.size || 0);
@@ -146,20 +194,26 @@ async function upsertOrganizationFileFromDropboxEntry(env, organization, fileEnt
     .bind(organization.id, fileName, fileName, dropboxPath, fileType, sizeBytes)
     .first();
 
-  return savedFile;
+  const projectsLinked = savedFile
+    ? await linkExistingProjectsToOrganizationFile(env, organization, savedFile)
+    : 0;
+
+  return { file: savedFile, projectsLinked };
 }
 
 async function syncFilesForOrganization(env, organization) {
   const dropbox = await listDropboxFolder(env, organization.dropbox_root_path);
   const files = (dropbox.entries || []).filter((entry) => entry[".tag"] === "file");
-  let synced = 0;
+  let filesSynced = 0;
+  let projectsLinked = 0;
 
   for (const fileEntry of files) {
-    const saved = await upsertOrganizationFileFromDropboxEntry(env, organization, fileEntry);
-    if (saved) synced += 1;
+    const result = await upsertOrganizationFileFromDropboxEntry(env, organization, fileEntry);
+    if (result.file) filesSynced += 1;
+    projectsLinked += result.projectsLinked || 0;
   }
 
-  return synced;
+  return { filesSynced, projectsLinked };
 }
 
 export async function onRequest(context) {
@@ -184,13 +238,15 @@ export async function onRequest(context) {
     const folders = (dropbox.entries || []).filter((entry) => entry[".tag"] === "folder");
     const synced = [];
     let filesSyncedTotal = 0;
+    let projectsLinkedTotal = 0;
 
     for (const folder of folders) {
       const result = await upsertOrganizationFromFolder(env, folder);
       if (result?.organization) {
-        const filesSynced = await syncFilesForOrganization(env, result.organization);
+        const { filesSynced, projectsLinked } = await syncFilesForOrganization(env, result.organization);
         filesSyncedTotal += filesSynced;
-        synced.push(publicOrganization(result.organization, result.status, filesSynced));
+        projectsLinkedTotal += projectsLinked;
+        synced.push(publicOrganization(result.organization, result.status, filesSynced, projectsLinked));
       }
     }
 
@@ -202,6 +258,7 @@ export async function onRequest(context) {
         foldersFound: folders.length,
         organizationsSynced: synced.length,
         filesSynced: filesSyncedTotal,
+        projectsLinked: projectsLinkedTotal,
       },
     });
 
@@ -211,6 +268,7 @@ export async function onRequest(context) {
       foldersFound: folders.length,
       organizationsSynced: synced.length,
       filesSynced: filesSyncedTotal,
+      projectsLinked: projectsLinkedTotal,
       organizations: synced,
     });
   } catch (error) {
