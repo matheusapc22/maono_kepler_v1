@@ -3,16 +3,43 @@ import { Link, useNavigate } from "react-router";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
 
+function parseApiDate(value: string) {
+  const trimmed = String(value || "").trim();
+
+  if (!trimmed) return null;
+
+  // Cloudflare D1/SQLite CURRENT_TIMESTAMP retorna UTC no formato:
+  // YYYY-MM-DD HH:mm:ss, sem o sufixo Z.
+  // Sem essa normalização, o navegador interpreta como horário local
+  // e mostra 20:27 em vez de converter UTC para 17:27 no Brasil.
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+    return new Date(`${trimmed.replace(" ", "T")}Z`);
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(trimmed)) {
+    return new Date(`${trimmed}Z`);
+  }
+
+  return new Date(trimmed);
+}
+
 function formatDate(value?: string) {
   if (!value) return "Não informado";
+
   try {
+    const date = parseApiDate(value);
+
+    if (!date || Number.isNaN(date.getTime())) {
+      return value;
+    }
+
     return new Intl.DateTimeFormat("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    }).format(new Date(value));
+    }).format(date);
   } catch (_error) {
     return value;
   }
