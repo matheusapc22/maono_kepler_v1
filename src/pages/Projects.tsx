@@ -55,12 +55,6 @@ function permissionLabel(value?: string) {
   return labels[String(value || "").toLowerCase()] || value || "Acesso";
 }
 
-function getInitials(nameOrEmail?: string) {
-  const value = String(nameOrEmail || "M").trim();
-  const [first = "M", second = ""] = value.replace(/@.*/, "").split(/[\s._-]+/);
-  return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
-}
-
 function relativeUpdateLabel(value?: string) {
   if (!value) return "Atualização não informada";
 
