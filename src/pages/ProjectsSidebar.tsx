@@ -189,8 +189,8 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
     <aside
       className={
         expanded
-          ? "hidden w-[296px] shrink-0 border-r border-slate-200 bg-[#fafafa] transition-all duration-300 lg:flex lg:flex-col"
-          : "hidden w-20 shrink-0 border-r border-slate-200 bg-[#fafafa] transition-all duration-300 lg:flex lg:flex-col"
+          ? "flex w-[296px] shrink-0 flex-col border-r border-slate-200 bg-[#fafafa] transition-all duration-300"
+          : "flex w-20 shrink-0 flex-col border-r border-slate-200 bg-[#fafafa] transition-all duration-300"
       }
     >
       <div className={expanded ? "flex h-20 items-center justify-between px-7" : "flex h-20 flex-col items-center justify-center gap-2 px-3"}>
