@@ -13,6 +13,47 @@ function canSaveProject(userRole?: string, accessLevel?: string) {
   return normalize(accessLevel) === "editor";
 }
 
+function getFallbackDatasets(mapState: any) {
+  const datasets = mapState?.visState?.datasets;
+
+  if (!datasets || typeof datasets !== "object") {
+    return [];
+  }
+
+  return Object.entries(datasets).map(([id, dataset]: [string, any]) => ({
+    version: "v1",
+    data: dataset?.data || dataset,
+    info: {
+      id,
+      label: dataset?.label || dataset?.data?.label || id,
+    },
+  }));
+}
+
+function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
+  const saved = rawSaved && typeof rawSaved === "object" ? rawSaved : {};
+
+  const config =
+    saved.config && typeof saved.config === "object"
+      ? saved.config
+      : {
+          visState: saved.visState || mapState?.visState || {},
+          mapState: saved.mapState || mapState?.mapState || {},
+          mapStyle: saved.mapStyle || mapState?.mapStyle || {},
+        };
+
+  const datasets = Array.isArray(saved.datasets)
+    ? saved.datasets
+    : getFallbackDatasets(mapState);
+
+  return {
+    ...saved,
+    version: saved.version || "v1",
+    datasets,
+    config,
+  };
+}
+
 const MaonoSaveButton: React.FC = () => {
   const { projectSlug } = useParams();
   const { authenticated, user, projects } = useSession();
@@ -39,7 +80,9 @@ const MaonoSaveButton: React.FC = () => {
     setMessage("");
 
     try {
-      const config = KeplerGlSchema.save(mapState);
+      const rawSaved = KeplerGlSchema.save(mapState);
+      const config = normalizeSavedKeplerConfig(rawSaved, mapState);
+
       const response = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
         method: "PUT",
         credentials: "include",
