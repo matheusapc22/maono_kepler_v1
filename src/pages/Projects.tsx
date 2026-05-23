@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
+import ProjectsSidebar, { type ProjectSidebarSection } from "./ProjectsSidebar";
 
 function parseApiDate(value: string) {
   const trimmed = String(value || "").trim();
@@ -107,7 +108,7 @@ const ProjectsPage: React.FC = () => {
   const { authenticated, loading, user, projects, logout } = useSession();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [sidebarSection, setSidebarSection] = useState<"recent" | "all">("recent");
+  const [sidebarSection, setSidebarSection] = useState<ProjectSidebarSection>("recent");
 
   const activeProjects = useMemo(
     () => projects.filter((project) => project.active !== false),
@@ -154,114 +155,20 @@ const ProjectsPage: React.FC = () => {
 
   if (!authenticated) return null;
 
-  const workspaceName = user?.name ? `${user.name.split(" ")[0]}'s Workspace` : "Maõno Workspace";
   const sectionTitle = sidebarSection === "recent" ? "Recentes" : "Todos os projetos";
 
   return (
     <main className="min-h-screen bg-white text-slate-950">
       <div className="flex min-h-screen">
-        <aside className="hidden w-[296px] shrink-0 border-r border-slate-200 bg-[#fafafa] lg:flex lg:flex-col">
-          <div className="flex h-20 items-center justify-between px-7">
-            <img src={Logo} alt="Maõno" className="h-11 w-auto object-contain" />
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
-              {getInitials(user?.name || user?.email)}
-            </div>
-          </div>
-
-          <div className="px-7 pb-7 pt-2">
-            <div className="flex items-center gap-3 rounded-2xl px-1 py-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600 text-xs font-bold text-white">
-                M
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-slate-950">{workspaceName}</p>
-                <p className="truncate text-xs text-slate-500">{user?.email}</p>
-              </div>
-              <span className="text-slate-400">⌄</span>
-            </div>
-          </div>
-
-          <nav className="flex-1 px-5 text-sm">
-            <div className="mb-6">
-              <div className="mb-2 flex items-center justify-between px-3 text-xs font-medium text-slate-500">
-                <span>Mapas</span>
-                <span className="text-lg leading-none text-slate-400">＋</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSidebarSection("recent")}
-                className={
-                  sidebarSection === "recent"
-                    ? "flex w-full items-center gap-3 rounded-xl bg-rose-50 px-3 py-2.5 font-semibold text-slate-950"
-                    : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-slate-700 hover:bg-slate-100"
-                }
-              >
-                <span className="text-lg">◷</span>
-                Recentes
-              </button>
-              <button
-                type="button"
-                onClick={() => setSidebarSection("all")}
-                className={
-                  sidebarSection === "all"
-                    ? "flex w-full items-center gap-3 rounded-xl bg-rose-50 px-3 py-2.5 font-semibold text-slate-950"
-                    : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-slate-700 hover:bg-slate-100"
-                }
-              >
-                <span className="text-lg">▦</span>
-                Todos os projetos
-              </button>
-              <label className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-700 hover:bg-slate-100">
-                <span className="text-lg">⌕</span>
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Buscar"
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
-                />
-              </label>
-            </div>
-
-            <div className="mb-6">
-              <div className="mb-2 px-3 text-xs font-medium text-slate-500">Acessos</div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-700">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-xs">V</span>
-                  Visualização
-                </div>
-                <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-700">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full border border-blue-300 text-xs text-blue-700">E</span>
-                  Edição
-                </div>
-                <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-700">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full border border-purple-300 text-xs text-purple-700">P</span>
-                  Proprietário
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 px-3 text-xs font-medium text-slate-500">Conta</div>
-              {user?.role === "admin" && (
-                <Link to="/admin" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-700 hover:bg-slate-100">
-                  <span className="text-lg">⚙</span>
-                  Painel Admin
-                </Link>
-              )}
-              <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-slate-700 hover:bg-slate-100">
-                <span className="text-lg">↳</span>
-                Sair
-              </button>
-            </div>
-          </nav>
-
-          <div className="m-5 rounded-2xl bg-blue-50 p-5 text-sm text-blue-900">
-            <p className="font-bold">Maõno Maps</p>
-            <p className="mt-2 leading-5 text-blue-700">
-              Acesse os mapas liberados para sua conta e acompanhe as últimas atualizações dos projetos.
-            </p>
-          </div>
-        </aside>
+        <ProjectsSidebar
+          user={user}
+          activeProjectsCount={activeProjects.length}
+          searchQuery={searchQuery}
+          sidebarSection={sidebarSection}
+          onSearchQueryChange={setSearchQuery}
+          onSidebarSectionChange={setSidebarSection}
+          onLogout={handleLogout}
+        />
 
         <section className="min-w-0 flex-1">
           <header className="flex min-h-20 items-center justify-between border-b border-slate-100 px-6 py-4 lg:px-10">
