@@ -74,7 +74,9 @@ function injectDropboxSyncButton() {
     item.textContent?.includes("Organizações cadastradas")
   );
 
-  const section = header?.closest("section");
+  if (!header) return;
+
+  const section = header.closest("section");
   if (!section) return;
 
   const button = document.createElement("button");
