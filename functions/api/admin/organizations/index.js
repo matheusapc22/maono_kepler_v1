@@ -47,7 +47,9 @@ function publicOrganization(row) {
   };
 }
 
-async function listOrganizations(env) {
+async function listOrganizations(env, { includeInactive = false } = {}) {
+  const whereClause = includeInactive ? "" : "WHERE organizations.active = 1";
+
   const { results } = await env.DB.prepare(
     `SELECT
       organizations.id,
@@ -65,6 +67,7 @@ async function listOrganizations(env) {
     LEFT JOIN organization_files ON organization_files.organization_id = organizations.id AND organization_files.active = 1
     LEFT JOIN projects ON projects.organization_id = organizations.id AND projects.active = 1
     LEFT JOIN organization_users ON organization_users.organization_id = organizations.id
+    ${whereClause}
     GROUP BY organizations.id
     ORDER BY organizations.active DESC, organizations.name ASC`
   ).all();
@@ -126,7 +129,9 @@ export async function onRequest(context) {
     requireAdmin(user);
 
     if (request.method === "GET") {
-      const organizations = await listOrganizations(env);
+      const url = new URL(request.url);
+      const includeInactive = url.searchParams.get("includeInactive") === "true";
+      const organizations = await listOrganizations(env, { includeInactive });
       return jsonResponse({ ok: true, organizations: organizations.map(publicOrganization) });
     }
 
