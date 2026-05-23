@@ -26,6 +26,11 @@ function normalizeSlug(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function isDropboxNotFoundError(error) {
+  const message = String(error?.message || "");
+  return message.includes("path/not_found") || message.includes("path_lookup/not_found");
+}
+
 function requireAdmin(user) {
   if (user?.role !== "admin") {
     const error = new Error("Apenas administradores podem acessar este recurso.");
@@ -140,11 +145,23 @@ async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
     env.DB.prepare(`UPDATE organizations SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(organizationId),
   ]);
 
+  let dropboxDeleted = false;
+  let dropboxAlreadyMissing = false;
+
   if (hardDeleteDropbox) {
-    await deleteDropboxPath(env, current.dropbox_root_path);
+    try {
+      await deleteDropboxPath(env, current.dropbox_root_path);
+      dropboxDeleted = true;
+    } catch (error) {
+      if (isDropboxNotFoundError(error)) {
+        dropboxAlreadyMissing = true;
+      } else {
+        throw error;
+      }
+    }
   }
 
-  return { organization: current };
+  return { organization: current, dropboxDeleted, dropboxAlreadyMissing };
 }
 
 export async function onRequest(context) {
@@ -184,16 +201,22 @@ export async function onRequest(context) {
     if (request.method === "DELETE") {
       const url = new URL(request.url);
       const hardDeleteDropbox = url.searchParams.get("dropbox") === "true";
-      const { organization, error } = await deleteOrganization(env, organizationId, hardDeleteDropbox);
+      const { organization, dropboxDeleted, dropboxAlreadyMissing, error } = await deleteOrganization(env, organizationId, hardDeleteDropbox);
       if (error) return error;
 
       await logAudit(env, {
         userId: user.id,
         action: hardDeleteDropbox ? "admin.organizations.delete_dropbox" : "admin.organizations.deactivate",
-        details: { organizationId, slug: organization.slug, dropboxRootPath: organization.dropbox_root_path },
+        details: {
+          organizationId,
+          slug: organization.slug,
+          dropboxRootPath: organization.dropbox_root_path,
+          dropboxDeleted,
+          dropboxAlreadyMissing,
+        },
       });
 
-      return jsonResponse({ ok: true });
+      return jsonResponse({ ok: true, dropboxDeleted, dropboxAlreadyMissing });
     }
 
     return methodNotAllowed(["GET", "PUT", "PATCH", "DELETE"]);
