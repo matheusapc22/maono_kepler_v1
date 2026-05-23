@@ -185,7 +185,7 @@ const StyledVerticalResizeHandle = styled(PanelResizeHandle)`
 const App = (props) => {
   const [showBanner, toggleShowBanner] = useState(false);
 
-  const { id, provider } = useParams();
+  const { id, provider, projectSlug } = useParams();
   const [searchParams] = useSearchParams();
   const query = Object.fromEntries(searchParams.entries());
   const dispatch = useDispatch();
@@ -670,7 +670,10 @@ const App = (props) => {
     _replaceSyncedFilterWTripLayer,
   ]);
 
-  const isAdminUser = useMemo(() => checkAdminUser(), []);
+  const isAdminUser = useMemo(
+    () => checkAdminUser({ projectSlug }),
+    [projectSlug]
+  );
 
   useEffect(() => {
     dispatch(toggleModal(null));
