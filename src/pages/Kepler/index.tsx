@@ -31,6 +31,7 @@ import { SqlPanel } from "@kepler.gl/duckdb";
 import Banner from "./components/banner";
 import Announcement, { FormLink } from "./components/announcement";
 import MaonoSaveButton from "./components/maono-save-button";
+import BackToProjectsButton from "./components/back-to-projects-button";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
 import { replacePanelHeader } from "./factories/panel-header";
@@ -331,6 +332,7 @@ const App = (props) => {
   return (
     <>
       <MapUrlLoader />
+      <BackToProjectsButton />
       <MaonoSaveButton />
       <StyleSheetManager shouldForwardProp={shouldForwardProp}>
         <ThemeProvider theme={theme}>
