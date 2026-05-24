@@ -35,6 +35,7 @@ import BackToProjectsButton from "./components/back-to-projects-button";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
 import { replacePanelHeader } from "./factories/panel-header";
+import { replaceLayerConfigurator } from "./factories/layer-configurator";
 import {
   CLOUD_PROVIDERS_CONFIGURATION,
   DEFAULT_FEATURE_FLAGS,
@@ -106,6 +107,8 @@ const KeplerGl = injectComponents([
   replacePanelHeader(),
   // @ts-expect-error: Unresolved
   replaceDatasetSection(),
+  // @ts-expect-error: Unresolved
+  replaceLayerConfigurator(),
 ]);
 
 // This implements the default behavior from styled-components v5
