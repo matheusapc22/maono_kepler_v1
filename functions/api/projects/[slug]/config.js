@@ -5,7 +5,7 @@ import { downloadDropboxTextFile, uploadDropboxTextFile } from "../../../_lib/dr
 
 function canSaveProject(user, project) {
   if (user?.role === "admin") return true;
-  return String(project?.access_level || "").toLowerCase() === "editor";
+  return ["editor", "owner"].includes(String(project?.access_level || "").toLowerCase());
 }
 
 function validateKeplerConfig(config) {
