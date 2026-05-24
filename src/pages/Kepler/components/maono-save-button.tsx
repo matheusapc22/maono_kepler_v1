@@ -10,7 +10,7 @@ function normalize(value?: string | null) {
 
 function canSaveProject(userRole?: string, accessLevel?: string) {
   if (normalize(userRole) === "admin") return true;
-  return normalize(accessLevel) === "editor";
+  return ["editor", "owner"].includes(normalize(accessLevel));
 }
 
 function getFallbackDatasets(mapState: any) {
