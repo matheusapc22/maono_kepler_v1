@@ -1,6 +1,6 @@
 const LEGACY_ADMIN_USER = "adminma426o123no321";
 
-const EDITABLE_PROJECT_ACCESS_LEVELS = new Set(["editor"]);
+const EDITABLE_PROJECT_ACCESS_LEVELS = new Set(["editor", "owner"]);
 
 type MaonoSessionProject = {
   slug?: string;
