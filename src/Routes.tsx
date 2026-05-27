@@ -1,23 +1,47 @@
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 
 const KeplerAppRoutes = lazy(() => import("./pages/Kepler"));
+const ProjectsPage = lazy(() => import("./pages/Projects"));
 
 const AppRoutes = () => {
   return (
     <Routes>
+      <Route path="/" element={<Navigate to="/projects" replace />} />
+
       <Route
-        path="/"
+        path="projects"
+        element={
+          <Suspense>
+            <ProjectsPage />
+          </Suspense>
+        }
+      />
+
+      <Route
+        path="map"
         element={
           <Suspense>
             <KeplerAppRoutes />
           </Suspense>
         }
       />
-
-      <Route path="map" element={<KeplerAppRoutes />} />
-      <Route path="(:id)" element={<KeplerAppRoutes />} />
-      <Route path="map/:provider" element={<KeplerAppRoutes />} />
+      <Route
+        path="(:id)"
+        element={
+          <Suspense>
+            <KeplerAppRoutes />
+          </Suspense>
+        }
+      />
+      <Route
+        path="map/:provider"
+        element={
+          <Suspense>
+            <KeplerAppRoutes />
+          </Suspense>
+        }
+      />
     </Routes>
   );
 };
