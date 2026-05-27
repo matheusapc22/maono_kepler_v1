@@ -25,6 +25,14 @@ export function joinDropboxPath(rootPath, fileName) {
   return `${cleanRoot}/${cleanFile}`;
 }
 
+export function getPreviewFileNameFromConfigFile(fileName = "config.kepler.json") {
+  const cleanFile = String(fileName || "config.kepler.json").replace(/^\/+/, "");
+  if (/\.json$/i.test(cleanFile)) {
+    return cleanFile.replace(/\.json$/i, ".png");
+  }
+  return `${cleanFile}.png`;
+}
+
 async function getDropboxAccessToken(env) {
   requireEnv(env, [
     "DROPBOX_APP_KEY",
@@ -153,7 +161,24 @@ export async function deleteDropboxPath(env, path) {
   return await response.json();
 }
 
+export async function deleteDropboxPathIfExists(env, path) {
+  try {
+    return await deleteDropboxPath(env, path);
+  } catch (error) {
+    const message = String(error?.message || "");
+    if (message.includes("path/not_found") || message.includes("not_found")) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function downloadDropboxTextFile(env, rootPath, fileName) {
+  const response = await downloadDropboxBinaryFile(env, rootPath, fileName);
+  return await response.text();
+}
+
+export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
   const accessToken = await getDropboxAccessToken(env);
   const path = joinDropboxPath(rootPath, fileName);
 
@@ -167,13 +192,19 @@ export async function downloadDropboxTextFile(env, rootPath, fileName) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Falha ao baixar arquivo Dropbox ${path}: ${response.status} ${text}`);
+    const error = new Error(`Falha ao baixar arquivo Dropbox ${path}: ${response.status} ${text}`);
+    error.status = response.status;
+    throw error;
   }
 
-  return await response.text();
+  return response;
 }
 
 export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
+  return await uploadDropboxBinaryFile(env, rootPath, fileName, content, "application/json");
+}
+
+export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, contentType = "application/octet-stream") {
   const normalizedRootPath = normalizeDropboxFolderPath(rootPath);
   const path = joinDropboxPath(normalizedRootPath, fileName);
 
@@ -184,7 +215,7 @@ export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/octet-stream",
+      "Content-Type": contentType,
       "Dropbox-API-Arg": JSON.stringify({
         path,
         mode: "overwrite",
