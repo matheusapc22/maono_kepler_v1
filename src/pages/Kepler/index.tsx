@@ -58,14 +58,11 @@ import {
 } from "@kepler.gl/actions";
 import { CLOUD_PROVIDERS } from "./cloud-providers";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-// Sample data
 /* eslint-disable no-unused-vars */
 import sampleTripData, {
   testCsvData,
   sampleTripDataConfig,
 } from "./data/sample-trip-data";
-// import sampleGeojson from './data/sample-small-geojson';
-// import sampleGeojsonPoints from './data/sample-geojson-points';
 import sampleGeojsonConfig from "./data/sample-geojson-config";
 import sampleH3Data, { config as h3MapConfig } from "./data/sample-hex-id-csv";
 import sampleS2Data, {
@@ -94,36 +91,43 @@ import { replaceSidePanel } from "./factories/side-panel";
 import checkAdminUser from "./utils/is-admin-user";
 import MapUrlLoader from "./map-url-loader";
 import { useHideMapAttribution } from "../../hooks/useHideMapAttrition";
-// import OverrideUploadMessage from "./components/override-upload-message";
 
 const KeplerGl = injectComponents([
-  // @ts-expect-error: Unresolved
   replaceSidePanel(),
-  // @ts-expect-error: Unresolved
   replaceLoadDataModal(),
-  // @ts-expect-error: Unresolved
   replaceMapControl(),
-  // @ts-expect-error: Unresolved
   replacePanelHeader(),
-  // @ts-expect-error: Unresolved
   replaceDatasetSection(),
-  // @ts-expect-error: Unresolved
   replaceLayerConfigurator(),
 ]);
 
-// This implements the default behavior from styled-components v5
 function shouldForwardProp(propName, target) {
   if (typeof target === "string") {
-    // For HTML elements, forward the prop if it is a valid HTML attribute
     return isPropValid(propName);
   }
-  // For other elements, forward all props
   return true;
 }
 
 const BannerHeight = 48;
 const BannerKey = `banner-${FormLink}`;
 const keplerGlGetState = (state) => state.demo.keplerGl;
+const MAONO_SCREENSHOT_TIMEOUT_MS = 6000;
+
+function normalizeScreenshotPayload(screenshot) {
+  if (!screenshot) return null;
+  if (typeof screenshot === "string") return screenshot;
+  if (typeof screenshot === "object") {
+    return (
+      screenshot.dataUrl ||
+      screenshot.dataURL ||
+      screenshot.image ||
+      screenshot.screenshot ||
+      screenshot.src ||
+      null
+    );
+  }
+  return null;
+}
 
 const GlobalStyle = styled.div`
   font-family: ff-clan-web-pro, "Helvetica Neue", Helvetica, sans-serif;
@@ -194,8 +198,8 @@ const App = (props) => {
   const [searchParams] = useSearchParams();
   const query = Object.fromEntries(searchParams.entries());
   const dispatch = useDispatch();
+  const screenshotRequestRef = useRef(null);
 
-  // TODO find another way to check for existence of duckDb plugin
   const duckDbPluginEnabled = (getApplicationConfig().plugins || []).some(
     (p) => p.name === "duckdb"
   );
@@ -214,11 +218,8 @@ const App = (props) => {
   const prevQueryRef = useRef<number>(null);
 
   useEffect(() => {
-    // if we pass an id as part of the url
-    // we try to fetch along map configurations
     const cloudProvider = CLOUD_PROVIDERS.find((c) => c.name === provider);
     if (cloudProvider) {
-      // Prevent constant reloading after change of the location
       if (isEqual(prevQueryRef.current, { provider, id, query })) {
         return;
       }
@@ -234,14 +235,11 @@ const App = (props) => {
       return;
     }
 
-    // Load sample using its id
     if (id) {
       dispatch(loadSampleConfigurations(id));
     }
 
-    // Load map using a custom
     if (query.mapUrl) {
-      // TODO?: validate map url
       dispatch(loadRemoteMap({ dataUrl: query.mapUrl }));
     }
 
@@ -250,23 +248,10 @@ const App = (props) => {
       dispatch(toggleModal(null));
     }
 
-    // delay zs to show the banner
-    // if (!window.localStorage.getItem(BannerKey)) {
-    //   window.setTimeout(_showBanner, 3000);
-    // }
-    // load sample data
     _loadSampleData();
-
-    // Notifications
-
-    // no dependencies, as this was part of componentDidMount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Update map boundary when view state changes, used by ai-assistant to
-   * get data from vector tiles when map boundary changes
-   */
   const onViewStateChange = useCallback(
     (viewState) => {
       const viewport = new WebMercatorViewport(viewState);
@@ -285,17 +270,69 @@ const App = (props) => {
   const _setScreenCaptured = useCallback(
     (screenshot) => {
       dispatch(setScreenCaptured(screenshot));
+
+      const pending = screenshotRequestRef.current;
+      if (!pending) return;
+
+      const dataUrl = normalizeScreenshotPayload(screenshot);
+      Window.clearTimeout(pending.timeoutId);
+      screenshotRequestRef.current = null;
+      dispatch(setStartScreenCapture(false));
+
+      if (dataUrl) {
+        pending.resolve(dataUrl);
+      } else {
+        pending.reject(new Error("ScreenshotWrapper retornou captura vazia."));
+      }
     }, [dispatch]);
 
-  /*
-  const _showBanner = useCallback(() => {
-    toggleShowBanner(true);
-  }, [toggleShowBanner]);
-  */
+  useEffect(() => {
+    Window.__MAONO_CAPTURE_SCREENSHOT__ = () => {
+      if (screenshotRequestRef.current) {
+        return screenshotRequestRef.current.promise;
+      }
+
+      let resolveRequest;
+      let rejectRequest;
+
+      const promise = new Promise((resolve, reject) => {
+        resolveRequest = resolve;
+        rejectRequest = reject;
+      });
+
+      const timeoutId = Window.setTimeout(() => {
+        if (screenshotRequestRef.current) {
+          screenshotRequestRef.current = null;
+          dispatch(setStartScreenCapture(false));
+          rejectRequest(new Error("Tempo limite ao capturar preview do mapa."));
+        }
+      }, MAONO_SCREENSHOT_TIMEOUT_MS);
+
+      screenshotRequestRef.current = {
+        promise,
+        resolve: resolveRequest,
+        reject: rejectRequest,
+        timeoutId,
+      };
+
+      dispatch(setStartScreenCapture(true));
+      return promise;
+    };
+
+    return () => {
+      if (Window.__MAONO_CAPTURE_SCREENSHOT__) {
+        delete Window.__MAONO_CAPTURE_SCREENSHOT__;
+      }
+      if (screenshotRequestRef.current?.timeoutId) {
+        Window.clearTimeout(screenshotRequestRef.current.timeoutId);
+      }
+      screenshotRequestRef.current = null;
+    };
+  }, [dispatch]);
 
   const hideBanner = useCallback(() => {
     toggleShowBanner(false);
-  }, [toggleShowBanner]);
+  }, []);
 
   const _disableBanner = useCallback(() => {
     hideBanner();
