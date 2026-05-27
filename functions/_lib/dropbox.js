@@ -6,6 +6,7 @@ const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
 const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder";
 const DROPBOX_CREATE_FOLDER_URL = "https://api.dropboxapi.com/2/files/create_folder_v2";
 const DROPBOX_DELETE_URL = "https://api.dropboxapi.com/2/files/delete_v2";
+const DROPBOX_UPLOAD_CONTENT_TYPE = "application/octet-stream";
 
 export function normalizeDropboxFolderPath(path) {
   const cleanPath = String(path || "").trim().replace(/\/+$/g, "");
@@ -201,10 +202,10 @@ export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
 }
 
 export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
-  return await uploadDropboxBinaryFile(env, rootPath, fileName, content, "application/json");
+  return await uploadDropboxBinaryFile(env, rootPath, fileName, content);
 }
 
-export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, contentType = "application/octet-stream") {
+export async function uploadDropboxBinaryFile(env, rootPath, fileName, content) {
   const normalizedRootPath = normalizeDropboxFolderPath(rootPath);
   const path = joinDropboxPath(normalizedRootPath, fileName);
 
@@ -215,7 +216,10 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": contentType,
+      // A API /2/files/upload do Dropbox aceita apenas application/octet-stream
+      // ou text/plain; charset=dropbox-cors-hack. Não envie application/json
+      // nem image/png aqui; o tipo real é inferido pelo nome/extensão do arquivo.
+      "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
       "Dropbox-API-Arg": JSON.stringify({
         path,
         mode: "overwrite",
