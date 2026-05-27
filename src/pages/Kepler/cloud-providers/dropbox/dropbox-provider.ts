@@ -19,7 +19,7 @@ const CORS_FREE_DOMAIN = "dl.dropboxusercontent.com";
 const PRIVATE_STORAGE_ENABLED = true;
 const SHARING_ENABLED = true;
 const MAX_THUMBNAIL_BATCH = 25;
-const IMAGE_URL_PREFIX = "data:image/gif;base64,";
+const IMAGE_URL_PREFIX = "data:image/png;base64,";
 
 function parseQueryString(query: string) {
   const searchParams = new URLSearchParams(query);
@@ -36,6 +36,15 @@ function isConfigFile(err: any) {
     typeof summary === "string" &&
     Boolean(summary.match(/path\/conflict\/file\//g))
   );
+}
+
+function isDropboxPathNotFound(err: any) {
+  const summary = err?.error?.error_summary || err?.error_summary || "";
+  return typeof summary === "string" && summary.includes("path/not_found");
+}
+
+function getThumbnailPathFromMapPath(path: string) {
+  return path.replace(/\.json$/i, ".png");
 }
 
 export default class DropboxProvider extends Provider {
@@ -62,7 +71,7 @@ export default class DropboxProvider extends Provider {
   async login() {
     return new Promise(async (resolve, reject) => {
       try {
-        const link = await this._authLink(); // IMPORTANT: await (returns Promise<string>)
+        const link = await this._authLink();
         const authWindow = Window.open(link, "_blank", "width=1024,height=716");
 
         const handleToken = async (event: any) => {
@@ -79,7 +88,6 @@ export default class DropboxProvider extends Provider {
             return;
           }
 
-          // Modern API: token lives under .auth
           this._dropbox.auth.setAccessToken(token);
 
           const user = await this.getUser();
@@ -88,7 +96,7 @@ export default class DropboxProvider extends Provider {
             Window.localStorage.setItem(
               "dropbox",
               JSON.stringify({
-                token, // Dropbox tokens typically don’t expire unless revoked
+                token,
                 user,
                 timestamp: new Date(),
               })
@@ -113,7 +121,6 @@ export default class DropboxProvider extends Provider {
       });
       const { pngs, visualizations } = this._parseEntries(response);
 
-      // Fetch thumbnails (up to 25 per batch)
       const thumbnails = await Promise.all(
         this._getThumbnailRequests(pngs)
       ).then((results) =>
@@ -123,13 +130,14 @@ export default class DropboxProvider extends Provider {
         )
       );
 
-      // Attach thumbnails to matching visualizations
       (thumbnails || []).forEach((thb: any) => {
         if (thb[".tag"] === "success" && thb.thumbnail) {
           const matchViz =
             visualizations[pngs[thb.metadata.id] && pngs[thb.metadata.id].name];
           if (matchViz) {
             matchViz.thumbnail = `${IMAGE_URL_PREFIX}${thb.thumbnail}`;
+            matchViz.thumbnailPath = pngs[thb.metadata.id].path_lower;
+            matchViz.thumbnailUpdatedAt = pngs[thb.metadata.id].clientModified;
           }
         }
       });
@@ -140,7 +148,18 @@ export default class DropboxProvider extends Provider {
     }
   }
 
-  /** Upload a map JSON (+ optional thumbnail). If public, return share URL. */
+  /**
+   * Upload a map JSON and replace its PNG preview.
+   *
+   * Maõno Maps policy:
+   * - The project JSON is kept as a single canonical file and is overwritten on save.
+   * - The preview image is also kept as a single canonical PNG next to the JSON.
+   * - Before writing the new PNG, the previous visible PNG is removed to avoid accumulating images.
+   *
+   * Example:
+   *   /Projeto_MRA_v1.json
+   *   /Projeto_MRA_v1.png
+   */
   async uploadMap({ mapData, options = {} }: any) {
     const { isPublic } = options;
     const { map, thumbnail } = mapData;
@@ -149,7 +168,9 @@ export default class DropboxProvider extends Provider {
     const fileName = `${name}.json`;
     const fileContent = map;
 
-    const mode = options.overwrite || isPublic ? "overwrite" : "add";
+    // Always overwrite the canonical JSON for private saves.
+    // This prevents Dropbox from creating Project (1).json, Project (2).json, etc.
+    const mode = "overwrite";
     const path = `${this._path}/${fileName}`;
 
     let metadata: any;
@@ -167,11 +188,7 @@ export default class DropboxProvider extends Provider {
     }
 
     if (thumbnail) {
-      await this._dropbox.filesUpload({
-        path: path.replace(/\.json$/, ".png"),
-        contents: thumbnail,
-        mode,
-      });
+      await this.replaceThumbnailForMapPath(path, thumbnail);
     }
 
     if (isPublic) {
@@ -179,6 +196,19 @@ export default class DropboxProvider extends Provider {
     }
 
     return { id: metadata.id, path: metadata.path_lower };
+  }
+
+  /** Replace only the PNG preview for an existing map, without touching the JSON. */
+  async replaceThumbnailForMapPath(mapPath: string, thumbnail: Blob) {
+    const thumbnailPath = getThumbnailPathFromMapPath(mapPath);
+
+    await this._deleteFileIfExists(thumbnailPath);
+
+    return await this._dropbox.filesUpload({
+      path: thumbnailPath,
+      contents: thumbnail,
+      mode: "overwrite",
+    });
   }
 
   /** Download a map JSON. */
@@ -260,7 +290,7 @@ export default class DropboxProvider extends Provider {
     if (!(location && location.hash?.length)) {
       return null;
     }
-    const query = Window.location.hash.substring(1); // remove '#'
+    const query = Window.location.hash.substring(1);
     return parseQueryString(query).access_token;
   }
 
@@ -344,7 +374,7 @@ export default class DropboxProvider extends Provider {
       btoa(
         JSON.stringify({ handler: "dropbox", origin: Window.location.origin })
       ),
-      "token" // responseType
+      "token"
     );
   }
 
@@ -383,6 +413,17 @@ export default class DropboxProvider extends Provider {
     );
   }
 
+  async _deleteFileIfExists(path: string) {
+    try {
+      await this._dropbox.filesDeleteV2({ path });
+    } catch (err) {
+      if (isDropboxPathNotFound(err)) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
   /** Parse listFolder result into visualizations + png index. */
   _parseEntries(response: any) {
     const { entries, cursor, has_more } = response;
@@ -405,7 +446,12 @@ export default class DropboxProvider extends Provider {
         };
       } else if (name && name.endsWith(".png")) {
         const title = name.replace(/\.png$/, "");
-        pngs[id] = { name: title, path_lower, id };
+        pngs[id] = {
+          name: title,
+          path_lower,
+          id,
+          clientModified: new Date(client_modified).getTime(),
+        };
       }
     });
 
