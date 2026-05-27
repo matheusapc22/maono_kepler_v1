@@ -20,6 +20,9 @@ const PRIVATE_STORAGE_ENABLED = true;
 const SHARING_ENABLED = true;
 const MAX_THUMBNAIL_BATCH = 25;
 const IMAGE_URL_PREFIX = "data:image/png;base64,";
+const THUMBNAIL_WIDTH = 960;
+const THUMBNAIL_HEIGHT = 540;
+const MAP_RENDER_CAPTURE_DELAY_MS = 650;
 
 function parseQueryString(query: string) {
   const searchParams = new URLSearchParams(query);
@@ -155,6 +158,7 @@ export default class DropboxProvider extends Provider {
    * - The project JSON is kept as a single canonical file and is overwritten on save.
    * - The preview image is also kept as a single canonical PNG next to the JSON.
    * - Before writing the new PNG, the previous visible PNG is removed to avoid accumulating images.
+   * - If Kepler does not provide a thumbnail, this provider captures the current map canvas.
    *
    * Example:
    *   /Projeto_MRA_v1.json
@@ -167,6 +171,9 @@ export default class DropboxProvider extends Provider {
     const name = map?.info && map.info.title;
     const fileName = `${name}.json`;
     const fileContent = map;
+
+    // Capture before navigation or modal cleanup can change the visible map.
+    const thumbnailToSave = thumbnail || (await this._safeCaptureCurrentMapThumbnail());
 
     // Always overwrite the canonical JSON for private saves.
     // This prevents Dropbox from creating Project (1).json, Project (2).json, etc.
@@ -187,8 +194,8 @@ export default class DropboxProvider extends Provider {
       throw err;
     }
 
-    if (thumbnail) {
-      await this.replaceThumbnailForMapPath(path, thumbnail);
+    if (thumbnailToSave) {
+      await this.replaceThumbnailForMapPath(path, thumbnailToSave);
     }
 
     if (isPublic) {
@@ -209,6 +216,11 @@ export default class DropboxProvider extends Provider {
       contents: thumbnail,
       mode: "overwrite",
     });
+  }
+
+  /** Public helper used by the Projects page/manual preview flow. */
+  async captureCurrentMapThumbnail() {
+    return await this._captureCurrentMapThumbnail();
   }
 
   /** Download a map JSON. */
@@ -422,6 +434,106 @@ export default class DropboxProvider extends Provider {
       }
       throw err;
     }
+  }
+
+  async _safeCaptureCurrentMapThumbnail() {
+    try {
+      return await this._captureCurrentMapThumbnail();
+    } catch (err) {
+      // Saving the JSON must not be blocked by a browser/WebGL screenshot failure.
+      // The Projects page will keep using the SVG fallback when no PNG is available.
+      // eslint-disable-next-line no-console
+      console.warn("Maõno Maps: não foi possível capturar o preview PNG do mapa.", err);
+      return null;
+    }
+  }
+
+  async _captureCurrentMapThumbnail() {
+    await this._delay(MAP_RENDER_CAPTURE_DELAY_MS);
+
+    const sourceCanvas = this._getLargestVisibleCanvas();
+    if (!sourceCanvas) {
+      throw new Error("Canvas do mapa não encontrado para geração do preview.");
+    }
+
+    return await this._copyCanvasToPngBlob(sourceCanvas);
+  }
+
+  _getLargestVisibleCanvas() {
+    const canvases = Array.from(Window.document.querySelectorAll("canvas"));
+
+    return (
+      canvases
+        .filter((canvas: HTMLCanvasElement) => {
+          const rect = canvas.getBoundingClientRect();
+          return canvas.width > 0 && canvas.height > 0 && rect.width > 0 && rect.height > 0;
+        })
+        .sort(
+          (a: HTMLCanvasElement, b: HTMLCanvasElement) =>
+            b.width * b.height - a.width * a.height
+        )[0] || null
+    );
+  }
+
+  _copyCanvasToPngBlob(sourceCanvas: HTMLCanvasElement) {
+    const outputCanvas = Window.document.createElement("canvas");
+    outputCanvas.width = THUMBNAIL_WIDTH;
+    outputCanvas.height = THUMBNAIL_HEIGHT;
+
+    const ctx = outputCanvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Contexto 2D não disponível para geração do preview.");
+    }
+
+    const sourceWidth = sourceCanvas.width;
+    const sourceHeight = sourceCanvas.height;
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT;
+
+    let sx = 0;
+    let sy = 0;
+    let sw = sourceWidth;
+    let sh = sourceHeight;
+
+    if (sourceRatio > targetRatio) {
+      sw = sourceHeight * targetRatio;
+      sx = (sourceWidth - sw) / 2;
+    } else {
+      sh = sourceWidth / targetRatio;
+      sy = (sourceHeight - sh) / 2;
+    }
+
+    ctx.fillStyle = "#08090B";
+    ctx.fillRect(0, 0, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+    ctx.drawImage(
+      sourceCanvas,
+      sx,
+      sy,
+      sw,
+      sh,
+      0,
+      0,
+      THUMBNAIL_WIDTH,
+      THUMBNAIL_HEIGHT
+    );
+
+    return new Promise((resolve, reject) => {
+      outputCanvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Canvas retornou Blob vazio ao gerar preview."));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/png",
+        0.92
+      );
+    });
+  }
+
+  _delay(ms: number) {
+    return new Promise((resolve) => Window.setTimeout(resolve, ms));
   }
 
   /** Parse listFolder result into visualizations + png index. */
