@@ -25,10 +25,6 @@ function parseApiDate(value: string) {
 
   if (!trimmed) return null;
 
-  // Cloudflare D1/SQLite CURRENT_TIMESTAMP retorna UTC no formato:
-  // YYYY-MM-DD HH:mm:ss, sem o sufixo Z.
-  // Sem essa normalização, o navegador interpreta como horário local
-  // e mostra 20:27 em vez de converter UTC para 17:27 no Brasil.
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
     return new Date(`${trimmed.replace(" ", "T")}Z`);
   }
@@ -90,19 +86,6 @@ function relativeUpdateLabel(value?: string) {
   if (diffMonths < 12) return `Atualizado há ${diffMonths} mês${diffMonths > 1 ? "es" : ""}`;
 
   return `Atualizado em ${formatDate(value)}`;
-}
-
-function thumbnailClass(index: number) {
-  const options = [
-    "from-sky-100 via-emerald-50 to-blue-200",
-    "from-slate-900 via-blue-950 to-emerald-800",
-    "from-orange-100 via-rose-50 to-sky-100",
-    "from-emerald-50 via-lime-50 to-slate-100",
-    "from-blue-100 via-cyan-50 to-orange-100",
-    "from-slate-100 via-white to-blue-100",
-  ];
-
-  return options[index % options.length];
 }
 
 function permissionBadgeClass(accessLevel?: string) {
@@ -182,11 +165,17 @@ function projectActionLabel(defaultLabel: string, userRole?: string, accessLevel
   return defaultLabel;
 }
 
+function projectThumbnailUrl(slug: string, updatedAt?: string) {
+  const cacheKey = encodeURIComponent(updatedAt || String(Date.now()));
+  return `/api/projects/${encodeURIComponent(slug)}/thumbnail?v=${cacheKey}`;
+}
+
 const ProjectsPage: React.FC = () => {
   const { authenticated, loading, user, projects, logout } = useSession();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarSection, setSidebarSection] = useState<ProjectSidebarSection>("recent");
+  const [missingThumbnailSlugs, setMissingThumbnailSlugs] = useState<Record<string, true>>({});
 
   const activeProjects = useMemo(
     () => projects.filter((project) => project.active !== false),
@@ -231,6 +220,10 @@ const ProjectsPage: React.FC = () => {
   async function handleLogout() {
     await logout();
     navigate("/login", { replace: true });
+  }
+
+  function markThumbnailMissing(slug: string) {
+    setMissingThumbnailSlugs((current) => ({ ...current, [slug]: true }));
   }
 
   if (loading) {
@@ -365,23 +358,43 @@ const ProjectsPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid gap-x-7 gap-y-10 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {filteredProjects.map((project, index) => {
+                {filteredProjects.map((project) => {
                   const actionLabel = projectActionLabel(panelProfile.projectActionLabel, user?.role, project.accessLevel);
+                  const hasMissingThumbnail = Boolean(missingThumbnailSlugs[project.slug]);
+                  const thumbnailUrl = projectThumbnailUrl(project.slug, project.updatedAt);
 
                   return (
                     <Link key={project.slug} to={`/projects/${project.slug}/map`} className="group block">
                       <article className="rounded-3xl border border-slate-700 bg-[#111827] p-4 transition hover:border-blue-400/60 hover:bg-[#121c2f]">
-                        <div className={`relative h-48 overflow-hidden rounded-2xl bg-gradient-to-br ${thumbnailClass(index)} shadow-sm ring-1 ring-slate-700 transition group-hover:shadow-lg group-hover:ring-blue-400/50`}>
-                          <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(90deg,rgba(15,23,42,.12)_1px,transparent_1px),linear-gradient(rgba(15,23,42,.12)_1px,transparent_1px)] [background-size:28px_28px]" />
-                          <div className="absolute left-8 top-8 h-20 w-28 rounded-full border-2 border-sky-400/60 bg-sky-200/20" />
-                          <div className="absolute bottom-7 right-8 h-24 w-36 rounded-[999px] border-2 border-emerald-400/60 bg-emerald-200/20" />
-                          <div className="absolute left-[18%] top-[54%] h-2.5 w-2.5 rounded-full bg-emerald-500 shadow" />
-                          <div className="absolute left-[28%] top-[48%] h-2 w-2 rounded-full bg-blue-500 shadow" />
-                          <div className="absolute left-[38%] top-[58%] h-3 w-3 rounded-full bg-rose-500 shadow" />
-                          <div className="absolute left-[48%] top-[45%] h-2.5 w-2.5 rounded-full bg-orange-500 shadow" />
+                        <div className="relative h-48 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-emerald-900 shadow-sm ring-1 ring-slate-700 transition group-hover:shadow-lg group-hover:ring-blue-400/50">
+                          {!hasMissingThumbnail && (
+                            <img
+                              src={thumbnailUrl}
+                              alt={`Preview do projeto ${project.name}`}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                              onError={() => markThumbnailMissing(project.slug)}
+                            />
+                          )}
+                          {hasMissingThumbnail && (
+                            <>
+                              <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(90deg,rgba(244,241,232,.12)_1px,transparent_1px),linear-gradient(rgba(244,241,232,.12)_1px,transparent_1px)] [background-size:28px_28px]" />
+                              <div className="absolute left-8 top-8 h-20 w-28 rounded-md border-2 border-yellow-400/60 bg-yellow-200/10" />
+                              <div className="absolute bottom-7 right-8 h-24 w-36 rounded-md border-2 border-emerald-400/60 bg-emerald-200/10" />
+                              <div className="absolute left-[18%] top-[54%] h-2.5 w-2.5 rounded-sm bg-emerald-500 shadow" />
+                              <div className="absolute left-[28%] top-[48%] h-2 w-2 rounded-sm bg-blue-500 shadow" />
+                              <div className="absolute left-[38%] top-[58%] h-3 w-3 rounded-sm bg-rose-500 shadow" />
+                              <div className="absolute left-[48%] top-[45%] h-2.5 w-2.5 rounded-sm bg-orange-500 shadow" />
+                            </>
+                          )}
                           <div className="absolute bottom-3 left-3 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
                             {permissionLabel(project.accessLevel)}
                           </div>
+                          {!hasMissingThumbnail && (
+                            <div className="absolute bottom-3 right-3 rounded-full border border-emerald-200/50 bg-emerald-900/80 px-3 py-1 text-xs font-bold text-emerald-50 backdrop-blur">
+                              Preview salvo
+                            </div>
+                          )}
                         </div>
 
                         <div className="mt-4">
