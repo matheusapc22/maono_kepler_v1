@@ -4,6 +4,12 @@ import { useParams } from "react-router";
 import { KeplerGlSchema } from "@kepler.gl/schemas";
 import { useSession } from "../../../auth/session";
 
+declare global {
+  interface Window {
+    __MAONO_CAPTURE_SCREENSHOT__?: () => Promise<string>;
+  }
+}
+
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
@@ -54,6 +60,19 @@ function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
   };
 }
 
+async function captureThumbnailDataUrl() {
+  if (typeof window.__MAONO_CAPTURE_SCREENSHOT__ !== "function") {
+    return null;
+  }
+
+  try {
+    return await window.__MAONO_CAPTURE_SCREENSHOT__();
+  } catch (error) {
+    console.warn("Maõno Maps: não foi possível capturar o preview PNG do mapa.", error);
+    return null;
+  }
+}
+
 const MaonoSaveButton: React.FC = () => {
   const { projectSlug } = useParams();
   const { authenticated, user, projects } = useSession();
@@ -82,6 +101,7 @@ const MaonoSaveButton: React.FC = () => {
     try {
       const rawSaved = KeplerGlSchema.save(mapState);
       const config = normalizeSavedKeplerConfig(rawSaved, mapState);
+      const thumbnailDataUrl = await captureThumbnailDataUrl();
 
       const response = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
         method: "PUT",
@@ -90,7 +110,7 @@ const MaonoSaveButton: React.FC = () => {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify({ config, thumbnailDataUrl }),
       });
 
       const data = await response.json();
@@ -100,7 +120,11 @@ const MaonoSaveButton: React.FC = () => {
       }
 
       setMessageType("success");
-      setMessage("Projeto salvo no Dropbox com sucesso.");
+      setMessage(
+        data?.preview
+          ? "Projeto e preview PNG salvos no Dropbox com sucesso."
+          : "Projeto salvo no Dropbox. Preview PNG não foi gerado nesta tentativa."
+      );
     } catch (error) {
       setMessageType("error");
       setMessage(error instanceof Error ? error.message : "Erro ao salvar projeto.");
