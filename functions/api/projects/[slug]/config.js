@@ -1,7 +1,14 @@
 import { errorResponse, jsonResponse, methodNotAllowed, readJsonBody } from "../../../_lib/http.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, logAudit, publicProject } from "../../../_lib/projects.js";
-import { downloadDropboxTextFile, uploadDropboxTextFile } from "../../../_lib/dropbox.js";
+import {
+  deleteDropboxPathIfExists,
+  downloadDropboxTextFile,
+  getPreviewFileNameFromConfigFile,
+  joinDropboxPath,
+  uploadDropboxBinaryFile,
+  uploadDropboxTextFile,
+} from "../../../_lib/dropbox.js";
 
 function canSaveProject(user, project) {
   if (user?.role === "admin") return true;
@@ -32,6 +39,25 @@ function jsonSizeBytes(value) {
   return new TextEncoder().encode(value).byteLength;
 }
 
+function decodeDataUrl(dataUrl) {
+  const value = String(dataUrl || "");
+  const match = value.match(/^data:(image\/(png|jpeg|webp));base64,(.+)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const contentType = match[1].toLowerCase();
+  const binary = atob(match[3]);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return { bytes, contentType };
+}
+
 async function updateLinkedOrganizationFileSize(env, project, sizeBytes) {
   if (!project.organization_file_id) return;
 
@@ -55,6 +81,36 @@ async function markProjectConfigUpdated(env, projectId) {
     .first();
 
   return updated;
+}
+
+async function saveProjectThumbnail(env, project, fileName, thumbnailDataUrl) {
+  const decoded = decodeDataUrl(thumbnailDataUrl);
+
+  if (!decoded) {
+    return null;
+  }
+
+  const previewFileName = getPreviewFileNameFromConfigFile(fileName);
+  const previewPath = joinDropboxPath(project.dropbox_root_path, previewFileName);
+
+  // Política Maõno: apenas uma imagem canônica por projeto.
+  // Exclui a anterior antes de salvar a nova para não acumular previews.
+  await deleteDropboxPathIfExists(env, previewPath);
+
+  await uploadDropboxBinaryFile(
+    env,
+    project.dropbox_root_path,
+    previewFileName,
+    decoded.bytes,
+    decoded.contentType
+  );
+
+  return {
+    previewFileName,
+    previewPath,
+    previewSizeBytes: decoded.bytes.byteLength,
+    previewContentType: decoded.contentType,
+  };
 }
 
 export async function onRequest(context) {
@@ -119,6 +175,12 @@ export async function onRequest(context) {
     const sizeBytes = jsonSizeBytes(content);
 
     await uploadDropboxTextFile(env, project.dropbox_root_path, fileName, content);
+
+    let preview = null;
+    if (body?.thumbnailDataUrl) {
+      preview = await saveProjectThumbnail(env, project, fileName, body.thumbnailDataUrl);
+    }
+
     await updateLinkedOrganizationFileSize(env, project, sizeBytes);
     const updatedProject = await markProjectConfigUpdated(env, project.id);
 
@@ -131,6 +193,7 @@ export async function onRequest(context) {
         fileName,
         dropboxRootPath: project.dropbox_root_path,
         sizeBytes,
+        preview,
       },
     });
 
@@ -140,6 +203,7 @@ export async function onRequest(context) {
       fileName,
       dropboxRootPath: project.dropbox_root_path,
       sizeBytes,
+      preview,
     });
   } catch (error) {
     return errorResponse(error.message, error.status || 500, error.code || "PROJECT_CONFIG_ERROR");
