@@ -2,13 +2,11 @@ import React, { useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { useParams } from "react-router";
 import { KeplerGlSchema } from "@kepler.gl/schemas";
+import html2canvas from "html2canvas";
 import { useSession } from "../../../auth/session";
 
-declare global {
-  interface Window {
-    __MAONO_CAPTURE_SCREENSHOT__?: () => Promise<string>;
-  }
-}
+const PREVIEW_WIDTH = 960;
+const PREVIEW_HEIGHT = 540;
 
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
@@ -37,7 +35,7 @@ function getFallbackDatasets(mapState: any) {
 }
 
 function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
-  const saved = rawSaved && typeof rawSaved === "object" ? rawSaved : {};
+  const saved = rawSaved && typeof saved === "object" ? rawSaved : {};
 
   const config =
     saved.config && typeof saved.config === "object"
@@ -60,17 +58,108 @@ function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
   };
 }
 
-async function captureThumbnailDataUrl() {
-  if (typeof window.__MAONO_CAPTURE_SCREENSHOT__ !== "function") {
-    return null;
+function waitForPaint() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function findCaptureTarget() {
+  return (
+    document.querySelector(".kepler-gl") ||
+    document.querySelector("[class*='kepler']") ||
+    document.querySelector("main") ||
+    document.body
+  ) as HTMLElement;
+}
+
+function collectCanvasDataUrls() {
+  const canvases = Array.from(document.querySelectorAll("canvas"));
+
+  return canvases.map((canvas) => {
+    try {
+      return canvas.toDataURL("image/png");
+    } catch (_error) {
+      return null;
+    }
+  });
+}
+
+function resizeToProjectPreview(sourceCanvas: HTMLCanvasElement) {
+  const outputCanvas = document.createElement("canvas");
+  outputCanvas.width = PREVIEW_WIDTH;
+  outputCanvas.height = PREVIEW_HEIGHT;
+
+  const ctx = outputCanvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Não foi possível criar contexto para preview PNG.");
   }
 
-  try {
-    return await window.__MAONO_CAPTURE_SCREENSHOT__();
-  } catch (error) {
-    console.warn("Maõno Maps: não foi possível capturar o preview PNG do mapa.", error);
-    return null;
+  const sourceWidth = sourceCanvas.width;
+  const sourceHeight = sourceCanvas.height;
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = PREVIEW_WIDTH / PREVIEW_HEIGHT;
+
+  let sx = 0;
+  let sy = 0;
+  let sw = sourceWidth;
+  let sh = sourceHeight;
+
+  if (sourceRatio > targetRatio) {
+    sw = sourceHeight * targetRatio;
+    sx = (sourceWidth - sw) / 2;
+  } else {
+    sh = sourceWidth / targetRatio;
+    sy = (sourceHeight - sh) / 2;
   }
+
+  ctx.fillStyle = "#08090B";
+  ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+
+  return outputCanvas.toDataURL("image/png", 0.92);
+}
+
+async function captureThumbnailDataUrl() {
+  await waitForPaint();
+
+  const target = findCaptureTarget();
+  const canvasDataUrls = collectCanvasDataUrls();
+
+  const captureCanvas = await html2canvas(target, {
+    backgroundColor: "#08090B",
+    useCORS: true,
+    allowTaint: true,
+    logging: false,
+    scale: 1,
+    ignoreElements: (element) => Boolean(element.closest?.("[data-maono-no-preview='true']")),
+    onclone: (clonedDocument) => {
+      const clonedCanvases = Array.from(clonedDocument.querySelectorAll("canvas"));
+
+      clonedCanvases.forEach((canvas, index) => {
+        const dataUrl = canvasDataUrls[index];
+        if (!dataUrl) return;
+
+        const img = clonedDocument.createElement("img");
+        img.src = dataUrl;
+        img.width = canvas.width;
+        img.height = canvas.height;
+        img.style.width = canvas.style.width || `${canvas.getBoundingClientRect().width}px`;
+        img.style.height = canvas.style.height || `${canvas.getBoundingClientRect().height}px`;
+        img.style.display = "block";
+
+        canvas.parentNode?.replaceChild(img, canvas);
+      });
+    },
+  });
+
+  if (!captureCanvas || captureCanvas.width <= 0 || captureCanvas.height <= 0) {
+    throw new Error("Captura retornou canvas vazio.");
+  }
+
+  return resizeToProjectPreview(captureCanvas);
 }
 
 const MaonoSaveButton: React.FC = () => {
@@ -101,7 +190,13 @@ const MaonoSaveButton: React.FC = () => {
     try {
       const rawSaved = KeplerGlSchema.save(mapState);
       const config = normalizeSavedKeplerConfig(rawSaved, mapState);
-      const thumbnailDataUrl = await captureThumbnailDataUrl();
+
+      let thumbnailDataUrl: string | null = null;
+      try {
+        thumbnailDataUrl = await captureThumbnailDataUrl();
+      } catch (captureError) {
+        console.warn("Maõno Maps: não foi possível capturar o preview PNG do mapa.", captureError);
+      }
 
       const response = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
         method: "PUT",
@@ -136,7 +231,7 @@ const MaonoSaveButton: React.FC = () => {
   if (!allowed) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[99998] flex flex-col items-end gap-3">
+    <div data-maono-no-preview="true" className="fixed bottom-6 right-6 z-[99998] flex flex-col items-end gap-3">
       {message && (
         <div
           className={
