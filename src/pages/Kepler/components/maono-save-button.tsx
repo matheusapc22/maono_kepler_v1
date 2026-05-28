@@ -23,6 +23,13 @@ type PreviewQuality = {
   transparentRatio: number;
 };
 
+type CanvasLayer = {
+  canvas: HTMLCanvasElement;
+  rect: DOMRect;
+  order: number;
+  zIndex: number;
+};
+
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
@@ -105,6 +112,29 @@ function getVisibleCanvases() {
       return canvas.width > 0 && canvas.height > 0 && rect.width > 80 && rect.height > 80;
     })
     .sort((a, b) => b.width * b.height - a.width * a.height);
+}
+
+function getStackedVisibleCanvasLayers() {
+  const canvases = Array.from(document.querySelectorAll("canvas"));
+
+  return canvases
+    .map((canvas, order): CanvasLayer | null => {
+      const rect = canvas.getBoundingClientRect();
+      if (canvas.width <= 0 || canvas.height <= 0 || rect.width <= 80 || rect.height <= 80) {
+        return null;
+      }
+
+      const zIndex = Number.parseInt(window.getComputedStyle(canvas).zIndex || "0", 10);
+
+      return {
+        canvas,
+        rect,
+        order,
+        zIndex: Number.isFinite(zIndex) ? zIndex : 0,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a!.zIndex - b!.zIndex || a!.order - b!.order) as CanvasLayer[];
 }
 
 function collectCanvasDataUrls() {
@@ -225,6 +255,116 @@ function resizeToProjectPreview(sourceCanvas: HTMLCanvasElement) {
   }
 
   return { dataUrl, quality };
+}
+
+function getIntersectionArea(a: DOMRect, b: DOMRect) {
+  const left = Math.max(a.left, b.left);
+  const top = Math.max(a.top, b.top);
+  const right = Math.min(a.right, b.right);
+  const bottom = Math.min(a.bottom, b.bottom);
+  const width = Math.max(0, right - left);
+  const height = Math.max(0, bottom - top);
+
+  return width * height;
+}
+
+function drawCanvasLayerIntoPreview(
+  ctx: CanvasRenderingContext2D,
+  layer: CanvasLayer,
+  viewportRect: DOMRect
+) {
+  const { canvas, rect } = layer;
+  const intersectionLeft = Math.max(rect.left, viewportRect.left);
+  const intersectionTop = Math.max(rect.top, viewportRect.top);
+  const intersectionRight = Math.min(rect.right, viewportRect.right);
+  const intersectionBottom = Math.min(rect.bottom, viewportRect.bottom);
+
+  const intersectionWidth = intersectionRight - intersectionLeft;
+  const intersectionHeight = intersectionBottom - intersectionTop;
+
+  if (intersectionWidth <= 0 || intersectionHeight <= 0) return false;
+
+  const sourceScaleX = canvas.width / rect.width;
+  const sourceScaleY = canvas.height / rect.height;
+
+  const sx = (intersectionLeft - rect.left) * sourceScaleX;
+  const sy = (intersectionTop - rect.top) * sourceScaleY;
+  const sw = intersectionWidth * sourceScaleX;
+  const sh = intersectionHeight * sourceScaleY;
+
+  const dx = ((intersectionLeft - viewportRect.left) / viewportRect.width) * PREVIEW_WIDTH;
+  const dy = ((intersectionTop - viewportRect.top) / viewportRect.height) * PREVIEW_HEIGHT;
+  const dw = (intersectionWidth / viewportRect.width) * PREVIEW_WIDTH;
+  const dh = (intersectionHeight / viewportRect.height) * PREVIEW_HEIGHT;
+
+  ctx.drawImage(canvas, sx, sy, sw, sh, dx, dy, dw, dh);
+  return true;
+}
+
+async function captureByCompositedCanvases(): Promise<CaptureResult> {
+  await waitForPaint();
+
+  const target = findCaptureTarget();
+  const viewportRect = target.getBoundingClientRect();
+  const layers = getStackedVisibleCanvasLayers().filter(
+    (layer) => getIntersectionArea(layer.rect, viewportRect) > 0
+  );
+
+  if (!layers.length) {
+    throw new Error("Nenhum canvas visível intersecta o alvo de captura.");
+  }
+
+  const outputCanvas = document.createElement("canvas");
+  outputCanvas.width = PREVIEW_WIDTH;
+  outputCanvas.height = PREVIEW_HEIGHT;
+
+  const ctx = outputCanvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Não foi possível criar canvas composto para preview.");
+  }
+
+  ctx.fillStyle = "#08090B";
+  ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+
+  let drawn = 0;
+  const skipped: string[] = [];
+
+  layers.forEach((layer, index) => {
+    try {
+      // Testa se o canvas é legível antes de desenhar. Se um canvas CORS-tainted for
+      // desenhado no composto, o composto inteiro fica bloqueado para toDataURL.
+      layer.canvas.toDataURL("image/png");
+      const didDraw = drawCanvasLayerIntoPreview(ctx, layer, viewportRect);
+      if (didDraw) drawn += 1;
+    } catch (error) {
+      skipped.push(`canvas[${index}] ${getErrorMessage(error)}`);
+    }
+  });
+
+  if (!drawn) {
+    throw new Error(`Nenhum canvas pôde ser composto. Ignorados: ${skipped.join(" | ")}`);
+  }
+
+  const quality = assertUsablePreview(outputCanvas, "preview composto");
+  const dataUrl = outputCanvas.toDataURL("image/png", 0.92);
+
+  if (!isValidDataUrl(dataUrl)) {
+    throw new Error("Canvas composto gerou dataURL inválido.");
+  }
+
+  return {
+    dataUrl,
+    method: "canvas-composite",
+    diagnostics: [
+      `target=${target.tagName.toLowerCase()}`,
+      `targetRect=${Math.round(viewportRect.width)}x${Math.round(viewportRect.height)}`,
+      `layers=${layers.length}`,
+      `drawn=${drawn}`,
+      `skipped=${skipped.length}`,
+      formatQuality(quality),
+      `bytesBase64=${dataUrl.length}`,
+    ],
+  };
 }
 
 async function captureByDirectCanvas(): Promise<CaptureResult> {
@@ -446,7 +586,17 @@ async function captureThumbnail(mapState: any): Promise<CaptureResult> {
   const errors: string[] = [];
 
   try {
-    return await captureByDirectCanvas();
+    return await captureByCompositedCanvases();
+  } catch (error) {
+    errors.push(`canvas-composite: ${getErrorMessage(error)}`);
+  }
+
+  try {
+    const result = await captureByDirectCanvas();
+    return {
+      ...result,
+      diagnostics: [...errors, ...result.diagnostics],
+    };
   } catch (error) {
     errors.push(`canvas-direct: ${getErrorMessage(error)}`);
   }
