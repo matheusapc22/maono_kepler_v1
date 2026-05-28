@@ -17,6 +17,12 @@ type CaptureResult = {
   diagnostics: string[];
 };
 
+type OverlayDatasetEntry = {
+  id: string;
+  dataset: any;
+  source: "saved" | "runtime";
+};
+
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
@@ -278,8 +284,8 @@ async function captureHtml2Canvas() {
   return { dataUrl: cropCanvasToPreview(captured), method: "html2canvas", diagnostics: [`capture=${captured.width}x${captured.height}`] };
 }
 
-function getViewport(mapState: any) {
-  const viewState = mapState?.mapState || {};
+function getViewport(mapState: any, savedConfig?: any) {
+  const viewState = mapState?.mapState || savedConfig?.config?.mapState || {};
   const longitude = Number(viewState.longitude);
   const latitude = Number(viewState.latitude);
   const zoom = Number(viewState.zoom);
@@ -295,8 +301,42 @@ function getViewport(mapState: any) {
   });
 }
 
+function getDatasetId(dataset: any, fallback: string) {
+  return String(dataset?.data?.id || dataset?.info?.id || dataset?.id || fallback);
+}
+
+function getOverlayDatasetEntries(mapState: any, savedConfig?: any): OverlayDatasetEntry[] {
+  const entries: OverlayDatasetEntry[] = [];
+  const seen = new Set<string>();
+
+  if (Array.isArray(savedConfig?.datasets)) {
+    savedConfig.datasets.forEach((dataset: any, index: number) => {
+      const id = getDatasetId(dataset, `saved-${index}`);
+      entries.push({ id, dataset, source: "saved" });
+      seen.add(id);
+    });
+  }
+
+  const runtimeDatasets = mapState?.visState?.datasets;
+  if (runtimeDatasets && typeof runtimeDatasets === "object") {
+    Object.entries(runtimeDatasets).forEach(([id, dataset]: [string, any]) => {
+      if (seen.has(id)) return;
+      entries.push({ id, dataset, source: "runtime" });
+    });
+  }
+
+  return entries;
+}
+
+function getAllLayers(mapState: any, savedConfig?: any) {
+  const layers = [] as any[];
+  if (Array.isArray(savedConfig?.config?.visState?.layers)) layers.push(...savedConfig.config.visState.layers);
+  if (Array.isArray(mapState?.visState?.layers)) layers.push(...mapState.visState.layers);
+  return layers;
+}
+
 function fieldsOf(dataset: any) {
-  const fields = dataset?.fields || dataset?.data?.fields || dataset?.data?.schema?.fields || [];
+  const fields = dataset?.data?.fields || dataset?.fields || dataset?.data?.schema?.fields || [];
   return Array.isArray(fields) ? fields : [];
 }
 
@@ -357,20 +397,27 @@ function valueOf(row: any, fields: any[], name?: string | null) {
 }
 
 function findField(fields: any[], candidates: string[]) {
-  const exact = fields.find((field) => candidates.map(normalize).includes(normalize(fieldName(field))));
+  const normalizedCandidates = candidates.map(normalize);
+  const exact = fields.find((field) => normalizedCandidates.includes(normalize(fieldName(field))));
   if (exact) return fieldName(exact);
-  const partial = fields.find((field) => candidates.some((candidate) => normalize(fieldName(field)).includes(normalize(candidate))));
+  const partial = fields.find((field) => normalizedCandidates.some((candidate) => normalize(fieldName(field)).includes(candidate)));
   return partial ? fieldName(partial) : null;
 }
 
-function layersForDataset(mapState: any, datasetId: string) {
-  const layers = mapState?.visState?.layers;
-  if (!Array.isArray(layers)) return [];
-  return layers.filter((layer: any) => String(layer?.config?.dataId || layer?.props?.dataId || "") === String(datasetId));
+function layerMatchesDataset(layerDataId: any, datasetId: string) {
+  if (Array.isArray(layerDataId)) return layerDataId.map(String).includes(String(datasetId));
+  return String(layerDataId || "") === String(datasetId);
 }
 
-function coordinateColumns(mapState: any, datasetId: string, fields: any[]) {
-  for (const layer of layersForDataset(mapState, datasetId)) {
+function layersForDataset(mapState: any, datasetId: string, savedConfig?: any) {
+  return getAllLayers(mapState, savedConfig).filter((layer: any) => {
+    const dataId = layer?.config?.dataId || layer?.props?.dataId || layer?.dataId;
+    return layerMatchesDataset(dataId, datasetId);
+  });
+}
+
+function coordinateColumns(mapState: any, datasetId: string, fields: any[], savedConfig?: any) {
+  for (const layer of layersForDataset(mapState, datasetId, savedConfig)) {
     const columns = layer?.config?.columns || layer?.props?.columns || {};
     const lat = columns.lat || columns.latitude || columns.y || columns.lat0;
     const lng = columns.lng || columns.lon || columns.longitude || columns.x || columns.lng0;
@@ -538,10 +585,10 @@ function loadImage(dataUrl: string) {
   });
 }
 
-async function applyStateOverlay(capture: CaptureResult, mapState: any): Promise<CaptureResult> {
-  const viewport = getViewport(mapState);
-  const datasets = mapState?.visState?.datasets;
-  if (!viewport || !datasets || typeof datasets !== "object") return capture;
+async function applyStateOverlay(capture: CaptureResult, mapState: any, savedConfig?: any): Promise<CaptureResult> {
+  const viewport = getViewport(mapState, savedConfig);
+  const entries = getOverlayDatasetEntries(mapState, savedConfig);
+  if (!viewport || !entries.length) return capture;
 
   const image = await loadImage(capture.dataUrl);
   const canvas = document.createElement("canvas");
@@ -555,11 +602,13 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any): Promise
   let geometries = 0;
   let rows = 0;
   let datasetCount = 0;
+  const datasetDiagnostics: string[] = [];
 
-  Object.entries(datasets).forEach(([datasetId, dataset]: [string, any], datasetIndex) => {
-    const fields = fieldsOf(dataset);
-    const rowsForDataset = rowsOf(dataset);
-    const columns = coordinateColumns(mapState, datasetId, fields);
+  entries.forEach((entry, datasetIndex) => {
+    const fields = fieldsOf(entry.dataset);
+    const rowsForDataset = rowsOf(entry.dataset);
+    const columns = coordinateColumns(mapState, entry.id, fields, savedConfig);
+    datasetDiagnostics.push(`${entry.source}:${entry.id}{fields=${fields.length},rows=${rowsForDataset.length},lat=${columns.lat || "-"},lng=${columns.lng || "-"}}`);
     if (!rowsForDataset.length) return;
     datasetCount += 1;
 
@@ -586,7 +635,7 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any): Promise
   });
 
   if (!points && !geometries) {
-    return { ...capture, diagnostics: [...capture.diagnostics, "stateOverlay=0"] };
+    return { ...capture, diagnostics: [...capture.diagnostics, "stateOverlay=0", `stateDatasets=${entries.length}`, datasetDiagnostics.join(";")] };
   }
 
   assertNotBlack(canvas, "preview com dados do estado");
@@ -602,6 +651,7 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any): Promise
       `stateOverlayGeometries=${geometries}`,
       `stateOverlayRows=${rows}`,
       `stateOverlayDatasets=${datasetCount}`,
+      datasetDiagnostics.join(";"),
       `stateOverlayBytesBase64=${dataUrl.length}`,
     ],
   };
@@ -632,19 +682,19 @@ function generatedPreview(): CaptureResult {
   return { dataUrl, method: "generated-technical-preview", diagnostics: ["fallback técnico"] };
 }
 
-async function captureThumbnail(mapState: any): Promise<CaptureResult> {
+async function captureThumbnail(mapState: any, savedConfig?: any): Promise<CaptureResult> {
   const errors: string[] = [];
   try {
-    return await applyStateOverlay(await captureCompositedBase(), mapState);
+    return await applyStateOverlay(await captureCompositedBase(), mapState, savedConfig);
   } catch (error) {
     errors.push(`canvas-composite: ${errorMessage(error)}`);
   }
   try {
-    return await applyStateOverlay(await captureHtml2Canvas(), mapState);
+    return await applyStateOverlay(await captureHtml2Canvas(), mapState, savedConfig);
   } catch (error) {
     errors.push(`html2canvas: ${errorMessage(error)}`);
   }
-  return await applyStateOverlay({ ...generatedPreview(), diagnostics: errors }, mapState);
+  return await applyStateOverlay({ ...generatedPreview(), diagnostics: errors }, mapState, savedConfig);
 }
 
 const MaonoSaveButton: React.FC = () => {
@@ -671,7 +721,7 @@ const MaonoSaveButton: React.FC = () => {
     try {
       const rawSaved = KeplerGlSchema.save(mapState);
       const config = normalizeSavedKeplerConfig(rawSaved, mapState);
-      const capture = await captureThumbnail(mapState);
+      const capture = await captureThumbnail(mapState, config);
 
       const response = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
         method: "PUT",
