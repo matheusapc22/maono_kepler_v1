@@ -7,11 +7,20 @@ import { useSession } from "../../../auth/session";
 
 const PREVIEW_WIDTH = 960;
 const PREVIEW_HEIGHT = 540;
+const MIN_NON_DARK_RATIO = 0.008;
+const MIN_VARIANCE = 8;
 
 type CaptureResult = {
   dataUrl: string;
   method: string;
   diagnostics: string[];
+};
+
+type PreviewQuality = {
+  mean: number;
+  variance: number;
+  nonDarkRatio: number;
+  transparentRatio: number;
 };
 
 function normalize(value?: string | null) {
@@ -89,17 +98,13 @@ function findCaptureTarget() {
   ) as HTMLElement;
 }
 
-function getLargestVisibleCanvas() {
-  const canvases = Array.from(document.querySelectorAll("canvas"));
-
-  return (
-    canvases
-      .filter((canvas) => {
-        const rect = canvas.getBoundingClientRect();
-        return canvas.width > 0 && canvas.height > 0 && rect.width > 80 && rect.height > 80;
-      })
-      .sort((a, b) => b.width * b.height - a.width * a.height)[0] || null
-  );
+function getVisibleCanvases() {
+  return Array.from(document.querySelectorAll("canvas"))
+    .filter((canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      return canvas.width > 0 && canvas.height > 0 && rect.width > 80 && rect.height > 80;
+    })
+    .sort((a, b) => b.width * b.height - a.width * a.height);
 }
 
 function collectCanvasDataUrls() {
@@ -112,6 +117,72 @@ function collectCanvasDataUrls() {
       return null;
     }
   });
+}
+
+function analyzeCanvasQuality(canvas: HTMLCanvasElement): PreviewQuality {
+  const sampleCanvas = document.createElement("canvas");
+  sampleCanvas.width = 160;
+  sampleCanvas.height = 90;
+
+  const ctx = sampleCanvas.getContext("2d");
+  if (!ctx) {
+    return { mean: 0, variance: 0, nonDarkRatio: 0, transparentRatio: 1 };
+  }
+
+  ctx.drawImage(canvas, 0, 0, sampleCanvas.width, sampleCanvas.height);
+
+  const data = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
+  const pixels = data.length / 4;
+  let sum = 0;
+  let sumSquares = 0;
+  let nonDark = 0;
+  let transparent = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3];
+    if (alpha < 8) {
+      transparent += 1;
+      continue;
+    }
+
+    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    sum += brightness;
+    sumSquares += brightness * brightness;
+
+    if (brightness > 28) {
+      nonDark += 1;
+    }
+  }
+
+  const opaquePixels = Math.max(1, pixels - transparent);
+  const mean = sum / opaquePixels;
+  const variance = sumSquares / opaquePixels - mean * mean;
+
+  return {
+    mean,
+    variance,
+    nonDarkRatio: nonDark / opaquePixels,
+    transparentRatio: transparent / pixels,
+  };
+}
+
+function formatQuality(quality: PreviewQuality) {
+  return `mean=${quality.mean.toFixed(1)},variance=${quality.variance.toFixed(1)},nonDark=${(
+    quality.nonDarkRatio * 100
+  ).toFixed(2)}%,transparent=${(quality.transparentRatio * 100).toFixed(2)}%`;
+}
+
+function assertUsablePreview(canvas: HTMLCanvasElement, label: string) {
+  const quality = analyzeCanvasQuality(canvas);
+
+  // A Maõno usa mapas escuros, então não exigimos imagem clara.
+  // Rejeitamos apenas captura praticamente sólida/preta, que é o caso típico de
+  // WebGL lido depois de o framebuffer ter sido limpo.
+  if (quality.nonDarkRatio < MIN_NON_DARK_RATIO && quality.variance < MIN_VARIANCE) {
+    throw new Error(`${label} gerou preview preto ou sem conteúdo útil (${formatQuality(quality)}).`);
+  }
+
+  return quality;
 }
 
 function resizeToProjectPreview(sourceCanvas: HTMLCanvasElement) {
@@ -146,38 +217,55 @@ function resizeToProjectPreview(sourceCanvas: HTMLCanvasElement) {
   ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
   ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
+  const quality = assertUsablePreview(outputCanvas, "preview redimensionado");
   const dataUrl = outputCanvas.toDataURL("image/png", 0.92);
 
   if (!isValidDataUrl(dataUrl)) {
     throw new Error("Canvas gerou dataURL inválido.");
   }
 
-  return dataUrl;
+  return { dataUrl, quality };
 }
 
 async function captureByDirectCanvas(): Promise<CaptureResult> {
   await waitForPaint();
 
-  const canvas = getLargestVisibleCanvas();
+  const canvases = getVisibleCanvases();
   const canvasCount = document.querySelectorAll("canvas").length;
+  const errors: string[] = [];
 
-  if (!canvas) {
+  if (!canvases.length) {
     throw new Error(`Nenhum canvas visível encontrado. Total de canvas na tela: ${canvasCount}.`);
   }
 
-  const rect = canvas.getBoundingClientRect();
-  const dataUrl = resizeToProjectPreview(canvas);
+  for (const [index, canvas] of canvases.entries()) {
+    const rect = canvas.getBoundingClientRect();
 
-  return {
-    dataUrl,
-    method: "canvas-direct",
-    diagnostics: [
-      `canvasCount=${canvasCount}`,
-      `source=${canvas.width}x${canvas.height}`,
-      `rect=${Math.round(rect.width)}x${Math.round(rect.height)}`,
-      `bytesBase64=${dataUrl.length}`,
-    ],
-  };
+    try {
+      const { dataUrl, quality } = resizeToProjectPreview(canvas);
+
+      return {
+        dataUrl,
+        method: `canvas-direct-${index}`,
+        diagnostics: [
+          `canvasCount=${canvasCount}`,
+          `selectedIndex=${index}`,
+          `source=${canvas.width}x${canvas.height}`,
+          `rect=${Math.round(rect.width)}x${Math.round(rect.height)}`,
+          formatQuality(quality),
+          `bytesBase64=${dataUrl.length}`,
+        ],
+      };
+    } catch (error) {
+      errors.push(
+        `canvas[${index}] ${canvas.width}x${canvas.height} rect=${Math.round(rect.width)}x${Math.round(
+          rect.height
+        )}: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
+  throw new Error(errors.join(" | "));
 }
 
 async function captureByHtml2Canvas(): Promise<CaptureResult> {
@@ -219,7 +307,7 @@ async function captureByHtml2Canvas(): Promise<CaptureResult> {
     throw new Error("html2canvas retornou canvas vazio.");
   }
 
-  const dataUrl = resizeToProjectPreview(captureCanvas);
+  const { dataUrl, quality } = resizeToProjectPreview(captureCanvas);
 
   return {
     dataUrl,
@@ -229,12 +317,132 @@ async function captureByHtml2Canvas(): Promise<CaptureResult> {
       `targetRect=${Math.round(targetRect.width)}x${Math.round(targetRect.height)}`,
       `readableCanvas=${readableCanvasCount}/${canvasDataUrls.length}`,
       `capture=${captureCanvas.width}x${captureCanvas.height}`,
+      formatQuality(quality),
       `bytesBase64=${dataUrl.length}`,
     ],
   };
 }
 
-async function captureThumbnail(): Promise<CaptureResult> {
+function getDatasetCount(mapState: any) {
+  const datasets = mapState?.visState?.datasets;
+  if (!datasets || typeof datasets !== "object") return 0;
+  return Object.keys(datasets).length;
+}
+
+function getLayerCount(mapState: any) {
+  const layers = mapState?.visState?.layers;
+  return Array.isArray(layers) ? layers.length : 0;
+}
+
+function createGeneratedProjectPreview(mapState: any): CaptureResult {
+  const canvas = document.createElement("canvas");
+  canvas.width = PREVIEW_WIDTH;
+  canvas.height = PREVIEW_HEIGHT;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Não foi possível criar canvas técnico de fallback.");
+  }
+
+  const datasetCount = getDatasetCount(mapState);
+  const layerCount = getLayerCount(mapState);
+  const latitude = mapState?.mapState?.latitude;
+  const longitude = mapState?.mapState?.longitude;
+  const zoom = mapState?.mapState?.zoom;
+
+  const gradient = ctx.createLinearGradient(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  gradient.addColorStop(0, "#08090B");
+  gradient.addColorStop(0.48, "#11151C");
+  gradient.addColorStop(1, "#0E2A27");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+
+  ctx.strokeStyle = "rgba(244,241,232,0.08)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= PREVIEW_WIDTH; x += 42) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, PREVIEW_HEIGHT);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= PREVIEW_HEIGHT; y += 42) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(PREVIEW_WIDTH, y);
+    ctx.stroke();
+  }
+
+  const polygons = [
+    { x: 96, y: 88, w: 260, h: 150, stroke: "#20C7B5", fill: "rgba(32,199,181,0.10)" },
+    { x: 280, y: 155, w: 410, h: 220, stroke: "#D6A84F", fill: "rgba(214,168,79,0.10)" },
+    { x: 585, y: 92, w: 270, h: 178, stroke: "#F2C766", fill: "rgba(242,199,102,0.08)" },
+    { x: 615, y: 290, w: 235, h: 128, stroke: "#22C55E", fill: "rgba(34,197,94,0.08)" },
+  ];
+
+  polygons.forEach((poly) => {
+    ctx.fillStyle = poly.fill;
+    ctx.strokeStyle = poly.stroke;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(poly.x, poly.y, poly.w, poly.h, 8);
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  const points = [
+    [225, 242, "#20C7B5"],
+    [306, 208, "#3B82F6"],
+    [392, 264, "#EF4444"],
+    [487, 197, "#F97316"],
+    [673, 228, "#F2C766"],
+    [746, 316, "#22C55E"],
+  ];
+
+  points.forEach(([x, y, color]) => {
+    ctx.fillStyle = color as string;
+    ctx.strokeStyle = "#08090B";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(x as number, y as number, 14, 14, 3);
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = "rgba(8,9,11,0.72)";
+  ctx.fillRect(0, 428, PREVIEW_WIDTH, 112);
+  ctx.fillStyle = "#F4F1E8";
+  ctx.font = "700 30px Arial";
+  ctx.fillText("Maõno Maps · preview técnico", 34, 472);
+
+  ctx.fillStyle = "#C6C0B1";
+  ctx.font = "600 20px Arial";
+  ctx.fillText(
+    `datasets=${datasetCount}  camadas=${layerCount}  zoom=${Number.isFinite(zoom) ? Number(zoom).toFixed(2) : "n/d"}`,
+    34,
+    508
+  );
+
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    ctx.fillText(`centro=${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`, 500, 508);
+  }
+
+  const quality = assertUsablePreview(canvas, "preview técnico gerado");
+  const dataUrl = canvas.toDataURL("image/png", 0.92);
+
+  return {
+    dataUrl,
+    method: "generated-technical-preview",
+    diagnostics: [
+      "WebGL screenshot indisponível; fallback técnico gerado a partir do estado do projeto.",
+      `datasets=${datasetCount}`,
+      `layers=${layerCount}`,
+      formatQuality(quality),
+      `bytesBase64=${dataUrl.length}`,
+    ],
+  };
+}
+
+async function captureThumbnail(mapState: any): Promise<CaptureResult> {
   const errors: string[] = [];
 
   try {
@@ -253,7 +461,11 @@ async function captureThumbnail(): Promise<CaptureResult> {
     errors.push(`html2canvas: ${getErrorMessage(error)}`);
   }
 
-  throw new Error(errors.join(" | "));
+  const generated = createGeneratedProjectPreview(mapState);
+  return {
+    ...generated,
+    diagnostics: [...errors, ...generated.diagnostics],
+  };
 }
 
 const MaonoSaveButton: React.FC = () => {
@@ -290,7 +502,7 @@ const MaonoSaveButton: React.FC = () => {
       let captureDiagnostics = "captura não iniciada";
 
       try {
-        const capture = await captureThumbnail();
+        const capture = await captureThumbnail(mapState);
         thumbnailDataUrl = capture.dataUrl;
         captureMethod = capture.method;
         captureDiagnostics = capture.diagnostics.join(" | ");
