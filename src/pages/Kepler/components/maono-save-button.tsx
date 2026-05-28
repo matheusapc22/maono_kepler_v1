@@ -2,41 +2,19 @@ import React, { useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { useParams } from "react-router";
 import { KeplerGlSchema } from "@kepler.gl/schemas";
+import { WebMercatorViewport } from "@deck.gl/core";
 import html2canvas from "html2canvas";
 import { useSession } from "../../../auth/session";
 
 const PREVIEW_WIDTH = 960;
 const PREVIEW_HEIGHT = 540;
-const MIN_NON_DARK_RATIO = 0.008;
-const MIN_VARIANCE = 8;
-const BACKGROUND_MEAN_THRESHOLD = 45;
-const BACKGROUND_NON_DARK_THRESHOLD = 0.35;
-const OVERLAY_DARK_BRIGHTNESS_LIMIT = 24;
-const OVERLAY_DARK_CHROMA_LIMIT = 14;
+const MAX_POINTS = 8000;
+const MAX_GEOMETRIES = 2200;
 
 type CaptureResult = {
   dataUrl: string;
   method: string;
   diagnostics: string[];
-};
-
-type PreviewQuality = {
-  mean: number;
-  variance: number;
-  nonDarkRatio: number;
-  transparentRatio: number;
-};
-
-type CanvasLayer = {
-  canvas: HTMLCanvasElement;
-  rect: DOMRect;
-  order: number;
-  zIndex: number;
-};
-
-type ReadableCanvasLayer = CanvasLayer & {
-  quality: PreviewQuality;
-  score: number;
 };
 
 function normalize(value?: string | null) {
@@ -50,24 +28,17 @@ function canSaveProject(userRole?: string, accessLevel?: string) {
 
 function getFallbackDatasets(mapState: any) {
   const datasets = mapState?.visState?.datasets;
-
-  if (!datasets || typeof datasets !== "object") {
-    return [];
-  }
+  if (!datasets || typeof datasets !== "object") return [];
 
   return Object.entries(datasets).map(([id, dataset]: [string, any]) => ({
     version: "v1",
     data: dataset?.data || dataset,
-    info: {
-      id,
-      label: dataset?.label || dataset?.data?.label || id,
-    },
+    info: { id, label: dataset?.label || dataset?.data?.label || id },
   }));
 }
 
 function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
   const saved = rawSaved && typeof rawSaved === "object" ? rawSaved : {};
-
   const config =
     saved.config && typeof saved.config === "object"
       ? saved.config
@@ -77,35 +48,65 @@ function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
           mapStyle: saved.mapStyle || mapState?.mapStyle || {},
         };
 
-  const datasets = Array.isArray(saved.datasets)
-    ? saved.datasets
-    : getFallbackDatasets(mapState);
-
   return {
     ...saved,
     version: saved.version || "v1",
-    datasets,
+    datasets: Array.isArray(saved.datasets) ? saved.datasets : getFallbackDatasets(mapState),
     config,
   };
 }
 
 function waitForPaint() {
   return new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => resolve());
-    });
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
   });
 }
 
-function getErrorMessage(error: unknown) {
+function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function isValidDataUrl(dataUrl?: string | null) {
-  return Boolean(dataUrl && /^data:image\/(png|jpeg|webp);base64,/i.test(dataUrl));
+function isImageDataUrl(value?: string | null) {
+  return Boolean(value && /^data:image\/(png|jpeg|webp);base64,/i.test(value));
 }
 
-function findCaptureTarget() {
+function brightnessQuality(canvas: HTMLCanvasElement) {
+  const sample = document.createElement("canvas");
+  sample.width = 160;
+  sample.height = 90;
+  const ctx = sample.getContext("2d");
+  if (!ctx) return { mean: 0, variance: 0, useful: 0 };
+
+  ctx.drawImage(canvas, 0, 0, sample.width, sample.height);
+  const data = ctx.getImageData(0, 0, sample.width, sample.height).data;
+  let sum = 0;
+  let sum2 = 0;
+  let useful = 0;
+  let count = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] < 8) continue;
+    const value = (data[index] + data[index + 1] + data[index + 2]) / 3;
+    sum += value;
+    sum2 += value * value;
+    if (value > 28) useful += 1;
+    count += 1;
+  }
+
+  const safeCount = Math.max(1, count);
+  const mean = sum / safeCount;
+  return { mean, variance: sum2 / safeCount - mean * mean, useful: useful / safeCount };
+}
+
+function assertNotBlack(canvas: HTMLCanvasElement, label: string) {
+  const q = brightnessQuality(canvas);
+  if (q.useful < 0.008 && q.variance < 8) {
+    throw new Error(`${label} gerou imagem preta ou sem conteúdo. mean=${q.mean.toFixed(1)} variance=${q.variance.toFixed(1)} useful=${(q.useful * 100).toFixed(2)}%`);
+  }
+  return q;
+}
+
+function getCaptureTarget() {
   return (
     document.querySelector(".kepler-gl") ||
     document.querySelector("[class*='kepler']") ||
@@ -116,660 +117,536 @@ function findCaptureTarget() {
 
 function getVisibleCanvases() {
   return Array.from(document.querySelectorAll("canvas"))
-    .filter((canvas) => {
-      const rect = canvas.getBoundingClientRect();
-      return canvas.width > 0 && canvas.height > 0 && rect.width > 80 && rect.height > 80;
-    })
-    .sort((a, b) => b.width * b.height - a.width * a.height);
+    .map((canvas, order) => ({
+      canvas,
+      order,
+      rect: canvas.getBoundingClientRect(),
+      zIndex: Number.parseInt(window.getComputedStyle(canvas).zIndex || "0", 10) || 0,
+    }))
+    .filter((item) => item.canvas.width > 0 && item.canvas.height > 0 && item.rect.width > 80 && item.rect.height > 80)
+    .sort((a, b) => a.zIndex - b.zIndex || a.order - b.order);
 }
 
-function getStackedVisibleCanvasLayers() {
-  const canvases = Array.from(document.querySelectorAll("canvas"));
+function cropCanvasToPreview(source: HTMLCanvasElement) {
+  const out = document.createElement("canvas");
+  out.width = PREVIEW_WIDTH;
+  out.height = PREVIEW_HEIGHT;
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("Contexto 2D indisponível para preview.");
 
-  return canvases
-    .map((canvas, order): CanvasLayer | null => {
-      const rect = canvas.getBoundingClientRect();
-      if (canvas.width <= 0 || canvas.height <= 0 || rect.width <= 80 || rect.height <= 80) {
-        return null;
-      }
-
-      const zIndex = Number.parseInt(window.getComputedStyle(canvas).zIndex || "0", 10);
-
-      return {
-        canvas,
-        rect,
-        order,
-        zIndex: Number.isFinite(zIndex) ? zIndex : 0,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a!.zIndex - b!.zIndex || a!.order - b!.order) as CanvasLayer[];
-}
-
-function collectCanvasDataUrls() {
-  const canvases = Array.from(document.querySelectorAll("canvas"));
-
-  return canvases.map((canvas) => {
-    try {
-      return canvas.toDataURL("image/png");
-    } catch (_error) {
-      return null;
-    }
-  });
-}
-
-function analyzeCanvasQuality(canvas: HTMLCanvasElement): PreviewQuality {
-  const sampleCanvas = document.createElement("canvas");
-  sampleCanvas.width = 160;
-  sampleCanvas.height = 90;
-
-  const ctx = sampleCanvas.getContext("2d");
-  if (!ctx) {
-    return { mean: 0, variance: 0, nonDarkRatio: 0, transparentRatio: 1 };
-  }
-
-  ctx.drawImage(canvas, 0, 0, sampleCanvas.width, sampleCanvas.height);
-
-  const data = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
-  const pixels = data.length / 4;
-  let sum = 0;
-  let sumSquares = 0;
-  let nonDark = 0;
-  let transparent = 0;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const alpha = data[i + 3];
-    if (alpha < 8) {
-      transparent += 1;
-      continue;
-    }
-
-    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-    sum += brightness;
-    sumSquares += brightness * brightness;
-
-    if (brightness > 28) {
-      nonDark += 1;
-    }
-  }
-
-  const opaquePixels = Math.max(1, pixels - transparent);
-  const mean = sum / opaquePixels;
-  const variance = sumSquares / opaquePixels - mean * mean;
-
-  return {
-    mean,
-    variance,
-    nonDarkRatio: nonDark / opaquePixels,
-    transparentRatio: transparent / pixels,
-  };
-}
-
-function formatQuality(quality: PreviewQuality) {
-  return `mean=${quality.mean.toFixed(1)},variance=${quality.variance.toFixed(1)},nonDark=${(
-    quality.nonDarkRatio * 100
-  ).toFixed(2)}%,transparent=${(quality.transparentRatio * 100).toFixed(2)}%`;
-}
-
-function getLayerScore(quality: PreviewQuality) {
-  return quality.mean + quality.nonDarkRatio * 180 + Math.sqrt(Math.max(0, quality.variance));
-}
-
-function assertUsablePreview(canvas: HTMLCanvasElement, label: string) {
-  const quality = analyzeCanvasQuality(canvas);
-
-  // A Maõno usa mapas escuros, então não exigimos imagem clara.
-  // Rejeitamos apenas captura praticamente sólida/preta, que é o caso típico de
-  // WebGL lido depois de o framebuffer ter sido limpo.
-  if (quality.nonDarkRatio < MIN_NON_DARK_RATIO && quality.variance < MIN_VARIANCE) {
-    throw new Error(`${label} gerou preview preto ou sem conteúdo útil (${formatQuality(quality)}).`);
-  }
-
-  return quality;
-}
-
-function resizeToProjectPreview(sourceCanvas: HTMLCanvasElement) {
-  const outputCanvas = document.createElement("canvas");
-  outputCanvas.width = PREVIEW_WIDTH;
-  outputCanvas.height = PREVIEW_HEIGHT;
-
-  const ctx = outputCanvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Não foi possível criar contexto para preview PNG.");
-  }
-
-  const sourceWidth = sourceCanvas.width;
-  const sourceHeight = sourceCanvas.height;
-  const sourceRatio = sourceWidth / sourceHeight;
+  const sourceRatio = source.width / source.height;
   const targetRatio = PREVIEW_WIDTH / PREVIEW_HEIGHT;
-
   let sx = 0;
   let sy = 0;
-  let sw = sourceWidth;
-  let sh = sourceHeight;
+  let sw = source.width;
+  let sh = source.height;
 
   if (sourceRatio > targetRatio) {
-    sw = sourceHeight * targetRatio;
-    sx = (sourceWidth - sw) / 2;
+    sw = source.height * targetRatio;
+    sx = (source.width - sw) / 2;
   } else {
-    sh = sourceWidth / targetRatio;
-    sy = (sourceHeight - sh) / 2;
+    sh = source.width / targetRatio;
+    sy = (source.height - sh) / 2;
   }
 
   ctx.fillStyle = "#08090B";
   ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-  ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-
-  const quality = assertUsablePreview(outputCanvas, "preview redimensionado");
-  const dataUrl = outputCanvas.toDataURL("image/png", 0.92);
-
-  if (!isValidDataUrl(dataUrl)) {
-    throw new Error("Canvas gerou dataURL inválido.");
-  }
-
-  return { dataUrl, quality };
+  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  assertNotBlack(out, "preview redimensionado");
+  const dataUrl = out.toDataURL("image/png", 0.92);
+  if (!isImageDataUrl(dataUrl)) throw new Error("DataURL inválido.");
+  return dataUrl;
 }
 
-function getIntersectionArea(a: DOMRect, b: DOMRect) {
-  const left = Math.max(a.left, b.left);
-  const top = Math.max(a.top, b.top);
-  const right = Math.min(a.right, b.right);
-  const bottom = Math.min(a.bottom, b.bottom);
-  const width = Math.max(0, right - left);
-  const height = Math.max(0, bottom - top);
+function drawCanvasIntoPreview(ctx: CanvasRenderingContext2D, item: any, targetRect: DOMRect) {
+  const rect = item.rect;
+  const left = Math.max(rect.left, targetRect.left);
+  const top = Math.max(rect.top, targetRect.top);
+  const right = Math.min(rect.right, targetRect.right);
+  const bottom = Math.min(rect.bottom, targetRect.bottom);
+  const width = right - left;
+  const height = bottom - top;
+  if (width <= 0 || height <= 0) return false;
 
-  return width * height;
-}
-
-function getLayerDrawGeometry(layer: CanvasLayer, viewportRect: DOMRect) {
-  const { canvas, rect } = layer;
-  const intersectionLeft = Math.max(rect.left, viewportRect.left);
-  const intersectionTop = Math.max(rect.top, viewportRect.top);
-  const intersectionRight = Math.min(rect.right, viewportRect.right);
-  const intersectionBottom = Math.min(rect.bottom, viewportRect.bottom);
-
-  const intersectionWidth = intersectionRight - intersectionLeft;
-  const intersectionHeight = intersectionBottom - intersectionTop;
-
-  if (intersectionWidth <= 0 || intersectionHeight <= 0) return null;
-
-  const sourceScaleX = canvas.width / rect.width;
-  const sourceScaleY = canvas.height / rect.height;
-
-  return {
-    sx: (intersectionLeft - rect.left) * sourceScaleX,
-    sy: (intersectionTop - rect.top) * sourceScaleY,
-    sw: intersectionWidth * sourceScaleX,
-    sh: intersectionHeight * sourceScaleY,
-    dx: ((intersectionLeft - viewportRect.left) / viewportRect.width) * PREVIEW_WIDTH,
-    dy: ((intersectionTop - viewportRect.top) / viewportRect.height) * PREVIEW_HEIGHT,
-    dw: (intersectionWidth / viewportRect.width) * PREVIEW_WIDTH,
-    dh: (intersectionHeight / viewportRect.height) * PREVIEW_HEIGHT,
-  };
-}
-
-function drawCanvasLayerIntoPreview(
-  ctx: CanvasRenderingContext2D,
-  layer: CanvasLayer,
-  viewportRect: DOMRect
-) {
-  const geometry = getLayerDrawGeometry(layer, viewportRect);
-  if (!geometry) return false;
-
+  const scaleX = item.canvas.width / rect.width;
+  const scaleY = item.canvas.height / rect.height;
   ctx.drawImage(
-    layer.canvas,
-    geometry.sx,
-    geometry.sy,
-    geometry.sw,
-    geometry.sh,
-    geometry.dx,
-    geometry.dy,
-    geometry.dw,
-    geometry.dh
+    item.canvas,
+    (left - rect.left) * scaleX,
+    (top - rect.top) * scaleY,
+    width * scaleX,
+    height * scaleY,
+    ((left - targetRect.left) / targetRect.width) * PREVIEW_WIDTH,
+    ((top - targetRect.top) / targetRect.height) * PREVIEW_HEIGHT,
+    (width / targetRect.width) * PREVIEW_WIDTH,
+    (height / targetRect.height) * PREVIEW_HEIGHT
   );
   return true;
 }
 
-function createPreviewCanvasFromLayer(layer: CanvasLayer, viewportRect: DOMRect) {
-  const canvas = document.createElement("canvas");
-  canvas.width = PREVIEW_WIDTH;
-  canvas.height = PREVIEW_HEIGHT;
+function maskBlackBackground(canvas: HTMLCanvasElement) {
+  const out = document.createElement("canvas");
+  out.width = PREVIEW_WIDTH;
+  out.height = PREVIEW_HEIGHT;
+  const ctx = out.getContext("2d");
+  if (!ctx) return canvas;
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Não foi possível criar canvas temporário de camada.");
-  }
-
-  ctx.clearRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-  const didDraw = drawCanvasLayerIntoPreview(ctx, layer, viewportRect);
-
-  if (!didDraw) {
-    throw new Error("Camada não intersecta a área de captura.");
-  }
-
-  return canvas;
-}
-
-function createMaskedOverlayCanvas(sourceCanvas: HTMLCanvasElement) {
-  const outputCanvas = document.createElement("canvas");
-  outputCanvas.width = PREVIEW_WIDTH;
-  outputCanvas.height = PREVIEW_HEIGHT;
-
-  const ctx = outputCanvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Não foi possível criar máscara de overlay.");
-  }
-
-  ctx.drawImage(sourceCanvas, 0, 0);
-
+  ctx.drawImage(canvas, 0, 0);
   const imageData = ctx.getImageData(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
   const data = imageData.data;
 
   for (let i = 0; i < data.length; i += 4) {
-    const alpha = data[i + 3];
-
-    if (alpha < 8) {
-      data[i + 3] = 0;
-      continue;
-    }
-
-    const red = data[i];
-    const green = data[i + 1];
-    const blue = data[i + 2];
-    const max = Math.max(red, green, blue);
-    const min = Math.min(red, green, blue);
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const brightness = (r + g + b) / 3;
     const chroma = max - min;
-    const brightness = (red + green + blue) / 3;
-
-    // Deck.gl/Mapbox às vezes entrega a camada de dados com fundo preto opaco.
-    // Para preservar o mapa base, removemos somente pixels quase pretos e sem cor.
-    // Polígonos azuis/verdes e pontos coloridos permanecem, mesmo quando escuros.
-    if (brightness < OVERLAY_DARK_BRIGHTNESS_LIMIT && chroma < OVERLAY_DARK_CHROMA_LIMIT) {
-      data[i + 3] = 0;
-    }
+    if (brightness < 24 && chroma < 14) data[i + 3] = 0;
   }
 
   ctx.putImageData(imageData, 0, 0);
-  return outputCanvas;
+  return out;
 }
 
-function isBackgroundLayer(layer: ReadableCanvasLayer) {
-  return (
-    layer.quality.mean >= BACKGROUND_MEAN_THRESHOLD ||
-    layer.quality.nonDarkRatio >= BACKGROUND_NON_DARK_THRESHOLD
-  );
-}
-
-async function captureByCompositedCanvases(): Promise<CaptureResult> {
+async function captureCompositedBase() {
   await waitForPaint();
 
-  const target = findCaptureTarget();
-  const viewportRect = target.getBoundingClientRect();
-  const layers = getStackedVisibleCanvasLayers().filter(
-    (layer) => getIntersectionArea(layer.rect, viewportRect) > 0
-  );
-
-  if (!layers.length) {
-    throw new Error("Nenhum canvas visível intersecta o alvo de captura.");
-  }
-
-  const readableLayers: ReadableCanvasLayer[] = [];
-  const skipped: string[] = [];
-
-  layers.forEach((layer, index) => {
-    try {
-      // Testa se o canvas é legível antes de desenhar. Se um canvas CORS-tainted for
-      // desenhado no composto, o composto inteiro fica bloqueado para toDataURL.
-      layer.canvas.toDataURL("image/png");
-      const previewCanvas = createPreviewCanvasFromLayer(layer, viewportRect);
-      const quality = analyzeCanvasQuality(previewCanvas);
-      readableLayers.push({
-        ...layer,
-        quality,
-        score: getLayerScore(quality),
-      });
-    } catch (error) {
-      skipped.push(`canvas[${index}] ${getErrorMessage(error)}`);
-    }
+  const target = getCaptureTarget();
+  const targetRect = target.getBoundingClientRect();
+  const canvases = getVisibleCanvases().filter((item) => {
+    const r = item.rect;
+    return Math.max(0, Math.min(r.right, targetRect.right) - Math.max(r.left, targetRect.left)) > 0;
   });
 
-  if (!readableLayers.length) {
-    throw new Error(`Nenhum canvas pôde ser lido. Ignorados: ${skipped.join(" | ")}`);
-  }
+  if (!canvases.length) throw new Error("Nenhum canvas visível encontrado para composição.");
 
-  const outputCanvas = document.createElement("canvas");
-  outputCanvas.width = PREVIEW_WIDTH;
-  outputCanvas.height = PREVIEW_HEIGHT;
-
-  const ctx = outputCanvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Não foi possível criar canvas composto para preview.");
-  }
+  const out = document.createElement("canvas");
+  out.width = PREVIEW_WIDTH;
+  out.height = PREVIEW_HEIGHT;
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("Contexto 2D indisponível para composição.");
 
   ctx.fillStyle = "#08090B";
   ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-  const sortedByStack = [...readableLayers].sort(
-    (a, b) => a.zIndex - b.zIndex || a.order - b.order
-  );
-  const bestBaseLayer = [...readableLayers].sort((a, b) => b.score - a.score)[0];
-  const backgroundLayers = sortedByStack.filter(isBackgroundLayer);
-  const fullLayers = backgroundLayers.length ? backgroundLayers : [bestBaseLayer];
-  const fullLayerKeys = new Set(fullLayers.map((layer) => `${layer.order}:${layer.zIndex}`));
+  let drawn = 0;
+  let skipped = 0;
+  const qualities: string[] = [];
 
-  let fullDrawn = 0;
-  fullLayers.forEach((layer) => {
+  for (const item of canvases) {
     try {
-      const didDraw = drawCanvasLayerIntoPreview(ctx, layer, viewportRect);
-      if (didDraw) fullDrawn += 1;
-    } catch (error) {
-      skipped.push(`full[${layer.order}] ${getErrorMessage(error)}`);
+      item.canvas.toDataURL("image/png");
+      const temp = document.createElement("canvas");
+      temp.width = PREVIEW_WIDTH;
+      temp.height = PREVIEW_HEIGHT;
+      const tempCtx = temp.getContext("2d");
+      if (!tempCtx) continue;
+      drawCanvasIntoPreview(tempCtx, item, targetRect);
+      const q = brightnessQuality(temp);
+      qualities.push(`o=${item.order},z=${item.zIndex},mean=${q.mean.toFixed(1)},var=${q.variance.toFixed(1)},useful=${(q.useful * 100).toFixed(1)}%`);
+
+      // Camadas muito escuras frequentemente são overlays deck.gl com fundo preto opaco.
+      // A máscara remove só o preto neutro e preserva polígonos/pontos coloridos.
+      if (q.mean < 45 && q.useful < 0.35) ctx.drawImage(maskBlackBackground(temp), 0, 0);
+      else ctx.drawImage(temp, 0, 0);
+      drawn += 1;
+    } catch (_error) {
+      skipped += 1;
     }
-  });
-
-  let overlayDrawn = 0;
-  sortedByStack.forEach((layer) => {
-    const layerKey = `${layer.order}:${layer.zIndex}`;
-    if (fullLayerKeys.has(layerKey)) return;
-
-    try {
-      const layerPreview = createPreviewCanvasFromLayer(layer, viewportRect);
-      const maskedOverlay = createMaskedOverlayCanvas(layerPreview);
-      const overlayQuality = analyzeCanvasQuality(maskedOverlay);
-
-      // Evita redesenhar camadas que ficaram vazias depois da máscara.
-      if (overlayQuality.transparentRatio > 0.995) return;
-
-      ctx.drawImage(maskedOverlay, 0, 0);
-      overlayDrawn += 1;
-    } catch (error) {
-      skipped.push(`overlay[${layer.order}] ${getErrorMessage(error)}`);
-    }
-  });
-
-  if (!fullDrawn && !overlayDrawn) {
-    throw new Error(`Nenhum canvas pôde ser composto. Ignorados: ${skipped.join(" | ")}`);
   }
 
-  const quality = assertUsablePreview(outputCanvas, "preview composto");
-  const dataUrl = outputCanvas.toDataURL("image/png", 0.92);
-
-  if (!isValidDataUrl(dataUrl)) {
-    throw new Error("Canvas composto gerou dataURL inválido.");
-  }
-
-  const layerSummary = readableLayers
-    .map((layer, index) => `l${index}{order=${layer.order},z=${layer.zIndex},${formatQuality(layer.quality)}}`)
-    .join(";");
-
+  if (!drawn) throw new Error("Nenhum canvas legível foi composto.");
+  assertNotBlack(out, "preview composto");
   return {
-    dataUrl,
-    method: "canvas-composite-masked",
-    diagnostics: [
-      `target=${target.tagName.toLowerCase()}`,
-      `targetRect=${Math.round(viewportRect.width)}x${Math.round(viewportRect.height)}`,
-      `layers=${layers.length}`,
-      `readable=${readableLayers.length}`,
-      `fullDrawn=${fullDrawn}`,
-      `overlayDrawn=${overlayDrawn}`,
-      `skipped=${skipped.length}`,
-      `bestBaseOrder=${bestBaseLayer.order}`,
-      formatQuality(quality),
-      layerSummary,
-      `bytesBase64=${dataUrl.length}`,
-    ],
+    dataUrl: out.toDataURL("image/png", 0.92),
+    method: "canvas-composite",
+    diagnostics: [`canvases=${canvases.length}`, `drawn=${drawn}`, `skipped=${skipped}`, qualities.join(";")],
   };
 }
 
-async function captureByDirectCanvas(): Promise<CaptureResult> {
+async function captureHtml2Canvas() {
   await waitForPaint();
-
-  const canvases = getVisibleCanvases();
-  const canvasCount = document.querySelectorAll("canvas").length;
-  const errors: string[] = [];
-
-  if (!canvases.length) {
-    throw new Error(`Nenhum canvas visível encontrado. Total de canvas na tela: ${canvasCount}.`);
-  }
-
-  for (const [index, canvas] of canvases.entries()) {
-    const rect = canvas.getBoundingClientRect();
-
-    try {
-      const { dataUrl, quality } = resizeToProjectPreview(canvas);
-
-      return {
-        dataUrl,
-        method: `canvas-direct-${index}`,
-        diagnostics: [
-          `canvasCount=${canvasCount}`,
-          `selectedIndex=${index}`,
-          `source=${canvas.width}x${canvas.height}`,
-          `rect=${Math.round(rect.width)}x${Math.round(rect.height)}`,
-          formatQuality(quality),
-          `bytesBase64=${dataUrl.length}`,
-        ],
-      };
-    } catch (error) {
-      errors.push(
-        `canvas[${index}] ${canvas.width}x${canvas.height} rect=${Math.round(rect.width)}x${Math.round(
-          rect.height
-        )}: ${getErrorMessage(error)}`
-      );
-    }
-  }
-
-  throw new Error(errors.join(" | "));
-}
-
-async function captureByHtml2Canvas(): Promise<CaptureResult> {
-  await waitForPaint();
-
-  const target = findCaptureTarget();
-  const targetRect = target.getBoundingClientRect();
-  const canvasDataUrls = collectCanvasDataUrls();
-  const readableCanvasCount = canvasDataUrls.filter(Boolean).length;
-
-  const captureCanvas = await html2canvas(target, {
+  const target = getCaptureTarget();
+  const captured = await html2canvas(target, {
     backgroundColor: "#08090B",
     useCORS: true,
     allowTaint: true,
     logging: false,
     scale: 1,
     ignoreElements: (element) => Boolean(element.closest?.("[data-maono-no-preview='true']")),
-    onclone: (clonedDocument) => {
-      const clonedCanvases = Array.from(clonedDocument.querySelectorAll("canvas"));
-
-      clonedCanvases.forEach((canvas, index) => {
-        const dataUrl = canvasDataUrls[index];
-        if (!dataUrl) return;
-
-        const img = clonedDocument.createElement("img");
-        img.src = dataUrl;
-        img.width = canvas.width;
-        img.height = canvas.height;
-        img.style.width = canvas.style.width || `${canvas.getBoundingClientRect().width}px`;
-        img.style.height = canvas.style.height || `${canvas.getBoundingClientRect().height}px`;
-        img.style.display = "block";
-
-        canvas.parentNode?.replaceChild(img, canvas);
-      });
-    },
   });
+  return { dataUrl: cropCanvasToPreview(captured), method: "html2canvas", diagnostics: [`capture=${captured.width}x${captured.height}`] };
+}
 
-  if (!captureCanvas || captureCanvas.width <= 0 || captureCanvas.height <= 0) {
-    throw new Error("html2canvas retornou canvas vazio.");
+function getViewport(mapState: any) {
+  const viewState = mapState?.mapState || {};
+  const longitude = Number(viewState.longitude);
+  const latitude = Number(viewState.latitude);
+  const zoom = Number(viewState.zoom);
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || !Number.isFinite(zoom)) return null;
+  return new WebMercatorViewport({
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_HEIGHT,
+    longitude,
+    latitude,
+    zoom,
+    pitch: Number(viewState.pitch) || 0,
+    bearing: Number(viewState.bearing) || 0,
+  });
+}
+
+function fieldsOf(dataset: any) {
+  const fields = dataset?.fields || dataset?.data?.fields || dataset?.data?.schema?.fields || [];
+  return Array.isArray(fields) ? fields : [];
+}
+
+function fieldName(field: any) {
+  return String(field?.name || field?.id || field?.displayName || "");
+}
+
+function rowsOf(dataset: any) {
+  const data = dataset?.data || dataset;
+  if (Array.isArray(data?.allData)) return data.allData;
+  if (Array.isArray(dataset?.allData)) return dataset.allData;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(dataset?.rows)) return dataset.rows;
+  if (Array.isArray(data)) return data;
+
+  const dc = dataset?.dataContainer || data?.dataContainer;
+  if (dc) {
+    try {
+      if (typeof dc.rows === "function") {
+        const rows = dc.rows();
+        if (Array.isArray(rows)) return rows;
+      }
+    } catch (_error) {
+      // ignore
+    }
+
+    const count = Number(typeof dc.numRows === "function" ? dc.numRows() : dc.numRows);
+    if (Number.isFinite(count) && count > 0) {
+      const rows = [];
+      const limit = Math.min(count, Math.max(MAX_POINTS, MAX_GEOMETRIES));
+      for (let i = 0; i < limit; i += 1) {
+        try {
+          const row = typeof dc.row === "function" ? dc.row(i) : typeof dc.get === "function" ? dc.get(i) : null;
+          if (row) rows.push(row);
+        } catch (_error) {
+          // ignore
+        }
+      }
+      return rows;
+    }
   }
 
-  const { dataUrl, quality } = resizeToProjectPreview(captureCanvas);
+  return [];
+}
 
+function valueOf(row: any, fields: any[], name?: string | null) {
+  if (!name || !row) return undefined;
+  if (Array.isArray(row)) {
+    const index = fields.findIndex((field) => normalize(fieldName(field)) === normalize(name));
+    return index >= 0 ? row[index] : undefined;
+  }
+  if (typeof row === "object") {
+    if (name in row) return row[name];
+    const key = Object.keys(row).find((candidate) => normalize(candidate) === normalize(name));
+    return key ? row[key] : undefined;
+  }
+  return undefined;
+}
+
+function findField(fields: any[], candidates: string[]) {
+  const exact = fields.find((field) => candidates.map(normalize).includes(normalize(fieldName(field))));
+  if (exact) return fieldName(exact);
+  const partial = fields.find((field) => candidates.some((candidate) => normalize(fieldName(field)).includes(normalize(candidate))));
+  return partial ? fieldName(partial) : null;
+}
+
+function layersForDataset(mapState: any, datasetId: string) {
+  const layers = mapState?.visState?.layers;
+  if (!Array.isArray(layers)) return [];
+  return layers.filter((layer: any) => String(layer?.config?.dataId || layer?.props?.dataId || "") === String(datasetId));
+}
+
+function coordinateColumns(mapState: any, datasetId: string, fields: any[]) {
+  for (const layer of layersForDataset(mapState, datasetId)) {
+    const columns = layer?.config?.columns || layer?.props?.columns || {};
+    const lat = columns.lat || columns.latitude || columns.y || columns.lat0;
+    const lng = columns.lng || columns.lon || columns.longitude || columns.x || columns.lng0;
+    if (lat && lng) return { lat: String(lat), lng: String(lng) };
+  }
   return {
-    dataUrl,
-    method: "html2canvas",
-    diagnostics: [
-      `target=${target.tagName.toLowerCase()}`,
-      `targetRect=${Math.round(targetRect.width)}x${Math.round(targetRect.height)}`,
-      `readableCanvas=${readableCanvasCount}/${canvasDataUrls.length}`,
-      `capture=${captureCanvas.width}x${captureCanvas.height}`,
-      formatQuality(quality),
-      `bytesBase64=${dataUrl.length}`,
-    ],
+    lat: findField(fields, ["latitude", "lat", "y", "lat_dd", "latitud"]),
+    lng: findField(fields, ["longitude", "lon", "lng", "long", "x", "lng_dd", "longitud"]),
   };
 }
 
-function getDatasetCount(mapState: any) {
+function toNumber(value: any) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+  return NaN;
+}
+
+function geometryValues(value: any): any[] {
+  if (!value) return [];
+  let parsed = value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith("{")) return [];
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (_error) {
+      return [];
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return [];
+  if (parsed.type === "FeatureCollection") return (parsed.features || []).flatMap((feature: any) => geometryValues(feature));
+  if (parsed.type === "Feature") return geometryValues(parsed.geometry);
+  if (parsed.type && parsed.coordinates) return [parsed];
+  if (parsed.geometry) return geometryValues(parsed.geometry);
+  return [];
+}
+
+function rowGeometries(row: any, fields: any[]) {
+  const out: any[] = [];
+  ["geojson", "geometry", "geom", "the_geom", "shape"].forEach((candidate) => {
+    out.push(...geometryValues(valueOf(row, fields, findField(fields, [candidate]))));
+  });
+  if (Array.isArray(row)) row.forEach((value) => out.push(...geometryValues(value)));
+  else if (row && typeof row === "object") Object.values(row).forEach((value) => out.push(...geometryValues(value)));
+  return out;
+}
+
+function project(viewport: any, coordinate: any) {
+  if (!Array.isArray(coordinate) || coordinate.length < 2) return null;
+  const lng = toNumber(coordinate[0]);
+  const lat = toNumber(coordinate[1]);
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  try {
+    const [x, y] = viewport.project([lng, lat]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (x < -120 || x > PREVIEW_WIDTH + 120 || y < -120 || y > PREVIEW_HEIGHT + 120) return null;
+    return { x, y };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function drawPoint(ctx: CanvasRenderingContext2D, x: number, y: number, index: number) {
+  const colors = ["#20C7B5", "#F2C766", "#22C55E", "#EF4444", "#3B82F6", "#F97316"];
+  ctx.save();
+  ctx.fillStyle = colors[index % colors.length];
+  ctx.strokeStyle = "rgba(8,9,11,0.92)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLine(ctx: CanvasRenderingContext2D, viewport: any, coordinates: any[], close = false) {
+  let started = false;
+  coordinates.forEach((coordinate) => {
+    const point = project(viewport, coordinate);
+    if (!point) return;
+    if (!started) {
+      ctx.moveTo(point.x, point.y);
+      started = true;
+    } else ctx.lineTo(point.x, point.y);
+  });
+  if (started && close) ctx.closePath();
+  return started;
+}
+
+function drawGeometry(ctx: CanvasRenderingContext2D, viewport: any, geometry: any, index: number) {
+  if (!geometry?.type || !geometry?.coordinates) return 0;
+  const fill = index % 2 === 0 ? "rgba(32,199,181,0.45)" : "rgba(214,168,79,0.38)";
+  const stroke = index % 2 === 0 ? "rgba(242,199,102,0.95)" : "rgba(32,199,181,0.95)";
+
+  if (geometry.type === "Point") {
+    const point = project(viewport, geometry.coordinates);
+    if (!point) return 0;
+    drawPoint(ctx, point.x, point.y, index);
+    return 1;
+  }
+  if (geometry.type === "MultiPoint") {
+    let drawn = 0;
+    geometry.coordinates.forEach((coordinate: any, pointIndex: number) => {
+      const point = project(viewport, coordinate);
+      if (point) {
+        drawPoint(ctx, point.x, point.y, index + pointIndex);
+        drawn += 1;
+      }
+    });
+    return drawn;
+  }
+  if (geometry.type === "LineString") {
+    ctx.beginPath();
+    if (!drawLine(ctx, viewport, geometry.coordinates)) return 0;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+    return 1;
+  }
+  if (geometry.type === "MultiLineString") {
+    let drawn = 0;
+    geometry.coordinates.forEach((line: any[]) => {
+      ctx.beginPath();
+      if (drawLine(ctx, viewport, line)) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+        drawn += 1;
+      }
+    });
+    return drawn;
+  }
+  if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+    let drawn = 0;
+    polygons.forEach((polygon: any[]) => {
+      ctx.beginPath();
+      let didDraw = false;
+      polygon.forEach((ring: any[]) => {
+        didDraw = drawLine(ctx, viewport, ring, true) || didDraw;
+      });
+      if (didDraw) {
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1.5;
+        ctx.fill("evenodd");
+        ctx.stroke();
+        drawn += 1;
+      }
+    });
+    return drawn;
+  }
+  return 0;
+}
+
+function loadImage(dataUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Não foi possível carregar preview base."));
+    image.src = dataUrl;
+  });
+}
+
+async function applyStateOverlay(capture: CaptureResult, mapState: any): Promise<CaptureResult> {
+  const viewport = getViewport(mapState);
   const datasets = mapState?.visState?.datasets;
-  if (!datasets || typeof datasets !== "object") return 0;
-  return Object.keys(datasets).length;
-}
+  if (!viewport || !datasets || typeof datasets !== "object") return capture;
 
-function getLayerCount(mapState: any) {
-  const layers = mapState?.visState?.layers;
-  return Array.isArray(layers) ? layers.length : 0;
-}
-
-function createGeneratedProjectPreview(mapState: any): CaptureResult {
+  const image = await loadImage(capture.dataUrl);
   const canvas = document.createElement("canvas");
   canvas.width = PREVIEW_WIDTH;
   canvas.height = PREVIEW_HEIGHT;
-
   const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Não foi possível criar canvas técnico de fallback.");
-  }
+  if (!ctx) return capture;
+  ctx.drawImage(image, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-  const datasetCount = getDatasetCount(mapState);
-  const layerCount = getLayerCount(mapState);
-  const latitude = mapState?.mapState?.latitude;
-  const longitude = mapState?.mapState?.longitude;
-  const zoom = mapState?.mapState?.zoom;
+  let points = 0;
+  let geometries = 0;
+  let rows = 0;
+  let datasetCount = 0;
 
-  const gradient = ctx.createLinearGradient(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-  gradient.addColorStop(0, "#08090B");
-  gradient.addColorStop(0.48, "#11151C");
-  gradient.addColorStop(1, "#0E2A27");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  Object.entries(datasets).forEach(([datasetId, dataset]: [string, any], datasetIndex) => {
+    const fields = fieldsOf(dataset);
+    const rowsForDataset = rowsOf(dataset);
+    const columns = coordinateColumns(mapState, datasetId, fields);
+    if (!rowsForDataset.length) return;
+    datasetCount += 1;
 
-  ctx.strokeStyle = "rgba(244,241,232,0.08)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x <= PREVIEW_WIDTH; x += 42) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, PREVIEW_HEIGHT);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= PREVIEW_HEIGHT; y += 42) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(PREVIEW_WIDTH, y);
-    ctx.stroke();
-  }
-
-  const polygons = [
-    { x: 96, y: 88, w: 260, h: 150, stroke: "#20C7B5", fill: "rgba(32,199,181,0.10)" },
-    { x: 280, y: 155, w: 410, h: 220, stroke: "#D6A84F", fill: "rgba(214,168,79,0.10)" },
-    { x: 585, y: 92, w: 270, h: 178, stroke: "#F2C766", fill: "rgba(242,199,102,0.08)" },
-    { x: 615, y: 290, w: 235, h: 128, stroke: "#22C55E", fill: "rgba(34,197,94,0.08)" },
-  ];
-
-  polygons.forEach((poly) => {
-    ctx.fillStyle = poly.fill;
-    ctx.strokeStyle = poly.stroke;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(poly.x, poly.y, poly.w, poly.h, 8);
-    ctx.fill();
-    ctx.stroke();
+    for (const row of rowsForDataset) {
+      rows += 1;
+      if (geometries < MAX_GEOMETRIES) {
+        for (const geometry of rowGeometries(row, fields)) {
+          if (geometries >= MAX_GEOMETRIES) break;
+          const drawn = drawGeometry(ctx, viewport, geometry, geometries + datasetIndex);
+          if (drawn) geometries += drawn;
+        }
+      }
+      if (points < MAX_POINTS && columns.lat && columns.lng) {
+        const lat = toNumber(valueOf(row, fields, columns.lat));
+        const lng = toNumber(valueOf(row, fields, columns.lng));
+        const point = Number.isFinite(lat) && Number.isFinite(lng) ? project(viewport, [lng, lat]) : null;
+        if (point) {
+          drawPoint(ctx, point.x, point.y, points + datasetIndex);
+          points += 1;
+        }
+      }
+      if (points >= MAX_POINTS && geometries >= MAX_GEOMETRIES) break;
+    }
   });
 
-  const points = [
-    [225, 242, "#20C7B5"],
-    [306, 208, "#3B82F6"],
-    [392, 264, "#EF4444"],
-    [487, 197, "#F97316"],
-    [673, 228, "#F2C766"],
-    [746, 316, "#22C55E"],
-  ];
-
-  points.forEach(([x, y, color]) => {
-    ctx.fillStyle = color as string;
-    ctx.strokeStyle = "#08090B";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(x as number, y as number, 14, 14, 3);
-    ctx.fill();
-    ctx.stroke();
-  });
-
-  ctx.fillStyle = "rgba(8,9,11,0.72)";
-  ctx.fillRect(0, 428, PREVIEW_WIDTH, 112);
-  ctx.fillStyle = "#F4F1E8";
-  ctx.font = "700 30px Arial";
-  ctx.fillText("Maõno Maps · preview técnico", 34, 472);
-
-  ctx.fillStyle = "#C6C0B1";
-  ctx.font = "600 20px Arial";
-  ctx.fillText(
-    `datasets=${datasetCount}  camadas=${layerCount}  zoom=${Number.isFinite(zoom) ? Number(zoom).toFixed(2) : "n/d"}`,
-    34,
-    508
-  );
-
-  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-    ctx.fillText(`centro=${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}`, 500, 508);
+  if (!points && !geometries) {
+    return { ...capture, diagnostics: [...capture.diagnostics, "stateOverlay=0"] };
   }
 
-  const quality = assertUsablePreview(canvas, "preview técnico gerado");
+  assertNotBlack(canvas, "preview com dados do estado");
   const dataUrl = canvas.toDataURL("image/png", 0.92);
+  if (!isImageDataUrl(dataUrl)) return capture;
 
   return {
     dataUrl,
-    method: "generated-technical-preview",
+    method: `${capture.method}+state-overlay`,
     diagnostics: [
-      "WebGL screenshot indisponível; fallback técnico gerado a partir do estado do projeto.",
-      `datasets=${datasetCount}`,
-      `layers=${layerCount}`,
-      formatQuality(quality),
-      `bytesBase64=${dataUrl.length}`,
+      ...capture.diagnostics,
+      `stateOverlayPoints=${points}`,
+      `stateOverlayGeometries=${geometries}`,
+      `stateOverlayRows=${rows}`,
+      `stateOverlayDatasets=${datasetCount}`,
+      `stateOverlayBytesBase64=${dataUrl.length}`,
     ],
   };
+}
+
+function generatedPreview(mapState: any): CaptureResult {
+  const canvas = document.createElement("canvas");
+  canvas.width = PREVIEW_WIDTH;
+  canvas.height = PREVIEW_HEIGHT;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas técnico indisponível.");
+
+  const gradient = ctx.createLinearGradient(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  gradient.addColorStop(0, "#08090B");
+  gradient.addColorStop(0.5, "#11151C");
+  gradient.addColorStop(1, "#0E2A27");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  ctx.strokeStyle = "rgba(244,241,232,0.09)";
+  for (let x = 0; x < PREVIEW_WIDTH; x += 42) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, PREVIEW_HEIGHT); ctx.stroke();
+  }
+  for (let y = 0; y < PREVIEW_HEIGHT; y += 42) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(PREVIEW_WIDTH, y); ctx.stroke();
+  }
+
+  const dataUrl = canvas.toDataURL("image/png", 0.92);
+  return { dataUrl, method: "generated-technical-preview", diagnostics: ["fallback técnico"] };
 }
 
 async function captureThumbnail(mapState: any): Promise<CaptureResult> {
   const errors: string[] = [];
-
   try {
-    return await captureByCompositedCanvases();
+    return await applyStateOverlay(await captureCompositedBase(), mapState);
   } catch (error) {
-    errors.push(`canvas-composite: ${getErrorMessage(error)}`);
+    errors.push(`canvas-composite: ${errorMessage(error)}`);
   }
-
   try {
-    const result = await captureByDirectCanvas();
-    return {
-      ...result,
-      diagnostics: [...errors, ...result.diagnostics],
-    };
+    return await applyStateOverlay(await captureHtml2Canvas(), mapState);
   } catch (error) {
-    errors.push(`canvas-direct: ${getErrorMessage(error)}`);
+    errors.push(`html2canvas: ${errorMessage(error)}`);
   }
-
-  try {
-    const result = await captureByHtml2Canvas();
-    return {
-      ...result,
-      diagnostics: [...errors, ...result.diagnostics],
-    };
-  } catch (error) {
-    errors.push(`html2canvas: ${getErrorMessage(error)}`);
-  }
-
-  const generated = createGeneratedProjectPreview(mapState);
-  return {
-    ...generated,
-    diagnostics: [...errors, ...generated.diagnostics],
-  };
+  return await applyStateOverlay({ ...generatedPreview(mapState), diagnostics: errors }, mapState);
 }
 
 const MaonoSaveButton: React.FC = () => {
@@ -781,15 +658,11 @@ const MaonoSaveButton: React.FC = () => {
   const [messageType, setMessageType] = useState<"success" | "error">("success");
 
   const projectAccessLevel = useMemo(() => {
-    const currentProject = projects.find(
-      (project) => normalize(project.slug) === normalize(projectSlug)
-    );
+    const currentProject = projects.find((project) => normalize(project.slug) === normalize(projectSlug));
     return currentProject?.accessLevel;
   }, [projects, projectSlug]);
 
-  const allowed = Boolean(
-    authenticated && projectSlug && canSaveProject(user?.role, projectAccessLevel)
-  );
+  const allowed = Boolean(authenticated && projectSlug && canSaveProject(user?.role, projectAccessLevel));
 
   async function handleSave() {
     if (!projectSlug || !mapState) return;
@@ -800,40 +673,20 @@ const MaonoSaveButton: React.FC = () => {
     try {
       const rawSaved = KeplerGlSchema.save(mapState);
       const config = normalizeSavedKeplerConfig(rawSaved, mapState);
-
-      let thumbnailDataUrl: string | null = null;
-      let captureMethod = "none";
-      let captureDiagnostics = "captura não iniciada";
-
-      try {
-        const capture = await captureThumbnail(mapState);
-        thumbnailDataUrl = capture.dataUrl;
-        captureMethod = capture.method;
-        captureDiagnostics = capture.diagnostics.join(" | ");
-      } catch (captureError) {
-        captureDiagnostics = getErrorMessage(captureError);
-        console.warn("Maõno Maps: não foi possível capturar o preview PNG do mapa.", captureError);
-      }
+      const capture = await captureThumbnail(mapState);
 
       const response = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
         method: "PUT",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           config,
-          thumbnailDataUrl,
-          thumbnailCapture: {
-            method: captureMethod,
-            diagnostics: captureDiagnostics,
-          },
+          thumbnailDataUrl: capture.dataUrl,
+          thumbnailCapture: { method: capture.method, diagnostics: capture.diagnostics.join(" | ") },
         }),
       });
 
       const data = await response.json();
-
       if (!response.ok || data?.ok === false) {
         throw new Error(data?.error?.message || "Não foi possível salvar o projeto.");
       }
@@ -841,8 +694,8 @@ const MaonoSaveButton: React.FC = () => {
       setMessageType("success");
       setMessage(
         data?.preview
-          ? `Projeto e preview PNG salvos no Dropbox com sucesso. Método: ${captureMethod}.`
-          : `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${captureDiagnostics}`
+          ? `Projeto e visualização PNG salvos no Dropbox com sucesso. Método: ${capture.method}.`
+          : `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${capture.diagnostics.join(" | ")}`
       );
     } catch (error) {
       setMessageType("error");
