@@ -9,6 +9,10 @@ const PREVIEW_WIDTH = 960;
 const PREVIEW_HEIGHT = 540;
 const MIN_NON_DARK_RATIO = 0.008;
 const MIN_VARIANCE = 8;
+const BACKGROUND_MEAN_THRESHOLD = 45;
+const BACKGROUND_NON_DARK_THRESHOLD = 0.35;
+const OVERLAY_DARK_BRIGHTNESS_LIMIT = 24;
+const OVERLAY_DARK_CHROMA_LIMIT = 14;
 
 type CaptureResult = {
   dataUrl: string;
@@ -28,6 +32,11 @@ type CanvasLayer = {
   rect: DOMRect;
   order: number;
   zIndex: number;
+};
+
+type ReadableCanvasLayer = CanvasLayer & {
+  quality: PreviewQuality;
+  score: number;
 };
 
 function normalize(value?: string | null) {
@@ -202,6 +211,10 @@ function formatQuality(quality: PreviewQuality) {
   ).toFixed(2)}%,transparent=${(quality.transparentRatio * 100).toFixed(2)}%`;
 }
 
+function getLayerScore(quality: PreviewQuality) {
+  return quality.mean + quality.nonDarkRatio * 180 + Math.sqrt(Math.max(0, quality.variance));
+}
+
 function assertUsablePreview(canvas: HTMLCanvasElement, label: string) {
   const quality = analyzeCanvasQuality(canvas);
 
@@ -268,11 +281,7 @@ function getIntersectionArea(a: DOMRect, b: DOMRect) {
   return width * height;
 }
 
-function drawCanvasLayerIntoPreview(
-  ctx: CanvasRenderingContext2D,
-  layer: CanvasLayer,
-  viewportRect: DOMRect
-) {
+function getLayerDrawGeometry(layer: CanvasLayer, viewportRect: DOMRect) {
   const { canvas, rect } = layer;
   const intersectionLeft = Math.max(rect.left, viewportRect.left);
   const intersectionTop = Math.max(rect.top, viewportRect.top);
@@ -282,23 +291,113 @@ function drawCanvasLayerIntoPreview(
   const intersectionWidth = intersectionRight - intersectionLeft;
   const intersectionHeight = intersectionBottom - intersectionTop;
 
-  if (intersectionWidth <= 0 || intersectionHeight <= 0) return false;
+  if (intersectionWidth <= 0 || intersectionHeight <= 0) return null;
 
   const sourceScaleX = canvas.width / rect.width;
   const sourceScaleY = canvas.height / rect.height;
 
-  const sx = (intersectionLeft - rect.left) * sourceScaleX;
-  const sy = (intersectionTop - rect.top) * sourceScaleY;
-  const sw = intersectionWidth * sourceScaleX;
-  const sh = intersectionHeight * sourceScaleY;
+  return {
+    sx: (intersectionLeft - rect.left) * sourceScaleX,
+    sy: (intersectionTop - rect.top) * sourceScaleY,
+    sw: intersectionWidth * sourceScaleX,
+    sh: intersectionHeight * sourceScaleY,
+    dx: ((intersectionLeft - viewportRect.left) / viewportRect.width) * PREVIEW_WIDTH,
+    dy: ((intersectionTop - viewportRect.top) / viewportRect.height) * PREVIEW_HEIGHT,
+    dw: (intersectionWidth / viewportRect.width) * PREVIEW_WIDTH,
+    dh: (intersectionHeight / viewportRect.height) * PREVIEW_HEIGHT,
+  };
+}
 
-  const dx = ((intersectionLeft - viewportRect.left) / viewportRect.width) * PREVIEW_WIDTH;
-  const dy = ((intersectionTop - viewportRect.top) / viewportRect.height) * PREVIEW_HEIGHT;
-  const dw = (intersectionWidth / viewportRect.width) * PREVIEW_WIDTH;
-  const dh = (intersectionHeight / viewportRect.height) * PREVIEW_HEIGHT;
+function drawCanvasLayerIntoPreview(
+  ctx: CanvasRenderingContext2D,
+  layer: CanvasLayer,
+  viewportRect: DOMRect
+) {
+  const geometry = getLayerDrawGeometry(layer, viewportRect);
+  if (!geometry) return false;
 
-  ctx.drawImage(canvas, sx, sy, sw, sh, dx, dy, dw, dh);
+  ctx.drawImage(
+    layer.canvas,
+    geometry.sx,
+    geometry.sy,
+    geometry.sw,
+    geometry.sh,
+    geometry.dx,
+    geometry.dy,
+    geometry.dw,
+    geometry.dh
+  );
   return true;
+}
+
+function createPreviewCanvasFromLayer(layer: CanvasLayer, viewportRect: DOMRect) {
+  const canvas = document.createElement("canvas");
+  canvas.width = PREVIEW_WIDTH;
+  canvas.height = PREVIEW_HEIGHT;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Não foi possível criar canvas temporário de camada.");
+  }
+
+  ctx.clearRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  const didDraw = drawCanvasLayerIntoPreview(ctx, layer, viewportRect);
+
+  if (!didDraw) {
+    throw new Error("Camada não intersecta a área de captura.");
+  }
+
+  return canvas;
+}
+
+function createMaskedOverlayCanvas(sourceCanvas: HTMLCanvasElement) {
+  const outputCanvas = document.createElement("canvas");
+  outputCanvas.width = PREVIEW_WIDTH;
+  outputCanvas.height = PREVIEW_HEIGHT;
+
+  const ctx = outputCanvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Não foi possível criar máscara de overlay.");
+  }
+
+  ctx.drawImage(sourceCanvas, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3];
+
+    if (alpha < 8) {
+      data[i + 3] = 0;
+      continue;
+    }
+
+    const red = data[i];
+    const green = data[i + 1];
+    const blue = data[i + 2];
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const chroma = max - min;
+    const brightness = (red + green + blue) / 3;
+
+    // Deck.gl/Mapbox às vezes entrega a camada de dados com fundo preto opaco.
+    // Para preservar o mapa base, removemos somente pixels quase pretos e sem cor.
+    // Polígonos azuis/verdes e pontos coloridos permanecem, mesmo quando escuros.
+    if (brightness < OVERLAY_DARK_BRIGHTNESS_LIMIT && chroma < OVERLAY_DARK_CHROMA_LIMIT) {
+      data[i + 3] = 0;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return outputCanvas;
+}
+
+function isBackgroundLayer(layer: ReadableCanvasLayer) {
+  return (
+    layer.quality.mean >= BACKGROUND_MEAN_THRESHOLD ||
+    layer.quality.nonDarkRatio >= BACKGROUND_NON_DARK_THRESHOLD
+  );
 }
 
 async function captureByCompositedCanvases(): Promise<CaptureResult> {
@@ -314,6 +413,30 @@ async function captureByCompositedCanvases(): Promise<CaptureResult> {
     throw new Error("Nenhum canvas visível intersecta o alvo de captura.");
   }
 
+  const readableLayers: ReadableCanvasLayer[] = [];
+  const skipped: string[] = [];
+
+  layers.forEach((layer, index) => {
+    try {
+      // Testa se o canvas é legível antes de desenhar. Se um canvas CORS-tainted for
+      // desenhado no composto, o composto inteiro fica bloqueado para toDataURL.
+      layer.canvas.toDataURL("image/png");
+      const previewCanvas = createPreviewCanvasFromLayer(layer, viewportRect);
+      const quality = analyzeCanvasQuality(previewCanvas);
+      readableLayers.push({
+        ...layer,
+        quality,
+        score: getLayerScore(quality),
+      });
+    } catch (error) {
+      skipped.push(`canvas[${index}] ${getErrorMessage(error)}`);
+    }
+  });
+
+  if (!readableLayers.length) {
+    throw new Error(`Nenhum canvas pôde ser lido. Ignorados: ${skipped.join(" | ")}`);
+  }
+
   const outputCanvas = document.createElement("canvas");
   outputCanvas.width = PREVIEW_WIDTH;
   outputCanvas.height = PREVIEW_HEIGHT;
@@ -326,22 +449,45 @@ async function captureByCompositedCanvases(): Promise<CaptureResult> {
   ctx.fillStyle = "#08090B";
   ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-  let drawn = 0;
-  const skipped: string[] = [];
+  const sortedByStack = [...readableLayers].sort(
+    (a, b) => a.zIndex - b.zIndex || a.order - b.order
+  );
+  const bestBaseLayer = [...readableLayers].sort((a, b) => b.score - a.score)[0];
+  const backgroundLayers = sortedByStack.filter(isBackgroundLayer);
+  const fullLayers = backgroundLayers.length ? backgroundLayers : [bestBaseLayer];
+  const fullLayerKeys = new Set(fullLayers.map((layer) => `${layer.order}:${layer.zIndex}`));
 
-  layers.forEach((layer, index) => {
+  let fullDrawn = 0;
+  fullLayers.forEach((layer) => {
     try {
-      // Testa se o canvas é legível antes de desenhar. Se um canvas CORS-tainted for
-      // desenhado no composto, o composto inteiro fica bloqueado para toDataURL.
-      layer.canvas.toDataURL("image/png");
       const didDraw = drawCanvasLayerIntoPreview(ctx, layer, viewportRect);
-      if (didDraw) drawn += 1;
+      if (didDraw) fullDrawn += 1;
     } catch (error) {
-      skipped.push(`canvas[${index}] ${getErrorMessage(error)}`);
+      skipped.push(`full[${layer.order}] ${getErrorMessage(error)}`);
     }
   });
 
-  if (!drawn) {
+  let overlayDrawn = 0;
+  sortedByStack.forEach((layer) => {
+    const layerKey = `${layer.order}:${layer.zIndex}`;
+    if (fullLayerKeys.has(layerKey)) return;
+
+    try {
+      const layerPreview = createPreviewCanvasFromLayer(layer, viewportRect);
+      const maskedOverlay = createMaskedOverlayCanvas(layerPreview);
+      const overlayQuality = analyzeCanvasQuality(maskedOverlay);
+
+      // Evita redesenhar camadas que ficaram vazias depois da máscara.
+      if (overlayQuality.transparentRatio > 0.995) return;
+
+      ctx.drawImage(maskedOverlay, 0, 0);
+      overlayDrawn += 1;
+    } catch (error) {
+      skipped.push(`overlay[${layer.order}] ${getErrorMessage(error)}`);
+    }
+  });
+
+  if (!fullDrawn && !overlayDrawn) {
     throw new Error(`Nenhum canvas pôde ser composto. Ignorados: ${skipped.join(" | ")}`);
   }
 
@@ -352,16 +498,24 @@ async function captureByCompositedCanvases(): Promise<CaptureResult> {
     throw new Error("Canvas composto gerou dataURL inválido.");
   }
 
+  const layerSummary = readableLayers
+    .map((layer, index) => `l${index}{order=${layer.order},z=${layer.zIndex},${formatQuality(layer.quality)}}`)
+    .join(";");
+
   return {
     dataUrl,
-    method: "canvas-composite",
+    method: "canvas-composite-masked",
     diagnostics: [
       `target=${target.tagName.toLowerCase()}`,
       `targetRect=${Math.round(viewportRect.width)}x${Math.round(viewportRect.height)}`,
       `layers=${layers.length}`,
-      `drawn=${drawn}`,
+      `readable=${readableLayers.length}`,
+      `fullDrawn=${fullDrawn}`,
+      `overlayDrawn=${overlayDrawn}`,
       `skipped=${skipped.length}`,
+      `bestBaseOrder=${bestBaseLayer.order}`,
       formatQuality(quality),
+      layerSummary,
       `bytesBase64=${dataUrl.length}`,
     ],
   };
