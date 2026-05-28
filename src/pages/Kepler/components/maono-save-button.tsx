@@ -10,6 +10,7 @@ const PREVIEW_WIDTH = 960;
 const PREVIEW_HEIGHT = 540;
 const MAX_POINTS = 8000;
 const MAX_GEOMETRIES = 2200;
+const MAX_ROWS_TO_SCAN = 12000;
 
 type CaptureResult = {
   dataUrl: string;
@@ -105,11 +106,15 @@ function brightnessQuality(canvas: HTMLCanvasElement) {
 }
 
 function assertNotBlack(canvas: HTMLCanvasElement, label: string) {
-  const q = brightnessQuality(canvas);
-  if (q.useful < 0.008 && q.variance < 8) {
-    throw new Error(`${label} gerou imagem preta ou sem conteúdo. mean=${q.mean.toFixed(1)} variance=${q.variance.toFixed(1)} useful=${(q.useful * 100).toFixed(2)}%`);
+  const quality = brightnessQuality(canvas);
+  if (quality.useful < 0.008 && quality.variance < 8) {
+    throw new Error(
+      `${label} gerou imagem preta ou sem conteúdo. mean=${quality.mean.toFixed(1)} variance=${quality.variance.toFixed(1)} useful=${(
+        quality.useful * 100
+      ).toFixed(2)}%`
+    );
   }
-  return q;
+  return quality;
 }
 
 function getCaptureTarget() {
@@ -222,8 +227,8 @@ async function captureCompositedBase() {
   const target = getCaptureTarget();
   const targetRect = target.getBoundingClientRect();
   const canvases = getVisibleCanvases().filter((item) => {
-    const r = item.rect;
-    return Math.max(0, Math.min(r.right, targetRect.right) - Math.max(r.left, targetRect.left)) > 0;
+    const rect = item.rect;
+    return Math.max(0, Math.min(rect.right, targetRect.right) - Math.max(rect.left, targetRect.left)) > 0;
   });
 
   if (!canvases.length) throw new Error("Nenhum canvas visível encontrado para composição.");
@@ -250,10 +255,14 @@ async function captureCompositedBase() {
       const tempCtx = temp.getContext("2d");
       if (!tempCtx) continue;
       drawCanvasIntoPreview(tempCtx, item, targetRect);
-      const q = brightnessQuality(temp);
-      qualities.push(`o=${item.order},z=${item.zIndex},mean=${q.mean.toFixed(1)},var=${q.variance.toFixed(1)},useful=${(q.useful * 100).toFixed(1)}%`);
+      const quality = brightnessQuality(temp);
+      qualities.push(
+        `o=${item.order},z=${item.zIndex},mean=${quality.mean.toFixed(1)},var=${quality.variance.toFixed(1)},useful=${(
+          quality.useful * 100
+        ).toFixed(1)}%`
+      );
 
-      if (q.mean < 45 && q.useful < 0.35) ctx.drawImage(maskBlackBackground(temp), 0, 0);
+      if (quality.mean < 45 && quality.useful < 0.35) ctx.drawImage(maskBlackBackground(temp), 0, 0);
       else ctx.drawImage(temp, 0, 0);
       drawn += 1;
     } catch (_error) {
@@ -344,20 +353,83 @@ function fieldName(field: any) {
   return String(field?.name || field?.id || field?.displayName || "");
 }
 
+function getDataContainer(dataset: any) {
+  const data = dataset?.data || dataset;
+  return dataset?.dataContainer || data?.dataContainer || null;
+}
+
+function getDataContainerRow(dc: any, rowIndex: number, fields: any[]) {
+  try {
+    if (typeof dc.row === "function") {
+      const row = dc.row(rowIndex);
+      if (row) return row;
+    }
+  } catch (_error) {
+    // ignore
+  }
+
+  try {
+    if (typeof dc.get === "function") {
+      const row = dc.get(rowIndex);
+      if (row) return row;
+    }
+  } catch (_error) {
+    // ignore
+  }
+
+  const values: any[] = [];
+  let hasValue = false;
+
+  fields.forEach((field, fieldIndex) => {
+    const name = fieldName(field);
+    let value;
+
+    try {
+      if (typeof dc.valueAt === "function") value = dc.valueAt(rowIndex, fieldIndex);
+    } catch (_error) {
+      value = undefined;
+    }
+
+    if (value === undefined) {
+      try {
+        if (typeof dc.valueAt === "function") value = dc.valueAt(rowIndex, name);
+      } catch (_error) {
+        value = undefined;
+      }
+    }
+
+    if (value === undefined) {
+      try {
+        if (typeof dc.getCell === "function") value = dc.getCell(rowIndex, fieldIndex);
+      } catch (_error) {
+        value = undefined;
+      }
+    }
+
+    if (value !== undefined) hasValue = true;
+    values[fieldIndex] = value;
+  });
+
+  return hasValue ? values : null;
+}
+
 function rowsOf(dataset: any) {
   const data = dataset?.data || dataset;
   if (Array.isArray(data?.allData)) return data.allData;
   if (Array.isArray(dataset?.allData)) return dataset.allData;
   if (Array.isArray(data?.rows)) return data.rows;
   if (Array.isArray(dataset?.rows)) return dataset.rows;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(dataset?.data?.data)) return dataset.data.data;
   if (Array.isArray(data)) return data;
 
-  const dc = dataset?.dataContainer || data?.dataContainer;
+  const dc = getDataContainer(dataset);
+  const fields = fieldsOf(dataset);
   if (dc) {
     try {
       if (typeof dc.rows === "function") {
         const rows = dc.rows();
-        if (Array.isArray(rows)) return rows;
+        if (Array.isArray(rows) && rows.length) return rows;
       }
     } catch (_error) {
       // ignore
@@ -366,14 +438,10 @@ function rowsOf(dataset: any) {
     const count = Number(typeof dc.numRows === "function" ? dc.numRows() : dc.numRows);
     if (Number.isFinite(count) && count > 0) {
       const rows = [];
-      const limit = Math.min(count, Math.max(MAX_POINTS, MAX_GEOMETRIES));
-      for (let i = 0; i < limit; i += 1) {
-        try {
-          const row = typeof dc.row === "function" ? dc.row(i) : typeof dc.get === "function" ? dc.get(i) : null;
-          if (row) rows.push(row);
-        } catch (_error) {
-          // ignore
-        }
+      const limit = Math.min(count, MAX_ROWS_TO_SCAN);
+      for (let index = 0; index < limit; index += 1) {
+        const row = getDataContainerRow(dc, index, fields);
+        if (row) rows.push(row);
       }
       return rows;
     }
@@ -429,6 +497,31 @@ function coordinateColumns(mapState: any, datasetId: string, fields: any[], save
   };
 }
 
+function geometryColumnCandidates(mapState: any, datasetId: string, fields: any[], savedConfig?: any) {
+  const candidates = new Set<string>();
+
+  for (const layer of layersForDataset(mapState, datasetId, savedConfig)) {
+    const columns = layer?.config?.columns || layer?.props?.columns || {};
+    [columns.geojson, columns.geometry, columns.geom, columns.shape].filter(Boolean).forEach((column) => candidates.add(String(column)));
+  }
+
+  fields.forEach((field) => {
+    const name = fieldName(field);
+    const type = normalize(field?.type || field?.fieldIdx || field?.format);
+    if (["geojson", "geometry", "geom", "the_geom", "shape"].some((candidate) => normalize(name).includes(candidate))) {
+      candidates.add(name);
+    }
+    if (type.includes("geojson") || type.includes("geometry")) candidates.add(name);
+  });
+
+  ["geojson", "geometry", "geom", "the_geom", "shape", "_geojson"].forEach((candidate) => {
+    const field = findField(fields, [candidate]);
+    if (field) candidates.add(field);
+  });
+
+  return Array.from(candidates);
+}
+
 function toNumber(value: any) {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
@@ -443,12 +536,16 @@ function geometryValues(value: any): any[] {
   let parsed = value;
   if (typeof value === "string") {
     const trimmed = value.trim();
-    if (!trimmed.startsWith("{")) return [];
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return [];
     try {
       parsed = JSON.parse(trimmed);
     } catch (_error) {
       return [];
     }
+  }
+  if (Array.isArray(parsed)) {
+    if (parsed.length && Array.isArray(parsed[0])) return [{ type: "LineString", coordinates: parsed }];
+    return [];
   }
   if (!parsed || typeof parsed !== "object") return [];
   if (parsed.type === "FeatureCollection") return (parsed.features || []).flatMap((feature: any) => geometryValues(feature));
@@ -458,11 +555,9 @@ function geometryValues(value: any): any[] {
   return [];
 }
 
-function rowGeometries(row: any, fields: any[]) {
+function rowGeometries(row: any, fields: any[], geometryColumns: string[]) {
   const out: any[] = [];
-  ["geojson", "geometry", "geom", "the_geom", "shape"].forEach((candidate) => {
-    out.push(...geometryValues(valueOf(row, fields, findField(fields, [candidate]))));
-  });
+  geometryColumns.forEach((column) => out.push(...geometryValues(valueOf(row, fields, column))));
   if (Array.isArray(row)) row.forEach((value) => out.push(...geometryValues(value)));
   else if (row && typeof row === "object") Object.values(row).forEach((value) => out.push(...geometryValues(value)));
   return out;
@@ -585,6 +680,10 @@ function loadImage(dataUrl: string) {
   });
 }
 
+function shortDiagnostics(diagnostics: string[]) {
+  return diagnostics.join(" | ").slice(0, 650);
+}
+
 async function applyStateOverlay(capture: CaptureResult, mapState: any, savedConfig?: any): Promise<CaptureResult> {
   const viewport = getViewport(mapState, savedConfig);
   const entries = getOverlayDatasetEntries(mapState, savedConfig);
@@ -608,14 +707,21 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any, savedCon
     const fields = fieldsOf(entry.dataset);
     const rowsForDataset = rowsOf(entry.dataset);
     const columns = coordinateColumns(mapState, entry.id, fields, savedConfig);
-    datasetDiagnostics.push(`${entry.source}:${entry.id}{fields=${fields.length},rows=${rowsForDataset.length},lat=${columns.lat || "-"},lng=${columns.lng || "-"}}`);
+    const geometryColumns = geometryColumnCandidates(mapState, entry.id, fields, savedConfig);
+
+    datasetDiagnostics.push(
+      `${entry.source}:${entry.id}{fields=${fields.length},rows=${rowsForDataset.length},lat=${columns.lat || "-"},lng=${
+        columns.lng || "-"
+      },geom=${geometryColumns.join("/") || "-"}}`
+    );
+
     if (!rowsForDataset.length) return;
     datasetCount += 1;
 
     for (const row of rowsForDataset) {
       rows += 1;
       if (geometries < MAX_GEOMETRIES) {
-        for (const geometry of rowGeometries(row, fields)) {
+        for (const geometry of rowGeometries(row, fields, geometryColumns)) {
           if (geometries >= MAX_GEOMETRIES) break;
           const drawn = drawGeometry(ctx, viewport, geometry, geometries + datasetIndex);
           if (drawn) geometries += drawn;
@@ -672,10 +778,16 @@ function generatedPreview(): CaptureResult {
   ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
   ctx.strokeStyle = "rgba(244,241,232,0.09)";
   for (let x = 0; x < PREVIEW_WIDTH; x += 42) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, PREVIEW_HEIGHT); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, PREVIEW_HEIGHT);
+    ctx.stroke();
   }
   for (let y = 0; y < PREVIEW_HEIGHT; y += 42) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(PREVIEW_WIDTH, y); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(PREVIEW_WIDTH, y);
+    ctx.stroke();
   }
 
   const dataUrl = canvas.toDataURL("image/png", 0.92);
@@ -742,8 +854,10 @@ const MaonoSaveButton: React.FC = () => {
       setMessageType("success");
       setMessage(
         data?.preview
-          ? `Projeto e visualização PNG salvos no Dropbox com sucesso. Método: ${capture.method}.`
-          : `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${capture.diagnostics.join(" | ")}`
+          ? `Projeto e visualização PNG salvos no Dropbox com sucesso. Método: ${capture.method}. ${
+              capture.method.includes("state-overlay") ? "" : `Diagnóstico: ${shortDiagnostics(capture.diagnostics)}`
+            }`
+          : `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${shortDiagnostics(capture.diagnostics)}`
       );
     } catch (error) {
       setMessageType("error");
