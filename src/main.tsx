@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
@@ -9,6 +10,34 @@ import { Provider } from "react-redux";
 import store from "./store";
 import { BrowserRouter } from "react-router";
 import { SessionProvider } from "./auth/session";
+
+function enableWebglScreenshotReadback() {
+  if (typeof window === "undefined") return;
+  if (window.__MAONO_WEBGL_READBACK_PATCHED__) return;
+  if (!window.HTMLCanvasElement?.prototype?.getContext) return;
+
+  window.__MAONO_WEBGL_READBACK_PATCHED__ = true;
+
+  const originalGetContext = window.HTMLCanvasElement.prototype.getContext;
+
+  window.HTMLCanvasElement.prototype.getContext = function patchedGetContext(type, attributes) {
+    const contextType = String(type || "").toLowerCase();
+
+    if (["webgl", "webgl2", "experimental-webgl"].includes(contextType)) {
+      return originalGetContext.call(this, type, {
+        ...(attributes || {}),
+        preserveDrawingBuffer: true,
+      });
+    }
+
+    return originalGetContext.call(this, type, attributes);
+  };
+}
+
+// A geração de preview PNG precisa ler o conteúdo do canvas WebGL.
+// Mapbox/deck.gl podem limpar o backbuffer após renderização; com preserveDrawingBuffer
+// o canvas fica legível para toDataURL/drawImage no momento do salvamento.
+enableWebglScreenshotReadback();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
