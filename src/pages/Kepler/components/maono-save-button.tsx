@@ -247,8 +247,6 @@ async function captureCompositedBase() {
       const q = brightnessQuality(temp);
       qualities.push(`o=${item.order},z=${item.zIndex},mean=${q.mean.toFixed(1)},var=${q.variance.toFixed(1)},useful=${(q.useful * 100).toFixed(1)}%`);
 
-      // Camadas muito escuras frequentemente são overlays deck.gl com fundo preto opaco.
-      // A máscara remove só o preto neutro e preserva polígonos/pontos coloridos.
       if (q.mean < 45 && q.useful < 0.35) ctx.drawImage(maskBlackBackground(temp), 0, 0);
       else ctx.drawImage(temp, 0, 0);
       drawn += 1;
@@ -609,7 +607,7 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any): Promise
   };
 }
 
-function generatedPreview(mapState: any): CaptureResult {
+function generatedPreview(): CaptureResult {
   const canvas = document.createElement("canvas");
   canvas.width = PREVIEW_WIDTH;
   canvas.height = PREVIEW_HEIGHT;
@@ -646,7 +644,7 @@ async function captureThumbnail(mapState: any): Promise<CaptureResult> {
   } catch (error) {
     errors.push(`html2canvas: ${errorMessage(error)}`);
   }
-  return await applyStateOverlay({ ...generatedPreview(mapState), diagnostics: errors }, mapState);
+  return await applyStateOverlay({ ...generatedPreview(), diagnostics: errors }, mapState);
 }
 
 const MaonoSaveButton: React.FC = () => {
