@@ -58,6 +58,10 @@ function decodeDataUrl(dataUrl) {
   return { bytes, contentType };
 }
 
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error || "Erro desconhecido.");
+}
+
 async function updateLinkedOrganizationFileSize(env, project, sizeBytes) {
   if (!project.organization_file_id) return;
 
@@ -174,11 +178,18 @@ export async function onRequest(context) {
     const content = JSON.stringify(config, null, 2);
     const sizeBytes = jsonSizeBytes(content);
 
+    // O JSON é o arquivo crítico. A falha do preview nunca deve bloquear o salvamento do projeto.
     await uploadDropboxTextFile(env, project.dropbox_root_path, fileName, content);
 
     let preview = null;
+    let previewError = null;
+
     if (body?.thumbnailDataUrl) {
-      preview = await saveProjectThumbnail(env, project, fileName, body.thumbnailDataUrl);
+      try {
+        preview = await saveProjectThumbnail(env, project, fileName, body.thumbnailDataUrl);
+      } catch (error) {
+        previewError = getErrorMessage(error);
+      }
     }
 
     await updateLinkedOrganizationFileSize(env, project, sizeBytes);
@@ -194,6 +205,8 @@ export async function onRequest(context) {
         dropboxRootPath: project.dropbox_root_path,
         sizeBytes,
         preview,
+        previewError,
+        thumbnailCapture: body?.thumbnailCapture || null,
       },
     });
 
@@ -204,6 +217,7 @@ export async function onRequest(context) {
       dropboxRootPath: project.dropbox_root_path,
       sizeBytes,
       preview,
+      previewError,
     });
   } catch (error) {
     return errorResponse(error.message, error.status || 500, error.code || "PROJECT_CONFIG_ERROR");
