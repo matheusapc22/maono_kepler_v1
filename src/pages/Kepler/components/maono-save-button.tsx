@@ -35,7 +35,7 @@ function getFallbackDatasets(mapState: any) {
 }
 
 function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
-  const saved = rawSaved && typeof saved === "object" ? rawSaved : {};
+  const saved = rawSaved && typeof rawSaved === "object" ? rawSaved : {};
 
   const config =
     saved.config && typeof saved.config === "object"
