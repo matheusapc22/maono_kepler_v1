@@ -8,6 +8,12 @@ import { useSession } from "../../../auth/session";
 const PREVIEW_WIDTH = 960;
 const PREVIEW_HEIGHT = 540;
 
+type CaptureResult = {
+  dataUrl: string;
+  method: string;
+  diagnostics: string[];
+};
+
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
@@ -66,6 +72,14 @@ function waitForPaint() {
   });
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isValidDataUrl(dataUrl?: string | null) {
+  return Boolean(dataUrl && /^data:image\/(png|jpeg|webp);base64,/i.test(dataUrl));
+}
+
 function findCaptureTarget() {
   return (
     document.querySelector(".kepler-gl") ||
@@ -73,6 +87,19 @@ function findCaptureTarget() {
     document.querySelector("main") ||
     document.body
   ) as HTMLElement;
+}
+
+function getLargestVisibleCanvas() {
+  const canvases = Array.from(document.querySelectorAll("canvas"));
+
+  return (
+    canvases
+      .filter((canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        return canvas.width > 0 && canvas.height > 0 && rect.width > 80 && rect.height > 80;
+      })
+      .sort((a, b) => b.width * b.height - a.width * a.height)[0] || null
+  );
 }
 
 function collectCanvasDataUrls() {
@@ -119,14 +146,47 @@ function resizeToProjectPreview(sourceCanvas: HTMLCanvasElement) {
   ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
   ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-  return outputCanvas.toDataURL("image/png", 0.92);
+  const dataUrl = outputCanvas.toDataURL("image/png", 0.92);
+
+  if (!isValidDataUrl(dataUrl)) {
+    throw new Error("Canvas gerou dataURL inválido.");
+  }
+
+  return dataUrl;
 }
 
-async function captureThumbnailDataUrl() {
+async function captureByDirectCanvas(): Promise<CaptureResult> {
+  await waitForPaint();
+
+  const canvas = getLargestVisibleCanvas();
+  const canvasCount = document.querySelectorAll("canvas").length;
+
+  if (!canvas) {
+    throw new Error(`Nenhum canvas visível encontrado. Total de canvas na tela: ${canvasCount}.`);
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const dataUrl = resizeToProjectPreview(canvas);
+
+  return {
+    dataUrl,
+    method: "canvas-direct",
+    diagnostics: [
+      `canvasCount=${canvasCount}`,
+      `source=${canvas.width}x${canvas.height}`,
+      `rect=${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      `bytesBase64=${dataUrl.length}`,
+    ],
+  };
+}
+
+async function captureByHtml2Canvas(): Promise<CaptureResult> {
   await waitForPaint();
 
   const target = findCaptureTarget();
+  const targetRect = target.getBoundingClientRect();
   const canvasDataUrls = collectCanvasDataUrls();
+  const readableCanvasCount = canvasDataUrls.filter(Boolean).length;
 
   const captureCanvas = await html2canvas(target, {
     backgroundColor: "#08090B",
@@ -156,10 +216,44 @@ async function captureThumbnailDataUrl() {
   });
 
   if (!captureCanvas || captureCanvas.width <= 0 || captureCanvas.height <= 0) {
-    throw new Error("Captura retornou canvas vazio.");
+    throw new Error("html2canvas retornou canvas vazio.");
   }
 
-  return resizeToProjectPreview(captureCanvas);
+  const dataUrl = resizeToProjectPreview(captureCanvas);
+
+  return {
+    dataUrl,
+    method: "html2canvas",
+    diagnostics: [
+      `target=${target.tagName.toLowerCase()}`,
+      `targetRect=${Math.round(targetRect.width)}x${Math.round(targetRect.height)}`,
+      `readableCanvas=${readableCanvasCount}/${canvasDataUrls.length}`,
+      `capture=${captureCanvas.width}x${captureCanvas.height}`,
+      `bytesBase64=${dataUrl.length}`,
+    ],
+  };
+}
+
+async function captureThumbnail(): Promise<CaptureResult> {
+  const errors: string[] = [];
+
+  try {
+    return await captureByDirectCanvas();
+  } catch (error) {
+    errors.push(`canvas-direct: ${getErrorMessage(error)}`);
+  }
+
+  try {
+    const result = await captureByHtml2Canvas();
+    return {
+      ...result,
+      diagnostics: [...errors, ...result.diagnostics],
+    };
+  } catch (error) {
+    errors.push(`html2canvas: ${getErrorMessage(error)}`);
+  }
+
+  throw new Error(errors.join(" | "));
 }
 
 const MaonoSaveButton: React.FC = () => {
@@ -192,9 +286,16 @@ const MaonoSaveButton: React.FC = () => {
       const config = normalizeSavedKeplerConfig(rawSaved, mapState);
 
       let thumbnailDataUrl: string | null = null;
+      let captureMethod = "none";
+      let captureDiagnostics = "captura não iniciada";
+
       try {
-        thumbnailDataUrl = await captureThumbnailDataUrl();
+        const capture = await captureThumbnail();
+        thumbnailDataUrl = capture.dataUrl;
+        captureMethod = capture.method;
+        captureDiagnostics = capture.diagnostics.join(" | ");
       } catch (captureError) {
+        captureDiagnostics = getErrorMessage(captureError);
         console.warn("Maõno Maps: não foi possível capturar o preview PNG do mapa.", captureError);
       }
 
@@ -205,7 +306,14 @@ const MaonoSaveButton: React.FC = () => {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ config, thumbnailDataUrl }),
+        body: JSON.stringify({
+          config,
+          thumbnailDataUrl,
+          thumbnailCapture: {
+            method: captureMethod,
+            diagnostics: captureDiagnostics,
+          },
+        }),
       });
 
       const data = await response.json();
@@ -217,8 +325,8 @@ const MaonoSaveButton: React.FC = () => {
       setMessageType("success");
       setMessage(
         data?.preview
-          ? "Projeto e preview PNG salvos no Dropbox com sucesso."
-          : "Projeto salvo no Dropbox. Preview PNG não foi gerado nesta tentativa."
+          ? `Projeto e preview PNG salvos no Dropbox com sucesso. Método: ${captureMethod}.`
+          : `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${captureDiagnostics}`
       );
     } catch (error) {
       setMessageType("error");
@@ -236,8 +344,8 @@ const MaonoSaveButton: React.FC = () => {
         <div
           className={
             messageType === "success"
-              ? "max-w-md rounded-2xl border border-emerald-300/50 bg-emerald-800/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
-              : "max-w-md rounded-2xl border border-red-300/50 bg-red-900/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
+              ? "max-w-xl rounded-2xl border border-emerald-300/50 bg-emerald-800/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
+              : "max-w-xl rounded-2xl border border-red-300/50 bg-red-900/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
           }
         >
           {message}
