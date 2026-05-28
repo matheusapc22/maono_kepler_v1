@@ -24,6 +24,14 @@ type OverlayDatasetEntry = {
   source: "saved" | "runtime";
 };
 
+type DrawStats = {
+  points: number;
+  geometries: number;
+  rows: number;
+  layers: number;
+  datasets: number;
+};
+
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
@@ -341,7 +349,7 @@ function getAllLayers(mapState: any, savedConfig?: any) {
   const layers = [] as any[];
   if (Array.isArray(savedConfig?.config?.visState?.layers)) layers.push(...savedConfig.config.visState.layers);
   if (Array.isArray(mapState?.visState?.layers)) layers.push(...mapState.visState.layers);
-  return layers;
+  return layers.filter((layer) => layer?.config?.isVisible !== false && layer?.isVisible !== false);
 }
 
 function fieldsOf(dataset: any) {
@@ -472,24 +480,31 @@ function findField(fields: any[], candidates: string[]) {
   return partial ? fieldName(partial) : null;
 }
 
-function layerMatchesDataset(layerDataId: any, datasetId: string) {
-  if (Array.isArray(layerDataId)) return layerDataId.map(String).includes(String(datasetId));
-  return String(layerDataId || "") === String(datasetId);
+function getLayerDataIds(layer: any) {
+  const value = layer?.config?.dataId || layer?.props?.dataId || layer?.dataId;
+  if (Array.isArray(value)) return value.map(String);
+  return value ? [String(value)] : [];
+}
+
+function layerMatchesDataset(layer: any, datasetId: string) {
+  return getLayerDataIds(layer).includes(String(datasetId));
 }
 
 function layersForDataset(mapState: any, datasetId: string, savedConfig?: any) {
-  return getAllLayers(mapState, savedConfig).filter((layer: any) => {
-    const dataId = layer?.config?.dataId || layer?.props?.dataId || layer?.dataId;
-    return layerMatchesDataset(dataId, datasetId);
-  });
+  return getAllLayers(mapState, savedConfig).filter((layer: any) => layerMatchesDataset(layer, datasetId));
+}
+
+function coordinateColumnsFromLayer(layer: any) {
+  const columns = layer?.config?.columns || layer?.props?.columns || {};
+  const lat = columns.lat || columns.latitude || columns.y || columns.lat0;
+  const lng = columns.lng || columns.lon || columns.longitude || columns.x || columns.lng0;
+  return lat && lng ? { lat: String(lat), lng: String(lng) } : null;
 }
 
 function coordinateColumns(mapState: any, datasetId: string, fields: any[], savedConfig?: any) {
   for (const layer of layersForDataset(mapState, datasetId, savedConfig)) {
-    const columns = layer?.config?.columns || layer?.props?.columns || {};
-    const lat = columns.lat || columns.latitude || columns.y || columns.lat0;
-    const lng = columns.lng || columns.lon || columns.longitude || columns.x || columns.lng0;
-    if (lat && lng) return { lat: String(lat), lng: String(lng) };
+    const columns = coordinateColumnsFromLayer(layer);
+    if (columns) return columns;
   }
   return {
     lat: findField(fields, ["latitude", "lat", "y", "lat_dd", "latitud"]),
@@ -497,12 +512,16 @@ function coordinateColumns(mapState: any, datasetId: string, fields: any[], save
   };
 }
 
+function geometryColumnCandidatesFromLayer(layer: any) {
+  const columns = layer?.config?.columns || layer?.props?.columns || {};
+  return [columns.geojson, columns.geometry, columns.geom, columns.shape].filter(Boolean).map(String);
+}
+
 function geometryColumnCandidates(mapState: any, datasetId: string, fields: any[], savedConfig?: any) {
   const candidates = new Set<string>();
 
   for (const layer of layersForDataset(mapState, datasetId, savedConfig)) {
-    const columns = layer?.config?.columns || layer?.props?.columns || {};
-    [columns.geojson, columns.geometry, columns.geom, columns.shape].filter(Boolean).forEach((column) => candidates.add(String(column)));
+    geometryColumnCandidatesFromLayer(layer).forEach((column) => candidates.add(column));
   }
 
   fields.forEach((field) => {
@@ -578,14 +597,96 @@ function project(viewport: any, coordinate: any) {
   }
 }
 
-function drawPoint(ctx: CanvasRenderingContext2D, x: number, y: number, index: number) {
-  const colors = ["#20C7B5", "#F2C766", "#22C55E", "#EF4444", "#3B82F6", "#F97316"];
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function cssColor(color: any, alpha = 1) {
+  if (Array.isArray(color)) {
+    const red = Number(color[0]) || 0;
+    const green = Number(color[1]) || 0;
+    const blue = Number(color[2]) || 0;
+    const ownAlpha = color.length > 3 ? (Number(color[3]) || 255) / 255 : 1;
+    return `rgba(${red},${green},${blue},${clamp(alpha * ownAlpha, 0, 1)})`;
+  }
+  if (typeof color === "string") {
+    if (color.startsWith("#")) {
+      const hex = color.replace("#", "");
+      const fullHex = hex.length === 3 ? hex.split("").map((char) => char + char).join("") : hex;
+      const red = Number.parseInt(fullHex.slice(0, 2), 16);
+      const green = Number.parseInt(fullHex.slice(2, 4), 16);
+      const blue = Number.parseInt(fullHex.slice(4, 6), 16);
+      return `rgba(${red},${green},${blue},${alpha})`;
+    }
+    return color;
+  }
+  return `rgba(32,199,181,${alpha})`;
+}
+
+function stableHash(value: any) {
+  const text = String(value ?? "");
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function colorRangeColors(layer: any) {
+  const colors = layer?.config?.visConfig?.colorRange?.colors;
+  return Array.isArray(colors) && colors.length ? colors : null;
+}
+
+function configuredColor(layer: any, row: any, fields: any[], index: number, alpha: number) {
+  const range = colorRangeColors(layer);
+  const colorField = layer?.config?.colorField?.name || layer?.config?.colorField?.id;
+
+  if (range) {
+    const key = colorField ? valueOf(row, fields, colorField) : index;
+    return cssColor(range[stableHash(key) % range.length], alpha);
+  }
+
+  const color = layer?.config?.color || layer?.config?.visConfig?.color || [32, 199, 181];
+  return cssColor(color, alpha);
+}
+
+function layerOpacity(layer: any, fallback = 0.55) {
+  const vis = layer?.config?.visConfig || {};
+  const opacity = Number(vis.opacity ?? vis.fillOpacity ?? fallback);
+  if (!Number.isFinite(opacity)) return fallback;
+  return opacity > 1 ? clamp(opacity / 100, 0.05, 1) : clamp(opacity, 0.05, 1);
+}
+
+function layerStrokeOpacity(layer: any) {
+  const vis = layer?.config?.visConfig || {};
+  const opacity = Number(vis.strokeOpacity ?? vis.outlineOpacity ?? Math.max(layerOpacity(layer), 0.55));
+  return opacity > 1 ? clamp(opacity / 100, 0.08, 1) : clamp(opacity, 0.08, 1);
+}
+
+function layerRadius(layer: any, row: any, fields: any[]) {
+  const vis = layer?.config?.visConfig || {};
+  const radiusField = layer?.config?.radiusField?.name || layer?.config?.radiusField?.id;
+  const radiusValue = radiusField ? toNumber(valueOf(row, fields, radiusField)) : NaN;
+
+  if (Number.isFinite(radiusValue)) {
+    const maxRadius = Array.isArray(vis.radiusRange) ? Number(vis.radiusRange[1]) || 70 : 70;
+    return clamp(Math.sqrt(Math.max(radiusValue, 0)) * 1.8, 5, maxRadius);
+  }
+
+  const configured = Number(vis.radius ?? vis.fixedRadius ?? (Array.isArray(vis.radiusRange) ? vis.radiusRange[1] : NaN));
+  return clamp(Number.isFinite(configured) ? configured : 18, 4, 90);
+}
+
+function drawStyledPoint(ctx: CanvasRenderingContext2D, layer: any, row: any, fields: any[], x: number, y: number, index: number) {
+  const alpha = layerOpacity(layer, 0.62);
+  const radius = layerRadius(layer, row, fields);
+
   ctx.save();
-  ctx.fillStyle = colors[index % colors.length];
-  ctx.strokeStyle = "rgba(8,9,11,0.92)";
-  ctx.lineWidth = 3;
+  ctx.fillStyle = configuredColor(layer, row, fields, index, alpha);
+  ctx.strokeStyle = "rgba(8,9,11,0.78)";
+  ctx.lineWidth = radius > 15 ? 1.5 : 3;
   ctx.beginPath();
-  ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
@@ -605,15 +706,24 @@ function drawLine(ctx: CanvasRenderingContext2D, viewport: any, coordinates: any
   return started;
 }
 
-function drawGeometry(ctx: CanvasRenderingContext2D, viewport: any, geometry: any, index: number) {
+function drawStyledGeometry(
+  ctx: CanvasRenderingContext2D,
+  viewport: any,
+  layer: any,
+  row: any,
+  fields: any[],
+  geometry: any,
+  index: number
+) {
   if (!geometry?.type || !geometry?.coordinates) return 0;
-  const fill = index % 2 === 0 ? "rgba(32,199,181,0.45)" : "rgba(214,168,79,0.38)";
-  const stroke = index % 2 === 0 ? "rgba(242,199,102,0.95)" : "rgba(32,199,181,0.95)";
+  const fill = configuredColor(layer, row, fields, index, layerOpacity(layer, 0.48));
+  const stroke = configuredColor(layer, row, fields, index, layerStrokeOpacity(layer));
+  const strokeWidth = clamp(Number(layer?.config?.visConfig?.thickness || layer?.config?.visConfig?.strokeWidth || 1.4), 0.7, 5);
 
   if (geometry.type === "Point") {
     const point = project(viewport, geometry.coordinates);
     if (!point) return 0;
-    drawPoint(ctx, point.x, point.y, index);
+    drawStyledPoint(ctx, layer, row, fields, point.x, point.y, index);
     return 1;
   }
   if (geometry.type === "MultiPoint") {
@@ -621,7 +731,7 @@ function drawGeometry(ctx: CanvasRenderingContext2D, viewport: any, geometry: an
     geometry.coordinates.forEach((coordinate: any, pointIndex: number) => {
       const point = project(viewport, coordinate);
       if (point) {
-        drawPoint(ctx, point.x, point.y, index + pointIndex);
+        drawStyledPoint(ctx, layer, row, fields, point.x, point.y, index + pointIndex);
         drawn += 1;
       }
     });
@@ -631,7 +741,7 @@ function drawGeometry(ctx: CanvasRenderingContext2D, viewport: any, geometry: an
     ctx.beginPath();
     if (!drawLine(ctx, viewport, geometry.coordinates)) return 0;
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = strokeWidth;
     ctx.stroke();
     return 1;
   }
@@ -641,7 +751,7 @@ function drawGeometry(ctx: CanvasRenderingContext2D, viewport: any, geometry: an
       ctx.beginPath();
       if (drawLine(ctx, viewport, line)) {
         ctx.strokeStyle = stroke;
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = strokeWidth;
         ctx.stroke();
         drawn += 1;
       }
@@ -660,7 +770,7 @@ function drawGeometry(ctx: CanvasRenderingContext2D, viewport: any, geometry: an
       if (didDraw) {
         ctx.fillStyle = fill;
         ctx.strokeStyle = stroke;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = strokeWidth;
         ctx.fill("evenodd");
         ctx.stroke();
         drawn += 1;
@@ -684,6 +794,123 @@ function shortDiagnostics(diagnostics: string[]) {
   return diagnostics.join(" | ").slice(0, 650);
 }
 
+function getDatasetById(entries: OverlayDatasetEntry[], datasetId: string) {
+  return entries.find((entry) => entry.id === datasetId) || entries.find((entry) => entry.id.endsWith(datasetId));
+}
+
+function drawLayerOverlay(
+  ctx: CanvasRenderingContext2D,
+  viewport: any,
+  layer: any,
+  entry: OverlayDatasetEntry,
+  mapState: any,
+  savedConfig: any,
+  stats: DrawStats,
+  diagnostics: string[]
+) {
+  const fields = fieldsOf(entry.dataset);
+  const rows = rowsOf(entry.dataset);
+  const layerType = normalize(layer?.type || layer?.config?.type || layer?.visualChannels?.layerType);
+  const columns = coordinateColumnsFromLayer(layer) || coordinateColumns(mapState, entry.id, fields, savedConfig);
+  const geometryColumns = geometryColumnCandidatesFromLayer(layer).length
+    ? geometryColumnCandidatesFromLayer(layer)
+    : geometryColumnCandidates(mapState, entry.id, fields, savedConfig);
+
+  let layerPoints = 0;
+  let layerGeometries = 0;
+
+  for (const row of rows) {
+    stats.rows += 1;
+
+    const shouldDrawGeometry = geometryColumns.length > 0 || layerType.includes("geojson") || layerType.includes("polygon");
+    if (shouldDrawGeometry && stats.geometries < MAX_GEOMETRIES) {
+      for (const geometry of rowGeometries(row, fields, geometryColumns)) {
+        if (stats.geometries >= MAX_GEOMETRIES) break;
+        const drawn = drawStyledGeometry(ctx, viewport, layer, row, fields, geometry, stats.geometries);
+        if (drawn) {
+          layerGeometries += drawn;
+          stats.geometries += drawn;
+        }
+      }
+    }
+
+    const shouldDrawPoint =
+      (layerType.includes("point") || layerType.includes("cluster") || layerType.includes("icon") || !shouldDrawGeometry) &&
+      columns.lat &&
+      columns.lng &&
+      stats.points < MAX_POINTS;
+
+    if (shouldDrawPoint) {
+      const lat = toNumber(valueOf(row, fields, columns.lat));
+      const lng = toNumber(valueOf(row, fields, columns.lng));
+      const point = Number.isFinite(lat) && Number.isFinite(lng) ? project(viewport, [lng, lat]) : null;
+      if (point) {
+        drawStyledPoint(ctx, layer, row, fields, point.x, point.y, stats.points);
+        layerPoints += 1;
+        stats.points += 1;
+      }
+    }
+
+    if (stats.points >= MAX_POINTS && stats.geometries >= MAX_GEOMETRIES) break;
+  }
+
+  if (layerPoints || layerGeometries) stats.layers += 1;
+  diagnostics.push(
+    `layer:${layer?.id || "sem-id"}{type=${layerType || "-"},dataset=${entry.source}:${entry.id},rows=${rows.length},points=${layerPoints},geoms=${layerGeometries},lat=${columns.lat || "-"},lng=${columns.lng || "-"},geom=${geometryColumns.join("/") || "-"}}`
+  );
+}
+
+function drawDatasetFallbackOverlay(
+  ctx: CanvasRenderingContext2D,
+  viewport: any,
+  entries: OverlayDatasetEntry[],
+  mapState: any,
+  savedConfig: any,
+  stats: DrawStats,
+  diagnostics: string[]
+) {
+  entries.forEach((entry, datasetIndex) => {
+    const fields = fieldsOf(entry.dataset);
+    const rows = rowsOf(entry.dataset);
+    const columns = coordinateColumns(mapState, entry.id, fields, savedConfig);
+    const geometryColumns = geometryColumnCandidates(mapState, entry.id, fields, savedConfig);
+    let datasetPoints = 0;
+    let datasetGeometries = 0;
+
+    for (const row of rows) {
+      stats.rows += 1;
+      if (stats.geometries < MAX_GEOMETRIES) {
+        for (const geometry of rowGeometries(row, fields, geometryColumns)) {
+          if (stats.geometries >= MAX_GEOMETRIES) break;
+          const fakeLayer = { config: { color: [32, 199, 181], visConfig: { opacity: 0.45, strokeOpacity: 0.85 } } };
+          const drawn = drawStyledGeometry(ctx, viewport, fakeLayer, row, fields, geometry, stats.geometries + datasetIndex);
+          if (drawn) {
+            datasetGeometries += drawn;
+            stats.geometries += drawn;
+          }
+        }
+      }
+      if (columns.lat && columns.lng && stats.points < MAX_POINTS) {
+        const lat = toNumber(valueOf(row, fields, columns.lat));
+        const lng = toNumber(valueOf(row, fields, columns.lng));
+        const point = Number.isFinite(lat) && Number.isFinite(lng) ? project(viewport, [lng, lat]) : null;
+        if (point) {
+          const fakeLayer = { config: { color: [242, 199, 102], visConfig: { radius: 8, opacity: 0.9 } } };
+          drawStyledPoint(ctx, fakeLayer, row, fields, point.x, point.y, stats.points + datasetIndex);
+          datasetPoints += 1;
+          stats.points += 1;
+        }
+      }
+      if (stats.points >= MAX_POINTS && stats.geometries >= MAX_GEOMETRIES) break;
+    }
+
+    if (datasetPoints || datasetGeometries) stats.datasets += 1;
+    diagnostics.push(
+      `fallback:${entry.source}:${entry.id}{fields=${fields.length},rows=${rows.length},points=${datasetPoints},geoms=${datasetGeometries},lat=${columns.lat || "-"},lng=${columns.lng || "-"},geom=${geometryColumns.join("/") || "-"}}`
+    );
+  });
+}
+
 async function applyStateOverlay(capture: CaptureResult, mapState: any, savedConfig?: any): Promise<CaptureResult> {
   const viewport = getViewport(mapState, savedConfig);
   const entries = getOverlayDatasetEntries(mapState, savedConfig);
@@ -697,51 +924,28 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any, savedCon
   if (!ctx) return capture;
   ctx.drawImage(image, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-  let points = 0;
-  let geometries = 0;
-  let rows = 0;
-  let datasetCount = 0;
-  const datasetDiagnostics: string[] = [];
+  const stats: DrawStats = { points: 0, geometries: 0, rows: 0, layers: 0, datasets: 0 };
+  const diagnostics: string[] = [];
+  const layers = getAllLayers(mapState, savedConfig);
 
-  entries.forEach((entry, datasetIndex) => {
-    const fields = fieldsOf(entry.dataset);
-    const rowsForDataset = rowsOf(entry.dataset);
-    const columns = coordinateColumns(mapState, entry.id, fields, savedConfig);
-    const geometryColumns = geometryColumnCandidates(mapState, entry.id, fields, savedConfig);
-
-    datasetDiagnostics.push(
-      `${entry.source}:${entry.id}{fields=${fields.length},rows=${rowsForDataset.length},lat=${columns.lat || "-"},lng=${
-        columns.lng || "-"
-      },geom=${geometryColumns.join("/") || "-"}}`
-    );
-
-    if (!rowsForDataset.length) return;
-    datasetCount += 1;
-
-    for (const row of rowsForDataset) {
-      rows += 1;
-      if (geometries < MAX_GEOMETRIES) {
-        for (const geometry of rowGeometries(row, fields, geometryColumns)) {
-          if (geometries >= MAX_GEOMETRIES) break;
-          const drawn = drawGeometry(ctx, viewport, geometry, geometries + datasetIndex);
-          if (drawn) geometries += drawn;
-        }
-      }
-      if (points < MAX_POINTS && columns.lat && columns.lng) {
-        const lat = toNumber(valueOf(row, fields, columns.lat));
-        const lng = toNumber(valueOf(row, fields, columns.lng));
-        const point = Number.isFinite(lat) && Number.isFinite(lng) ? project(viewport, [lng, lat]) : null;
-        if (point) {
-          drawPoint(ctx, point.x, point.y, points + datasetIndex);
-          points += 1;
-        }
-      }
-      if (points >= MAX_POINTS && geometries >= MAX_GEOMETRIES) break;
-    }
+  layers.forEach((layer) => {
+    const dataIds = getLayerDataIds(layer);
+    dataIds.forEach((dataId) => {
+      const entry = getDatasetById(entries, dataId);
+      if (!entry) return;
+      drawLayerOverlay(ctx, viewport, layer, entry, mapState, savedConfig, stats, diagnostics);
+    });
   });
 
-  if (!points && !geometries) {
-    return { ...capture, diagnostics: [...capture.diagnostics, "stateOverlay=0", `stateDatasets=${entries.length}`, datasetDiagnostics.join(";")] };
+  if (!stats.points && !stats.geometries) {
+    drawDatasetFallbackOverlay(ctx, viewport, entries, mapState, savedConfig, stats, diagnostics);
+  }
+
+  if (!stats.points && !stats.geometries) {
+    return {
+      ...capture,
+      diagnostics: [...capture.diagnostics, "stateOverlay=0", `stateDatasets=${entries.length}`, `stateLayers=${layers.length}`, diagnostics.join(";")],
+    };
   }
 
   assertNotBlack(canvas, "preview com dados do estado");
@@ -750,15 +954,16 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any, savedCon
 
   return {
     dataUrl,
-    method: `${capture.method}+state-overlay`,
+    method: `${capture.method}+kepler-layer-overlay`,
     diagnostics: [
       ...capture.diagnostics,
-      `stateOverlayPoints=${points}`,
-      `stateOverlayGeometries=${geometries}`,
-      `stateOverlayRows=${rows}`,
-      `stateOverlayDatasets=${datasetCount}`,
-      datasetDiagnostics.join(";"),
-      `stateOverlayBytesBase64=${dataUrl.length}`,
+      `overlayPoints=${stats.points}`,
+      `overlayGeometries=${stats.geometries}`,
+      `overlayRows=${stats.rows}`,
+      `overlayLayers=${stats.layers}`,
+      `overlayDatasets=${stats.datasets}`,
+      diagnostics.join(";"),
+      `overlayBytesBase64=${dataUrl.length}`,
     ],
   };
 }
@@ -855,7 +1060,7 @@ const MaonoSaveButton: React.FC = () => {
       setMessage(
         data?.preview
           ? `Projeto e visualização PNG salvos no Dropbox com sucesso. Método: ${capture.method}. ${
-              capture.method.includes("state-overlay") ? "" : `Diagnóstico: ${shortDiagnostics(capture.diagnostics)}`
+              capture.method.includes("overlay") ? "" : `Diagnóstico: ${shortDiagnostics(capture.diagnostics)}`
             }`
           : `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${shortDiagnostics(capture.diagnostics)}`
       );
