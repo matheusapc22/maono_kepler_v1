@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { connect } from "react-redux";
 import { useParams } from "react-router";
-import { loadFiles } from "@kepler.gl/actions";
+import { addDataToMap } from "@kepler.gl/actions";
+import KeplerGlSchema from "@kepler.gl/schemas";
 import type { RootState } from "../../../store";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
@@ -10,66 +11,178 @@ import Spinner from "../../../components/Spinner";
 const mapStateToProps = (state: RootState) => ({
   isMapLoading: selectIsMapLoading(state),
 });
+
 const dispatchToProps = (dispatch: any) => ({ dispatch });
 
 const connectStore = connect(mapStateToProps, dispatchToProps);
 
-async function loadProjectConfig(projectSlug: string, dispatch: any) {
-  dispatch(setLoadingMapStatus(true));
+async function parseJsonResponse(response: Response) {
+  const text = await response.text();
 
-  const response = await fetch(
-    `/api/projects/${encodeURIComponent(projectSlug)}/config`,
-    {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-      },
-    }
-  );
-
-  const data = await response.json();
-
-  if (!response.ok || !data?.ok) {
-    const message =
-      data?.error?.message ||
-      `Não foi possível carregar o projeto ${projectSlug}.`;
-    throw new Error(message);
+  if (!text.trim()) {
+    throw new Error("A resposta do servidor veio vazia.");
   }
 
-  const file = new File(
-    [JSON.stringify(data.config, null, 2)],
-    `${projectSlug}.kepler.json`,
-    { type: "application/json" }
-  );
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("A resposta do servidor não está em JSON válido.");
+  }
+}
 
-  await dispatch(loadFiles([file]));
+function getApiErrorMessage(data: any, fallback: string) {
+  return data?.error?.message || data?.message || fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function validateSavedKeplerConfig(value: unknown) {
+  if (!isRecord(value)) {
+    throw new Error("Configuração do projeto inválida.");
+  }
+
+  if (!Array.isArray(value.datasets)) {
+    throw new Error("A configuração do projeto não possui datasets válidos.");
+  }
+
+  if (!isRecord(value.config)) {
+    throw new Error("A configuração do projeto não possui objeto config válido.");
+  }
+}
+
+function normalizeDatasetForKepler(dataset: any) {
+  const data = dataset?.data ?? dataset;
+
+  return {
+    info: {
+      id: data?.id ?? dataset?.id,
+      label: data?.label ?? dataset?.label ?? data?.id ?? dataset?.id,
+      color: data?.color ?? dataset?.color,
+    },
+    data,
+  };
+}
+
+function loadSavedKeplerConfig(savedConfig: any) {
+  validateSavedKeplerConfig(savedConfig);
+
+  try {
+    const loaded = KeplerGlSchema.load(savedConfig) as any;
+
+    if (isRecord(loaded)) {
+      const datasets = Array.isArray(loaded.datasets)
+        ? loaded.datasets
+        : savedConfig.datasets.map(normalizeDatasetForKepler);
+
+      const config = loaded.config ?? savedConfig.config;
+
+      return {
+        datasets,
+        config,
+      };
+    }
+  } catch (error) {
+    console.warn(
+      "[Maono map loader] KeplerGlSchema.load falhou, usando fallback seguro:",
+      error,
+    );
+  }
+
+  return {
+    datasets: savedConfig.datasets.map(normalizeDatasetForKepler),
+    config: savedConfig.config,
+  };
+}
+
+async function loadProjectConfig(
+  projectSlug: string,
+  dispatch: any,
+  signal: AbortSignal,
+) {
+  dispatch(setLoadingMapStatus(true));
+
+  try {
+    const response = await fetch(
+      `/api/projects/${encodeURIComponent(projectSlug)}/config`,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+        signal,
+      },
+    );
+
+    const data = await parseJsonResponse(response);
+
+    if (!response.ok || !data?.ok) {
+      const message = getApiErrorMessage(
+        data,
+        `Não foi possível carregar o projeto ${projectSlug}.`,
+      );
+
+      throw new Error(message);
+    }
+
+    const savedConfig = data.config;
+    const loadedConfig = loadSavedKeplerConfig(savedConfig);
+
+    dispatch(
+      addDataToMap({
+        datasets: loadedConfig.datasets,
+        config: loadedConfig.config,
+        options: {
+          centerMap: true,
+          readOnly: false,
+        },
+      }),
+    );
+  } finally {
+    dispatch(setLoadingMapStatus(false));
+  }
 }
 
 const MapUrlLoader = connectStore(
   ({ isMapLoading, dispatch }: { isMapLoading: boolean; dispatch: any }) => {
-    const { projectSlug } = useParams();
+    const { projectSlug } = useParams<{ projectSlug: string }>();
     const loadedProjectRef = useRef<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-      if (!projectSlug || loadedProjectRef.current === projectSlug) return;
+      if (!projectSlug) {
+        loadedProjectRef.current = null;
+        return;
+      }
+
+      if (loadedProjectRef.current === projectSlug) {
+        return;
+      }
+
+      const controller = new AbortController();
 
       loadedProjectRef.current = projectSlug;
       setError(null);
 
-      loadProjectConfig(projectSlug, dispatch)
-        .catch((err) => {
-          loadedProjectRef.current = null;
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Não foi possível carregar o projeto."
-          );
-        })
-        .finally(() => {
-          dispatch(setLoadingMapStatus(false));
-        });
+      loadProjectConfig(projectSlug, dispatch, controller.signal).catch((err) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        loadedProjectRef.current = null;
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Não foi possível carregar o projeto.",
+        );
+        dispatch(setLoadingMapStatus(false));
+      });
+
+      return () => {
+        controller.abort();
+      };
     }, [projectSlug, dispatch]);
 
     if (error) {
@@ -99,7 +212,7 @@ const MapUrlLoader = connectStore(
         </p>
       </div>
     ) : null;
-  }
+  },
 );
 
 export default MapUrlLoader;

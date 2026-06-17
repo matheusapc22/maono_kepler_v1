@@ -28,3 +28,10 @@ test-results
 # test temporary outputs
 coverage
 playwright/auth.json
+
+# secrets and local session files
+.env
+.env.*
+.dev.vars
+*.cookies.txt
+viewer.cookies.txt

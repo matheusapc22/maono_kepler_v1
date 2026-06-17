@@ -1,6 +1,529 @@
-import { jsonResponse, errorResponse, methodNotAllowed } from "../_lib/http.js";
+import {
+  jsonResponse,
+  errorResponse,
+  methodNotAllowed,
+} from "../_lib/http.js";
 import { getSessionUser } from "../_lib/auth.js";
 import { listProjectsForUser, publicProject } from "../_lib/projects.js";
+
+const ROLE_ALIASES = {
+  client: "owner",
+};
+
+const OFFICIAL_ROLES = new Set([
+  "super_admin",
+  "admin",
+  "owner",
+  "editor",
+  "viewer",
+]);
+
+const PUBLIC_PERMISSION_SET = new Set([
+  "project.view",
+  "project.create",
+  "project.save",
+  "project.favorite",
+
+  "document.view",
+  "document.upload",
+  "document.download",
+  "document.delete",
+
+  "ticket.view",
+  "ticket.create",
+  "ticket.manage",
+
+  "users.view",
+  "users.create",
+  "users.manage_access",
+
+  "permission.grant",
+  "permission.revoke",
+
+  "organization.view",
+  "organization.edit",
+
+  "limits.view",
+  "limits.increase_request",
+
+  "admin.panel.access",
+  "audit.view",
+
+  "export.view",
+  "export.create",
+  "export.download",
+]);
+
+const PUBLIC_LIMIT_KEYS = new Set([
+  "plan",
+  "planName",
+  "plan_name",
+  "maxProjects",
+  "max_projects",
+  "projectLimit",
+  "project_limit",
+  "maxUsers",
+  "max_users",
+  "userLimit",
+  "user_limit",
+  "maxStorageMb",
+  "max_storage_mb",
+  "storageLimitMb",
+  "storage_limit_mb",
+  "maxExportsPerMonth",
+  "max_exports_per_month",
+]);
+
+function normalizeRole(role) {
+  const rawRole = String(role || "").trim().toLowerCase();
+  const normalized = ROLE_ALIASES[rawRole] || rawRole;
+
+  return OFFICIAL_ROLES.has(normalized) ? normalized : "viewer";
+}
+
+function normalizePermission(permission) {
+  const value = String(permission || "").trim();
+
+  return PUBLIC_PERMISSION_SET.has(value) ? value : null;
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter((value) => typeof value === "string" && value))];
+}
+
+function getDb(env) {
+  return env.DB || env.D1 || env.MAONO_DB || null;
+}
+
+async function optionalAll(env, sql, params = []) {
+  const db = getDb(env);
+
+  if (!db || typeof db.prepare !== "function") {
+    return [];
+  }
+
+  try {
+    const statement = db.prepare(sql);
+    const result =
+      params.length > 0
+        ? await statement.bind(...params).all()
+        : await statement.all();
+
+    return Array.isArray(result?.results) ? result.results : [];
+  } catch (error) {
+    console.warn("[Maono session] Consulta opcional ignorada:", error.message);
+    return [];
+  }
+}
+
+function toId(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return value;
+}
+
+function getUserOrganizationId(user) {
+  return (
+    toId(user.activeOrganizationId) ||
+    toId(user.active_organization_id) ||
+    toId(user.organizationId) ||
+    toId(user.organization_id) ||
+    toId(user.organization?.id) ||
+    toId(user.organization?.organizationId) ||
+    null
+  );
+}
+
+function getProjectOrganizationId(project) {
+  return (
+    toId(project.organizationId) ||
+    toId(project.organization_id) ||
+    toId(project.orgId) ||
+    toId(project.org_id) ||
+    null
+  );
+}
+
+function publicOrganization(row) {
+  if (!row) {
+    return null;
+  }
+
+  const id =
+    toId(row.id) ||
+    toId(row.organizationId) ||
+    toId(row.organization_id) ||
+    null;
+
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id,
+    name: row.name || row.organization_name || undefined,
+    slug: row.slug || row.organization_slug || undefined,
+    role: row.role || row.organizationRole || row.organization_role || undefined,
+    accessLevel:
+      row.accessLevel || row.access_level || row.organizationAccessLevel || undefined,
+  };
+}
+
+function publicOrganizations(rows) {
+  const organizations = rows
+    .map(publicOrganization)
+    .filter(Boolean);
+
+  const seen = new Set();
+
+  return organizations.filter((organization) => {
+    const key = String(organization.id);
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+async function listOrganizationsForUser(env, user, role) {
+  const userId = user.id;
+
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT
+        o.id,
+        o.name,
+        o.slug,
+        ou.role,
+        ou.access_level
+      FROM organization_users ou
+      INNER JOIN organizations o ON o.id = ou.organization_id
+      WHERE ou.user_id = ?
+      ORDER BY o.name ASC
+      LIMIT 100
+    `,
+    [userId],
+  );
+
+  const organizations = publicOrganizations(rows);
+
+  const fallbackOrganizationId = getUserOrganizationId(user);
+
+  if (organizations.length === 0 && fallbackOrganizationId) {
+    return [
+      {
+        id: fallbackOrganizationId,
+        name: user.organization_name || user.organizationName || undefined,
+        slug: user.organization_slug || user.organizationSlug || undefined,
+        role: role === "owner" ? "owner" : undefined,
+        accessLevel: user.accessLevel || user.access_level || undefined,
+      },
+    ];
+  }
+
+  return organizations;
+}
+
+function getActiveOrganizationId(user, organizations) {
+  const explicit = getUserOrganizationId(user);
+
+  if (explicit) {
+    return explicit;
+  }
+
+  return organizations[0]?.id || null;
+}
+
+async function listDirectUserPermissions(env, userId) {
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT permission
+      FROM user_permissions
+      WHERE user_id = ?
+      LIMIT 500
+    `,
+    [userId],
+  );
+
+  return rows
+    .map((row) => normalizePermission(row.permission || row.action || row.name))
+    .filter(Boolean);
+}
+
+async function listOrganizationUserPermissions(env, userId, activeOrganizationId) {
+  if (!activeOrganizationId) {
+    return [];
+  }
+
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT permission
+      FROM organization_user_permissions
+      WHERE user_id = ?
+        AND organization_id = ?
+      LIMIT 500
+    `,
+    [userId, activeOrganizationId],
+  );
+
+  return rows
+    .map((row) => normalizePermission(row.permission || row.action || row.name))
+    .filter(Boolean);
+}
+
+async function listConfiguredPermissions(env, user, activeOrganizationId) {
+  const [directPermissions, organizationPermissions] = await Promise.all([
+    listDirectUserPermissions(env, user.id),
+    listOrganizationUserPermissions(env, user.id, activeOrganizationId),
+  ]);
+
+  return uniqueStrings([...directPermissions, ...organizationPermissions]);
+}
+
+async function listStoredScopes(env, userId) {
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT scope
+      FROM user_scopes
+      WHERE user_id = ?
+      LIMIT 500
+    `,
+    [userId],
+  );
+
+  return rows
+    .map((row) => row.scope)
+    .filter((scope) => typeof scope === "string" && scope.trim());
+}
+
+function buildDefaultScopes(role, organizations) {
+  if (role === "super_admin") {
+    return ["platform:*"];
+  }
+
+  return organizations.map((organization) => `organization:${organization.id}`);
+}
+
+async function listScopes(env, user, role, organizations) {
+  const storedScopes = await listStoredScopes(env, user.id);
+
+  return uniqueStrings([
+    ...buildDefaultScopes(role, organizations),
+    ...storedScopes,
+  ]);
+}
+
+async function listFeatureFlags(env, userId, activeOrganizationId) {
+  const userRows = await optionalAll(
+    env,
+    `
+      SELECT flag
+      FROM user_feature_flags
+      WHERE user_id = ?
+      LIMIT 200
+    `,
+    [userId],
+  );
+
+  const organizationRows = activeOrganizationId
+    ? await optionalAll(
+        env,
+        `
+          SELECT flag
+          FROM organization_feature_flags
+          WHERE organization_id = ?
+          LIMIT 200
+        `,
+        [activeOrganizationId],
+      )
+    : [];
+
+  return uniqueStrings(
+    [...userRows, ...organizationRows]
+      .map((row) => row.flag || row.feature_flag || row.name)
+      .filter((flag) => typeof flag === "string" && flag.trim()),
+  );
+}
+
+function parseLimitValue(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed === "true") {
+    return true;
+  }
+
+  if (trimmed === "false") {
+    return false;
+  }
+
+  const numberValue = Number(trimmed);
+
+  if (!Number.isNaN(numberValue) && trimmed !== "") {
+    return numberValue;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+function normalizeLimitKey(key) {
+  const value = String(key || "").trim();
+
+  return PUBLIC_LIMIT_KEYS.has(value) ? value : null;
+}
+
+async function getOrganizationLimits(env, activeOrganizationId) {
+  if (!activeOrganizationId) {
+    return {};
+  }
+
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT key, value
+      FROM organization_limits
+      WHERE organization_id = ?
+      LIMIT 100
+    `,
+    [activeOrganizationId],
+  );
+
+  const limits = {};
+
+  for (const row of rows) {
+    const key = normalizeLimitKey(row.key || row.limit_key || row.name);
+
+    if (!key) {
+      continue;
+    }
+
+    limits[key] = parseLimitValue(row.value);
+  }
+
+  return limits;
+}
+
+function publicSafeProject(project) {
+  const base = publicProject(project) || project || {};
+
+  const id = toId(base.id);
+  const slug = base.slug;
+  const name = base.name;
+
+  if (!id || !slug || !name) {
+    return null;
+  }
+
+  const organizationId = getProjectOrganizationId(base);
+  const accessLevel =
+    base.accessLevel ||
+    base.access_level ||
+    base.projectAccessLevel ||
+    "viewer";
+
+  return {
+    id,
+    name,
+    slug,
+    description: base.description || undefined,
+    organizationId,
+    organization_id: organizationId,
+    accessLevel,
+    permissions: Array.isArray(base.permissions)
+      ? base.permissions.map(normalizePermission).filter(Boolean)
+      : [],
+    active: typeof base.active === "boolean" ? base.active : undefined,
+    thumbnailUrl: base.thumbnailUrl || base.thumbnail_url || undefined,
+    createdAt: base.createdAt || base.created_at || undefined,
+    updatedAt: base.updatedAt || base.updated_at || undefined,
+  };
+}
+
+function publicSafeProjects(projects) {
+  return projects
+    .map(publicSafeProject)
+    .filter(Boolean);
+}
+
+function getActiveOrganization(organizations, activeOrganizationId) {
+  if (!activeOrganizationId) {
+    return organizations[0] || null;
+  }
+
+  return (
+    organizations.find(
+      (organization) => String(organization.id) === String(activeOrganizationId),
+    ) ||
+    organizations[0] ||
+    null
+  );
+}
+
+function publicUser(user, role, activeOrganizationId, organizations, permissions, scopes, featureFlags, limits) {
+  const activeOrganization = getActiveOrganization(
+    organizations,
+    activeOrganizationId,
+  );
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name || undefined,
+    role,
+    rawRole: user.role && String(user.role) !== role ? user.role : undefined,
+
+    organizationId: activeOrganizationId,
+    organization_id: activeOrganizationId,
+    activeOrganizationId: activeOrganizationId,
+    activeOrganization,
+    organization: activeOrganization,
+    organizations,
+
+    permissions,
+    scopes,
+    accessLevel: user.accessLevel || user.access_level || null,
+    featureFlags,
+    limits,
+  };
+}
+
+function unauthenticatedSession() {
+  return {
+    authenticated: false,
+    user: null,
+    projects: [],
+    activeOrganization: null,
+    organizations: [],
+  };
+}
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -13,26 +536,55 @@ export async function onRequest(context) {
     const user = await getSessionUser(env, request);
 
     if (!user) {
-      return jsonResponse({
-        authenticated: false,
-        user: null,
-        projects: [],
-      });
+      return jsonResponse(unauthenticatedSession());
     }
 
-    const projects = await listProjectsForUser(env, user);
+    const role = normalizeRole(user.role);
+    const organizations = await listOrganizationsForUser(env, user, role);
+    const activeOrganizationId = getActiveOrganizationId(user, organizations);
+
+    const [
+      projects,
+      permissions,
+      scopes,
+      featureFlags,
+      limits,
+    ] = await Promise.all([
+      listProjectsForUser(env, user),
+      listConfiguredPermissions(env, user, activeOrganizationId),
+      listScopes(env, user, role, organizations),
+      listFeatureFlags(env, user.id, activeOrganizationId),
+      getOrganizationLimits(env, activeOrganizationId),
+    ]);
+
+    const publicProjects = publicSafeProjects(projects);
 
     return jsonResponse({
       authenticated: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
-      projects: projects.map(publicProject),
+      user: publicUser(
+        user,
+        role,
+        activeOrganizationId,
+        organizations,
+        permissions,
+        scopes,
+        featureFlags,
+        limits,
+      ),
+      projects: publicProjects,
+      activeOrganization: getActiveOrganization(
+        organizations,
+        activeOrganizationId,
+      ),
+      organizations,
     });
   } catch (error) {
-    return errorResponse(error.message, error.status || 500, error.code || "SESSION_ERROR");
+    console.error("[Maono session] Falha ao carregar sessão:", error);
+
+    return errorResponse(
+      "Não foi possível carregar a sessão.",
+      error.status || 500,
+      error.code || "SESSION_ERROR",
+    );
   }
 }

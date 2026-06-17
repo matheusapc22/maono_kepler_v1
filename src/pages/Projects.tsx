@@ -1,247 +1,355 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import Logo from "../assets/images/Logo_Maono.png";
-import { useSession } from "../auth/session";
-import ProjectsSidebar, { type ProjectSidebarSection } from "./ProjectsSidebar";
 
-type PanelProfile = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  roleLabel: string;
-  primaryMetricLabel: string;
-  secondaryMetricLabel: string;
-  emptyTitle: string;
-  emptyDescription: string;
-  projectActionLabel: string;
+import {
+  can,
+  type AccessControlProject,
+  type AccessControlUser,
+  type PermissionContext,
+} from "../access-control/can";
+import type { Permission } from "../access-control/permissions";
+import {
+  useSession,
+  type MaonoProject,
+  type MaonoUser,
+} from "../auth/session";
+import ProjectsSidebar, {
+  type ProjectSidebarSection,
+} from "./ProjectsSidebar";
+import AdminShortcutSection from "./Projects/components/AdminShortcutSection";
+import AuditShortcutSection from "./Projects/components/AuditShortcutSection";
+import DocumentsSection from "./Projects/components/DocumentsSection";
+import ExportsSection from "./Projects/components/ExportsSection";
+import LimitsPlansSection from "./Projects/components/LimitsPlansSection";
+import OrganizationSection from "./Projects/components/OrganizationSection";
+import TicketsSection from "./Projects/components/TicketsSection";
+import UsersAccessSection from "./Projects/components/UsersAccessSection";
+import WorkspaceSection from "./Projects/components/WorkspaceSection";
+import {
+  fetchWorkspaceProjects,
+  setProjectFavorite,
+  type WorkspaceProject,
+  type WorkspaceSectionKey,
+} from "./Projects/workspace-api";
+import "./Projects/projects.css";
+
+const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = {
+  files: "document.view",
+  requests: "ticket.view",
+  exports: "export.view",
+  users: "users.view",
+  organization: "organization.view",
+  limits: "limits.view",
+  audit: "audit.view",
+  backend: "admin.panel.access",
 };
 
-function normalize(value?: string | null) {
-  return String(value || "").trim().toLowerCase();
+function isWorkspaceSection(
+  section: ProjectSidebarSection,
+): section is WorkspaceSectionKey {
+  return section === "all" || section === "recent" || section === "favorites";
 }
 
-function parseApiDate(value: string) {
-  const trimmed = String(value || "").trim();
-
-  if (!trimmed) return null;
-
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
-    return new Date(`${trimmed.replace(" ", "T")}Z`);
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(trimmed)) {
-    return new Date(`${trimmed}Z`);
-  }
-
-  return new Date(trimmed);
-}
-
-function formatDate(value?: string) {
-  if (!value) return "Não informado";
-
-  try {
-    const date = parseApiDate(value);
-
-    if (!date || Number.isNaN(date.getTime())) {
-      return value;
-    }
-
-    return new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
-  } catch (_error) {
-    return value;
-  }
-}
-
-function permissionLabel(value?: string) {
-  const labels: Record<string, string> = {
-    viewer: "Visualização",
-    editor: "Edição",
-    owner: "Proprietário",
+function sectionTitle(section: ProjectSidebarSection) {
+  const titles: Record<ProjectSidebarSection, string> = {
+    all: "Todos os Projetos",
+    recent: "Recentes",
+    favorites: "Favoritos",
+    files: "Arquivos e Documentos",
+    requests: "Central de Chamados",
+    exports: "Exportações",
+    users: "Usuários e Acessos",
+    organization: "Organização",
+    limits: "Limites e Planos",
+    audit: "Auditoria",
+    backend: "Administração Maõno",
   };
-  return labels[normalize(value)] || value || "Acesso";
+
+  return titles[section];
 }
 
-function relativeUpdateLabel(value?: string) {
-  if (!value) return "Atualização não informada";
-
-  const date = parseApiDate(value);
-  if (!date || Number.isNaN(date.getTime())) return `Atualizado em ${value}`;
-
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  const diffMonths = Math.floor(diffDays / 30);
-
-  if (diffMinutes < 1) return "Atualizado agora";
-  if (diffMinutes < 60) return `Atualizado há ${diffMinutes} min`;
-  if (diffHours < 24) return `Atualizado há ${diffHours} h`;
-  if (diffDays < 30) return `Atualizado há ${diffDays} dia${diffDays > 1 ? "s" : ""}`;
-  if (diffMonths < 12) return `Atualizado há ${diffMonths} mês${diffMonths > 1 ? "es" : ""}`;
-
-  return `Atualizado em ${formatDate(value)}`;
+function userAsAccessControlUser(user: MaonoUser | null) {
+  return user as AccessControlUser | null;
 }
 
-function permissionBadgeClass(accessLevel?: string) {
-  const normalized = normalize(accessLevel);
-
-  if (normalized === "editor") return "border-blue-200 bg-blue-50 text-blue-700";
-  if (normalized === "owner") return "border-purple-200 bg-purple-50 text-purple-700";
-
-  return "border-slate-200 bg-slate-50 text-slate-600";
+function projectAsAccessControlProject(project: MaonoProject) {
+  return project as AccessControlProject;
 }
 
-function canEditProject(accessLevel?: string) {
-  return ["editor", "owner"].includes(normalize(accessLevel));
-}
-
-function getPanelProfile(role?: string): PanelProfile {
-  const normalizedRole = normalize(role);
-
-  if (normalizedRole === "admin") {
-    return {
-      eyebrow: "Console administrativo",
-      title: "Gestão de projetos",
-      description: "Visão geral de todos os mapas ativos, com acesso ao painel administrativo, cadastro de usuários, vínculos e arquivos.",
-      roleLabel: "Administrador",
-      primaryMetricLabel: "Projetos administrados",
-      secondaryMetricLabel: "Projetos editáveis",
-      emptyTitle: "Nenhum projeto cadastrado",
-      emptyDescription: "Crie o primeiro mapa pelo painel administrativo para liberar acesso aos usuários.",
-      projectActionLabel: "Administrar mapa",
-    };
+function buildOrganizationContext(user: MaonoUser | null): PermissionContext {
+  if (!user) {
+    return {};
   }
 
-  if (normalizedRole === "editor") {
-    return {
-      eyebrow: "Área de edição",
-      title: "Projetos para edição",
-      description: "Acesse os mapas liberados para editar camadas, estilos, filtros e salvar alterações no arquivo do projeto.",
-      roleLabel: "Editor",
-      primaryMetricLabel: "Projetos liberados",
-      secondaryMetricLabel: "Com permissão de edição",
-      emptyTitle: "Nenhum projeto para edição",
-      emptyDescription: "Sua conta ainda não possui projetos com permissão de edição.",
-      projectActionLabel: "Abrir para editar",
-    };
-  }
+  const accessUser = user as AccessControlUser;
 
-  if (normalizedRole === "viewer") {
-    return {
-      eyebrow: "Área de consulta",
-      title: "Projetos para visualização",
-      description: "Consulte mapas e análises liberados para sua conta, sem alterar os arquivos originais do projeto.",
-      roleLabel: "Visualizador",
-      primaryMetricLabel: "Projetos disponíveis",
-      secondaryMetricLabel: "Somente leitura",
-      emptyTitle: "Nenhum projeto para visualização",
-      emptyDescription: "Sua conta ainda não possui mapas liberados para consulta.",
-      projectActionLabel: "Abrir mapa",
-    };
-  }
+  const organization =
+    user.activeOrganization ?? user.organization ?? undefined;
+
+  const organizationId =
+    accessUser.activeOrganizationId ??
+    accessUser.organizationId ??
+    accessUser.organization_id ??
+    organization?.id ??
+    undefined;
 
   return {
-    eyebrow: "Área do cliente",
-    title: "Meus projetos",
-    description: "Acompanhe os mapas e análises geográficas disponibilizados pela Maõno para sua organização.",
-    roleLabel: "Cliente",
-    primaryMetricLabel: "Projetos liberados",
-    secondaryMetricLabel: "Projetos editáveis",
-    emptyTitle: "Nenhum projeto liberado",
-    emptyDescription: "Sua conta ainda não possui projetos vinculados.",
-    projectActionLabel: "Abrir mapa",
+    organizationId,
+    organization,
+    permissions: accessUser.permissions,
+    scopes: accessUser.scopes,
   };
 }
 
-function projectActionLabel(defaultLabel: string, userRole?: string, accessLevel?: string) {
-  if (normalize(userRole) === "admin") return "Administrar mapa";
-  if (canEditProject(accessLevel)) return "Abrir para editar";
-  return defaultLabel;
+function buildProjectContext(
+  user: MaonoUser | null,
+  project: MaonoProject,
+): PermissionContext {
+  const organizationContext = buildOrganizationContext(user);
+  const accessProject = projectAsAccessControlProject(project);
+
+  return {
+    ...organizationContext,
+    project: accessProject,
+    projectId: project.id ?? project.slug,
+    projectAccessLevel: project.accessLevel,
+    organizationId:
+      project.organizationId ??
+      project.organization_id ??
+      organizationContext.organizationId,
+    permissions: [
+      ...(organizationContext.permissions ?? []),
+      ...(project.permissions ?? []),
+    ],
+  };
 }
 
-function projectThumbnailUrl(slug: string, updatedAt?: string) {
-  const cacheKey = encodeURIComponent(updatedAt || String(Date.now()));
-  return `/api/projects/${encodeURIComponent(slug)}/thumbnail?v=${cacheKey}`;
+function canUser(
+  user: MaonoUser | null,
+  permission: Permission,
+  context: PermissionContext = {},
+) {
+  return can(userAsAccessControlUser(user), permission, context);
+}
+
+function canProject(
+  user: MaonoUser | null,
+  permission: Permission,
+  project: MaonoProject,
+) {
+  return canUser(user, permission, buildProjectContext(user, project));
+}
+
+function canViewSection(user: MaonoUser | null, section: ProjectSidebarSection) {
+  if (isWorkspaceSection(section)) {
+    return true;
+  }
+
+  const permission = SECTION_PERMISSIONS[section];
+
+  if (!permission) {
+    return false;
+  }
+
+  return canUser(user, permission, buildOrganizationContext(user));
+}
+
+function mergeProjectIntoList(
+  projects: WorkspaceProject[],
+  updatedProject: WorkspaceProject,
+) {
+  return projects.map((project) =>
+    project.slug === updatedProject.slug
+      ? {
+          ...project,
+          favorite: updatedProject.favorite,
+          favorited: updatedProject.favorite,
+        }
+      : project,
+  );
 }
 
 const ProjectsPage: React.FC = () => {
-  const { authenticated, loading, user, projects, logout } = useSession();
+  const {
+    authenticated,
+    loading,
+    user,
+    projects: sessionProjects,
+    logout,
+  } = useSession();
   const navigate = useNavigate();
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [sidebarSection, setSidebarSection] = useState<ProjectSidebarSection>("recent");
-  const [missingThumbnailSlugs, setMissingThumbnailSlugs] = useState<Record<string, true>>({});
-
-  const activeProjects = useMemo(
-    () => projects.filter((project) => project.active !== false),
-    [projects]
+  const [sidebarSection, setSidebarSection] =
+    useState<ProjectSidebarSection>("all");
+  const [allProjects, setAllProjects] = useState<WorkspaceProject[]>([]);
+  const [workspaceProjects, setWorkspaceProjects] = useState<WorkspaceProject[]>(
+    [],
+  );
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [favoriteBusySlugs, setFavoriteBusySlugs] = useState<Record<string, true>>(
+    {},
   );
 
-  const editableProjectsCount = useMemo(() => {
-    if (normalize(user?.role) === "admin") return activeProjects.length;
-    return activeProjects.filter((project) => canEditProject(project.accessLevel)).length;
-  }, [activeProjects, user?.role]);
-
-  const readOnlyProjectsCount = useMemo(
-    () => activeProjects.filter((project) => !canEditProject(project.accessLevel)).length,
-    [activeProjects]
+  const organizationContext = useMemo(
+    () => buildOrganizationContext(user),
+    [user],
   );
 
-  const filteredProjects = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+  const loadAllProjects = useCallback(async () => {
+    const projects = await fetchWorkspaceProjects("all");
+    setAllProjects(projects);
 
-    if (!query) return activeProjects;
+    if (sidebarSection === "all") {
+      setWorkspaceProjects(projects);
+    }
 
-    return activeProjects.filter((project) => {
-      const searchable = [
-        project.name,
-        project.slug,
-        project.description,
-        project.accessLevel,
-        project.defaultConfigFile,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+    return projects;
+  }, [sidebarSection]);
 
-      return searchable.includes(query);
-    });
-  }, [activeProjects, searchQuery]);
+  const loadWorkspaceSection = useCallback(
+    async (section: WorkspaceSectionKey) => {
+      setWorkspaceLoading(true);
+      setWorkspaceError(null);
+
+      try {
+        if (section === "all") {
+          const projects = await loadAllProjects();
+          setWorkspaceProjects(projects);
+          return;
+        }
+
+        const projects = await fetchWorkspaceProjects(section);
+        setWorkspaceProjects(projects);
+      } catch (error) {
+        setWorkspaceError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar o workspace.",
+        );
+      } finally {
+        setWorkspaceLoading(false);
+      }
+    },
+    [loadAllProjects],
+  );
 
   useEffect(() => {
-    if (!loading && !authenticated) navigate("/login?next=/projects", { replace: true });
+    if (!loading && authenticated) {
+      void loadAllProjects().catch((error) => {
+        setWorkspaceError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar projetos.",
+        );
+      });
+    }
+  }, [authenticated, loadAllProjects, loading]);
+
+  useEffect(() => {
+    if (!loading && authenticated && isWorkspaceSection(sidebarSection)) {
+      void loadWorkspaceSection(sidebarSection);
+    }
+  }, [authenticated, loadWorkspaceSection, loading, sidebarSection]);
+
+  const activeProjects = useMemo(() => {
+    const source = allProjects.length > 0 ? allProjects : sessionProjects;
+
+    return source.filter((project) => project.active !== false);
+  }, [allProjects, sessionProjects]);
+
+  const editableProjectsCount = useMemo(
+    () =>
+      activeProjects.filter((project) =>
+        canProject(user, "project.save", project),
+      ).length,
+    [activeProjects, user],
+  );
+
+  const readOnlyProjectsCount = useMemo(
+    () =>
+      activeProjects.filter(
+        (project) => !canProject(user, "project.save", project),
+      ).length,
+    [activeProjects, user],
+  );
+
+  useEffect(() => {
+    if (!loading && !authenticated) {
+      navigate("/login?next=/projects", { replace: true });
+    }
   }, [authenticated, loading, navigate]);
+
+  useEffect(() => {
+    if (!loading && authenticated && !canViewSection(user, sidebarSection)) {
+      setSidebarSection("all");
+    }
+  }, [authenticated, loading, sidebarSection, user]);
 
   async function handleLogout() {
     await logout();
     navigate("/login", { replace: true });
   }
 
-  function markThumbnailMissing(slug: string) {
-    setMissingThumbnailSlugs((current) => ({ ...current, [slug]: true }));
+  async function handleFavoriteToggle(project: WorkspaceProject) {
+    const nextFavorite = !Boolean(project.favorite || project.favorited);
+
+    setFavoriteBusySlugs((current) => ({
+      ...current,
+      [project.slug]: true,
+    }));
+
+    try {
+      const updatedProject = await setProjectFavorite(
+        project.slug,
+        nextFavorite,
+      );
+
+      setAllProjects((current) => mergeProjectIntoList(current, updatedProject));
+
+      setWorkspaceProjects((current) => {
+        const updated = mergeProjectIntoList(current, updatedProject);
+
+        if (sidebarSection === "favorites" && !updatedProject.favorite) {
+          return updated.filter((item) => item.slug !== updatedProject.slug);
+        }
+
+        return updated;
+      });
+    } catch (error) {
+      setWorkspaceError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar favorito.",
+      );
+    } finally {
+      setFavoriteBusySlugs((current) => {
+        const next = { ...current };
+        delete next[project.slug];
+        return next;
+      });
+    }
   }
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0f172a] text-white">
-        <p className="animate-pulse">Carregando seus projetos...</p>
+      <main className="mm-loading-screen">
+        <p>Carregando seus projetos...</p>
       </main>
     );
   }
 
-  if (!authenticated) return null;
+  if (!authenticated) {
+    return null;
+  }
 
-  const panelProfile = getPanelProfile(user?.role);
-  const sectionTitle = sidebarSection === "recent" ? "Recentes" : "Todos os projetos";
+  const canCreateMap = canUser(user, "project.create", organizationContext);
+  const showWorkspaceTopbar = isWorkspaceSection(sidebarSection);
 
   return (
-    <main className="min-h-screen bg-[#0f172a] text-slate-100">
-      <div className="flex min-h-screen">
+    <main className="mm-projects-page">
+      <div className="mm-projects-layout">
         <ProjectsSidebar
           user={user}
           activeProjectsCount={activeProjects.length}
@@ -252,181 +360,50 @@ const ProjectsPage: React.FC = () => {
           onLogout={handleLogout}
         />
 
-        <section className="min-w-0 flex-1">
-          <header className="flex min-h-20 items-center justify-between border-b border-slate-700 bg-[#1f2937] px-6 py-4 lg:px-10">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3 lg:hidden">
-                <img src={Logo} alt="Maõno" className="h-10 w-auto object-contain" />
-                <div>
-                  <p className="text-xs text-slate-300">Maõno Maps</p>
-                  <h1 className="text-xl font-semibold text-white">{sectionTitle}</h1>
-                </div>
-              </div>
-              <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-blue-200 lg:block">{panelProfile.eyebrow}</p>
-              <h1 className="hidden text-2xl font-semibold tracking-tight text-white lg:block">{sectionTitle}</h1>
-              <p className="mt-1 hidden text-sm text-slate-400 lg:block">
-                {filteredProjects.length} de {activeProjects.length} projeto(s) disponível(is)
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-100 md:inline-flex">
-                {panelProfile.roleLabel}
-              </span>
-              <div className="hidden items-center gap-2 rounded-full border border-slate-600 bg-[#111827] px-4 py-2 text-sm text-slate-300 shadow-sm md:flex">
-                <span>Workspace maps</span>
-                <span>⌄</span>
-              </div>
-              <div className="hidden items-center gap-2 rounded-full border border-slate-600 bg-[#111827] px-4 py-2 text-sm text-slate-300 shadow-sm md:flex">
-                <span>Grade</span>
-                <span>⌄</span>
-              </div>
-              {user?.role === "admin" && (
-                <Link to="/admin#projects" className="rounded-xl border border-slate-600 bg-[#111827] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800">
-                  Novo mapa
-                </Link>
-              )}
-            </div>
-          </header>
-
-          <div className="px-6 py-7 lg:px-10">
-            <div className="mb-8 rounded-3xl border border-slate-700 bg-[#111827] px-6 py-6 shadow-2xl shadow-black/10">
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-yellow-100">
-                      {panelProfile.roleLabel}
-                    </span>
-                    <span className="rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100">
-                      Painel inicial da plataforma
-                    </span>
-                  </div>
-                  <h2 className="mt-4 text-2xl font-bold text-white">{panelProfile.title}</h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{panelProfile.description}</p>
-                </div>
-
-                <div className="grid min-w-[260px] gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                  <div className="rounded-2xl border border-slate-700 bg-[#0f172a] px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{panelProfile.primaryMetricLabel}</p>
-                    <p className="mt-2 text-3xl font-bold text-white">{activeProjects.length}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-700 bg-[#0f172a] px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{panelProfile.secondaryMetricLabel}</p>
-                    <p className="mt-2 text-3xl font-bold text-white">{editableProjectsCount}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-700 bg-[#0f172a] px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Somente leitura</p>
-                    <p className="mt-2 text-3xl font-bold text-white">{readOnlyProjectsCount}</p>
-                  </div>
-                </div>
+        <section className="mm-projects-main">
+          {showWorkspaceTopbar && (
+            <header className="mm-projects-topbar">
+              <div>
+                <h1>{sectionTitle(sidebarSection)}</h1>
               </div>
 
-              {user?.role === "admin" && (
-                <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-700 pt-5">
-                  <Link to="/admin" className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-bold text-white hover:bg-blue-400">
-                    Abrir painel admin
+              <div className="mm-topbar-actions">
+                {canCreateMap && (
+                  <Link to="/map" className="mm-btn primary mm-new-map-btn">
+                    Novo mapa
                   </Link>
-                  <Link to="/admin/files" className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-bold text-slate-100 hover:bg-slate-800">
-                    Gerenciar Dropbox
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            <div className="mb-6 lg:hidden">
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-[#111827] px-4 py-3 shadow-sm">
-                <span className="text-slate-400">⌕</span>
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Buscar projeto"
-                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
-                />
-              </label>
-            </div>
-
-            {activeProjects.length === 0 ? (
-              <div className="rounded-3xl border border-slate-700 bg-[#111827] p-12 text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-700 bg-[#0f172a] text-3xl shadow-sm">▧</div>
-                <h2 className="mt-5 text-xl font-semibold text-white">{panelProfile.emptyTitle}</h2>
-                <p className="mt-2 text-slate-400">{panelProfile.emptyDescription}</p>
+                )}
               </div>
-            ) : filteredProjects.length === 0 ? (
-              <div className="rounded-3xl border border-slate-700 bg-[#111827] p-12 text-center">
-                <h2 className="text-xl font-semibold text-white">Nenhum projeto encontrado</h2>
-                <p className="mt-2 text-slate-400">Tente buscar pelo nome, identificador ou tipo de acesso.</p>
-              </div>
+            </header>
+          )}
+
+          <div className="mm-projects-content">
+            {isWorkspaceSection(sidebarSection) ? (
+              <WorkspaceSection
+                section={sidebarSection}
+                projects={workspaceProjects}
+                searchQuery={searchQuery}
+                user={user}
+                loading={workspaceLoading}
+                error={workspaceError}
+                favoriteBusySlugs={favoriteBusySlugs}
+                canProjectSave={(project) =>
+                  canProject(user, "project.save", project)
+                }
+                canProjectFavorite={(project) =>
+                  canProject(user, "project.favorite", project)
+                }
+                onFavoriteToggle={handleFavoriteToggle}
+                onRetry={() => loadWorkspaceSection(sidebarSection)}
+              />
             ) : (
-              <div className="grid gap-x-7 gap-y-10 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {filteredProjects.map((project) => {
-                  const actionLabel = projectActionLabel(panelProfile.projectActionLabel, user?.role, project.accessLevel);
-                  const hasMissingThumbnail = Boolean(missingThumbnailSlugs[project.slug]);
-                  const thumbnailUrl = projectThumbnailUrl(project.slug, project.updatedAt);
-
-                  return (
-                    <Link key={project.slug} to={`/projects/${project.slug}/map`} className="group block">
-                      <article className="rounded-3xl border border-slate-700 bg-[#111827] p-4 transition hover:border-blue-400/60 hover:bg-[#121c2f]">
-                        <div className="relative h-48 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-emerald-900 shadow-sm ring-1 ring-slate-700 transition group-hover:shadow-lg group-hover:ring-blue-400/50">
-                          {!hasMissingThumbnail && (
-                            <img
-                              src={thumbnailUrl}
-                              alt={`Preview do projeto ${project.name}`}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                              onError={() => markThumbnailMissing(project.slug)}
-                            />
-                          )}
-                          {hasMissingThumbnail && (
-                            <>
-                              <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(90deg,rgba(244,241,232,.12)_1px,transparent_1px),linear-gradient(rgba(244,241,232,.12)_1px,transparent_1px)] [background-size:28px_28px]" />
-                              <div className="absolute left-8 top-8 h-20 w-28 rounded-md border-2 border-yellow-400/60 bg-yellow-200/10" />
-                              <div className="absolute bottom-7 right-8 h-24 w-36 rounded-md border-2 border-emerald-400/60 bg-emerald-200/10" />
-                              <div className="absolute left-[18%] top-[54%] h-2.5 w-2.5 rounded-sm bg-emerald-500 shadow" />
-                              <div className="absolute left-[28%] top-[48%] h-2 w-2 rounded-sm bg-blue-500 shadow" />
-                              <div className="absolute left-[38%] top-[58%] h-3 w-3 rounded-sm bg-rose-500 shadow" />
-                              <div className="absolute left-[48%] top-[45%] h-2.5 w-2.5 rounded-sm bg-orange-500 shadow" />
-                            </>
-                          )}
-                          <div className="absolute bottom-3 left-3 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
-                            {permissionLabel(project.accessLevel)}
-                          </div>
-                          {!hasMissingThumbnail && (
-                            <div className="absolute bottom-3 right-3 rounded-full border border-emerald-200/50 bg-emerald-900/80 px-3 py-1 text-xs font-bold text-emerald-50 backdrop-blur">
-                              Preview salvo
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <h2 className="truncate text-base font-semibold text-white group-hover:text-blue-200">{project.name}</h2>
-                              <p className="mt-1 truncate text-sm font-semibold text-slate-300">{user?.name || user?.email}</p>
-                            </div>
-                            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${permissionBadgeClass(project.accessLevel)}`}>
-                              {permissionLabel(project.accessLevel)}
-                            </span>
-                          </div>
-
-                          <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-slate-300">
-                            {project.description || "Projeto geográfico disponível para consulta e análise."}
-                          </p>
-
-                          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-400">
-                            <span>{relativeUpdateLabel(project.updatedAt)}</span>
-                            <span className="text-slate-600">•</span>
-                            <span className="truncate">{project.slug}</span>
-                          </div>
-
-                          <div className="mt-4 rounded-2xl border border-slate-700 bg-[#0f172a] px-4 py-3 text-sm font-bold text-blue-100 transition group-hover:border-blue-400/40 group-hover:text-white">
-                            {actionLabel}
-                          </div>
-                        </div>
-                      </article>
-                    </Link>
-                  );
-                })}
-              </div>
+              <ProjectsSectionRouter
+                section={sidebarSection}
+                projects={activeProjects}
+                user={user}
+                editableProjectsCount={editableProjectsCount}
+                readOnlyProjectsCount={readOnlyProjectsCount}
+              />
             )}
           </div>
         </section>
@@ -434,5 +411,62 @@ const ProjectsPage: React.FC = () => {
     </main>
   );
 };
+
+function ProjectsSectionRouter({
+  section,
+  projects,
+  user,
+  editableProjectsCount,
+  readOnlyProjectsCount,
+}: {
+  section: ProjectSidebarSection;
+  projects: MaonoProject[];
+  user: MaonoUser | null;
+  editableProjectsCount: number;
+  readOnlyProjectsCount: number;
+}) {
+  switch (section) {
+    case "files":
+      return <DocumentsSection projects={projects} />;
+
+    case "requests":
+      return <TicketsSection />;
+
+    case "exports":
+      return (
+        <ExportsSection
+          editableProjectsCount={editableProjectsCount}
+          readOnlyProjectsCount={readOnlyProjectsCount}
+        />
+      );
+
+    case "users":
+      return <UsersAccessSection user={user} />;
+
+    case "organization":
+      return <OrganizationSection user={user} projectsCount={projects.length} />;
+
+    case "limits":
+      return <LimitsPlansSection user={user} projectsCount={projects.length} />;
+
+    case "audit":
+      return <AuditShortcutSection />;
+
+    case "backend":
+      return <AdminShortcutSection />;
+
+    default:
+      return (
+        <section className="mm-empty-state">
+          <div>▧</div>
+          <h2>Seção indisponível</h2>
+          <p>
+            Esta seção não está disponível para o seu perfil ou ainda não foi
+            liberada.
+          </p>
+        </section>
+      );
+  }
+}
 
 export default ProjectsPage;

@@ -1,0 +1,38 @@
+/* Sprint 5 — Workspace real: favoritos persistidos */
+.mm-project-card {
+  position: relative;
+}
+
+.mm-project-card-link {
+  display: block;
+}
+
+.mm-project-favorite {
+  width: 34px;
+  height: 34px;
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  right: 18px;
+  border: 1px solid rgba(214, 168, 79, .42);
+  border-radius: 999px;
+  background: rgba(8, 9, 11, .78);
+  color: var(--mm-gold-bright);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  backdrop-filter: blur(8px);
+}
+
+.mm-project-favorite:hover,
+.mm-project-favorite.active {
+  background: rgba(214, 168, 79, .18);
+  border-color: rgba(242, 199, 102, .78);
+}
+
+.mm-project-favorite:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}

@@ -1,5 +1,21 @@
-import { buildCookie, errorResponse, jsonResponse, methodNotAllowed } from "../../_lib/http.js";
+import {
+  buildCookie,
+  errorResponse,
+  jsonResponse,
+  methodNotAllowed,
+} from "../../_lib/http.js";
 import { SESSION_COOKIE_NAME, destroySession } from "../../_lib/auth.js";
+
+function isSecureRequest(request) {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const requestUrl = new URL(request.url);
+
+  if (forwardedProto) {
+    return forwardedProto.toLowerCase().includes("https");
+  }
+
+  return requestUrl.protocol === "https:";
+}
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -15,15 +31,30 @@ export async function onRequest(context) {
       maxAge: 0,
       path: "/",
       httpOnly: true,
-      secure: true,
+      secure: isSecureRequest(request),
       sameSite: "Lax",
     });
 
     return jsonResponse(
-      { ok: true, authenticated: false },
-      { headers: { "Set-Cookie": expiredCookie } }
+      {
+        ok: true,
+        authenticated: false,
+        user: null,
+        projects: [],
+      },
+      {
+        headers: {
+          "Set-Cookie": expiredCookie,
+        },
+      },
     );
   } catch (error) {
-    return errorResponse(error.message, error.status || 500, error.code || "LOGOUT_ERROR");
+    console.error("[Maono logout] Falha ao encerrar sessão:", error);
+
+    return errorResponse(
+      "Não foi possível encerrar a sessão.",
+      error.status || 500,
+      error.code || "LOGOUT_ERROR",
+    );
   }
 }
