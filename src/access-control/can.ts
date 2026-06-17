@@ -248,7 +248,20 @@ export function can(
   const allowedByRole = roleAllows(role, permission);
   const allowedByProjectAccess = projectAccessAllows(permission, context);
 
-  if (!allowedByRole && !explicitPermission && !allowedByProjectAccess) {
+  /**
+   * Se o backend retornou um projeto com accessLevel, a UI deve respeitar
+   * esse vínculo direto usuário-projeto, mesmo quando a organização ativa
+   * do usuário for diferente da organização proprietária do projeto.
+   *
+   * Isso mantém favoritos comuns para viewer/editor/owner e mantém
+   * salvamento restrito a editor/owner via PROJECT_SAVE_ACCESS_LEVELS.
+   * A segurança real continua no backend.
+   */
+  if (hasProjectContext(context) && allowedByProjectAccess) {
+    return true;
+  }
+
+  if (!allowedByRole && !explicitPermission) {
     return false;
   }
 
