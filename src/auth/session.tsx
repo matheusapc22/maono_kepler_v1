@@ -68,6 +68,8 @@ type MaonoProject = {
   accessLevel: "owner" | "editor" | "viewer" | string;
   permissions?: Permission[];
   active?: boolean;
+  thumbnailUrl?: string;
+  thumbnail_url?: string;
   createdAt?: string;
   updatedAt?: string;
 
@@ -141,6 +143,14 @@ function toStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
+function toPermissionArray(value: unknown): Permission[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return normalizePermissions(value);
+}
+
 function toLimits(value: unknown): MaonoLimits | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -170,7 +180,7 @@ function normalizeOrganization(value: unknown): MaonoOrganization | null {
     role: toStringValue(value.role),
     accessLevel:
       toStringValue(value.accessLevel) ?? toStringValue(value.access_level),
-    permissions: normalizePermissions(value.permissions as unknown[]),
+    permissions: toPermissionArray(value.permissions),
     featureFlags: toStringArray(
       value.featureFlags ?? value.feature_flags ?? value.flags,
     ),
@@ -234,7 +244,7 @@ function normalizeUser(value: unknown): MaonoUser | null {
     organization: activeOrganization,
     organizations,
 
-    permissions: normalizePermissions(value.permissions as unknown[]),
+    permissions: toPermissionArray(value.permissions),
     scopes: toStringArray(value.scopes),
     accessLevel:
       toStringValue(value.accessLevel) ??
@@ -273,9 +283,12 @@ function normalizeProject(value: unknown): MaonoProject | null {
       toStringValue(value.accessLevel) ??
       toStringValue(value.access_level) ??
       "viewer",
-    permissions: normalizePermissions(value.permissions as unknown[]),
-    active:
-      typeof value.active === "boolean" ? value.active : undefined,
+    permissions: toPermissionArray(value.permissions),
+    active: typeof value.active === "boolean" ? value.active : undefined,
+    thumbnailUrl:
+      toStringValue(value.thumbnailUrl) ?? toStringValue(value.thumbnail_url),
+    thumbnail_url:
+      toStringValue(value.thumbnail_url) ?? toStringValue(value.thumbnailUrl),
     createdAt:
       toStringValue(value.createdAt) ?? toStringValue(value.created_at),
     updatedAt:

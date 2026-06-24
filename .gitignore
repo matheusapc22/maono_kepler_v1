@@ -34,4 +34,6 @@ playwright/auth.json
 .env.*
 .dev.vars
 *.cookies.txt
-viewer.cookies.txt
+
+# dev-only database seeds
+/dev-seeds/

@@ -21,6 +21,12 @@ export type {
   PermissionContext,
 };
 
+const ORGANIZATION_CONTEXT_PERMISSION_PREFIXES = [
+  "document.",
+  "ticket.",
+  "export.",
+] as const;
+
 function toId(value: IdLike | null | undefined): string | null {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -75,6 +81,18 @@ function getProjectAccessLevel(context: PermissionContext): string | null {
   );
 }
 
+function getOrganizationPermissions(
+  context: PermissionContext,
+): readonly unknown[] | undefined {
+  const organization = context.organization as
+    | (AccessControlOrganization & {
+        permissions?: readonly unknown[];
+      })
+    | undefined;
+
+  return organization?.permissions;
+}
+
 function hasOrganizationInUserList(
   user: AccessControlUser,
   organizationId: string,
@@ -116,6 +134,7 @@ function getExplicitPermissions(
     ...normalizePermissions(user.permissions),
     ...normalizePermissions(context.permissions),
     ...normalizePermissions(context.project?.permissions),
+    ...normalizePermissions(getOrganizationPermissions(context)),
   ];
 }
 
@@ -131,8 +150,18 @@ function hasProjectContext(context: PermissionContext): boolean {
   return Boolean(context.project || getTargetProjectId(context));
 }
 
+function hasOrganizationContext(context: PermissionContext): boolean {
+  return Boolean(context.organization || getTargetOrganizationId(context));
+}
+
 function requiresProjectContext(permission: Permission): boolean {
   return PROJECT_CONTEXT_REQUIRED_PERMISSIONS.includes(permission);
+}
+
+function isOrganizationScopedPermission(permission: Permission): boolean {
+  return ORGANIZATION_CONTEXT_PERMISSION_PREFIXES.some((prefix) =>
+    permission.startsWith(prefix),
+  );
 }
 
 function projectAccessAllows(
@@ -216,6 +245,59 @@ function hasScope(user: AccessControlUser, context: PermissionContext): boolean 
   return !organizationId && !projectId;
 }
 
+function organizationPermissionAllows(
+  user: AccessControlUser,
+  role: string,
+  permission: Permission,
+  context: PermissionContext,
+  explicitPermission: boolean,
+): boolean {
+  /**
+   * Permissões de documentos, chamados e exportações sempre precisam de
+   * contexto organizacional na UI. Sem organizationId, não há como garantir
+   * que o item exibido pertence ao escopo correto do usuário.
+   */
+  if (!hasOrganizationContext(context)) {
+    return false;
+  }
+
+  if (!isSameOrganization(user, context)) {
+    return false;
+  }
+
+  if (!hasScope(user, context)) {
+    return false;
+  }
+
+  /**
+   * Admin continua configurável: só vê ações de organização quando a sessão
+   * ou o contexto trouxer permissão explícita e escopo compatível.
+   */
+  if (role === "admin") {
+    return explicitPermission;
+  }
+
+  /**
+   * Owner pode receber permissões visuais da própria organização por policy,
+   * mas também respeita permissões explícitas quando vierem do backend.
+   */
+  if (role === "owner") {
+    return explicitPermission || roleAllows(role, permission);
+  }
+
+  /**
+   * Editor e Viewer não recebem documentos, chamados ou exportações apenas por role.
+   * Para Sprint 7, eles precisam de permissão explícita no payload/contexto.
+   *
+   * Isso impede, por padrão, casos sensíveis como export.download para Viewer.
+   */
+  if (role === "editor" || role === "viewer") {
+    return explicitPermission;
+  }
+
+  return false;
+}
+
 export function can(
   user: AccessControlUser | null | undefined,
   permission: Permission,
@@ -236,6 +318,21 @@ export function can(
   }
 
   const explicitPermission = hasExplicitPermission(user, permission, context);
+
+  /**
+   * Permissões organization-scoped entram antes da regra geral de role.
+   * Isso evita liberar document.*, ticket.* e export.* por acidente para
+   * editor/viewer apenas porque roleAllows(...) permite algo no futuro.
+   */
+  if (isOrganizationScopedPermission(permission)) {
+    return organizationPermissionAllows(
+      user,
+      role,
+      permission,
+      context,
+      explicitPermission,
+    );
+  }
 
   if (role === "admin") {
     return explicitPermission && hasScope(user, context);

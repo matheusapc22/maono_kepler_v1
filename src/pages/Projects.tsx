@@ -3,11 +3,12 @@ import { Link, useNavigate } from "react-router";
 
 import {
   can,
+  type AccessControlOrganization,
   type AccessControlProject,
   type AccessControlUser,
   type PermissionContext,
 } from "../access-control/can";
-import type { Permission } from "../access-control/permissions";
+import { PERMISSION, type Permission } from "../access-control/permissions";
 import {
   useSession,
   type MaonoProject,
@@ -34,14 +35,14 @@ import {
 import "./Projects/projects.css";
 
 const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = {
-  files: "document.view",
-  requests: "ticket.view",
-  exports: "export.view",
-  users: "users.view",
-  organization: "organization.view",
-  limits: "limits.view",
-  audit: "audit.view",
-  backend: "admin.panel.access",
+  files: PERMISSION.DOCUMENT_VIEW,
+  requests: PERMISSION.TICKET_VIEW,
+  exports: PERMISSION.EXPORT_VIEW,
+  users: PERMISSION.USERS_VIEW,
+  organization: PERMISSION.ORGANIZATION_VIEW,
+  limits: PERMISSION.LIMITS_VIEW,
+  audit: PERMISSION.AUDIT_VIEW,
+  backend: PERMISSION.ADMIN_PANEL_ACCESS,
 };
 
 function isWorkspaceSection(
@@ -81,24 +82,40 @@ function buildOrganizationContext(user: MaonoUser | null): PermissionContext {
     return {};
   }
 
-  const accessUser = user as AccessControlUser;
+  const accessUser = user as AccessControlUser & {
+    activeOrganization?: AccessControlOrganization | null;
+    organization?: AccessControlOrganization | null;
+  };
 
   const organization =
-    user.activeOrganization ?? user.organization ?? undefined;
+    accessUser.activeOrganization ?? accessUser.organization ?? undefined;
 
   const organizationId =
     accessUser.activeOrganizationId ??
     accessUser.organizationId ??
     accessUser.organization_id ??
     organization?.id ??
+    organization?.organizationId ??
     undefined;
 
   return {
     organizationId,
-    organization,
+    organization: organization ?? undefined,
     permissions: accessUser.permissions,
     scopes: accessUser.scopes,
   };
+}
+
+function getOrganizationIdFromContext(
+  context: PermissionContext,
+): number | string | null {
+  const organizationId =
+    context.organizationId ??
+    context.organization?.id ??
+    context.organization?.organizationId ??
+    null;
+
+  return organizationId === undefined ? null : organizationId;
 }
 
 function buildProjectContext(
@@ -188,13 +205,18 @@ const ProjectsPage: React.FC = () => {
   );
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-  const [favoriteBusySlugs, setFavoriteBusySlugs] = useState<Record<string, true>>(
-    {},
-  );
+  const [favoriteBusySlugs, setFavoriteBusySlugs] = useState<
+    Record<string, true>
+  >({});
 
   const organizationContext = useMemo(
     () => buildOrganizationContext(user),
     [user],
+  );
+
+  const activeOrganizationId = useMemo(
+    () => getOrganizationIdFromContext(organizationContext),
+    [organizationContext],
   );
 
   const loadAllProjects = useCallback(async () => {
@@ -262,7 +284,7 @@ const ProjectsPage: React.FC = () => {
   const editableProjectsCount = useMemo(
     () =>
       activeProjects.filter((project) =>
-        canProject(user, "project.save", project),
+        canProject(user, PERMISSION.PROJECT_SAVE, project),
       ).length,
     [activeProjects, user],
   );
@@ -270,7 +292,7 @@ const ProjectsPage: React.FC = () => {
   const readOnlyProjectsCount = useMemo(
     () =>
       activeProjects.filter(
-        (project) => !canProject(user, "project.save", project),
+        (project) => !canProject(user, PERMISSION.PROJECT_SAVE, project),
       ).length,
     [activeProjects, user],
   );
@@ -344,7 +366,11 @@ const ProjectsPage: React.FC = () => {
     return null;
   }
 
-  const canCreateMap = canUser(user, "project.create", organizationContext);
+  const canCreateMap = canUser(
+    user,
+    PERMISSION.PROJECT_CREATE,
+    organizationContext,
+  );
   const showWorkspaceTopbar = isWorkspaceSection(sidebarSection);
 
   return (
@@ -388,10 +414,10 @@ const ProjectsPage: React.FC = () => {
                 error={workspaceError}
                 favoriteBusySlugs={favoriteBusySlugs}
                 canProjectSave={(project) =>
-                  canProject(user, "project.save", project)
+                  canProject(user, PERMISSION.PROJECT_SAVE, project)
                 }
                 canProjectFavorite={(project) =>
-                  canProject(user, "project.favorite", project)
+                  canProject(user, PERMISSION.PROJECT_FAVORITE, project)
                 }
                 onFavoriteToggle={handleFavoriteToggle}
                 onRetry={() => loadWorkspaceSection(sidebarSection)}
@@ -401,6 +427,7 @@ const ProjectsPage: React.FC = () => {
                 section={sidebarSection}
                 projects={activeProjects}
                 user={user}
+                organizationId={activeOrganizationId}
                 editableProjectsCount={editableProjectsCount}
                 readOnlyProjectsCount={readOnlyProjectsCount}
               />
@@ -416,25 +443,41 @@ function ProjectsSectionRouter({
   section,
   projects,
   user,
+  organizationId,
   editableProjectsCount,
   readOnlyProjectsCount,
 }: {
   section: ProjectSidebarSection;
   projects: MaonoProject[];
   user: MaonoUser | null;
+  organizationId: number | string | null;
   editableProjectsCount: number;
   readOnlyProjectsCount: number;
 }) {
+  const accessControlUser = userAsAccessControlUser(user);
+
   switch (section) {
     case "files":
-      return <DocumentsSection projects={projects} />;
+      return (
+        <DocumentsSection
+          user={accessControlUser}
+          organizationId={organizationId}
+        />
+      );
 
     case "requests":
-      return <TicketsSection />;
+      return (
+        <TicketsSection
+          user={accessControlUser}
+          organizationId={organizationId}
+        />
+      );
 
     case "exports":
       return (
         <ExportsSection
+          user={accessControlUser}
+          organizationId={organizationId}
           editableProjectsCount={editableProjectsCount}
           readOnlyProjectsCount={readOnlyProjectsCount}
         />

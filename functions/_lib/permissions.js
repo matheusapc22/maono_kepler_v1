@@ -62,29 +62,6 @@ const PERMISSION_SET = new Set(PERMISSIONS);
 const PROJECT_VIEW_ACCESS_LEVELS = new Set(["viewer", "editor", "owner"]);
 const PROJECT_SAVE_ACCESS_LEVELS = new Set(["editor", "owner"]);
 
-const OWNER_ORGANIZATION_PERMISSIONS = new Set([
-  "project.view",
-  "project.favorite",
-  "document.view",
-  "ticket.view",
-  "ticket.create",
-  "ticket.comment",
-  "users.view",
-  "users.create",
-  "users.edit",
-  "users.disable",
-  "users.invite",
-  "users.manage_access",
-  "permission.grant",
-  "permission.revoke",
-  "organization.view",
-  "organization.edit",
-  "organization.metrics.view",
-  "plan.view",
-  "limits.view",
-  "limits.increase_request",
-]);
-
 const PROJECT_CONTEXT_PERMISSIONS = new Set([
   "project.view",
   "project.edit",
@@ -93,37 +70,87 @@ const PROJECT_CONTEXT_PERMISSIONS = new Set([
   "project.thumbnail.update",
 ]);
 
+const ORGANIZATION_PERMISSION_PREFIXES = [
+  "document.",
+  "ticket.",
+  "export.",
+];
+
+const OWNER_ORGANIZATION_PERMISSIONS = new Set([
+  "document.view",
+  "document.upload",
+  "document.download",
+  "document.delete",
+
+  "ticket.view",
+  "ticket.create",
+  "ticket.comment",
+
+  "export.view",
+  "export.create",
+  "export.download",
+
+  "users.view",
+  "users.create",
+  "users.edit",
+  "users.disable",
+  "users.invite",
+  "users.manage_access",
+
+  "permission.grant",
+  "permission.revoke",
+
+  "organization.view",
+  "organization.edit",
+  "organization.metrics.view",
+
+  "plan.view",
+  "limits.view",
+  "limits.increase_request",
+]);
+
+const VIEWER_EXPLICIT_ONLY_PERMISSIONS = new Set([
+  "export.download",
+]);
+
 const SENSITIVE_ACTIONS = new Set([
   "project.create",
   "project.edit",
   "project.save",
   "project.favorite",
   "project.thumbnail.update",
+
   "document.upload",
   "document.download",
   "document.edit",
   "document.delete",
   "document.manage",
+
   "ticket.create",
   "ticket.comment",
   "ticket.manage",
   "ticket.close",
   "ticket.assign",
+
   "export.create",
   "export.download",
   "export.manage",
+
   "users.create",
   "users.edit",
   "users.disable",
   "users.delete",
   "users.invite",
   "users.manage_access",
+
   "permission.grant",
   "permission.revoke",
   "role.assign",
+
   "organization.edit",
   "plan.change_request",
   "limits.increase_request",
+
   "admin.panel.access",
   "audit.export",
 ]);
@@ -149,9 +176,36 @@ function toId(value) {
   return String(value);
 }
 
+function toNumberOrString(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) && String(numberValue) === String(value)
+    ? numberValue
+    : value;
+}
+
 function normalizePermission(permission) {
   const value = String(permission || "").trim();
+
   return PERMISSION_SET.has(value) ? value : null;
+}
+
+function normalizeScopeType(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (
+    normalized === "global" ||
+    normalized === "organization" ||
+    normalized === "project"
+  ) {
+    return normalized;
+  }
+
+  return null;
 }
 
 function nowIso() {
@@ -177,6 +231,7 @@ async function optionalAll(env, sql, params = []) {
 
 async function optionalFirst(env, sql, params = []) {
   const rows = await optionalAll(env, sql, params);
+
   return rows[0] || null;
 }
 
@@ -185,6 +240,7 @@ async function optionalRun(env, sql, params = []) {
 
   try {
     const statement = db.prepare(sql);
+
     return params.length > 0
       ? await statement.bind(...params).run()
       : await statement.run();
@@ -204,6 +260,17 @@ function isExpiredPermission(row) {
 
 function normalizeAccessLevel(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function getUserOrganizationId(user) {
+  return (
+    toId(user?.activeOrganizationId) ||
+    toId(user?.organizationId) ||
+    toId(user?.organization_id) ||
+    toId(user?.organization?.id) ||
+    toId(user?.organization?.organizationId) ||
+    null
+  );
 }
 
 function getContextOrganizationId(context) {
@@ -234,6 +301,32 @@ function getContextProjectSlug(context) {
     context?.project?.slug ||
     null
   );
+}
+
+function isOrganizationScopedPermission(permission) {
+  return ORGANIZATION_PERMISSION_PREFIXES.some((prefix) =>
+    String(permission || "").startsWith(prefix),
+  );
+}
+
+function getContextScopeType(context) {
+  const explicitScopeType = normalizeScopeType(
+    context?.scopeType || context?.scope_type,
+  );
+
+  if (explicitScopeType) {
+    return explicitScopeType;
+  }
+
+  if (getContextProjectId(context) || getContextProjectSlug(context)) {
+    return "project";
+  }
+
+  if (getContextOrganizationId(context)) {
+    return "organization";
+  }
+
+  return "global";
 }
 
 async function getProjectContext(env, context = {}) {
@@ -298,6 +391,37 @@ async function getOrganizationMembership(env, userId, organizationId) {
   return membership;
 }
 
+async function getOrganizationRelation(env, user, organizationId) {
+  if (!user?.id || !organizationId) {
+    return {
+      isMember: false,
+      isOwner: false,
+      membership: null,
+    };
+  }
+
+  const userOrganizationId = getUserOrganizationId(user);
+  const sameUserOrganization = userOrganizationId === toId(organizationId);
+  const membership = await getOrganizationMembership(env, user.id, organizationId);
+
+  const membershipRole = normalizeRole(
+    membership?.role || membership?.access_level || "",
+  );
+  const membershipAccessLevel = normalizeAccessLevel(membership?.access_level);
+  const userRole = normalizeRole(user.role);
+
+  const isOwner =
+    membershipRole === "owner" ||
+    membershipAccessLevel === "owner" ||
+    (sameUserOrganization && userRole === "owner");
+
+  return {
+    isMember: Boolean(membership) || sameUserOrganization,
+    isOwner,
+    membership,
+  };
+}
+
 async function getProjectAccess(env, userId, projectId) {
   if (!userId || !projectId) {
     return null;
@@ -342,8 +466,8 @@ async function hasUserPermission(env, user, permission, context) {
       user.id,
       permission,
       nowIso(),
-      organizationId ? Number(organizationId) || organizationId : null,
-      projectId ? Number(projectId) || projectId : null,
+      organizationId ? toNumberOrString(organizationId) : null,
+      projectId ? toNumberOrString(projectId) : null,
     ],
   );
 
@@ -351,11 +475,7 @@ async function hasUserPermission(env, user, permission, context) {
 }
 
 async function hasRolePermission(env, role, permission, context) {
-  const scopeType = getContextProjectId(context)
-    ? "project"
-    : getContextOrganizationId(context)
-      ? "organization"
-      : "global";
+  const scopeType = getContextScopeType(context);
 
   const rows = await optionalAll(
     env,
@@ -396,33 +516,6 @@ function canProjectAccessLevel(permission, accessLevel) {
   return false;
 }
 
-async function ownerWithinOrganization(env, user, permission, context) {
-  if (!OWNER_ORGANIZATION_PERMISSIONS.has(permission)) {
-    return false;
-  }
-
-  const organizationId = getContextOrganizationId(context);
-
-  if (!organizationId) {
-    return false;
-  }
-
-  const membership = await getOrganizationMembership(env, user.id, organizationId);
-
-  if (!membership) {
-    return false;
-  }
-
-  const membershipRole = normalizeRole(
-    membership.role || membership.access_level || user.role,
-  );
-
-  return (
-    membershipRole === "owner" ||
-    normalizeAccessLevel(membership.access_level) === "owner"
-  );
-}
-
 async function projectMembershipAllows(env, user, permission, context, project) {
   if (!PROJECT_CONTEXT_PERMISSIONS.has(permission)) {
     return false;
@@ -441,14 +534,133 @@ async function projectMembershipAllows(env, user, permission, context, project) 
   return canProjectAccessLevel(permission, access.access_level);
 }
 
+async function organizationPermissionAllows(
+  env,
+  user,
+  role,
+  permission,
+  context,
+  explicitUserPermission,
+  configuredRolePermission,
+) {
+  const organizationId = getContextOrganizationId(context);
+
+  if (!organizationId) {
+    return {
+      allowed: false,
+      reason: "ORGANIZATION_CONTEXT_REQUIRED",
+    };
+  }
+
+  const relation = await getOrganizationRelation(env, user, organizationId);
+
+  /**
+   * Admin é configurável: não recebe acesso automático só por ser admin.
+   * Passa apenas se houver permissão granular de usuário ou de role.
+   */
+  if (role === "admin") {
+    return {
+      allowed: explicitUserPermission || configuredRolePermission,
+      reason:
+        explicitUserPermission || configuredRolePermission
+          ? "ADMIN_CONFIGURED_ORGANIZATION_PERMISSION"
+          : "ADMIN_REQUIRES_ORGANIZATION_PERMISSION",
+    };
+  }
+
+  /**
+   * Owner é limitado à própria organização e também precisa que a permissão
+   * exista na matriz configurada de role_permissions ou user_permissions.
+   */
+  if (role === "owner") {
+    if (!relation.isOwner) {
+      return {
+        allowed: false,
+        reason: "OWNER_OUTSIDE_ORGANIZATION",
+      };
+    }
+
+    if (!OWNER_ORGANIZATION_PERMISSIONS.has(permission)) {
+      return {
+        allowed: false,
+        reason: "OWNER_PERMISSION_NOT_ALLOWED",
+      };
+    }
+
+    return {
+      allowed: explicitUserPermission || configuredRolePermission,
+      reason:
+        explicitUserPermission || configuredRolePermission
+          ? "OWNER_ORGANIZATION_PERMISSION"
+          : "OWNER_REQUIRES_CONFIGURED_PERMISSION",
+    };
+  }
+
+  /**
+   * Editor e Viewer dependem de permissão granular e vínculo com a organização.
+   * Viewer nunca recebe export.download apenas por role_permissions padrão.
+   * Para export.download, Viewer precisa de user_permissions explícita.
+   */
+  if (role === "editor" || role === "viewer") {
+    if (!relation.isMember) {
+      return {
+        allowed: false,
+        reason: "USER_OUTSIDE_ORGANIZATION",
+      };
+    }
+
+    if (role === "viewer" && VIEWER_EXPLICIT_ONLY_PERMISSIONS.has(permission)) {
+      return {
+        allowed: explicitUserPermission,
+        reason: explicitUserPermission
+          ? "VIEWER_EXPLICIT_PERMISSION"
+          : "VIEWER_EXPLICIT_PERMISSION_REQUIRED",
+      };
+    }
+
+    return {
+      allowed: explicitUserPermission || configuredRolePermission,
+      reason:
+        explicitUserPermission || configuredRolePermission
+          ? "ORGANIZATION_GRANULAR_PERMISSION"
+          : "ORGANIZATION_GRANULAR_PERMISSION_REQUIRED",
+    };
+  }
+
+  return {
+    allowed: false,
+    reason: "ROLE_NOT_ALLOWED_FOR_ORGANIZATION_PERMISSION",
+  };
+}
+
+async function ownerWithinOrganization(env, user, permission, context) {
+  if (!OWNER_ORGANIZATION_PERMISSIONS.has(permission)) {
+    return false;
+  }
+
+  const organizationId = getContextOrganizationId(context);
+
+  if (!organizationId) {
+    return false;
+  }
+
+  const relation = await getOrganizationRelation(env, user, organizationId);
+
+  return relation.isOwner;
+}
+
 async function buildResolvedContext(env, context = {}) {
   const project = await getProjectContext(env, context);
   const organizationId =
     getContextOrganizationId(context) ||
     (project ? toId(project.organization_id) : null);
 
+  const scopeType = normalizeScopeType(context.scopeType || context.scope_type)
+    || (project ? "project" : organizationId ? "organization" : "global");
+
   return {
     ...context,
+    scopeType,
     project: project || context.project || null,
     projectId: project?.id || getContextProjectId(context),
     projectSlug: project?.slug || getContextProjectSlug(context),
@@ -508,6 +720,58 @@ export async function can(env, user, permission, context = {}) {
     resolvedContext,
   );
 
+  /**
+   * Project-scoped: accessLevel do vínculo user_projects deve valer para
+   * qualquer role global, inclusive admin escopado. Isso não concede admin
+   * global; apenas respeita vínculo explícito usuário-projeto.
+   */
+  const allowedByProjectMembership = await projectMembershipAllows(
+    env,
+    user,
+    normalizedPermission,
+    resolvedContext,
+    project,
+  );
+
+  if (allowedByProjectMembership) {
+    return {
+      allowed: true,
+      reason: "PROJECT_ACCESS_LEVEL",
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
+
+  /**
+   * Organization-scoped: documentos, chamados e exportações precisam de
+   * organização no contexto e validação granular. Frontend escondendo botão
+   * nunca substitui esta validação.
+   */
+  if (isOrganizationScopedPermission(normalizedPermission)) {
+    const organizationDecision = await organizationPermissionAllows(
+      env,
+      user,
+      role,
+      normalizedPermission,
+      resolvedContext,
+      explicitUserPermission,
+      configuredRolePermission,
+    );
+
+    return {
+      allowed: organizationDecision.allowed,
+      reason: organizationDecision.reason,
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
+
+  /**
+   * Admin continua configurável: passa apenas com permissão explícita ou
+   * role_permissions configurada. Não há bypass global por role=admin.
+   */
   if (role === "admin") {
     return {
       allowed: explicitUserPermission || configuredRolePermission,
@@ -525,26 +789,6 @@ export async function can(env, user, permission, context = {}) {
     return {
       allowed: true,
       reason: "USER_PERMISSION",
-      user,
-      permission: normalizedPermission,
-      context: resolvedContext,
-    };
-  }
-
-  if (
-    project &&
-    configuredRolePermission &&
-    await projectMembershipAllows(
-      env,
-      user,
-      normalizedPermission,
-      resolvedContext,
-      project,
-    )
-  ) {
-    return {
-      allowed: true,
-      reason: "PROJECT_ACCESS_LEVEL",
       user,
       permission: normalizedPermission,
       context: resolvedContext,
@@ -598,6 +842,7 @@ export async function requirePermission(
         resourceType: options.resourceType || inferResourceType(permission),
         resourceId:
           options.resourceId ||
+          decision.context?.resourceId ||
           decision.context?.projectSlug ||
           decision.context?.projectId ||
           decision.context?.organizationId ||
@@ -628,6 +873,7 @@ export async function requirePermission(
       resourceType: options.resourceType || inferResourceType(permission),
       resourceId:
         options.resourceId ||
+        decision.context?.resourceId ||
         decision.context?.projectSlug ||
         decision.context?.projectId ||
         decision.context?.organizationId ||
@@ -666,6 +912,35 @@ export async function requireProjectPermission(
     ...options,
     resourceType: options.resourceType || "project",
   });
+}
+
+export async function requireOrganizationPermission(
+  env,
+  request,
+  permission,
+  organizationIdOrContext,
+  options = {},
+) {
+  const context =
+    typeof organizationIdOrContext === "object"
+      ? organizationIdOrContext
+      : {
+          organizationId: organizationIdOrContext,
+        };
+
+  return requirePermission(
+    env,
+    request,
+    permission,
+    {
+      ...context,
+      scopeType: "organization",
+    },
+    {
+      ...options,
+      resourceType: options.resourceType || inferResourceType(permission),
+    },
+  );
 }
 
 export async function recordAuditLog(env, event) {
@@ -707,12 +982,15 @@ function inferResourceType(permission) {
   if (prefix === "document") return "document";
   if (prefix === "ticket") return "ticket";
   if (prefix === "export") return "export";
+
   if (prefix === "users" || prefix === "permission" || prefix === "role") {
     return "user";
   }
+
   if (prefix === "organization" || prefix === "limits" || prefix === "plan") {
     return "organization";
   }
+
   if (prefix === "admin" || prefix === "audit") return "platform";
 
   return "unknown";

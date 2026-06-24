@@ -30,6 +30,21 @@ function getDb(env) {
   return db;
 }
 
+async function optionalFirst(env, sql, params = []) {
+  const db = getDb(env);
+
+  try {
+    const statement = db.prepare(sql);
+
+    return params.length > 0
+      ? await statement.bind(...params).first()
+      : await statement.first();
+  } catch (error) {
+    console.warn("[Maono auth] Consulta opcional ignorada:", error.message);
+    return null;
+  }
+}
+
 function toHex(buffer) {
   return [...new Uint8Array(buffer)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -66,6 +81,14 @@ function constantTimeStringEqual(left, right) {
   }
 
   return diff === 0;
+}
+
+function toId(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return value;
 }
 
 export function normalizeEmail(email) {
@@ -199,6 +222,18 @@ function normalizeSessionUser(row) {
 
   const rawRole = row.role;
   const role = normalizeRole(rawRole);
+  const organizationId =
+    toId(row.organizationId) ||
+    toId(row.organization_id) ||
+    toId(row.activeOrganizationId) ||
+    toId(row.active_organization_id) ||
+    null;
+
+  const activeOrganizationId =
+    toId(row.activeOrganizationId) ||
+    toId(row.active_organization_id) ||
+    organizationId ||
+    null;
 
   return {
     id: row.id,
@@ -207,23 +242,41 @@ function normalizeSessionUser(row) {
     role,
     rawRole: rawRole && String(rawRole) !== role ? rawRole : undefined,
     active: row.active,
+    organizationId,
+    organization_id: organizationId,
+    activeOrganizationId,
+    active_organization_id: activeOrganizationId,
     expires_at: row.expires_at,
     sessionExpiresAt: row.expires_at,
   };
 }
 
-export async function getSessionUser(env, request) {
-  const token = getCookie(request, SESSION_COOKIE_NAME);
+async function getSessionUserWithOrganizationColumns(env, tokenHash, now) {
+  return optionalFirst(
+    env,
+    `SELECT
+      users.id,
+      users.email,
+      users.name,
+      users.role,
+      users.active,
+      users.organization_id,
+      users.active_organization_id,
+      sessions.expires_at
+    FROM sessions
+    INNER JOIN users ON users.id = sessions.user_id
+    WHERE sessions.token_hash = ?
+      AND sessions.expires_at > ?
+      AND users.active = 1
+    LIMIT 1`,
+    [tokenHash, now],
+  );
+}
 
-  if (!token) {
-    return null;
-  }
-
+async function getSessionUserBase(env, tokenHash, now) {
   const db = getDb(env);
-  const tokenHash = await sha256Hex(token);
-  const now = new Date().toISOString();
 
-  const result = await db
+  return db
     .prepare(
       `SELECT
         users.id,
@@ -241,6 +294,29 @@ export async function getSessionUser(env, request) {
     )
     .bind(tokenHash, now)
     .first();
+}
+
+export async function getSessionUser(env, request) {
+  const token = getCookie(request, SESSION_COOKIE_NAME);
+
+  if (!token) {
+    return null;
+  }
+
+  const tokenHash = await sha256Hex(token);
+  const now = new Date().toISOString();
+
+  const resultWithOrganization = await getSessionUserWithOrganizationColumns(
+    env,
+    tokenHash,
+    now,
+  );
+
+  if (resultWithOrganization) {
+    return normalizeSessionUser(resultWithOrganization);
+  }
+
+  const result = await getSessionUserBase(env, tokenHash, now);
 
   return normalizeSessionUser(result);
 }
@@ -277,6 +353,11 @@ export function canManagePlatform(user) {
  * Para salvar mapa, a regra-alvo é:
  * can(user, "project.save", { project, organization })
  * no backend em functions/_lib/permissions.js.
+ *
+ * Importante:
+ * Admin não recebe permissão automática de edição aqui.
+ * Se algum endpoint ainda depender deste wrapper para admin, ele deve ser
+ * migrado para requirePermission/requireProjectPermission.
  */
 export function canEditProject(user, accessLevel) {
   const role = normalizeRole(user?.role);
@@ -285,10 +366,6 @@ export function canEditProject(user, accessLevel) {
     .toLowerCase();
 
   if (role === "super_admin") {
-    return true;
-  }
-
-  if (role === "admin") {
     return true;
   }
 

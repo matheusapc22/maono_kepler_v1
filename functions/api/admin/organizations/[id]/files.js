@@ -1,4 +1,8 @@
-import { errorResponse, jsonResponse, methodNotAllowed } from "../../../../_lib/http.js";
+import {
+  errorResponse,
+  jsonResponse,
+  methodNotAllowed,
+} from "../../../../_lib/http.js";
 import { requireSession } from "../../../../_lib/auth.js";
 import {
   joinDropboxPath,
@@ -7,8 +11,10 @@ import {
 } from "../../../../_lib/dropbox.js";
 import { logAudit } from "../../../../_lib/projects.js";
 
+const ADMIN_ROLES = new Set(["super_admin", "admin"]);
+
 function requireAdmin(user) {
-  if (user?.role !== "admin") {
+  if (!ADMIN_ROLES.has(user?.role)) {
     const error = new Error("Apenas administradores podem acessar este recurso.");
     error.status = 403;
     error.code = "FORBIDDEN";
@@ -20,14 +26,34 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+function normalizeOrganizationId(value) {
+  const organizationId = Number(value);
+
+  if (!Number.isInteger(organizationId) || organizationId <= 0) {
+    return null;
+  }
+
+  return organizationId;
+}
+
 function inferFileType(fileName) {
   const lower = String(fileName || "").toLowerCase();
+
   if (lower.endsWith(".json")) return "json";
   if (lower.endsWith(".geojson")) return "geojson";
   if (lower.endsWith(".csv")) return "csv";
   if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) return "spreadsheet";
   if (lower.endsWith(".zip")) return "zip";
-  if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) return "image";
+
+  if (
+    lower.endsWith(".png") ||
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".webp")
+  ) {
+    return "image";
+  }
+
   return "other";
 }
 
@@ -46,7 +72,6 @@ function publicOrganizationFile(row) {
     organizationId: row.organization_id,
     name: row.name,
     fileName: row.file_name,
-    dropboxPath: row.dropbox_path,
     fileType: row.file_type,
     sizeBytes: row.size_bytes,
     isProject: Boolean(row.is_project),
@@ -57,23 +82,21 @@ function publicOrganizationFile(row) {
   };
 }
 
-function publicDropboxEntry(entry) {
+function publicAdminDropboxEntry(entry) {
   return {
     tag: entry[".tag"],
     name: entry.name,
-    pathLower: entry.path_lower,
-    pathDisplay: entry.path_display,
     id: entry.id,
     size: entry.size,
   };
 }
 
 async function getOrganization(env, organizationId) {
-  return await env.DB.prepare(
+  return env.DB.prepare(
     `SELECT id, name, slug, dropbox_root_path, active
      FROM organizations
      WHERE id = ?
-     LIMIT 1`
+     LIMIT 1`,
   )
     .bind(organizationId)
     .first();
@@ -90,7 +113,11 @@ async function listOrganizationFiles(env, organizationId) {
      FROM organization_files
      LEFT JOIN projects ON projects.organization_file_id = organization_files.id
      WHERE organization_files.organization_id = ?
-     ORDER BY organization_files.active DESC, organization_files.file_type ASC, organization_files.name ASC, projects.active DESC`
+     ORDER BY
+      organization_files.active DESC,
+      organization_files.file_type ASC,
+      organization_files.name ASC,
+      projects.active DESC`,
   )
     .bind(organizationId)
     .all();
@@ -100,6 +127,7 @@ async function listOrganizationFiles(env, organizationId) {
 
   for (const row of rows) {
     const previous = byFile.get(row.id);
+
     if (!previous || (!previous.project_active && row.project_active)) {
       byFile.set(row.id, row);
     }
@@ -113,7 +141,13 @@ async function upsertOrganizationFile(env, organization, file, requestedName) {
   const displayName = normalizeText(requestedName) || fileName;
 
   if (!fileName) {
-    return { error: errorResponse("O arquivo enviado não possui nome.", 400, "FILE_NAME_REQUIRED") };
+    return {
+      error: errorResponse(
+        "O arquivo enviado não possui nome.",
+        400,
+        "FILE_NAME_REQUIRED",
+      ),
+    };
   }
 
   const content = await file.arrayBuffer();
@@ -121,7 +155,12 @@ async function upsertOrganizationFile(env, organization, file, requestedName) {
   const fileType = inferFileType(fileName);
   const sizeBytes = Number(file.size || content.byteLength || 0);
 
-  await uploadDropboxTextFile(env, organization.dropbox_root_path, fileName, content);
+  await uploadDropboxTextFile(
+    env,
+    organization.dropbox_root_path,
+    fileName,
+    content,
+  );
 
   const savedFile = await env.DB.prepare(
     `INSERT INTO organization_files (
@@ -142,9 +181,16 @@ async function upsertOrganizationFile(env, organization, file, requestedName) {
       size_bytes = excluded.size_bytes,
       active = 1,
       updated_at = CURRENT_TIMESTAMP
-    RETURNING *`
+    RETURNING *`,
   )
-    .bind(organization.id, displayName, fileName, dropboxPath, fileType, sizeBytes)
+    .bind(
+      organization.id,
+      displayName,
+      fileName,
+      dropboxPath,
+      fileType,
+      sizeBytes,
+    )
     .first();
 
   return { file: savedFile };
@@ -157,19 +203,40 @@ export async function onRequest(context) {
     const user = await requireSession(env, request);
     requireAdmin(user);
 
-    const organizationId = Number(params.id);
+    const organizationId = normalizeOrganizationId(params.id);
+
     if (!organizationId) {
-      return errorResponse("ID da organização inválido.", 400, "ORGANIZATION_ID_INVALID");
+      return errorResponse(
+        "ID da organização inválido.",
+        400,
+        "ORGANIZATION_ID_INVALID",
+      );
     }
 
     const organization = await getOrganization(env, organizationId);
+
     if (!organization) {
-      return errorResponse("Organização não encontrada.", 404, "ORGANIZATION_NOT_FOUND");
+      return errorResponse(
+        "Organização não encontrada.",
+        404,
+        "ORGANIZATION_NOT_FOUND",
+      );
+    }
+
+    if (!organization.active) {
+      return errorResponse(
+        "Organização inativa.",
+        403,
+        "ORGANIZATION_INACTIVE",
+      );
     }
 
     if (request.method === "GET") {
       const files = await listOrganizationFiles(env, organizationId);
-      const dropbox = await listDropboxFolder(env, organization.dropbox_root_path);
+      const dropbox = await listDropboxFolder(
+        env,
+        organization.dropbox_root_path,
+      );
 
       return jsonResponse({
         ok: true,
@@ -177,11 +244,10 @@ export async function onRequest(context) {
           id: organization.id,
           name: organization.name,
           slug: organization.slug,
-          dropboxRootPath: organization.dropbox_root_path,
           active: Boolean(organization.active),
         },
         files: files.map(publicOrganizationFile),
-        dropboxEntries: (dropbox.entries || []).map(publicDropboxEntry),
+        dropboxEntries: (dropbox.entries || []).map(publicAdminDropboxEntry),
       });
     }
 
@@ -191,11 +257,23 @@ export async function onRequest(context) {
       const name = normalizeText(form.get("name"));
 
       if (!file || typeof file.arrayBuffer !== "function") {
-        return errorResponse("Envie um arquivo para a organização.", 400, "ORGANIZATION_FILE_REQUIRED");
+        return errorResponse(
+          "Envie um arquivo para a organização.",
+          400,
+          "ORGANIZATION_FILE_REQUIRED",
+        );
       }
 
-      const { file: savedFile, error } = await upsertOrganizationFile(env, organization, file, name);
-      if (error) return error;
+      const { file: savedFile, error } = await upsertOrganizationFile(
+        env,
+        organization,
+        file,
+        name,
+      );
+
+      if (error) {
+        return error;
+      }
 
       await logAudit(env, {
         userId: user.id,
@@ -203,15 +281,27 @@ export async function onRequest(context) {
         details: {
           organizationId: organization.id,
           fileId: savedFile.id,
-          dropboxPath: savedFile.dropbox_path,
+          fileName: savedFile.file_name,
+          fileType: savedFile.file_type,
+          sizeBytes: savedFile.size_bytes,
         },
       });
 
-      return jsonResponse({ ok: true, file: publicOrganizationFile(savedFile) }, { status: 201 });
+      return jsonResponse(
+        {
+          ok: true,
+          file: publicOrganizationFile(savedFile),
+        },
+        { status: 201 },
+      );
     }
 
     return methodNotAllowed(["GET", "POST"]);
   } catch (error) {
-    return errorResponse(error.message, error.status || 500, error.code || "ADMIN_ORGANIZATION_FILES_ERROR");
+    return errorResponse(
+      error.message,
+      error.status || 500,
+      error.code || "ADMIN_ORGANIZATION_FILES_ERROR",
+    );
   }
 }

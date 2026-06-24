@@ -6,7 +6,7 @@ import {
   type AccessControlUser,
   type PermissionContext,
 } from "../access-control/can";
-import type { Permission } from "../access-control/permissions";
+import { PERMISSION, type Permission } from "../access-control/permissions";
 import Logo from "../assets/images/Logo_Maono.png";
 import type { MaonoUser } from "../auth/session";
 
@@ -88,7 +88,9 @@ function buildPermissionContext(user: MaonoUser | null): PermissionContext {
     sidebarUser.organizationId ??
     sidebarUser.organization_id ??
     sidebarUser.activeOrganization?.id ??
+    sidebarUser.activeOrganization?.organizationId ??
     sidebarUser.organization?.id ??
+    sidebarUser.organization?.organizationId ??
     undefined;
 
   return {
@@ -146,19 +148,19 @@ function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
           key: "files",
           label: "Arquivos e Documentos",
           icon: "▤",
-          permission: "document.view",
+          permission: PERMISSION.DOCUMENT_VIEW,
         },
         {
           key: "requests",
           label: "Central de Chamados",
           icon: "◇",
-          permission: "ticket.view",
+          permission: PERMISSION.TICKET_VIEW,
         },
         {
           key: "exports",
           label: "Exportações",
           icon: "⇩",
-          permission: "export.view",
+          permission: PERMISSION.EXPORT_VIEW,
         },
       ],
     },
@@ -169,19 +171,19 @@ function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
           key: "users",
           label: "Usuários e Acessos",
           icon: "☷",
-          permission: "users.view",
+          permission: PERMISSION.USERS_VIEW,
         },
         {
           key: "organization",
           label: "Organização",
           icon: "▥",
-          permission: "organization.view",
+          permission: PERMISSION.ORGANIZATION_VIEW,
         },
         {
           key: "limits",
           label: "Limites e Planos",
           icon: "▧",
-          permission: "limits.view",
+          permission: PERMISSION.LIMITS_VIEW,
         },
       ],
     },
@@ -192,13 +194,13 @@ function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
           label: "Painel Admin",
           icon: "♛",
           href: "/admin",
-          permission: "admin.panel.access",
+          permission: PERMISSION.ADMIN_PANEL_ACCESS,
         },
         {
           key: "audit",
           label: "Auditoria",
           icon: "◌",
-          permission: "audit.view",
+          permission: PERMISSION.AUDIT_VIEW,
         },
       ],
     },
@@ -238,9 +240,9 @@ function ItemButton({
 
       <span className="mm-sidebar-label">{item.label}</span>
 
-      {typeof item.count === "number" && (
+      {typeof item.count === "number" ? (
         <span className="mm-sidebar-count">{item.count}</span>
-      )}
+      ) : null}
     </>
   );
 
@@ -326,7 +328,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
           </button>
         </div>
 
-        {expanded && (
+        {expanded ? (
           <div className="mm-sidebar-user">
             <div className="mm-sidebar-avatar" aria-hidden="true">
               {getInitials(user?.name || user?.email)}
@@ -337,9 +339,9 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
               <span>{user?.email}</span>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {expanded && (
+        {expanded ? (
           <div className="mm-sidebar-search">
             <span aria-hidden="true">⌕</span>
             <input
@@ -349,7 +351,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
               aria-label="Buscar projetos"
             />
           </div>
-        )}
+        ) : null}
       </div>
 
       <nav className="mm-sidebar-nav" aria-label="Navegação da área de projetos">
@@ -380,12 +382,12 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
       </nav>
 
       <div className="mm-sidebar-footer">
-        {expanded && (
+        {expanded ? (
           <>
             <strong>Maõno Maps</strong>
             <span>{normalizeRoleLabel(user?.role)} · central geográfica</span>
           </>
-        )}
+        ) : null}
 
         <button
           type="button"

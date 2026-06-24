@@ -1069,3 +1069,173 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   12. SPRINT 7 — ORGANIZAÇÃO: DOCUMENTOS, CHAMADOS E EXPORTAÇÕES
+========================================================= */
+
+.projects-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.projects-section-header h2 {
+  margin: 0 0 8px;
+}
+
+.projects-section-header p {
+  margin: 0;
+  color: var(--mm-text-soft);
+}
+
+.projects-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projects-empty-state {
+  margin-top: 14px;
+  border: 1px dashed var(--mm-border-strong);
+  border-radius: var(--mm-radius-lg);
+  padding: 22px;
+  background: rgba(14, 17, 22, 0.72);
+  color: var(--mm-muted);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.projects-inline-form {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-lg);
+  background: #0b0f15;
+}
+
+.projects-inline-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--mm-text-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.projects-inline-form input,
+.projects-inline-form textarea,
+.projects-inline-form select,
+.mm-table-wrap select {
+  width: 100%;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: var(--mm-radius-md);
+  padding: 9px 10px;
+  background: var(--mm-bg-soft);
+  color: var(--mm-text);
+  font: inherit;
+  outline: none;
+}
+
+.projects-inline-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.projects-inline-form input:focus,
+.projects-inline-form textarea:focus,
+.projects-inline-form select:focus,
+.mm-table-wrap select:focus {
+  border-color: rgba(242, 199, 102, 0.7);
+  box-shadow: 0 0 0 3px rgba(214, 168, 79, 0.14);
+}
+
+.mm-error-text {
+  margin: 12px 0;
+  color: #fecaca;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mm-button {
+  min-height: 34px;
+  border: 1px solid rgba(214, 168, 79, 0.46);
+  border-radius: var(--mm-radius-md);
+  padding: 8px 12px;
+  background: #16140d;
+  color: var(--mm-gold-bright);
+  font-weight: 900;
+  font-size: 12px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.mm-button:hover {
+  border-color: rgba(242, 199, 102, 0.72);
+  background: #1e1a10;
+}
+
+.mm-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.mm-button.secondary {
+  background: rgba(214, 168, 79, 0.08);
+  color: var(--mm-gold-bright);
+  border-color: rgba(214, 168, 79, 0.36);
+}
+
+.mm-button.ghost {
+  min-height: 30px;
+  padding: 6px 10px;
+  background: var(--mm-surface);
+  color: var(--mm-text-soft);
+  border-color: var(--mm-border);
+}
+
+.mm-button.ghost:hover {
+  color: var(--mm-text);
+  background: var(--mm-surface-2);
+}
+
+.mm-button.danger {
+  min-height: 30px;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.34);
+}
+
+.mm-button.danger:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.48);
+}
+
+@media (max-width: 760px) {
+  .projects-section-header {
+    display: grid;
+    gap: 12px;
+  }
+
+  .projects-inline-form {
+    padding: 14px;
+  }
+
+  .projects-row-actions {
+    align-items: stretch;
+  }
+
+  .projects-row-actions .mm-button {
+    width: 100%;
+  }
+}

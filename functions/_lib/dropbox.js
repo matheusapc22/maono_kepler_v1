@@ -4,33 +4,74 @@ const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
 const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
 const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder";
-const DROPBOX_CREATE_FOLDER_URL = "https://api.dropboxapi.com/2/files/create_folder_v2";
+const DROPBOX_CREATE_FOLDER_URL =
+  "https://api.dropboxapi.com/2/files/create_folder_v2";
 const DROPBOX_DELETE_URL = "https://api.dropboxapi.com/2/files/delete_v2";
 const DROPBOX_UPLOAD_CONTENT_TYPE = "application/octet-stream";
 
 export function normalizeDropboxFolderPath(path) {
   const cleanPath = String(path || "").trim().replace(/\/+$/g, "");
-  if (!cleanPath || cleanPath === "/") return "";
+
+  if (!cleanPath || cleanPath === "/") {
+    return "";
+  }
+
   return cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
 }
 
 export function normalizeDropboxPath(path) {
   const cleanPath = String(path || "").trim().replace(/\/+$/g, "");
-  if (!cleanPath || cleanPath === "/") return "";
+
+  if (!cleanPath || cleanPath === "/") {
+    return "";
+  }
+
   return cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+}
+
+export function normalizeDropboxFileName(fileName) {
+  const cleanFileName = String(fileName || "").trim().replace(/^\/+/, "");
+
+  if (!cleanFileName) {
+    const error = new Error("Nome de arquivo Dropbox obrigatório.");
+    error.status = 400;
+    error.code = "DROPBOX_FILE_NAME_REQUIRED";
+    throw error;
+  }
+
+  if (
+    cleanFileName.includes("/") ||
+    cleanFileName.includes("\\") ||
+    cleanFileName === "." ||
+    cleanFileName === ".." ||
+    cleanFileName.includes("..") ||
+    /[\u0000-\u001f]/.test(cleanFileName)
+  ) {
+    const error = new Error("Nome de arquivo Dropbox inválido.");
+    error.status = 400;
+    error.code = "DROPBOX_FILE_NAME_INVALID";
+    throw error;
+  }
+
+  return cleanFileName;
 }
 
 export function joinDropboxPath(rootPath, fileName) {
   const cleanRoot = normalizeDropboxFolderPath(rootPath);
-  const cleanFile = String(fileName || "").replace(/^\/+/, "");
+  const cleanFile = normalizeDropboxFileName(fileName);
+
   return `${cleanRoot}/${cleanFile}`;
 }
 
-export function getPreviewFileNameFromConfigFile(fileName = "config.kepler.json") {
-  const cleanFile = String(fileName || "config.kepler.json").replace(/^\/+/, "");
+export function getPreviewFileNameFromConfigFile(
+  fileName = "config.kepler.json",
+) {
+  const cleanFile = normalizeDropboxFileName(fileName);
+
   if (/\.json$/i.test(cleanFile)) {
     return cleanFile.replace(/\.json$/i, ".png");
   }
+
   return `${cleanFile}.png`;
 }
 
@@ -57,16 +98,23 @@ async function getDropboxAccessToken(env) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Falha ao renovar token Dropbox: ${response.status} ${text}`);
+
+    throw new Error(
+      `Falha ao renovar token Dropbox: ${response.status} ${text}`,
+    );
   }
 
   const data = await response.json();
+
   return data.access_token;
 }
 
 async function createDropboxFolderWithToken(accessToken, path) {
   const normalizedPath = normalizeDropboxFolderPath(path);
-  if (!normalizedPath) return null;
+
+  if (!normalizedPath) {
+    return null;
+  }
 
   const response = await fetch(DROPBOX_CREATE_FOLDER_URL, {
     method: "POST",
@@ -90,13 +138,18 @@ async function createDropboxFolderWithToken(accessToken, path) {
     return null;
   }
 
-  throw new Error(`Falha ao criar pasta Dropbox ${normalizedPath}: ${response.status} ${text}`);
+  throw new Error(
+    `Falha ao criar pasta Dropbox ${normalizedPath}: ${response.status} ${text}`,
+  );
 }
 
 export async function ensureDropboxFolder(env, path) {
   const accessToken = await getDropboxAccessToken(env);
   const normalizedPath = normalizeDropboxFolderPath(path);
-  if (!normalizedPath) return null;
+
+  if (!normalizedPath) {
+    return null;
+  }
 
   const parts = normalizedPath.split("/").filter(Boolean);
   let current = "";
@@ -131,7 +184,10 @@ export async function listDropboxFolder(env, path = "") {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Falha ao listar pasta Dropbox ${normalizedPath || "/"}: ${response.status} ${text}`);
+
+    throw new Error(
+      `Falha ao listar pasta Dropbox ${normalizedPath || "/"}: ${response.status} ${text}`,
+    );
   }
 
   return await response.json();
@@ -156,7 +212,10 @@ export async function deleteDropboxPath(env, path) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Falha ao excluir caminho Dropbox ${normalizedPath}: ${response.status} ${text}`);
+
+    throw new Error(
+      `Falha ao excluir caminho Dropbox ${normalizedPath}: ${response.status} ${text}`,
+    );
   }
 
   return await response.json();
@@ -167,15 +226,18 @@ export async function deleteDropboxPathIfExists(env, path) {
     return await deleteDropboxPath(env, path);
   } catch (error) {
     const message = String(error?.message || "");
+
     if (message.includes("path/not_found") || message.includes("not_found")) {
       return null;
     }
+
     throw error;
   }
 }
 
 export async function downloadDropboxTextFile(env, rootPath, fileName) {
   const response = await downloadDropboxBinaryFile(env, rootPath, fileName);
+
   return await response.text();
 }
 
@@ -193,7 +255,10 @@ export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
 
   if (!response.ok) {
     const text = await response.text();
-    const error = new Error(`Falha ao baixar arquivo Dropbox ${path}: ${response.status} ${text}`);
+    const error = new Error(
+      `Falha ao baixar arquivo Dropbox ${path}: ${response.status} ${text}`,
+    );
+
     error.status = response.status;
     throw error;
   }
@@ -212,14 +277,17 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content) 
   await ensureDropboxFolder(env, normalizedRootPath);
 
   const accessToken = await getDropboxAccessToken(env);
+
   const response = await fetch(DROPBOX_UPLOAD_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      // A API /2/files/upload do Dropbox aceita apenas application/octet-stream
-      // ou text/plain; charset=dropbox-cors-hack. Não envie application/json
-      // nem image/png aqui; o tipo real é inferido pelo nome/extensão do arquivo.
+
+      // A API /2/files/upload do Dropbox aceita application/octet-stream.
+      // Não envie application/json nem image/png aqui; o tipo real é inferido
+      // pelo nome/extensão do arquivo.
       "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
+
       "Dropbox-API-Arg": JSON.stringify({
         path,
         mode: "overwrite",
@@ -233,7 +301,10 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content) 
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Falha ao enviar arquivo Dropbox ${path}: ${response.status} ${text}`);
+
+    throw new Error(
+      `Falha ao enviar arquivo Dropbox ${path}: ${response.status} ${text}`,
+    );
   }
 
   return await response.json();
