@@ -64,6 +64,104 @@ export type OrganizationExport = {
   updatedAt?: string;
 };
 
+export type OrganizationUser = {
+  id: number | string;
+  organizationId: number | string;
+  name?: string;
+  email?: string;
+  role?: "super_admin" | "admin" | "owner" | "editor" | "viewer" | "client" | string;
+  accessLevel?: "owner" | "editor" | "viewer" | string;
+  active?: boolean;
+  permissions?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+  membershipCreatedAt?: string;
+};
+
+export type CreateOrganizationUserPayload = {
+  name: string;
+  email: string;
+  role?: "owner" | "editor" | "viewer" | "admin" | "super_admin" | string;
+  accessLevel?: "owner" | "editor" | "viewer" | string;
+  active?: boolean;
+};
+
+export type UpdateOrganizationUserPayload = {
+  name?: string;
+  fullName?: string;
+  active?: boolean;
+  role?: "owner" | "editor" | "viewer" | "admin" | "super_admin" | string;
+  accessLevel?: "owner" | "editor" | "viewer" | string;
+  access_level?: "owner" | "editor" | "viewer" | string;
+};
+
+export type OrganizationUserPermissionGrant = {
+  id?: number | string;
+  organizationId?: number | string;
+  userId?: number | string;
+  permission?: string;
+  createdAt?: string;
+};
+
+export type OrganizationUserPermissionRevoke = {
+  organizationId?: number | string;
+  userId?: number | string;
+  permission?: string;
+  revoked?: boolean;
+};
+
+export type OrganizationMetrics = {
+  users: number;
+  projects: number;
+  files: number;
+  tickets: number;
+  exports: number;
+};
+
+export type OrganizationDetails = {
+  id: number | string;
+  name?: string;
+  slug?: string;
+  active?: boolean;
+  plan?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  metrics?: OrganizationMetrics;
+};
+
+export type OrganizationLimitCounter = {
+  used: number;
+  limit: number;
+};
+
+export type OrganizationLimits = {
+  plan: string;
+  users: OrganizationLimitCounter;
+  projects: OrganizationLimitCounter;
+  storageMb: OrganizationLimitCounter;
+  exports: OrganizationLimitCounter;
+};
+
+export type OrganizationLimitRequest = {
+  id: number | string;
+  organizationId?: number | string;
+  requestType?: string;
+  requestedPlan?: string | null;
+  requestedLimits?: Record<string, unknown> | null;
+  reason?: string | null;
+  requestedBy?: number | string | null;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CreateOrganizationLimitRequestPayload = {
+  requestType: string;
+  requestedPlan?: string | null;
+  requestedLimits?: Record<string, unknown> | null;
+  reason?: string;
+};
+
 export type DownloadResponse = {
   blob: Blob;
   fileName: string | null;
@@ -73,24 +171,38 @@ export type DownloadResponse = {
 type ApiErrorPayload = {
   error?: unknown;
   message?: unknown;
+  code?: unknown;
 };
 
 type JsonValue = unknown;
 
 class ApiError extends Error {
   status: number;
+  code?: string;
   payload: unknown;
 
-  constructor(message: string, status: number, payload: unknown) {
+  constructor(message: string, status: number, payload: unknown, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
     this.payload = payload;
   }
 }
 
 function pathSegment(value: number | string): string {
   return encodeURIComponent(String(value));
+}
+
+function organizationPath(organizationId: number | string): string {
+  return `/api/organizations/${pathSegment(organizationId)}`;
+}
+
+function organizationUserPath(
+  organizationId: number | string,
+  userId: number | string,
+): string {
+  return `${organizationPath(organizationId)}/users/${pathSegment(userId)}`;
 }
 
 function parseJsonSafely(text: string): JsonValue {
@@ -134,12 +246,59 @@ function getErrorMessage(payload: unknown, status: number): string {
   return `Erro HTTP ${status}`;
 }
 
+function getErrorCode(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+
+  const data = payload as ApiErrorPayload;
+
+  if (typeof data.code === "string" && data.code.trim()) {
+    return data.code;
+  }
+
+  if (
+    data.error &&
+    typeof data.error === "object" &&
+    "code" in data.error &&
+    typeof (data.error as { code?: unknown }).code === "string"
+  ) {
+    return (data.error as { code: string }).code;
+  }
+
+  return undefined;
+}
+
+function buildHeaders(
+  initHeaders: HeadersInit | undefined,
+  options: {
+    json?: boolean;
+  } = {},
+): Headers {
+  const headers = new Headers(initHeaders);
+
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
+
+  if (options.json && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return headers;
+}
+
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   const data = parseJsonSafely(text);
 
   if (!response.ok) {
-    throw new ApiError(getErrorMessage(data, response.status), response.status, data);
+    throw new ApiError(
+      getErrorMessage(data, response.status),
+      response.status,
+      data,
+      getErrorCode(data),
+    );
   }
 
   return data as T;
@@ -149,10 +308,9 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...init,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
+    headers: buildHeaders(init.headers, {
+      json: true,
+    }),
   });
 
   return parseJsonResponse<T>(response);
@@ -168,9 +326,7 @@ async function requestFormDataJson<T>(
     method: "POST",
     credentials: "include",
     body: formData,
-    headers: {
-      ...(init.headers || {}),
-    },
+    headers: buildHeaders(init.headers),
   });
 
   return parseJsonResponse<T>(response);
@@ -190,7 +346,12 @@ async function requestDownload(
     const text = await response.text();
     const data = parseJsonSafely(text);
 
-    throw new ApiError(getErrorMessage(data, response.status), response.status, data);
+    throw new ApiError(
+      getErrorMessage(data, response.status),
+      response.status,
+      data,
+      getErrorCode(data),
+    );
   }
 
   const blob = await response.blob();
@@ -266,7 +427,7 @@ export function saveProjectConfig(projectSlug: string, config: unknown) {
 
 export function listOrganizationFiles(organizationId: number | string) {
   return requestJson<{ ok: boolean; files: OrganizationFile[] }>(
-    `/api/organizations/${pathSegment(organizationId)}/files`,
+    `${organizationPath(organizationId)}/files`,
   );
 }
 
@@ -275,7 +436,7 @@ export function uploadOrganizationFile(
   formData: FormData,
 ) {
   return requestFormDataJson<{ ok: boolean; file: OrganizationFile }>(
-    `/api/organizations/${pathSegment(organizationId)}/files`,
+    `${organizationPath(organizationId)}/files`,
     formData,
   );
 }
@@ -285,9 +446,7 @@ export function downloadOrganizationFile(
   fileId: number | string,
 ) {
   return requestDownload(
-    `/api/organizations/${pathSegment(organizationId)}/files/${pathSegment(
-      fileId,
-    )}/download`,
+    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}/download`,
   );
 }
 
@@ -296,7 +455,7 @@ export function deleteOrganizationFile(
   fileId: number | string,
 ) {
   return requestJson<{ ok: boolean; deleted: boolean }>(
-    `/api/organizations/${pathSegment(organizationId)}/files/${pathSegment(fileId)}`,
+    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}`,
     {
       method: "DELETE",
     },
@@ -305,7 +464,7 @@ export function deleteOrganizationFile(
 
 export function listOrganizationTickets(organizationId: number | string) {
   return requestJson<{ ok: boolean; tickets: OrganizationTicket[] }>(
-    `/api/organizations/${pathSegment(organizationId)}/tickets`,
+    `${organizationPath(organizationId)}/tickets`,
   );
 }
 
@@ -318,7 +477,7 @@ export function createOrganizationTicket(
   },
 ) {
   return requestJson<{ ok: boolean; ticket: OrganizationTicket }>(
-    `/api/organizations/${pathSegment(organizationId)}/tickets`,
+    `${organizationPath(organizationId)}/tickets`,
     {
       method: "POST",
       body: JSON.stringify(payload),
@@ -335,9 +494,7 @@ export function updateOrganizationTicket(
   },
 ) {
   return requestJson<{ ok: boolean; ticket: OrganizationTicket }>(
-    `/api/organizations/${pathSegment(organizationId)}/tickets/${pathSegment(
-      ticketId,
-    )}`,
+    `${organizationPath(organizationId)}/tickets/${pathSegment(ticketId)}`,
     {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -347,7 +504,7 @@ export function updateOrganizationTicket(
 
 export function listOrganizationExports(organizationId: number | string) {
   return requestJson<{ ok: boolean; exports: OrganizationExport[] }>(
-    `/api/organizations/${pathSegment(organizationId)}/exports`,
+    `${organizationPath(organizationId)}/exports`,
   );
 }
 
@@ -359,10 +516,104 @@ export function createOrganizationExport(
   },
 ) {
   return requestJson<{ ok: boolean; export: OrganizationExport }>(
-    `/api/organizations/${pathSegment(organizationId)}/exports`,
+    `${organizationPath(organizationId)}/exports`,
     {
       method: "POST",
       body: JSON.stringify(payload),
     },
   );
 }
+
+export function listOrganizationUsers(organizationId: number | string) {
+  return requestJson<{ ok: boolean; users: OrganizationUser[] }>(
+    `${organizationPath(organizationId)}/users`,
+  );
+}
+
+export function createOrganizationUser(
+  organizationId: number | string,
+  payload: CreateOrganizationUserPayload,
+) {
+  return requestJson<{ ok: boolean; user: OrganizationUser }>(
+    `${organizationPath(organizationId)}/users`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function updateOrganizationUser(
+  organizationId: number | string,
+  userId: number | string,
+  payload: UpdateOrganizationUserPayload,
+) {
+  return requestJson<{ ok: boolean; user: OrganizationUser }>(
+    organizationUserPath(organizationId, userId),
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function grantOrganizationUserPermission(
+  organizationId: number | string,
+  userId: number | string,
+  permission: string,
+) {
+  return requestJson<{ ok: boolean; grant: OrganizationUserPermissionGrant }>(
+    `${organizationUserPath(organizationId, userId)}/permissions`,
+    {
+      method: "POST",
+      body: JSON.stringify({ permission }),
+    },
+  );
+}
+
+export function revokeOrganizationUserPermission(
+  organizationId: number | string,
+  userId: number | string,
+  permission: string,
+) {
+  return requestJson<{ ok: boolean; revoke: OrganizationUserPermissionRevoke }>(
+    `${organizationUserPath(organizationId, userId)}/permissions/${pathSegment(
+      permission,
+    )}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+export function getOrganization(organizationId: number | string) {
+  return requestJson<{ ok: boolean; organization: OrganizationDetails }>(
+    organizationPath(organizationId),
+  );
+}
+
+export function getOrganizationLimits(organizationId: number | string) {
+  return requestJson<{
+    ok: boolean;
+    limits: OrganizationLimits;
+    pendingRequests: OrganizationLimitRequest[];
+  }>(`${organizationPath(organizationId)}/limits`);
+}
+
+export function createOrganizationLimitRequest(
+  organizationId: number | string,
+  payload: CreateOrganizationLimitRequestPayload,
+) {
+  return requestJson<{
+    ok: boolean;
+    request: {
+      id: number | string;
+      status: string;
+    };
+  }>(`${organizationPath(organizationId)}/limits/requests`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export { ApiError };

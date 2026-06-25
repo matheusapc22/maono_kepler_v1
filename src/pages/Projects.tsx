@@ -45,6 +45,39 @@ const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = 
   backend: PERMISSION.ADMIN_PANEL_ACCESS,
 };
 
+type ManagementSectionProps = {
+  user: MaonoUser | null;
+  organizationId: number | string | null;
+  projects: MaonoProject[];
+  projectsCount: number;
+};
+
+/**
+ * Adaptadores temporários para permitir que o router já passe organizationId
+ * e projects sem obrigar todos os componentes da Sprint 8 a consumirem essas
+ * props imediatamente.
+ */
+const UsersAccessSectionWithProps =
+  UsersAccessSection as React.ComponentType<
+    Pick<ManagementSectionProps, "user" | "organizationId" | "projects">
+  >;
+
+const OrganizationSectionWithProps =
+  OrganizationSection as React.ComponentType<
+    Pick<
+      ManagementSectionProps,
+      "user" | "organizationId" | "projects" | "projectsCount"
+    >
+  >;
+
+const LimitsPlansSectionWithProps =
+  LimitsPlansSection as React.ComponentType<
+    Pick<
+      ManagementSectionProps,
+      "user" | "organizationId" | "projects" | "projectsCount"
+    >
+  >;
+
 function isWorkspaceSection(
   section: ProjectSidebarSection,
 ): section is WorkspaceSectionKey {
@@ -455,6 +488,22 @@ function ProjectsSectionRouter({
   readOnlyProjectsCount: number;
 }) {
   const accessControlUser = userAsAccessControlUser(user);
+  const requiredPermission = SECTION_PERMISSIONS[section];
+
+  if (
+    requiredPermission &&
+    !canUser(user, requiredPermission, buildOrganizationContext(user))
+  ) {
+    return (
+      <section className="mm-empty-state">
+        <div>▧</div>
+        <h2>Acesso restrito</h2>
+        <p>
+          Você não possui permissão para acessar esta seção da organização.
+        </p>
+      </section>
+    );
+  }
 
   switch (section) {
     case "files":
@@ -484,13 +533,33 @@ function ProjectsSectionRouter({
       );
 
     case "users":
-      return <UsersAccessSection user={user} />;
+      return (
+        <UsersAccessSectionWithProps
+          user={user}
+          organizationId={organizationId}
+          projects={projects}
+        />
+      );
 
     case "organization":
-      return <OrganizationSection user={user} projectsCount={projects.length} />;
+      return (
+        <OrganizationSectionWithProps
+          user={user}
+          organizationId={organizationId}
+          projects={projects}
+          projectsCount={projects.length}
+        />
+      );
 
     case "limits":
-      return <LimitsPlansSection user={user} projectsCount={projects.length} />;
+      return (
+        <LimitsPlansSectionWithProps
+          user={user}
+          organizationId={organizationId}
+          projects={projects}
+          projectsCount={projects.length}
+        />
+      );
 
     case "audit":
       return <AuditShortcutSection />;

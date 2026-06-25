@@ -35,26 +35,63 @@ const PUBLIC_PERMISSION_SET = new Set([
   "ticket.create",
   "ticket.manage",
 
+  "export.view",
+  "export.create",
+  "export.download",
+
   "users.view",
   "users.create",
+  "users.edit",
+  "users.disable",
   "users.manage_access",
 
   "permission.grant",
   "permission.revoke",
 
+  "role.assign",
+
   "organization.view",
   "organization.edit",
+  "organization.metrics.view",
 
   "limits.view",
   "limits.increase_request",
 
   "admin.panel.access",
   "audit.view",
+]);
+
+const OWNER_DEFAULT_PERMISSIONS = [
+  "document.view",
+  "document.upload",
+  "document.download",
+  "document.delete",
+
+  "ticket.view",
+  "ticket.create",
+  "ticket.manage",
 
   "export.view",
   "export.create",
   "export.download",
-]);
+
+  "users.view",
+  "users.create",
+  "users.edit",
+  "users.disable",
+  "users.manage_access",
+
+  "permission.grant",
+  "permission.revoke",
+
+  "role.assign",
+
+  "organization.view",
+  "organization.metrics.view",
+
+  "limits.view",
+  "limits.increase_request",
+];
 
 const PUBLIC_LIMIT_KEYS = new Set([
   "plan",
@@ -128,6 +165,22 @@ function toId(value) {
   return value;
 }
 
+function toPublicBoolean(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (value === 1 || value === "1") {
+    return true;
+  }
+
+  if (value === 0 || value === "0") {
+    return false;
+  }
+
+  return undefined;
+}
+
 function getUserOrganizationId(user) {
   return (
     toId(user.activeOrganizationId) ||
@@ -175,12 +228,18 @@ function publicOrganization(row) {
       row.access_level ||
       row.organizationAccessLevel ||
       undefined,
+    access_level:
+      row.access_level ||
+      row.accessLevel ||
+      row.organizationAccessLevel ||
+      undefined,
+    active: toPublicBoolean(row.active),
+    plan: row.plan || row.plan_name || undefined,
   };
 }
 
 function publicOrganizations(rows) {
   const organizations = rows.map(publicOrganization).filter(Boolean);
-
   const seen = new Set();
 
   return organizations.filter((organization) => {
@@ -196,6 +255,28 @@ function publicOrganizations(rows) {
 }
 
 async function listActiveOrganizationsForSuperAdmin(env) {
+  const activeRowsWithPlan = await optionalAll(
+    env,
+    `
+      SELECT
+        id,
+        name,
+        slug,
+        active,
+        plan,
+        'super_admin' AS role,
+        'owner' AS access_level
+      FROM organizations
+      WHERE active = 1
+      ORDER BY name ASC
+      LIMIT 100
+    `,
+  );
+
+  if (activeRowsWithPlan.length > 0) {
+    return publicOrganizations(activeRowsWithPlan);
+  }
+
   const activeRows = await optionalAll(
     env,
     `
@@ -203,6 +284,7 @@ async function listActiveOrganizationsForSuperAdmin(env) {
         id,
         name,
         slug,
+        active,
         'super_admin' AS role,
         'owner' AS access_level
       FROM organizations
@@ -245,26 +327,48 @@ async function listOrganizationsForUser(env, user, role) {
 
   const userId = user.id;
 
-  const rows = await optionalAll(
-  env,
-  `
-    SELECT
-      o.id,
-      o.name,
-      o.slug,
-      ? AS role,
-      ou.access_level
-    FROM organization_users ou
-    INNER JOIN organizations o ON o.id = ou.organization_id
-    WHERE ou.user_id = ?
-    ORDER BY o.name ASC
-    LIMIT 100
-  `,
-  [role, userId],
-);
+  const rowsWithPlan = await optionalAll(
+    env,
+    `
+      SELECT
+        o.id,
+        o.name,
+        o.slug,
+        o.active,
+        o.plan,
+        ? AS role,
+        ou.access_level
+      FROM organization_users ou
+      INNER JOIN organizations o ON o.id = ou.organization_id
+      WHERE ou.user_id = ?
+      ORDER BY o.name ASC
+      LIMIT 100
+    `,
+    [role, userId],
+  );
+
+  const rows =
+    rowsWithPlan.length > 0
+      ? rowsWithPlan
+      : await optionalAll(
+          env,
+          `
+            SELECT
+              o.id,
+              o.name,
+              o.slug,
+              ? AS role,
+              ou.access_level
+            FROM organization_users ou
+            INNER JOIN organizations o ON o.id = ou.organization_id
+            WHERE ou.user_id = ?
+            ORDER BY o.name ASC
+            LIMIT 100
+          `,
+          [role, userId],
+        );
 
   const organizations = publicOrganizations(rows);
-
   const fallbackOrganizationId = getUserOrganizationId(user);
 
   if (organizations.length === 0 && fallbackOrganizationId) {
@@ -275,6 +379,7 @@ async function listOrganizationsForUser(env, user, role) {
         slug: user.organization_slug || user.organizationSlug || undefined,
         role: role === "owner" ? "owner" : undefined,
         accessLevel: user.accessLevel || user.access_level || undefined,
+        access_level: user.access_level || user.accessLevel || undefined,
       },
     ];
   }
@@ -414,6 +519,18 @@ async function listRolePermissions(env, role) {
     .filter(Boolean);
 }
 
+function listDefaultRolePermissions(role) {
+  if (role === "super_admin") {
+    return [...PUBLIC_PERMISSION_SET];
+  }
+
+  if (role === "owner") {
+    return OWNER_DEFAULT_PERMISSIONS;
+  }
+
+  return [];
+}
+
 async function listConfiguredPermissions(env, user, role, activeOrganizationId) {
   const [directPermissions, organizationPermissions, rolePermissions] =
     await Promise.all([
@@ -423,6 +540,7 @@ async function listConfiguredPermissions(env, user, role, activeOrganizationId) 
     ]);
 
   return uniqueStrings([
+    ...listDefaultRolePermissions(role),
     ...directPermissions,
     ...organizationPermissions,
     ...rolePermissions,
@@ -598,6 +716,7 @@ function publicSafeProject(project) {
     organizationId,
     organization_id: organizationId,
     accessLevel,
+    access_level: accessLevel,
     permissions: Array.isArray(base.permissions)
       ? base.permissions.map(normalizePermission).filter(Boolean)
       : [],
@@ -658,6 +777,7 @@ function publicUser(
     permissions,
     scopes,
     accessLevel: user.accessLevel || user.access_level || null,
+    access_level: user.access_level || user.accessLevel || null,
     featureFlags,
     limits,
   };
@@ -670,6 +790,8 @@ function unauthenticatedSession() {
     projects: [],
     activeOrganization: null,
     organizations: [],
+    permissions: [],
+    scopes: [],
   };
 }
 
@@ -701,6 +823,10 @@ export async function onRequest(context) {
       ]);
 
     const publicProjects = publicSafeProjects(projects);
+    const activeOrganization = getActiveOrganization(
+      organizations,
+      activeOrganizationId,
+    );
 
     return jsonResponse({
       authenticated: true,
@@ -715,11 +841,10 @@ export async function onRequest(context) {
         limits,
       ),
       projects: publicProjects,
-      activeOrganization: getActiveOrganization(
-        organizations,
-        activeOrganizationId,
-      ),
+      activeOrganization,
       organizations,
+      permissions,
+      scopes,
     });
   } catch (error) {
     console.error("[Maono session] Falha ao carregar sessão:", error);

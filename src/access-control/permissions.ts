@@ -2,7 +2,9 @@ export const PERMISSION = {
   PROJECT_VIEW: "project.view",
   PROJECT_CREATE: "project.create",
   PROJECT_SAVE: "project.save",
+  PROJECT_EDIT: "project.edit",
   PROJECT_FAVORITE: "project.favorite",
+  PROJECT_THUMBNAIL_UPDATE: "project.thumbnail.update",
 
   DOCUMENT_VIEW: "document.view",
   DOCUMENT_UPLOAD: "document.upload",
@@ -13,25 +15,30 @@ export const PERMISSION = {
   TICKET_CREATE: "ticket.create",
   TICKET_MANAGE: "ticket.manage",
 
+  EXPORT_VIEW: "export.view",
+  EXPORT_CREATE: "export.create",
+  EXPORT_DOWNLOAD: "export.download",
+
   USERS_VIEW: "users.view",
   USERS_CREATE: "users.create",
+  USERS_EDIT: "users.edit",
+  USERS_DISABLE: "users.disable",
   USERS_MANAGE_ACCESS: "users.manage_access",
 
   PERMISSION_GRANT: "permission.grant",
   PERMISSION_REVOKE: "permission.revoke",
 
+  ROLE_ASSIGN: "role.assign",
+
   ORGANIZATION_VIEW: "organization.view",
   ORGANIZATION_EDIT: "organization.edit",
+  ORGANIZATION_METRICS_VIEW: "organization.metrics.view",
 
   LIMITS_VIEW: "limits.view",
   LIMITS_INCREASE_REQUEST: "limits.increase_request",
 
   ADMIN_PANEL_ACCESS: "admin.panel.access",
   AUDIT_VIEW: "audit.view",
-
-  EXPORT_VIEW: "export.view",
-  EXPORT_CREATE: "export.create",
-  EXPORT_DOWNLOAD: "export.download",
 } as const;
 
 export type Permission = (typeof PERMISSION)[keyof typeof PERMISSION];

@@ -55,6 +55,18 @@ type SidebarGroup = {
 
 const MAONO_SYMBOL_SRC = "/images/Simbolo_Maono.png";
 
+const MANAGEMENT_SECTIONS = new Set<ProjectSidebarSection>([
+  "users",
+  "organization",
+  "limits",
+]);
+
+const MANAGEMENT_PERMISSIONS = new Set<Permission>([
+  PERMISSION.USERS_VIEW,
+  PERMISSION.ORGANIZATION_VIEW,
+  PERMISSION.LIMITS_VIEW,
+]);
+
 function getInitials(nameOrEmail?: string) {
   const value = String(nameOrEmail || "M").trim();
   const [first = "M", second = ""] = value
@@ -64,8 +76,12 @@ function getInitials(nameOrEmail?: string) {
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
 }
 
+function normalizeRole(role?: string) {
+  return String(role || "").trim().toLowerCase();
+}
+
 function normalizeRoleLabel(role?: string) {
-  const normalized = String(role || "").trim().toLowerCase();
+  const normalized = normalizeRole(role);
 
   if (normalized === "super_admin") return "Super Admin";
   if (normalized === "admin") return "Admin";
@@ -76,12 +92,48 @@ function normalizeRoleLabel(role?: string) {
   return role || "Usuário";
 }
 
+function getStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function isSuperAdmin(user: MaonoUser | null) {
+  return normalizeRole(user?.role) === "super_admin";
+}
+
+function isOwner(user: MaonoUser | null) {
+  const role = normalizeRole(user?.role);
+
+  return role === "owner" || role === "client";
+}
+
+function hasPlatformScope(user: MaonoUser | null) {
+  const scopes = getStringArray((user as SidebarUser | null)?.scopes);
+
+  return scopes.includes("platform:*");
+}
+
+function hasExplicitPermission(
+  user: MaonoUser | null,
+  permission: Permission,
+) {
+  const permissions = getStringArray(
+    (user as SidebarUser | null)?.permissions,
+  );
+
+  return permissions.includes(permission);
+}
+
 function buildPermissionContext(user: MaonoUser | null): PermissionContext {
   if (!user) {
     return {};
   }
 
   const sidebarUser = user as SidebarUser;
+
+  const organization =
+    sidebarUser.activeOrganization ?? sidebarUser.organization ?? undefined;
 
   const organizationId =
     sidebarUser.activeOrganizationId ??
@@ -95,11 +147,59 @@ function buildPermissionContext(user: MaonoUser | null): PermissionContext {
 
   return {
     organizationId,
-    organization:
-      sidebarUser.activeOrganization ?? sidebarUser.organization ?? undefined,
+    organization,
     permissions: sidebarUser.permissions,
     scopes: sidebarUser.scopes,
   };
+}
+
+function hasOrganizationScope(context: PermissionContext) {
+  return Boolean(
+    context.organizationId ??
+      context.organization?.id ??
+      context.organization?.organizationId,
+  );
+}
+
+function canShowManagementItem(
+  user: MaonoUser | null,
+  item: SidebarItem,
+  context: PermissionContext,
+) {
+  if (!user || !item.permission || !item.key) {
+    return false;
+  }
+
+  if (!MANAGEMENT_SECTIONS.has(item.key)) {
+    return false;
+  }
+
+  if (!MANAGEMENT_PERMISSIONS.has(item.permission)) {
+    return false;
+  }
+
+  if (isSuperAdmin(user) || hasPlatformScope(user)) {
+    return true;
+  }
+
+  if (hasExplicitPermission(user, item.permission)) {
+    return can(user as AccessControlUser, item.permission, context);
+  }
+
+  /**
+   * Owner pode ver Gestão da própria organização.
+   * Ainda assim exigimos organizationId no contexto para evitar mostrar Gestão
+   * quando a sessão não carrega organização ativa.
+   */
+  if (isOwner(user) && hasOrganizationScope(context)) {
+    return can(user as AccessControlUser, item.permission, context);
+  }
+
+  /**
+   * Admin autorizado depende do can(...), que valida escopo/permissão.
+   * Viewer/Editor sem permissão explícita também caem aqui e devem retornar false.
+   */
+  return can(user as AccessControlUser, item.permission, context);
 }
 
 function canShowItem(
@@ -113,6 +213,10 @@ function canShowItem(
 
   if (!item.permission) {
     return true;
+  }
+
+  if (item.key && MANAGEMENT_SECTIONS.has(item.key)) {
+    return canShowManagementItem(user, item, context);
   }
 
   return can(user as AccessControlUser, item.permission, context);

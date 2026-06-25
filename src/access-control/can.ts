@@ -21,11 +21,51 @@ export type {
   PermissionContext,
 };
 
+type RoleAllowsRole = Parameters<typeof roleAllows>[0];
+
 const ORGANIZATION_CONTEXT_PERMISSION_PREFIXES = [
   "document.",
   "ticket.",
   "export.",
+  "users.",
+  "permission.",
+  "role.",
+  "organization.",
+  "limits.",
+  "plan.",
 ] as const;
+
+const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
+  new Set<Permission>([
+    "document.view",
+    "document.upload",
+    "document.download",
+    "document.delete",
+
+    "ticket.view",
+    "ticket.create",
+    "ticket.manage",
+
+    "export.view",
+    "export.create",
+    "export.download",
+
+    "users.view",
+    "users.create",
+    "users.edit",
+    "users.disable",
+    "users.manage_access",
+
+    "permission.grant",
+    "permission.revoke",
+    "role.assign",
+
+    "organization.view",
+    "organization.metrics.view",
+
+    "limits.view",
+    "limits.increase_request",
+  ]);
 
 function toId(value: IdLike | null | undefined): string | null {
   if (value === null || value === undefined || value === "") {
@@ -164,6 +204,38 @@ function isOrganizationScopedPermission(permission: Permission): boolean {
   );
 }
 
+function ownerPolicyAllows(permission: Permission): boolean {
+  return OWNER_ORGANIZATION_POLICY_PERMISSIONS.has(permission);
+}
+
+function roleForPolicy(role: string): RoleAllowsRole | null {
+  if (role === "client") {
+    return "owner" as RoleAllowsRole;
+  }
+
+  if (
+    role === "super_admin" ||
+    role === "admin" ||
+    role === "owner" ||
+    role === "editor" ||
+    role === "viewer"
+  ) {
+    return role as RoleAllowsRole;
+  }
+
+  return null;
+}
+
+function roleAllowsSafely(role: string, permission: Permission): boolean {
+  const policyRole = roleForPolicy(role);
+
+  if (!policyRole) {
+    return false;
+  }
+
+  return roleAllows(policyRole, permission);
+}
+
 function projectAccessAllows(
   permission: Permission,
   context: PermissionContext,
@@ -253,9 +325,8 @@ function organizationPermissionAllows(
   explicitPermission: boolean,
 ): boolean {
   /**
-   * Permissões de documentos, chamados e exportações sempre precisam de
-   * contexto organizacional na UI. Sem organizationId, não há como garantir
-   * que o item exibido pertence ao escopo correto do usuário.
+   * Permissões de organização sempre precisam de contexto organizacional na UI.
+   * Sem organizationId, não há como exibir uma ação scoped de forma confiável.
    */
   if (!hasOrganizationContext(context)) {
     return false;
@@ -270,26 +341,29 @@ function organizationPermissionAllows(
   }
 
   /**
-   * Admin continua configurável: só vê ações de organização quando a sessão
-   * ou o contexto trouxer permissão explícita e escopo compatível.
+   * Admin depende de escopo e permissão explícita.
+   * Isso evita liberar Gestão apenas pelo role "admin".
    */
   if (role === "admin") {
     return explicitPermission;
   }
 
   /**
-   * Owner pode receber permissões visuais da própria organização por policy,
-   * mas também respeita permissões explícitas quando vierem do backend.
+   * Owner pode visualizar e operar Gestão dentro da própria organização,
+   * conforme policy visual da Sprint 8. Regras finas de escalada continuam
+   * no backend.
    */
-  if (role === "owner") {
-    return explicitPermission || roleAllows(role, permission);
+  if (role === "owner" || role === "client") {
+    return (
+      explicitPermission ||
+      ownerPolicyAllows(permission) ||
+      roleAllowsSafely(role, permission)
+    );
   }
 
   /**
-   * Editor e Viewer não recebem documentos, chamados ou exportações apenas por role.
-   * Para Sprint 7, eles precisam de permissão explícita no payload/contexto.
-   *
-   * Isso impede, por padrão, casos sensíveis como export.download para Viewer.
+   * Editor e Viewer dependem de permissões explícitas para qualquer permissão
+   * organizacional nova ou antiga.
    */
   if (role === "editor" || role === "viewer") {
     return explicitPermission;
@@ -313,6 +387,10 @@ export function can(
     return false;
   }
 
+  /**
+   * Super Admin pode visualizar tudo na UI.
+   * Segurança real continua nos endpoints.
+   */
   if (role === "super_admin") {
     return true;
   }
@@ -321,8 +399,9 @@ export function can(
 
   /**
    * Permissões organization-scoped entram antes da regra geral de role.
-   * Isso evita liberar document.*, ticket.* e export.* por acidente para
-   * editor/viewer apenas porque roleAllows(...) permite algo no futuro.
+   * Isso cobre Sprint 7 e Sprint 8:
+   * document.*, ticket.*, export.*, users.*, permission.*, role.*,
+   * organization.*, limits.* e plan.*.
    */
   if (isOrganizationScopedPermission(permission)) {
     return organizationPermissionAllows(
@@ -334,6 +413,10 @@ export function can(
     );
   }
 
+  /**
+   * Admin continua configurável: fora do bloco organization-scoped,
+   * depende de permissão explícita e escopo.
+   */
   if (role === "admin") {
     return explicitPermission && hasScope(user, context);
   }
@@ -342,7 +425,7 @@ export function can(
     return false;
   }
 
-  const allowedByRole = roleAllows(role, permission);
+  const allowedByRole = roleAllowsSafely(role, permission);
   const allowedByProjectAccess = projectAccessAllows(permission, context);
 
   /**

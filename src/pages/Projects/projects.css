@@ -1239,3 +1239,300 @@
     width: 100%;
   }
 }
+
+/* =========================================================
+   13. SPRINT 8 — GESTÃO: USUÁRIOS, ORGANIZAÇÃO, LIMITES
+========================================================= */
+
+.projects-management-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.projects-management-card {
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-lg);
+  padding: 16px;
+  background: var(--mm-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.projects-management-card h3 {
+  margin: 0 0 10px;
+  color: var(--mm-text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.projects-management-card p {
+  margin: 8px 0 0;
+  color: var(--mm-text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.projects-management-form,
+.mm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.projects-management-form label,
+.mm-form-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--mm-text-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.projects-management-form input,
+.projects-management-form textarea,
+.projects-management-form select,
+.mm-form-grid input,
+.mm-form-grid textarea,
+.mm-form-grid select,
+.mm-table-wrap input,
+.mm-table-wrap textarea {
+  width: 100%;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: var(--mm-radius-md);
+  padding: 9px 10px;
+  background: var(--mm-bg-soft);
+  color: var(--mm-text);
+  font: inherit;
+  outline: none;
+}
+
+.projects-management-form textarea,
+.mm-form-grid textarea,
+.mm-table-wrap textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.projects-management-form input:focus,
+.projects-management-form textarea:focus,
+.projects-management-form select:focus,
+.mm-form-grid input:focus,
+.mm-form-grid textarea:focus,
+.mm-form-grid select:focus,
+.mm-table-wrap input:focus,
+.mm-table-wrap textarea:focus {
+  border-color: rgba(242, 199, 102, 0.7);
+  box-shadow: 0 0 0 3px rgba(214, 168, 79, 0.14);
+}
+
+.projects-permission-list,
+.mm-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.projects-permission-list .mm-tag,
+.mm-tags-list .mm-tag {
+  gap: 6px;
+}
+
+.projects-limits-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.projects-metric-card {
+  min-height: 106px;
+  border: 1px solid var(--mm-border);
+  border-top: 2px solid rgba(214, 168, 79, 0.34);
+  border-radius: var(--mm-radius-lg);
+  padding: 14px;
+  background: var(--mm-surface);
+}
+
+.projects-metric-card span {
+  color: var(--mm-muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 900;
+}
+
+.projects-metric-card strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--mm-text);
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.projects-user-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) 120px 150px 150px minmax(220px, 2fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-lg);
+  background: var(--mm-surface);
+}
+
+.projects-user-actions,
+.mm-actions-row,
+.mm-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.mm-form-actions {
+  align-items: end;
+  margin-top: 0;
+}
+
+.mm-muted {
+  margin-top: 6px;
+  color: var(--mm-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mm-btn:disabled,
+.mm-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.mm-btn.tiny,
+.mm-button.tiny {
+  min-height: 24px;
+  padding: 2px 7px;
+  border-radius: var(--mm-radius-sm);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.mm-section-card .mm-card + .mm-card {
+  margin-top: 14px;
+}
+
+.mm-section-card code {
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-sm);
+  padding: 2px 5px;
+  background: var(--mm-bg-soft);
+  color: var(--mm-gold-bright);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.mm-section-card button {
+  cursor: pointer;
+}
+
+.mm-section-card button:disabled {
+  cursor: not-allowed;
+}
+
+.mm-section-card input:disabled,
+.mm-section-card select:disabled,
+.mm-section-card textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.mm-table-wrap .mm-btn,
+.mm-table-wrap .mm-button {
+  white-space: nowrap;
+}
+
+/* Barras simples de uso para cards futuros de limites */
+.projects-limit-progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--mm-bg-soft);
+  border: 1px solid var(--mm-border);
+}
+
+.projects-limit-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgba(32, 199, 181, 0.88),
+    rgba(242, 199, 102, 0.88)
+  );
+}
+
+/* Estados de feedback usados pelas telas de Gestão */
+.projects-feedback {
+  margin-top: 14px;
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-lg);
+  padding: 12px 14px;
+  background: var(--mm-surface);
+}
+
+.projects-feedback.error {
+  border-color: rgba(239, 68, 68, 0.34);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fecaca;
+}
+
+.projects-feedback.success {
+  border-color: rgba(34, 197, 94, 0.34);
+  background: rgba(34, 197, 94, 0.08);
+  color: #bbf7d0;
+}
+
+@media (max-width: 1200px) {
+  .projects-management-grid,
+  .projects-limits-grid,
+  .mm-form-grid,
+  .projects-management-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .projects-user-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .projects-management-grid,
+  .projects-limits-grid,
+  .projects-management-form,
+  .mm-form-grid,
+  .projects-user-row {
+    grid-template-columns: 1fr;
+  }
+
+  .projects-user-actions,
+  .mm-actions-row,
+  .mm-form-actions {
+    align-items: stretch;
+  }
+
+  .projects-user-actions .mm-btn,
+  .mm-actions-row .mm-btn,
+  .mm-form-actions .mm-btn,
+  .projects-user-actions .mm-button,
+  .mm-actions-row .mm-button,
+  .mm-form-actions .mm-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

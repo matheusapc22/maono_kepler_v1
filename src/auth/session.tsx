@@ -15,7 +15,14 @@ import {
 
 type MaonoId = number | string;
 
-type MaonoRole = "super_admin" | "admin" | "owner" | "editor" | "viewer";
+type MaonoRole =
+  | "super_admin"
+  | "admin"
+  | "owner"
+  | "editor"
+  | "viewer"
+  | "client"
+  | string;
 
 type MaonoFeatureFlag = string;
 
@@ -23,11 +30,17 @@ type MaonoLimits = Record<string, unknown>;
 
 type MaonoOrganization = {
   id: MaonoId;
+  organizationId?: MaonoId | null;
+  organization_id?: MaonoId | null;
   name?: string;
   slug?: string;
-  role?: MaonoRole | string;
+  role?: MaonoRole;
   accessLevel?: string;
+  access_level?: string;
+  active?: boolean;
+  plan?: string;
   permissions?: Permission[];
+  scopes?: string[];
   featureFlags?: MaonoFeatureFlag[];
   limits?: MaonoLimits;
 };
@@ -54,6 +67,7 @@ type MaonoUser = {
   permissions?: Permission[];
   scopes?: string[];
   accessLevel?: string | null;
+  access_level?: string | null;
   featureFlags?: MaonoFeatureFlag[];
   limits?: MaonoLimits;
 };
@@ -66,6 +80,7 @@ type MaonoProject = {
   organizationId?: MaonoId | null;
   organization_id?: MaonoId | null;
   accessLevel: "owner" | "editor" | "viewer" | string;
+  access_level?: "owner" | "editor" | "viewer" | string;
   permissions?: Permission[];
   active?: boolean;
   thumbnailUrl?: string;
@@ -124,15 +139,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toId(value: unknown): MaonoId | null {
-  if (typeof value === "number" || typeof value === "string") {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    return trimmed || null;
   }
 
   return null;
 }
 
 function toStringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed || undefined;
+}
+
+function toBooleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function toStringArray(value: unknown): string[] {
@@ -159,6 +190,16 @@ function toLimits(value: unknown): MaonoLimits | undefined {
   return { ...value };
 }
 
+function mergePermissions(
+  ...values: Array<Permission[] | undefined>
+): Permission[] {
+  return Array.from(new Set(values.flatMap((value) => value ?? [])));
+}
+
+function mergeStringArrays(...values: Array<string[] | undefined>): string[] {
+  return Array.from(new Set(values.flatMap((value) => value ?? [])));
+}
+
 function normalizeOrganization(value: unknown): MaonoOrganization | null {
   if (!isRecord(value)) {
     return null;
@@ -173,14 +214,22 @@ function normalizeOrganization(value: unknown): MaonoOrganization | null {
     return null;
   }
 
+  const accessLevel =
+    toStringValue(value.accessLevel) ?? toStringValue(value.access_level);
+
   return {
     id,
+    organizationId: toId(value.organizationId) ?? id,
+    organization_id: toId(value.organization_id) ?? id,
     name: toStringValue(value.name),
     slug: toStringValue(value.slug),
     role: toStringValue(value.role),
-    accessLevel:
-      toStringValue(value.accessLevel) ?? toStringValue(value.access_level),
+    accessLevel,
+    access_level: accessLevel,
+    active: toBooleanValue(value.active),
+    plan: toStringValue(value.plan),
     permissions: toPermissionArray(value.permissions),
+    scopes: toStringArray(value.scopes),
     featureFlags: toStringArray(
       value.featureFlags ?? value.feature_flags ?? value.flags,
     ),
@@ -230,6 +279,11 @@ function normalizeUser(value: unknown): MaonoUser | null {
     toId(value.active_organization_id) ??
     toId(organizationId);
 
+  const accessLevel =
+    toStringValue(value.accessLevel) ??
+    toStringValue(value.access_level) ??
+    null;
+
   return {
     id,
     email,
@@ -246,10 +300,8 @@ function normalizeUser(value: unknown): MaonoUser | null {
 
     permissions: toPermissionArray(value.permissions),
     scopes: toStringArray(value.scopes),
-    accessLevel:
-      toStringValue(value.accessLevel) ??
-      toStringValue(value.access_level) ??
-      null,
+    accessLevel,
+    access_level: accessLevel,
     featureFlags: toStringArray(
       value.featureFlags ?? value.feature_flags ?? value.flags,
     ),
@@ -270,6 +322,11 @@ function normalizeProject(value: unknown): MaonoProject | null {
     return null;
   }
 
+  const accessLevel =
+    toStringValue(value.accessLevel) ??
+    toStringValue(value.access_level) ??
+    "viewer";
+
   return {
     id,
     name,
@@ -279,10 +336,8 @@ function normalizeProject(value: unknown): MaonoProject | null {
       toId(value.organizationId) ?? toId(value.organization_id) ?? null,
     organization_id:
       toId(value.organization_id) ?? toId(value.organizationId) ?? null,
-    accessLevel:
-      toStringValue(value.accessLevel) ??
-      toStringValue(value.access_level) ??
-      "viewer",
+    accessLevel,
+    access_level: accessLevel,
     permissions: toPermissionArray(value.permissions),
     active: typeof value.active === "boolean" ? value.active : undefined,
     thumbnailUrl:
@@ -306,13 +361,54 @@ function normalizeProjects(value: unknown): MaonoProject[] {
     .filter((project): project is MaonoProject => Boolean(project));
 }
 
+function enrichUserWithSessionContext({
+  user,
+  activeOrganization,
+  organizations,
+  rootPermissions,
+  rootScopes,
+}: {
+  user: MaonoUser;
+  activeOrganization: MaonoOrganization | null;
+  organizations: MaonoOrganization[];
+  rootPermissions: Permission[];
+  rootScopes: string[];
+}): MaonoUser {
+  const nextActiveOrganization =
+    activeOrganization ?? user.activeOrganization ?? user.organization ?? null;
+
+  const nextOrganizations =
+    organizations.length > 0 ? organizations : user.organizations ?? [];
+
+  const organizationId =
+    user.organizationId ??
+    user.organization_id ??
+    nextActiveOrganization?.id ??
+    null;
+
+  const activeOrganizationId =
+    user.activeOrganizationId ?? organizationId ?? nextActiveOrganization?.id ?? null;
+
+  return {
+    ...user,
+    organizationId,
+    organization_id: organizationId,
+    activeOrganizationId,
+    activeOrganization: nextActiveOrganization,
+    organization: nextActiveOrganization,
+    organizations: nextOrganizations,
+    permissions: mergePermissions(user.permissions, rootPermissions),
+    scopes: mergeStringArrays(user.scopes, rootScopes),
+  };
+}
+
 function normalizeSessionPayload(value: unknown): PublicSession {
   if (!isRecord(value)) {
     return EMPTY_SESSION;
   }
 
-  const user = normalizeUser(value.user);
-  const authenticated = Boolean(value.authenticated && user);
+  const userFromPayload = normalizeUser(value.user);
+  const authenticated = Boolean(value.authenticated && userFromPayload);
   const projects = authenticated ? normalizeProjects(value.projects) : [];
 
   const organizationsFromRoot = normalizeOrganizations(value.organizations);
@@ -320,20 +416,35 @@ function normalizeSessionPayload(value: unknown): PublicSession {
     normalizeOrganization(value.activeOrganization) ??
     normalizeOrganization(value.active_organization);
 
+  const rootPermissions = toPermissionArray(value.permissions);
+  const rootScopes = toStringArray(value.scopes);
+
   const organizations =
     organizationsFromRoot.length > 0
       ? organizationsFromRoot
-      : user?.organizations ?? [];
+      : userFromPayload?.organizations ?? [];
 
   const activeOrganization =
     activeOrganizationFromRoot ??
-    user?.activeOrganization ??
-    user?.organization ??
+    userFromPayload?.activeOrganization ??
+    userFromPayload?.organization ??
+    organizations[0] ??
     null;
+
+  const user =
+    authenticated && userFromPayload
+      ? enrichUserWithSessionContext({
+          user: userFromPayload,
+          activeOrganization,
+          organizations,
+          rootPermissions,
+          rootScopes,
+        })
+      : null;
 
   return {
     authenticated,
-    user: authenticated ? user : null,
+    user,
     projects,
     activeOrganization: authenticated ? activeOrganization : null,
     organizations: authenticated ? organizations : [],

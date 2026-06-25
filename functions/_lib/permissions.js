@@ -74,6 +74,21 @@ const ORGANIZATION_PERMISSION_PREFIXES = [
   "document.",
   "ticket.",
   "export.",
+  "users.",
+  "permission.",
+  "role.",
+  "organization.",
+  "limits.",
+  "plan.",
+];
+
+const MANAGEMENT_PERMISSION_PREFIXES = [
+  "users.",
+  "permission.",
+  "role.",
+  "organization.",
+  "limits.",
+  "plan.",
 ];
 
 const OWNER_ORGANIZATION_PERMISSIONS = new Set([
@@ -99,6 +114,7 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
 
   "permission.grant",
   "permission.revoke",
+  "role.assign",
 
   "organization.view",
   "organization.edit",
@@ -309,6 +325,12 @@ function isOrganizationScopedPermission(permission) {
   );
 }
 
+function isManagementPermission(permission) {
+  return MANAGEMENT_PERMISSION_PREFIXES.some((prefix) =>
+    String(permission || "").startsWith(prefix),
+  );
+}
+
 function getContextScopeType(context) {
   const explicitScopeType = normalizeScopeType(
     context?.scopeType || context?.scope_type,
@@ -368,10 +390,23 @@ async function getOrganizationMembership(env, userId, organizationId) {
     return null;
   }
 
+  /**
+   * A tabela organization_users confirmada no ambiente local possui:
+   * id, organization_id, user_id, access_level, created_at.
+   *
+   * Por isso, não selecionamos role/active diretamente. Usamos aliases
+   * seguros para manter compatibilidade com ambientes onde essas colunas
+   * ainda não existem.
+   */
   const membership = await optionalFirst(
     env,
     `
-      SELECT organization_id, user_id, access_level, role, active
+      SELECT
+        organization_id,
+        user_id,
+        access_level,
+        NULL AS role,
+        1 AS active
       FROM organization_users
       WHERE user_id = ?
         AND organization_id = ?
@@ -381,10 +416,6 @@ async function getOrganizationMembership(env, userId, organizationId) {
   );
 
   if (!membership) {
-    return null;
-  }
-
-  if (membership.active === 0 || membership.active === "0") {
     return null;
   }
 
@@ -474,6 +505,36 @@ async function hasUserPermission(env, user, permission, context) {
   return rows.some((row) => !isExpiredPermission(row));
 }
 
+async function hasScopedOrganizationUserPermission(env, user, permission, context) {
+  const organizationId = getContextOrganizationId(context);
+
+  if (!user?.id || !organizationId) {
+    return false;
+  }
+
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT id, permission, organization_id, expires_at, active
+      FROM user_permissions
+      WHERE user_id = ?
+        AND permission = ?
+        AND active = 1
+        AND organization_id = ?
+        AND (expires_at IS NULL OR expires_at > ?)
+      LIMIT 20
+    `,
+    [
+      user.id,
+      permission,
+      toNumberOrString(organizationId),
+      nowIso(),
+    ],
+  );
+
+  return rows.some((row) => !isExpiredPermission(row));
+}
+
 async function hasRolePermission(env, role, permission, context) {
   const scopeType = getContextScopeType(context);
 
@@ -542,6 +603,7 @@ async function organizationPermissionAllows(
   context,
   explicitUserPermission,
   configuredRolePermission,
+  scopedOrganizationUserPermission,
 ) {
   const organizationId = getContextOrganizationId(context);
 
@@ -553,24 +615,33 @@ async function organizationPermissionAllows(
   }
 
   const relation = await getOrganizationRelation(env, user, organizationId);
+  const managementPermission = isManagementPermission(permission);
 
   /**
-   * Admin é configurável: não recebe acesso automático só por ser admin.
-   * Passa apenas se houver permissão granular de usuário ou de role.
+   * Admin não recebe acesso automático só por role textual.
+   * Para operar Gestão, precisa estar no escopo da organização.
+   *
+   * Escopo aceito:
+   * - membership na organização + permissão explícita/role_permission;
+   * - ou user_permission diretamente escopada para organization_id.
    */
   if (role === "admin") {
+    const adminHasScopedAccess =
+      scopedOrganizationUserPermission ||
+      (relation.isMember && (explicitUserPermission || configuredRolePermission));
+
     return {
-      allowed: explicitUserPermission || configuredRolePermission,
-      reason:
-        explicitUserPermission || configuredRolePermission
-          ? "ADMIN_CONFIGURED_ORGANIZATION_PERMISSION"
-          : "ADMIN_REQUIRES_ORGANIZATION_PERMISSION",
+      allowed: adminHasScopedAccess,
+      reason: adminHasScopedAccess
+        ? "ADMIN_ORGANIZATION_SCOPED_PERMISSION"
+        : "ADMIN_REQUIRES_ORGANIZATION_SCOPE",
     };
   }
 
   /**
-   * Owner é limitado à própria organização e também precisa que a permissão
-   * exista na matriz configurada de role_permissions ou user_permissions.
+   * Owner opera apenas dentro da própria organização.
+   * A matriz OWNER_ORGANIZATION_PERMISSIONS define o que Owner pode tentar fazer.
+   * Regras de escalada, como impedir Admin/Super Admin, ficam em organizations.js.
    */
   if (role === "owner") {
     if (!relation.isOwner) {
@@ -588,24 +659,30 @@ async function organizationPermissionAllows(
     }
 
     return {
-      allowed: explicitUserPermission || configuredRolePermission,
-      reason:
-        explicitUserPermission || configuredRolePermission
-          ? "OWNER_ORGANIZATION_PERMISSION"
-          : "OWNER_REQUIRES_CONFIGURED_PERMISSION",
+      allowed: true,
+      reason: "OWNER_ORGANIZATION_PERMISSION",
     };
   }
 
   /**
-   * Editor e Viewer dependem de permissão granular e vínculo com a organização.
-   * Viewer nunca recebe export.download apenas por role_permissions padrão.
-   * Para export.download, Viewer precisa de user_permissions explícita.
+   * Editor e Viewer precisam pertencer à organização.
+   * Para permissões de Gestão, não basta role_permissions genérica:
+   * precisam de permissão explícita.
    */
   if (role === "editor" || role === "viewer") {
     if (!relation.isMember) {
       return {
         allowed: false,
         reason: "USER_OUTSIDE_ORGANIZATION",
+      };
+    }
+
+    if (managementPermission) {
+      return {
+        allowed: explicitUserPermission,
+        reason: explicitUserPermission
+          ? "MANAGEMENT_EXPLICIT_PERMISSION"
+          : "MANAGEMENT_EXPLICIT_PERMISSION_REQUIRED",
       };
     }
 
@@ -720,6 +797,14 @@ export async function can(env, user, permission, context = {}) {
     resolvedContext,
   );
 
+  const scopedOrganizationUserPermission =
+    await hasScopedOrganizationUserPermission(
+      env,
+      user,
+      normalizedPermission,
+      resolvedContext,
+    );
+
   /**
    * Project-scoped: accessLevel do vínculo user_projects deve valer para
    * qualquer role global, inclusive admin escopado. Isso não concede admin
@@ -744,8 +829,8 @@ export async function can(env, user, permission, context = {}) {
   }
 
   /**
-   * Organization-scoped: documentos, chamados e exportações precisam de
-   * organização no contexto e validação granular. Frontend escondendo botão
+   * Organization-scoped: documentos, chamados, exportações e Gestão precisam
+   * de organização no contexto e validação granular. Frontend escondendo botão
    * nunca substitui esta validação.
    */
   if (isOrganizationScopedPermission(normalizedPermission)) {
@@ -757,6 +842,7 @@ export async function can(env, user, permission, context = {}) {
       resolvedContext,
       explicitUserPermission,
       configuredRolePermission,
+      scopedOrganizationUserPermission,
     );
 
     return {
