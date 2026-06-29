@@ -1,5 +1,5 @@
 export async function listProjectsForUser(env, user) {
-  if (user.role === "admin") {
+  if (user.role === "super_admin") {
     const { results } = await env.DB.prepare(
       `SELECT
         projects.id,
@@ -8,6 +8,7 @@ export async function listProjectsForUser(env, user) {
         projects.description,
         projects.dropbox_root_path,
         projects.default_config_file,
+        projects.organization_id,
         projects.active,
         projects.created_at,
         projects.updated_at,
@@ -28,6 +29,7 @@ export async function listProjectsForUser(env, user) {
       projects.description,
       projects.dropbox_root_path,
       projects.default_config_file,
+      projects.organization_id,
       projects.active,
       projects.created_at,
       projects.updated_at,
@@ -45,7 +47,7 @@ export async function listProjectsForUser(env, user) {
 }
 
 export async function getAuthorizedProject(env, user, slug) {
-  if (user.role === "admin") {
+  if (user.role === "super_admin") {
     const project = await env.DB.prepare(
       `SELECT
         projects.id,
@@ -54,6 +56,7 @@ export async function getAuthorizedProject(env, user, slug) {
         projects.description,
         projects.dropbox_root_path,
         projects.default_config_file,
+        projects.organization_id,
         projects.active,
         projects.created_at,
         projects.updated_at,
@@ -77,6 +80,7 @@ export async function getAuthorizedProject(env, user, slug) {
       projects.description,
       projects.dropbox_root_path,
       projects.default_config_file,
+      projects.organization_id,
       projects.active,
       projects.created_at,
       projects.updated_at,
@@ -95,12 +99,18 @@ export async function getAuthorizedProject(env, user, slug) {
 }
 
 export function publicProject(project) {
+  const organizationId = project.organization_id ?? null;
+  const accessLevel = project.access_level ?? null;
+
   return {
     id: project.id,
     name: project.name,
     slug: project.slug,
     description: project.description,
-    accessLevel: project.access_level,
+    organizationId,
+    organization_id: organizationId,
+    accessLevel,
+    access_level: accessLevel,
     active: Boolean(project.active),
     dropboxRootPath: project.dropbox_root_path,
     defaultConfigFile: project.default_config_file,
@@ -109,10 +119,18 @@ export function publicProject(project) {
   };
 }
 
-export async function logAudit(env, { userId, projectId = null, action, details = null }) {
+export async function logAudit(
+  env,
+  { userId, projectId = null, action, details = null },
+) {
   await env.DB.prepare(
-    `INSERT INTO audit_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)`
+    `INSERT INTO audit_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)`,
   )
-    .bind(userId || null, projectId, action, details ? JSON.stringify(details) : null)
+    .bind(
+      userId || null,
+      projectId,
+      action,
+      details ? JSON.stringify(details) : null,
+    )
     .run();
 }
