@@ -4,7 +4,7 @@ import {
   methodNotAllowed,
   readJsonBody,
 } from "../../../../_lib/http.js";
-import { requireSession } from "../../../../_lib/auth.js";
+import { requirePermission } from "../../../../_lib/permissions.js";
 import { logAudit } from "../../../../_lib/projects.js";
 
 function normalizeText(value) {
@@ -45,13 +45,6 @@ async function generateUniqueProjectSlug(env, baseSlug) {
   return `${base}-${Date.now().toString(36)}-${makeShortId(4)}`;
 }
 
-function requireAdmin(user) {
-  if (user?.role !== "admin") {
-    return errorResponse("Apenas administradores podem acessar este recurso.", 403, "FORBIDDEN");
-  }
-  return null;
-}
-
 function publicProject(project, accessCount) {
   return {
     id: project.id,
@@ -84,6 +77,24 @@ async function getManagedFile(env, fileId) {
   )
     .bind(fileId)
     .first();
+}
+
+async function requireAdminPanelAccessForOrganizationFileProject(env, request, file) {
+  return requirePermission(
+    env,
+    request,
+    "admin.panel.access",
+    {
+      scopeType: "organization",
+      organizationId: file.organization_id,
+    },
+    {
+      resourceType: "organization_file",
+      resourceId: file.id,
+      auditAction: "admin.organization_files.project_create",
+      auditOnSuccess: false,
+    }
+  );
 }
 
 async function copyOrganizationAccessToProject(env, organizationId, projectId) {
@@ -119,44 +130,78 @@ export async function onRequest(context) {
   }
 
   try {
-    const user = await requireSession(env, request);
-    const adminError = requireAdmin(user);
-    if (adminError) return adminError;
-
     const fileId = Number(params.id);
     if (!fileId) {
-      return errorResponse("ID do arquivo inválido.", 400, "ORGANIZATION_FILE_ID_INVALID");
+      return errorResponse(
+        "ID do arquivo inválido.",
+        400,
+        "ORGANIZATION_FILE_ID_INVALID"
+      );
     }
 
     const file = await getManagedFile(env, fileId);
     if (!file) {
-      return errorResponse("Arquivo não encontrado.", 404, "ORGANIZATION_FILE_NOT_FOUND");
+      return errorResponse(
+        "Arquivo não encontrado.",
+        404,
+        "ORGANIZATION_FILE_NOT_FOUND"
+      );
     }
+
+    const { user } = await requireAdminPanelAccessForOrganizationFileProject(
+      env,
+      request,
+      file
+    );
 
     const fileName = String(file.file_name || "").toLowerCase();
     if (!fileName.endsWith(".json")) {
-      return errorResponse("Somente arquivos JSON podem virar projeto Kepler.", 400, "ORGANIZATION_FILE_NOT_JSON");
+      return errorResponse(
+        "Somente arquivos JSON podem virar projeto Kepler.",
+        400,
+        "ORGANIZATION_FILE_NOT_JSON"
+      );
     }
 
     if (!file.active || !file.organization_active) {
-      return errorResponse("Arquivo ou organização inativa.", 400, "ORGANIZATION_FILE_INACTIVE");
+      return errorResponse(
+        "Arquivo ou organização inativa.",
+        400,
+        "ORGANIZATION_FILE_INACTIVE"
+      );
     }
 
     const body = await readJsonBody(request);
     const name = normalizeText(body?.name || file.name || file.file_name);
-    const description = normalizeText(body?.description || `Projeto criado a partir de ${file.file_name}.`);
+    const description = normalizeText(
+      body?.description || `Projeto criado a partir de ${file.file_name}.`
+    );
     const shouldCopyOrganizationAccess = body?.copyOrganizationAccess !== false;
 
     if (!name) {
-      return errorResponse("Informe um nome válido para o projeto.", 400, "PROJECT_DATA_REQUIRED");
+      return errorResponse(
+        "Informe um nome válido para o projeto.",
+        400,
+        "PROJECT_DATA_REQUIRED"
+      );
     }
 
     const baseSlug = normalizeSlug(
       body?.slug || `${file.organization_slug || "org"}-${name}`
     );
-    const slug = body?.autoGenerateSlug === false && body?.slug
-      ? normalizeSlug(body.slug)
-      : await generateUniqueProjectSlug(env, baseSlug);
+
+    const slug =
+      body?.autoGenerateSlug === false && body?.slug
+        ? normalizeSlug(body.slug)
+        : await generateUniqueProjectSlug(env, baseSlug);
+
+    if (!slug) {
+      return errorResponse(
+        "Informe um identificador válido para o projeto.",
+        400,
+        "PROJECT_SLUG_INVALID"
+      );
+    }
 
     let project;
 
@@ -186,19 +231,30 @@ export async function onRequest(context) {
         .first();
     } catch (error) {
       if (String(error.message || "").includes("UNIQUE")) {
-        return errorResponse("Já existe um projeto com este identificador.", 409, "PROJECT_SLUG_EXISTS");
+        return errorResponse(
+          "Já existe um projeto com este identificador.",
+          409,
+          "PROJECT_SLUG_EXISTS"
+        );
       }
+
       throw error;
     }
 
     await env.DB.prepare(
-      `UPDATE organization_files SET is_project = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      `UPDATE organization_files
+       SET is_project = 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
     )
       .bind(file.id)
       .run();
 
     const accessCount = shouldCopyOrganizationAccess
-      ? await copyOrganizationAccessToProject(env, file.organization_id, project.id)
+      ? await copyOrganizationAccessToProject(
+          env,
+          file.organization_id,
+          project.id
+        )
       : 0;
 
     await logAudit(env, {
@@ -210,14 +266,22 @@ export async function onRequest(context) {
         fileId: file.id,
         slug: project.slug,
         accessCount,
+        result: "success",
       },
     });
 
     return jsonResponse(
-      { ok: true, project: publicProject(project, accessCount) },
+      {
+        ok: true,
+        project: publicProject(project, accessCount),
+      },
       { status: 201 }
     );
   } catch (error) {
-    return errorResponse(error.message, error.status || 500, error.code || "ADMIN_ORGANIZATION_FILE_PROJECT_ERROR");
+    return errorResponse(
+      error.message,
+      error.status || 500,
+      error.code || "ADMIN_ORGANIZATION_FILE_PROJECT_ERROR"
+    );
   }
 }

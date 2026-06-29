@@ -50,6 +50,7 @@ export const PERMISSIONS = [
   "limits.increase_request",
 
   "admin.panel.access",
+
   "audit.view",
   "audit.export",
   "audit.security.view",
@@ -125,9 +126,7 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "limits.increase_request",
 ]);
 
-const VIEWER_EXPLICIT_ONLY_PERMISSIONS = new Set([
-  "export.download",
-]);
+const VIEWER_EXPLICIT_ONLY_PERMISSIONS = new Set(["export.download"]);
 
 const SENSITIVE_ACTIONS = new Set([
   "project.create",
@@ -168,7 +167,12 @@ const SENSITIVE_ACTIONS = new Set([
   "limits.increase_request",
 
   "admin.panel.access",
+
+  "audit.view",
   "audit.export",
+  "audit.security.view",
+  "audit.platform.view",
+  "audit.organization.view",
 ]);
 
 function getDb(env) {
@@ -390,14 +394,6 @@ async function getOrganizationMembership(env, userId, organizationId) {
     return null;
   }
 
-  /**
-   * A tabela organization_users confirmada no ambiente local possui:
-   * id, organization_id, user_id, access_level, created_at.
-   *
-   * Por isso, não selecionamos role/active diretamente. Usamos aliases
-   * seguros para manter compatibilidade com ambientes onde essas colunas
-   * ainda não existem.
-   */
   const membership = await optionalFirst(
     env,
     `
@@ -617,14 +613,6 @@ async function organizationPermissionAllows(
   const relation = await getOrganizationRelation(env, user, organizationId);
   const managementPermission = isManagementPermission(permission);
 
-  /**
-   * Admin não recebe acesso automático só por role textual.
-   * Para operar Gestão, precisa estar no escopo da organização.
-   *
-   * Escopo aceito:
-   * - membership na organização + permissão explícita/role_permission;
-   * - ou user_permission diretamente escopada para organization_id.
-   */
   if (role === "admin") {
     const adminHasScopedAccess =
       scopedOrganizationUserPermission ||
@@ -638,11 +626,6 @@ async function organizationPermissionAllows(
     };
   }
 
-  /**
-   * Owner opera apenas dentro da própria organização.
-   * A matriz OWNER_ORGANIZATION_PERMISSIONS define o que Owner pode tentar fazer.
-   * Regras de escalada, como impedir Admin/Super Admin, ficam em organizations.js.
-   */
   if (role === "owner") {
     if (!relation.isOwner) {
       return {
@@ -664,11 +647,6 @@ async function organizationPermissionAllows(
     };
   }
 
-  /**
-   * Editor e Viewer precisam pertencer à organização.
-   * Para permissões de Gestão, não basta role_permissions genérica:
-   * precisam de permissão explícita.
-   */
   if (role === "editor" || role === "viewer") {
     if (!relation.isMember) {
       return {
@@ -732,8 +710,9 @@ async function buildResolvedContext(env, context = {}) {
     getContextOrganizationId(context) ||
     (project ? toId(project.organization_id) : null);
 
-  const scopeType = normalizeScopeType(context.scopeType || context.scope_type)
-    || (project ? "project" : organizationId ? "organization" : "global");
+  const scopeType =
+    normalizeScopeType(context.scopeType || context.scope_type) ||
+    (project ? "project" : organizationId ? "organization" : "global");
 
   return {
     ...context,
@@ -805,11 +784,6 @@ export async function can(env, user, permission, context = {}) {
       resolvedContext,
     );
 
-  /**
-   * Project-scoped: accessLevel do vínculo user_projects deve valer para
-   * qualquer role global, inclusive admin escopado. Isso não concede admin
-   * global; apenas respeita vínculo explícito usuário-projeto.
-   */
   const allowedByProjectMembership = await projectMembershipAllows(
     env,
     user,
@@ -828,11 +802,6 @@ export async function can(env, user, permission, context = {}) {
     };
   }
 
-  /**
-   * Organization-scoped: documentos, chamados, exportações e Gestão precisam
-   * de organização no contexto e validação granular. Frontend escondendo botão
-   * nunca substitui esta validação.
-   */
   if (isOrganizationScopedPermission(normalizedPermission)) {
     const organizationDecision = await organizationPermissionAllows(
       env,
@@ -854,10 +823,6 @@ export async function can(env, user, permission, context = {}) {
     };
   }
 
-  /**
-   * Admin continua configurável: passa apenas com permissão explícita ou
-   * role_permissions configurada. Não há bypass global por role=admin.
-   */
   if (role === "admin") {
     return {
       allowed: explicitUserPermission || configuredRolePermission,
@@ -1077,7 +1042,9 @@ function inferResourceType(permission) {
     return "organization";
   }
 
-  if (prefix === "admin" || prefix === "audit") return "platform";
+  if (prefix === "admin" || prefix === "audit") {
+    return "platform";
+  }
 
   return "unknown";
 }

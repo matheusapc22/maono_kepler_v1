@@ -3,24 +3,13 @@ import {
   jsonResponse,
   methodNotAllowed,
 } from "../../../../_lib/http.js";
-import { requireSession } from "../../../../_lib/auth.js";
+import { requirePermission } from "../../../../_lib/permissions.js";
 import {
   joinDropboxPath,
   listDropboxFolder,
   uploadDropboxTextFile,
 } from "../../../../_lib/dropbox.js";
 import { logAudit } from "../../../../_lib/projects.js";
-
-const ADMIN_ROLES = new Set(["super_admin", "admin"]);
-
-function requireAdmin(user) {
-  if (!ADMIN_ROLES.has(user?.role)) {
-    const error = new Error("Apenas administradores podem acessar este recurso.");
-    error.status = 403;
-    error.code = "FORBIDDEN";
-    throw error;
-  }
-}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -34,6 +23,29 @@ function normalizeOrganizationId(value) {
   }
 
   return organizationId;
+}
+
+async function requireOrganizationAdminPanelAccess(
+  env,
+  request,
+  organizationId,
+  action,
+) {
+  return requirePermission(
+    env,
+    request,
+    "admin.panel.access",
+    {
+      organizationId,
+      scopeType: "organization",
+    },
+    {
+      resourceType: "organization",
+      resourceId: organizationId,
+      auditAction: action,
+      auditOnSuccess: false,
+    },
+  );
 }
 
 function inferFileType(fileName) {
@@ -93,7 +105,12 @@ function publicAdminDropboxEntry(entry) {
 
 async function getOrganization(env, organizationId) {
   return env.DB.prepare(
-    `SELECT id, name, slug, dropbox_root_path, active
+    `SELECT
+      id,
+      name,
+      slug,
+      dropbox_root_path,
+      active
      FROM organizations
      WHERE id = ?
      LIMIT 1`,
@@ -200,8 +217,9 @@ export async function onRequest(context) {
   const { request, env, params } = context;
 
   try {
-    const user = await requireSession(env, request);
-    requireAdmin(user);
+    if (request.method !== "GET" && request.method !== "POST") {
+      return methodNotAllowed(["GET", "POST"]);
+    }
 
     const organizationId = normalizeOrganizationId(params.id);
 
@@ -212,6 +230,15 @@ export async function onRequest(context) {
         "ORGANIZATION_ID_INVALID",
       );
     }
+
+    const { user } = await requireOrganizationAdminPanelAccess(
+      env,
+      request,
+      organizationId,
+      request.method === "POST"
+        ? "admin.organization_files.upload"
+        : "admin.organization_files.view",
+    );
 
     const organization = await getOrganization(env, organizationId);
 

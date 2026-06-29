@@ -174,6 +174,10 @@ function buildProjectContext(
   };
 }
 
+function buildSectionPermissionContext(user: MaonoUser | null) {
+  return buildOrganizationContext(user);
+}
+
 function canUser(
   user: MaonoUser | null,
   permission: Permission,
@@ -190,19 +194,6 @@ function canProject(
   return canUser(user, permission, buildProjectContext(user, project));
 }
 
-function canViewSection(user: MaonoUser | null, section: ProjectSidebarSection) {
-  if (isWorkspaceSection(section)) {
-    return true;
-  }
-
-  const permission = SECTION_PERMISSIONS[section];
-
-  if (!permission) {
-    return false;
-  }
-
-  return canUser(user, permission, buildOrganizationContext(user));
-}
 
 function mergeProjectIntoList(
   projects: WorkspaceProject[],
@@ -216,6 +207,23 @@ function mergeProjectIntoList(
           favorited: updatedProject.favorite,
         }
       : project,
+  );
+}
+
+function RestrictedSection({
+  section,
+}: {
+  section: ProjectSidebarSection;
+}) {
+  return (
+    <section className="mm-empty-state">
+      <div>▧</div>
+      <h2>Acesso restrito</h2>
+      <p>
+        Você não possui permissão para acessar {sectionTitle(section)} neste
+        contexto.
+      </p>
+    </section>
   );
 }
 
@@ -335,12 +343,6 @@ const ProjectsPage: React.FC = () => {
       navigate("/login?next=/projects", { replace: true });
     }
   }, [authenticated, loading, navigate]);
-
-  useEffect(() => {
-    if (!loading && authenticated && !canViewSection(user, sidebarSection)) {
-      setSidebarSection("all");
-    }
-  }, [authenticated, loading, sidebarSection, user]);
 
   async function handleLogout() {
     await logout();
@@ -489,20 +491,20 @@ function ProjectsSectionRouter({
 }) {
   const accessControlUser = userAsAccessControlUser(user);
   const requiredPermission = SECTION_PERMISSIONS[section];
+  const sectionPermissionContext = buildSectionPermissionContext(user);
 
+  /**
+   * Defesa visual do router interno:
+   * se uma seção administrativa ou organizacional for forçada manualmente,
+   * o conteúdo não é renderizado sem a permissão correspondente.
+   *
+   * Segurança real permanece no backend e nas rotas protegidas.
+   */
   if (
     requiredPermission &&
-    !canUser(user, requiredPermission, buildOrganizationContext(user))
+    !canUser(user, requiredPermission, sectionPermissionContext)
   ) {
-    return (
-      <section className="mm-empty-state">
-        <div>▧</div>
-        <h2>Acesso restrito</h2>
-        <p>
-          Você não possui permissão para acessar esta seção da organização.
-        </p>
-      </section>
-    );
+    return <RestrictedSection section={section} />;
   }
 
   switch (section) {

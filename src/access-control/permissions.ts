@@ -38,7 +38,12 @@ export const PERMISSION = {
   LIMITS_INCREASE_REQUEST: "limits.increase_request",
 
   ADMIN_PANEL_ACCESS: "admin.panel.access",
+
   AUDIT_VIEW: "audit.view",
+  AUDIT_EXPORT: "audit.export",
+  AUDIT_SECURITY_VIEW: "audit.security.view",
+  AUDIT_PLATFORM_VIEW: "audit.platform.view",
+  AUDIT_ORGANIZATION_VIEW: "audit.organization.view",
 } as const;
 
 export type Permission = (typeof PERMISSION)[keyof typeof PERMISSION];

@@ -67,6 +67,11 @@ const MANAGEMENT_PERMISSIONS = new Set<Permission>([
   PERMISSION.LIMITS_VIEW,
 ]);
 
+const ADMINISTRATION_PERMISSIONS = new Set<Permission>([
+  PERMISSION.ADMIN_PANEL_ACCESS,
+  PERMISSION.AUDIT_VIEW,
+]);
+
 function getInitials(nameOrEmail?: string) {
   const value = String(nameOrEmail || "M").trim();
   const [first = "M", second = ""] = value
@@ -202,6 +207,36 @@ function canShowManagementItem(
   return can(user as AccessControlUser, item.permission, context);
 }
 
+function isAdministrationItem(item: SidebarItem) {
+  return Boolean(
+    item.permission && ADMINISTRATION_PERMISSIONS.has(item.permission),
+  );
+}
+
+function canShowAdministrationItem(
+  user: MaonoUser | null,
+  item: SidebarItem,
+  context: PermissionContext,
+) {
+  if (!user || !item.permission) {
+    return false;
+  }
+
+  if (!isAdministrationItem(item)) {
+    return false;
+  }
+
+  /**
+   * Não duplicamos regra sensível aqui.
+   * A sidebar pergunta ao can.ts se o item pode aparecer visualmente:
+   * - Painel Admin depende de admin.panel.access.
+   * - Auditoria depende de audit.view.
+   *
+   * Segurança real continua nas rotas e endpoints.
+   */
+  return can(user as AccessControlUser, item.permission, context);
+}
+
 function canShowItem(
   user: MaonoUser | null,
   item: SidebarItem,
@@ -217,6 +252,10 @@ function canShowItem(
 
   if (item.key && MANAGEMENT_SECTIONS.has(item.key)) {
     return canShowManagementItem(user, item, context);
+  }
+
+  if (isAdministrationItem(item)) {
+    return canShowAdministrationItem(user, item, context);
   }
 
   return can(user as AccessControlUser, item.permission, context);

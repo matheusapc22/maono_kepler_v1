@@ -35,6 +35,37 @@ const ORGANIZATION_CONTEXT_PERMISSION_PREFIXES = [
   "plan.",
 ] as const;
 
+const ADMINISTRATIVE_PERMISSIONS: ReadonlySet<Permission> =
+  new Set<Permission>([
+    "admin.panel.access",
+    "audit.view",
+    "audit.export",
+    "audit.security.view",
+    "audit.platform.view",
+    "audit.organization.view",
+  ]);
+
+const AUDIT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
+  "audit.view",
+  "audit.export",
+  "audit.security.view",
+  "audit.platform.view",
+  "audit.organization.view",
+]);
+
+const PLATFORM_AUDIT_PERMISSIONS: ReadonlySet<Permission> =
+  new Set<Permission>([
+    "audit.security.view",
+    "audit.platform.view",
+  ]);
+
+const ORGANIZATION_AUDIT_PERMISSIONS: ReadonlySet<Permission> =
+  new Set<Permission>([
+    "audit.view",
+    "audit.export",
+    "audit.organization.view",
+  ]);
+
 const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
   new Set<Permission>([
     "document.view",
@@ -105,6 +136,13 @@ function getTargetOrganizationId(context: PermissionContext): string | null {
   );
 }
 
+function getTargetOrUserOrganizationId(
+  user: AccessControlUser,
+  context: PermissionContext,
+): string | null {
+  return getTargetOrganizationId(context) ?? getUserOrganizationId(user);
+}
+
 function getTargetProjectId(context: PermissionContext): string | null {
   return (
     toId(context.projectId) ??
@@ -166,6 +204,22 @@ function isSameOrganization(
   return hasOrganizationInUserList(user, targetOrganizationId);
 }
 
+function isSameAdministrativeOrganization(
+  user: AccessControlUser,
+  context: PermissionContext,
+): boolean {
+  const organizationId = getTargetOrUserOrganizationId(user, context);
+
+  if (!organizationId) {
+    return false;
+  }
+
+  return isSameOrganization(user, {
+    ...context,
+    organizationId,
+  });
+}
+
 function getExplicitPermissions(
   user: AccessControlUser,
   context: PermissionContext,
@@ -202,6 +256,22 @@ function isOrganizationScopedPermission(permission: Permission): boolean {
   return ORGANIZATION_CONTEXT_PERMISSION_PREFIXES.some((prefix) =>
     permission.startsWith(prefix),
   );
+}
+
+function isAdministrativePermission(permission: Permission): boolean {
+  return ADMINISTRATIVE_PERMISSIONS.has(permission);
+}
+
+function isAuditPermission(permission: Permission): boolean {
+  return AUDIT_PERMISSIONS.has(permission);
+}
+
+function isPlatformAuditPermission(permission: Permission): boolean {
+  return PLATFORM_AUDIT_PERMISSIONS.has(permission);
+}
+
+function isOrganizationAuditPermission(permission: Permission): boolean {
+  return ORGANIZATION_AUDIT_PERMISSIONS.has(permission);
 }
 
 function ownerPolicyAllows(permission: Permission): boolean {
@@ -268,6 +338,59 @@ function getScopes(
   return [...(user.scopes ?? []), ...(context.scopes ?? [])];
 }
 
+function hasPlatformScope(
+  user: AccessControlUser,
+  context: PermissionContext,
+): boolean {
+  const scopes = getScopes(user, context);
+
+  return (
+    scopes.includes("*") ||
+    scopes.includes("platform:*") ||
+    scopes.includes("platform:all")
+  );
+}
+
+function hasOrganizationScope(
+  user: AccessControlUser,
+  context: PermissionContext,
+): boolean {
+  const organizationId = getTargetOrUserOrganizationId(user, context);
+
+  if (!organizationId) {
+    return false;
+  }
+
+  if (!isSameAdministrativeOrganization(user, context)) {
+    return false;
+  }
+
+  const scopes = getScopes(user, context);
+
+  /**
+   * Compatibilidade visual: se a sessão ainda não trouxe scopes, mas trouxe
+   * vínculo claro de organização, a UI pode exibir itens autorizados por
+   * permissão explícita. A segurança real continua no backend.
+   */
+  if (scopes.length === 0) {
+    return true;
+  }
+
+  return (
+    scopes.includes(`organization:${organizationId}`) ||
+    scopes.includes(`org:${organizationId}`) ||
+    scopes.includes("organization:*") ||
+    scopes.includes("org:*")
+  );
+}
+
+function hasAdministrativeScope(
+  user: AccessControlUser,
+  context: PermissionContext,
+): boolean {
+  return hasPlatformScope(user, context) || hasOrganizationScope(user, context);
+}
+
 function hasScope(user: AccessControlUser, context: PermissionContext): boolean {
   const scopes = getScopes(user, context);
 
@@ -282,11 +405,7 @@ function hasScope(user: AccessControlUser, context: PermissionContext): boolean 
     return true;
   }
 
-  if (
-    scopes.includes("*") ||
-    scopes.includes("platform:*") ||
-    scopes.includes("platform:all")
-  ) {
+  if (hasPlatformScope(user, context)) {
     return true;
   }
 
@@ -315,6 +434,60 @@ function hasScope(user: AccessControlUser, context: PermissionContext): boolean 
    * para adaptar a UI. A validação real de escopo deve acontecer no backend.
    */
   return !organizationId && !projectId;
+}
+
+function administrativePermissionAllows(
+  user: AccessControlUser,
+  role: string,
+  permission: Permission,
+  context: PermissionContext,
+  explicitPermission: boolean,
+): boolean {
+  if (permission === "admin.panel.access") {
+    if (role === "admin") {
+      return explicitPermission && hasAdministrativeScope(user, context);
+    }
+
+    /**
+     * Owner, Editor e Viewer não devem visualizar Painel Admin por role.
+     * Mesmo com UI manipulada, backend e rotas precisam bloquear.
+     */
+    return false;
+  }
+
+  if (!isAuditPermission(permission)) {
+    return false;
+  }
+
+  if (isPlatformAuditPermission(permission)) {
+    return explicitPermission && hasPlatformScope(user, context);
+  }
+
+  if (role === "admin") {
+    return explicitPermission && hasAdministrativeScope(user, context);
+  }
+
+  if (role === "owner" || role === "client") {
+    /**
+     * Owner só visualiza auditoria organizacional se vier autorizado por
+     * permissão explícita e estiver no escopo da própria organização.
+     */
+    return (
+      explicitPermission &&
+      isOrganizationAuditPermission(permission) &&
+      hasOrganizationScope(user, context)
+    );
+  }
+
+  if (role === "editor" || role === "viewer") {
+    /**
+     * Editor e Viewer dependem de permissão explícita. Por padrão, como não
+     * recebem audit.* na sessão, não veem Auditoria.
+     */
+    return explicitPermission && hasAdministrativeScope(user, context);
+  }
+
+  return false;
 }
 
 function organizationPermissionAllows(
@@ -398,6 +571,21 @@ export function can(
   const explicitPermission = hasExplicitPermission(user, permission, context);
 
   /**
+   * Permissões administrativas e de auditoria entram antes das permissões
+   * organization-scoped. Isso impede que audit.* ou admin.panel.access sejam
+   * liberadas por policy genérica de Owner/Admin.
+   */
+  if (isAdministrativePermission(permission)) {
+    return administrativePermissionAllows(
+      user,
+      role,
+      permission,
+      context,
+      explicitPermission,
+    );
+  }
+
+  /**
    * Permissões organization-scoped entram antes da regra geral de role.
    * Isso cobre Sprint 7 e Sprint 8:
    * document.*, ticket.*, export.*, users.*, permission.*, role.*,
@@ -414,8 +602,8 @@ export function can(
   }
 
   /**
-   * Admin continua configurável: fora do bloco organization-scoped,
-   * depende de permissão explícita e escopo.
+   * Admin continua configurável: fora do bloco organization-scoped e fora
+   * do bloco administrativo, depende de permissão explícita e escopo.
    */
   if (role === "admin") {
     return explicitPermission && hasScope(user, context);

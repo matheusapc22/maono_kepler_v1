@@ -1,6 +1,15 @@
 // AppRoutes.tsx
 import React, { lazy, Suspense, useEffect } from "react";
 import { Navigate, Routes, Route, useLocation } from "react-router";
+
+import {
+  can,
+  type AccessControlOrganization,
+  type AccessControlUser,
+  type PermissionContext,
+} from "./access-control/can";
+import { PERMISSION } from "./access-control/permissions";
+import { useSession, type MaonoUser } from "./auth/session";
 import {
   getCloudProvider,
   DEFAULT_CLOUD_PROVIDER,
@@ -18,6 +27,90 @@ const WithSuspense: React.FC<{ children: React.ReactNode }> = ({
     {children}
   </Suspense>
 );
+
+function buildSessionPermissionContext(
+  user: MaonoUser | null,
+): PermissionContext {
+  if (!user) {
+    return {};
+  }
+
+  const accessUser = user as AccessControlUser & {
+    activeOrganization?: AccessControlOrganization | null;
+    organization?: AccessControlOrganization | null;
+  };
+
+  const organization =
+    accessUser.activeOrganization ?? accessUser.organization ?? undefined;
+
+  const organizationId =
+    accessUser.activeOrganizationId ??
+    accessUser.organizationId ??
+    accessUser.organization_id ??
+    organization?.id ??
+    organization?.organizationId ??
+    undefined;
+
+  return {
+    organizationId,
+    organization: organization ?? undefined,
+    permissions: accessUser.permissions,
+    scopes: accessUser.scopes,
+  };
+}
+
+function buildLoginRedirect(location: ReturnType<typeof useLocation>) {
+  const next = `${location.pathname}${location.search || ""}`;
+
+  return `/login?next=${encodeURIComponent(next)}`;
+}
+
+const RouteLoading: React.FC = () => (
+  <div style={{ padding: 16 }}>Carregando…</div>
+);
+
+const RestrictedAccess: React.FC = () => (
+  <main style={{ padding: 24 }}>
+    <h1>Acesso restrito</h1>
+    <p>
+      Você não possui permissão para acessar esta área administrativa neste
+      contexto.
+    </p>
+  </main>
+);
+
+const AdminRouteGuard: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const { authenticated, loading, user } = useSession();
+  const location = useLocation();
+
+  if (loading) {
+    return <RouteLoading />;
+  }
+
+  if (!authenticated) {
+    return (
+      <Navigate
+        to={buildLoginRedirect(location)}
+        replace
+      />
+    );
+  }
+
+  const permissionContext = buildSessionPermissionContext(user);
+  const allowed = can(
+    user as AccessControlUser | null,
+    PERMISSION.ADMIN_PANEL_ACCESS,
+    permissionContext,
+  );
+
+  if (!allowed) {
+    return <RestrictedAccess />;
+  }
+
+  return <>{children}</>;
+};
 
 const AuthCallback: React.FC = () => {
   const location = useLocation();
@@ -52,6 +145,7 @@ const AppRoutes: React.FC = () => {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/projects" replace />} />
+
       <Route
         path="/login"
         element={
@@ -60,6 +154,7 @@ const AppRoutes: React.FC = () => {
           </WithSuspense>
         }
       />
+
       <Route
         path="/projects"
         element={
@@ -68,15 +163,23 @@ const AppRoutes: React.FC = () => {
           </WithSuspense>
         }
       />
+
       <Route
         path="/admin"
         element={
-          <WithSuspense>
-            <AdminPage />
-          </WithSuspense>
+          <AdminRouteGuard>
+            <WithSuspense>
+              <AdminPage />
+            </WithSuspense>
+          </AdminRouteGuard>
         }
       />
-      <Route path="/admin/files" element={<Navigate to="/admin?section=organizations" replace />} />
+
+      <Route
+        path="/admin/files"
+        element={<Navigate to="/admin?section=organizations" replace />}
+      />
+
       <Route
         path="/projects/:projectSlug/map"
         element={
@@ -85,7 +188,9 @@ const AppRoutes: React.FC = () => {
           </WithSuspense>
         }
       />
+
       <Route path="/auth" element={<AuthCallback />} />
+
       <Route
         path="map"
         element={
@@ -94,6 +199,7 @@ const AppRoutes: React.FC = () => {
           </WithSuspense>
         }
       />
+
       <Route path="(:id)" element={<KeplerApp />} />
       <Route path="map/:provider" element={<KeplerApp />} />
       <Route path="demo/map" element={<KeplerApp />} />

@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import {
+  can,
+  type AccessControlOrganization,
+  type AccessControlUser,
+  type PermissionContext,
+} from "../access-control/can";
+import { PERMISSION } from "../access-control/permissions";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
 
@@ -51,6 +58,22 @@ type DropboxEntry = {
   size?: number;
 };
 
+type ApiPayload = {
+  ok?: boolean;
+  message?: string;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  [key: string]: any;
+};
+
+type ApiError = Error & {
+  status?: number;
+  code?: string;
+  payload?: unknown;
+};
+
 const EMPTY_ORG_FORM = {
   name: "",
   slug: "",
@@ -72,11 +95,36 @@ const selectStyle: React.CSSProperties = {
 };
 
 async function readJson(response: Response) {
-  const data = await response.json();
-  if (!response.ok || data?.ok === false) {
-    throw new Error(data?.error?.message || "Erro na requisição.");
+  const text = await response.text();
+  let data: ApiPayload | null = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text) as ApiPayload;
+    } catch {
+      data = {
+        ok: false,
+        message: text,
+      };
+    }
   }
-  return data;
+
+  if (!response.ok || data?.ok === false) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      (response.status === 403
+        ? "Acesso negado para a área administrativa."
+        : "Erro na requisição.");
+
+    const error = new Error(message) as ApiError;
+    error.status = response.status;
+    error.code = data?.error?.code;
+    error.payload = data;
+    throw error;
+  }
+
+  return data || {};
 }
 
 function slugify(value: string) {
@@ -101,6 +149,82 @@ function normalizeProjectPath(slug: string) {
   const cleanSlug = slugify(slug);
   return cleanSlug ? `/projects/${cleanSlug}` : "/projects/";
 }
+
+function buildSessionPermissionContext(
+  user: ReturnType<typeof useSession>["user"],
+): PermissionContext {
+  if (!user) {
+    return {};
+  }
+
+  const accessUser = user as AccessControlUser & {
+    activeOrganization?: AccessControlOrganization | null;
+    organization?: AccessControlOrganization | null;
+  };
+
+  const organization =
+    accessUser.activeOrganization ?? accessUser.organization ?? undefined;
+
+  const organizationId =
+    accessUser.activeOrganizationId ??
+    accessUser.organizationId ??
+    accessUser.organization_id ??
+    organization?.id ??
+    organization?.organizationId ??
+    undefined;
+
+  return {
+    organizationId,
+    organization: organization ?? undefined,
+    permissions: accessUser.permissions,
+    scopes: accessUser.scopes,
+  };
+}
+
+function loginRedirectForAdminFiles() {
+  return `/login?next=${encodeURIComponent("/admin/files")}`;
+}
+
+const LoadingScreen: React.FC = () => (
+  <main className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
+    <p className="animate-pulse">Carregando gestão de arquivos...</p>
+  </main>
+);
+
+const RestrictedAdminAccess: React.FC = () => (
+  <main className="min-h-screen bg-[#0f172a] text-white">
+    <section className="mx-auto flex min-h-screen max-w-3xl flex-col items-start justify-center px-6 py-12">
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/20">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-blue-200">
+          Administração Maõno
+        </p>
+        <h1 className="mt-3 text-3xl font-semibold">Acesso restrito</h1>
+        <p className="mt-4 text-white/70">
+          Você não possui permissão para acessar a gestão administrativa de
+          organizações e arquivos neste contexto.
+        </p>
+        <p className="mt-3 text-sm text-white/55">
+          Permissão visual exigida: <strong>admin.panel.access</strong>.
+          Endpoints administrativos continuam protegidos no backend.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            className="rounded-xl border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
+            to="/projects"
+          >
+            Voltar para Projetos
+          </Link>
+          <Link
+            className="rounded-xl border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
+            to="/login"
+          >
+            Trocar usuário
+          </Link>
+        </div>
+      </div>
+    </section>
+  </main>
+);
 
 const AdminFilesPage: React.FC = () => {
   const { authenticated, loading, user, logout } = useSession();
@@ -127,7 +251,20 @@ const AdminFilesPage: React.FC = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const isAdmin = user?.role === "admin";
+  const permissionContext = useMemo(
+    () => buildSessionPermissionContext(user),
+    [user],
+  );
+
+  const canAccessAdmin = useMemo(
+    () =>
+      can(
+        user as AccessControlUser | null,
+        PERMISSION.ADMIN_PANEL_ACCESS,
+        permissionContext,
+      ),
+    [permissionContext, user],
+  );
   const selectedOrganization = useMemo(
     () => organizations.find((item) => item.id === selectedOrganizationId) || null,
     [organizations, selectedOrganizationId]
@@ -200,29 +337,39 @@ const AdminFilesPage: React.FC = () => {
   }
 
   useEffect(() => {
-    if (!loading && !authenticated) navigate("/login?next=/admin/files", { replace: true });
+    if (!loading && !authenticated) {
+      navigate(loginRedirectForAdminFiles(), { replace: true });
+    }
   }, [authenticated, loading, navigate]);
 
   useEffect(() => {
-    if (!loading && authenticated && !isAdmin) navigate("/projects", { replace: true });
-  }, [authenticated, isAdmin, loading, navigate]);
+    if (!loading && authenticated && canAccessAdmin) {
+      refreshOrganizations().catch((err) =>
+        setError(err instanceof Error ? err.message : "Erro ao carregar organizações."),
+      );
+    }
 
-  useEffect(() => {
-    if (!loading && authenticated && isAdmin) {
-      refreshOrganizations().catch((err) => setError(err.message));
+    if (!loading && authenticated && !canAccessAdmin) {
+      setOrganizations([]);
+      setUsers([]);
+      setSelectedOrganizationId(null);
+      setOrganizationFiles([]);
+      setOrganizationUsers([]);
+      setDropboxEntries([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authenticated, isAdmin, loading]);
+  }, [authenticated, canAccessAdmin, loading]);
 
   useEffect(() => {
-    if (selectedOrganizationId) {
+    if (selectedOrganizationId && canAccessAdmin) {
       refreshOrganizationDetails(selectedOrganizationId);
     } else {
       setOrganizationFiles([]);
       setOrganizationUsers([]);
       setDropboxEntries([]);
     }
-  }, [selectedOrganizationId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAccessAdmin, selectedOrganizationId]);
 
   async function handleLogout() {
     await logout();
@@ -485,14 +632,16 @@ const AdminFilesPage: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <main className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
-        <p className="animate-pulse">Carregando gestão de arquivos...</p>
-      </main>
-    );
+    return <LoadingScreen />;
   }
 
-  if (!authenticated || !isAdmin) return null;
+  if (!authenticated) {
+    return null;
+  }
+
+  if (!canAccessAdmin) {
+    return <RestrictedAdminAccess />;
+  }
 
   return (
     <main className="min-h-screen bg-[#0f172a] text-white">
