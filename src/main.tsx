@@ -2,6 +2,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import "./components/loading/Skeleton.css";
 import "./fallback-ui-styles";
 import "./auto-project-id";
 import "./dropbox-sync-ui";
@@ -48,5 +49,5 @@ createRoot(document.getElementById("root")!).render(
         </SessionProvider>
       </BrowserRouter>
     </Provider>
-  </StrictMode>
+  </StrictMode>,
 );
