@@ -3,7 +3,10 @@ import {
   errorResponse,
   methodNotAllowed,
 } from "../_lib/http.js";
-import { getSessionUser } from "../_lib/auth.js";
+import {
+  getSessionUser,
+  setSessionActiveOrganization,
+} from "../_lib/auth.js";
 import { listProjectsForUser, publicProject } from "../_lib/projects.js";
 
 const ROLE_ALIASES = {
@@ -296,7 +299,6 @@ async function listActiveOrganizationsForSuperAdmin(env) {
       FROM organizations
       WHERE active = 1
       ORDER BY name ASC
-      LIMIT 100
     `,
   );
 
@@ -317,7 +319,6 @@ async function listActiveOrganizationsForSuperAdmin(env) {
       FROM organizations
       WHERE active = 1
       ORDER BY name ASC
-      LIMIT 100
     `,
   );
 
@@ -325,22 +326,7 @@ async function listActiveOrganizationsForSuperAdmin(env) {
     return publicOrganizations(activeRows);
   }
 
-  const fallbackRows = await optionalAll(
-    env,
-    `
-      SELECT
-        id,
-        name,
-        slug,
-        'super_admin' AS role,
-        'owner' AS access_level
-      FROM organizations
-      ORDER BY name ASC
-      LIMIT 100
-    `,
-  );
-
-  return publicOrganizations(fallbackRows);
+  return [];
 }
 
 async function listOrganizationsForUser(env, user, role) {
@@ -368,8 +354,8 @@ async function listOrganizationsForUser(env, user, role) {
       FROM organization_users ou
       INNER JOIN organizations o ON o.id = ou.organization_id
       WHERE ou.user_id = ?
+        AND o.active = 1
       ORDER BY o.name ASC
-      LIMIT 100
     `,
     [role, userId],
   );
@@ -389,36 +375,26 @@ async function listOrganizationsForUser(env, user, role) {
             FROM organization_users ou
             INNER JOIN organizations o ON o.id = ou.organization_id
             WHERE ou.user_id = ?
+              AND o.active = 1
             ORDER BY o.name ASC
-            LIMIT 100
           `,
           [role, userId],
         );
 
-  const organizations = publicOrganizations(rows);
-  const fallbackOrganizationId = getUserOrganizationId(user);
-
-  if (organizations.length === 0 && fallbackOrganizationId) {
-    return [
-      {
-        id: fallbackOrganizationId,
-        name: user.organization_name || user.organizationName || undefined,
-        slug: user.organization_slug || user.organizationSlug || undefined,
-        role: role === "owner" ? "owner" : undefined,
-        accessLevel: user.accessLevel || user.access_level || undefined,
-        access_level: user.access_level || user.accessLevel || undefined,
-      },
-    ];
-  }
-
-  return organizations;
+  return publicOrganizations(rows);
 }
 
 function getActiveOrganizationId(user, organizations) {
   const explicit = getUserOrganizationId(user);
 
   if (explicit) {
-    return explicit;
+    const authorizedOrganization = organizations.find(
+      (organization) => String(organization.id) === String(explicit),
+    );
+
+    if (authorizedOrganization) {
+      return authorizedOrganization.id;
+    }
   }
 
   return organizations[0]?.id || null;
@@ -579,19 +555,25 @@ async function listStoredScopes(env, userId) {
     .filter((scope) => typeof scope === "string" && scope.trim());
 }
 
-function buildDefaultScopes(role, organizations) {
+function buildDefaultScopes(role, activeOrganizationId) {
   if (role === "super_admin") {
     return ["platform:*"];
   }
 
-  return organizations.map((organization) => `organization:${organization.id}`);
+  return activeOrganizationId
+    ? [`organization:${activeOrganizationId}`]
+    : [];
 }
 
-async function listScopes(env, user, role, organizations) {
+async function listScopes(env, user, role, activeOrganizationId) {
   const storedScopes = await listStoredScopes(env, user.id);
 
+  if (role !== "super_admin") {
+    return buildDefaultScopes(role, activeOrganizationId);
+  }
+
   return uniqueStrings([
-    ...buildDefaultScopes(role, organizations),
+    ...buildDefaultScopes(role, activeOrganizationId),
     ...storedScopes,
   ]);
 }
@@ -760,6 +742,16 @@ function getActiveOrganization(organizations, activeOrganizationId) {
   );
 }
 
+function getEffectiveRole(accountRole, activeOrganization) {
+  if (accountRole === "super_admin" || accountRole === "admin") {
+    return accountRole;
+  }
+
+  return normalizeRole(
+    activeOrganization?.accessLevel ?? activeOrganization?.access_level,
+  );
+}
+
 function publicUser(
   user,
   role,
@@ -774,13 +766,19 @@ function publicUser(
     organizations,
     activeOrganizationId,
   );
+  const accessLevel =
+    activeOrganization?.accessLevel ??
+    activeOrganization?.access_level ??
+    null;
 
   return {
     id: user.id,
     email: user.email,
     name: user.name || undefined,
     role,
-    rawRole: user.role && String(user.role) !== role ? user.role : undefined,
+    rawRole:
+      user.rawRole ??
+      (user.role && String(user.role) !== role ? user.role : undefined),
 
     organizationId: activeOrganizationId,
     organization_id: activeOrganizationId,
@@ -791,14 +789,14 @@ function publicUser(
 
     permissions,
     scopes,
-    accessLevel: user.accessLevel || user.access_level || null,
-    access_level: user.access_level || user.accessLevel || null,
+    accessLevel,
+    access_level: accessLevel,
     featureFlags,
     limits,
   };
 }
 
-function unauthenticatedSession() {
+export function unauthenticatedSession() {
   return {
     authenticated: false,
     user: null,
@@ -807,6 +805,62 @@ function unauthenticatedSession() {
     organizations: [],
     permissions: [],
     scopes: [],
+  };
+}
+
+export async function buildAuthenticatedSession(env, user) {
+  const accountRole = normalizeRole(user.role);
+  const organizations = await listOrganizationsForUser(
+    env,
+    user,
+    accountRole,
+  );
+  const activeOrganizationId = getActiveOrganizationId(user, organizations);
+  const activeOrganization = getActiveOrganization(
+    organizations,
+    activeOrganizationId,
+  );
+  const role = getEffectiveRole(accountRole, activeOrganization);
+  const scopedUser = {
+    ...user,
+    role,
+    activeOrganizationId: activeOrganization?.id ?? null,
+    active_organization_id: activeOrganization?.id ?? null,
+    organizationId: activeOrganization?.id ?? null,
+    organization_id: activeOrganization?.id ?? null,
+  };
+
+  const [projects, permissions, scopes, featureFlags, limits] =
+    await Promise.all([
+      listProjectsForUser(env, scopedUser),
+      listConfiguredPermissions(
+        env,
+        scopedUser,
+        role,
+        activeOrganization?.id ?? null,
+      ),
+      listScopes(env, scopedUser, role, activeOrganization?.id ?? null),
+      listFeatureFlags(env, scopedUser.id, activeOrganization?.id ?? null),
+      getOrganizationLimits(env, activeOrganization?.id ?? null),
+    ]);
+
+  return {
+    authenticated: true,
+    user: publicUser(
+      scopedUser,
+      role,
+      activeOrganization?.id ?? null,
+      organizations,
+      permissions,
+      scopes,
+      featureFlags,
+      limits,
+    ),
+    projects: publicSafeProjects(projects),
+    activeOrganization,
+    organizations,
+    permissions,
+    scopes,
   };
 }
 
@@ -824,43 +878,21 @@ export async function onRequest(context) {
       return jsonResponse(unauthenticatedSession());
     }
 
-    const role = normalizeRole(user.role);
-    const organizations = await listOrganizationsForUser(env, user, role);
-    const activeOrganizationId = getActiveOrganizationId(user, organizations);
+    const session = await buildAuthenticatedSession(env, user);
+    const selectedOrganizationId = session.activeOrganization?.id ?? null;
 
-    const [projects, permissions, scopes, featureFlags, limits] =
-      await Promise.all([
-        listProjectsForUser(env, user),
-        listConfiguredPermissions(env, user, role, activeOrganizationId),
-        listScopes(env, user, role, organizations),
-        listFeatureFlags(env, user.id, activeOrganizationId),
-        getOrganizationLimits(env, activeOrganizationId),
-      ]);
+    if (
+      String(getUserOrganizationId(user) ?? "") !==
+      String(selectedOrganizationId ?? "")
+    ) {
+      await setSessionActiveOrganization(
+        env,
+        request,
+        selectedOrganizationId,
+      );
+    }
 
-    const publicProjects = publicSafeProjects(projects);
-    const activeOrganization = getActiveOrganization(
-      organizations,
-      activeOrganizationId,
-    );
-
-    return jsonResponse({
-      authenticated: true,
-      user: publicUser(
-        user,
-        role,
-        activeOrganizationId,
-        organizations,
-        permissions,
-        scopes,
-        featureFlags,
-        limits,
-      ),
-      projects: publicProjects,
-      activeOrganization,
-      organizations,
-      permissions,
-      scopes,
-    });
+    return jsonResponse(session);
   } catch (error) {
     console.error("[Maono session] Falha ao carregar sessão:", error);
 
