@@ -1,7 +1,11 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { MaonoUser } from "../../../auth/session";
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
+import {
+  projectThumbnailUrl,
+  type ProjectThumbnailState,
+} from "../project-thumbnail";
 import type { WorkspaceProject, WorkspaceSectionKey } from "../workspace-api";
 import ProjectCard from "./ProjectCard";
 
@@ -65,6 +69,10 @@ function matchesSearch(project: WorkspaceProject, searchQuery: string) {
   return searchable.includes(query);
 }
 
+function projectMediaKey(project: WorkspaceProject) {
+  return `${project.slug}:${projectThumbnailUrl(project)}`;
+}
+
 function EmptyState({
   title,
   description,
@@ -97,6 +105,31 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
   const filteredProjects = useMemo(
     () => projects.filter((project) => matchesSearch(project, searchQuery)),
     [projects, searchQuery],
+  );
+
+  const mediaKeys = useMemo(
+    () => filteredProjects.map(projectMediaKey),
+    [filteredProjects],
+  );
+  const mediaBatchKey = mediaKeys.join("|");
+  const [readyMediaKeys, setReadyMediaKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  useEffect(() => {
+    setReadyMediaKeys(new Set());
+  }, [mediaBatchKey]);
+
+  const handleThumbnailReady = useCallback(
+    (mediaKey: string, _state: ProjectThumbnailState) => {
+      setReadyMediaKeys((current) => {
+        if (current.has(mediaKey)) return current;
+        const next = new Set(current);
+        next.add(mediaKey);
+        return next;
+      });
+    },
+    [mediaBatchKey],
   );
 
   if (loading && projects.length === 0) {
@@ -138,25 +171,60 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
     );
   }
 
+  const readyMediaCount = mediaKeys.reduce(
+    (count, mediaKey) => count + (readyMediaKeys.has(mediaKey) ? 1 : 0),
+    0,
+  );
+  const waitingForMedia = readyMediaCount < mediaKeys.length;
+  const skeletonCount = Math.min(6, Math.max(1, filteredProjects.length));
+
   return (
-    <section className="mm-project-grid" aria-busy={loading}>
-      {filteredProjects.map((project) => (
-        <ProjectCard
-          key={project.slug}
-          project={project}
-          user={user}
-          canSave={canProjectSave(project)}
-          canFavorite={canProjectFavorite(project)}
-          favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
-          onFavoriteToggle={onFavoriteToggle}
-        />
-      ))}
+    <div
+      className="mm-project-grid-stage"
+      aria-busy={loading || waitingForMedia}
+    >
+      {waitingForMedia ? (
+        <div className="mm-project-grid-overlay">
+          <ProjectGridSkeleton count={skeletonCount} />
+        </div>
+      ) : null}
+
+      <section
+        className={`mm-project-grid mm-project-grid-content${
+          waitingForMedia ? " is-preparing-media" : ""
+        }`}
+        aria-hidden={waitingForMedia}
+      >
+        {filteredProjects.map((project) => {
+          const mediaKey = projectMediaKey(project);
+
+          return (
+            <ProjectCard
+              key={project.slug}
+              project={project}
+              user={user}
+              canSave={canProjectSave(project)}
+              canFavorite={canProjectFavorite(project)}
+              favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
+              onFavoriteToggle={onFavoriteToggle}
+              onThumbnailReady={(state) =>
+                handleThumbnailReady(mediaKey, state)
+              }
+            />
+          );
+        })}
+      </section>
+
       {loading ? (
         <span className="mm-sr-only" role="status">
           Atualizando projetos.
         </span>
+      ) : waitingForMedia ? (
+        <span className="mm-sr-only" role="status">
+          Preparando imagens dos projetos.
+        </span>
       ) : null}
-    </section>
+    </div>
   );
 };
 
