@@ -145,6 +145,30 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     onThumbnailReady?.(project, thumbnailState);
   }, [onThumbnailReady, project, thumbnailState]);
 
+  const handleThumbnailLoad = React.useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      const loadedSource = image.currentSrc || image.src;
+
+      const reveal = () => {
+        const currentSource = image.currentSrc || image.src;
+        if (currentSource !== loadedSource) return;
+        setThumbnailState("loaded");
+      };
+
+      if (typeof image.decode === "function") {
+        void image
+          .decode()
+          .catch(() => undefined)
+          .then(() => window.requestAnimationFrame(reveal));
+        return;
+      }
+
+      window.requestAnimationFrame(reveal);
+    },
+    [],
+  );
+
   return (
     <article className="mm-project-card">
       {canFavorite && (
@@ -180,7 +204,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               loading="eager"
               decoding="async"
               className={thumbnailState === "loaded" ? "is-loaded" : "is-loading"}
-              onLoad={() => setThumbnailState("loaded")}
+              onLoad={handleThumbnailLoad}
               onError={() => setThumbnailState("missing")}
             />
           )}
