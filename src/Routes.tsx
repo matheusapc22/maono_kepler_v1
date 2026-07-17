@@ -19,6 +19,8 @@ import {
   getCloudProvider,
   DEFAULT_CLOUD_PROVIDER,
 } from "./pages/Kepler/cloud-providers";
+import "./pages/Projects/projects.css";
+import "./pages/Admin/admin.css";
 
 const KeplerApp = lazy(() => import("./pages/Kepler"));
 const LoginPage = lazy(() => import("./pages/Login"));
