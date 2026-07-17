@@ -3,6 +3,10 @@ import { Link } from "react-router";
 
 import type { MaonoUser } from "../../../auth/session";
 import { Skeleton } from "../../../components/loading/Skeleton";
+import {
+  projectThumbnailUrl,
+  type ProjectThumbnailState,
+} from "../project-thumbnail";
 import type { WorkspaceProject } from "../workspace-api";
 
 type ProjectCardProps = {
@@ -12,7 +16,15 @@ type ProjectCardProps = {
   canFavorite: boolean;
   favoriteBusy?: boolean;
   onFavoriteToggle?: (project: WorkspaceProject) => void | Promise<void>;
+  onThumbnailReady?: (
+    project: WorkspaceProject,
+    state: ProjectThumbnailState,
+  ) => void;
 };
+
+type InternalThumbnailState = "loading" | ProjectThumbnailState;
+
+const THUMBNAIL_RENDER_TIMEOUT_MS = 15000;
 
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
@@ -97,16 +109,6 @@ function permissionLabel(value?: string) {
   return labels[normalize(value)] || value || "Acesso";
 }
 
-function projectThumbnailUrl(project: WorkspaceProject) {
-  if (project.thumbnailUrl) {
-    return project.thumbnailUrl;
-  }
-
-  const stableVersion = project.updatedAt || project.createdAt || project.slug;
-  const cacheKey = encodeURIComponent(stableVersion);
-  return `/api/projects/${encodeURIComponent(project.slug)}/thumbnail?v=${cacheKey}`;
-}
-
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   user,
@@ -114,16 +116,58 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   canFavorite,
   favoriteBusy = false,
   onFavoriteToggle,
+  onThumbnailReady,
 }) => {
   const thumbnailUrl = projectThumbnailUrl(project);
-  const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
-  const [thumbnailMissing, setThumbnailMissing] = React.useState(false);
+  const [thumbnailState, setThumbnailState] =
+    React.useState<InternalThumbnailState>("loading");
   const isFavorite = Boolean(project.favorite || project.favorited);
+  const description =
+    project.description ||
+    "Projeto geográfico disponível para consulta e análise.";
 
   React.useEffect(() => {
-    setThumbnailLoaded(false);
-    setThumbnailMissing(false);
+    setThumbnailState("loading");
   }, [thumbnailUrl]);
+
+  React.useEffect(() => {
+    if (thumbnailState !== "loading") return;
+
+    const timeoutId = window.setTimeout(() => {
+      setThumbnailState("missing");
+    }, THUMBNAIL_RENDER_TIMEOUT_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [thumbnailState, thumbnailUrl]);
+
+  React.useEffect(() => {
+    if (thumbnailState === "loading") return;
+    onThumbnailReady?.(project, thumbnailState);
+  }, [onThumbnailReady, project, thumbnailState]);
+
+  const handleThumbnailLoad = React.useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      const loadedSource = image.currentSrc || image.src;
+
+      const reveal = () => {
+        const currentSource = image.currentSrc || image.src;
+        if (currentSource !== loadedSource) return;
+        setThumbnailState("loaded");
+      };
+
+      if (typeof image.decode === "function") {
+        void image
+          .decode()
+          .catch(() => undefined)
+          .then(() => window.requestAnimationFrame(reveal));
+        return;
+      }
+
+      window.requestAnimationFrame(reveal);
+    },
+    [],
+  );
 
   return (
     <article className="mm-project-card">
@@ -149,25 +193,23 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         className="mm-project-card-link"
       >
         <div className="mm-project-thumb">
-          {!thumbnailLoaded && !thumbnailMissing ? (
+          {thumbnailState === "loading" ? (
             <Skeleton className="mm-project-thumb-loading" radius={0} />
           ) : null}
 
-          {!thumbnailMissing && (
+          {thumbnailState !== "missing" && (
             <img
               src={thumbnailUrl}
               alt={`Preview do projeto ${project.name}`}
-              loading="lazy"
-              className={thumbnailLoaded ? "is-loaded" : "is-loading"}
-              onLoad={() => setThumbnailLoaded(true)}
-              onError={() => {
-                setThumbnailLoaded(false);
-                setThumbnailMissing(true);
-              }}
+              loading="eager"
+              decoding="async"
+              className={thumbnailState === "loaded" ? "is-loaded" : "is-loading"}
+              onLoad={handleThumbnailLoad}
+              onError={() => setThumbnailState("missing")}
             />
           )}
 
-          {thumbnailMissing && (
+          {thumbnailState === "missing" && (
             <div className="mm-project-thumb-fallback" aria-hidden="true" />
           )}
 
@@ -175,7 +217,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             {permissionLabel(project.accessLevel)}
           </span>
 
-          {!thumbnailMissing && (
+          {thumbnailState === "loaded" && (
             <span className="mm-thumb-badge right">Preview salvo</span>
           )}
         </div>
@@ -183,8 +225,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         <div className="mm-project-card-body">
           <div className="mm-project-title-row">
             <div>
-              <h2>{project.name}</h2>
-              <p>{user?.name || user?.email}</p>
+              <h2 title={project.name}>{project.name}</h2>
+              <p title={user?.name || user?.email}>
+                {user?.name || user?.email}
+              </p>
             </div>
 
             <span className={canSave ? "mm-tag green" : "mm-tag red"}>
@@ -192,15 +236,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             </span>
           </div>
 
-          <p className="mm-project-desc">
-            {project.description ||
-              "Projeto geográfico disponível para consulta e análise."}
+          <p className="mm-project-desc" title={description}>
+            {description}
           </p>
 
           <div className="mm-project-meta">
             <span>{relativeUpdateLabel(project.updatedAt || project.createdAt)}</span>
             <span>•</span>
-            <span>{project.slug}</span>
+            <span title={project.slug}>{project.slug}</span>
           </div>
 
           <div className="mm-card-action">Abrir mapa</div>
