@@ -1,0 +1,179 @@
+.mm-transfer-panel {
+  position: fixed;
+  top: 96px;
+  right: 24px;
+  z-index: 80;
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid rgba(214, 168, 79, 0.5);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(11, 15, 21, 0.97);
+  color: var(--mm-text);
+  box-shadow:
+    0 20px 55px rgba(0, 0, 0, 0.48),
+    0 0 0 1px rgba(242, 199, 102, 0.05) inset;
+  backdrop-filter: blur(14px);
+  animation: mm-transfer-panel-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mm-transfer-panel.success {
+  border-color: rgba(214, 168, 79, 0.7);
+}
+
+.mm-transfer-panel.error {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.mm-transfer-panel-header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.mm-transfer-panel-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(214, 168, 79, 0.38);
+  border-radius: 999px;
+  background: rgba(214, 168, 79, 0.08);
+  color: var(--mm-gold-bright);
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.mm-transfer-panel-copy {
+  min-width: 0;
+}
+
+.mm-transfer-panel-copy strong,
+.mm-transfer-panel-copy span {
+  display: block;
+}
+
+.mm-transfer-panel-copy strong {
+  color: var(--mm-text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.mm-transfer-panel-copy span {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--mm-text-soft);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-transfer-panel-percent {
+  color: var(--mm-gold-bright);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 950;
+}
+
+.mm-transfer-panel-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--mm-muted);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.mm-transfer-panel-close:hover {
+  background: var(--mm-surface-2);
+  color: var(--mm-text);
+}
+
+.mm-transfer-panel-detail {
+  min-height: 18px;
+  margin: 11px 0 9px;
+  color: var(--mm-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.mm-transfer-panel.error .mm-transfer-panel-detail {
+  color: #fecaca;
+}
+
+.mm-transfer-progress-track {
+  width: 100%;
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(214, 168, 79, 0.16);
+  border-radius: 999px;
+  background: #07090d;
+}
+
+.mm-transfer-progress-bar {
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--mm-gold-muted),
+    var(--mm-gold),
+    var(--mm-gold-bright)
+  );
+  box-shadow: 0 0 14px rgba(242, 199, 102, 0.32);
+  transition: width 260ms ease;
+}
+
+.mm-transfer-panel.processing .mm-transfer-progress-bar {
+  background-size: 180% 100%;
+  animation: mm-transfer-progress-shimmer 1.1s linear infinite;
+}
+
+.mm-transfer-panel.error .mm-transfer-progress-bar {
+  background: linear-gradient(90deg, #7f1d1d, #ef4444, #fca5a5);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.24);
+}
+
+@keyframes mm-transfer-panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, -8px, 0) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes mm-transfer-progress-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -80% 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .mm-transfer-panel {
+    top: 16px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-transfer-panel,
+  .mm-transfer-progress-bar {
+    animation: none !important;
+    transition: none !important;
+  }
+}
