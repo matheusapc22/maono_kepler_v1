@@ -88,7 +88,29 @@
 
 .mm-projects-main {
   min-width: 0;
+  position: relative;
   background: var(--mm-bg);
+}
+
+.mm-projects-main.is-context-switching .mm-projects-topbar,
+.mm-projects-main.is-context-switching .mm-projects-content {
+  pointer-events: none;
+  opacity: .62;
+}
+
+.mm-context-switch-status {
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  z-index: 1200;
+  border: 1px solid rgba(214, 168, 79, .5);
+  border-radius: 10px;
+  padding: 10px 13px;
+  background: rgba(12, 16, 22, .96);
+  color: var(--mm-gold-bright);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .42);
+  font-size: 11px;
+  font-weight: 850;
 }
 
 /* =========================================================
@@ -276,10 +298,213 @@
   color: var(--mm-muted);
 }
 
+.mm-organization-switcher {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.mm-organization-trigger {
+  width: 100%;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(214, 168, 79, .34);
+  border-radius: var(--mm-radius-lg);
+  padding: 8px 10px;
+  background: linear-gradient(135deg, rgba(214, 168, 79, .09), rgba(17, 21, 28, .96));
+  color: var(--mm-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.mm-organization-trigger:hover:not(:disabled),
+.mm-organization-trigger[aria-expanded="true"] {
+  border-color: rgba(242, 199, 102, .68);
+  background: linear-gradient(135deg, rgba(214, 168, 79, .14), rgba(21, 26, 35, .98));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .26);
+}
+
+.mm-organization-trigger:focus-visible,
+.mm-organization-option:focus-visible {
+  outline: 2px solid var(--mm-gold-bright);
+  outline-offset: 2px;
+}
+
+.mm-organization-trigger:disabled {
+  cursor: wait;
+  opacity: .66;
+}
+
+.mm-organization-avatar {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  border: 1px solid rgba(242, 199, 102, .45);
+  border-radius: 10px;
+  background: rgba(8, 10, 13, .88);
+  color: var(--mm-gold-bright);
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.mm-organization-trigger-copy,
+.mm-organization-option-copy {
+  min-width: 0;
+  display: block;
+}
+
+.mm-organization-trigger-copy strong,
+.mm-organization-option-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--mm-text);
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-organization-trigger-copy span,
+.mm-organization-option-copy span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--mm-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-organization-chevron {
+  color: var(--mm-gold-bright);
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.mm-organization-inline-error {
+  margin: 7px 2px 0;
+  color: #fecaca;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.mm-organization-menu {
+  position: fixed;
+  z-index: 1000;
+  overflow: auto;
+  box-sizing: border-box;
+  border: 1px solid rgba(214, 168, 79, .48);
+  border-radius: 12px;
+  padding: 8px;
+  background: #0c1016;
+  color: var(--mm-text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .58);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.mm-organization-menu-header {
+  padding: 7px 8px 10px;
+  border-bottom: 1px solid var(--mm-border);
+}
+
+.mm-organization-menu-header strong {
+  display: block;
+  font-size: 12px;
+}
+
+.mm-organization-menu-header span {
+  display: block;
+  margin-top: 3px;
+  color: var(--mm-muted);
+  font-size: 10px;
+}
+
+.mm-organization-options {
+  display: grid;
+  gap: 5px;
+  padding-top: 7px;
+}
+
+.mm-organization-option {
+  width: 100%;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 8px;
+  background: transparent;
+  color: var(--mm-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mm-organization-option:hover,
+.mm-organization-option:focus-visible {
+  border-color: var(--mm-border-strong);
+  background: var(--mm-surface-2);
+}
+
+.mm-organization-option.selected {
+  border-color: rgba(214, 168, 79, .42);
+  background: rgba(214, 168, 79, .08);
+}
+
+.mm-organization-option:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+
+.mm-organization-check {
+  color: var(--mm-gold-bright);
+  font-size: 16px;
+  font-weight: 950;
+  text-align: center;
+}
+
+.mm-organization-menu-status,
+.mm-organization-menu-error {
+  margin-top: 7px;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.mm-organization-menu-status {
+  border: 1px solid rgba(214, 168, 79, .3);
+  background: rgba(214, 168, 79, .08);
+  color: var(--mm-gold-bright);
+}
+
+.mm-organization-menu-error {
+  border: 1px solid rgba(239, 68, 68, .34);
+  background: rgba(239, 68, 68, .09);
+  color: #fecaca;
+}
+
 .mm-sidebar-nav {
   flex: 1;
   overflow: auto;
   padding: 14px 10px;
+}
+
+.mm-projects-sidebar.is-context-switching .mm-sidebar-nav,
+.mm-projects-sidebar.is-context-switching .mm-sidebar-search {
+  pointer-events: none;
+  opacity: .62;
 }
 
 .mm-sidebar-group {
@@ -514,6 +739,27 @@
   border: 0;
 }
 
+.mm-projects-sidebar.collapsed .mm-organization-switcher {
+  width: 54px;
+  margin-top: 12px;
+}
+
+.mm-projects-sidebar.collapsed .mm-organization-trigger {
+  width: 54px;
+  min-height: 54px;
+  grid-template-columns: 1fr;
+  place-items: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 14px;
+}
+
+.mm-projects-sidebar.collapsed .mm-organization-trigger-copy,
+.mm-projects-sidebar.collapsed .mm-organization-chevron,
+.mm-projects-sidebar.collapsed .mm-organization-inline-error {
+  display: none;
+}
+
 .mm-projects-sidebar.collapsed .mm-sidebar-nav {
   padding: 12px 10px;
 }
@@ -586,7 +832,7 @@
 }
 
 /* =========================================================
-   5. TOPBAR — APENAS WORKSPACE
+   5. TOPBAR — PROJETOS
 ========================================================= */
 
 .mm-projects-topbar {
