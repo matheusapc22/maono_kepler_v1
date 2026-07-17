@@ -116,7 +116,9 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
   );
 
   const handleThumbnailReady = useCallback(
-    (mediaKey: string, _state: ProjectThumbnailState) => {
+    (project: WorkspaceProject, _state: ProjectThumbnailState) => {
+      const mediaKey = projectMediaKey(project);
+
       setReadyMediaKeys((current) => {
         if (current.has(mediaKey)) return current;
         const next = new Set(current);
@@ -190,24 +192,18 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
         }`}
         aria-hidden={waitingForMedia}
       >
-        {filteredProjects.map((project) => {
-          const mediaKey = projectMediaKey(project);
-
-          return (
-            <ProjectCard
-              key={project.slug}
-              project={project}
-              user={user}
-              canSave={canProjectSave(project)}
-              canFavorite={canProjectFavorite(project)}
-              favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
-              onFavoriteToggle={onFavoriteToggle}
-              onThumbnailReady={(state) =>
-                handleThumbnailReady(mediaKey, state)
-              }
-            />
-          );
-        })}
+        {filteredProjects.map((project) => (
+          <ProjectCard
+            key={project.slug}
+            project={project}
+            user={user}
+            canSave={canProjectSave(project)}
+            canFavorite={canProjectFavorite(project)}
+            favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
+            onFavoriteToggle={onFavoriteToggle}
+            onThumbnailReady={handleThumbnailReady}
+          />
+        ))}
       </section>
 
       {loading ? (
