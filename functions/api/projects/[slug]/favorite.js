@@ -12,7 +12,7 @@ import {
   getAccessibleProjectBySlug,
   markProjectFavorite,
   unmarkProjectFavorite,
-} from "../../../_lib/workspace-projects.js";
+} from "../../../_lib/project-list.js";
 
 function decodeProjectSlug(value) {
   try {
