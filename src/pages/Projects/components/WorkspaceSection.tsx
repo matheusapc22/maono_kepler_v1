@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 
 import type { MaonoUser } from "../../../auth/session";
+import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
 import type { WorkspaceProject, WorkspaceSectionKey } from "../workspace-api";
 import ProjectCard from "./ProjectCard";
 
@@ -98,14 +99,8 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
     [projects, searchQuery],
   );
 
-  if (loading) {
-    return (
-      <section className="mm-empty-state">
-        <div>⌁</div>
-        <h2>Carregando projetos</h2>
-        <p>Buscando projetos autorizados no backend.</p>
-      </section>
-    );
+  if (loading && projects.length === 0) {
+    return <ProjectGridSkeleton />;
   }
 
   if (error) {
@@ -144,7 +139,7 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
   }
 
   return (
-    <section className="mm-project-grid">
+    <section className="mm-project-grid" aria-busy={loading}>
       {filteredProjects.map((project) => (
         <ProjectCard
           key={project.slug}
@@ -156,6 +151,11 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
           onFavoriteToggle={onFavoriteToggle}
         />
       ))}
+      {loading ? (
+        <span className="mm-sr-only" role="status">
+          Atualizando projetos.
+        </span>
+      ) : null}
     </section>
   );
 };

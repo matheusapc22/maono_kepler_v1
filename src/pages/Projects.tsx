@@ -14,6 +14,7 @@ import {
   type MaonoProject,
   type MaonoUser,
 } from "../auth/session";
+import { ProjectsPageSkeleton } from "../components/loading/Skeleton";
 import ProjectsSidebar, {
   type ProjectSidebarSection,
 } from "./ProjectsSidebar";
@@ -194,7 +195,6 @@ function canProject(
   return canUser(user, permission, buildProjectContext(user, project));
 }
 
-
 function mergeProjectIntoList(
   projects: WorkspaceProject[],
   updatedProject: WorkspaceProject,
@@ -263,13 +263,8 @@ const ProjectsPage: React.FC = () => {
   const loadAllProjects = useCallback(async () => {
     const projects = await fetchWorkspaceProjects("all");
     setAllProjects(projects);
-
-    if (sidebarSection === "all") {
-      setWorkspaceProjects(projects);
-    }
-
     return projects;
-  }, [sidebarSection]);
+  }, []);
 
   const loadWorkspaceSection = useCallback(
     async (section: WorkspaceSectionKey) => {
@@ -297,18 +292,6 @@ const ProjectsPage: React.FC = () => {
     },
     [loadAllProjects],
   );
-
-  useEffect(() => {
-    if (!loading && authenticated) {
-      void loadAllProjects().catch((error) => {
-        setWorkspaceError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar projetos.",
-        );
-      });
-    }
-  }, [authenticated, loadAllProjects, loading]);
 
   useEffect(() => {
     if (!loading && authenticated && isWorkspaceSection(sidebarSection)) {
@@ -390,11 +373,7 @@ const ProjectsPage: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <main className="mm-loading-screen">
-        <p>Carregando seus projetos...</p>
-      </main>
-    );
+    return <ProjectsPageSkeleton />;
   }
 
   if (!authenticated) {
