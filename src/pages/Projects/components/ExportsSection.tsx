@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
+import { MetricsSkeleton, TableSkeleton } from "../../../components/loading/Skeleton";
 import {
   createOrganizationExport,
   listOrganizationExports,
@@ -15,22 +16,13 @@ type ExportsSectionProps = {
   readOnlyProjectsCount?: number;
 };
 
-const INITIAL_FORM = {
-  type: "projects_summary",
-  format: "csv",
-};
+const INITIAL_FORM = { type: "projects_summary", format: "csv" };
+const EXPORT_HEADERS = ["Tipo", "Formato", "Status", "Criada em", "Download"];
 
 function formatDate(value?: string) {
-  if (!value) {
-    return "—";
-  }
-
+  if (!value) return "—";
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
+  if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -67,10 +59,8 @@ export default function ExportsSection({
       setExportsList([]);
       return;
     }
-
     setLoading(true);
     setError(null);
-
     try {
       const response = await listOrganizationExports(organizationId);
       setExportsList(response.exports ?? []);
@@ -92,14 +82,9 @@ export default function ExportsSection({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!organizationId || !canCreate) {
-      return;
-    }
-
+    if (!organizationId || !canCreate) return;
     setCreating(true);
     setError(null);
-
     try {
       await createOrganizationExport(organizationId, form);
       setForm(INITIAL_FORM);
@@ -136,27 +121,17 @@ export default function ExportsSection({
   return (
     <section className="mm-card mm-section-card">
       <h2>Exportações</h2>
-      <p>
-        Controle de exportações por organização e permissão. Viewers não
-        exportam dados sensíveis por padrão.
-      </p>
+      <p>Controle de exportações por organização e permissão.</p>
 
-      <div className="mm-metrics-grid compact">
-        <article className="mm-card metric">
-          <span>Projetos editáveis</span>
-          <strong>{editableProjectsCount}</strong>
-        </article>
-
-        <article className="mm-card metric">
-          <span>Somente leitura</span>
-          <strong>{readOnlyProjectsCount}</strong>
-        </article>
-
-        <article className="mm-card metric">
-          <span>Exportações solicitadas</span>
-          <strong>{exportsList.length}</strong>
-        </article>
-      </div>
+      {loading ? (
+        <MetricsSkeleton count={3} />
+      ) : (
+        <div className="mm-metrics-grid compact">
+          <article className="mm-card metric"><span>Projetos editáveis</span><strong>{editableProjectsCount}</strong></article>
+          <article className="mm-card metric"><span>Somente leitura</span><strong>{readOnlyProjectsCount}</strong></article>
+          <article className="mm-card metric"><span>Exportações solicitadas</span><strong>{exportsList.length}</strong></article>
+        </div>
+      )}
 
       {error ? <p className="mm-error-text">{error}</p> : null}
 
@@ -166,35 +141,23 @@ export default function ExportsSection({
             Tipo
             <select
               value={form.type}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  type: event.target.value,
-                }))
-              }
+              onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
             >
               <option value="projects_summary">Resumo de projetos</option>
               <option value="documents_index">Índice de documentos</option>
               <option value="tickets_summary">Resumo de chamados</option>
             </select>
           </label>
-
           <label>
             Formato
             <select
               value={form.format}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  format: event.target.value,
-                }))
-              }
+              onChange={(event) => setForm((current) => ({ ...current, format: event.target.value }))}
             >
               <option value="csv">CSV</option>
               <option value="json">JSON</option>
             </select>
           </label>
-
           <button type="submit" className="mm-button" disabled={creating}>
             {creating ? "Solicitando..." : "Solicitar exportação"}
           </button>
@@ -202,24 +165,15 @@ export default function ExportsSection({
       ) : null}
 
       {loading ? (
-        <p>Carregando exportações...</p>
+        <TableSkeleton headers={EXPORT_HEADERS} rows={5} />
       ) : exportsList.length === 0 ? (
-        <div className="projects-empty-state">
-          Nenhuma exportação solicitada para esta organização.
-        </div>
+        <div className="projects-empty-state">Nenhuma exportação solicitada para esta organização.</div>
       ) : (
         <div className="mm-table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Formato</th>
-                <th>Status</th>
-                <th>Criada em</th>
-                <th>Download</th>
-              </tr>
+              <tr>{EXPORT_HEADERS.map((header) => <th key={header}>{header}</th>)}</tr>
             </thead>
-
             <tbody>
               {exportsList.map((item) => (
                 <tr key={item.id}>
@@ -229,17 +183,10 @@ export default function ExportsSection({
                   <td>{formatDate(item.createdAt)}</td>
                   <td>
                     {canDownload ? (
-                      <button
-                        type="button"
-                        className="mm-button ghost"
-                        disabled
-                        title="Endpoint de download de exportação ainda não foi criado."
-                      >
+                      <button type="button" className="mm-button ghost" disabled>
                         Download pendente
                       </button>
-                    ) : (
-                      "Bloqueado"
-                    )}
+                    ) : "Bloqueado"}
                   </td>
                 </tr>
               ))}
