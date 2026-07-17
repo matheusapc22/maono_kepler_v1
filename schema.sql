@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS organizations (
   dropbox_root_path TEXT NOT NULL UNIQUE,
   description TEXT,
   active INTEGER NOT NULL DEFAULT 1,
+  storage_status TEXT NOT NULL DEFAULT 'PENDING',
+  storage_error TEXT,
+  storage_checked_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -116,6 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug);
 CREATE INDEX IF NOT EXISTS idx_organizations_active ON organizations(active);
+CREATE INDEX IF NOT EXISTS idx_organizations_storage_status ON organizations(storage_status);
 CREATE INDEX IF NOT EXISTS idx_organization_users_org_id ON organization_users(organization_id);
 CREATE INDEX IF NOT EXISTS idx_organization_users_user_id ON organization_users(user_id);
 CREATE INDEX IF NOT EXISTS idx_organization_files_org_id ON organization_files(organization_id);

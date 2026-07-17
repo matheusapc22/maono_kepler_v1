@@ -28,13 +28,11 @@ function normalizeSlug(value) {
 
 function normalizePositiveInteger(value) {
   const numberValue = Number(value);
-
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
 function isDropboxNotFoundError(error) {
   const message = String(error?.message || "");
-
   return (
     message.includes("path/not_found") ||
     message.includes("path_lookup/not_found")
@@ -72,6 +70,9 @@ function publicOrganization(row) {
     description: row.description,
     active: Boolean(row.active),
     dropboxRootConfigured: Boolean(row.dropbox_root_path),
+    storageStatus: row.storage_status || null,
+    storageError: row.storage_error || null,
+    storageCheckedAt: row.storage_checked_at || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -79,15 +80,7 @@ function publicOrganization(row) {
 
 async function getOrganizationById(env, organizationId) {
   return env.DB.prepare(
-    `SELECT
-      id,
-      name,
-      slug,
-      description,
-      dropbox_root_path,
-      active,
-      created_at,
-      updated_at
+    `SELECT *
      FROM organizations
      WHERE id = ?
      LIMIT 1`,
@@ -118,10 +111,14 @@ async function updateOrganization(env, organizationId, body) {
       : body?.active === true
         ? 1
         : Number(current.active || 0);
-  const dropboxRootPath = normalizeDropboxFolderPath(
+
+  const requestedPath = normalizeText(
     body?.dropboxRootPath ??
       body?.dropbox_root_path ??
       current.dropbox_root_path,
+  );
+  const dropboxRootPath = normalizeDropboxFolderPath(
+    requestedPath || `/projects/${slug || `organization-${organizationId}`}`,
   );
 
   if (!name) {
@@ -154,7 +151,11 @@ async function updateOrganization(env, organizationId, body) {
     };
   }
 
-  await ensureDropboxFolder(env, dropboxRootPath);
+  // Uma organização só pode ser salva/reativada como ativa depois que sua
+  // raiz e a subpasta de documentos estiverem disponíveis no Dropbox.
+  if (active) {
+    await ensureDropboxFolder(env, `${dropboxRootPath}/documents`);
+  }
 
   try {
     const updated = await env.DB.prepare(
@@ -165,6 +166,9 @@ async function updateOrganization(env, organizationId, body) {
         description = ?,
         dropbox_root_path = ?,
         active = ?,
+        storage_status = ?,
+        storage_error = NULL,
+        storage_checked_at = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?
        RETURNING *`,
@@ -175,6 +179,8 @@ async function updateOrganization(env, organizationId, body) {
         description || null,
         dropboxRootPath,
         active,
+        active ? "READY" : "DISABLED",
+        new Date().toISOString(),
         organizationId,
       )
       .first();
@@ -239,7 +245,11 @@ async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
     ).bind(organizationId),
     env.DB.prepare(
       `UPDATE organizations
-       SET active = 0, updated_at = CURRENT_TIMESTAMP
+       SET active = 0,
+           storage_status = 'DISABLED',
+           storage_error = NULL,
+           storage_checked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
     ).bind(organizationId),
   ]);
@@ -247,7 +257,7 @@ async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
   let dropboxDeleted = false;
   let dropboxAlreadyMissing = false;
 
-  if (hardDeleteDropbox) {
+  if (hardDeleteDropbox && current.dropbox_root_path) {
     try {
       await deleteDropboxPath(env, current.dropbox_root_path);
       dropboxDeleted = true;
@@ -320,9 +330,7 @@ export async function onRequest(context) {
         body,
       );
 
-      if (error) {
-        return error;
-      }
+      if (error) return error;
 
       await logAudit(env, {
         userId: user.id,
@@ -332,6 +340,7 @@ export async function onRequest(context) {
           slug: organization.slug,
           active: Boolean(organization.active),
           dropboxRootConfigured: Boolean(organization.dropbox_root_path),
+          storageStatus: organization.storage_status || null,
         },
       });
 
@@ -354,9 +363,7 @@ export async function onRequest(context) {
       const { organization, dropboxDeleted, dropboxAlreadyMissing, error } =
         await deleteOrganization(env, organizationId, hardDeleteDropbox);
 
-      if (error) {
-        return error;
-      }
+      if (error) return error;
 
       await logAudit(env, {
         userId: user.id,

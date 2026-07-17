@@ -8,7 +8,6 @@ import {
   parsePositiveInteger,
 } from "../../../_lib/organizations.js";
 import {
-  buildOrganizationDocumentsRoot,
   buildStoredFileName,
   createPendingFileRecord,
   deleteOrganizationBinary,
@@ -24,6 +23,10 @@ import {
   uploadOrganizationBinary,
   validateProjectForOrganization,
 } from "../../../_lib/organization-files.js";
+import {
+  ensureOrganizationStorage,
+  publicOrganizationStorage,
+} from "../../../_lib/organization-storage.js";
 
 export async function onRequest(context) {
   const { request } = context;
@@ -58,7 +61,12 @@ export async function onRequestGet({ env, request, params }) {
       },
     );
 
-    await getOrganizationOrThrow(env, organizationId);
+    const organization = await getOrganizationOrThrow(env, organizationId);
+
+    // Autorreparo: toda organização ativa acessada por esta área precisa ter
+    // uma raiz canônica e a subpasta /documents fisicamente disponíveis.
+    const storage = await ensureOrganizationStorage(env, organization);
+
     const rows = await listRowsByOrganization(
       env,
       "organization_files",
@@ -69,6 +77,7 @@ export async function onRequestGet({ env, request, params }) {
       {
         ok: true,
         requestId,
+        storage: publicOrganizationStorage(storage),
         files: rows.map(publicOrganizationFile),
       },
       {
@@ -114,6 +123,11 @@ export async function onRequestPost({ env, request, params }) {
     actor = permission.user;
 
     const organization = await getOrganizationOrThrow(env, organizationId);
+
+    // O provisionamento ocorre antes de interpretar e persistir o arquivo.
+    // Se a organização for legada, o caminho é corrigido no D1 e criado no Dropbox.
+    const storage = await ensureOrganizationStorage(env, organization);
+
     upload = await readOrganizationFileUpload(request);
     await validateProjectForOrganization(env, organizationId, upload.projectId);
 
@@ -134,6 +148,7 @@ export async function onRequestPost({ env, request, params }) {
             ok: true,
             idempotent: true,
             requestId,
+            storage: publicOrganizationStorage(storage),
             file: publicOrganizationFile(previous),
           },
           {
@@ -155,7 +170,7 @@ export async function onRequestPost({ env, request, params }) {
       throw conflict;
     }
 
-    const documentsRoot = buildOrganizationDocumentsRoot(organization);
+    const documentsRoot = storage.documentsRoot;
     const storedFileName = buildStoredFileName(upload.originalName);
     uploadedPath = organizationFileDropboxPath(documentsRoot, storedFileName);
 
@@ -203,6 +218,7 @@ export async function onRequestPost({ env, request, params }) {
       {
         ok: true,
         requestId,
+        storage: publicOrganizationStorage(storage),
         file: publicOrganizationFile(activeFile || pendingFile),
       },
       {
