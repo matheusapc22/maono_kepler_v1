@@ -117,7 +117,7 @@
 
 .mm-transfer-progress-bar {
   height: 100%;
-  min-width: 2px;
+  min-width: 0;
   border-radius: inherit;
   background: linear-gradient(
     90deg,
@@ -126,7 +126,7 @@
     var(--mm-gold-bright)
   );
   box-shadow: 0 0 14px rgba(242, 199, 102, 0.32);
-  transition: width 260ms ease;
+  transition: width 90ms linear;
 }
 
 .mm-transfer-panel.processing .mm-transfer-progress-bar {

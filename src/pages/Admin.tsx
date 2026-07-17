@@ -196,17 +196,17 @@ const AdminPage: React.FC = () => {
         <section className="admin-command-grid">
           <article className="mm-card mm-section-card">
             <h2>Gestão de Organizações</h2>
-            <p>Files foi incorporado aqui. Organizações agora concentram Dropbox, JSONs, PNGs, documentos e limites.</p>
+            <p>Organizações, documentos, projetos e limites.</p>
             <button className="mm-btn primary" type="button" onClick={() => setSection("organizations")}>Abrir organizações</button>
           </article>
           <article className="mm-card mm-section-card">
             <h2>Projetos e Mapas</h2>
-            <p>Controle interno de mapas, vínculo com organização, preview PNG e arquivo JSON canônico.</p>
+            <p>Mapas, vínculos, previews e configurações.</p>
             <button className="mm-btn" type="button" onClick={() => setSection("projects")}>Abrir projetos</button>
           </article>
           <article className="mm-card mm-section-card">
             <h2>Auditoria</h2>
-            <p>Eventos sensíveis, tentativas bloqueadas e trilhas de administração.</p>
+            <p>Eventos, bloqueios e ações administrativas.</p>
             <button className="mm-btn" type="button" onClick={() => setSection("audit")}>Abrir auditoria</button>
           </article>
         </section>
@@ -218,12 +218,9 @@ const AdminPage: React.FC = () => {
     return (
       <section className="mm-card mm-section-card">
         <h2>Gestão de Organizações</h2>
-        <p>
-          A antiga rota <strong>/admin/files</strong> agora redireciona para esta seção. Arquivos, documentos,
-          JSONs, PNGs e pastas Dropbox passam a ser tratados dentro de cada organização.
-        </p>
+        <p>Arquivos e documentos por organização.</p>
         <Table
-          headers={["Organização", "Slug", "Dropbox", "Projetos", "Usuários", "Arquivos", "Status"]}
+          headers={["Organização", "Slug", "Pasta", "Projetos", "Usuários", "Arquivos", "Status"]}
           rows={organizations.map((org) => [
             org.name,
             org.slug,
@@ -242,7 +239,7 @@ const AdminPage: React.FC = () => {
     return (
       <section className="mm-card mm-section-card">
         <h2>Usuários e Permissões</h2>
-        <p>Controle interno de Super Admin, Admin, Owner, Editor e Viewer.</p>
+        <p>Super Admin, Admin, Owner, Editor e Viewer.</p>
         <Table
           headers={["Nome", "E-mail", "Perfil", "Projetos", "Status"]}
           rows={users.map((item) => [
@@ -261,9 +258,9 @@ const AdminPage: React.FC = () => {
     return (
       <section className="mm-card mm-section-card">
         <h2>Projetos e Mapas</h2>
-        <p>Monitoramento interno de mapas, arquivo JSON, preview PNG, organização e vínculos.</p>
+        <p>Mapas, configurações, previews e vínculos.</p>
         <Table
-          headers={["Projeto", "Slug", "JSON", "Dropbox", "Acessos", "Status"]}
+          headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]}
           rows={projects.map((project) => [
             project.name,
             project.slug,
@@ -281,7 +278,7 @@ const AdminPage: React.FC = () => {
     return (
       <section className="mm-card mm-section-card">
         <h2>Solicitações</h2>
-        <p>Fila interna para criação de mapas, envio de bases, revisão de preview e suporte.</p>
+        <p>Criação, revisão e suporte.</p>
         <section className="mm-metrics-grid compact">
           <article className="mm-card metric"><span>Abertas</span><strong>0</strong></article>
           <article className="mm-card metric"><span>Em análise</span><strong>0</strong></article>
@@ -295,11 +292,11 @@ const AdminPage: React.FC = () => {
     return (
       <section className="mm-card mm-section-card">
         <h2>Auditoria</h2>
-        <p>Eventos de administração, alteração de permissões, salvamentos e ações bloqueadas.</p>
+        <p>Eventos e ações administrativas.</p>
         <div className="mm-audit-list">
-          <div><strong>admin.open</strong><span>Painel administrativo acessado por {roleLabel(user?.role)}.</span></div>
+          <div><strong>admin.open</strong><span>Painel acessado por {roleLabel(user?.role)}.</span></div>
           <div><strong>admin.files.redirect</strong><span>/admin/files redireciona para Gestão de Organizações.</span></div>
-          <div><strong>projects.thumbnail</strong><span>Preview PNG permanece vinculado ao card do projeto.</span></div>
+          <div><strong>projects.thumbnail</strong><span>Preview vinculado ao projeto.</span></div>
         </div>
       </section>
     );
@@ -309,12 +306,12 @@ const AdminPage: React.FC = () => {
     return (
       <section className="mm-card mm-section-card">
         <h2>Sistema</h2>
-        <p>Camadas reais da plataforma: React, Vite, Cloudflare Pages Functions, D1, Dropbox App Folder e Kepler.gl.</p>
+        <p>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</p>
         <div className="mm-code-panel">
           / = /projects<br />
-          /admin = painel administrativo unificado<br />
+          /admin = painel administrativo<br />
           /admin/files = /admin?section=organizations<br />
-          /api/projects/:slug/thumbnail = preview PNG do último salvamento
+          /api/projects/:slug/thumbnail = preview do projeto
         </div>
       </section>
     );
@@ -366,7 +363,7 @@ const AdminPage: React.FC = () => {
           <div>
             <p className="mm-eyebrow">Administração Maõno</p>
             <h1>{sectionTitle(section)}</h1>
-            <p>Painel interno visível apenas para Super Admin e Admin.</p>
+            <p>Acesso administrativo.</p>
           </div>
           <div className="mm-topbar-actions">
             <span className="mm-user-chip gold">{roleLabel(user?.role)}</span>
