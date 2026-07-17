@@ -4,7 +4,9 @@ import {
   methodNotAllowed,
 } from "../../_lib/http.js";
 import { requireSession } from "../../_lib/auth.js";
-import { listFavoriteWorkspaceProjectsForUser } from "../../_lib/workspace-projects.js";
+import {
+  listFavoriteProjectsForActiveOrganization,
+} from "../../_lib/project-list.js";
 
 function logUnexpectedError(error) {
   const status = error?.status || 500;
@@ -23,7 +25,7 @@ export async function onRequest(context) {
 
   try {
     const user = await requireSession(env, request);
-    const projects = await listFavoriteWorkspaceProjectsForUser(env, user);
+    const projects = await listFavoriteProjectsForActiveOrganization(env, user);
 
     return jsonResponse({
       ok: true,
