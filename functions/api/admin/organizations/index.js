@@ -135,6 +135,8 @@ async function createOrganization(env, body) {
     await ensureDropboxFolder(env, `${dropboxRootPath}/documents`);
   }
 
+  const checkedAt = new Date().toISOString();
+
   try {
     const organization = await env.DB.prepare(
       `INSERT INTO organizations (
@@ -142,12 +144,23 @@ async function createOrganization(env, body) {
         slug,
         description,
         dropbox_root_path,
-        active
+        active,
+        storage_status,
+        storage_error,
+        storage_checked_at
       )
-      VALUES (?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
       RETURNING *`,
     )
-      .bind(name, slug, description || null, dropboxRootPath, active)
+      .bind(
+        name,
+        slug,
+        description || null,
+        dropboxRootPath,
+        active,
+        active ? "READY" : "DISABLED",
+        checkedAt,
+      )
       .first();
 
     return { organization };
@@ -211,6 +224,7 @@ export async function onRequest(context) {
           slug: organization.slug,
           active: Boolean(organization.active),
           storageProvisioned: Boolean(organization.active),
+          storageStatus: organization.storage_status || null,
         },
       });
 
