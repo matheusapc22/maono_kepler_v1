@@ -8,7 +8,10 @@ import {
   recordAuditLog,
   requirePermission,
 } from "../../_lib/permissions.js";
-import { listWorkspaceProjectsForUser } from "../../_lib/workspace-projects.js";
+import {
+  listProjectsForActiveOrganization,
+} from "../../_lib/project-list.js";
+import { getActiveOrganizationId } from "../../_lib/projects.js";
 
 async function readOptionalJsonBody(request) {
   const text = await request.text();
@@ -38,6 +41,10 @@ function getCreateProjectContext(body) {
   };
 }
 
+function sameId(left, right) {
+  return String(left ?? "") === String(right ?? "");
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -49,7 +56,7 @@ export async function onRequest(context) {
     const user = await requireSession(env, request);
 
     if (request.method === "GET") {
-      const projects = await listWorkspaceProjectsForUser(env, user);
+      const projects = await listProjectsForActiveOrganization(env, user);
 
       return jsonResponse({
         ok: true,
@@ -58,7 +65,31 @@ export async function onRequest(context) {
     }
 
     const body = await readOptionalJsonBody(request);
-    const permissionContext = getCreateProjectContext(body);
+    const requestedContext = getCreateProjectContext(body);
+    const activeOrganizationId = getActiveOrganizationId(user);
+
+    if (!activeOrganizationId) {
+      const error = new Error("Nenhuma organização ativa foi selecionada.");
+      error.status = 409;
+      error.code = "ACTIVE_ORGANIZATION_REQUIRED";
+      throw error;
+    }
+
+    if (
+      requestedContext.organizationId &&
+      !sameId(requestedContext.organizationId, activeOrganizationId)
+    ) {
+      const error = new Error(
+        "A organização informada não corresponde à organização ativa.",
+      );
+      error.status = 403;
+      error.code = "ORGANIZATION_CONTEXT_MISMATCH";
+      throw error;
+    }
+
+    const permissionContext = {
+      organizationId: activeOrganizationId,
+    };
 
     await requirePermission(
       env,
@@ -118,6 +149,14 @@ export async function onRequest(context) {
         "Você não tem permissão para criar projetos.",
         403,
         error.code || "PROJECT_CREATE_FORBIDDEN",
+      );
+    }
+
+    if (error.status === 409) {
+      return errorResponse(
+        error.message || "Selecione uma organização ativa.",
+        409,
+        error.code || "ACTIVE_ORGANIZATION_REQUIRED",
       );
     }
 
