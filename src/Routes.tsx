@@ -11,6 +11,11 @@ import {
 import { PERMISSION } from "./access-control/permissions";
 import { useSession, type MaonoUser } from "./auth/session";
 import {
+  AdminPageSkeleton,
+  ProjectsPageSkeleton,
+  Skeleton,
+} from "./components/loading/Skeleton";
+import {
   getCloudProvider,
   DEFAULT_CLOUD_PROVIDER,
 } from "./pages/Kepler/cloud-providers";
@@ -20,12 +25,24 @@ const LoginPage = lazy(() => import("./pages/Login"));
 const ProjectsPage = lazy(() => import("./pages/Projects"));
 const AdminPage = lazy(() => import("./pages/Admin"));
 
-const WithSuspense: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => (
-  <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
-    {children}
-  </Suspense>
+const RouteLoading: React.FC = () => (
+  <main className="mm-loading-screen" aria-busy="true">
+    <div className="mm-skeleton-stack" style={{ width: "min(360px, 82vw)" }}>
+      <Skeleton width="58%" height={24} />
+      <Skeleton width="100%" height={12} />
+      <Skeleton width="82%" height={12} />
+    </div>
+    <span className="mm-sr-only" role="status">
+      Carregando página.
+    </span>
+  </main>
+);
+
+const WithSuspense: React.FC<{
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+}> = ({ children, fallback = <RouteLoading /> }) => (
+  <Suspense fallback={fallback}>{children}</Suspense>
 );
 
 function buildSessionPermissionContext(
@@ -65,10 +82,6 @@ function buildLoginRedirect(location: ReturnType<typeof useLocation>) {
   return `/login?next=${encodeURIComponent(next)}`;
 }
 
-const RouteLoading: React.FC = () => (
-  <div style={{ padding: 16 }}>Carregando…</div>
-);
-
 const RestrictedAccess: React.FC = () => (
   <main style={{ padding: 24 }}>
     <h1>Acesso restrito</h1>
@@ -86,7 +99,7 @@ const AdminRouteGuard: React.FC<{ children: React.ReactNode }> = ({
   const location = useLocation();
 
   if (loading) {
-    return <RouteLoading />;
+    return <AdminPageSkeleton />;
   }
 
   if (!authenticated) {
@@ -158,7 +171,7 @@ const AppRoutes: React.FC = () => {
       <Route
         path="/projects"
         element={
-          <WithSuspense>
+          <WithSuspense fallback={<ProjectsPageSkeleton />}>
             <ProjectsPage />
           </WithSuspense>
         }
@@ -168,7 +181,7 @@ const AppRoutes: React.FC = () => {
         path="/admin"
         element={
           <AdminRouteGuard>
-            <WithSuspense>
+            <WithSuspense fallback={<AdminPageSkeleton />}>
               <AdminPage />
             </WithSuspense>
           </AdminRouteGuard>
