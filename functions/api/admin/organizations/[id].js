@@ -259,7 +259,7 @@ async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
 
   if (hardDeleteDropbox && current.dropbox_root_path) {
     try {
-      await deleteDropboxPath(current.dropbox_root_path ? env : env, current.dropbox_root_path);
+      await deleteDropboxPath(env, current.dropbox_root_path);
       dropboxDeleted = true;
     } catch (error) {
       if (isDropboxNotFoundError(error)) {
