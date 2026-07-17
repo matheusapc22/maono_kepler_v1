@@ -48,16 +48,29 @@ CREATE TABLE IF NOT EXISTS organization_users (
 CREATE TABLE IF NOT EXISTS organization_files (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   organization_id INTEGER,
+  project_id INTEGER,
   name TEXT NOT NULL,
+  original_name TEXT,
   file_name TEXT NOT NULL,
   dropbox_path TEXT NOT NULL UNIQUE,
+  dropbox_file_id TEXT,
+  dropbox_rev TEXT,
   file_type TEXT NOT NULL DEFAULT 'other',
+  mime_type TEXT,
   size_bytes INTEGER,
+  sha256 TEXT,
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  error_message TEXT,
+  idempotency_key TEXT,
+  uploaded_by INTEGER,
   is_project INTEGER NOT NULL DEFAULT 0,
   active INTEGER NOT NULL DEFAULT 1,
+  deleted_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
+  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -106,8 +119,15 @@ CREATE INDEX IF NOT EXISTS idx_organizations_active ON organizations(active);
 CREATE INDEX IF NOT EXISTS idx_organization_users_org_id ON organization_users(organization_id);
 CREATE INDEX IF NOT EXISTS idx_organization_users_user_id ON organization_users(user_id);
 CREATE INDEX IF NOT EXISTS idx_organization_files_org_id ON organization_files(organization_id);
+CREATE INDEX IF NOT EXISTS idx_organization_files_project_id ON organization_files(project_id);
 CREATE INDEX IF NOT EXISTS idx_organization_files_dropbox_path ON organization_files(dropbox_path);
 CREATE INDEX IF NOT EXISTS idx_organization_files_file_type ON organization_files(file_type);
+CREATE INDEX IF NOT EXISTS idx_organization_files_status ON organization_files(status);
+CREATE INDEX IF NOT EXISTS idx_organization_files_uploaded_by ON organization_files(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_organization_files_deleted_at ON organization_files(deleted_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_files_idempotency
+  ON organization_files(organization_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug);
 CREATE INDEX IF NOT EXISTS idx_projects_organization_id ON projects(organization_id);
 CREATE INDEX IF NOT EXISTS idx_projects_organization_file_id ON projects(organization_file_id);

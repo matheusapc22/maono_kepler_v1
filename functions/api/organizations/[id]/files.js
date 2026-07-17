@@ -1,37 +1,47 @@
 import { requireOrganizationPermission } from "../../../_lib/permissions.js";
 import {
-  buildOrganizationDocumentPath,
   getOrganizationOrThrow,
-  handleApiError,
-  insertRow,
+  getRouteParam,
   jsonResponse,
   listRowsByOrganization,
   methodNotAllowed,
-  normalizeOrganizationFile,
-  now,
   parsePositiveInteger,
-  readUploadedOrganizationFile,
-  uploadBufferToDropbox,
-  getRouteParam,
 } from "../../../_lib/organizations.js";
+import {
+  buildOrganizationDocumentsRoot,
+  buildStoredFileName,
+  createPendingFileRecord,
+  deleteOrganizationBinary,
+  findFileByIdempotencyKey,
+  markFileActive,
+  markFileFailed,
+  organizationFileDropboxPath,
+  organizationFileErrorResponse,
+  organizationFileRequestId,
+  publicOrganizationFile,
+  readOrganizationFileUpload,
+  recordOrganizationFileAudit,
+  uploadOrganizationBinary,
+  validateProjectForOrganization,
+} from "../../../_lib/organization-files.js";
 
 export async function onRequest(context) {
   const { request } = context;
 
-  if (request.method === "GET") {
-    return onRequestGet(context);
-  }
-
-  if (request.method === "POST") {
-    return onRequestPost(context);
-  }
+  if (request.method === "GET") return onRequestGet(context);
+  if (request.method === "POST") return onRequestPost(context);
 
   return methodNotAllowed(request.method, ["GET", "POST"]);
 }
 
 export async function onRequestGet({ env, request, params }) {
+  const requestId = organizationFileRequestId(request);
+
   try {
-    const organizationId = parsePositiveInteger(getRouteParam(params, "id"), "organizationId");
+    const organizationId = parsePositiveInteger(
+      getRouteParam(params, "id"),
+      "organizationId",
+    );
 
     await requireOrganizationPermission(
       env,
@@ -49,23 +59,43 @@ export async function onRequestGet({ env, request, params }) {
     );
 
     await getOrganizationOrThrow(env, organizationId);
+    const rows = await listRowsByOrganization(
+      env,
+      "organization_files",
+      organizationId,
+    );
 
-    const rows = await listRowsByOrganization(env, "organization_files", organizationId);
-
-    return jsonResponse({
-      ok: true,
-      files: rows.map(normalizeOrganizationFile),
-    });
+    return jsonResponse(
+      {
+        ok: true,
+        requestId,
+        files: rows.map(publicOrganizationFile),
+      },
+      {
+        headers: { "X-Request-Id": requestId },
+      },
+    );
   } catch (error) {
-    return handleApiError(error);
+    return organizationFileErrorResponse(error, requestId);
   }
 }
 
 export async function onRequestPost({ env, request, params }) {
-  try {
-    const organizationId = parsePositiveInteger(getRouteParam(params, "id"), "organizationId");
+  const requestId = organizationFileRequestId(request);
+  let pendingFile = null;
+  let uploadedPath = null;
+  let uploadedToDropbox = false;
+  let actor = null;
+  let organizationId = null;
+  let upload = null;
 
-    const { user } = await requireOrganizationPermission(
+  try {
+    organizationId = parsePositiveInteger(
+      getRouteParam(params, "id"),
+      "organizationId",
+    );
+
+    const permission = await requireOrganizationPermission(
       env,
       request,
       "document.upload",
@@ -81,43 +111,151 @@ export async function onRequestPost({ env, request, params }) {
         auditOnSuccess: false,
       },
     );
+    actor = permission.user;
 
-    await getOrganizationOrThrow(env, organizationId);
+    const organization = await getOrganizationOrThrow(env, organizationId);
+    upload = await readOrganizationFileUpload(request);
+    await validateProjectForOrganization(env, organizationId, upload.projectId);
 
-    const uploadedFile = await readUploadedOrganizationFile(request);
-    const dropboxPath = buildOrganizationDocumentPath(organizationId, uploadedFile.name);
+    const previous = await findFileByIdempotencyKey(
+      env,
+      organizationId,
+      upload.idempotencyKey,
+    );
 
-    await uploadBufferToDropbox(env, dropboxPath, uploadedFile.arrayBuffer);
+    if (previous) {
+      const previousStatus = String(
+        previous.status || (previous.active ? "ACTIVE" : "INACTIVE"),
+      ).toUpperCase();
 
-    const row = await insertRow(env, "organization_files", {
-      organization_id: organizationId,
-      name: uploadedFile.name,
-      file_name: uploadedFile.name,
-      original_name: uploadedFile.name,
-      mime_type: uploadedFile.mimeType,
-      content_type: uploadedFile.mimeType,
-      size: uploadedFile.size,
-      size_bytes: uploadedFile.size,
-      dropbox_path: dropboxPath,
-      path: dropboxPath,
-      file_path: dropboxPath,
-      storage_path: dropboxPath,
-      uploaded_by: user.id,
-      created_by: user.id,
-      user_id: user.id,
-      created_at: now(),
-      updated_at: now(),
-      active: 1,
+      if (previousStatus === "ACTIVE" && previous.active !== 0) {
+        return jsonResponse(
+          {
+            ok: true,
+            idempotent: true,
+            requestId,
+            file: publicOrganizationFile(previous),
+          },
+          {
+            status: 200,
+            headers: { "X-Request-Id": requestId },
+          },
+        );
+      }
+
+      const conflict = new Error(
+        previousStatus === "PENDING"
+          ? "Já existe um upload em processamento para esta requisição."
+          : "Esta chave de idempotência já foi utilizada. Gere uma nova chave para repetir o envio.",
+      );
+      conflict.status = 409;
+      conflict.code = "IDEMPOTENCY_CONFLICT";
+      conflict.stage = "file.idempotency";
+      conflict.publicMessage = conflict.message;
+      throw conflict;
+    }
+
+    const documentsRoot = buildOrganizationDocumentsRoot(organization);
+    const storedFileName = buildStoredFileName(upload.originalName);
+    uploadedPath = organizationFileDropboxPath(documentsRoot, storedFileName);
+
+    pendingFile = await createPendingFileRecord(env, {
+      organizationId,
+      projectId: upload.projectId,
+      originalName: upload.originalName,
+      storedFileName,
+      dropboxPath: uploadedPath,
+      fileType: upload.fileType,
+      mimeType: upload.mimeType,
+      size: upload.size,
+      sha256: upload.sha256,
+      idempotencyKey: upload.idempotencyKey,
+      userId: actor.id,
+    });
+
+    const dropboxMetadata = await uploadOrganizationBinary(
+      env,
+      documentsRoot,
+      storedFileName,
+      upload.arrayBuffer,
+    );
+    uploadedToDropbox = true;
+
+    const activeFile = await markFileActive(
+      env,
+      pendingFile.id,
+      dropboxMetadata,
+    );
+
+    await recordOrganizationFileAudit(env, {
+      request,
+      requestId,
+      userId: actor.id,
+      organizationId,
+      projectId: upload.projectId,
+      action: "document.upload",
+      fileId: activeFile?.id || pendingFile.id,
+      fileName: upload.originalName,
+      size: upload.size,
     });
 
     return jsonResponse(
       {
         ok: true,
-        file: normalizeOrganizationFile(row),
+        requestId,
+        file: publicOrganizationFile(activeFile || pendingFile),
       },
-      { status: 201 },
+      {
+        status: 201,
+        headers: { "X-Request-Id": requestId },
+      },
     );
   } catch (error) {
-    return handleApiError(error);
+    if (pendingFile?.id) {
+      try {
+        await markFileFailed(env, pendingFile.id, error);
+      } catch (metadataError) {
+        console.error(
+          `[Maono organization files][${requestId}][database.mark_failed]`,
+          metadataError,
+        );
+      }
+    }
+
+    if (uploadedToDropbox && uploadedPath) {
+      try {
+        await deleteOrganizationBinary(env, uploadedPath);
+      } catch (cleanupError) {
+        console.error(
+          `[Maono organization files][${requestId}][dropbox.compensation]`,
+          cleanupError,
+        );
+      }
+    }
+
+    if (actor && organizationId) {
+      try {
+        await recordOrganizationFileAudit(env, {
+          request,
+          requestId,
+          userId: actor.id,
+          organizationId,
+          projectId: upload?.projectId || null,
+          action: "document.upload",
+          fileId: pendingFile?.id || null,
+          fileName: upload?.originalName || null,
+          size: upload?.size || null,
+          result: "failed",
+          code: error?.code || "ORGANIZATION_FILE_UPLOAD_FAILED",
+        });
+      } catch (auditError) {
+        console.error(
+          `[Maono organization files][${requestId}][audit]`,
+          auditError,
+        );
+      }
+    }
+
+    return organizationFileErrorResponse(error, requestId);
   }
 }
