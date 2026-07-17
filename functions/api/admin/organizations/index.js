@@ -4,7 +4,10 @@ import {
   methodNotAllowed,
   readJsonBody,
 } from "../../../_lib/http.js";
-import { ensureDropboxFolder, normalizeDropboxFolderPath } from "../../../_lib/dropbox.js";
+import {
+  ensureDropboxFolder,
+  normalizeDropboxFolderPath,
+} from "../../../_lib/dropbox.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import { logAudit } from "../../../_lib/projects.js";
 
@@ -47,6 +50,9 @@ function publicOrganization(row) {
     description: row.description,
     dropboxRootPath: row.dropbox_root_path,
     active: Boolean(row.active),
+    storageStatus: row.storage_status || null,
+    storageError: row.storage_error || null,
+    storageCheckedAt: row.storage_checked_at || null,
     fileCount: row.file_count || 0,
     projectCount: row.project_count || 0,
     userCount: row.user_count || 0,
@@ -60,14 +66,7 @@ async function listOrganizations(env, { includeInactive = false } = {}) {
 
   const { results } = await env.DB.prepare(
     `SELECT
-      organizations.id,
-      organizations.name,
-      organizations.slug,
-      organizations.description,
-      organizations.dropbox_root_path,
-      organizations.active,
-      organizations.created_at,
-      organizations.updated_at,
+      organizations.*,
       COUNT(DISTINCT organization_files.id) AS file_count,
       COUNT(DISTINCT projects.id) AS project_count,
       COUNT(DISTINCT organization_users.id) AS user_count
@@ -130,7 +129,11 @@ async function createOrganization(env, body) {
     };
   }
 
-  await ensureDropboxFolder(env, dropboxRootPath);
+  // Invariante: antes de uma organização ser persistida como ativa, a raiz e
+  // a subpasta de documentos precisam existir fisicamente no Dropbox.
+  if (active) {
+    await ensureDropboxFolder(env, `${dropboxRootPath}/documents`);
+  }
 
   try {
     const organization = await env.DB.prepare(
@@ -207,6 +210,7 @@ export async function onRequest(context) {
           organizationId: organization.id,
           slug: organization.slug,
           active: Boolean(organization.active),
+          storageProvisioned: Boolean(organization.active),
         },
       });
 
