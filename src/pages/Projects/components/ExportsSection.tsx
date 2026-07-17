@@ -38,7 +38,8 @@ export default function ExportsSection({
 }: ExportsSectionProps) {
   const [exportsList, setExportsList] = useState<OrganizationExport[]>([]);
   const [form, setForm] = useState(INITIAL_FORM);
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,13 +55,16 @@ export default function ExportsSection({
   const canCreate = can(user, PERMISSION.EXPORT_CREATE, permissionContext);
   const canDownload = can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext);
 
-  async function loadExports() {
+  async function loadExports({ background = false } = {}) {
     if (!organizationId || !canView) {
       setExportsList([]);
       return;
     }
-    setLoading(true);
+
+    if (background) setRefreshing(true);
+    else setInitialLoading(true);
     setError(null);
+
     try {
       const response = await listOrganizationExports(organizationId);
       setExportsList(response.exports ?? []);
@@ -71,11 +75,13 @@ export default function ExportsSection({
           : "Não foi possível carregar exportações.",
       );
     } finally {
-      setLoading(false);
+      if (background) setRefreshing(false);
+      else setInitialLoading(false);
     }
   }
 
   useEffect(() => {
+    setExportsList([]);
     void loadExports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, canView]);
@@ -88,7 +94,7 @@ export default function ExportsSection({
     try {
       await createOrganizationExport(organizationId, form);
       setForm(INITIAL_FORM);
-      await loadExports();
+      await loadExports({ background: true });
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -118,15 +124,17 @@ export default function ExportsSection({
     );
   }
 
+  const showInitialSkeleton = initialLoading && exportsList.length === 0;
+
   return (
     <section className="mm-card mm-section-card">
       <h2>Exportações</h2>
       <p>Controle de exportações por organização e permissão.</p>
 
-      {loading ? (
+      {showInitialSkeleton ? (
         <MetricsSkeleton count={3} />
       ) : (
-        <div className="mm-metrics-grid compact">
+        <div className="mm-metrics-grid compact" aria-busy={refreshing}>
           <article className="mm-card metric"><span>Projetos editáveis</span><strong>{editableProjectsCount}</strong></article>
           <article className="mm-card metric"><span>Somente leitura</span><strong>{readOnlyProjectsCount}</strong></article>
           <article className="mm-card metric"><span>Exportações solicitadas</span><strong>{exportsList.length}</strong></article>
@@ -164,12 +172,12 @@ export default function ExportsSection({
         </form>
       ) : null}
 
-      {loading ? (
+      {showInitialSkeleton ? (
         <TableSkeleton headers={EXPORT_HEADERS} rows={5} />
       ) : exportsList.length === 0 ? (
         <div className="projects-empty-state">Nenhuma exportação solicitada para esta organização.</div>
       ) : (
-        <div className="mm-table-wrap">
+        <div className="mm-table-wrap" aria-busy={refreshing}>
           <table>
             <thead>
               <tr>{EXPORT_HEADERS.map((header) => <th key={header}>{header}</th>)}</tr>
@@ -192,6 +200,9 @@ export default function ExportsSection({
               ))}
             </tbody>
           </table>
+          {refreshing ? (
+            <span className="mm-sr-only" role="status">Atualizando exportações.</span>
+          ) : null}
         </div>
       )}
     </section>
