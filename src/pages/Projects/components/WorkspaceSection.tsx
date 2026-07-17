@@ -1,9 +1,9 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 
 import type { MaonoUser } from "../../../auth/session";
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
 import type { WorkspaceProject, WorkspaceSectionKey } from "../workspace-api";
-import ProjectCard from "./ProjectCard";
+import ProjectCard, { projectThumbnailKey } from "./ProjectCard";
 
 type WorkspaceSectionProps = {
   section: WorkspaceSectionKey;
@@ -98,6 +98,28 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
     () => projects.filter((project) => matchesSearch(project, searchQuery)),
     [projects, searchQuery],
   );
+  const [settledThumbnailKeys, setSettledThumbnailKeys] = useState<
+    Record<string, true>
+  >({});
+  const visibleThumbnailKeys = useMemo(
+    () => filteredProjects.map(projectThumbnailKey),
+    [filteredProjects],
+  );
+  const allVisibleThumbnailsSettled =
+    visibleThumbnailKeys.length === 0 ||
+    visibleThumbnailKeys.every((key) => settledThumbnailKeys[key]);
+  const handleThumbnailSettled = useCallback((project: WorkspaceProject) => {
+    const thumbnailKey = projectThumbnailKey(project);
+
+    setSettledThumbnailKeys((current) =>
+      current[thumbnailKey]
+        ? current
+        : {
+            ...current,
+            [thumbnailKey]: true,
+          },
+    );
+  }, []);
 
   if (loading && projects.length === 0) {
     return <ProjectGridSkeleton />;
@@ -139,7 +161,10 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
   }
 
   return (
-    <section className="mm-project-grid" aria-busy={loading}>
+    <section
+      className="mm-project-grid"
+      aria-busy={loading || !allVisibleThumbnailsSettled}
+    >
       {filteredProjects.map((project) => (
         <ProjectCard
           key={project.slug}
@@ -148,12 +173,16 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
           canSave={canProjectSave(project)}
           canFavorite={canProjectFavorite(project)}
           favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
+          holdThumbnailShimmer={!allVisibleThumbnailsSettled}
           onFavoriteToggle={onFavoriteToggle}
+          onThumbnailSettled={handleThumbnailSettled}
         />
       ))}
-      {loading ? (
+      {loading || !allVisibleThumbnailsSettled ? (
         <span className="mm-sr-only" role="status">
-          Atualizando projetos.
+          {loading
+            ? "Atualizando projetos."
+            : "Carregando imagens dos projetos."}
         </span>
       ) : null}
     </section>

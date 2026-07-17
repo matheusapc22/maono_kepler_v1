@@ -11,7 +11,9 @@ type ProjectCardProps = {
   canSave: boolean;
   canFavorite: boolean;
   favoriteBusy?: boolean;
+  holdThumbnailShimmer?: boolean;
   onFavoriteToggle?: (project: WorkspaceProject) => void | Promise<void>;
+  onThumbnailSettled?: (project: WorkspaceProject) => void;
 };
 
 function normalize(value?: string | null) {
@@ -97,7 +99,7 @@ function permissionLabel(value?: string) {
   return labels[normalize(value)] || value || "Acesso";
 }
 
-function projectThumbnailUrl(project: WorkspaceProject) {
+export function projectThumbnailUrl(project: WorkspaceProject) {
   if (project.thumbnailUrl) {
     return project.thumbnailUrl;
   }
@@ -107,13 +109,19 @@ function projectThumbnailUrl(project: WorkspaceProject) {
   return `/api/projects/${encodeURIComponent(project.slug)}/thumbnail?v=${cacheKey}`;
 }
 
+export function projectThumbnailKey(project: WorkspaceProject) {
+  return `${project.slug}::${projectThumbnailUrl(project)}`;
+}
+
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   user,
   canSave,
   canFavorite,
   favoriteBusy = false,
+  holdThumbnailShimmer = false,
   onFavoriteToggle,
+  onThumbnailSettled,
 }) => {
   const thumbnailUrl = projectThumbnailUrl(project);
   const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
@@ -125,8 +133,47 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     setThumbnailMissing(false);
   }, [thumbnailUrl]);
 
+  const handleThumbnailLoad = React.useCallback(
+    async (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      const loadedSource = image.currentSrc || image.src;
+
+      try {
+        await image.decode();
+      } catch {
+        // onLoad já confirma bytes válidos; decode pode rejeitar em alguns browsers.
+      }
+
+      if ((image.currentSrc || image.src) !== loadedSource) {
+        return;
+      }
+
+      setThumbnailMissing(false);
+      setThumbnailLoaded(true);
+      onThumbnailSettled?.(project);
+    },
+    [onThumbnailSettled, project],
+  );
+
+  const handleThumbnailError = React.useCallback(() => {
+    setThumbnailLoaded(false);
+    setThumbnailMissing(true);
+    onThumbnailSettled?.(project);
+  }, [onThumbnailSettled, project]);
+
+  const showThumbnailShimmer =
+    holdThumbnailShimmer || (!thumbnailLoaded && !thumbnailMissing);
+  const revealThumbnail = thumbnailLoaded && !holdThumbnailShimmer;
+
   return (
-    <article className="mm-project-card">
+    <article
+      className={
+        holdThumbnailShimmer
+          ? "mm-project-card is-media-pending"
+          : "mm-project-card"
+      }
+      aria-busy={holdThumbnailShimmer}
+    >
       {canFavorite && (
         <button
           type="button"
@@ -149,7 +196,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         className="mm-project-card-link"
       >
         <div className="mm-project-thumb">
-          {!thumbnailLoaded && !thumbnailMissing ? (
+          {showThumbnailShimmer ? (
             <Skeleton className="mm-project-thumb-loading" radius={0} />
           ) : null}
 
@@ -157,13 +204,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             <img
               src={thumbnailUrl}
               alt={`Preview do projeto ${project.name}`}
-              loading="lazy"
-              className={thumbnailLoaded ? "is-loaded" : "is-loading"}
-              onLoad={() => setThumbnailLoaded(true)}
-              onError={() => {
-                setThumbnailLoaded(false);
-                setThumbnailMissing(true);
-              }}
+              loading="eager"
+              decoding="async"
+              className={revealThumbnail ? "is-loaded" : "is-loading"}
+              onLoad={handleThumbnailLoad}
+              onError={handleThumbnailError}
             />
           )}
 

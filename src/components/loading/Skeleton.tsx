@@ -1,5 +1,7 @@
 import type { CSSProperties, HTMLAttributes } from "react";
 
+import Logo from "../../assets/images/Logo_Maono.png";
+
 type SkeletonProps = HTMLAttributes<HTMLSpanElement> & {
   width?: CSSProperties["width"];
   height?: CSSProperties["height"];
@@ -126,37 +128,39 @@ export function ProjectGridSkeleton({ count = 6 }: CountProps) {
   );
 }
 
-function SidebarSkeleton() {
+function ProjectsLoadingSidebar() {
   return (
-    <aside className="mm-projects-sidebar mm-skeleton-sidebar" aria-hidden="true">
+    <aside
+      className="mm-projects-sidebar mm-projects-loading-sidebar"
+      aria-hidden="true"
+    >
       <div className="mm-sidebar-head">
         <div className="mm-sidebar-brand-row">
-          <Skeleton width={142} height={38} />
-          <Skeleton width={34} height={34} radius={10} />
+          <div className="mm-sidebar-logo-mask">
+            <img src={Logo} alt="" className="mm-sidebar-logo" />
+          </div>
+          <span className="mm-loading-sidebar-toggle">‹</span>
         </div>
-        <div className="mm-sidebar-user mm-skeleton-user">
-          <Skeleton width={42} height={42} radius={999} />
-          <div className="mm-skeleton-stack mm-skeleton-grow">
-            <Skeleton width="62%" height={13} />
-            <Skeleton width="82%" height={11} />
+        <div className="mm-loading-sidebar-user">
+          <span className="mm-loading-static-block mm-loading-sidebar-avatar" />
+          <div className="mm-loading-sidebar-user-copy">
+            <span className="mm-loading-static-block" />
+            <span className="mm-loading-static-block short" />
           </div>
         </div>
-        <Skeleton width="100%" height={40} radius={9} />
+        <span className="mm-loading-static-block mm-loading-sidebar-search" />
       </div>
-      <nav className="mm-sidebar-nav">
+      <nav className="mm-loading-sidebar-nav">
         {Array.from({ length: 9 }, (_, index) => (
-          <Skeleton
+          <span
             key={index}
-            width="100%"
-            height={38}
-            radius={10}
-            className="mm-skeleton-nav-item"
+            className="mm-loading-static-block mm-loading-sidebar-item"
           />
         ))}
       </nav>
-      <div className="mm-sidebar-footer">
-        <Skeleton width="58%" height={12} />
-        <Skeleton width="100%" height={38} radius={10} />
+      <div className="mm-loading-sidebar-footer">
+        <span className="mm-loading-static-block mm-loading-sidebar-footer-copy" />
+        <span className="mm-loading-static-block mm-loading-sidebar-footer-action" />
       </div>
     </aside>
   );
@@ -166,7 +170,7 @@ export function ProjectsPageSkeleton() {
   return (
     <main className="mm-projects-page mm-skeleton-page" aria-busy="true">
       <div className="mm-projects-layout">
-        <SidebarSkeleton />
+        <ProjectsLoadingSidebar />
         <section className="mm-projects-main">
           <header className="mm-projects-topbar">
             <div className="mm-skeleton-stack mm-skeleton-topbar-copy">
