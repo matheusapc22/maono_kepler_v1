@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
+import { MetricsSkeleton, TableSkeleton } from "../../../components/loading/Skeleton";
 import {
   createOrganizationTicket,
   listOrganizationTickets,
@@ -20,17 +21,12 @@ const INITIAL_FORM = {
   priority: "normal",
 };
 
+const TICKET_HEADERS = ["Assunto", "Status", "Prioridade", "Criado em", "Ação"];
+
 function formatDate(value?: string) {
-  if (!value) {
-    return "—";
-  }
-
+  if (!value) return "—";
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
+  if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -38,10 +34,7 @@ function formatDate(value?: string) {
   });
 }
 
-export default function TicketsSection({
-  user,
-  organizationId,
-}: TicketsSectionProps) {
+export default function TicketsSection({ user, organizationId }: TicketsSectionProps) {
   const [tickets, setTickets] = useState<OrganizationTicket[]>([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
@@ -63,7 +56,6 @@ export default function TicketsSection({
   const openTicketsCount = tickets.filter((ticket) =>
     ["open", "new", "pending"].includes(ticket.status),
   ).length;
-
   const inReviewCount = tickets.filter((ticket) =>
     ["in_review", "review", "in_progress"].includes(ticket.status),
   ).length;
@@ -73,10 +65,8 @@ export default function TicketsSection({
       setTickets([]);
       return;
     }
-
     setLoading(true);
     setError(null);
-
     try {
       const response = await listOrganizationTickets(organizationId);
       setTickets(response.tickets ?? []);
@@ -98,14 +88,9 @@ export default function TicketsSection({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!organizationId || !canCreate) {
-      return;
-    }
-
+    if (!organizationId || !canCreate) return;
     setSaving(true);
     setError(null);
-
     try {
       await createOrganizationTicket(organizationId, form);
       setForm(INITIAL_FORM);
@@ -122,12 +107,8 @@ export default function TicketsSection({
   }
 
   async function handleStatusChange(ticket: OrganizationTicket, status: string) {
-    if (!organizationId || !canManage) {
-      return;
-    }
-
+    if (!organizationId || !canManage) return;
     setError(null);
-
     try {
       await updateOrganizationTicket(organizationId, ticket.id, { status });
       await loadTickets();
@@ -166,22 +147,15 @@ export default function TicketsSection({
         previews e suporte operacional.
       </p>
 
-      <div className="mm-metrics-grid compact">
-        <article className="mm-card metric">
-          <span>Chamados abertos</span>
-          <strong>{openTicketsCount}</strong>
-        </article>
-
-        <article className="mm-card metric">
-          <span>Total de chamados</span>
-          <strong>{tickets.length}</strong>
-        </article>
-
-        <article className="mm-card metric">
-          <span>Em revisão</span>
-          <strong>{inReviewCount}</strong>
-        </article>
-      </div>
+      {loading ? (
+        <MetricsSkeleton count={3} />
+      ) : (
+        <div className="mm-metrics-grid compact">
+          <article className="mm-card metric"><span>Chamados abertos</span><strong>{openTicketsCount}</strong></article>
+          <article className="mm-card metric"><span>Total de chamados</span><strong>{tickets.length}</strong></article>
+          <article className="mm-card metric"><span>Em revisão</span><strong>{inReviewCount}</strong></article>
+        </div>
+      )}
 
       {error ? <p className="mm-error-text">{error}</p> : null}
 
@@ -193,47 +167,29 @@ export default function TicketsSection({
               value={form.subject}
               maxLength={160}
               required
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  subject: event.target.value,
-                }))
-              }
+              onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
             />
           </label>
-
           <label>
             Descrição
             <textarea
               value={form.description}
               maxLength={5000}
               required
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
+              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
             />
           </label>
-
           <label>
             Prioridade
             <select
               value={form.priority}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  priority: event.target.value,
-                }))
-              }
+              onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}
             >
               <option value="low">Baixa</option>
               <option value="normal">Normal</option>
               <option value="high">Alta</option>
             </select>
           </label>
-
           <button type="submit" className="mm-button" disabled={saving}>
             {saving ? "Criando..." : "Criar chamado"}
           </button>
@@ -241,24 +197,15 @@ export default function TicketsSection({
       ) : null}
 
       {loading ? (
-        <p>Carregando chamados...</p>
+        <TableSkeleton headers={TICKET_HEADERS} rows={5} />
       ) : tickets.length === 0 ? (
-        <div className="projects-empty-state">
-          Nenhum chamado encontrado para esta organização.
-        </div>
+        <div className="projects-empty-state">Nenhum chamado encontrado para esta organização.</div>
       ) : (
         <div className="mm-table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Assunto</th>
-                <th>Status</th>
-                <th>Prioridade</th>
-                <th>Criado em</th>
-                <th>Ação</th>
-              </tr>
+              <tr>{TICKET_HEADERS.map((header) => <th key={header}>{header}</th>)}</tr>
             </thead>
-
             <tbody>
               {tickets.map((ticket) => (
                 <tr key={ticket.id}>
@@ -270,18 +217,14 @@ export default function TicketsSection({
                     {canManage ? (
                       <select
                         value={ticket.status}
-                        onChange={(event) =>
-                          void handleStatusChange(ticket, event.target.value)
-                        }
+                        onChange={(event) => void handleStatusChange(ticket, event.target.value)}
                       >
                         <option value="open">Aberto</option>
                         <option value="in_progress">Em andamento</option>
                         <option value="in_review">Em revisão</option>
                         <option value="closed">Fechado</option>
                       </select>
-                    ) : (
-                      "—"
-                    )}
+                    ) : "—"}
                   </td>
                 </tr>
               ))}
