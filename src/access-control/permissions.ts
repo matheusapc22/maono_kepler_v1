@@ -52,6 +52,19 @@ export const PERMISSIONS = Object.values(PERMISSION) as readonly Permission[];
 
 export const ALL_PERMISSIONS: readonly Permission[] = PERMISSIONS;
 
+export const PROJECT_MAP_PERMISSIONS = [
+  PERMISSION.PROJECT_VIEW,
+  PERMISSION.PROJECT_SAVE,
+  PERMISSION.PROJECT_EDIT,
+  PERMISSION.PROJECT_THUMBNAIL_UPDATE,
+] as const satisfies readonly Permission[];
+
+export const PROJECT_PERSISTENCE_PERMISSIONS = [
+  PERMISSION.PROJECT_SAVE,
+  PERMISSION.PROJECT_EDIT,
+  PERMISSION.PROJECT_THUMBNAIL_UPDATE,
+] as const satisfies readonly Permission[];
+
 const PERMISSION_SET = new Set<string>(PERMISSIONS);
 
 export function isPermission(permission: unknown): permission is Permission {

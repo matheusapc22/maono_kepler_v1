@@ -5,6 +5,8 @@ import { KeplerGlSchema } from "@kepler.gl/schemas";
 import { WebMercatorViewport } from "@deck.gl/core";
 import html2canvas from "html2canvas";
 import { useSession } from "../../../auth/session";
+import { can } from "../../../access-control/can";
+import { PERMISSION } from "../../../access-control/permissions";
 
 const PREVIEW_WIDTH = 960;
 const PREVIEW_HEIGHT = 540;
@@ -36,11 +38,6 @@ function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
-function canSaveProject(userRole?: string, accessLevel?: string) {
-  if (normalize(userRole) === "admin") return true;
-  return ["editor", "owner"].includes(normalize(accessLevel));
-}
-
 function getFallbackDatasets(mapState: any) {
   const datasets = mapState?.visState?.datasets;
   if (!datasets || typeof datasets !== "object") return [];
@@ -66,14 +63,18 @@ function normalizeSavedKeplerConfig(rawSaved: any, mapState: any) {
   return {
     ...saved,
     version: saved.version || "v1",
-    datasets: Array.isArray(saved.datasets) ? saved.datasets : getFallbackDatasets(mapState),
+    datasets: Array.isArray(saved.datasets)
+      ? saved.datasets
+      : getFallbackDatasets(mapState),
     config,
   };
 }
 
 function waitForPaint() {
   return new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => resolve()),
+    );
   });
 }
 
@@ -110,16 +111,22 @@ function brightnessQuality(canvas: HTMLCanvasElement) {
 
   const safeCount = Math.max(1, count);
   const mean = sum / safeCount;
-  return { mean, variance: sum2 / safeCount - mean * mean, useful: useful / safeCount };
+  return {
+    mean,
+    variance: sum2 / safeCount - mean * mean,
+    useful: useful / safeCount,
+  };
 }
 
 function assertNotBlack(canvas: HTMLCanvasElement, label: string) {
   const quality = brightnessQuality(canvas);
   if (quality.useful < 0.008 && quality.variance < 8) {
     throw new Error(
-      `${label} gerou imagem preta ou sem conteúdo. mean=${quality.mean.toFixed(1)} variance=${quality.variance.toFixed(1)} useful=${(
+      `${label} gerou imagem preta ou sem conteúdo. mean=${quality.mean.toFixed(
+        1,
+      )} variance=${quality.variance.toFixed(1)} useful=${(
         quality.useful * 100
-      ).toFixed(2)}%`
+      ).toFixed(2)}%`,
     );
   }
   return quality;
@@ -140,9 +147,16 @@ function getVisibleCanvases() {
       canvas,
       order,
       rect: canvas.getBoundingClientRect(),
-      zIndex: Number.parseInt(window.getComputedStyle(canvas).zIndex || "0", 10) || 0,
+      zIndex:
+        Number.parseInt(window.getComputedStyle(canvas).zIndex || "0", 10) || 0,
     }))
-    .filter((item) => item.canvas.width > 0 && item.canvas.height > 0 && item.rect.width > 80 && item.rect.height > 80)
+    .filter(
+      (item) =>
+        item.canvas.width > 0 &&
+        item.canvas.height > 0 &&
+        item.rect.width > 80 &&
+        item.rect.height > 80,
+    )
     .sort((a, b) => a.zIndex - b.zIndex || a.order - b.order);
 }
 
@@ -177,7 +191,11 @@ function cropCanvasToPreview(source: HTMLCanvasElement) {
   return dataUrl;
 }
 
-function drawCanvasIntoPreview(ctx: CanvasRenderingContext2D, item: any, targetRect: DOMRect) {
+function drawCanvasIntoPreview(
+  ctx: CanvasRenderingContext2D,
+  item: any,
+  targetRect: DOMRect,
+) {
   const rect = item.rect;
   const left = Math.max(rect.left, targetRect.left);
   const top = Math.max(rect.top, targetRect.top);
@@ -198,7 +216,7 @@ function drawCanvasIntoPreview(ctx: CanvasRenderingContext2D, item: any, targetR
     ((left - targetRect.left) / targetRect.width) * PREVIEW_WIDTH,
     ((top - targetRect.top) / targetRect.height) * PREVIEW_HEIGHT,
     (width / targetRect.width) * PREVIEW_WIDTH,
-    (height / targetRect.height) * PREVIEW_HEIGHT
+    (height / targetRect.height) * PREVIEW_HEIGHT,
   );
   return true;
 }
@@ -236,10 +254,18 @@ async function captureCompositedBase() {
   const targetRect = target.getBoundingClientRect();
   const canvases = getVisibleCanvases().filter((item) => {
     const rect = item.rect;
-    return Math.max(0, Math.min(rect.right, targetRect.right) - Math.max(rect.left, targetRect.left)) > 0;
+    return (
+      Math.max(
+        0,
+        Math.min(rect.right, targetRect.right) -
+          Math.max(rect.left, targetRect.left),
+      ) > 0
+    );
   });
 
-  if (!canvases.length) throw new Error("Nenhum canvas visível encontrado para composição.");
+  if (!canvases.length) {
+    throw new Error("Nenhum canvas visível encontrado para composição.");
+  }
 
   const out = document.createElement("canvas");
   out.width = PREVIEW_WIDTH;
@@ -265,13 +291,19 @@ async function captureCompositedBase() {
       drawCanvasIntoPreview(tempCtx, item, targetRect);
       const quality = brightnessQuality(temp);
       qualities.push(
-        `o=${item.order},z=${item.zIndex},mean=${quality.mean.toFixed(1)},var=${quality.variance.toFixed(1)},useful=${(
+        `o=${item.order},z=${item.zIndex},mean=${quality.mean.toFixed(
+          1,
+        )},var=${quality.variance.toFixed(1)},useful=${(
           quality.useful * 100
-        ).toFixed(1)}%`
+        ).toFixed(1)}%`,
       );
 
-      if (quality.mean < 45 && quality.useful < 0.35) ctx.drawImage(maskBlackBackground(temp), 0, 0);
-      else ctx.drawImage(temp, 0, 0);
+      if (quality.mean < 45 && quality.useful < 0.35) {
+        ctx.drawImage(maskBlackBackground(temp), 0, 0);
+      } else {
+        ctx.drawImage(temp, 0, 0);
+      }
+
       drawn += 1;
     } catch (_error) {
       skipped += 1;
@@ -283,7 +315,12 @@ async function captureCompositedBase() {
   return {
     dataUrl: out.toDataURL("image/png", 0.92),
     method: "canvas-composite",
-    diagnostics: [`canvases=${canvases.length}`, `drawn=${drawn}`, `skipped=${skipped}`, qualities.join(";")],
+    diagnostics: [
+      `canvases=${canvases.length}`,
+      `drawn=${drawn}`,
+      `skipped=${skipped}`,
+      qualities.join(";"),
+    ],
   };
 }
 
@@ -296,9 +333,15 @@ async function captureHtml2Canvas() {
     allowTaint: true,
     logging: false,
     scale: 1,
-    ignoreElements: (element) => Boolean(element.closest?.("[data-maono-no-preview='true']")),
+    ignoreElements: (element) =>
+      Boolean(element.closest?.("[data-maono-no-preview='true']")),
   });
-  return { dataUrl: cropCanvasToPreview(captured), method: "html2canvas", diagnostics: [`capture=${captured.width}x${captured.height}`] };
+
+  return {
+    dataUrl: cropCanvasToPreview(captured),
+    method: "html2canvas",
+    diagnostics: [`capture=${captured.width}x${captured.height}`],
+  };
 }
 
 function getViewport(mapState: any, savedConfig?: any) {
@@ -306,7 +349,15 @@ function getViewport(mapState: any, savedConfig?: any) {
   const longitude = Number(viewState.longitude);
   const latitude = Number(viewState.latitude);
   const zoom = Number(viewState.zoom);
-  if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || !Number.isFinite(zoom)) return null;
+
+  if (
+    !Number.isFinite(longitude) ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(zoom)
+  ) {
+    return null;
+  }
+
   return new WebMercatorViewport({
     width: PREVIEW_WIDTH,
     height: PREVIEW_HEIGHT,
@@ -322,7 +373,10 @@ function getDatasetId(dataset: any, fallback: string) {
   return String(dataset?.data?.id || dataset?.info?.id || dataset?.id || fallback);
 }
 
-function getOverlayDatasetEntries(mapState: any, savedConfig?: any): OverlayDatasetEntry[] {
+function getOverlayDatasetEntries(
+  mapState: any,
+  savedConfig?: any,
+): OverlayDatasetEntry[] {
   const entries: OverlayDatasetEntry[] = [];
   const seen = new Set<string>();
 
@@ -347,13 +401,20 @@ function getOverlayDatasetEntries(mapState: any, savedConfig?: any): OverlayData
 
 function getAllLayers(mapState: any, savedConfig?: any) {
   const layers = [] as any[];
-  if (Array.isArray(savedConfig?.config?.visState?.layers)) layers.push(...savedConfig.config.visState.layers);
-  if (Array.isArray(mapState?.visState?.layers)) layers.push(...mapState.visState.layers);
-  return layers.filter((layer) => layer?.config?.isVisible !== false && layer?.isVisible !== false);
+  if (Array.isArray(savedConfig?.config?.visState?.layers)) {
+    layers.push(...savedConfig.config.visState.layers);
+  }
+  if (Array.isArray(mapState?.visState?.layers)) {
+    layers.push(...mapState.visState.layers);
+  }
+  return layers.filter(
+    (layer) => layer?.config?.isVisible !== false && layer?.isVisible !== false,
+  );
 }
 
 function fieldsOf(dataset: any) {
-  const fields = dataset?.data?.fields || dataset?.fields || dataset?.data?.schema?.fields || [];
+  const fields =
+    dataset?.data?.fields || dataset?.fields || dataset?.data?.schema?.fields || [];
   return Array.isArray(fields) ? fields : [];
 }
 
@@ -393,14 +454,18 @@ function getDataContainerRow(dc: any, rowIndex: number, fields: any[]) {
     let value;
 
     try {
-      if (typeof dc.valueAt === "function") value = dc.valueAt(rowIndex, fieldIndex);
+      if (typeof dc.valueAt === "function") {
+        value = dc.valueAt(rowIndex, fieldIndex);
+      }
     } catch (_error) {
       value = undefined;
     }
 
     if (value === undefined) {
       try {
-        if (typeof dc.valueAt === "function") value = dc.valueAt(rowIndex, name);
+        if (typeof dc.valueAt === "function") {
+          value = dc.valueAt(rowIndex, name);
+        }
       } catch (_error) {
         value = undefined;
       }
@@ -408,7 +473,9 @@ function getDataContainerRow(dc: any, rowIndex: number, fields: any[]) {
 
     if (value === undefined) {
       try {
-        if (typeof dc.getCell === "function") value = dc.getCell(rowIndex, fieldIndex);
+        if (typeof dc.getCell === "function") {
+          value = dc.getCell(rowIndex, fieldIndex);
+        }
       } catch (_error) {
         value = undefined;
       }
@@ -433,6 +500,7 @@ function rowsOf(dataset: any) {
 
   const dc = getDataContainer(dataset);
   const fields = fieldsOf(dataset);
+
   if (dc) {
     try {
       if (typeof dc.rows === "function") {
@@ -443,14 +511,19 @@ function rowsOf(dataset: any) {
       // ignore
     }
 
-    const count = Number(typeof dc.numRows === "function" ? dc.numRows() : dc.numRows);
+    const count = Number(
+      typeof dc.numRows === "function" ? dc.numRows() : dc.numRows,
+    );
+
     if (Number.isFinite(count) && count > 0) {
       const rows = [];
       const limit = Math.min(count, MAX_ROWS_TO_SCAN);
+
       for (let index = 0; index < limit; index += 1) {
         const row = getDataContainerRow(dc, index, fields);
         if (row) rows.push(row);
       }
+
       return rows;
     }
   }
@@ -460,23 +533,39 @@ function rowsOf(dataset: any) {
 
 function valueOf(row: any, fields: any[], name?: string | null) {
   if (!name || !row) return undefined;
+
   if (Array.isArray(row)) {
-    const index = fields.findIndex((field) => normalize(fieldName(field)) === normalize(name));
+    const index = fields.findIndex(
+      (field) => normalize(fieldName(field)) === normalize(name),
+    );
     return index >= 0 ? row[index] : undefined;
   }
+
   if (typeof row === "object") {
     if (name in row) return row[name];
-    const key = Object.keys(row).find((candidate) => normalize(candidate) === normalize(name));
+    const key = Object.keys(row).find(
+      (candidate) => normalize(candidate) === normalize(name),
+    );
     return key ? row[key] : undefined;
   }
+
   return undefined;
 }
 
 function findField(fields: any[], candidates: string[]) {
   const normalizedCandidates = candidates.map(normalize);
-  const exact = fields.find((field) => normalizedCandidates.includes(normalize(fieldName(field))));
+  const exact = fields.find((field) =>
+    normalizedCandidates.includes(normalize(fieldName(field))),
+  );
+
   if (exact) return fieldName(exact);
-  const partial = fields.find((field) => normalizedCandidates.some((candidate) => normalize(fieldName(field)).includes(candidate)));
+
+  const partial = fields.find((field) =>
+    normalizedCandidates.some((candidate) =>
+      normalize(fieldName(field)).includes(candidate),
+    ),
+  );
+
   return partial ? fieldName(partial) : null;
 }
 
@@ -491,106 +580,177 @@ function layerMatchesDataset(layer: any, datasetId: string) {
 }
 
 function layersForDataset(mapState: any, datasetId: string, savedConfig?: any) {
-  return getAllLayers(mapState, savedConfig).filter((layer: any) => layerMatchesDataset(layer, datasetId));
+  return getAllLayers(mapState, savedConfig).filter((layer: any) =>
+    layerMatchesDataset(layer, datasetId),
+  );
 }
 
 function coordinateColumnsFromLayer(layer: any) {
   const columns = layer?.config?.columns || layer?.props?.columns || {};
   const lat = columns.lat || columns.latitude || columns.y || columns.lat0;
-  const lng = columns.lng || columns.lon || columns.longitude || columns.x || columns.lng0;
+  const lng =
+    columns.lng || columns.lon || columns.longitude || columns.x || columns.lng0;
   return lat && lng ? { lat: String(lat), lng: String(lng) } : null;
 }
 
-function coordinateColumns(mapState: any, datasetId: string, fields: any[], savedConfig?: any) {
+function coordinateColumns(
+  mapState: any,
+  datasetId: string,
+  fields: any[],
+  savedConfig?: any,
+) {
   for (const layer of layersForDataset(mapState, datasetId, savedConfig)) {
     const columns = coordinateColumnsFromLayer(layer);
     if (columns) return columns;
   }
+
   return {
     lat: findField(fields, ["latitude", "lat", "y", "lat_dd", "latitud"]),
-    lng: findField(fields, ["longitude", "lon", "lng", "long", "x", "lng_dd", "longitud"]),
+    lng: findField(fields, [
+      "longitude",
+      "lon",
+      "lng",
+      "long",
+      "x",
+      "lng_dd",
+      "longitud",
+    ]),
   };
 }
 
 function geometryColumnCandidatesFromLayer(layer: any) {
   const columns = layer?.config?.columns || layer?.props?.columns || {};
-  return [columns.geojson, columns.geometry, columns.geom, columns.shape].filter(Boolean).map(String);
+  return [columns.geojson, columns.geometry, columns.geom, columns.shape]
+    .filter(Boolean)
+    .map(String);
 }
 
-function geometryColumnCandidates(mapState: any, datasetId: string, fields: any[], savedConfig?: any) {
+function geometryColumnCandidates(
+  mapState: any,
+  datasetId: string,
+  fields: any[],
+  savedConfig?: any,
+) {
   const candidates = new Set<string>();
 
   for (const layer of layersForDataset(mapState, datasetId, savedConfig)) {
-    geometryColumnCandidatesFromLayer(layer).forEach((column) => candidates.add(column));
+    geometryColumnCandidatesFromLayer(layer).forEach((column) =>
+      candidates.add(column),
+    );
   }
 
   fields.forEach((field) => {
     const name = fieldName(field);
     const type = normalize(field?.type || field?.fieldIdx || field?.format);
-    if (["geojson", "geometry", "geom", "the_geom", "shape"].some((candidate) => normalize(name).includes(candidate))) {
+
+    if (
+      ["geojson", "geometry", "geom", "the_geom", "shape"].some((candidate) =>
+        normalize(name).includes(candidate),
+      )
+    ) {
       candidates.add(name);
     }
+
     if (type.includes("geojson") || type.includes("geometry")) candidates.add(name);
   });
 
-  ["geojson", "geometry", "geom", "the_geom", "shape", "_geojson"].forEach((candidate) => {
-    const field = findField(fields, [candidate]);
-    if (field) candidates.add(field);
-  });
+  ["geojson", "geometry", "geom", "the_geom", "shape", "_geojson"].forEach(
+    (candidate) => {
+      const field = findField(fields, [candidate]);
+      if (field) candidates.add(field);
+    },
+  );
 
   return Array.from(candidates);
 }
 
 function toNumber(value: any) {
   if (typeof value === "number") return value;
+
   if (typeof value === "string") {
     const parsed = Number(value.replace(",", "."));
     return Number.isFinite(parsed) ? parsed : NaN;
   }
+
   return NaN;
 }
 
 function geometryValues(value: any): any[] {
   if (!value) return [];
   let parsed = value;
+
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return [];
+
     try {
       parsed = JSON.parse(trimmed);
     } catch (_error) {
       return [];
     }
   }
+
   if (Array.isArray(parsed)) {
-    if (parsed.length && Array.isArray(parsed[0])) return [{ type: "LineString", coordinates: parsed }];
+    if (parsed.length && Array.isArray(parsed[0])) {
+      return [{ type: "LineString", coordinates: parsed }];
+    }
+
     return [];
   }
+
   if (!parsed || typeof parsed !== "object") return [];
-  if (parsed.type === "FeatureCollection") return (parsed.features || []).flatMap((feature: any) => geometryValues(feature));
+  if (parsed.type === "FeatureCollection") {
+    return (parsed.features || []).flatMap((feature: any) =>
+      geometryValues(feature),
+    );
+  }
+
   if (parsed.type === "Feature") return geometryValues(parsed.geometry);
   if (parsed.type && parsed.coordinates) return [parsed];
   if (parsed.geometry) return geometryValues(parsed.geometry);
+
   return [];
 }
 
 function rowGeometries(row: any, fields: any[], geometryColumns: string[]) {
   const out: any[] = [];
-  geometryColumns.forEach((column) => out.push(...geometryValues(valueOf(row, fields, column))));
-  if (Array.isArray(row)) row.forEach((value) => out.push(...geometryValues(value)));
-  else if (row && typeof row === "object") Object.values(row).forEach((value) => out.push(...geometryValues(value)));
+  geometryColumns.forEach((column) =>
+    out.push(...geometryValues(valueOf(row, fields, column))),
+  );
+
+  if (Array.isArray(row)) {
+    row.forEach((value) => out.push(...geometryValues(value)));
+  } else if (row && typeof row === "object") {
+    Object.values(row).forEach((value) =>
+      out.push(...geometryValues(value)),
+    );
+  }
+
   return out;
 }
 
 function project(viewport: any, coordinate: any) {
   if (!Array.isArray(coordinate) || coordinate.length < 2) return null;
+
   const lng = toNumber(coordinate[0]);
   const lat = toNumber(coordinate[1]);
+
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+
   try {
     const [x, y] = viewport.project([lng, lat]);
+
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    if (x < -120 || x > PREVIEW_WIDTH + 120 || y < -120 || y > PREVIEW_HEIGHT + 120) return null;
+
+    if (
+      x < -120 ||
+      x > PREVIEW_WIDTH + 120 ||
+      y < -120 ||
+      y > PREVIEW_HEIGHT + 120
+    ) {
+      return null;
+    }
+
     return { x, y };
   } catch (_error) {
     return null;
@@ -607,28 +767,42 @@ function cssColor(color: any, alpha = 1) {
     const green = Number(color[1]) || 0;
     const blue = Number(color[2]) || 0;
     const ownAlpha = color.length > 3 ? (Number(color[3]) || 255) / 255 : 1;
+
     return `rgba(${red},${green},${blue},${clamp(alpha * ownAlpha, 0, 1)})`;
   }
+
   if (typeof color === "string") {
     if (color.startsWith("#")) {
       const hex = color.replace("#", "");
-      const fullHex = hex.length === 3 ? hex.split("").map((char) => char + char).join("") : hex;
+      const fullHex =
+        hex.length === 3
+          ? hex
+              .split("")
+              .map((char) => char + char)
+              .join("")
+          : hex;
+
       const red = Number.parseInt(fullHex.slice(0, 2), 16);
       const green = Number.parseInt(fullHex.slice(2, 4), 16);
       const blue = Number.parseInt(fullHex.slice(4, 6), 16);
+
       return `rgba(${red},${green},${blue},${alpha})`;
     }
+
     return color;
   }
+
   return `rgba(32,199,181,${alpha})`;
 }
 
 function stableHash(value: any) {
   const text = String(value ?? "");
   let hash = 0;
+
   for (let index = 0; index < text.length; index += 1) {
     hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
   }
+
   return hash;
 }
 
@@ -637,7 +811,13 @@ function colorRangeColors(layer: any) {
   return Array.isArray(colors) && colors.length ? colors : null;
 }
 
-function configuredColor(layer: any, row: any, fields: any[], index: number, alpha: number) {
+function configuredColor(
+  layer: any,
+  row: any,
+  fields: any[],
+  index: number,
+  alpha: number,
+) {
   const range = colorRangeColors(layer);
   const colorField = layer?.config?.colorField?.name || layer?.config?.colorField?.id;
 
@@ -646,20 +826,27 @@ function configuredColor(layer: any, row: any, fields: any[], index: number, alp
     return cssColor(range[stableHash(key) % range.length], alpha);
   }
 
-  const color = layer?.config?.color || layer?.config?.visConfig?.color || [32, 199, 181];
+  const color = layer?.config?.color || layer?.config?.visConfig?.color || [
+    32, 199, 181,
+  ];
   return cssColor(color, alpha);
 }
 
 function layerOpacity(layer: any, fallback = 0.55) {
   const vis = layer?.config?.visConfig || {};
   const opacity = Number(vis.opacity ?? vis.fillOpacity ?? fallback);
+
   if (!Number.isFinite(opacity)) return fallback;
+
   return opacity > 1 ? clamp(opacity / 100, 0.05, 1) : clamp(opacity, 0.05, 1);
 }
 
 function layerStrokeOpacity(layer: any) {
   const vis = layer?.config?.visConfig || {};
-  const opacity = Number(vis.strokeOpacity ?? vis.outlineOpacity ?? Math.max(layerOpacity(layer), 0.55));
+  const opacity = Number(
+    vis.strokeOpacity ?? vis.outlineOpacity ?? Math.max(layerOpacity(layer), 0.55),
+  );
+
   return opacity > 1 ? clamp(opacity / 100, 0.08, 1) : clamp(opacity, 0.08, 1);
 }
 
@@ -669,15 +856,28 @@ function layerRadius(layer: any, row: any, fields: any[]) {
   const radiusValue = radiusField ? toNumber(valueOf(row, fields, radiusField)) : NaN;
 
   if (Number.isFinite(radiusValue)) {
-    const maxRadius = Array.isArray(vis.radiusRange) ? Number(vis.radiusRange[1]) || 70 : 70;
+    const maxRadius = Array.isArray(vis.radiusRange)
+      ? Number(vis.radiusRange[1]) || 70
+      : 70;
     return clamp(Math.sqrt(Math.max(radiusValue, 0)) * 1.8, 5, maxRadius);
   }
 
-  const configured = Number(vis.radius ?? vis.fixedRadius ?? (Array.isArray(vis.radiusRange) ? vis.radiusRange[1] : NaN));
+  const configured = Number(
+    vis.radius ?? vis.fixedRadius ?? (Array.isArray(vis.radiusRange) ? vis.radiusRange[1] : NaN),
+  );
+
   return clamp(Number.isFinite(configured) ? configured : 18, 4, 90);
 }
 
-function drawStyledPoint(ctx: CanvasRenderingContext2D, layer: any, row: any, fields: any[], x: number, y: number, index: number) {
+function drawStyledPoint(
+  ctx: CanvasRenderingContext2D,
+  layer: any,
+  row: any,
+  fields: any[],
+  x: number,
+  y: number,
+  index: number,
+) {
   const alpha = layerOpacity(layer, 0.62);
   const radius = layerRadius(layer, row, fields);
 
@@ -692,17 +892,28 @@ function drawStyledPoint(ctx: CanvasRenderingContext2D, layer: any, row: any, fi
   ctx.restore();
 }
 
-function drawLine(ctx: CanvasRenderingContext2D, viewport: any, coordinates: any[], close = false) {
+function drawLine(
+  ctx: CanvasRenderingContext2D,
+  viewport: any,
+  coordinates: any[],
+  close = false,
+) {
   let started = false;
+
   coordinates.forEach((coordinate) => {
     const point = project(viewport, coordinate);
     if (!point) return;
+
     if (!started) {
       ctx.moveTo(point.x, point.y);
       started = true;
-    } else ctx.lineTo(point.x, point.y);
+    } else {
+      ctx.lineTo(point.x, point.y);
+    }
   });
+
   if (started && close) ctx.closePath();
+
   return started;
 }
 
@@ -713,42 +924,57 @@ function drawStyledGeometry(
   row: any,
   fields: any[],
   geometry: any,
-  index: number
+  index: number,
 ) {
   if (!geometry?.type || !geometry?.coordinates) return 0;
+
   const fill = configuredColor(layer, row, fields, index, layerOpacity(layer, 0.48));
   const stroke = configuredColor(layer, row, fields, index, layerStrokeOpacity(layer));
-  const strokeWidth = clamp(Number(layer?.config?.visConfig?.thickness || layer?.config?.visConfig?.strokeWidth || 1.4), 0.7, 5);
+  const strokeWidth = clamp(
+    Number(layer?.config?.visConfig?.thickness || layer?.config?.visConfig?.strokeWidth || 1.4),
+    0.7,
+    5,
+  );
 
   if (geometry.type === "Point") {
     const point = project(viewport, geometry.coordinates);
     if (!point) return 0;
+
     drawStyledPoint(ctx, layer, row, fields, point.x, point.y, index);
     return 1;
   }
+
   if (geometry.type === "MultiPoint") {
     let drawn = 0;
+
     geometry.coordinates.forEach((coordinate: any, pointIndex: number) => {
       const point = project(viewport, coordinate);
+
       if (point) {
         drawStyledPoint(ctx, layer, row, fields, point.x, point.y, index + pointIndex);
         drawn += 1;
       }
     });
+
     return drawn;
   }
+
   if (geometry.type === "LineString") {
     ctx.beginPath();
     if (!drawLine(ctx, viewport, geometry.coordinates)) return 0;
+
     ctx.strokeStyle = stroke;
     ctx.lineWidth = strokeWidth;
     ctx.stroke();
     return 1;
   }
+
   if (geometry.type === "MultiLineString") {
     let drawn = 0;
+
     geometry.coordinates.forEach((line: any[]) => {
       ctx.beginPath();
+
       if (drawLine(ctx, viewport, line)) {
         ctx.strokeStyle = stroke;
         ctx.lineWidth = strokeWidth;
@@ -756,17 +982,22 @@ function drawStyledGeometry(
         drawn += 1;
       }
     });
+
     return drawn;
   }
+
   if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
     const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
     let drawn = 0;
+
     polygons.forEach((polygon: any[]) => {
       ctx.beginPath();
       let didDraw = false;
+
       polygon.forEach((ring: any[]) => {
         didDraw = drawLine(ctx, viewport, ring, true) || didDraw;
       });
+
       if (didDraw) {
         ctx.fillStyle = fill;
         ctx.strokeStyle = stroke;
@@ -776,8 +1007,10 @@ function drawStyledGeometry(
         drawn += 1;
       }
     });
+
     return drawn;
   }
+
   return 0;
 }
 
@@ -794,8 +1027,91 @@ function shortDiagnostics(diagnostics: string[]) {
   return diagnostics.join(" | ").slice(0, 650);
 }
 
+function getPreviewErrorMessage(value: unknown) {
+  if (typeof value !== "string") return "";
+
+  return value.trim();
+}
+
+async function readJsonResponse(response: Response): Promise<any> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    return {
+      ok: false,
+      error: {
+        message: "A API retornou uma resposta inesperada.",
+        code: "INVALID_JSON_RESPONSE",
+      },
+    };
+  }
+}
+
+function getBackendErrorMessage(data: any) {
+  const message = data?.error?.message || data?.message;
+
+  return typeof message === "string" ? message.trim() : "";
+}
+
+function getSaveErrorMessage(response: Response, data: any) {
+  if (response.status === 401) {
+    return "Sua sessão expirou. Entre novamente para salvar o projeto.";
+  }
+
+  if (response.status === 403) {
+    return "Você não tem permissão para salvar alterações permanentes neste projeto.";
+  }
+
+  if (response.status === 409) {
+    return "O projeto foi alterado em outro lugar. Recarregue o mapa antes de salvar novamente.";
+  }
+
+  if (response.status === 404) {
+    return "Projeto não encontrado ou sem permissão de acesso.";
+  }
+
+  if (response.status >= 500) {
+    return "Não foi possível salvar agora. Tente novamente em alguns instantes.";
+  }
+
+  const backendMessage = getBackendErrorMessage(data);
+
+  if (backendMessage) {
+    return backendMessage;
+  }
+
+  if (!response.ok) {
+    return "Não foi possível salvar o projeto.";
+  }
+
+  return "A API retornou uma resposta inesperada.";
+}
+
+function getSaveFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.trim() : "";
+
+  if (!message) {
+    return "Erro ao salvar projeto.";
+  }
+
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return "Não foi possível conectar à API para salvar o projeto.";
+  }
+
+  return message;
+}
+
 function getDatasetById(entries: OverlayDatasetEntry[], datasetId: string) {
-  return entries.find((entry) => entry.id === datasetId) || entries.find((entry) => entry.id.endsWith(datasetId));
+  return (
+    entries.find((entry) => entry.id === datasetId) ||
+    entries.find((entry) => entry.id.endsWith(datasetId))
+  );
 }
 
 function drawLayerOverlay(
@@ -806,12 +1122,14 @@ function drawLayerOverlay(
   mapState: any,
   savedConfig: any,
   stats: DrawStats,
-  diagnostics: string[]
+  diagnostics: string[],
 ) {
   const fields = fieldsOf(entry.dataset);
   const rows = rowsOf(entry.dataset);
   const layerType = normalize(layer?.type || layer?.config?.type || layer?.visualChannels?.layerType);
-  const columns = coordinateColumnsFromLayer(layer) || coordinateColumns(mapState, entry.id, fields, savedConfig);
+  const columns =
+    coordinateColumnsFromLayer(layer) ||
+    coordinateColumns(mapState, entry.id, fields, savedConfig);
   const geometryColumns = geometryColumnCandidatesFromLayer(layer).length
     ? geometryColumnCandidatesFromLayer(layer)
     : geometryColumnCandidates(mapState, entry.id, fields, savedConfig);
@@ -822,11 +1140,24 @@ function drawLayerOverlay(
   for (const row of rows) {
     stats.rows += 1;
 
-    const shouldDrawGeometry = geometryColumns.length > 0 || layerType.includes("geojson") || layerType.includes("polygon");
+    const shouldDrawGeometry =
+      geometryColumns.length > 0 ||
+      layerType.includes("geojson") ||
+      layerType.includes("polygon");
+
     if (shouldDrawGeometry && stats.geometries < MAX_GEOMETRIES) {
       for (const geometry of rowGeometries(row, fields, geometryColumns)) {
         if (stats.geometries >= MAX_GEOMETRIES) break;
-        const drawn = drawStyledGeometry(ctx, viewport, layer, row, fields, geometry, stats.geometries);
+        const drawn = drawStyledGeometry(
+          ctx,
+          viewport,
+          layer,
+          row,
+          fields,
+          geometry,
+          stats.geometries,
+        );
+
         if (drawn) {
           layerGeometries += drawn;
           stats.geometries += drawn;
@@ -835,7 +1166,10 @@ function drawLayerOverlay(
     }
 
     const shouldDrawPoint =
-      (layerType.includes("point") || layerType.includes("cluster") || layerType.includes("icon") || !shouldDrawGeometry) &&
+      (layerType.includes("point") ||
+        layerType.includes("cluster") ||
+        layerType.includes("icon") ||
+        !shouldDrawGeometry) &&
       columns.lat &&
       columns.lng &&
       stats.points < MAX_POINTS;
@@ -843,7 +1177,11 @@ function drawLayerOverlay(
     if (shouldDrawPoint) {
       const lat = toNumber(valueOf(row, fields, columns.lat));
       const lng = toNumber(valueOf(row, fields, columns.lng));
-      const point = Number.isFinite(lat) && Number.isFinite(lng) ? project(viewport, [lng, lat]) : null;
+      const point =
+        Number.isFinite(lat) && Number.isFinite(lng)
+          ? project(viewport, [lng, lat])
+          : null;
+
       if (point) {
         drawStyledPoint(ctx, layer, row, fields, point.x, point.y, stats.points);
         layerPoints += 1;
@@ -855,8 +1193,13 @@ function drawLayerOverlay(
   }
 
   if (layerPoints || layerGeometries) stats.layers += 1;
+
   diagnostics.push(
-    `layer:${layer?.id || "sem-id"}{type=${layerType || "-"},dataset=${entry.source}:${entry.id},rows=${rows.length},points=${layerPoints},geoms=${layerGeometries},lat=${columns.lat || "-"},lng=${columns.lng || "-"},geom=${geometryColumns.join("/") || "-"}}`
+    `layer:${layer?.id || "sem-id"}{type=${
+      layerType || "-"
+    },dataset=${entry.source}:${entry.id},rows=${rows.length},points=${layerPoints},geoms=${layerGeometries},lat=${
+      columns.lat || "-"
+    },lng=${columns.lng || "-"},geom=${geometryColumns.join("/") || "-"}}`,
   );
 }
 
@@ -867,51 +1210,102 @@ function drawDatasetFallbackOverlay(
   mapState: any,
   savedConfig: any,
   stats: DrawStats,
-  diagnostics: string[]
+  diagnostics: string[],
 ) {
   entries.forEach((entry, datasetIndex) => {
     const fields = fieldsOf(entry.dataset);
     const rows = rowsOf(entry.dataset);
     const columns = coordinateColumns(mapState, entry.id, fields, savedConfig);
-    const geometryColumns = geometryColumnCandidates(mapState, entry.id, fields, savedConfig);
+    const geometryColumns = geometryColumnCandidates(
+      mapState,
+      entry.id,
+      fields,
+      savedConfig,
+    );
     let datasetPoints = 0;
     let datasetGeometries = 0;
 
     for (const row of rows) {
       stats.rows += 1;
+
       if (stats.geometries < MAX_GEOMETRIES) {
         for (const geometry of rowGeometries(row, fields, geometryColumns)) {
           if (stats.geometries >= MAX_GEOMETRIES) break;
-          const fakeLayer = { config: { color: [32, 199, 181], visConfig: { opacity: 0.45, strokeOpacity: 0.85 } } };
-          const drawn = drawStyledGeometry(ctx, viewport, fakeLayer, row, fields, geometry, stats.geometries + datasetIndex);
+
+          const fakeLayer = {
+            config: {
+              color: [32, 199, 181],
+              visConfig: { opacity: 0.45, strokeOpacity: 0.85 },
+            },
+          };
+
+          const drawn = drawStyledGeometry(
+            ctx,
+            viewport,
+            fakeLayer,
+            row,
+            fields,
+            geometry,
+            stats.geometries + datasetIndex,
+          );
+
           if (drawn) {
             datasetGeometries += drawn;
             stats.geometries += drawn;
           }
         }
       }
+
       if (columns.lat && columns.lng && stats.points < MAX_POINTS) {
         const lat = toNumber(valueOf(row, fields, columns.lat));
         const lng = toNumber(valueOf(row, fields, columns.lng));
-        const point = Number.isFinite(lat) && Number.isFinite(lng) ? project(viewport, [lng, lat]) : null;
+        const point =
+          Number.isFinite(lat) && Number.isFinite(lng)
+            ? project(viewport, [lng, lat])
+            : null;
+
         if (point) {
-          const fakeLayer = { config: { color: [242, 199, 102], visConfig: { radius: 8, opacity: 0.9 } } };
-          drawStyledPoint(ctx, fakeLayer, row, fields, point.x, point.y, stats.points + datasetIndex);
+          const fakeLayer = {
+            config: {
+              color: [242, 199, 102],
+              visConfig: { radius: 8, opacity: 0.9 },
+            },
+          };
+
+          drawStyledPoint(
+            ctx,
+            fakeLayer,
+            row,
+            fields,
+            point.x,
+            point.y,
+            stats.points + datasetIndex,
+          );
           datasetPoints += 1;
           stats.points += 1;
         }
       }
+
       if (stats.points >= MAX_POINTS && stats.geometries >= MAX_GEOMETRIES) break;
     }
 
     if (datasetPoints || datasetGeometries) stats.datasets += 1;
+
     diagnostics.push(
-      `fallback:${entry.source}:${entry.id}{fields=${fields.length},rows=${rows.length},points=${datasetPoints},geoms=${datasetGeometries},lat=${columns.lat || "-"},lng=${columns.lng || "-"},geom=${geometryColumns.join("/") || "-"}}`
+      `fallback:${entry.source}:${entry.id}{fields=${fields.length},rows=${
+        rows.length
+      },points=${datasetPoints},geoms=${datasetGeometries},lat=${
+        columns.lat || "-"
+      },lng=${columns.lng || "-"},geom=${geometryColumns.join("/") || "-"}}`,
     );
   });
 }
 
-async function applyStateOverlay(capture: CaptureResult, mapState: any, savedConfig?: any): Promise<CaptureResult> {
+async function applyStateOverlay(
+  capture: CaptureResult,
+  mapState: any,
+  savedConfig?: any,
+): Promise<CaptureResult> {
   const viewport = getViewport(mapState, savedConfig);
   const entries = getOverlayDatasetEntries(mapState, savedConfig);
   if (!viewport || !entries.length) return capture;
@@ -922,9 +1316,16 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any, savedCon
   canvas.height = PREVIEW_HEIGHT;
   const ctx = canvas.getContext("2d");
   if (!ctx) return capture;
+
   ctx.drawImage(image, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-  const stats: DrawStats = { points: 0, geometries: 0, rows: 0, layers: 0, datasets: 0 };
+  const stats: DrawStats = {
+    points: 0,
+    geometries: 0,
+    rows: 0,
+    layers: 0,
+    datasets: 0,
+  };
   const diagnostics: string[] = [];
   const layers = getAllLayers(mapState, savedConfig);
 
@@ -933,18 +1334,41 @@ async function applyStateOverlay(capture: CaptureResult, mapState: any, savedCon
     dataIds.forEach((dataId) => {
       const entry = getDatasetById(entries, dataId);
       if (!entry) return;
-      drawLayerOverlay(ctx, viewport, layer, entry, mapState, savedConfig, stats, diagnostics);
+      drawLayerOverlay(
+        ctx,
+        viewport,
+        layer,
+        entry,
+        mapState,
+        savedConfig,
+        stats,
+        diagnostics,
+      );
     });
   });
 
   if (!stats.points && !stats.geometries) {
-    drawDatasetFallbackOverlay(ctx, viewport, entries, mapState, savedConfig, stats, diagnostics);
+    drawDatasetFallbackOverlay(
+      ctx,
+      viewport,
+      entries,
+      mapState,
+      savedConfig,
+      stats,
+      diagnostics,
+    );
   }
 
   if (!stats.points && !stats.geometries) {
     return {
       ...capture,
-      diagnostics: [...capture.diagnostics, "stateOverlay=0", `stateDatasets=${entries.length}`, `stateLayers=${layers.length}`, diagnostics.join(";")],
+      diagnostics: [
+        ...capture.diagnostics,
+        "stateOverlay=0",
+        `stateDatasets=${entries.length}`,
+        `stateLayers=${layers.length}`,
+        diagnostics.join(";"),
+      ],
     };
   }
 
@@ -982,12 +1406,14 @@ function generatedPreview(): CaptureResult {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
   ctx.strokeStyle = "rgba(244,241,232,0.09)";
+
   for (let x = 0; x < PREVIEW_WIDTH; x += 42) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, PREVIEW_HEIGHT);
     ctx.stroke();
   }
+
   for (let y = 0; y < PREVIEW_HEIGHT; y += 42) {
     ctx.beginPath();
     ctx.moveTo(0, y);
@@ -996,22 +1422,37 @@ function generatedPreview(): CaptureResult {
   }
 
   const dataUrl = canvas.toDataURL("image/png", 0.92);
-  return { dataUrl, method: "generated-technical-preview", diagnostics: ["fallback técnico"] };
+
+  return {
+    dataUrl,
+    method: "generated-technical-preview",
+    diagnostics: ["fallback técnico"],
+  };
 }
 
-async function captureThumbnail(mapState: any, savedConfig?: any): Promise<CaptureResult> {
+async function captureThumbnail(
+  mapState: any,
+  savedConfig?: any,
+): Promise<CaptureResult> {
   const errors: string[] = [];
+
   try {
     return await applyStateOverlay(await captureCompositedBase(), mapState, savedConfig);
   } catch (error) {
     errors.push(`canvas-composite: ${errorMessage(error)}`);
   }
+
   try {
     return await applyStateOverlay(await captureHtml2Canvas(), mapState, savedConfig);
   } catch (error) {
     errors.push(`html2canvas: ${errorMessage(error)}`);
   }
-  return await applyStateOverlay({ ...generatedPreview(), diagnostics: errors }, mapState, savedConfig);
+
+  return await applyStateOverlay(
+    { ...generatedPreview(), diagnostics: errors },
+    mapState,
+    savedConfig,
+  );
 }
 
 const MaonoSaveButton: React.FC = () => {
@@ -1022,14 +1463,52 @@ const MaonoSaveButton: React.FC = () => {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
 
-  const projectAccessLevel = useMemo(() => {
-    const currentProject = projects.find((project) => normalize(project.slug) === normalize(projectSlug));
-    return currentProject?.accessLevel;
+  const currentProject = useMemo(() => {
+    return (
+      (projects || []).find(
+        (project: any) => normalize(project?.slug) === normalize(projectSlug),
+      ) || null
+    );
   }, [projects, projectSlug]);
 
-  const allowed = Boolean(authenticated && projectSlug && canSaveProject(user?.role, projectAccessLevel));
+  const savePermissionContext = useMemo(() => {
+    if (!currentProject) {
+      return null;
+    }
+
+    const userContext = user as any;
+    const organizationId =
+      currentProject.organizationId ??
+      currentProject.organization_id ??
+      userContext?.activeOrganizationId ??
+      userContext?.organizationId ??
+      userContext?.organization_id ??
+      null;
+
+    return {
+      project: currentProject,
+      projectId: currentProject.id ?? null,
+      projectSlug: currentProject.slug ?? projectSlug ?? null,
+      organizationId,
+      permissions: currentProject.permissions ?? [],
+    };
+  }, [currentProject, projectSlug, user]);
+
+  const allowed = useMemo(() => {
+    if (!authenticated || !projectSlug || !savePermissionContext) {
+      return false;
+    }
+
+    return can(user as any, PERMISSION.PROJECT_SAVE, savePermissionContext);
+  }, [authenticated, projectSlug, savePermissionContext, user]);
 
   async function handleSave() {
+    if (!allowed) {
+      setMessageType("error");
+      setMessage("Você não tem permissão para salvar alterações permanentes neste projeto.");
+      return;
+    }
+
     if (!projectSlug || !mapState) return;
 
     setSaving(true);
@@ -1043,30 +1522,55 @@ const MaonoSaveButton: React.FC = () => {
       const response = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
         method: "PUT",
         credentials: "include",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({
           config,
           thumbnailDataUrl: capture.dataUrl,
-          thumbnailCapture: { method: capture.method, diagnostics: capture.diagnostics.join(" | ") },
+          thumbnailCapture: {
+            method: capture.method,
+            diagnostics: capture.diagnostics.join(" | "),
+          },
         }),
       });
 
-      const data = await response.json();
+      const data = await readJsonResponse(response);
+
       if (!response.ok || data?.ok === false) {
-        throw new Error(data?.error?.message || "Não foi possível salvar o projeto.");
+        throw new Error(getSaveErrorMessage(response, data));
       }
 
+      const previewError = getPreviewErrorMessage(data?.previewError);
+      const captureDiagnostics = shortDiagnostics(capture.diagnostics);
+
       setMessageType("success");
+
+      if (data?.preview) {
+        setMessage(
+          `Projeto e visualização PNG salvos no Dropbox com sucesso. Método: ${capture.method}. ${
+            capture.method.includes("overlay")
+              ? ""
+              : `Diagnóstico: ${captureDiagnostics}`
+          }`,
+        );
+        return;
+      }
+
+      if (previewError) {
+        setMessage(
+          `Projeto salvo no Dropbox. A visualização PNG não foi atualizada. Motivo: ${previewError}. Diagnóstico da captura: ${captureDiagnostics}`,
+        );
+        return;
+      }
+
       setMessage(
-        data?.preview
-          ? `Projeto e visualização PNG salvos no Dropbox com sucesso. Método: ${capture.method}. ${
-              capture.method.includes("overlay") ? "" : `Diagnóstico: ${shortDiagnostics(capture.diagnostics)}`
-            }`
-          : `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${shortDiagnostics(capture.diagnostics)}`
+        `Projeto salvo no Dropbox. Preview PNG não foi gerado. Diagnóstico: ${captureDiagnostics}`,
       );
     } catch (error) {
       setMessageType("error");
-      setMessage(error instanceof Error ? error.message : "Erro ao salvar projeto.");
+      setMessage(getSaveFailureMessage(error));
     } finally {
       setSaving(false);
     }
@@ -1075,7 +1579,10 @@ const MaonoSaveButton: React.FC = () => {
   if (!allowed) return null;
 
   return (
-    <div data-maono-no-preview="true" className="fixed bottom-6 right-6 z-[99998] flex flex-col items-end gap-3">
+    <div
+      data-maono-no-preview="true"
+      className="fixed bottom-6 right-6 z-[99998] flex flex-col items-end gap-3"
+    >
       {message && (
         <div
           className={
@@ -1087,6 +1594,7 @@ const MaonoSaveButton: React.FC = () => {
           {message}
         </div>
       )}
+
       <button
         type="button"
         onClick={handleSave}

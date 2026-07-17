@@ -7,8 +7,8 @@ import {
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, publicProject } from "../../../_lib/projects.js";
 import {
+  can,
   recordAuditLog,
-  requireProjectPermission,
 } from "../../../_lib/permissions.js";
 import {
   deleteDropboxPathIfExists,
@@ -18,6 +18,9 @@ import {
   uploadDropboxBinaryFile,
   uploadDropboxTextFile,
 } from "../../../_lib/dropbox.js";
+
+const AUDIT_TEXT_LIMIT = 800;
+const AUDIT_SHORT_TEXT_LIMIT = 160;
 
 function decodeProjectSlug(value) {
   try {
@@ -145,6 +148,60 @@ function logUnexpectedError(error) {
   }
 }
 
+function sanitizeAuditText(value, maxLength = AUDIT_TEXT_LIMIT) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  let text = "";
+
+  if (typeof value === "string") {
+    text = value;
+  } else {
+    try {
+      text = JSON.stringify(value);
+    } catch {
+      text = String(value);
+    }
+  }
+
+  if (/data:image\/[a-z]+;base64,/i.test(text)) {
+    return "[redacted:data-url]";
+  }
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength)}…`;
+}
+
+function publicThumbnailCaptureForAudit(thumbnailCapture) {
+  if (!thumbnailCapture || typeof thumbnailCapture !== "object") {
+    return null;
+  }
+
+  return {
+    method: sanitizeAuditText(
+      thumbnailCapture.method,
+      AUDIT_SHORT_TEXT_LIMIT,
+    ),
+    diagnostics: sanitizeAuditText(
+      thumbnailCapture.diagnostics,
+      AUDIT_TEXT_LIMIT,
+    ),
+  };
+}
+
+function createForbiddenError(permission, reason) {
+  const error = new Error("Acesso negado.");
+  error.status = 403;
+  error.code = "FORBIDDEN";
+  error.permission = permission;
+  error.reason = reason || "DENY_BY_DEFAULT";
+  return error;
+}
+
 async function updateLinkedOrganizationFileSize(env, project, sizeBytes) {
   if (!project.organization_file_id) return;
 
@@ -220,6 +277,77 @@ async function auditProjectConfigAccess(
   });
 }
 
+async function requireProjectConfigPermission(
+  env,
+  request,
+  user,
+  project,
+  slug,
+  fileName,
+  permission,
+  action,
+) {
+  const permissionContext = getProjectPermissionContext(project, slug);
+  const decision = await can(env, user, permission, permissionContext);
+
+  if (decision.allowed) {
+    return decision;
+  }
+
+  await auditProjectConfigAccess(
+    env,
+    request,
+    user,
+    project,
+    action,
+    "denied",
+    {
+      slug,
+      fileName,
+      permission,
+      reason: decision.reason,
+    },
+  );
+
+  throw createForbiddenError(permission, decision.reason);
+}
+
+async function auditUnexpectedProjectConfigError(
+  env,
+  request,
+  user,
+  project,
+  action,
+  slug,
+  fileName,
+  permission,
+  error,
+  result = "error",
+) {
+  if (!user || !project) {
+    return;
+  }
+
+  await auditProjectConfigAccess(
+    env,
+    request,
+    user,
+    project,
+    action,
+    result,
+    {
+      slug,
+      fileName,
+      permission,
+      reason: error?.code || "PROJECT_CONFIG_ERROR",
+      errorMessage: sanitizeAuditText(
+        getErrorMessage(error),
+        AUDIT_TEXT_LIMIT,
+      ),
+    },
+  );
+}
+
 export async function onRequest(context) {
   const { request, env, params } = context;
 
@@ -227,22 +355,34 @@ export async function onRequest(context) {
     return methodNotAllowed(["GET", "PUT"]);
   }
 
+  const action =
+    request.method === "GET"
+      ? "projects.config.read"
+      : "projects.config.save";
+  const permission =
+    request.method === "GET"
+      ? "project.view"
+      : "project.save";
+
+  let user = null;
+  let slug = null;
+  let project = null;
+  let fileName = "config.kepler.json";
+
   try {
-    const user = await requireSession(env, request);
-    const slug = decodeProjectSlug(params?.slug);
+    user = await requireSession(env, request);
+    slug = decodeProjectSlug(params?.slug);
 
     if (!slug) {
       await recordAuditLog(env, {
         actorUserId: user?.id,
-        action:
-          request.method === "GET"
-            ? "projects.config.read"
-            : "projects.config.save",
+        action,
         resourceType: "project",
         resourceId: null,
         result: "denied",
         metadata: {
           reason: "MISSING_PROJECT_SLUG",
+          permission,
         },
         request,
       });
@@ -254,21 +394,19 @@ export async function onRequest(context) {
       );
     }
 
-    const project = await getAuthorizedProject(env, user, slug);
+    project = await getAuthorizedProject(env, user, slug);
 
     if (!project) {
       await recordAuditLog(env, {
         actorUserId: user?.id,
-        action:
-          request.method === "GET"
-            ? "projects.config.read"
-            : "projects.config.save",
+        action,
         resourceType: "project",
         resourceId: slug,
         result: "denied",
         metadata: {
           slug,
           reason: "PROJECT_NOT_FOUND_OR_NOT_AUTHORIZED",
+          permission,
         },
         request,
       });
@@ -280,22 +418,18 @@ export async function onRequest(context) {
       );
     }
 
-    const fileName = project.default_config_file || "config.kepler.json";
-    const permissionContext = getProjectPermissionContext(project, slug);
+    fileName = project.default_config_file || "config.kepler.json";
 
     if (request.method === "GET") {
-      await requireProjectPermission(
+      await requireProjectConfigPermission(
         env,
         request,
+        user,
+        project,
+        slug,
+        fileName,
         "project.view",
-        permissionContext,
-        {
-          user,
-          auditAction: "projects.config.read",
-          auditOnSuccess: false,
-          resourceType: "project",
-          resourceId: getProjectAuditResourceId(project, slug),
-        },
+        "projects.config.read",
       );
 
       const fileText = await downloadDropboxTextFile(
@@ -319,6 +453,7 @@ export async function onRequest(context) {
           {
             slug,
             fileName,
+            permission: "project.view",
             reason: "INVALID_PROJECT_CONFIG",
           },
         );
@@ -351,18 +486,15 @@ export async function onRequest(context) {
       });
     }
 
-    await requireProjectPermission(
+    await requireProjectConfigPermission(
       env,
       request,
+      user,
+      project,
+      slug,
+      fileName,
       "project.save",
-      permissionContext,
-      {
-        user,
-        auditAction: "projects.config.save",
-        auditOnSuccess: false,
-        resourceType: "project",
-        resourceId: getProjectAuditResourceId(project, slug),
-      },
+      "projects.config.save",
     );
 
     const body = await readJsonBody(request);
@@ -437,9 +569,9 @@ export async function onRequest(context) {
         fileName,
         permission: "project.save",
         sizeBytes,
-        preview,
-        previewError,
-        thumbnailCapture: body?.thumbnailCapture || null,
+        preview: publicPreview,
+        previewError: sanitizeAuditText(previewError, AUDIT_TEXT_LIMIT),
+        thumbnailCapture: publicThumbnailCaptureForAudit(body?.thumbnailCapture),
       },
     );
 
@@ -458,6 +590,19 @@ export async function onRequest(context) {
     const code = error?.code || "PROJECT_CONFIG_ERROR";
 
     if (status === 400) {
+      await auditUnexpectedProjectConfigError(
+        env,
+        request,
+        user,
+        project,
+        action,
+        slug,
+        fileName,
+        permission,
+        error,
+        "invalid",
+      );
+
       return errorResponse(
         error.message || "Requisição inválida.",
         400,
@@ -488,6 +633,19 @@ export async function onRequest(context) {
         code,
       );
     }
+
+    await auditUnexpectedProjectConfigError(
+      env,
+      request,
+      user,
+      project,
+      action,
+      slug,
+      fileName,
+      permission,
+      error,
+      "error",
+    );
 
     return errorResponse(
       "Não foi possível processar a configuração do projeto.",

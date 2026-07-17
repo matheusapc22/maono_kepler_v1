@@ -157,6 +157,33 @@ async function optionalAll(env, sql, params = []) {
   }
 }
 
+async function optionalAllOrNull(env, sql, params = []) {
+  const db = getDb(env);
+
+  if (!db || typeof db.prepare !== "function") {
+    return [];
+  }
+
+  try {
+    const statement = db.prepare(sql);
+    const result =
+      params.length > 0
+        ? await statement.bind(...params).all()
+        : await statement.all();
+
+    return Array.isArray(result?.results) ? result.results : [];
+  } catch (error) {
+    console.warn("[Maono session] Consulta opcional ignorada:", error.message);
+    return null;
+  }
+}
+
+function normalizePermissionRows(rows) {
+  return rows
+    .map((row) => normalizePermission(row.permission || row.action || row.name))
+    .filter(Boolean);
+}
+
 function toId(value) {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -398,7 +425,7 @@ function getActiveOrganizationId(user, organizations) {
 }
 
 async function listDirectUserPermissions(env, userId) {
-  const rows = await optionalAll(
+  const rows = await optionalAllOrNull(
     env,
     `
       SELECT permission
@@ -411,10 +438,8 @@ async function listDirectUserPermissions(env, userId) {
     [userId],
   );
 
-  if (rows.length > 0) {
-    return rows
-      .map((row) => normalizePermission(row.permission || row.action || row.name))
-      .filter(Boolean);
+  if (rows !== null) {
+    return normalizePermissionRows(rows);
   }
 
   const fallbackRows = await optionalAll(
@@ -428,9 +453,7 @@ async function listDirectUserPermissions(env, userId) {
     [userId],
   );
 
-  return fallbackRows
-    .map((row) => normalizePermission(row.permission || row.action || row.name))
-    .filter(Boolean);
+  return normalizePermissionRows(fallbackRows);
 }
 
 async function listOrganizationUserPermissions(
@@ -442,7 +465,7 @@ async function listOrganizationUserPermissions(
     return [];
   }
 
-  const rows = await optionalAll(
+  const rows = await optionalAllOrNull(
     env,
     `
       SELECT permission
@@ -456,10 +479,8 @@ async function listOrganizationUserPermissions(
     [userId, activeOrganizationId],
   );
 
-  if (rows.length > 0) {
-    return rows
-      .map((row) => normalizePermission(row.permission || row.action || row.name))
-      .filter(Boolean);
+  if (rows !== null) {
+    return normalizePermissionRows(rows);
   }
 
   const fallbackRows = await optionalAll(
@@ -474,13 +495,11 @@ async function listOrganizationUserPermissions(
     [userId, activeOrganizationId],
   );
 
-  return fallbackRows
-    .map((row) => normalizePermission(row.permission || row.action || row.name))
-    .filter(Boolean);
+  return normalizePermissionRows(fallbackRows);
 }
 
 async function listRolePermissions(env, role) {
-  const rows = await optionalAll(
+  const rows = await optionalAllOrNull(
     env,
     `
       SELECT permission
@@ -497,10 +516,8 @@ async function listRolePermissions(env, role) {
     [role],
   );
 
-  if (rows.length > 0) {
-    return rows
-      .map((row) => normalizePermission(row.permission || row.action || row.name))
-      .filter(Boolean);
+  if (rows !== null) {
+    return normalizePermissionRows(rows);
   }
 
   const fallbackRows = await optionalAll(
@@ -514,9 +531,7 @@ async function listRolePermissions(env, role) {
     [role],
   );
 
-  return fallbackRows
-    .map((row) => normalizePermission(row.permission || row.action || row.name))
-    .filter(Boolean);
+  return normalizePermissionRows(fallbackRows);
 }
 
 function listDefaultRolePermissions(role) {

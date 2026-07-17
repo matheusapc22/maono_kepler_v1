@@ -2,7 +2,6 @@ import { normalizePermissions, type Permission } from "./permissions";
 import { normalizeRole } from "./roles";
 import {
   PROJECT_CONTEXT_REQUIRED_PERMISSIONS,
-  PROJECT_SAVE_ACCESS_LEVELS,
   PROJECT_VIEW_ACCESS_LEVELS,
   roleAllows,
   type AccessControlOrganization,
@@ -22,6 +21,10 @@ export type {
 };
 
 type RoleAllowsRole = Parameters<typeof roleAllows>[0];
+
+type ProjectSlugContext = PermissionContext & {
+  projectSlug?: IdLike;
+};
 
 const ORGANIZATION_CONTEXT_PERMISSION_PREFIXES = [
   "document.",
@@ -98,6 +101,13 @@ const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
     "limits.increase_request",
   ]);
 
+const PROJECT_PERSISTENCE_PERMISSIONS: ReadonlySet<Permission> =
+  new Set<Permission>([
+    "project.save",
+    "project.edit",
+    "project.thumbnail.update",
+  ]);
+
 function toId(value: IdLike | null | undefined): string | null {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -144,8 +154,11 @@ function getTargetOrUserOrganizationId(
 }
 
 function getTargetProjectId(context: PermissionContext): string | null {
+  const projectSlug = (context as ProjectSlugContext).projectSlug;
+
   return (
     toId(context.projectId) ??
+    toId(projectSlug) ??
     toId(context.project?.id) ??
     toId(context.project?.slug)
   );
@@ -274,6 +287,10 @@ function isOrganizationAuditPermission(permission: Permission): boolean {
   return ORGANIZATION_AUDIT_PERMISSIONS.has(permission);
 }
 
+function isProjectPersistencePermission(permission: Permission): boolean {
+  return PROJECT_PERSISTENCE_PERMISSIONS.has(permission);
+}
+
 function ownerPolicyAllows(permission: Permission): boolean {
   return OWNER_ORGANIZATION_POLICY_PERMISSIONS.has(permission);
 }
@@ -322,12 +339,6 @@ function projectAccessAllows(
     );
   }
 
-  if (permission === "project.save") {
-    return PROJECT_SAVE_ACCESS_LEVELS.includes(
-      accessLevel as (typeof PROJECT_SAVE_ACCESS_LEVELS)[number],
-    );
-  }
-
   return false;
 }
 
@@ -367,11 +378,6 @@ function hasOrganizationScope(
 
   const scopes = getScopes(user, context);
 
-  /**
-   * Compatibilidade visual: se a sessão ainda não trouxe scopes, mas trouxe
-   * vínculo claro de organização, a UI pode exibir itens autorizados por
-   * permissão explícita. A segurança real continua no backend.
-   */
   if (scopes.length === 0) {
     return true;
   }
@@ -394,13 +400,6 @@ function hasAdministrativeScope(
 function hasScope(user: AccessControlUser, context: PermissionContext): boolean {
   const scopes = getScopes(user, context);
 
-  /**
-   * Compatibilidade com a sessão atual:
-   * enquanto scopes ainda não estiverem populados para todos os usuários,
-   * a autorização visual depende de role, organização, accessLevel e permissions.
-   *
-   * Endpoints sensíveis continuam obrigados a validar permissão no backend.
-   */
   if (scopes.length === 0) {
     return true;
   }
@@ -429,10 +428,6 @@ function hasScope(user: AccessControlUser, context: PermissionContext): boolean 
     return true;
   }
 
-  /**
-   * Quando não há contexto específico, a permissão explícita já é suficiente
-   * para adaptar a UI. A validação real de escopo deve acontecer no backend.
-   */
   return !organizationId && !projectId;
 }
 
@@ -448,10 +443,6 @@ function administrativePermissionAllows(
       return explicitPermission && hasAdministrativeScope(user, context);
     }
 
-    /**
-     * Owner, Editor e Viewer não devem visualizar Painel Admin por role.
-     * Mesmo com UI manipulada, backend e rotas precisam bloquear.
-     */
     return false;
   }
 
@@ -468,10 +459,6 @@ function administrativePermissionAllows(
   }
 
   if (role === "owner" || role === "client") {
-    /**
-     * Owner só visualiza auditoria organizacional se vier autorizado por
-     * permissão explícita e estiver no escopo da própria organização.
-     */
     return (
       explicitPermission &&
       isOrganizationAuditPermission(permission) &&
@@ -480,10 +467,6 @@ function administrativePermissionAllows(
   }
 
   if (role === "editor" || role === "viewer") {
-    /**
-     * Editor e Viewer dependem de permissão explícita. Por padrão, como não
-     * recebem audit.* na sessão, não veem Auditoria.
-     */
     return explicitPermission && hasAdministrativeScope(user, context);
   }
 
@@ -497,10 +480,6 @@ function organizationPermissionAllows(
   context: PermissionContext,
   explicitPermission: boolean,
 ): boolean {
-  /**
-   * Permissões de organização sempre precisam de contexto organizacional na UI.
-   * Sem organizationId, não há como exibir uma ação scoped de forma confiável.
-   */
   if (!hasOrganizationContext(context)) {
     return false;
   }
@@ -513,19 +492,10 @@ function organizationPermissionAllows(
     return false;
   }
 
-  /**
-   * Admin depende de escopo e permissão explícita.
-   * Isso evita liberar Gestão apenas pelo role "admin".
-   */
   if (role === "admin") {
     return explicitPermission;
   }
 
-  /**
-   * Owner pode visualizar e operar Gestão dentro da própria organização,
-   * conforme policy visual da Sprint 8. Regras finas de escalada continuam
-   * no backend.
-   */
   if (role === "owner" || role === "client") {
     return (
       explicitPermission ||
@@ -534,15 +504,27 @@ function organizationPermissionAllows(
     );
   }
 
-  /**
-   * Editor e Viewer dependem de permissões explícitas para qualquer permissão
-   * organizacional nova ou antiga.
-   */
   if (role === "editor" || role === "viewer") {
     return explicitPermission;
   }
 
   return false;
+}
+
+function projectPersistencePermissionAllows(
+  user: AccessControlUser,
+  context: PermissionContext,
+  explicitPermission: boolean,
+): boolean {
+  if (!hasProjectContext(context)) {
+    return false;
+  }
+
+  if (!explicitPermission) {
+    return false;
+  }
+
+  return hasScope(user, context);
 }
 
 export function can(
@@ -560,21 +542,12 @@ export function can(
     return false;
   }
 
-  /**
-   * Super Admin pode visualizar tudo na UI.
-   * Segurança real continua nos endpoints.
-   */
   if (role === "super_admin") {
     return true;
   }
 
   const explicitPermission = hasExplicitPermission(user, permission, context);
 
-  /**
-   * Permissões administrativas e de auditoria entram antes das permissões
-   * organization-scoped. Isso impede que audit.* ou admin.panel.access sejam
-   * liberadas por policy genérica de Owner/Admin.
-   */
   if (isAdministrativePermission(permission)) {
     return administrativePermissionAllows(
       user,
@@ -585,12 +558,6 @@ export function can(
     );
   }
 
-  /**
-   * Permissões organization-scoped entram antes da regra geral de role.
-   * Isso cobre Sprint 7 e Sprint 8:
-   * document.*, ticket.*, export.*, users.*, permission.*, role.*,
-   * organization.*, limits.* e plan.*.
-   */
   if (isOrganizationScopedPermission(permission)) {
     return organizationPermissionAllows(
       user,
@@ -601,30 +568,25 @@ export function can(
     );
   }
 
-  /**
-   * Admin continua configurável: fora do bloco organization-scoped e fora
-   * do bloco administrativo, depende de permissão explícita e escopo.
-   */
-  if (role === "admin") {
-    return explicitPermission && hasScope(user, context);
-  }
-
   if (requiresProjectContext(permission) && !hasProjectContext(context)) {
     return false;
+  }
+
+  if (isProjectPersistencePermission(permission)) {
+    return projectPersistencePermissionAllows(
+      user,
+      context,
+      explicitPermission,
+    );
+  }
+
+  if (role === "admin") {
+    return explicitPermission && hasScope(user, context);
   }
 
   const allowedByRole = roleAllowsSafely(role, permission);
   const allowedByProjectAccess = projectAccessAllows(permission, context);
 
-  /**
-   * Se o backend retornou um projeto com accessLevel, a UI deve respeitar
-   * esse vínculo direto usuário-projeto, mesmo quando a organização ativa
-   * do usuário for diferente da organização proprietária do projeto.
-   *
-   * Isso mantém favoritos comuns para viewer/editor/owner e mantém
-   * salvamento restrito a editor/owner via PROJECT_SAVE_ACCESS_LEVELS.
-   * A segurança real continua no backend.
-   */
   if (hasProjectContext(context) && allowedByProjectAccess) {
     return true;
   }

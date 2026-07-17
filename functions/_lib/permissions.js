@@ -61,7 +61,11 @@ export const PERMISSIONS = [
 const PERMISSION_SET = new Set(PERMISSIONS);
 
 const PROJECT_VIEW_ACCESS_LEVELS = new Set(["viewer", "editor", "owner"]);
-const PROJECT_SAVE_ACCESS_LEVELS = new Set(["editor", "owner"]);
+const PROJECT_PERSISTENCE_PERMISSIONS = new Set([
+  "project.save",
+  "project.edit",
+  "project.thumbnail.update",
+]);
 
 const PROJECT_CONTEXT_PERMISSIONS = new Set([
   "project.view",
@@ -335,6 +339,10 @@ function isManagementPermission(permission) {
   );
 }
 
+function isProjectPersistencePermission(permission) {
+  return PROJECT_PERSISTENCE_PERMISSIONS.has(permission);
+}
+
 function getContextScopeType(context) {
   const explicitScopeType = normalizeScopeType(
     context?.scopeType || context?.scope_type,
@@ -531,6 +539,48 @@ async function hasScopedOrganizationUserPermission(env, user, permission, contex
   return rows.some((row) => !isExpiredPermission(row));
 }
 
+async function hasScopedProjectPersistencePermission(env, user, permission, context) {
+  const organizationId = getContextOrganizationId(context);
+  const projectId = getContextProjectId(context);
+
+  if (!user?.id || (!organizationId && !projectId)) {
+    return false;
+  }
+
+  const scopedOrganizationId = organizationId
+    ? toNumberOrString(organizationId)
+    : null;
+  const scopedProjectId = projectId ? toNumberOrString(projectId) : null;
+
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT id, permission, organization_id, project_id, expires_at, active
+      FROM user_permissions
+      WHERE user_id = ?
+        AND permission = ?
+        AND active = 1
+        AND (expires_at IS NULL OR expires_at > ?)
+        AND (
+          (? IS NOT NULL AND project_id = ?)
+          OR (? IS NOT NULL AND organization_id = ?)
+        )
+      LIMIT 20
+    `,
+    [
+      user.id,
+      permission,
+      nowIso(),
+      scopedProjectId,
+      scopedProjectId,
+      scopedOrganizationId,
+      scopedOrganizationId,
+    ],
+  );
+
+  return rows.some((row) => !isExpiredPermission(row));
+}
+
 async function hasRolePermission(env, role, permission, context) {
   const scopeType = getContextScopeType(context);
 
@@ -560,14 +610,6 @@ function canProjectAccessLevel(permission, accessLevel) {
 
   if (permission === "project.view" || permission === "project.favorite") {
     return PROJECT_VIEW_ACCESS_LEVELS.has(normalized);
-  }
-
-  if (
-    permission === "project.save" ||
-    permission === "project.edit" ||
-    permission === "project.thumbnail.update"
-  ) {
-    return PROJECT_SAVE_ACCESS_LEVELS.has(normalized);
   }
 
   return false;
@@ -783,6 +825,41 @@ export async function can(env, user, permission, context = {}) {
       normalizedPermission,
       resolvedContext,
     );
+
+  if (isProjectPersistencePermission(normalizedPermission)) {
+    const hasProjectTarget =
+      Boolean(project?.id) ||
+      Boolean(getContextProjectId(resolvedContext)) ||
+      Boolean(getContextProjectSlug(resolvedContext));
+
+    if (!hasProjectTarget) {
+      return {
+        allowed: false,
+        reason: "PROJECT_CONTEXT_REQUIRED",
+        user,
+        permission: normalizedPermission,
+        context: resolvedContext,
+      };
+    }
+
+    const scopedProjectPersistencePermission =
+      await hasScopedProjectPersistencePermission(
+        env,
+        user,
+        normalizedPermission,
+        resolvedContext,
+      );
+
+    return {
+      allowed: scopedProjectPersistencePermission,
+      reason: scopedProjectPersistencePermission
+        ? "PROJECT_PERSISTENCE_PERMISSION"
+        : "PROJECT_PERSISTENCE_PERMISSION_REQUIRED",
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
 
   const allowedByProjectMembership = await projectMembershipAllows(
     env,
