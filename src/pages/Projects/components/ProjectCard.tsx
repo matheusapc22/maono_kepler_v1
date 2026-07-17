@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router";
 
 import type { MaonoUser } from "../../../auth/session";
+import { Skeleton } from "../../../components/loading/Skeleton";
 import type { WorkspaceProject } from "../workspace-api";
 
 type ProjectCardProps = {
@@ -101,7 +102,8 @@ function projectThumbnailUrl(project: WorkspaceProject) {
     return project.thumbnailUrl;
   }
 
-  const cacheKey = encodeURIComponent(project.updatedAt || String(Date.now()));
+  const stableVersion = project.updatedAt || project.createdAt || project.slug;
+  const cacheKey = encodeURIComponent(stableVersion);
   return `/api/projects/${encodeURIComponent(project.slug)}/thumbnail?v=${cacheKey}`;
 }
 
@@ -113,8 +115,15 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   favoriteBusy = false,
   onFavoriteToggle,
 }) => {
+  const thumbnailUrl = projectThumbnailUrl(project);
+  const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
   const [thumbnailMissing, setThumbnailMissing] = React.useState(false);
   const isFavorite = Boolean(project.favorite || project.favorited);
+
+  React.useEffect(() => {
+    setThumbnailLoaded(false);
+    setThumbnailMissing(false);
+  }, [thumbnailUrl]);
 
   return (
     <article className="mm-project-card">
@@ -140,12 +149,21 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         className="mm-project-card-link"
       >
         <div className="mm-project-thumb">
+          {!thumbnailLoaded && !thumbnailMissing ? (
+            <Skeleton className="mm-project-thumb-loading" radius={0} />
+          ) : null}
+
           {!thumbnailMissing && (
             <img
-              src={projectThumbnailUrl(project)}
+              src={thumbnailUrl}
               alt={`Preview do projeto ${project.name}`}
               loading="lazy"
-              onError={() => setThumbnailMissing(true)}
+              className={thumbnailLoaded ? "is-loaded" : "is-loading"}
+              onLoad={() => setThumbnailLoaded(true)}
+              onError={() => {
+                setThumbnailLoaded(false);
+                setThumbnailMissing(true);
+              }}
             />
           )}
 
