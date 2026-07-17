@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
+import { TableSkeleton } from "../../../components/loading/Skeleton";
 import {
   deleteOrganizationFile,
   listOrganizationFiles,
@@ -22,6 +23,7 @@ type DocumentsSectionProps = {
 
 type TransferKind = "upload" | "download";
 type TransferStatus = "running" | "processing" | "success" | "error";
+type FeedbackStatus = "loading" | "success";
 
 type TransferPanelState = {
   kind: TransferKind;
@@ -31,8 +33,15 @@ type TransferPanelState = {
   detail: string;
 };
 
+type FeedbackState = {
+  id: number;
+  status: FeedbackStatus;
+  message: string;
+};
+
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const PROGRESS_TICK_MS = 24;
+const DOCUMENT_HEADERS = ["Documento", "Tipo", "Tamanho", "Atualizado em", "Ações"];
 const ALLOWED_EXTENSIONS = new Set([
   "geojson",
   "json",
@@ -205,22 +214,40 @@ function TransferPanel({
   );
 }
 
+function FeedbackToast({ feedback }: { feedback: FeedbackState }) {
+  return (
+    <aside
+      key={feedback.id}
+      className={`mm-document-feedback ${feedback.status}`}
+      role="status"
+      aria-live="polite"
+    >
+      <span className="mm-document-feedback-icon" aria-hidden="true">
+        {feedback.status === "loading" ? "" : "✓"}
+      </span>
+      <span>{feedback.message}</span>
+    </aside>
+  );
+}
+
 export default function DocumentsSection({
   user,
   organizationId,
 }: DocumentsSectionProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dismissTimerRef = useRef<number | null>(null);
+  const feedbackTimerRef = useRef<number | null>(null);
   const processingTimerRef = useRef<number | null>(null);
   const progressTimerRef = useRef<number | null>(null);
   const progressTargetRef = useRef(0);
   const displayedProgressRef = useRef(0);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busyFileId, setBusyFileId] = useState<number | string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [transfer, setTransfer] = useState<TransferPanelState | null>(null);
 
   const permissionContext = useMemo(
@@ -303,6 +330,29 @@ export default function DocumentsSection({
     if (dismissTimerRef.current !== null) {
       window.clearTimeout(dismissTimerRef.current);
       dismissTimerRef.current = null;
+    }
+  }
+
+  function clearFeedbackTimer() {
+    if (feedbackTimerRef.current !== null) {
+      window.clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
+    }
+  }
+
+  function showFeedback(
+    status: FeedbackStatus,
+    message: string,
+    dismissAfter?: number,
+  ) {
+    clearFeedbackTimer();
+    setFeedback({ id: Date.now(), status, message });
+
+    if (dismissAfter) {
+      feedbackTimerRef.current = window.setTimeout(() => {
+        setFeedback(null);
+        feedbackTimerRef.current = null;
+      }, dismissAfter);
     }
   }
 
@@ -399,13 +449,17 @@ export default function DocumentsSection({
     });
   }
 
-  async function loadFiles() {
+  async function loadFiles({ background = false } = {}) {
     if (!organizationId || !canView) {
       setFiles([]);
       return;
     }
 
-    setLoading(true);
+    if (background) {
+      setRefreshing(true);
+    } else {
+      setInitialLoading(true);
+    }
     setError(null);
 
     try {
@@ -419,12 +473,17 @@ export default function DocumentsSection({
         ),
       );
     } finally {
-      setLoading(false);
+      if (background) {
+        setRefreshing(false);
+      } else {
+        setInitialLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    setMessage(null);
+    setFiles([]);
+    setFeedback(null);
     void loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, canView]);
@@ -434,6 +493,7 @@ export default function DocumentsSection({
       stopProcessingTimer();
       stopProgressTimer();
       clearDismissTimer();
+      clearFeedbackTimer();
     };
   }, []);
 
@@ -464,7 +524,7 @@ export default function DocumentsSection({
     setProgressTarget(3);
     setUploading(true);
     setError(null);
-    setMessage(null);
+    setFeedback(null);
 
     try {
       await uploadOrganizationFileWithProgress(
@@ -474,7 +534,8 @@ export default function DocumentsSection({
       );
 
       await completeTransfer("upload", file.name);
-      await loadFiles();
+      await loadFiles({ background: true });
+      showFeedback("success", "Documento enviado.", 3400);
       scheduleTransferDismiss();
     } catch (requestError) {
       stopProcessingTimer();
@@ -515,7 +576,7 @@ export default function DocumentsSection({
     setProgressTarget(2);
     setBusyFileId(file.id);
     setError(null);
-    setMessage(null);
+    setFeedback(null);
 
     try {
       const response = await downloadOrganizationFileWithProgress(
@@ -532,6 +593,7 @@ export default function DocumentsSection({
       const fileName = response.fileName || file.name || "documento";
       downloadBlob(response.blob, fileName);
       await completeTransfer("download", fileName);
+      showFeedback("success", "Download concluído.", 3400);
       scheduleTransferDismiss();
     } catch (requestError) {
       stopProgressTimer();
@@ -564,13 +626,17 @@ export default function DocumentsSection({
 
     setBusyFileId(file.id);
     setError(null);
-    setMessage(null);
+    showFeedback("loading", "Excluindo documento...");
 
     try {
       await deleteOrganizationFile(organizationId, file.id);
-      await loadFiles();
-      setMessage("Documento excluído.");
+      setFiles((current) =>
+        current.filter((item) => String(item.id) !== String(file.id)),
+      );
+      await loadFiles({ background: true });
+      showFeedback("success", "Documento excluído.", 3400);
     } catch (requestError) {
+      setFeedback(null);
       setError(
         formatRequestError(
           requestError,
@@ -605,8 +671,9 @@ export default function DocumentsSection({
       {transfer ? (
         <TransferPanel transfer={transfer} onClose={closeTransferPanel} />
       ) : null}
+      {feedback ? <FeedbackToast feedback={feedback} /> : null}
 
-      <section className="mm-card mm-section-card">
+      <section className="mm-card mm-section-card documents-section">
         <div className="projects-section-header">
           <h2>Arquivos e Documentos</h2>
 
@@ -629,22 +696,23 @@ export default function DocumentsSection({
         </div>
 
         {error ? <p className="mm-error-text">{error}</p> : null}
-        {message ? <p className="mm-success-text">{message}</p> : null}
 
-        {loading ? (
-          <p>Carregando...</p>
+        {initialLoading && files.length === 0 ? (
+          <TableSkeleton
+            headers={DOCUMENT_HEADERS}
+            rows={5}
+            className="documents-table-skeleton"
+          />
         ) : files.length === 0 ? (
           <div className="projects-empty-state">Nenhum documento.</div>
         ) : (
-          <div className="mm-table-wrap">
-            <table>
+          <div className="mm-table-wrap" aria-busy={refreshing}>
+            <table className="documents-table">
               <thead>
                 <tr>
-                  <th>Documento</th>
-                  <th>Tipo</th>
-                  <th>Tamanho</th>
-                  <th>Atualizado em</th>
-                  <th>Ações</th>
+                  {DOCUMENT_HEADERS.map((header) => (
+                    <th key={header}>{header}</th>
+                  ))}
                 </tr>
               </thead>
 
@@ -654,7 +722,11 @@ export default function DocumentsSection({
 
                   return (
                     <tr key={file.id}>
-                      <td>{file.name}</td>
+                      <td className="documents-name-cell">
+                        <span className="documents-file-name" title={file.name}>
+                          {file.name}
+                        </span>
+                      </td>
                       <td>{file.mimeType || "—"}</td>
                       <td>{formatBytes(file.size)}</td>
                       <td>{formatDate(file.updatedAt || file.createdAt)}</td>
@@ -690,6 +762,11 @@ export default function DocumentsSection({
                 })}
               </tbody>
             </table>
+            {refreshing ? (
+              <span className="mm-sr-only" role="status">
+                Atualizando documentos.
+              </span>
+            ) : null}
           </div>
         )}
       </section>
