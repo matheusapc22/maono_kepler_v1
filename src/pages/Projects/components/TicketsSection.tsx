@@ -37,7 +37,8 @@ function formatDate(value?: string) {
 export default function TicketsSection({ user, organizationId }: TicketsSectionProps) {
   const [tickets, setTickets] = useState<OrganizationTicket[]>([]);
   const [form, setForm] = useState(INITIAL_FORM);
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,13 +61,16 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
     ["in_review", "review", "in_progress"].includes(ticket.status),
   ).length;
 
-  async function loadTickets() {
+  async function loadTickets({ background = false } = {}) {
     if (!organizationId || !canView) {
       setTickets([]);
       return;
     }
-    setLoading(true);
+
+    if (background) setRefreshing(true);
+    else setInitialLoading(true);
     setError(null);
+
     try {
       const response = await listOrganizationTickets(organizationId);
       setTickets(response.tickets ?? []);
@@ -77,11 +81,13 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
           : "Não foi possível carregar os chamados.",
       );
     } finally {
-      setLoading(false);
+      if (background) setRefreshing(false);
+      else setInitialLoading(false);
     }
   }
 
   useEffect(() => {
+    setTickets([]);
     void loadTickets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, canView]);
@@ -94,7 +100,7 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
     try {
       await createOrganizationTicket(organizationId, form);
       setForm(INITIAL_FORM);
-      await loadTickets();
+      await loadTickets({ background: true });
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -109,15 +115,21 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
   async function handleStatusChange(ticket: OrganizationTicket, status: string) {
     if (!organizationId || !canManage) return;
     setError(null);
+    setTickets((current) =>
+      current.map((item) =>
+        String(item.id) === String(ticket.id) ? { ...item, status } : item,
+      ),
+    );
     try {
       await updateOrganizationTicket(organizationId, ticket.id, { status });
-      await loadTickets();
+      await loadTickets({ background: true });
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
           : "Não foi possível atualizar o chamado.",
       );
+      await loadTickets({ background: true });
     }
   }
 
@@ -139,6 +151,8 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
     );
   }
 
+  const showInitialSkeleton = initialLoading && tickets.length === 0;
+
   return (
     <section className="mm-card mm-section-card">
       <h2>Central de Chamados</h2>
@@ -147,10 +161,10 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
         previews e suporte operacional.
       </p>
 
-      {loading ? (
+      {showInitialSkeleton ? (
         <MetricsSkeleton count={3} />
       ) : (
-        <div className="mm-metrics-grid compact">
+        <div className="mm-metrics-grid compact" aria-busy={refreshing}>
           <article className="mm-card metric"><span>Chamados abertos</span><strong>{openTicketsCount}</strong></article>
           <article className="mm-card metric"><span>Total de chamados</span><strong>{tickets.length}</strong></article>
           <article className="mm-card metric"><span>Em revisão</span><strong>{inReviewCount}</strong></article>
@@ -196,12 +210,12 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
         </form>
       ) : null}
 
-      {loading ? (
+      {showInitialSkeleton ? (
         <TableSkeleton headers={TICKET_HEADERS} rows={5} />
       ) : tickets.length === 0 ? (
         <div className="projects-empty-state">Nenhum chamado encontrado para esta organização.</div>
       ) : (
-        <div className="mm-table-wrap">
+        <div className="mm-table-wrap" aria-busy={refreshing}>
           <table>
             <thead>
               <tr>{TICKET_HEADERS.map((header) => <th key={header}>{header}</th>)}</tr>
@@ -230,6 +244,9 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
               ))}
             </tbody>
           </table>
+          {refreshing ? (
+            <span className="mm-sr-only" role="status">Atualizando chamados.</span>
+          ) : null}
         </div>
       )}
     </section>
