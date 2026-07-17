@@ -16,7 +16,10 @@ type ProjectCardProps = {
   canFavorite: boolean;
   favoriteBusy?: boolean;
   onFavoriteToggle?: (project: WorkspaceProject) => void | Promise<void>;
-  onThumbnailReady?: (state: ProjectThumbnailState) => void;
+  onThumbnailReady?: (
+    project: WorkspaceProject,
+    state: ProjectThumbnailState,
+  ) => void;
 };
 
 type InternalThumbnailState = "loading" | ProjectThumbnailState;
@@ -139,8 +142,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
   React.useEffect(() => {
     if (thumbnailState === "loading") return;
-    onThumbnailReady?.(thumbnailState);
-  }, [onThumbnailReady, thumbnailState]);
+    onThumbnailReady?.(project, thumbnailState);
+  }, [onThumbnailReady, project, thumbnailState]);
 
   return (
     <article className="mm-project-card">
