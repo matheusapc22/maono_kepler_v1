@@ -1,33 +1,41 @@
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import {
-  deleteFromDropbox,
   deleteOrSoftDeleteRow,
   findRowByIdAndOrganization,
   getFileDropboxPath,
   getOrganizationOrThrow,
   getRouteParam,
-  handleApiError,
   jsonResponse,
   methodNotAllowed,
   parsePositiveInteger,
+  updateRow,
 } from "../../../../_lib/organizations.js";
+import {
+  deleteOrganizationBinary,
+  organizationFileErrorResponse,
+  organizationFileRequestId,
+  recordOrganizationFileAudit,
+} from "../../../../_lib/organization-files.js";
 
 export async function onRequest(context) {
-  const { request } = context;
-
-  if (request.method === "DELETE") {
-    return onRequestDelete(context);
-  }
-
-  return methodNotAllowed(request.method, ["DELETE"]);
+  if (context.request.method === "DELETE") return onRequestDelete(context);
+  return methodNotAllowed(context.request.method, ["DELETE"]);
 }
 
 export async function onRequestDelete({ env, request, params }) {
-  try {
-    const organizationId = parsePositiveInteger(getRouteParam(params, "id"), "organizationId");
-    const fileId = parsePositiveInteger(getRouteParam(params, "fileId"), "fileId");
+  const requestId = organizationFileRequestId(request);
 
-    await requireOrganizationPermission(
+  try {
+    const organizationId = parsePositiveInteger(
+      getRouteParam(params, "id"),
+      "organizationId",
+    );
+    const fileId = parsePositiveInteger(
+      getRouteParam(params, "fileId"),
+      "fileId",
+    );
+
+    const { user } = await requireOrganizationPermission(
       env,
       request,
       "document.delete",
@@ -41,12 +49,11 @@ export async function onRequestDelete({ env, request, params }) {
         auditAction: "document.delete",
         resourceType: "document",
         resourceId: fileId,
-        auditOnSuccess: true,
+        auditOnSuccess: false,
       },
     );
 
     await getOrganizationOrThrow(env, organizationId);
-
     const file = await findRowByIdAndOrganization(
       env,
       "organization_files",
@@ -55,28 +62,41 @@ export async function onRequestDelete({ env, request, params }) {
     );
 
     if (!file) {
-      return jsonResponse(
-        {
-          ok: false,
-          error: "Arquivo não encontrado.",
-        },
-        { status: 404 },
-      );
+      const error = new Error("Arquivo não encontrado.");
+      error.status = 404;
+      error.code = "ORGANIZATION_FILE_NOT_FOUND";
+      error.stage = "file.lookup";
+      error.publicMessage = error.message;
+      throw error;
     }
 
     const dropboxPath = getFileDropboxPath(file);
+    if (dropboxPath) await deleteOrganizationBinary(env, dropboxPath);
 
-    if (dropboxPath) {
-      await deleteFromDropbox(env, dropboxPath);
-    }
-
+    await updateRow(env, "organization_files", fileId, {
+      status: "DELETED",
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    });
     await deleteOrSoftDeleteRow(env, "organization_files", fileId);
 
-    return jsonResponse({
-      ok: true,
-      deleted: true,
+    await recordOrganizationFileAudit(env, {
+      request,
+      requestId,
+      userId: user.id,
+      organizationId,
+      projectId: file.project_id || null,
+      action: "document.delete",
+      fileId,
+      fileName: file.original_name || file.name || file.file_name,
+      size: file.size_bytes || file.size || null,
     });
+
+    return jsonResponse(
+      { ok: true, deleted: true, requestId },
+      { headers: { "X-Request-Id": requestId } },
+    );
   } catch (error) {
-    return handleApiError(error);
+    return organizationFileErrorResponse(error, requestId);
   }
 }
