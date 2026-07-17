@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 
 import type { MaonoUser } from "../../../auth/session";
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
@@ -111,14 +111,9 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
     () => filteredProjects.map(projectMediaKey),
     [filteredProjects],
   );
-  const mediaBatchKey = mediaKeys.join("|");
   const [readyMediaKeys, setReadyMediaKeys] = useState<Set<string>>(
     () => new Set(),
   );
-
-  useEffect(() => {
-    setReadyMediaKeys(new Set());
-  }, [mediaBatchKey]);
 
   const handleThumbnailReady = useCallback(
     (mediaKey: string, _state: ProjectThumbnailState) => {
@@ -129,7 +124,7 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
         return next;
       });
     },
-    [mediaBatchKey],
+    [],
   );
 
   if (loading && projects.length === 0) {
