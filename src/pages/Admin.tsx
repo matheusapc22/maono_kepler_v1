@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { useSession } from "../auth/session";
+import { AdminPageSkeleton } from "../components/loading/Skeleton";
 import "./Projects/projects.css";
 import "./Admin/admin.css";
 
@@ -90,10 +91,6 @@ function statusLabel(active?: boolean) {
   return active === false ? "Inativo" : "Ativo";
 }
 
-function statusClass(active?: boolean) {
-  return active === false ? "no" : "yes";
-}
-
 const AdminPage: React.FC = () => {
   const { authenticated, loading, user, logout } = useSession();
   const navigate = useNavigate();
@@ -106,6 +103,7 @@ const AdminPage: React.FC = () => {
   const [access, setAccess] = useState<AdminAccess[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const adminLike = isAdminLike(user?.role);
@@ -129,6 +127,7 @@ const AdminPage: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar painel administrativo.");
     } finally {
+      setHasLoaded(true);
       setIsRefreshing(false);
     }
   }
@@ -143,7 +142,7 @@ const AdminPage: React.FC = () => {
 
   useEffect(() => {
     if (!loading && authenticated && adminLike) {
-      refreshAdminData();
+      void refreshAdminData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated, adminLike, loading]);
@@ -159,15 +158,15 @@ const AdminPage: React.FC = () => {
   const totalFiles = useMemo(() => organizations.reduce((sum, org) => sum + Number(org.fileCount || 0), 0), [organizations]);
 
   if (loading) {
-    return (
-      <main className="mm-loading-screen">
-        <p>Carregando painel administrativo...</p>
-      </main>
-    );
+    return <AdminPageSkeleton section={section} />;
   }
 
   if (!authenticated) return null;
   if (!adminLike) return <Navigate to="/projects" replace />;
+
+  if (!hasLoaded) {
+    return <AdminPageSkeleton section={section} />;
+  }
 
   const navItems = [
     { section: "overview", label: "Painel", icon: "◎" },
@@ -358,7 +357,7 @@ const AdminPage: React.FC = () => {
         </div>
       </aside>
 
-      <section className="admin-main">
+      <section className="admin-main" aria-busy={isRefreshing}>
         <header className="mm-projects-topbar admin-topbar">
           <div>
             <p className="mm-eyebrow">Administração Maõno</p>
@@ -377,6 +376,11 @@ const AdminPage: React.FC = () => {
           {error && <div className="admin-notice error">{error}</div>}
           {success && <div className="admin-notice success">{success}</div>}
           {renderActiveSection()}
+          {isRefreshing ? (
+            <span className="mm-sr-only" role="status">
+              Atualizando dados administrativos.
+            </span>
+          ) : null}
         </div>
       </section>
     </main>
