@@ -32,6 +32,7 @@ type TransferPanelState = {
 };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const PROGRESS_TICK_MS = 24;
 const ALLOWED_EXTENSIONS = new Set([
   "geojson",
   "json",
@@ -111,10 +112,13 @@ function formatRequestError(error: unknown, fallback: string) {
     stage ? `etapa ${stage}` : null,
     requestId ? `requisição ${requestId}` : null,
   ].filter(Boolean);
+  const message = (error.message || fallback)
+    .replace(/Dropbox/gi, "armazenamento")
+    .replace(/Cloudflare D1/gi, "sistema");
 
   return diagnostics.length
-    ? `${error.message} (${diagnostics.join(" · ")})`
-    : error.message || fallback;
+    ? `${message} (${diagnostics.join(" · ")})`
+    : message;
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -138,8 +142,8 @@ function transferTitle(transfer: TransferPanelState) {
     return transfer.kind === "upload" ? "Falha no upload" : "Falha no download";
   }
 
-  if (transfer.status === "processing") return "Processando documento";
-  return transfer.kind === "upload" ? "Enviando documento" : "Baixando documento";
+  if (transfer.status === "processing") return "Finalizando";
+  return transfer.kind === "upload" ? "Enviando" : "Baixando";
 }
 
 function TransferPanel({
@@ -194,7 +198,7 @@ function TransferPanel({
       >
         <div
           className="mm-transfer-progress-bar"
-          style={{ width: `${Math.max(2, transfer.percent)}%` }}
+          style={{ width: `${transfer.percent}%` }}
         />
       </div>
     </aside>
@@ -208,6 +212,9 @@ export default function DocumentsSection({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dismissTimerRef = useRef<number | null>(null);
   const processingTimerRef = useRef<number | null>(null);
+  const progressTimerRef = useRef<number | null>(null);
+  const progressTargetRef = useRef(0);
+  const displayedProgressRef = useRef(0);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -231,6 +238,60 @@ export default function DocumentsSection({
   const transferBusy =
     transfer?.status === "running" || transfer?.status === "processing";
 
+  function stopProgressTimer() {
+    if (progressTimerRef.current !== null) {
+      window.clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  }
+
+  function startProgressTimer() {
+    if (progressTimerRef.current !== null) return;
+
+    progressTimerRef.current = window.setInterval(() => {
+      const current = displayedProgressRef.current;
+      const target = progressTargetRef.current;
+
+      if (current >= target) {
+        if (target >= 100) stopProgressTimer();
+        return;
+      }
+
+      const next = Math.min(target, current + 1);
+      displayedProgressRef.current = next;
+      setTransfer((active) => (active ? { ...active, percent: next } : active));
+    }, PROGRESS_TICK_MS);
+  }
+
+  function setProgressTarget(target: number) {
+    const normalized = Math.max(0, Math.min(100, Math.round(target)));
+    progressTargetRef.current = Math.max(progressTargetRef.current, normalized);
+    startProgressTimer();
+  }
+
+  function resetProgress() {
+    stopProgressTimer();
+    progressTargetRef.current = 0;
+    displayedProgressRef.current = 0;
+  }
+
+  function waitForProgress(target: number, timeout = 3500) {
+    return new Promise<void>((resolve) => {
+      const startedAt = Date.now();
+      const poll = () => {
+        if (
+          displayedProgressRef.current >= target ||
+          Date.now() - startedAt >= timeout
+        ) {
+          resolve();
+          return;
+        }
+        window.setTimeout(poll, PROGRESS_TICK_MS);
+      };
+      poll();
+    });
+  }
+
   function stopProcessingTimer() {
     if (processingTimerRef.current !== null) {
       window.clearInterval(processingTimerRef.current);
@@ -247,6 +308,7 @@ export default function DocumentsSection({
 
   function closeTransferPanel() {
     stopProcessingTimer();
+    stopProgressTimer();
     clearDismissTimer();
     setTransfer(null);
   }
@@ -254,6 +316,7 @@ export default function DocumentsSection({
   function scheduleTransferDismiss(delay = 2200) {
     clearDismissTimer();
     dismissTimerRef.current = window.setTimeout(() => {
+      resetProgress();
       setTransfer(null);
       dismissTimerRef.current = null;
     }, delay);
@@ -264,22 +327,15 @@ export default function DocumentsSection({
       kind: "upload",
       status: "processing",
       fileName,
-      percent: Math.max(current?.percent || 0, 92),
-      detail: "Upload recebido. Salvando no Dropbox e catalogando no D1...",
+      percent: current?.percent ?? displayedProgressRef.current,
+      detail: "Finalizando...",
     }));
+    setProgressTarget(96);
 
     if (processingTimerRef.current !== null) return;
-
     processingTimerRef.current = window.setInterval(() => {
-      setTransfer((current) => {
-        if (!current || current.status !== "processing") return current;
-
-        return {
-          ...current,
-          percent: Math.min(97, current.percent + 1),
-        };
-      });
-    }, 450);
+      setProgressTarget(Math.min(98, progressTargetRef.current + 1));
+    }, 650);
   }
 
   function updateRunningTransfer(
@@ -292,28 +348,54 @@ export default function DocumentsSection({
       return;
     }
 
-    setTransfer((current) => {
-      const calculatedPercent =
-        progress.percent === null
-          ? Math.min(kind === "upload" ? 84 : 94, (current?.percent || 2) + 4)
-          : kind === "upload"
-            ? Math.min(90, Math.max(2, Math.round(progress.percent * 0.9)))
-            : Math.min(99, Math.max(2, progress.percent));
-
-      const total = progress.total;
-      const detail = total
-        ? `${formatBytes(progress.loaded)} de ${formatBytes(total)}`
+    const calculatedTarget =
+      progress.percent === null
+        ? Math.min(kind === "upload" ? 84 : 94, progressTargetRef.current + 3)
         : kind === "upload"
-          ? "Enviando dados para o servidor..."
-          : "Recebendo dados do servidor...";
+          ? Math.min(88, Math.round(progress.percent * 0.88))
+          : Math.min(99, progress.percent);
 
-      return {
-        kind,
-        status: "running",
-        fileName,
-        percent: calculatedPercent,
-        detail,
-      };
+    setProgressTarget(calculatedTarget);
+
+    const detail = progress.total
+      ? `${formatBytes(progress.loaded)} de ${formatBytes(progress.total)}`
+      : kind === "upload"
+        ? "Enviando..."
+        : "Baixando...";
+
+    setTransfer((current) => ({
+      kind,
+      status: "running",
+      fileName,
+      percent: current?.percent ?? displayedProgressRef.current,
+      detail,
+    }));
+  }
+
+  async function completeTransfer(
+    kind: TransferKind,
+    fileName: string,
+    detail = "Concluído.",
+  ) {
+    stopProcessingTimer();
+    setTransfer((current) => ({
+      kind,
+      status: "processing",
+      fileName,
+      percent: current?.percent ?? displayedProgressRef.current,
+      detail: "Finalizando...",
+    }));
+    setProgressTarget(100);
+    await waitForProgress(100);
+
+    displayedProgressRef.current = 100;
+    progressTargetRef.current = 100;
+    setTransfer({
+      kind,
+      status: "success",
+      fileName,
+      percent: 100,
+      detail,
     });
   }
 
@@ -350,6 +432,7 @@ export default function DocumentsSection({
   useEffect(() => {
     return () => {
       stopProcessingTimer();
+      stopProgressTimer();
       clearDismissTimer();
     };
   }, []);
@@ -370,13 +453,15 @@ export default function DocumentsSection({
 
     stopProcessingTimer();
     clearDismissTimer();
+    resetProgress();
     setTransfer({
       kind: "upload",
       status: "running",
       fileName: file.name,
-      percent: 2,
-      detail: "Preparando envio...",
+      percent: 0,
+      detail: "Preparando...",
     });
+    setProgressTarget(3);
     setUploading(true);
     setError(null);
     setMessage(null);
@@ -388,20 +473,12 @@ export default function DocumentsSection({
         (progress) => updateRunningTransfer("upload", file.name, progress),
       );
 
-      stopProcessingTimer();
-      setTransfer({
-        kind: "upload",
-        status: "success",
-        fileName: file.name,
-        percent: 100,
-        detail: "Arquivo salvo no Dropbox e catalogado com sucesso.",
-      });
-
+      await completeTransfer("upload", file.name);
       await loadFiles();
-      setMessage("Arquivo enviado e catalogado com sucesso.");
       scheduleTransferDismiss();
     } catch (requestError) {
       stopProcessingTimer();
+      stopProgressTimer();
       const formattedError = formatRequestError(
         requestError,
         "Não foi possível enviar o documento.",
@@ -412,7 +489,7 @@ export default function DocumentsSection({
         kind: "upload",
         status: "error",
         fileName: file.name,
-        percent: Math.max(6, current?.percent || 6),
+        percent: current?.percent ?? displayedProgressRef.current,
         detail: formattedError,
       }));
       scheduleTransferDismiss(6500);
@@ -427,13 +504,15 @@ export default function DocumentsSection({
 
     stopProcessingTimer();
     clearDismissTimer();
+    resetProgress();
     setTransfer({
       kind: "download",
       status: "running",
       fileName: file.name || "documento",
-      percent: 2,
-      detail: "Preparando download...",
+      percent: 0,
+      detail: "Preparando...",
     });
+    setProgressTarget(2);
     setBusyFileId(file.id);
     setError(null);
     setMessage(null);
@@ -452,15 +531,10 @@ export default function DocumentsSection({
 
       const fileName = response.fileName || file.name || "documento";
       downloadBlob(response.blob, fileName);
-      setTransfer({
-        kind: "download",
-        status: "success",
-        fileName,
-        percent: 100,
-        detail: "Download concluído. O arquivo foi disponibilizado pelo navegador.",
-      });
+      await completeTransfer("download", fileName);
       scheduleTransferDismiss();
     } catch (requestError) {
+      stopProgressTimer();
       const formattedError = formatRequestError(
         requestError,
         "Não foi possível baixar o documento.",
@@ -471,7 +545,7 @@ export default function DocumentsSection({
         kind: "download",
         status: "error",
         fileName: file.name || "documento",
-        percent: Math.max(6, current?.percent || 6),
+        percent: current?.percent ?? displayedProgressRef.current,
         detail: formattedError,
       }));
       scheduleTransferDismiss(6500);
@@ -495,7 +569,7 @@ export default function DocumentsSection({
     try {
       await deleteOrganizationFile(organizationId, file.id);
       await loadFiles();
-      setMessage("Arquivo excluído do Dropbox e removido da listagem.");
+      setMessage("Documento excluído.");
     } catch (requestError) {
       setError(
         formatRequestError(
@@ -512,7 +586,7 @@ export default function DocumentsSection({
     return (
       <section className="mm-card mm-section-card">
         <h2>Arquivos e Documentos</h2>
-        <p>Selecione uma organização para consultar documentos.</p>
+        <p>Selecione uma organização.</p>
       </section>
     );
   }
@@ -521,7 +595,7 @@ export default function DocumentsSection({
     return (
       <section className="mm-card mm-section-card">
         <h2>Arquivos e Documentos</h2>
-        <p>Você não tem permissão para visualizar documentos desta organização.</p>
+        <p>Acesso não permitido.</p>
       </section>
     );
   }
@@ -534,13 +608,7 @@ export default function DocumentsSection({
 
       <section className="mm-card mm-section-card">
         <div className="projects-section-header">
-          <div>
-            <h2>Arquivos e Documentos</h2>
-            <p>
-              Os arquivos são armazenados dentro da pasta Dropbox da organização.
-              Metadados, permissões e auditoria permanecem no Cloudflare D1.
-            </p>
-          </div>
+          <h2>Arquivos e Documentos</h2>
 
           {canUpload ? (
             <label className="mm-button secondary">
@@ -564,11 +632,9 @@ export default function DocumentsSection({
         {message ? <p className="mm-success-text">{message}</p> : null}
 
         {loading ? (
-          <p>Carregando documentos...</p>
+          <p>Carregando...</p>
         ) : files.length === 0 ? (
-          <div className="projects-empty-state">
-            Nenhum documento encontrado para esta organização.
-          </div>
+          <div className="projects-empty-state">Nenhum documento.</div>
         ) : (
           <div className="mm-table-wrap">
             <table>
