@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import {
@@ -26,13 +26,13 @@ import LimitsPlansSection from "./Projects/components/LimitsPlansSection";
 import OrganizationSection from "./Projects/components/OrganizationSection";
 import TicketsSection from "./Projects/components/TicketsSection";
 import UsersAccessSection from "./Projects/components/UsersAccessSection";
-import WorkspaceSection from "./Projects/components/WorkspaceSection";
+import ProjectsSection from "./Projects/components/ProjectsSection";
 import {
-  fetchWorkspaceProjects,
+  fetchProjects,
   setProjectFavorite,
-  type WorkspaceProject,
-  type WorkspaceSectionKey,
-} from "./Projects/workspace-api";
+  type ProjectListItem,
+  type ProjectSectionKey,
+} from "./Projects/projects-api";
 import "./Projects/projects.css";
 
 const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = {
@@ -79,9 +79,9 @@ const LimitsPlansSectionWithProps =
     >
   >;
 
-function isWorkspaceSection(
+function isProjectSection(
   section: ProjectSidebarSection,
-): section is WorkspaceSectionKey {
+): section is ProjectSectionKey {
   return section === "all" || section === "recent" || section === "favorites";
 }
 
@@ -196,8 +196,8 @@ function canProject(
 }
 
 function mergeProjectIntoList(
-  projects: WorkspaceProject[],
-  updatedProject: WorkspaceProject,
+  projects: ProjectListItem[],
+  updatedProject: ProjectListItem,
 ) {
   return projects.map((project) =>
     project.slug === updatedProject.slug
@@ -233,6 +233,12 @@ const ProjectsPage: React.FC = () => {
     loading,
     user,
     projects: sessionProjects,
+    activeOrganization,
+    organizations,
+    switchingOrganization,
+    organizationSwitchError,
+    switchOrganization,
+    clearOrganizationSwitchError,
     logout,
   } = useSession();
   const navigate = useNavigate();
@@ -240,15 +246,18 @@ const ProjectsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarSection, setSidebarSection] =
     useState<ProjectSidebarSection>("all");
-  const [allProjects, setAllProjects] = useState<WorkspaceProject[]>([]);
-  const [workspaceProjects, setWorkspaceProjects] = useState<WorkspaceProject[]>(
-    [],
+  const [allProjects, setAllProjects] = useState<ProjectListItem[]>([]);
+  const [projectItems, setProjectItems] = useState<ProjectListItem[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [projectsContextKey, setProjectsContextKey] = useState<string | null>(
+    null,
   );
-  const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [favoriteBusySlugs, setFavoriteBusySlugs] = useState<
     Record<string, true>
   >({});
+  const projectsRequestIdRef = useRef(0);
+  const projectsRequestControllerRef = useRef<AbortController | null>(null);
 
   const organizationContext = useMemo(
     () => buildOrganizationContext(user),
@@ -256,54 +265,106 @@ const ProjectsPage: React.FC = () => {
   );
 
   const activeOrganizationId = useMemo(
-    () => getOrganizationIdFromContext(organizationContext),
-    [organizationContext],
+    () =>
+      activeOrganization?.id ??
+      getOrganizationIdFromContext(organizationContext),
+    [activeOrganization?.id, organizationContext],
   );
+  const activeOrganizationKey = String(activeOrganizationId ?? "");
+  const activeOrganizationKeyRef = useRef(activeOrganizationKey);
+  activeOrganizationKeyRef.current = activeOrganizationKey;
 
-  const loadAllProjects = useCallback(async () => {
-    const projects = await fetchWorkspaceProjects("all");
-    setAllProjects(projects);
-    return projects;
-  }, []);
+  const loadProjectSection = useCallback(
+    async (section: ProjectSectionKey) => {
+      if (!activeOrganizationId) {
+        setAllProjects([]);
+        setProjectItems([]);
+        setProjectsContextKey(null);
+        setProjectsLoading(false);
+        return;
+      }
 
-  const loadWorkspaceSection = useCallback(
-    async (section: WorkspaceSectionKey) => {
-      setWorkspaceLoading(true);
-      setWorkspaceError(null);
+      projectsRequestIdRef.current += 1;
+      const requestId = projectsRequestIdRef.current;
+      const requestOrganizationKey = String(activeOrganizationId);
+      projectsRequestControllerRef.current?.abort();
+      const controller = new AbortController();
+      projectsRequestControllerRef.current = controller;
+
+      setProjectsContextKey(requestOrganizationKey);
+      setProjectsLoading(true);
+      setProjectsError(null);
 
       try {
-        if (section === "all") {
-          const projects = await loadAllProjects();
-          setWorkspaceProjects(projects);
+        const projects = await fetchProjects(section, {
+          signal: controller.signal,
+        });
+
+        if (
+          requestId !== projectsRequestIdRef.current ||
+          requestOrganizationKey !== activeOrganizationKeyRef.current
+        ) {
           return;
         }
 
-        const projects = await fetchWorkspaceProjects(section);
-        setWorkspaceProjects(projects);
+        if (section === "all") {
+          setAllProjects(projects);
+        }
+
+        setProjectItems(projects);
       } catch (error) {
-        setWorkspaceError(
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        if (
+          requestId !== projectsRequestIdRef.current ||
+          requestOrganizationKey !== activeOrganizationKeyRef.current
+        ) {
+          return;
+        }
+
+        setProjectsError(
           error instanceof Error
             ? error.message
-            : "Não foi possível carregar o workspace.",
+            : "Não foi possível carregar os projetos.",
         );
       } finally {
-        setWorkspaceLoading(false);
+        if (
+          requestId === projectsRequestIdRef.current &&
+          requestOrganizationKey === activeOrganizationKeyRef.current
+        ) {
+          setProjectsLoading(false);
+          projectsRequestControllerRef.current = null;
+        }
       }
     },
-    [loadAllProjects],
+    [activeOrganizationId],
   );
 
   useEffect(() => {
-    if (!loading && authenticated && isWorkspaceSection(sidebarSection)) {
-      void loadWorkspaceSection(sidebarSection);
+    if (!loading && authenticated && isProjectSection(sidebarSection)) {
+      void loadProjectSection(sidebarSection);
     }
-  }, [authenticated, loadWorkspaceSection, loading, sidebarSection]);
+
+    return () => {
+      projectsRequestIdRef.current += 1;
+      projectsRequestControllerRef.current?.abort();
+    };
+  }, [authenticated, loadProjectSection, loading, sidebarSection]);
+
+  const projectContextIsCurrent =
+    projectsContextKey === activeOrganizationKey;
+  const visibleProjectItems = projectContextIsCurrent ? projectItems : [];
 
   const activeProjects = useMemo(() => {
-    const source = allProjects.length > 0 ? allProjects : sessionProjects;
+    const source =
+      projectContextIsCurrent && allProjects.length > 0
+        ? allProjects
+        : sessionProjects;
 
     return source.filter((project) => project.active !== false);
-  }, [allProjects, sessionProjects]);
+  }, [allProjects, projectContextIsCurrent, sessionProjects]);
 
   const editableProjectsCount = useMemo(
     () =>
@@ -332,8 +393,25 @@ const ProjectsPage: React.FC = () => {
     navigate("/login", { replace: true });
   }
 
-  async function handleFavoriteToggle(project: WorkspaceProject) {
+  async function handleOrganizationSwitch(organizationId: number | string) {
+    await switchOrganization(organizationId);
+
+    projectsRequestIdRef.current += 1;
+    projectsRequestControllerRef.current?.abort();
+    projectsRequestControllerRef.current = null;
+    setSearchQuery("");
+    setSidebarSection("all");
+    setAllProjects([]);
+    setProjectItems([]);
+    setProjectsContextKey(null);
+    setProjectsError(null);
+    setProjectsLoading(false);
+    setFavoriteBusySlugs({});
+  }
+
+  async function handleFavoriteToggle(project: ProjectListItem) {
     const nextFavorite = !Boolean(project.favorite || project.favorited);
+    const requestOrganizationKey = activeOrganizationKey;
 
     setFavoriteBusySlugs((current) => ({
       ...current,
@@ -346,9 +424,13 @@ const ProjectsPage: React.FC = () => {
         nextFavorite,
       );
 
+      if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
+        return;
+      }
+
       setAllProjects((current) => mergeProjectIntoList(current, updatedProject));
 
-      setWorkspaceProjects((current) => {
+      setProjectItems((current) => {
         const updated = mergeProjectIntoList(current, updatedProject);
 
         if (sidebarSection === "favorites" && !updatedProject.favorite) {
@@ -358,12 +440,20 @@ const ProjectsPage: React.FC = () => {
         return updated;
       });
     } catch (error) {
-      setWorkspaceError(
+      if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
+        return;
+      }
+
+      setProjectsError(
         error instanceof Error
           ? error.message
           : "Não foi possível atualizar favorito.",
       );
     } finally {
+      if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
+        return;
+      }
+
       setFavoriteBusySlugs((current) => {
         const next = { ...current };
         delete next[project.slug];
@@ -385,23 +475,42 @@ const ProjectsPage: React.FC = () => {
     PERMISSION.PROJECT_CREATE,
     organizationContext,
   );
-  const showWorkspaceTopbar = isWorkspaceSection(sidebarSection);
+  const showProjectsTopbar = isProjectSection(sidebarSection);
 
   return (
     <main className="mm-projects-page">
       <div className="mm-projects-layout">
         <ProjectsSidebar
           user={user}
+          activeOrganization={activeOrganization}
+          organizations={organizations}
+          switchingOrganization={switchingOrganization}
+          organizationSwitchError={organizationSwitchError}
           activeProjectsCount={activeProjects.length}
           searchQuery={searchQuery}
           sidebarSection={sidebarSection}
           onSearchQueryChange={setSearchQuery}
           onSidebarSectionChange={setSidebarSection}
+          onOrganizationSwitch={handleOrganizationSwitch}
+          onDismissOrganizationSwitchError={clearOrganizationSwitchError}
           onLogout={handleLogout}
         />
 
-        <section className="mm-projects-main">
-          {showWorkspaceTopbar && (
+        <section
+          className={
+            switchingOrganization
+              ? "mm-projects-main is-context-switching"
+              : "mm-projects-main"
+          }
+          aria-busy={switchingOrganization}
+        >
+          {switchingOrganization ? (
+            <div className="mm-context-switch-status" role="status">
+              Trocando organização e atualizando permissões…
+            </div>
+          ) : null}
+
+          {showProjectsTopbar && (
             <header className="mm-projects-topbar">
               <div>
                 <h1>{sectionTitle(sidebarSection)}</h1>
@@ -418,14 +527,24 @@ const ProjectsPage: React.FC = () => {
           )}
 
           <div className="mm-projects-content">
-            {isWorkspaceSection(sidebarSection) ? (
-              <WorkspaceSection
+            {!activeOrganization ? (
+              <section className="mm-empty-state">
+                <div>◇</div>
+                <h2>Nenhuma organização disponível</h2>
+                <p>
+                  Sua conta não possui uma organização ativa autorizada.
+                  Solicite acesso a um administrador para visualizar projetos.
+                </p>
+              </section>
+            ) : isProjectSection(sidebarSection) ? (
+              <ProjectsSection
+                key={`${activeOrganizationKey}:${sidebarSection}`}
                 section={sidebarSection}
-                projects={workspaceProjects}
+                projects={visibleProjectItems}
                 searchQuery={searchQuery}
                 user={user}
-                loading={workspaceLoading}
-                error={workspaceError}
+                loading={projectsLoading}
+                error={projectsError}
                 favoriteBusySlugs={favoriteBusySlugs}
                 canProjectSave={(project) =>
                   canProject(user, PERMISSION.PROJECT_SAVE, project)
@@ -434,10 +553,11 @@ const ProjectsPage: React.FC = () => {
                   canProject(user, PERMISSION.PROJECT_FAVORITE, project)
                 }
                 onFavoriteToggle={handleFavoriteToggle}
-                onRetry={() => loadWorkspaceSection(sidebarSection)}
+                onRetry={() => loadProjectSection(sidebarSection)}
               />
             ) : (
               <ProjectsSectionRouter
+                key={`${activeOrganizationKey}:${sidebarSection}`}
                 section={sidebarSection}
                 projects={activeProjects}
                 user={user}
