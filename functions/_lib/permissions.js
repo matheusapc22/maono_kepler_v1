@@ -289,6 +289,7 @@ function normalizeAccessLevel(value) {
 function getUserOrganizationId(user) {
   return (
     toId(user?.activeOrganizationId) ||
+    toId(user?.active_organization_id) ||
     toId(user?.organizationId) ||
     toId(user?.organization_id) ||
     toId(user?.organization?.id) ||
@@ -793,6 +794,24 @@ export async function can(env, user, permission, context = {}) {
 
   const resolvedContext = await buildResolvedContext(env, context);
   const project = resolvedContext.project;
+  const activeOrganizationId = getUserOrganizationId(user);
+  const contextOrganizationId = getContextOrganizationId(resolvedContext);
+
+  if (
+    contextOrganizationId &&
+    (
+      !activeOrganizationId ||
+      String(activeOrganizationId) !== String(contextOrganizationId)
+    )
+  ) {
+    return {
+      allowed: false,
+      reason: "ACTIVE_ORGANIZATION_CONTEXT_MISMATCH",
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
 
   if (role === "super_admin") {
     return {
