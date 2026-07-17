@@ -12,13 +12,6 @@ const PROJECTS_ROOT = "/projects";
 const DOCUMENTS_FOLDER = "documents";
 const MAX_REPAIR_BATCH = 500;
 
-const STORAGE_COLUMNS = {
-  dropbox_root_path: "TEXT",
-  storage_status: "TEXT",
-  storage_error: "TEXT",
-  storage_checked_at: "TEXT",
-};
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -51,35 +44,18 @@ function storageError(message, status, code, stage, cause = null) {
   return error;
 }
 
-function isDuplicateColumnError(error) {
-  return String(error?.message || "").toLowerCase().includes("duplicate column");
-}
-
 export async function ensureOrganizationStorageSchema(env) {
-  const db = getDb(env);
-  let columns = await getTableColumns(env, "organizations");
+  const columns = await getTableColumns(env, "organizations");
 
-  for (const [column, definition] of Object.entries(STORAGE_COLUMNS)) {
-    if (columns.has(column)) continue;
-
-    try {
-      await db
-        .prepare(`ALTER TABLE organizations ADD COLUMN ${column} ${definition}`)
-        .run();
-    } catch (error) {
-      if (!isDuplicateColumnError(error)) {
-        throw storageError(
-          "A estrutura de armazenamento das organizações está desatualizada.",
-          500,
-          "ORGANIZATION_STORAGE_SCHEMA_OUTDATED",
-          "organization.storage.schema",
-          error,
-        );
-      }
-    }
+  if (!columns.has("dropbox_root_path")) {
+    throw storageError(
+      "A migration de armazenamento das organizações ainda não foi aplicada.",
+      500,
+      "ORGANIZATION_STORAGE_SCHEMA_OUTDATED",
+      "organization.storage.schema",
+    );
   }
 
-  columns = await getTableColumns(env, "organizations");
   return columns;
 }
 
@@ -239,9 +215,10 @@ export async function repairActiveOrganizationStorages(
 ) {
   await ensureOrganizationStorageSchema(env);
 
+  const numericLimit = Number(limit);
   const safeLimit = Math.max(
     1,
-    Math.min(Number.isInteger(Number(limit)) ? Number(limit) : 100, MAX_REPAIR_BATCH),
+    Math.min(Number.isInteger(numericLimit) ? numericLimit : 100, MAX_REPAIR_BATCH),
   );
 
   const result = await getDb(env)
