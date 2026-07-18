@@ -189,23 +189,28 @@ export default function TicketsToolbar({
             </select>
           </label>
 
-          <label className="ticket-date-filter">
-            <span className="ticket-filter-label">De</span>
-            <input
-              type="date"
-              value={filters.from}
-              onChange={(event) => updateFilter("from", event.target.value)}
-            />
-          </label>
+          <fieldset className="ticket-period-filter">
+            <legend className="ticket-filter-label">Período</legend>
+            <div>
+              <label className="ticket-date-filter">
+                <span className="ticket-filter-label">De</span>
+                <input
+                  type="date"
+                  value={filters.from}
+                  onChange={(event) => updateFilter("from", event.target.value)}
+                />
+              </label>
 
-          <label className="ticket-date-filter">
-            <span className="ticket-filter-label">Até</span>
-            <input
-              type="date"
-              value={filters.to}
-              onChange={(event) => updateFilter("to", event.target.value)}
-            />
-          </label>
+              <label className="ticket-date-filter">
+                <span className="ticket-filter-label">Até</span>
+                <input
+                  type="date"
+                  value={filters.to}
+                  onChange={(event) => updateFilter("to", event.target.value)}
+                />
+              </label>
+            </div>
+          </fieldset>
 
           <label>
             <span className="ticket-filter-label">Ordenar por</span>
