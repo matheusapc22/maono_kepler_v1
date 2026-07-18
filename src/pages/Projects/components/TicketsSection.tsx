@@ -609,12 +609,8 @@ export default function TicketsSection({
           <TicketListView
             tickets={tickets}
             pagination={pagination}
-            canManage={canManage}
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
-            onStatusChange={(ticket, status) =>
-              void changeStatus(ticket, status)
-            }
             onPageChange={(targetPage) =>
               void loadTicketsPage(targetPage, { background: true })
             }

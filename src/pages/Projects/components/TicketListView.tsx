@@ -8,16 +8,13 @@ import {
   STATUS_LABELS,
   type Ticket,
   type TicketPagination,
-  type TicketStatus,
 } from "./ticket-types";
 
 type TicketListViewProps = {
   tickets: Ticket[];
   pagination: TicketPagination;
-  canManage: boolean;
   busyTicketIds: ReadonlySet<string>;
   onOpen: (ticket: Ticket) => void;
-  onStatusChange: (ticket: Ticket, status: TicketStatus) => void;
   onPageChange: (page: number) => void;
 };
 
@@ -35,10 +32,8 @@ export const TICKET_LIST_HEADERS = [
 export default function TicketListView({
   tickets,
   pagination,
-  canManage,
   busyTicketIds,
   onOpen,
-  onStatusChange,
   onPageChange,
 }: TicketListViewProps) {
   return (
@@ -119,7 +114,7 @@ export default function TicketListView({
                       >
                         ⋮
                       </button>
-                      {canManage && busy ? (
+                      {busy ? (
                         <span className="mm-sr-only">Atualizando chamado</span>
                       ) : null}
                     </div>
