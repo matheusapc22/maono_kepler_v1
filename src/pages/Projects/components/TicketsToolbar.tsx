@@ -45,10 +45,13 @@ export default function TicketsToolbar({
   return (
     <>
       <header className="ticket-center-header">
-        <div>
-          <span className="ticket-center-eyebrow">
-            Organização ativa · #{organizationId}
-          </span>
+        <div className="ticket-center-heading">
+          <div className="ticket-center-heading-meta">
+            <span className="ticket-center-eyebrow">Atendimento operacional</span>
+            <span className="ticket-organization-chip">
+              Organização #{organizationId}
+            </span>
+          </div>
           <h2>Central de Chamados</h2>
           <p>Consulte, priorize e acompanhe solicitações operacionais.</p>
         </div>
@@ -84,130 +87,139 @@ export default function TicketsToolbar({
         </div>
       </header>
 
-      <section className="ticket-filter-bar" aria-label="Filtros de chamados">
-        <label className="ticket-filter-search">
-          <span className="mm-sr-only">Buscar chamados</span>
-          <span aria-hidden="true">⌕</span>
-          <input
-            type="search"
-            value={filters.q}
-            placeholder="Buscar por código, assunto ou descrição"
-            onChange={(event) => updateFilter("q", event.target.value)}
-          />
-        </label>
-
-        <label>
-          <span className="mm-sr-only">Filtrar por situação</span>
-          <select
-            value={filters.status}
-            onChange={(event) =>
-              updateFilter(
-                "status",
-                event.target.value as TicketFilters["status"],
-              )
+      <section className="ticket-filter-surface" aria-label="Filtros de chamados">
+        <header className="ticket-filter-header">
+          <div>
+            <strong>Filtros</strong>
+            <span>Encontre chamados por contexto, responsável ou período.</span>
+          </div>
+          <button
+            type="button"
+            className="ticket-filter-clear"
+            disabled={!hasFilters}
+            onClick={() =>
+              onFiltersChange({
+                q: "",
+                status: "",
+                priority: "",
+                assigneeId: "",
+                from: "",
+                to: "",
+                sort: filters.sort,
+              })
             }
           >
-            <option value="">Todas as situações</option>
-            <option value="new">Novo</option>
-            <option value="open">Aberto</option>
-            <option value="in_progress">Em andamento</option>
-            <option value="in_review">Em revisão</option>
-            <option value="closed">Concluído</option>
-          </select>
-        </label>
+            Limpar filtros
+          </button>
+        </header>
 
-        <label>
-          <span className="mm-sr-only">Filtrar por prioridade</span>
-          <select
-            value={filters.priority}
-            onChange={(event) =>
-              updateFilter(
-                "priority",
-                event.target.value as TicketFilters["priority"],
-              )
-            }
-          >
-            <option value="">Todas as prioridades</option>
-            <option value="high">Alta</option>
-            <option value="normal">Normal</option>
-            <option value="low">Baixa</option>
-          </select>
-        </label>
+        <div className="ticket-filter-bar">
+          <label className="ticket-filter-search">
+            <span className="ticket-filter-label">Buscar</span>
+            <span className="ticket-filter-input-wrap">
+              <span aria-hidden="true">⌕</span>
+              <input
+                type="search"
+                value={filters.q}
+                placeholder="Código, assunto ou descrição"
+                onChange={(event) => updateFilter("q", event.target.value)}
+              />
+            </span>
+          </label>
 
-        <label>
-          <span className="mm-sr-only">Filtrar por atendente</span>
-          <select
-            value={filters.assigneeId}
-            onChange={(event) =>
-              updateFilter("assigneeId", event.target.value)
-            }
-          >
-            <option value="">Todos os atendentes</option>
-            <option value="unassigned">Não atribuído</option>
-            {assignees.map((assignee) => (
-              <option key={assignee.id} value={String(assignee.id)}>
-                {assigneeLabel(assignee)}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label>
+            <span className="ticket-filter-label">Situação</span>
+            <select
+              value={filters.status}
+              onChange={(event) =>
+                updateFilter(
+                  "status",
+                  event.target.value as TicketFilters["status"],
+                )
+              }
+            >
+              <option value="">Todas as situações</option>
+              <option value="new">Novo</option>
+              <option value="open">Aberto</option>
+              <option value="in_progress">Em andamento</option>
+              <option value="in_review">Em revisão</option>
+              <option value="closed">Concluído</option>
+            </select>
+          </label>
 
-        <label className="ticket-date-filter">
-          <span>De</span>
-          <input
-            type="date"
-            value={filters.from}
-            onChange={(event) => updateFilter("from", event.target.value)}
-          />
-        </label>
+          <label>
+            <span className="ticket-filter-label">Prioridade</span>
+            <select
+              value={filters.priority}
+              onChange={(event) =>
+                updateFilter(
+                  "priority",
+                  event.target.value as TicketFilters["priority"],
+                )
+              }
+            >
+              <option value="">Todas as prioridades</option>
+              <option value="high">Alta</option>
+              <option value="normal">Normal</option>
+              <option value="low">Baixa</option>
+            </select>
+          </label>
 
-        <label className="ticket-date-filter">
-          <span>Até</span>
-          <input
-            type="date"
-            value={filters.to}
-            onChange={(event) => updateFilter("to", event.target.value)}
-          />
-        </label>
+          <label>
+            <span className="ticket-filter-label">Atendente</span>
+            <select
+              value={filters.assigneeId}
+              onChange={(event) =>
+                updateFilter("assigneeId", event.target.value)
+              }
+            >
+              <option value="">Todos os atendentes</option>
+              <option value="unassigned">Não atribuído</option>
+              {assignees.map((assignee) => (
+                <option key={assignee.id} value={String(assignee.id)}>
+                  {assigneeLabel(assignee)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label>
-          <span className="mm-sr-only">Ordenação</span>
-          <select
-            value={filters.sort}
-            onChange={(event) =>
-              updateFilter(
-                "sort",
-                event.target.value as TicketFilters["sort"],
-              )
-            }
-          >
-            <option value="updated_desc">Atualizados recentemente</option>
-            <option value="updated_asc">Atualizados há mais tempo</option>
-            <option value="due_asc">Prazo mais próximo</option>
-            <option value="priority_desc">Maior prioridade</option>
-          </select>
-        </label>
+          <label className="ticket-date-filter">
+            <span className="ticket-filter-label">De</span>
+            <input
+              type="date"
+              value={filters.from}
+              onChange={(event) => updateFilter("from", event.target.value)}
+            />
+          </label>
 
-        <button
-          type="button"
-          className="ticket-filter-clear"
-          disabled={!hasFilters}
-          onClick={() =>
-            onFiltersChange({
-              q: "",
-              status: "",
-              priority: "",
-              assigneeId: "",
-              from: "",
-              to: "",
-              sort: filters.sort,
-            })
-          }
-        >
-          Limpar filtros
-        </button>
+          <label className="ticket-date-filter">
+            <span className="ticket-filter-label">Até</span>
+            <input
+              type="date"
+              value={filters.to}
+              onChange={(event) => updateFilter("to", event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span className="ticket-filter-label">Ordenar por</span>
+            <select
+              value={filters.sort}
+              onChange={(event) =>
+                updateFilter(
+                  "sort",
+                  event.target.value as TicketFilters["sort"],
+                )
+              }
+            >
+              <option value="updated_desc">Atualizados recentemente</option>
+              <option value="updated_asc">Atualizados há mais tempo</option>
+              <option value="due_asc">Prazo mais próximo</option>
+              <option value="priority_desc">Maior prioridade</option>
+            </select>
+          </label>
+        </div>
       </section>
     </>
   );
 }
-

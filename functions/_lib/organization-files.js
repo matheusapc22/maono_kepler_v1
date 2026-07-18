@@ -1,8 +1,12 @@
 import {
+  appendDropboxUploadSession,
   deleteDropboxPathIfExists,
   downloadDropboxBinaryFile,
+  ensureDropboxFolder,
+  finishDropboxUploadSession,
   joinDropboxPath,
   normalizeDropboxFolderPath,
+  startDropboxUploadSession,
   uploadDropboxBinaryFile,
 } from "./dropbox.js";
 import {
@@ -342,6 +346,67 @@ export async function uploadOrganizationBinary(env, rootPath, fileName, arrayBuf
     error.code = error.code || "DROPBOX_UPLOAD_FAILED";
     error.stage = error.stage || "dropbox.upload";
     error.publicMessage = "Não foi possível enviar o arquivo ao Dropbox.";
+    throw error;
+  }
+}
+
+export async function startOrganizationBinaryUpload(env, rootPath) {
+  try {
+    await ensureDropboxFolder(env, rootPath);
+    return await startDropboxUploadSession(env);
+  } catch (error) {
+    error.status = error.status >= 400 ? error.status : 502;
+    error.code = error.code || "DROPBOX_UPLOAD_SESSION_FAILED";
+    error.stage = error.stage || "dropbox.upload_session.start";
+    error.publicMessage = "Não foi possível iniciar o envio do arquivo.";
+    throw error;
+  }
+}
+
+export async function appendOrganizationBinaryUpload(
+  env,
+  sessionId,
+  offset,
+  arrayBuffer,
+) {
+  try {
+    return await appendDropboxUploadSession(
+      env,
+      sessionId,
+      offset,
+      arrayBuffer,
+    );
+  } catch (error) {
+    error.status = error.status >= 400 ? error.status : 502;
+    error.code = error.code || "DROPBOX_UPLOAD_SESSION_FAILED";
+    error.stage = error.stage || "dropbox.upload_session.append";
+    error.publicMessage = "Não foi possível continuar o envio do arquivo.";
+    throw error;
+  }
+}
+
+export async function finishOrganizationBinaryUpload(
+  env,
+  sessionId,
+  offset,
+  rootPath,
+  fileName,
+  arrayBuffer,
+) {
+  try {
+    return await finishDropboxUploadSession(
+      env,
+      sessionId,
+      offset,
+      rootPath,
+      fileName,
+      arrayBuffer,
+    );
+  } catch (error) {
+    error.status = error.status >= 400 ? error.status : 502;
+    error.code = error.code || "DROPBOX_UPLOAD_SESSION_FAILED";
+    error.stage = error.stage || "dropbox.upload_session.finish";
+    error.publicMessage = "Não foi possível concluir o envio do arquivo.";
     throw error;
   }
 }

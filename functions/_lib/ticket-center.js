@@ -1,8 +1,12 @@
 import {
+  appendOrganizationBinaryUpload,
   buildStoredFileName,
   deleteOrganizationBinary,
   downloadOrganizationBinary,
+  finishOrganizationBinaryUpload,
   organizationFileDropboxPath,
+  splitDropboxFilePath,
+  startOrganizationBinaryUpload,
   uploadOrganizationBinary,
 } from "./organization-files.js";
 import {
@@ -13,7 +17,9 @@ import {
   fileDownloadHeaders,
   getDb,
   getOrganizationOrThrow,
+  getTableColumns,
   insertRow,
+  jsonResponse,
   sanitizeFileName,
   tableExists,
   updateRow,
@@ -46,9 +52,20 @@ const STATUS_ALIASES = {
   resolved: "closed",
 };
 
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const MAX_TICKET_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const MEBIBYTE = 1024 * 1024;
+const MAX_ATTACHMENT_BYTES = 80 * MEBIBYTE;
+const MAX_TICKET_ATTACHMENT_BYTES = 150 * MEBIBYTE;
+const MAX_MULTIPART_ATTACHMENT_BYTES = 10 * MEBIBYTE;
+const MAX_UPLOAD_CHUNK_BYTES = 8 * MEBIBYTE;
 const MAX_ATTACHMENTS_PER_TICKET = 5;
+const PENDING_UPLOAD_TTL_MS = 2 * 60 * 60 * 1000;
+
+export const TICKET_ATTACHMENT_LIMITS = Object.freeze({
+  maxFiles: MAX_ATTACHMENTS_PER_TICKET,
+  maxFileBytes: MAX_ATTACHMENT_BYTES,
+  maxTicketBytes: MAX_TICKET_ATTACHMENT_BYTES,
+  chunkBytes: MAX_UPLOAD_CHUNK_BYTES,
+});
 
 const ATTACHMENT_TYPES = {
   pdf: ["application/pdf"],
@@ -87,6 +104,30 @@ function apiError(message, status = 400, code = "BAD_REQUEST", extra = {}) {
   error.code = code;
   Object.assign(error, extra);
   return error;
+}
+
+export function ticketCenterErrorResponse(error, request) {
+  const status = Number(error?.status || error?.statusCode || 500);
+  const safeStatus = status >= 400 && status < 600 ? status : 500;
+  const requestId =
+    request?.headers?.get("X-Request-Id")?.trim() || crypto.randomUUID();
+  const code = error?.code || "TICKET_CENTER_INTERNAL_ERROR";
+  const message =
+    safeStatus >= 500
+      ? error?.publicMessage || "Erro interno ao processar a requisição."
+      : error?.message || "Erro na requisição.";
+
+  if (safeStatus >= 500) {
+    console.error(`[Maono ticket center][${requestId}][${code}]`, error);
+  }
+
+  return jsonResponse(
+    { ok: false, error: message, code, requestId },
+    {
+      status: safeStatus,
+      headers: { "X-Request-Id": requestId },
+    },
+  );
 }
 
 function cleanText(value, { required = false, maxLength = 500 } = {}) {
@@ -318,69 +359,183 @@ export async function ensureTicketCenterSchema(env) {
   }
 }
 
+function legacyText(value, fallback, maxLength) {
+  const text = String(value ?? "").trim() || fallback;
+  return text.slice(0, maxLength);
+}
+
+function legacyEnum(normalize, value, fallback) {
+  try {
+    return normalize(value || fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+function legacyDate(value, fallback = null) {
+  try {
+    return normalizeOptionalDate(value) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function normalizeLegacyTicketRow(
+  row,
+  { organizationId, fallbackUserId, validUserIds = null } = {},
+) {
+  const legacyId = toPositiveInteger(row?.id);
+  const fallbackCreator = toPositiveInteger(fallbackUserId);
+  const candidateCreator =
+    toPositiveInteger(row?.created_by) || toPositiveInteger(row?.user_id);
+  const candidateIsValid =
+    candidateCreator &&
+    (!validUserIds || validUserIds.has(String(candidateCreator)));
+  const createdBy = candidateIsValid ? candidateCreator : fallbackCreator;
+
+  if (!legacyId || !createdBy || !toPositiveInteger(organizationId)) {
+    return null;
+  }
+
+  const subject = legacyText(
+    row?.subject || row?.title,
+    "Chamado legado",
+    160,
+  );
+  const description = legacyText(
+    row?.description || row?.body,
+    subject,
+    5000,
+  );
+  const createdAt = legacyDate(row?.created_at, isoNow());
+  const assignedToCandidate = toPositiveInteger(row?.assigned_to);
+  const assignedTo =
+    assignedToCandidate &&
+    (!validUserIds || validUserIds.has(String(assignedToCandidate)))
+      ? assignedToCandidate
+      : null;
+
+  return {
+    organizationId: Number(organizationId),
+    legacyId,
+    code: `TKT-L${organizationId}-${String(legacyId).padStart(6, "0")}`,
+    subject,
+    description,
+    status: legacyEnum(normalizeTicketStatus, row?.status, "open"),
+    priority: legacyEnum(normalizePriority, row?.priority, "normal"),
+    category: legacyEnum(normalizeCategory, row?.category, "support"),
+    assignedTo,
+    dueAt: legacyDate(row?.due_at || row?.scheduled_at),
+    closedAt: legacyDate(row?.closed_at),
+    createdBy,
+    createdAt,
+    updatedAt: legacyDate(row?.updated_at || row?.created_at, createdAt),
+  };
+}
+
 export async function migrateLegacyTickets(
   env,
   organizationId,
   fallbackUserId,
 ) {
-  if (!(await tableExists(env, "tickets"))) return;
+  try {
+    if (!(await tableExists(env, "tickets"))) {
+      return { migrated: 0, skipped: 0 };
+    }
 
-  const result = await getDb(env)
-    .prepare(
-      `SELECT *
-       FROM tickets
-       WHERE organization_id = ?
-         AND (active = 1 OR active IS NULL)
-       ORDER BY id ASC
-       LIMIT 1000`,
-    )
-    .bind(organizationId)
-    .all();
+    const columns = await getTableColumns(env, "tickets");
+    if (!columns.has("id") || !columns.has("organization_id")) {
+      console.warn(
+        "[Maono ticket center][legacy] Tabela tickets incompatível; importação ignorada.",
+      );
+      return { migrated: 0, skipped: 0 };
+    }
 
-  for (const row of result?.results || []) {
-    const legacyId = toPositiveInteger(row.id);
-    const createdBy =
-      toPositiveInteger(row.created_by) ||
-      toPositiveInteger(row.user_id) ||
-      toPositiveInteger(fallbackUserId);
-
-    if (!legacyId || !createdBy) continue;
-
-    const code = `TKT-L${organizationId}-${String(legacyId).padStart(6, "0")}`;
-    const subject = cleanText(row.subject || row.title || "Chamado legado", {
-      required: true,
-      maxLength: 160,
-    });
-    const description = cleanText(row.description || row.body || subject, {
-      required: true,
-      maxLength: 5000,
-    });
-
-    await getDb(env)
+    const activeFilter = columns.has("active")
+      ? "AND (legacy.active = 1 OR legacy.active IS NULL)"
+      : "";
+    const result = await getDb(env)
       .prepare(
-        `INSERT OR IGNORE INTO organization_tickets (
-          organization_id, legacy_ticket_id, code, subject, description,
-          status, priority, category, assigned_to, due_at, closed_at,
-          created_by, active, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        `SELECT legacy.*
+         FROM tickets legacy
+         WHERE legacy.organization_id = ?
+           ${activeFilter}
+           AND NOT EXISTS (
+             SELECT 1
+             FROM organization_tickets canonical
+             WHERE canonical.organization_id = ?
+               AND canonical.legacy_ticket_id = legacy.id
+           )
+         ORDER BY legacy.id ASC
+         LIMIT 100`,
       )
-      .bind(
-        organizationId,
-        legacyId,
-        code,
-        subject,
-        description,
-        normalizeTicketStatus(row.status || "open"),
-        normalizePriority(row.priority || "normal"),
-        normalizeCategory(row.category || "support"),
-        toPositiveInteger(row.assigned_to),
-        normalizeOptionalDate(row.due_at || row.scheduled_at),
-        row.closed_at ? normalizeOptionalDate(row.closed_at) : null,
-        createdBy,
-        normalizeOptionalDate(row.created_at) || isoNow(),
-        normalizeOptionalDate(row.updated_at || row.created_at) || isoNow(),
-      )
-      .run();
+      .bind(organizationId, organizationId)
+      .all();
+    const userResult = await getDb(env)
+      .prepare("SELECT id FROM users")
+      .all();
+    const validUserIds = new Set(
+      (userResult?.results || []).map((row) => String(row.id)),
+    );
+
+    let migrated = 0;
+    let skipped = 0;
+    for (const row of result?.results || []) {
+      try {
+        const ticket = normalizeLegacyTicketRow(row, {
+          organizationId,
+          fallbackUserId,
+          validUserIds,
+        });
+        if (!ticket) {
+          skipped += 1;
+          continue;
+        }
+
+        await getDb(env)
+          .prepare(
+            `INSERT OR IGNORE INTO organization_tickets (
+              organization_id, legacy_ticket_id, code, subject, description,
+              status, priority, category, assigned_to, due_at, closed_at,
+              created_by, active, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          )
+          .bind(
+            ticket.organizationId,
+            ticket.legacyId,
+            ticket.code,
+            ticket.subject,
+            ticket.description,
+            ticket.status,
+            ticket.priority,
+            ticket.category,
+            ticket.assignedTo,
+            ticket.dueAt,
+            ticket.closedAt,
+            ticket.createdBy,
+            ticket.createdAt,
+            ticket.updatedAt,
+          )
+          .run();
+        migrated += 1;
+      } catch (error) {
+        skipped += 1;
+        console.warn(
+          `[Maono ticket center][legacy][organization:${organizationId}][ticket:${row?.id || "unknown"}]`,
+          error,
+        );
+      }
+    }
+
+    return { migrated, skipped };
+  } catch (error) {
+    // A compatibilidade com registros antigos nunca deve indisponibilizar a
+    // Central canônica. O erro fica nos logs e os chamados novos seguem ativos.
+    console.warn(
+      `[Maono ticket center][legacy][organization:${organizationId}] Importação ignorada.`,
+      error,
+    );
+    return { migrated: 0, skipped: 0, failed: true };
   }
 }
 
@@ -1045,11 +1200,11 @@ export async function readTicketAttachmentUpload(request) {
     throw apiError("Arquivo vazio.", 400, "ATTACHMENT_EMPTY");
   }
 
-  if (arrayBuffer.byteLength > MAX_ATTACHMENT_BYTES) {
+  if (arrayBuffer.byteLength > MAX_MULTIPART_ATTACHMENT_BYTES) {
     throw apiError(
-      "Cada anexo pode ter no máximo 10 MB.",
+      "Envios tradicionais aceitam até 10 MB. Use o envio em partes para arquivos maiores.",
       413,
-      "ATTACHMENT_TOO_LARGE",
+      "ATTACHMENT_CHUNK_UPLOAD_REQUIRED",
     );
   }
 
@@ -1064,14 +1219,32 @@ export async function readTicketAttachmentUpload(request) {
   };
 }
 
+async function expireStaleTicketUploads(env, organizationId, ticketId) {
+  const cutoff = new Date(Date.now() - PENDING_UPLOAD_TTL_MS).toISOString();
+  await getDb(env)
+    .prepare(
+      `UPDATE ticket_attachments
+       SET status = 'FAILED',
+           error_message = 'Sessão de upload expirada.',
+           updated_at = ?
+       WHERE organization_id = ?
+         AND ticket_id = ?
+         AND status = 'PENDING'
+         AND updated_at < ?`,
+    )
+    .bind(isoNow(), organizationId, ticketId, cutoff)
+    .run();
+}
+
 async function assertAttachmentCapacity(env, organizationId, ticketId, size) {
+  await expireStaleTicketUploads(env, organizationId, ticketId);
   const row = await getDb(env)
     .prepare(
       `SELECT COUNT(*) AS total_files, COALESCE(SUM(size_bytes), 0) AS total_bytes
        FROM ticket_attachments
        WHERE organization_id = ?
          AND ticket_id = ?
-         AND status = 'ACTIVE'
+         AND status IN ('ACTIVE', 'PENDING')
          AND deleted_at IS NULL`,
     )
     .bind(organizationId, ticketId)
@@ -1087,10 +1260,354 @@ async function assertAttachmentCapacity(env, organizationId, ticketId, size) {
 
   if (Number(row?.total_bytes || 0) + size > MAX_TICKET_ATTACHMENT_BYTES) {
     throw apiError(
-      "Os anexos do chamado não podem ultrapassar 25 MB.",
+      "Os anexos do chamado não podem ultrapassar 150 MB.",
       413,
       "ATTACHMENT_TOTAL_LIMIT",
     );
+  }
+}
+
+export function validateTicketAttachmentMetadata(payload = {}) {
+  const originalName = sanitizeFileName(
+    payload.name || payload.fileName || "anexo",
+  );
+  const extension = extensionFromName(originalName);
+  const allowedMimeTypes = ATTACHMENT_TYPES[extension];
+
+  if (!allowedMimeTypes) {
+    throw apiError(
+      "Tipo de arquivo não permitido.",
+      415,
+      "ATTACHMENT_TYPE_NOT_ALLOWED",
+    );
+  }
+
+  const mimeType = String(
+    payload.mimeType || payload.type || "application/octet-stream",
+  )
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (
+    !allowedMimeTypes.includes(mimeType) &&
+    mimeType !== "application/octet-stream"
+  ) {
+    throw apiError(
+      "O MIME do arquivo não é permitido.",
+      415,
+      "ATTACHMENT_MIME_NOT_ALLOWED",
+    );
+  }
+
+  const size = Number(payload.size);
+  if (!Number.isInteger(size) || size <= 0) {
+    throw apiError("Arquivo vazio ou tamanho inválido.", 400, "ATTACHMENT_EMPTY");
+  }
+  if (size > MAX_ATTACHMENT_BYTES) {
+    throw apiError(
+      "Cada anexo pode ter no máximo 80 MB.",
+      413,
+      "ATTACHMENT_TOO_LARGE",
+    );
+  }
+
+  return { originalName, extension, mimeType, size };
+}
+
+export async function initiateTicketAttachmentUpload(
+  env,
+  organizationId,
+  ticketId,
+  user,
+  payload,
+) {
+  const ticket = await getTicketOrThrow(env, organizationId, ticketId);
+  if (ticket.status === "closed") {
+    throw apiError(
+      "Não é possível anexar arquivos a um chamado concluído.",
+      409,
+      "TICKET_CLOSED",
+    );
+  }
+
+  await enforceRateLimit(env, "attachment", organizationId, user.id);
+  const upload = validateTicketAttachmentMetadata(payload);
+  await assertAttachmentCapacity(env, organizationId, ticketId, upload.size);
+
+  const organization = await getOrganizationOrThrow(env, organizationId);
+  const storage = await ensureOrganizationStorage(env, organization, {
+    provisionDocuments: false,
+  });
+  const rootPath = `${storage.rootPath || canonicalOrganizationRoot(organization)}/tickets/${ticketId}/attachments`;
+  const storedName = buildStoredFileName(upload.originalName);
+  const storageKey = organizationFileDropboxPath(rootPath, storedName);
+  const timestamp = isoNow();
+  let pending = null;
+
+  try {
+    pending = await insertRow(env, "ticket_attachments", {
+      organization_id: organizationId,
+      ticket_id: ticketId,
+      original_name: upload.originalName,
+      stored_name: storedName,
+      storage_key: storageKey,
+      mime_type: upload.mimeType,
+      size_bytes: upload.size,
+      sha256: null,
+      status: "PENDING",
+      uploaded_by: user.id,
+      dropbox_rev: "0",
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
+
+    const session = await startOrganizationBinaryUpload(env, rootPath);
+    if (!session?.session_id) {
+      throw apiError(
+        "O provedor de arquivos não iniciou a sessão de upload.",
+        502,
+        "ATTACHMENT_UPLOAD_SESSION_INVALID",
+      );
+    }
+
+    const activePending = await updateRow(
+      env,
+      "ticket_attachments",
+      pending.id,
+      {
+        dropbox_file_id: session.session_id,
+        dropbox_rev: "0",
+        error_message: null,
+        updated_at: isoNow(),
+      },
+    );
+
+    return {
+      attachment: publicTicketAttachment(activePending || pending),
+      upload: {
+        attachmentId: pending.id,
+        offset: 0,
+        chunkSize: MAX_UPLOAD_CHUNK_BYTES,
+        size: upload.size,
+      },
+    };
+  } catch (error) {
+    if (pending?.id) {
+      try {
+        await updateRow(env, "ticket_attachments", pending.id, {
+          status: "FAILED",
+          error_message: String(error?.message || "Falha ao iniciar upload").slice(
+            0,
+            1000,
+          ),
+          updated_at: isoNow(),
+        });
+      } catch (metadataError) {
+        console.error("[Maono ticket upload][start metadata]", metadataError);
+      }
+    }
+    throw error;
+  }
+}
+
+async function getPendingTicketAttachmentOrThrow(
+  env,
+  organizationId,
+  ticketId,
+  attachmentId,
+) {
+  const row = await getDb(env)
+    .prepare(
+      `SELECT *
+       FROM ticket_attachments
+       WHERE id = ?
+         AND organization_id = ?
+         AND ticket_id = ?
+         AND status = 'PENDING'
+         AND deleted_at IS NULL
+       LIMIT 1`,
+    )
+    .bind(attachmentId, organizationId, ticketId)
+    .first();
+
+  if (!row) {
+    throw apiError(
+      "Sessão de upload não encontrada ou já concluída.",
+      404,
+      "ATTACHMENT_UPLOAD_NOT_FOUND",
+    );
+  }
+  return row;
+}
+
+function parseUploadOffset(request) {
+  const rawOffset = request.headers.get("Upload-Offset");
+  const offset = Number(rawOffset);
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw apiError(
+      "Offset do upload inválido.",
+      400,
+      "ATTACHMENT_UPLOAD_OFFSET_INVALID",
+    );
+  }
+  return offset;
+}
+
+export async function uploadTicketAttachmentChunk(
+  env,
+  organizationId,
+  ticketId,
+  attachmentId,
+  user,
+  request,
+) {
+  const ticket = await getTicketOrThrow(env, organizationId, ticketId);
+  if (ticket.status === "closed") {
+    throw apiError(
+      "Não é possível anexar arquivos a um chamado concluído.",
+      409,
+      "TICKET_CLOSED",
+    );
+  }
+
+  const pending = await getPendingTicketAttachmentOrThrow(
+    env,
+    organizationId,
+    ticketId,
+    attachmentId,
+  );
+  if (String(pending.uploaded_by) !== String(user.id)) {
+    throw apiError(
+      "Esta sessão de upload pertence a outro usuário.",
+      403,
+      "ATTACHMENT_UPLOAD_FORBIDDEN",
+    );
+  }
+
+  const offset = parseUploadOffset(request);
+  const expectedOffset = Number(pending.dropbox_rev || 0);
+  if (offset !== expectedOffset) {
+    throw apiError(
+      `O envio está fora de sequência. Retome a partir do byte ${expectedOffset}.`,
+      409,
+      "ATTACHMENT_UPLOAD_OFFSET_MISMATCH",
+      { expectedOffset },
+    );
+  }
+
+  const contentLength = Number(request.headers.get("Content-Length") || 0);
+  if (contentLength > MAX_UPLOAD_CHUNK_BYTES) {
+    throw apiError(
+      "Cada parte do upload pode ter no máximo 8 MB.",
+      413,
+      "ATTACHMENT_CHUNK_TOO_LARGE",
+    );
+  }
+
+  const arrayBuffer = await request.arrayBuffer();
+  if (arrayBuffer.byteLength <= 0) {
+    throw apiError("Parte do upload vazia.", 400, "ATTACHMENT_CHUNK_EMPTY");
+  }
+  if (arrayBuffer.byteLength > MAX_UPLOAD_CHUNK_BYTES) {
+    throw apiError(
+      "Cada parte do upload pode ter no máximo 8 MB.",
+      413,
+      "ATTACHMENT_CHUNK_TOO_LARGE",
+    );
+  }
+
+  const nextOffset = offset + arrayBuffer.byteLength;
+  const expectedSize = Number(pending.size_bytes || 0);
+  if (nextOffset > expectedSize) {
+    throw apiError(
+      "O conteúdo enviado ultrapassa o tamanho declarado do arquivo.",
+      409,
+      "ATTACHMENT_UPLOAD_SIZE_MISMATCH",
+    );
+  }
+  if (offset === 0) {
+    assertFileSignature(extensionFromName(pending.original_name), arrayBuffer);
+  }
+
+  const sessionId = String(pending.dropbox_file_id || "");
+  if (!sessionId) {
+    throw apiError(
+      "Sessão de upload inválida.",
+      409,
+      "ATTACHMENT_UPLOAD_SESSION_INVALID",
+    );
+  }
+
+  const complete = nextOffset === expectedSize;
+  try {
+    if (!complete) {
+      await appendOrganizationBinaryUpload(
+        env,
+        sessionId,
+        offset,
+        arrayBuffer,
+      );
+      await updateRow(env, "ticket_attachments", attachmentId, {
+        dropbox_rev: String(nextOffset),
+        error_message: null,
+        updated_at: isoNow(),
+      });
+      return { attachment: null, offset: nextOffset, complete: false };
+    }
+
+    const { rootPath, fileName } = splitDropboxFilePath(pending.storage_key);
+    const metadata = await finishOrganizationBinaryUpload(
+      env,
+      sessionId,
+      offset,
+      rootPath,
+      fileName,
+      arrayBuffer,
+    );
+    const active = await updateRow(env, "ticket_attachments", attachmentId, {
+      status: "ACTIVE",
+      dropbox_file_id: metadata?.id || null,
+      dropbox_rev: metadata?.rev || null,
+      error_message: null,
+      updated_at: isoNow(),
+    });
+
+    await recordTicketEvent(env, {
+      organizationId,
+      ticketId,
+      type: "ticket.attachment.added",
+      actorUserId: user.id,
+      metadata: {
+        attachmentId,
+        fileName: pending.original_name,
+        size: expectedSize,
+      },
+    });
+    await recordAuditLog(env, {
+      actorUserId: user.id,
+      organizationId,
+      action: "ticket.attachment.added",
+      resourceType: "ticket_attachment",
+      resourceId: attachmentId,
+      metadata: { ticketId, fileName: pending.original_name },
+      request,
+    });
+
+    return {
+      attachment: publicTicketAttachment(active || { ...pending, status: "ACTIVE" }),
+      offset: nextOffset,
+      complete: true,
+    };
+  } catch (error) {
+    try {
+      await updateRow(env, "ticket_attachments", attachmentId, {
+        error_message: String(error?.message || "Falha no upload").slice(0, 1000),
+        updated_at: isoNow(),
+      });
+    } catch (metadataError) {
+      console.error("[Maono ticket upload][chunk metadata]", metadataError);
+    }
+    throw error;
   }
 }
 
@@ -1213,12 +1730,20 @@ export async function createTicketAttachment(
   }
 }
 
-export async function getTicketAttachmentOrThrow(
+export async function getTicketAttachmentRecordOrThrow(
   env,
   organizationId,
   ticketId,
   attachmentId,
+  statuses = ["ACTIVE"],
 ) {
+  const allowedStatuses = statuses.filter((status) =>
+    ["PENDING", "ACTIVE", "FAILED", "DELETED"].includes(status),
+  );
+  if (allowedStatuses.length === 0) {
+    throw apiError("Estado de anexo inválido.", 500, "ATTACHMENT_STATUS_INVALID");
+  }
+  const statusPlaceholders = allowedStatuses.map(() => "?").join(", ");
   const row = await getDb(env)
     .prepare(
       `SELECT
@@ -1231,11 +1756,11 @@ export async function getTicketAttachmentOrThrow(
        WHERE a.id = ?
          AND a.organization_id = ?
          AND a.ticket_id = ?
-         AND a.status = 'ACTIVE'
+         AND a.status IN (${statusPlaceholders})
          AND a.deleted_at IS NULL
        LIMIT 1`,
     )
-    .bind(attachmentId, organizationId, ticketId)
+    .bind(attachmentId, organizationId, ticketId, ...allowedStatuses)
     .first();
 
   if (!row) {
@@ -1243,6 +1768,21 @@ export async function getTicketAttachmentOrThrow(
   }
 
   return row;
+}
+
+export async function getTicketAttachmentOrThrow(
+  env,
+  organizationId,
+  ticketId,
+  attachmentId,
+) {
+  return getTicketAttachmentRecordOrThrow(
+    env,
+    organizationId,
+    ticketId,
+    attachmentId,
+    ["ACTIVE"],
+  );
 }
 
 export async function downloadTicketAttachment(
@@ -1284,16 +1824,21 @@ export async function deleteTicketAttachment(
   request,
 ) {
   await getTicketOrThrow(env, organizationId, ticketId);
-  const attachment = await getTicketAttachmentOrThrow(
+  const attachment = await getTicketAttachmentRecordOrThrow(
     env,
     organizationId,
     ticketId,
     attachmentId,
+    ["ACTIVE", "PENDING"],
   );
 
-  await deleteOrganizationBinary(env, attachment.storage_key);
+  if (attachment.status === "ACTIVE") {
+    await deleteOrganizationBinary(env, attachment.storage_key);
+  }
   await updateRow(env, "ticket_attachments", attachmentId, {
-    status: "DELETED",
+    status: attachment.status === "PENDING" ? "FAILED" : "DELETED",
+    error_message:
+      attachment.status === "PENDING" ? "Upload cancelado pelo usuário." : null,
     deleted_at: isoNow(),
     updated_at: isoNow(),
   });
@@ -1301,7 +1846,10 @@ export async function deleteTicketAttachment(
   await recordTicketEvent(env, {
     organizationId,
     ticketId,
-    type: "ticket.attachment.deleted",
+    type:
+      attachment.status === "PENDING"
+        ? "ticket.attachment.upload_cancelled"
+        : "ticket.attachment.deleted",
     actorUserId: user.id,
     metadata: {
       attachmentId,
@@ -1312,7 +1860,10 @@ export async function deleteTicketAttachment(
   await recordAuditLog(env, {
     actorUserId: user.id,
     organizationId,
-    action: "ticket.attachment.deleted",
+    action:
+      attachment.status === "PENDING"
+        ? "ticket.attachment.upload_cancelled"
+        : "ticket.attachment.deleted",
     resourceType: "ticket_attachment",
     resourceId: attachmentId,
     metadata: { ticketId, fileName: attachment.original_name },
@@ -1321,6 +1872,13 @@ export async function deleteTicketAttachment(
 }
 
 export function canCreatorDeleteAttachment(ticket, attachment, userId) {
+  if (
+    attachment.status === "PENDING" &&
+    String(attachment.uploaded_by) === String(userId)
+  ) {
+    return true;
+  }
+
   return (
     ticket.status !== "closed" &&
     String(attachment.uploaded_by) === String(userId)

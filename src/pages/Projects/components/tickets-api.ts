@@ -28,6 +28,7 @@ function ticketsPath(organizationId: number | string) {
 async function responseError(response: Response) {
   let message = `A requisição falhou (${response.status}).`;
   let code: string | undefined;
+  let requestId = response.headers.get("X-Request-Id") || undefined;
 
   try {
     const payload = await response.json();
@@ -36,16 +37,23 @@ async function responseError(response: Response) {
       message = payload.error.message;
     }
     code = payload?.code || payload?.error?.code;
+    requestId = payload?.requestId || requestId;
   } catch {
     // Mantém a mensagem HTTP segura.
+  }
+
+  if (response.status >= 500 && requestId) {
+    message = `${message} Referência: ${requestId}.`;
   }
 
   const error = new Error(message) as Error & {
     status?: number;
     code?: string;
+    requestId?: string;
   };
   error.status = response.status;
   error.code = code;
+  error.requestId = requestId;
   return error;
 }
 
@@ -136,34 +144,68 @@ export async function updateTicket(
   return response.ticket;
 }
 
-export function uploadTicketAttachment(
+type UploadStartResponse = {
+  ok: boolean;
+  attachment: TicketAttachment;
+  upload: {
+    attachmentId: number | string;
+    offset: number;
+    chunkSize: number;
+    size: number;
+  };
+};
+
+type UploadChunkResponse = {
+  ok: boolean;
+  attachment: TicketAttachment | null;
+  offset: number;
+  complete: boolean;
+};
+
+function attachmentsPath(
   organizationId: number | string,
   ticketId: number | string,
-  file: File,
-  options: UploadOptions = {},
 ) {
-  return new Promise<TicketAttachment>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const url = `${ticketsPath(organizationId)}/${pathSegment(ticketId)}/attachments`;
-    const formData = new FormData();
-    formData.set("file", file);
+  return `${ticketsPath(organizationId)}/${pathSegment(ticketId)}/attachments`;
+}
 
-    xhr.open("POST", url);
+function uploadAttachmentChunk(
+  url: string,
+  chunk: Blob,
+  offset: number,
+  totalSize: number,
+  options: UploadOptions,
+) {
+  return new Promise<UploadChunkResponse>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const abort = () => xhr.abort();
+    const cleanup = () => options.signal?.removeEventListener("abort", abort);
+
+    xhr.open("PATCH", url);
     xhr.withCredentials = true;
     xhr.setRequestHeader("Accept", "application/json");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("Upload-Offset", String(offset));
 
     xhr.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable) return;
       options.onProgress?.(
-        Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100))),
+        Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(((offset + event.loaded) / totalSize) * 100),
+          ),
+        ),
       );
     });
 
     xhr.addEventListener("load", () => {
-      let payload: {
-        attachment?: TicketAttachment;
+      cleanup();
+      let payload: Partial<UploadChunkResponse> & {
         error?: string | { message?: string };
         code?: string;
+        requestId?: string;
       } = {};
       try {
         payload = JSON.parse(xhr.responseText || "{}");
@@ -171,40 +213,111 @@ export function uploadTicketAttachment(
         // A mensagem abaixo é suficiente para respostas não JSON.
       }
 
-      if (xhr.status >= 200 && xhr.status < 300 && payload.attachment) {
-        options.onProgress?.(100);
-        resolve(payload.attachment);
+      if (
+        xhr.status >= 200 &&
+        xhr.status < 300 &&
+        typeof payload.offset === "number"
+      ) {
+        resolve(payload as UploadChunkResponse);
         return;
       }
 
-      const message =
+      let message =
         typeof payload.error === "string"
           ? payload.error
           : payload.error?.message ||
-            `Não foi possível enviar ${file.name}.`;
+            "Não foi possível enviar uma parte do arquivo.";
+      const requestId =
+        payload.requestId || xhr.getResponseHeader("X-Request-Id") || undefined;
+      if (xhr.status >= 500 && requestId) {
+        message = `${message} Referência: ${requestId}.`;
+      }
       const error = new Error(message) as Error & {
         status?: number;
         code?: string;
+        requestId?: string;
       };
       error.status = xhr.status;
       error.code = payload.code;
+      error.requestId = requestId;
       reject(error);
     });
 
     xhr.addEventListener("error", () => {
-      reject(new Error(`Falha de rede ao enviar ${file.name}.`));
+      cleanup();
+      reject(new Error("Falha de rede durante o envio do arquivo."));
     });
 
     xhr.addEventListener("abort", () => {
+      cleanup();
       reject(new DOMException("Upload cancelado.", "AbortError"));
     });
 
-    options.signal?.addEventListener("abort", () => xhr.abort(), {
-      once: true,
-    });
+    options.signal?.addEventListener("abort", abort, { once: true });
 
-    xhr.send(formData);
+    xhr.send(chunk);
   });
+}
+
+export async function uploadTicketAttachment(
+  organizationId: number | string,
+  ticketId: number | string,
+  file: File,
+  options: UploadOptions = {},
+) {
+  if (options.signal?.aborted) {
+    throw new DOMException("Upload cancelado.", "AbortError");
+  }
+
+  const basePath = attachmentsPath(organizationId, ticketId);
+  const started = await requestJson<UploadStartResponse>(basePath, {
+    method: "POST",
+    body: JSON.stringify({
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+    }),
+    signal: options.signal,
+  });
+  const attachmentId = started.upload.attachmentId;
+  const chunkSize = Math.max(1, started.upload.chunkSize);
+  let offset = started.upload.offset;
+
+  try {
+    while (offset < file.size) {
+      const end = Math.min(file.size, offset + chunkSize);
+      const response = await uploadAttachmentChunk(
+        `${basePath}/${pathSegment(attachmentId)}`,
+        file.slice(offset, end),
+        offset,
+        file.size,
+        options,
+      );
+
+      if (response.offset <= offset) {
+        throw new Error("O servidor não confirmou o avanço do upload.");
+      }
+      offset = response.offset;
+
+      if (response.complete) {
+        if (!response.attachment) {
+          throw new Error("O servidor concluiu o envio sem retornar o anexo.");
+        }
+        options.onProgress?.(100);
+        return response.attachment;
+      }
+    }
+
+    throw new Error("O upload terminou antes da confirmação do servidor.");
+  } catch (error) {
+    void fetch(`${basePath}/${pathSegment(attachmentId)}`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+      keepalive: true,
+    }).catch(() => undefined);
+    throw error;
+  }
 }
 
 function downloadFileName(response: Response, fallback: string) {

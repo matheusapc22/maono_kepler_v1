@@ -52,6 +52,8 @@ const ALLOWED_EXTENSIONS = [
   "docx",
   "txt",
 ];
+const MAX_FILE_BYTES = 80 * 1024 * 1024;
+const MAX_TICKET_BYTES = 150 * 1024 * 1024;
 
 function fileExtension(file: File) {
   return file.name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
@@ -59,11 +61,11 @@ function fileExtension(file: File) {
 
 function validateFiles(files: File[]) {
   if (files.length > 5) return "Selecione no máximo 5 arquivos.";
-  if (files.some((file) => file.size > 10 * 1024 * 1024)) {
-    return "Cada arquivo pode ter no máximo 10 MB.";
+  if (files.some((file) => file.size > MAX_FILE_BYTES)) {
+    return "Cada arquivo pode ter no máximo 80 MB.";
   }
-  if (files.reduce((total, file) => total + file.size, 0) > 25 * 1024 * 1024) {
-    return "Os arquivos não podem ultrapassar 25 MB no total.";
+  if (files.reduce((total, file) => total + file.size, 0) > MAX_TICKET_BYTES) {
+    return "Os arquivos não podem ultrapassar 150 MB no total.";
   }
   if (files.some((file) => !ALLOWED_EXTENSIONS.includes(fileExtension(file)))) {
     return "Há um arquivo com tipo não permitido.";
@@ -110,6 +112,8 @@ export default function NewTicketPopover({
     if (!open) return undefined;
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     window.setTimeout(() => {
       panelRef.current?.querySelector<HTMLElement>("input, button")?.focus();
     }, 0);
@@ -144,6 +148,7 @@ export default function NewTicketPopover({
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
       previousFocusRef.current?.focus();
     };
   }, [onClose, open]);
@@ -472,7 +477,7 @@ export default function NewTicketPopover({
               <span aria-hidden="true">⇧</span>
               <strong>Adicionar anexos</strong>
               <small>
-                Até 5 arquivos · 10 MB cada · 25 MB no total
+                Até 5 arquivos · 80 MB cada · 150 MB no total
               </small>
             </label>
 
