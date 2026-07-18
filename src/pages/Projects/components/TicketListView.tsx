@@ -1,5 +1,4 @@
 import {
-  formatTicketDate,
   formatTicketDateTime,
   isTicketOverdue,
   ticketPersonName,
@@ -9,48 +8,59 @@ import {
   STATUS_LABELS,
   type Ticket,
   type TicketPagination,
-  type TicketStatus,
 } from "./ticket-types";
 
 type TicketListViewProps = {
   tickets: Ticket[];
   pagination: TicketPagination;
-  canManage: boolean;
   busyTicketIds: ReadonlySet<string>;
   onOpen: (ticket: Ticket) => void;
-  onStatusChange: (ticket: Ticket, status: TicketStatus) => void;
   onPageChange: (page: number) => void;
 };
 
 export const TICKET_LIST_HEADERS = [
+  "Selecionar",
   "Código",
-  "Solicitante",
   "Assunto",
+  "Prioridade",
   "Situação",
-  "Última atualização",
   "Atendente",
-  "Cadastrado em",
+  "Última atualização",
   "Ações",
 ];
 
 export default function TicketListView({
   tickets,
   pagination,
-  canManage,
   busyTicketIds,
   onOpen,
-  onStatusChange,
   onPageChange,
 }: TicketListViewProps) {
   return (
     <section className="ticket-list-region" aria-label="Lista de chamados">
+      <header className="ticket-list-header">
+        <h3>Lista de chamados</h3>
+        <div>
+          <span>
+            Exibindo {tickets.length} de {pagination.total}
+          </span>
+          <button type="button" className="ticket-list-tool">
+            <span aria-hidden="true">⇧</span> Exportar
+          </button>
+          <button type="button" className="ticket-list-tool is-icon" aria-label="Mais opções">
+            ⋮
+          </button>
+        </div>
+      </header>
       <div className="ticket-list-scroll">
         <table className="ticket-list-table">
           <thead>
             <tr>
-              {TICKET_LIST_HEADERS.map((header) => (
+              {TICKET_LIST_HEADERS.map((header, index) => (
                 <th key={header} scope="col">
-                  {header}
+                  {index === 0 ? (
+                    <input type="checkbox" aria-label="Selecionar todos os chamados desta página" />
+                  ) : header}
                 </th>
               ))}
             </tr>
@@ -62,13 +72,13 @@ export default function TicketListView({
 
               return (
                 <tr key={ticket.id} className={overdue ? "is-overdue" : ""}>
+                  <td><input type="checkbox" aria-label={`Selecionar ${ticket.code}`} /></td>
                   <td>
                     <strong className="ticket-code">{ticket.code}</strong>
                     {overdue ? (
                       <span className="ticket-overdue-label">Vencido</span>
                     ) : null}
                   </td>
-                  <td>{ticketPersonName(ticket.createdBy)}</td>
                   <td>
                     <button
                       type="button"
@@ -79,18 +89,20 @@ export default function TicketListView({
                     </button>
                   </td>
                   <td>
+                    <span className={`ticket-priority-badge priority-${ticket.priority}`}>
+                      <i aria-hidden="true" />{PRIORITY_LABELS[ticket.priority]}
+                    </span>
+                  </td>
+                  <td>
                     <span
                       className={`ticket-status-badge status-${ticket.status}`}
                     >
                       {STATUS_LABELS[ticket.status]}
                     </span>
                   </td>
-                  <td title={formatTicketDateTime(ticket.updatedAt)}>
-                    {formatTicketDate(ticket.updatedAt)}
-                  </td>
                   <td>{ticketPersonName(ticket.assignedTo)}</td>
-                  <td title={formatTicketDateTime(ticket.createdAt)}>
-                    {formatTicketDate(ticket.createdAt)}
+                  <td title={formatTicketDateTime(ticket.updatedAt)}>
+                    {formatTicketDateTime(ticket.updatedAt)}
                   </td>
                   <td>
                     <div className="ticket-row-actions">
@@ -98,31 +110,12 @@ export default function TicketListView({
                         type="button"
                         className="ticket-table-action"
                         onClick={() => onOpen(ticket)}
+                        aria-label={`Abrir ${ticket.code}`}
                       >
-                        Abrir
+                        ⋮
                       </button>
-                      {canManage ? (
-                        <label>
-                          <span className="mm-sr-only">
-                            Alterar situação de {ticket.code}
-                          </span>
-                          <select
-                            value={ticket.status}
-                            disabled={busy}
-                            onChange={(event) =>
-                              onStatusChange(
-                                ticket,
-                                event.target.value as TicketStatus,
-                              )
-                            }
-                          >
-                            <option value="new">Novo</option>
-                            <option value="open">Aberto</option>
-                            <option value="in_progress">Em andamento</option>
-                            <option value="in_review">Em revisão</option>
-                            <option value="closed">Concluído</option>
-                          </select>
-                        </label>
+                      {busy ? (
+                        <span className="mm-sr-only">Atualizando chamado</span>
                       ) : null}
                     </div>
                   </td>
@@ -162,4 +155,3 @@ export default function TicketListView({
     </section>
   );
 }
-
