@@ -1,35 +1,76 @@
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import {
-  findRowByIdAndOrganization,
   getOrganizationOrThrow,
   getRouteParam,
   handleApiError,
   jsonResponse,
   methodNotAllowed,
-  normalizeTicket,
-  now,
   parsePositiveInteger,
   readJsonBody,
-  updateRow,
-  validateTicketPatchPayload,
 } from "../../../../_lib/organizations.js";
+import {
+  ensureTicketCenterSchema,
+  getTicketDetails,
+  migrateLegacyTickets,
+  updateTicket,
+} from "../../../../_lib/ticket-center.js";
 
 export async function onRequest(context) {
-  const { request } = context;
+  if (context.request.method === "GET") return onRequestGet(context);
+  if (context.request.method === "PATCH") return onRequestPatch(context);
 
-  if (request.method === "PATCH") {
-    return onRequestPatch(context);
+  return methodNotAllowed(context.request.method, ["GET", "PATCH"]);
+}
+
+function routeIds(params) {
+  return {
+    organizationId: parsePositiveInteger(
+      getRouteParam(params, "id"),
+      "organizationId",
+    ),
+    ticketId: parsePositiveInteger(
+      getRouteParam(params, "ticketId"),
+      "ticketId",
+    ),
+  };
+}
+
+export async function onRequestGet({ env, request, params }) {
+  try {
+    const { organizationId, ticketId } = routeIds(params);
+    const { user } = await requireOrganizationPermission(
+      env,
+      request,
+      "ticket.view",
+      {
+        organizationId,
+        scopeType: "organization",
+        resourceType: "ticket",
+        resourceId: ticketId,
+      },
+      {
+        audit: false,
+        resourceType: "ticket",
+      },
+    );
+
+    await getOrganizationOrThrow(env, organizationId);
+    await ensureTicketCenterSchema(env);
+    await migrateLegacyTickets(env, organizationId, user.id);
+
+    return jsonResponse({
+      ok: true,
+      ...(await getTicketDetails(env, organizationId, ticketId)),
+    });
+  } catch (error) {
+    return handleApiError(error);
   }
-
-  return methodNotAllowed(request.method, ["PATCH"]);
 }
 
 export async function onRequestPatch({ env, request, params }) {
   try {
-    const organizationId = parsePositiveInteger(getRouteParam(params, "id"), "organizationId");
-    const ticketId = parsePositiveInteger(getRouteParam(params, "ticketId"), "ticketId");
-
-    await requireOrganizationPermission(
+    const { organizationId, ticketId } = routeIds(params);
+    const { user } = await requireOrganizationPermission(
       env,
       request,
       "ticket.manage",
@@ -40,44 +81,27 @@ export async function onRequestPatch({ env, request, params }) {
         resourceId: ticketId,
       },
       {
-        auditAction: "ticket.manage",
+        audit: false,
         resourceType: "ticket",
-        resourceId: ticketId,
-        auditOnSuccess: true,
       },
     );
 
     await getOrganizationOrThrow(env, organizationId);
+    await ensureTicketCenterSchema(env);
+    await migrateLegacyTickets(env, organizationId, user.id);
 
-    const ticket = await findRowByIdAndOrganization(
+    const ticket = await updateTicket(
       env,
-      "tickets",
-      ticketId,
       organizationId,
+      ticketId,
+      user,
+      await readJsonBody(request),
+      request,
     );
 
-    if (!ticket) {
-      return jsonResponse(
-        {
-          ok: false,
-          error: "Chamado não encontrado.",
-        },
-        { status: 404 },
-      );
-    }
-
-    const patch = validateTicketPatchPayload(await readJsonBody(request));
-
-    const row = await updateRow(env, "tickets", ticketId, {
-      ...patch,
-      updated_at: now(),
-    });
-
-    return jsonResponse({
-      ok: true,
-      ticket: normalizeTicket(row || { ...ticket, ...patch, updated_at: now() }),
-    });
+    return jsonResponse({ ok: true, ticket });
   } catch (error) {
     return handleApiError(error);
   }
 }
+

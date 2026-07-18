@@ -1,46 +1,135 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
-import { MetricsSkeleton, TableSkeleton } from "../../../components/loading/Skeleton";
 import {
-  createOrganizationTicket,
-  listOrganizationTickets,
-  updateOrganizationTicket,
-  type OrganizationTicket,
-} from "../../../lib/api";
+  MetricsSkeleton,
+  TableSkeleton,
+} from "../../../components/loading/Skeleton";
+import NewTicketPopover from "./NewTicketPopover";
+import TicketCalendarView from "./TicketCalendarView";
+import TicketDetailDrawer from "./TicketDetailDrawer";
+import TicketKanbanView from "./TicketKanbanView";
+import TicketListView, {
+  TICKET_LIST_HEADERS,
+} from "./TicketListView";
+import TicketsToolbar from "./TicketsToolbar";
+import {
+  getTicketDetails,
+  listTickets,
+  updateTicket,
+} from "./tickets-api";
+import {
+  DEFAULT_TICKET_FILTERS,
+  type Ticket,
+  type TicketDetailResponse,
+  type TicketFacets,
+  type TicketFilters,
+  type TicketPagination,
+  type TicketStatus,
+  type TicketViewMode,
+  type UpdateTicketPayload,
+} from "./ticket-types";
 
 type TicketsSectionProps = {
   user?: AccessControlUser | null;
   organizationId?: number | string | null;
 };
 
-const INITIAL_FORM = {
-  subject: "",
-  description: "",
-  priority: "normal",
+const EMPTY_FACETS: TicketFacets = {
+  byStatus: {
+    new: 0,
+    open: 0,
+    in_progress: 0,
+    in_review: 0,
+    closed: 0,
+  },
+  overdue: 0,
 };
 
-const TICKET_HEADERS = ["Assunto", "Status", "Prioridade", "Criado em", "Ação"];
+const EMPTY_PAGINATION: TicketPagination = {
+  page: 1,
+  limit: 50,
+  total: 0,
+  totalPages: 1,
+  hasMore: false,
+};
 
-function formatDate(value?: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+function mergeTickets(current: Ticket[], incoming: Ticket[]) {
+  const byId = new Map(current.map((ticket) => [String(ticket.id), ticket]));
+  for (const ticket of incoming) byId.set(String(ticket.id), ticket);
+  return Array.from(byId.values());
 }
 
-export default function TicketsSection({ user, organizationId }: TicketsSectionProps) {
-  const [tickets, setTickets] = useState<OrganizationTicket[]>([]);
-  const [form, setForm] = useState(INITIAL_FORM);
+function replaceTicket(current: Ticket[], updated: Ticket) {
+  const exists = current.some(
+    (ticket) => String(ticket.id) === String(updated.id),
+  );
+  if (!exists) return [updated, ...current];
+
+  return current.map((ticket) =>
+    String(ticket.id) === String(updated.id) ? updated : ticket,
+  );
+}
+
+function storedViewMode(organizationId: number | string | null | undefined) {
+  if (!organizationId || typeof window === "undefined") return "list";
+  const stored = window.localStorage.getItem(
+    `maono:ticket-view:${organizationId}`,
+  );
+  return stored === "kanban" || stored === "calendar" ? stored : "list";
+}
+
+export default function TicketsSection({
+  user,
+  organizationId,
+}: TicketsSectionProps) {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [filters, setFilters] = useState<TicketFilters>(
+    DEFAULT_TICKET_FILTERS,
+  );
+  const [debouncedFilters, setDebouncedFilters] = useState<TicketFilters>(
+    DEFAULT_TICKET_FILTERS,
+  );
+  const [facets, setFacets] = useState<TicketFacets>(EMPTY_FACETS);
+  const [pagination, setPagination] =
+    useState<TicketPagination>(EMPTY_PAGINATION);
+  const [assignees, setAssignees] = useState<
+    TicketDetailResponse["assignees"]
+  >([]);
+  const [viewMode, setViewMode] = useState<TicketViewMode>(() =>
+    storedViewMode(organizationId),
+  );
   const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newTicketOpen, setNewTicketOpen] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<
+    number | string | null
+  >(null);
+  const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailSaving, setDetailSaving] = useState(false);
+  const [busyTicketIds, setBusyTicketIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [toast, setToast] = useState<string | null>(null);
+
+  const listRequestIdRef = useRef(0);
+  const listControllerRef = useRef<AbortController | null>(null);
+  const detailRequestIdRef = useRef(0);
+  const detailControllerRef = useRef<AbortController | null>(null);
+  const organizationKeyRef = useRef(String(organizationId ?? ""));
+  const newTicketButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  organizationKeyRef.current = String(organizationId ?? "");
 
   const permissionContext = useMemo(
     () => ({
@@ -53,85 +142,292 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
   const canView = can(user, PERMISSION.TICKET_VIEW, permissionContext);
   const canCreate = can(user, PERMISSION.TICKET_CREATE, permissionContext);
   const canManage = can(user, PERMISSION.TICKET_MANAGE, permissionContext);
+  const canUpload = canCreate || canManage;
 
-  const openTicketsCount = tickets.filter((ticket) =>
-    ["open", "new", "pending"].includes(ticket.status),
-  ).length;
-  const inReviewCount = tickets.filter((ticket) =>
-    ["in_review", "review", "in_progress"].includes(ticket.status),
-  ).length;
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setDebouncedFilters(filters),
+      filters.q === debouncedFilters.q ? 0 : 250,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [debouncedFilters.q, filters]);
 
-  async function loadTickets({ background = false } = {}) {
-    if (!organizationId || !canView) {
-      setTickets([]);
-      return;
-    }
+  useEffect(() => {
+    setViewMode(storedViewMode(organizationId));
+  }, [organizationId]);
 
-    if (background) setRefreshing(true);
-    else setInitialLoading(true);
-    setError(null);
+  useEffect(() => {
+    if (!organizationId || typeof window === "undefined") return;
+    window.localStorage.setItem(
+      `maono:ticket-view:${organizationId}`,
+      viewMode,
+    );
+  }, [organizationId, viewMode]);
 
-    try {
-      const response = await listOrganizationTickets(organizationId);
-      setTickets(response.tickets ?? []);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível carregar os chamados.",
-      );
-    } finally {
-      if (background) setRefreshing(false);
-      else setInitialLoading(false);
-    }
-  }
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = window.setTimeout(() => setToast(null), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  const loadTicketsPage = useCallback(
+    async (
+      targetPage = 1,
+      options: { append?: boolean; background?: boolean } = {},
+    ) => {
+      if (!organizationId || !canView) {
+        setTickets([]);
+        return;
+      }
+
+      listRequestIdRef.current += 1;
+      const requestId = listRequestIdRef.current;
+      const requestOrganizationKey = String(organizationId);
+      listControllerRef.current?.abort();
+      const controller = new AbortController();
+      listControllerRef.current = controller;
+
+      if (options.background || options.append || targetPage > 1) {
+        setRefreshing(true);
+      } else {
+        setInitialLoading(true);
+      }
+      setError(null);
+
+      try {
+        const response = await listTickets(
+          organizationId,
+          debouncedFilters,
+          targetPage,
+          controller.signal,
+          {
+            limit: viewMode === "list" ? 50 : 100,
+            includeUndated: viewMode === "calendar",
+          },
+        );
+
+        if (
+          requestId !== listRequestIdRef.current ||
+          requestOrganizationKey !== organizationKeyRef.current
+        ) {
+          return;
+        }
+
+        setTickets((current) =>
+          options.append
+            ? mergeTickets(current, response.tickets)
+            : response.tickets,
+        );
+        setFacets(response.facets);
+        setPagination(response.pagination);
+        setAssignees(response.assignees);
+      } catch (requestError) {
+        if (
+          requestError instanceof DOMException &&
+          requestError.name === "AbortError"
+        ) {
+          return;
+        }
+        if (
+          requestId !== listRequestIdRef.current ||
+          requestOrganizationKey !== organizationKeyRef.current
+        ) {
+          return;
+        }
+
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Não foi possível carregar os chamados.",
+        );
+      } finally {
+        if (
+          requestId === listRequestIdRef.current &&
+          requestOrganizationKey === organizationKeyRef.current
+        ) {
+          setInitialLoading(false);
+          setRefreshing(false);
+          listControllerRef.current = null;
+        }
+      }
+    },
+    [canView, debouncedFilters, organizationId, viewMode],
+  );
 
   useEffect(() => {
     setTickets([]);
-    void loadTickets();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId, canView]);
+    setPagination(EMPTY_PAGINATION);
+    setFacets(EMPTY_FACETS);
+    void loadTicketsPage(1);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!organizationId || !canCreate) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await createOrganizationTicket(organizationId, form);
-      setForm(INITIAL_FORM);
-      await loadTickets({ background: true });
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível criar o chamado.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
+    return () => {
+      listRequestIdRef.current += 1;
+      listControllerRef.current?.abort();
+    };
+  }, [loadTicketsPage]);
 
-  async function handleStatusChange(ticket: OrganizationTicket, status: string) {
-    if (!organizationId || !canManage) return;
-    setError(null);
+  const loadDetail = useCallback(
+    async (ticketId: number | string) => {
+      if (!organizationId) return;
+
+      detailRequestIdRef.current += 1;
+      const requestId = detailRequestIdRef.current;
+      const requestOrganizationKey = String(organizationId);
+      detailControllerRef.current?.abort();
+      const controller = new AbortController();
+      detailControllerRef.current = controller;
+
+      setDetailLoading(true);
+      setDetailError(null);
+
+      try {
+        const response = await getTicketDetails(
+          organizationId,
+          ticketId,
+          controller.signal,
+        );
+
+        if (
+          requestId !== detailRequestIdRef.current ||
+          requestOrganizationKey !== organizationKeyRef.current
+        ) {
+          return;
+        }
+
+        setDetail(response);
+      } catch (requestError) {
+        if (
+          requestError instanceof DOMException &&
+          requestError.name === "AbortError"
+        ) {
+          return;
+        }
+        if (
+          requestId !== detailRequestIdRef.current ||
+          requestOrganizationKey !== organizationKeyRef.current
+        ) {
+          return;
+        }
+
+        setDetailError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Não foi possível carregar o chamado.",
+        );
+      } finally {
+        if (requestId === detailRequestIdRef.current) {
+          setDetailLoading(false);
+          detailControllerRef.current = null;
+        }
+      }
+    },
+    [organizationId],
+  );
+
+  const openTicket = useCallback(
+    (ticket: Ticket) => {
+      setSelectedTicketId(ticket.id);
+      setDetail(null);
+      void loadDetail(ticket.id);
+    },
+    [loadDetail],
+  );
+
+  const closeDetail = useCallback(() => {
+    detailRequestIdRef.current += 1;
+    detailControllerRef.current?.abort();
+    setSelectedTicketId(null);
+    setDetail(null);
+    setDetailError(null);
+  }, []);
+
+  const closeNewTicket = useCallback(() => {
+    setNewTicketOpen(false);
+  }, []);
+
+  async function changeStatus(ticket: Ticket, status: TicketStatus) {
+    if (!organizationId || !canManage || ticket.status === status) return;
+
+    const previous = ticket;
+    const ticketKey = String(ticket.id);
+    const requestOrganizationKey = String(organizationId);
+    setBusyTicketIds((current) => new Set(current).add(ticketKey));
     setTickets((current) =>
       current.map((item) =>
-        String(item.id) === String(ticket.id) ? { ...item, status } : item,
+        String(item.id) === ticketKey ? { ...item, status } : item,
       ),
     );
+    setError(null);
+
     try {
-      await updateOrganizationTicket(organizationId, ticket.id, { status });
-      await loadTickets({ background: true });
+      const updated = await updateTicket(
+        organizationId,
+        ticket.id,
+        { status },
+      );
+      if (requestOrganizationKey !== organizationKeyRef.current) return;
+      setTickets((current) => replaceTicket(current, updated));
+      if (String(selectedTicketId) === ticketKey) {
+        void loadDetail(ticket.id);
+      }
     } catch (requestError) {
+      if (requestOrganizationKey !== organizationKeyRef.current) return;
+      setTickets((current) => replaceTicket(current, previous));
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Não foi possível atualizar o chamado.",
+          : "Não foi possível alterar a situação.",
       );
-      await loadTickets({ background: true });
+    } finally {
+      if (requestOrganizationKey === organizationKeyRef.current) {
+        setBusyTicketIds((current) => {
+          const next = new Set(current);
+          next.delete(ticketKey);
+          return next;
+        });
+      }
     }
   }
+
+  async function updateSelectedTicket(payload: UpdateTicketPayload) {
+    if (!organizationId || !selectedTicketId || !canManage) return;
+
+    setDetailSaving(true);
+    const requestOrganizationKey = String(organizationId);
+    try {
+      const updated = await updateTicket(
+        organizationId,
+        selectedTicketId,
+        payload,
+      );
+      if (requestOrganizationKey !== organizationKeyRef.current) return;
+      setTickets((current) => replaceTicket(current, updated));
+      await loadDetail(selectedTicketId);
+      setToast(`${updated.code} atualizado com sucesso.`);
+    } finally {
+      if (requestOrganizationKey === organizationKeyRef.current) {
+        setDetailSaving(false);
+      }
+    }
+  }
+
+  function handleCreated(ticket: Ticket, failedFiles: File[]) {
+    setTickets((current) => replaceTicket(current, ticket));
+    setToast(
+      failedFiles.length > 0
+        ? `${ticket.code} criado; ${failedFiles.length} anexo(s) aguardam nova tentativa.`
+        : `${ticket.code} criado com sucesso.`,
+    );
+    void loadTicketsPage(1, { background: true });
+  }
+
+  const handleCalendarRange = useCallback((from: string, to: string) => {
+    setFilters((current) =>
+      current.from === from && current.to === to
+        ? current
+        : { ...current, from, to, sort: "due_asc" },
+    );
+  }, []);
 
   if (!organizationId) {
     return (
@@ -151,104 +447,226 @@ export default function TicketsSection({ user, organizationId }: TicketsSectionP
     );
   }
 
+  const openCount =
+    facets.byStatus.new + facets.byStatus.open;
   const showInitialSkeleton = initialLoading && tickets.length === 0;
 
   return (
-    <section className="mm-card mm-section-card">
-      <h2>Central de Chamados</h2>
-      <p>
-        Espaço para solicitações de novos mapas, envio de bases, revisão de
-        previews e suporte operacional.
-      </p>
+    <section className="ticket-center-shell">
+      <TicketsToolbar
+        organizationId={organizationId}
+        filters={filters}
+        assignees={assignees}
+        viewMode={viewMode}
+        canCreate={canCreate}
+        onFiltersChange={setFilters}
+        onViewModeChange={setViewMode}
+        onNewTicket={() => setNewTicketOpen(true)}
+        newTicketButtonRef={newTicketButtonRef}
+      />
 
       {showInitialSkeleton ? (
-        <MetricsSkeleton count={3} />
+        <MetricsSkeleton count={5} />
       ) : (
-        <div className="mm-metrics-grid compact" aria-busy={refreshing}>
-          <article className="mm-card metric"><span>Chamados abertos</span><strong>{openTicketsCount}</strong></article>
-          <article className="mm-card metric"><span>Total de chamados</span><strong>{tickets.length}</strong></article>
-          <article className="mm-card metric"><span>Em revisão</span><strong>{inReviewCount}</strong></article>
-        </div>
+        <section
+          className="ticket-metrics"
+          aria-label="Resumo dos chamados"
+          aria-busy={refreshing}
+        >
+          <button
+            type="button"
+            className={filters.status === "open" ? "is-active" : ""}
+            onClick={() =>
+              setFilters((current) => ({ ...current, status: "open" }))
+            }
+          >
+            <span>Abertos</span>
+            <strong>{openCount}</strong>
+          </button>
+          <button
+            type="button"
+            className={filters.status === "in_progress" ? "is-active" : ""}
+            onClick={() =>
+              setFilters((current) => ({
+                ...current,
+                status: "in_progress",
+              }))
+            }
+          >
+            <span>Em andamento</span>
+            <strong>{facets.byStatus.in_progress}</strong>
+          </button>
+          <button
+            type="button"
+            className={filters.status === "in_review" ? "is-active" : ""}
+            onClick={() =>
+              setFilters((current) => ({
+                ...current,
+                status: "in_review",
+              }))
+            }
+          >
+            <span>Em revisão</span>
+            <strong>{facets.byStatus.in_review}</strong>
+          </button>
+          <article>
+            <span>Vencidos</span>
+            <strong>{facets.overdue}</strong>
+          </article>
+          <button
+            type="button"
+            className={filters.status === "closed" ? "is-active" : ""}
+            onClick={() =>
+              setFilters((current) => ({ ...current, status: "closed" }))
+            }
+          >
+            <span>Concluídos</span>
+            <strong>{facets.byStatus.closed}</strong>
+          </button>
+        </section>
       )}
 
-      {error ? <p className="mm-error-text">{error}</p> : null}
-
-      {canCreate ? (
-        <form className="projects-inline-form" onSubmit={handleSubmit}>
-          <label>
-            Assunto
-            <input
-              value={form.subject}
-              maxLength={160}
-              required
-              onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
-            />
-          </label>
-          <label>
-            Descrição
-            <textarea
-              value={form.description}
-              maxLength={5000}
-              required
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-            />
-          </label>
-          <label>
-            Prioridade
-            <select
-              value={form.priority}
-              onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}
-            >
-              <option value="low">Baixa</option>
-              <option value="normal">Normal</option>
-              <option value="high">Alta</option>
-            </select>
-          </label>
-          <button type="submit" className="mm-button" disabled={saving}>
-            {saving ? "Criando..." : "Criar chamado"}
+      {error ? (
+        <div className="ticket-error-banner" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={() => void loadTicketsPage(1)}>
+            Tentar novamente
           </button>
-        </form>
+        </div>
       ) : null}
 
-      {showInitialSkeleton ? (
-        <TableSkeleton headers={TICKET_HEADERS} rows={5} />
-      ) : tickets.length === 0 ? (
-        <div className="projects-empty-state">Nenhum chamado encontrado para esta organização.</div>
-      ) : (
-        <div className="mm-table-wrap" aria-busy={refreshing}>
-          <table>
-            <thead>
-              <tr>{TICKET_HEADERS.map((header) => <th key={header}>{header}</th>)}</tr>
-            </thead>
-            <tbody>
-              {tickets.map((ticket) => (
-                <tr key={ticket.id}>
-                  <td>{ticket.subject}</td>
-                  <td>{ticket.status}</td>
-                  <td>{ticket.priority || "normal"}</td>
-                  <td>{formatDate(ticket.createdAt)}</td>
-                  <td>
-                    {canManage ? (
-                      <select
-                        value={ticket.status}
-                        onChange={(event) => void handleStatusChange(ticket, event.target.value)}
-                      >
-                        <option value="open">Aberto</option>
-                        <option value="in_progress">Em andamento</option>
-                        <option value="in_review">Em revisão</option>
-                        <option value="closed">Fechado</option>
-                      </select>
-                    ) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {refreshing ? (
-            <span className="mm-sr-only" role="status">Atualizando chamados.</span>
-          ) : null}
+      <div
+        className="ticket-view-region"
+        aria-busy={initialLoading || refreshing}
+      >
+        {showInitialSkeleton ? (
+          viewMode === "list" ? (
+            <TableSkeleton headers={TICKET_LIST_HEADERS} rows={7} />
+          ) : (
+            <div className={`ticket-view-skeleton mode-${viewMode}`}>
+              {Array.from({ length: viewMode === "kanban" ? 4 : 12 }).map(
+                (_, index) => (
+                  <span key={index} />
+                ),
+              )}
+              <p className="mm-sr-only" role="status">
+                Carregando chamados.
+              </p>
+            </div>
+          )
+        ) : tickets.length === 0 ? (
+          <div className="ticket-empty-state">
+            <span aria-hidden="true">▧</span>
+            <h3>Nenhum chamado encontrado</h3>
+            <p>
+              Ajuste os filtros ou registre a primeira solicitação desta
+              organização.
+            </p>
+            {canCreate ? (
+              <button
+                type="button"
+                className="ticket-primary-action"
+                onClick={() => setNewTicketOpen(true)}
+              >
+                Novo chamado
+              </button>
+            ) : null}
+          </div>
+        ) : viewMode === "list" ? (
+          <TicketListView
+            tickets={tickets}
+            pagination={pagination}
+            canManage={canManage}
+            busyTicketIds={busyTicketIds}
+            onOpen={openTicket}
+            onStatusChange={(ticket, status) =>
+              void changeStatus(ticket, status)
+            }
+            onPageChange={(targetPage) =>
+              void loadTicketsPage(targetPage, { background: true })
+            }
+          />
+        ) : viewMode === "kanban" ? (
+          <TicketKanbanView
+            tickets={tickets}
+            canManage={canManage}
+            busyTicketIds={busyTicketIds}
+            onOpen={openTicket}
+            onStatusChange={(ticket, status) =>
+              void changeStatus(ticket, status)
+            }
+          />
+        ) : (
+          <TicketCalendarView
+            tickets={tickets}
+            onOpen={openTicket}
+            onRangeChange={handleCalendarRange}
+          />
+        )}
+
+        {!showInitialSkeleton &&
+        viewMode !== "list" &&
+        pagination.hasMore ? (
+          <button
+            type="button"
+            className="ticket-load-more"
+            disabled={refreshing}
+            onClick={() =>
+              void loadTicketsPage(pagination.page + 1, {
+                append: true,
+                background: true,
+              })
+            }
+          >
+            {refreshing ? "Carregando..." : "Carregar mais chamados"}
+          </button>
+        ) : null}
+      </div>
+
+      {refreshing ? (
+        <span className="mm-sr-only" role="status">
+          Atualizando chamados.
+        </span>
+      ) : null}
+
+      {toast ? (
+        <div className="ticket-toast" role="status">
+          {toast}
         </div>
-      )}
+      ) : null}
+
+      <NewTicketPopover
+        open={newTicketOpen}
+        organizationId={organizationId}
+        assignees={assignees}
+        canManage={canManage}
+        onClose={closeNewTicket}
+        onCreated={handleCreated}
+      />
+
+      <TicketDetailDrawer
+        open={selectedTicketId !== null}
+        organizationId={organizationId}
+        detail={detail}
+        loading={detailLoading}
+        error={detailError}
+        saving={detailSaving}
+        canManage={canManage}
+        canUpload={canUpload}
+        currentUserId={user?.id}
+        onClose={closeDetail}
+        onRetry={() => {
+          if (selectedTicketId) void loadDetail(selectedTicketId);
+        }}
+        onReload={() => {
+          if (selectedTicketId) {
+            void loadDetail(selectedTicketId);
+            void loadTicketsPage(pagination.page, { background: true });
+          }
+        }}
+        onUpdate={updateSelectedTicket}
+      />
     </section>
   );
 }
+

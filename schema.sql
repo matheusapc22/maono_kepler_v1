@@ -140,6 +140,85 @@ CREATE INDEX IF NOT EXISTS idx_projects_organization_id ON projects(organization
 CREATE INDEX IF NOT EXISTS idx_projects_organization_file_id ON projects(organization_file_id);
 CREATE INDEX IF NOT EXISTS idx_user_projects_user_id ON user_projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_projects_project_id ON user_projects(project_id);
+
+-- Central de Chamados (migration 0010_ticket_center.sql)
+CREATE TABLE IF NOT EXISTS organization_tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  organization_id INTEGER NOT NULL,
+  legacy_ticket_id INTEGER,
+  code TEXT UNIQUE,
+  subject TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new'
+    CHECK (status IN ('new', 'open', 'in_progress', 'in_review', 'closed')),
+  priority TEXT NOT NULL DEFAULT 'normal'
+    CHECK (priority IN ('low', 'normal', 'high')),
+  category TEXT NOT NULL DEFAULT 'support'
+    CHECK (category IN ('map', 'database', 'permission', 'export', 'support', 'other')),
+  assigned_to INTEGER,
+  due_at TEXT,
+  closed_at TEXT,
+  created_by INTEGER NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (organization_id, legacy_ticket_id),
+  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS ticket_attachments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  organization_id INTEGER NOT NULL,
+  ticket_id INTEGER NOT NULL,
+  original_name TEXT NOT NULL,
+  stored_name TEXT NOT NULL,
+  storage_key TEXT NOT NULL UNIQUE,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING'
+    CHECK (status IN ('PENDING', 'ACTIVE', 'FAILED', 'DELETED')),
+  uploaded_by INTEGER NOT NULL,
+  dropbox_file_id TEXT,
+  dropbox_rev TEXT,
+  error_message TEXT,
+  deleted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  FOREIGN KEY (ticket_id) REFERENCES organization_tickets(id) ON DELETE CASCADE,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS ticket_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  organization_id INTEGER NOT NULL,
+  ticket_id INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  actor_user_id INTEGER,
+  metadata TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  FOREIGN KEY (ticket_id) REFERENCES organization_tickets(id) ON DELETE CASCADE,
+  FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_organization_tickets_org_status
+  ON organization_tickets(organization_id, status);
+CREATE INDEX IF NOT EXISTS idx_organization_tickets_org_due
+  ON organization_tickets(organization_id, due_at);
+CREATE INDEX IF NOT EXISTS idx_organization_tickets_updated
+  ON organization_tickets(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_organization_tickets_assignee
+  ON organization_tickets(organization_id, assigned_to);
+CREATE INDEX IF NOT EXISTS idx_ticket_attachments_scope
+  ON ticket_attachments(organization_id, ticket_id, status);
+CREATE INDEX IF NOT EXISTS idx_ticket_attachments_uploaded_by
+  ON ticket_attachments(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_ticket_events_scope
+  ON ticket_events(organization_id, ticket_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_project_id ON audit_logs(project_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);

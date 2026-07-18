@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   "ticket.create",
   "ticket.comment",
   "ticket.manage",
+  "ticket.manage",
   "ticket.close",
   "ticket.assign",
 
