@@ -20,14 +20,19 @@ import TicketListView, {
   TICKET_LIST_HEADERS,
 } from "./TicketListView";
 import TicketsToolbar from "./TicketsToolbar";
+import TicketErrorNotice from "./TicketErrorNotice";
 import {
   getTicketDetails,
   listTickets,
+  TicketApiError,
+  toTicketApiError,
   updateTicket,
 } from "./tickets-api";
 import {
+  DEFAULT_TICKET_ATTACHMENT_LIMITS,
   DEFAULT_TICKET_FILTERS,
   type Ticket,
+  type TicketAttachmentLimits,
   type TicketDetailResponse,
   type TicketFacets,
   type TicketFilters,
@@ -40,6 +45,7 @@ import {
 type TicketsSectionProps = {
   user?: AccessControlUser | null;
   organizationId?: number | string | null;
+  organizationName?: string | null;
 };
 
 const EMPTY_FACETS: TicketFacets = {
@@ -89,6 +95,7 @@ function storedViewMode(organizationId: number | string | null | undefined) {
 export default function TicketsSection({
   user,
   organizationId,
+  organizationName,
 }: TicketsSectionProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [filters, setFilters] = useState<TicketFilters>(
@@ -103,19 +110,21 @@ export default function TicketsSection({
   const [assignees, setAssignees] = useState<
     TicketDetailResponse["assignees"]
   >([]);
+  const [attachmentLimits, setAttachmentLimits] =
+    useState<TicketAttachmentLimits>(DEFAULT_TICKET_ATTACHMENT_LIMITS);
   const [viewMode, setViewMode] = useState<TicketViewMode>(() =>
     storedViewMode(organizationId),
   );
   const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<TicketApiError | null>(null);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<
     number | string | null
   >(null);
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<TicketApiError | null>(null);
   const [detailSaving, setDetailSaving] = useState(false);
   const [busyTicketIds, setBusyTicketIds] = useState<Set<string>>(
     () => new Set(),
@@ -221,6 +230,9 @@ export default function TicketsSection({
         setFacets(response.facets);
         setPagination(response.pagination);
         setAssignees(response.assignees);
+        setAttachmentLimits(
+          response.attachmentLimits || DEFAULT_TICKET_ATTACHMENT_LIMITS,
+        );
       } catch (requestError) {
         if (
           requestError instanceof DOMException &&
@@ -236,9 +248,7 @@ export default function TicketsSection({
         }
 
         setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Não foi possível carregar os chamados.",
+          toTicketApiError(requestError, "Não foi possível carregar os chamados."),
         );
       } finally {
         if (
@@ -295,6 +305,9 @@ export default function TicketsSection({
         }
 
         setDetail(response);
+        setAttachmentLimits(
+          response.attachmentLimits || DEFAULT_TICKET_ATTACHMENT_LIMITS,
+        );
       } catch (requestError) {
         if (
           requestError instanceof DOMException &&
@@ -310,9 +323,7 @@ export default function TicketsSection({
         }
 
         setDetailError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Não foi possível carregar o chamado.",
+          toTicketApiError(requestError, "Não foi possível carregar o chamado."),
         );
       } finally {
         if (requestId === detailRequestIdRef.current) {
@@ -374,9 +385,7 @@ export default function TicketsSection({
       if (requestOrganizationKey !== organizationKeyRef.current) return;
       setTickets((current) => replaceTicket(current, previous));
       setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível alterar a situação.",
+        toTicketApiError(requestError, "Não foi possível alterar a situação."),
       );
     } finally {
       if (requestOrganizationKey === organizationKeyRef.current) {
@@ -455,6 +464,7 @@ export default function TicketsSection({
     <section className="ticket-center-shell">
       <TicketsToolbar
         organizationId={organizationId}
+        organizationName={organizationName}
         filters={filters}
         assignees={assignees}
         viewMode={viewMode}
@@ -476,8 +486,13 @@ export default function TicketsSection({
           <button
             type="button"
             className={filters.status === "open" ? "is-active" : ""}
+            aria-pressed={filters.status === "open" && !filters.overdueOnly}
             onClick={() =>
-              setFilters((current) => ({ ...current, status: "open" }))
+              setFilters((current) => ({
+                ...current,
+                status: current.status === "open" && !current.overdueOnly ? "" : "open",
+                overdueOnly: false,
+              }))
             }
           >
             <span>Abertos</span>
@@ -486,10 +501,12 @@ export default function TicketsSection({
           <button
             type="button"
             className={filters.status === "in_progress" ? "is-active" : ""}
+            aria-pressed={filters.status === "in_progress" && !filters.overdueOnly}
             onClick={() =>
               setFilters((current) => ({
                 ...current,
                 status: "in_progress",
+                overdueOnly: false,
               }))
             }
           >
@@ -499,25 +516,43 @@ export default function TicketsSection({
           <button
             type="button"
             className={filters.status === "in_review" ? "is-active" : ""}
+            aria-pressed={filters.status === "in_review" && !filters.overdueOnly}
             onClick={() =>
               setFilters((current) => ({
                 ...current,
                 status: "in_review",
+                overdueOnly: false,
               }))
             }
           >
             <span>Em revisão</span>
             <strong>{facets.byStatus.in_review}</strong>
           </button>
-          <article>
+          <button
+            type="button"
+            className={filters.overdueOnly ? "is-active" : ""}
+            aria-pressed={filters.overdueOnly}
+            onClick={() =>
+              setFilters((current) => ({
+                ...current,
+                status: "",
+                overdueOnly: !current.overdueOnly,
+              }))
+            }
+          >
             <span>Vencidos</span>
             <strong>{facets.overdue}</strong>
-          </article>
+          </button>
           <button
             type="button"
             className={filters.status === "closed" ? "is-active" : ""}
+            aria-pressed={filters.status === "closed" && !filters.overdueOnly}
             onClick={() =>
-              setFilters((current) => ({ ...current, status: "closed" }))
+              setFilters((current) => ({
+                ...current,
+                status: "closed",
+                overdueOnly: false,
+              }))
             }
           >
             <span>Concluídos</span>
@@ -527,12 +562,10 @@ export default function TicketsSection({
       )}
 
       {error ? (
-        <div className="ticket-error-banner" role="alert">
-          <span>{error}</span>
-          <button type="button" onClick={() => void loadTicketsPage(1)}>
-            Tentar novamente
-          </button>
-        </div>
+        <TicketErrorNotice
+          error={error}
+          onRetry={() => void loadTicketsPage(1)}
+        />
       ) : null}
 
       <div
@@ -640,6 +673,7 @@ export default function TicketsSection({
         organizationId={organizationId}
         assignees={assignees}
         canManage={canManage}
+        attachmentLimits={attachmentLimits}
         onClose={closeNewTicket}
         onCreated={handleCreated}
       />
@@ -653,6 +687,7 @@ export default function TicketsSection({
         saving={detailSaving}
         canManage={canManage}
         canUpload={canUpload}
+        attachmentLimits={attachmentLimits}
         currentUserId={user?.id}
         onClose={closeDetail}
         onRetry={() => {
@@ -669,4 +704,3 @@ export default function TicketsSection({
     </section>
   );
 }
-

@@ -2,14 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createTicket,
+  TicketApiError,
+  toTicketApiError,
   uploadTicketAttachment,
 } from "./tickets-api";
+import TicketErrorNotice from "./TicketErrorNotice";
 import { dateInputToIso } from "./ticket-format";
 import {
   CATEGORY_LABELS,
   PRIORITY_LABELS,
   type CreateTicketPayload,
   type Ticket,
+  type TicketAttachmentLimits,
   type TicketCategory,
   type TicketPerson,
   type TicketPriority,
@@ -20,14 +24,15 @@ type NewTicketPopoverProps = {
   organizationId: number | string;
   assignees: TicketPerson[];
   canManage: boolean;
+  attachmentLimits: TicketAttachmentLimits;
   onClose: () => void;
   onCreated: (ticket: Ticket, failedFiles: File[]) => void;
 };
 
 type UploadState = {
   progress: number;
-  status: "queued" | "uploading" | "done" | "failed";
-  error?: string;
+  status: "queued" | "uploading" | "finalizing" | "done" | "failed";
+  error?: TicketApiError;
 };
 
 const INITIAL_FORM = {
@@ -52,20 +57,26 @@ const ALLOWED_EXTENSIONS = [
   "docx",
   "txt",
 ];
-const MAX_FILE_BYTES = 80 * 1024 * 1024;
-const MAX_TICKET_BYTES = 150 * 1024 * 1024;
-
 function fileExtension(file: File) {
   return file.name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
 }
 
-function validateFiles(files: File[]) {
-  if (files.length > 5) return "Selecione no máximo 5 arquivos.";
-  if (files.some((file) => file.size > MAX_FILE_BYTES)) {
-    return "Cada arquivo pode ter no máximo 80 MB.";
+function megabytes(bytes: number) {
+  return Math.round(bytes / 1024 / 1024);
+}
+
+function validateFiles(files: File[], limits: TicketAttachmentLimits) {
+  if (files.length > limits.maxFiles) {
+    return `Selecione no máximo ${limits.maxFiles} arquivos.`;
   }
-  if (files.reduce((total, file) => total + file.size, 0) > MAX_TICKET_BYTES) {
-    return "Os arquivos não podem ultrapassar 150 MB no total.";
+  if (files.some((file) => file.size > limits.maxFileBytes)) {
+    return `Cada arquivo pode ter no máximo ${megabytes(limits.maxFileBytes)} MB.`;
+  }
+  if (
+    files.reduce((total, file) => total + file.size, 0) >
+    limits.maxTicketBytes
+  ) {
+    return `Os arquivos não podem ultrapassar ${megabytes(limits.maxTicketBytes)} MB no total.`;
   }
   if (files.some((file) => !ALLOWED_EXTENSIONS.includes(fileExtension(file)))) {
     return "Há um arquivo com tipo não permitido.";
@@ -82,6 +93,7 @@ export default function NewTicketPopover({
   organizationId,
   assignees,
   canManage,
+  attachmentLimits,
   onClose,
   onCreated,
 }: NewTicketPopoverProps) {
@@ -95,13 +107,15 @@ export default function NewTicketPopover({
   const [phase, setPhase] = useState<
     "idle" | "creating" | "uploading" | "partial"
   >("idle");
-  const [error, setError] = useState<string | null>(null);
+  const [retryingFileKey, setRetryingFileKey] = useState<string | null>(null);
+  const [error, setError] = useState<TicketApiError | string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const busyRef = useRef(false);
 
-  const busy = phase === "creating" || phase === "uploading";
+  const busy =
+    phase === "creating" || phase === "uploading" || retryingFileKey !== null;
   busyRef.current = busy;
   const totalBytes = useMemo(
     () => files.reduce((total, file) => total + file.size, 0),
@@ -168,6 +182,7 @@ export default function NewTicketPopover({
     setCreatedTicket(null);
     setUploadStates({});
     setPhase("idle");
+    setRetryingFileKey(null);
     setError(null);
     onClose();
   }
@@ -199,7 +214,21 @@ export default function NewTicketPopover({
           onProgress: (progress) =>
             setUploadStates((current) => ({
               ...current,
-              [key]: { progress, status: "uploading" },
+              [key]: {
+                progress,
+                status:
+                  current[key]?.status === "finalizing"
+                    ? "finalizing"
+                    : "uploading",
+              },
+            })),
+          onStage: (stage) =>
+            setUploadStates((current) => ({
+              ...current,
+              [key]: {
+                progress: current[key]?.progress || 0,
+                status: stage,
+              },
             })),
         });
         setUploadStates((current) => ({
@@ -219,10 +248,7 @@ export default function NewTicketPopover({
           [key]: {
             progress: current[key]?.progress || 0,
             status: "failed",
-            error:
-              uploadError instanceof Error
-                ? uploadError.message
-                : "Falha no envio.",
+            error: toTicketApiError(uploadError, "Falha no envio."),
           },
         }));
       }
@@ -242,11 +268,73 @@ export default function NewTicketPopover({
     }
   }
 
+  async function retryFile(ticket: Ticket, file: File) {
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    if (retryingFileKey) return;
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setRetryingFileKey(key);
+    setUploadStates((current) => ({
+      ...current,
+      [key]: { progress: 0, status: "uploading" },
+    }));
+
+    try {
+      await uploadTicketAttachment(organizationId, ticket.id, file, {
+        signal: controller.signal,
+        onProgress: (progress) =>
+          setUploadStates((current) => ({
+            ...current,
+            [key]: {
+              progress,
+              status:
+                current[key]?.status === "finalizing"
+                  ? "finalizing"
+                  : "uploading",
+            },
+          })),
+        onStage: (stage) =>
+          setUploadStates((current) => ({
+            ...current,
+            [key]: {
+              progress: current[key]?.progress || 0,
+              status: stage,
+            },
+          })),
+      });
+      setUploadStates((current) => ({
+        ...current,
+        [key]: { progress: 100, status: "done" },
+      }));
+      const remaining = failedFiles.filter((item) => item !== file);
+      setFailedFiles(remaining);
+      onCreated(ticket, remaining);
+      if (remaining.length === 0) resetAndClose();
+    } catch (uploadError) {
+      if (!(uploadError instanceof DOMException && uploadError.name === "AbortError")) {
+        setUploadStates((current) => ({
+          ...current,
+          [key]: {
+            progress: current[key]?.progress || 0,
+            status: "failed",
+            error: toTicketApiError(uploadError, "Falha no envio."),
+          },
+        }));
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setRetryingFileKey(null);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || createdTicket) return;
 
-    const fileError = validateFiles(files);
+    const fileError = validateFiles(files, attachmentLimits);
     if (fileError) {
       setError(fileError);
       return;
@@ -284,9 +372,7 @@ export default function NewTicketPopover({
       }
       setPhase("idle");
       setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível criar o chamado.",
+        toTicketApiError(requestError, "Não foi possível criar o chamado."),
       );
     } finally {
       if (abortControllerRef.current === controller) {
@@ -334,7 +420,36 @@ export default function NewTicketPopover({
         {createdTicket && phase === "partial" ? (
           <section className="ticket-partial-upload" role="status">
             <strong>{createdTicket.code} foi criado.</strong>
-            <p>{error}</p>
+            {error ? <TicketErrorNotice error={error} compact /> : null}
+            <ul className="ticket-partial-files" aria-label="Anexos com falha">
+              {failedFiles.map((file) => {
+                const key = `${file.name}:${file.size}:${file.lastModified}`;
+                const fileError = uploadStates[key]?.error;
+                return (
+                  <li key={key}>
+                    <span>
+                      <strong>{file.name}</strong>
+                      <small>{(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                    </span>
+                    {fileError ? (
+                      <TicketErrorNotice error={fileError} compact />
+                    ) : null}
+                    <button
+                      type="button"
+                      className="ticket-secondary-action"
+                      disabled={retryingFileKey !== null}
+                      onClick={() => void retryFile(createdTicket, file)}
+                    >
+                      {retryingFileKey === key
+                        ? uploadStates[key]?.status === "finalizing"
+                          ? "Finalizando..."
+                          : `${uploadStates[key]?.progress || 0}%`
+                        : "Tentar novamente este arquivo"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
             <div className="ticket-panel-actions">
               <button
                 type="button"
@@ -471,13 +586,15 @@ export default function NewTicketPopover({
                   const nextFiles = Array.from(event.target.files || []);
                   setFiles(nextFiles);
                   setUploadStates({});
-                  setError(validateFiles(nextFiles));
+                  setError(validateFiles(nextFiles, attachmentLimits));
                 }}
               />
               <span aria-hidden="true">⇧</span>
               <strong>Adicionar anexos</strong>
               <small>
-                Até 5 arquivos · 80 MB cada · 150 MB no total
+                Até {attachmentLimits.maxFiles} arquivos ·{" "}
+                {megabytes(attachmentLimits.maxFileBytes)} MB cada ·{" "}
+                {megabytes(attachmentLimits.maxTicketBytes)} MB no total
               </small>
             </label>
 
@@ -497,9 +614,11 @@ export default function NewTicketPopover({
                       </div>
                       <small>
                         {state?.status === "failed"
-                          ? state.error
+                          ? state.error?.message
                           : state?.status === "done"
                             ? "Concluído"
+                            : state?.status === "finalizing"
+                              ? "Finalizando anexo..."
                             : state?.status === "uploading"
                               ? `${state.progress}%`
                               : "Na fila"}
@@ -516,9 +635,9 @@ export default function NewTicketPopover({
             </div>
 
             {error ? (
-              <p className="ticket-form-error ticket-field-wide" role="alert">
-                {error}
-              </p>
+              <div className="ticket-field-wide">
+                <TicketErrorNotice error={error} compact />
+              </div>
             ) : null}
 
             <div className="ticket-panel-actions ticket-field-wide">

@@ -3,9 +3,11 @@ import type {
   TicketPerson,
   TicketViewMode,
 } from "./ticket-types";
+import HeadsetIcon from "../../../components/icons/HeadsetIcon";
 
 type TicketsToolbarProps = {
   organizationId: number | string;
+  organizationName?: string | null;
   filters: TicketFilters;
   assignees: TicketPerson[];
   viewMode: TicketViewMode;
@@ -22,6 +24,7 @@ function assigneeLabel(assignee: TicketPerson) {
 
 export default function TicketsToolbar({
   organizationId,
+  organizationName,
   filters,
   assignees,
   viewMode,
@@ -45,15 +48,19 @@ export default function TicketsToolbar({
   return (
     <>
       <header className="ticket-center-header">
+        <span className="ticket-center-headset" aria-hidden="true">
+          <HeadsetIcon />
+        </span>
         <div className="ticket-center-heading">
-          <div className="ticket-center-heading-meta">
-            <span className="ticket-center-eyebrow">Atendimento operacional</span>
-            <span className="ticket-organization-chip">
-              Organização #{organizationId}
-            </span>
-          </div>
+          <span className="ticket-center-eyebrow">Atendimento operacional</span>
           <h2>Central de Chamados</h2>
-          <p>Consulte, priorize e acompanhe solicitações operacionais.</p>
+          <p>
+            <strong>
+              {organizationName?.trim() || `Organização #${organizationId}`} Workspace
+            </strong>
+            <span aria-hidden="true"> · </span>
+            acompanhe solicitações operacionais
+          </p>
         </div>
 
         <div className="ticket-center-actions">
@@ -105,6 +112,7 @@ export default function TicketsToolbar({
                 assigneeId: "",
                 from: "",
                 to: "",
+                overdueOnly: false,
                 sort: filters.sort,
               })
             }

@@ -64,7 +64,7 @@
 .ticket-center-header {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 24px;
   padding: 22px 24px;
@@ -74,6 +74,23 @@
     radial-gradient(circle at 0 0, rgba(214, 168, 79, 0.12), transparent 38%),
     linear-gradient(145deg, #11151c, #0d1117);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+}
+
+.ticket-center-headset {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(242, 199, 102, 0.4);
+  border-radius: 50%;
+  color: var(--mm-gold-bright);
+  background: rgba(214, 168, 79, 0.08);
+  box-shadow: inset 0 0 0 5px rgba(214, 168, 79, 0.03);
+}
+
+.ticket-center-headset svg {
+  width: 27px;
+  height: 27px;
 }
 
 .ticket-panel-header,
@@ -128,6 +145,11 @@
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.ticket-center-header p strong {
+  color: var(--mm-text-soft);
+  font-weight: 800;
 }
 
 .ticket-center-eyebrow {
@@ -406,7 +428,7 @@
   line-height: 1;
 }
 
-.ticket-error-banner {
+.ticket-error-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -418,12 +440,54 @@
   color: #fecaca;
 }
 
-.ticket-error-banner button {
-  border: 0;
+.ticket-error-notice > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ticket-error-notice strong {
+  color: #fecaca;
+  font-size: 0.78rem;
+}
+
+.ticket-error-notice span {
+  color: #fca5a5;
+  font-size: 0.71rem;
+}
+
+.ticket-error-reference code {
+  user-select: all;
   color: #fff;
-  background: transparent;
-  text-decoration: underline;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ticket-error-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.ticket-error-notice button {
+  min-height: 32px;
+  border: 1px solid rgba(239, 68, 68, 0.34);
+  border-radius: 7px;
+  padding: 6px 9px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+  font-size: 0.69rem;
   cursor: pointer;
+}
+
+.ticket-error-notice.is-compact {
+  align-items: flex-start;
+  padding: 9px 10px;
+}
+
+.ticket-error-notice.is-compact,
+.ticket-error-notice.is-compact .ticket-error-actions {
+  flex-wrap: wrap;
 }
 
 .ticket-view-region {
@@ -464,11 +528,17 @@
   position: sticky;
   z-index: 2;
   top: 0;
-  color: var(--mm-text);
-  background: #151a22;
+  color: #dce5f2;
+  background: #142237;
   font-size: 0.71rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.ticket-list-table thead tr,
+.ticket-list-table thead th:first-child,
+.ticket-list-table thead th:last-child {
+  background: #142237;
 }
 
 .ticket-list-table tbody tr {
@@ -1251,6 +1321,50 @@
   color: var(--mm-text-soft);
 }
 
+.ticket-partial-files {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket-partial-files li {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--mm-border);
+  border-radius: 9px;
+  background: var(--mm-bg-soft);
+}
+
+.ticket-partial-files li > span {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ticket-partial-files li > span strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-partial-files small,
+.ticket-upload-locked {
+  color: var(--mm-muted);
+  font-size: 0.7rem;
+}
+
+.ticket-upload-locked {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--mm-border);
+  border-radius: 7px;
+  background: var(--mm-bg-soft);
+}
+
 .ticket-drawer-overlay {
   justify-content: flex-end;
 }
@@ -1635,11 +1749,21 @@
 
 @media (max-width: 1050px) {
   .ticket-center-header {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: stretch;
   }
 
   .ticket-center-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .ticket-error-notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ticket-error-actions {
     justify-content: flex-end;
   }
 
@@ -2436,6 +2560,12 @@
   text-align: center;
   font-family: "Segoe UI Symbol", "Noto Sans Symbols", "Apple Symbols", Inter, ui-sans-serif, system-ui, sans-serif;
   font-variant-emoji: text;
+}
+
+.mm-sidebar-headset {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .mm-sidebar-label {

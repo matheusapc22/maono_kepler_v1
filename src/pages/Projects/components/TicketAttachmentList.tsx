@@ -3,14 +3,21 @@ import { useRef, useState } from "react";
 import {
   deleteTicketAttachment,
   downloadTicketAttachment,
+  TicketApiError,
+  toTicketApiError,
   uploadTicketAttachment,
 } from "./tickets-api";
+import TicketErrorNotice from "./TicketErrorNotice";
 import {
   formatFileSize,
   formatTicketDateTime,
   ticketPersonName,
 } from "./ticket-format";
-import type { Ticket, TicketAttachment } from "./ticket-types";
+import type {
+  Ticket,
+  TicketAttachment,
+  TicketAttachmentLimits,
+} from "./ticket-types";
 
 type TicketAttachmentListProps = {
   organizationId: number | string;
@@ -18,12 +25,10 @@ type TicketAttachmentListProps = {
   attachments: TicketAttachment[];
   canUpload: boolean;
   canManage: boolean;
+  attachmentLimits: TicketAttachmentLimits;
   currentUserId?: number | string | null;
   onChanged: () => void;
 };
-
-const MAX_FILE_BYTES = 80 * 1024 * 1024;
-const MAX_TICKET_BYTES = 150 * 1024 * 1024;
 
 export default function TicketAttachmentList({
   organizationId,
@@ -31,34 +36,48 @@ export default function TicketAttachmentList({
   attachments,
   canUpload,
   canManage,
+  attachmentLimits,
   currentUserId,
   onChanged,
 }: TicketAttachmentListProps) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStage, setUploadStage] = useState<"uploading" | "finalizing">(
+    "uploading",
+  );
   const [busyAttachmentId, setBusyAttachmentId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<TicketApiError | string | null>(null);
+  const [failedFile, setFailedFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const uploadControllerRef = useRef<AbortController | null>(null);
 
+  const currentBytes = attachments.reduce(
+    (total, attachment) => total + Number(attachment.size || 0),
+    0,
+  );
   const uploadAllowed =
-    canUpload && ticket.status !== "closed" && attachments.length < 5;
+    canUpload &&
+    ticket.status !== "closed" &&
+    attachments.length < attachmentLimits.maxFiles &&
+    currentBytes < attachmentLimits.maxTicketBytes;
 
   async function handleUpload(file: File) {
     if (!uploadAllowed) return;
     setError(null);
-    if (file.size > MAX_FILE_BYTES) {
-      setError("Cada arquivo pode ter no máximo 80 MB.");
+    setFailedFile(null);
+    if (file.size > attachmentLimits.maxFileBytes) {
+      setError(
+        `Cada arquivo pode ter no máximo ${formatFileSize(attachmentLimits.maxFileBytes)}.`,
+      );
       return;
     }
-    const currentBytes = attachments.reduce(
-      (total, attachment) => total + Number(attachment.size || 0),
-      0,
-    );
-    if (currentBytes + file.size > MAX_TICKET_BYTES) {
-      setError("Os anexos do chamado não podem ultrapassar 150 MB.");
+    if (currentBytes + file.size > attachmentLimits.maxTicketBytes) {
+      setError(
+        `Os anexos do chamado não podem ultrapassar ${formatFileSize(attachmentLimits.maxTicketBytes)}.`,
+      );
       return;
     }
     setUploadProgress(0);
+    setUploadStage("uploading");
     const controller = new AbortController();
     uploadControllerRef.current = controller;
 
@@ -66,6 +85,7 @@ export default function TicketAttachmentList({
       await uploadTicketAttachment(organizationId, ticket.id, file, {
         signal: controller.signal,
         onProgress: setUploadProgress,
+        onStage: setUploadStage,
       });
       onChanged();
     } catch (requestError) {
@@ -75,10 +95,9 @@ export default function TicketAttachmentList({
       ) {
         setError("Upload cancelado.");
       } else {
+        setFailedFile(file);
         setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Não foi possível enviar o anexo.",
+          toTicketApiError(requestError, "Não foi possível enviar o anexo."),
         );
       }
     } finally {
@@ -99,9 +118,7 @@ export default function TicketAttachmentList({
       );
     } catch (requestError) {
       setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível baixar o anexo.",
+        toTicketApiError(requestError, "Não foi possível baixar o anexo."),
       );
     } finally {
       setBusyAttachmentId(null);
@@ -120,9 +137,7 @@ export default function TicketAttachmentList({
       onChanged();
     } catch (requestError) {
       setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível excluir o anexo.",
+        toTicketApiError(requestError, "Não foi possível excluir o anexo."),
       );
     } finally {
       setBusyAttachmentId(null);
@@ -135,7 +150,10 @@ export default function TicketAttachmentList({
         <div>
           <h4 id="ticket-attachments-title">Anexos</h4>
           <p>
-            {attachments.length}/5 arquivos · 80 MB por arquivo · 150 MB no total
+            {formatFileSize(currentBytes)} /{" "}
+            {formatFileSize(attachmentLimits.maxTicketBytes)} ·{" "}
+            {attachments.length}/{attachmentLimits.maxFiles} arquivos ·{" "}
+            {formatFileSize(attachmentLimits.maxFileBytes)} por arquivo
           </p>
         </div>
 
@@ -160,7 +178,11 @@ export default function TicketAttachmentList({
           <div>
             <span style={{ width: `${uploadProgress}%` }} />
           </div>
-          <span>{uploadProgress}%</span>
+          <span>
+            {uploadStage === "finalizing"
+              ? "Finalizando anexo..."
+              : `${uploadProgress}%`}
+          </span>
           <button
             type="button"
             onClick={() => uploadControllerRef.current?.abort()}
@@ -171,8 +193,16 @@ export default function TicketAttachmentList({
       ) : null}
 
       {error ? (
-        <p className="ticket-form-error" role="alert">
-          {error}
+        <TicketErrorNotice
+          error={error}
+          compact
+          onRetry={failedFile ? () => void handleUpload(failedFile) : undefined}
+        />
+      ) : null}
+
+      {ticket.status === "closed" ? (
+        <p className="ticket-upload-locked">
+          Chamados concluídos preservam os anexos existentes, mas não aceitam novos envios.
         </p>
       ) : null}
 

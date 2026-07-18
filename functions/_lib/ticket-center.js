@@ -122,7 +122,13 @@ export function ticketCenterErrorResponse(error, request) {
   }
 
   return jsonResponse(
-    { ok: false, error: message, code, requestId },
+    {
+      ok: false,
+      error: message,
+      code,
+      requestId,
+      stage: error?.stage || undefined,
+    },
     {
       status: safeStatus,
       headers: { "X-Request-Id": requestId },
@@ -575,6 +581,7 @@ export function parseTicketListOptions(requestUrl) {
     from: rawFrom ? normalizeOptionalDate(`${rawFrom}T00:00:00.000Z`) : null,
     to: rawTo ? normalizeOptionalDate(`${rawTo}T23:59:59.999Z`) : null,
     includeUndated: url.searchParams.get("includeUndated") === "1",
+    overdueOnly: url.searchParams.get("overdueOnly") === "1",
     page,
     limit,
     sort,
@@ -600,6 +607,13 @@ function buildTicketWhere(organizationId, options, { includeStatus = true } = {}
   if (includeStatus && options.status) {
     clauses.push("t.status = ?");
     values.push(options.status);
+  }
+
+  if (options.overdueOnly) {
+    clauses.push("t.status <> 'closed'");
+    clauses.push("t.due_at IS NOT NULL");
+    clauses.push("t.due_at < ?");
+    values.push(isoNow());
   }
 
   if (options.priority) {
@@ -739,6 +753,7 @@ export async function listTickets(env, organizationId, options) {
 
   return {
     tickets: (result?.results || []).map(publicTicket),
+    attachmentLimits: TICKET_ATTACHMENT_LIMITS,
     pagination: {
       page: options.page,
       limit: options.limit,
@@ -849,6 +864,7 @@ export async function getTicketDetails(env, organizationId, ticketId) {
     attachments: await listTicketAttachments(env, organizationId, ticketId),
     events: await listTicketEvents(env, organizationId, ticketId),
     assignees: await listTicketAssignees(env, organizationId),
+    attachmentLimits: TICKET_ATTACHMENT_LIMITS,
   };
 }
 

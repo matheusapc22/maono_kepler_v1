@@ -562,6 +562,7 @@ const ProjectsPage: React.FC = () => {
                 projects={activeProjects}
                 user={user}
                 organizationId={activeOrganizationId}
+                organizationName={activeOrganization?.name}
                 editableProjectsCount={editableProjectsCount}
                 readOnlyProjectsCount={readOnlyProjectsCount}
               />
@@ -578,6 +579,7 @@ function ProjectsSectionRouter({
   projects,
   user,
   organizationId,
+  organizationName,
   editableProjectsCount,
   readOnlyProjectsCount,
 }: {
@@ -585,6 +587,7 @@ function ProjectsSectionRouter({
   projects: MaonoProject[];
   user: MaonoUser | null;
   organizationId: number | string | null;
+  organizationName?: string | null;
   editableProjectsCount: number;
   readOnlyProjectsCount: number;
 }) {
@@ -620,6 +623,7 @@ function ProjectsSectionRouter({
         <TicketsSection
           user={accessControlUser}
           organizationId={organizationId}
+          organizationName={organizationName}
         />
       );
 

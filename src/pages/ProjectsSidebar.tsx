@@ -14,6 +14,7 @@ import type {
   MaonoUser,
 } from "../auth/session";
 import OrganizationWorkspaceSwitcher from "./Projects/components/OrganizationWorkspaceSwitcher";
+import HeadsetIcon from "../components/icons/HeadsetIcon";
 
 export type ProjectSidebarSection =
   | "all"
@@ -53,7 +54,7 @@ type SidebarUser = MaonoUser &
 type SidebarItem = {
   key?: ProjectSidebarSection;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   count?: number;
   href?: string;
   permission?: Permission;
@@ -307,7 +308,7 @@ function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
         {
           key: "requests",
           label: "Central de Chamados",
-          icon: "◇",
+          icon: <HeadsetIcon className="mm-sidebar-headset" />,
           permission: PERMISSION.TICKET_VIEW,
         },
         {

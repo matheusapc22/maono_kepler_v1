@@ -15,7 +15,38 @@ type RequestOptions = RequestInit & {
 type UploadOptions = {
   signal?: AbortSignal;
   onProgress?: (progress: number) => void;
+  onStage?: (stage: "uploading" | "finalizing") => void;
 };
+
+export class TicketApiError extends Error {
+  status?: number;
+  code?: string;
+  requestId?: string;
+  stage?: string;
+
+  constructor(
+    message: string,
+    options: {
+      status?: number;
+      code?: string;
+      requestId?: string;
+      stage?: string;
+    } = {},
+  ) {
+    super(message);
+    this.name = "TicketApiError";
+    Object.assign(this, options);
+  }
+}
+
+export function toTicketApiError(
+  error: unknown,
+  fallback = "Não foi possível concluir a operação.",
+) {
+  if (error instanceof TicketApiError) return error;
+  if (error instanceof Error) return new TicketApiError(error.message);
+  return new TicketApiError(fallback);
+}
 
 function pathSegment(value: number | string) {
   return encodeURIComponent(String(value));
@@ -29,6 +60,7 @@ async function responseError(response: Response) {
   let message = `A requisição falhou (${response.status}).`;
   let code: string | undefined;
   let requestId = response.headers.get("X-Request-Id") || undefined;
+  let stage: string | undefined;
 
   try {
     const payload = await response.json();
@@ -38,23 +70,17 @@ async function responseError(response: Response) {
     }
     code = payload?.code || payload?.error?.code;
     requestId = payload?.requestId || requestId;
+    stage = payload?.stage;
   } catch {
     // Mantém a mensagem HTTP segura.
   }
 
-  if (response.status >= 500 && requestId) {
-    message = `${message} Referência: ${requestId}.`;
-  }
-
-  const error = new Error(message) as Error & {
-    status?: number;
-    code?: string;
-    requestId?: string;
-  };
-  error.status = response.status;
-  error.code = code;
-  error.requestId = requestId;
-  return error;
+  return new TicketApiError(message, {
+    status: response.status,
+    code,
+    requestId,
+    stage,
+  });
 }
 
 async function requestJson<T>(url: string, options: RequestOptions = {}) {
@@ -89,6 +115,7 @@ export function listTickets(
   if (filters.assigneeId) params.set("assigneeId", filters.assigneeId);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
+  if (filters.overdueOnly) params.set("overdueOnly", "1");
   params.set("sort", filters.sort);
   params.set("page", String(page));
   params.set("limit", String(options.limit || 50));
@@ -189,15 +216,22 @@ function uploadAttachmentChunk(
 
     xhr.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable) return;
+      options.onStage?.("uploading");
       options.onProgress?.(
         Math.max(
           0,
           Math.min(
-            100,
+            99,
             Math.round(((offset + event.loaded) / totalSize) * 100),
           ),
         ),
       );
+    });
+
+    xhr.upload.addEventListener("load", () => {
+      if (offset + chunk.size >= totalSize) {
+        options.onStage?.("finalizing");
+      }
     });
 
     xhr.addEventListener("load", () => {
@@ -206,6 +240,7 @@ function uploadAttachmentChunk(
         error?: string | { message?: string };
         code?: string;
         requestId?: string;
+        stage?: string;
       } = {};
       try {
         payload = JSON.parse(xhr.responseText || "{}");
@@ -222,30 +257,31 @@ function uploadAttachmentChunk(
         return;
       }
 
-      let message =
+      const message =
         typeof payload.error === "string"
           ? payload.error
           : payload.error?.message ||
             "Não foi possível enviar uma parte do arquivo.";
       const requestId =
         payload.requestId || xhr.getResponseHeader("X-Request-Id") || undefined;
-      if (xhr.status >= 500 && requestId) {
-        message = `${message} Referência: ${requestId}.`;
-      }
-      const error = new Error(message) as Error & {
-        status?: number;
-        code?: string;
-        requestId?: string;
-      };
-      error.status = xhr.status;
-      error.code = payload.code;
-      error.requestId = requestId;
-      reject(error);
+      reject(
+        new TicketApiError(message, {
+          status: xhr.status,
+          code: payload.code,
+          requestId,
+          stage: payload.stage,
+        }),
+      );
     });
 
     xhr.addEventListener("error", () => {
       cleanup();
-      reject(new Error("Falha de rede durante o envio do arquivo."));
+      reject(
+        new TicketApiError("Falha de rede durante o envio do arquivo.", {
+          code: "TICKET_UPLOAD_NETWORK_ERROR",
+          stage: "attachment.chunk",
+        }),
+      );
     });
 
     xhr.addEventListener("abort", () => {
@@ -286,6 +322,7 @@ export async function uploadTicketAttachment(
   try {
     while (offset < file.size) {
       const end = Math.min(file.size, offset + chunkSize);
+      options.onStage?.("uploading");
       const response = await uploadAttachmentChunk(
         `${basePath}/${pathSegment(attachmentId)}`,
         file.slice(offset, end),
