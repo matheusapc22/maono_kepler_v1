@@ -92,12 +92,13 @@ test("valida criação, prazo e limites dos filtros", () => {
   assert.match(payload.dueAt, /^2026-07-30T18:00:00\.000Z$/);
 
   const options = parseTicketListOptions(
-    "https://maono.test/api/tickets?status=review&limit=900&page=2&assigneeId=unassigned",
+    "https://maono.test/api/tickets?status=review&limit=900&page=2&assigneeId=unassigned&overdueOnly=1",
   );
   assert.equal(options.status, "in_review");
   assert.equal(options.limit, 100);
   assert.equal(options.page, 2);
   assert.equal(options.unassigned, true);
+  assert.equal(options.overdueOnly, true);
 
   assert.throws(
     () => validateTicketPatchPayload({}),

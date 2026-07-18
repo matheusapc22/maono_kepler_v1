@@ -35,6 +35,20 @@ export type TicketAttachment = {
   uploadedBy?: TicketPerson | null;
 };
 
+export type TicketAttachmentLimits = {
+  maxFiles: number;
+  maxFileBytes: number;
+  maxTicketBytes: number;
+  chunkBytes: number;
+};
+
+export const DEFAULT_TICKET_ATTACHMENT_LIMITS: TicketAttachmentLimits = {
+  maxFiles: 5,
+  maxFileBytes: 80 * 1024 * 1024,
+  maxTicketBytes: 150 * 1024 * 1024,
+  chunkBytes: 8 * 1024 * 1024,
+};
+
 export type TicketEvent = {
   id: number | string;
   type: string;
@@ -68,6 +82,7 @@ export type TicketFilters = {
   assigneeId: string;
   from: string;
   to: string;
+  overdueOnly: boolean;
   sort: "updated_desc" | "updated_asc" | "due_asc" | "priority_desc";
 };
 
@@ -94,6 +109,7 @@ export type TicketListResponse = {
     to?: string | null;
   };
   assignees: TicketPerson[];
+  attachmentLimits: TicketAttachmentLimits;
 };
 
 export type TicketDetailResponse = {
@@ -102,6 +118,7 @@ export type TicketDetailResponse = {
   attachments: TicketAttachment[];
   events: TicketEvent[];
   assignees: TicketPerson[];
+  attachmentLimits: TicketAttachmentLimits;
 };
 
 export type CreateTicketPayload = {
@@ -124,6 +141,7 @@ export const DEFAULT_TICKET_FILTERS: TicketFilters = {
   assigneeId: "",
   from: "",
   to: "",
+  overdueOnly: false,
   sort: "updated_desc",
 };
 
@@ -149,4 +167,3 @@ export const CATEGORY_LABELS: Record<TicketCategory, string> = {
   support: "Suporte",
   other: "Outro",
 };
-

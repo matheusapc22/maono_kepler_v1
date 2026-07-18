@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import TicketAttachmentList from "./TicketAttachmentList";
+import TicketErrorNotice from "./TicketErrorNotice";
+import {
+  TicketApiError,
+  toTicketApiError,
+} from "./tickets-api";
 import {
   dateInputToIso,
   dateInputValue,
@@ -12,6 +17,7 @@ import {
   PRIORITY_LABELS,
   STATUS_LABELS,
   type TicketDetailResponse,
+  type TicketAttachmentLimits,
   type TicketStatus,
   type UpdateTicketPayload,
 } from "./ticket-types";
@@ -21,10 +27,11 @@ type TicketDetailDrawerProps = {
   organizationId: number | string;
   detail: TicketDetailResponse | null;
   loading: boolean;
-  error: string | null;
+  error: TicketApiError | null;
   saving: boolean;
   canManage: boolean;
   canUpload: boolean;
+  attachmentLimits: TicketAttachmentLimits;
   currentUserId?: number | string | null;
   onClose: () => void;
   onRetry: () => void;
@@ -51,6 +58,7 @@ export default function TicketDetailDrawer({
   saving,
   canManage,
   canUpload,
+  attachmentLimits,
   currentUserId,
   onClose,
   onRetry,
@@ -62,7 +70,7 @@ export default function TicketDetailDrawer({
   const [category, setCategory] = useState("support");
   const [dueDate, setDueDate] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<TicketApiError | null>(null);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -137,9 +145,7 @@ export default function TicketDetailDrawer({
       });
     } catch (requestError) {
       setSaveError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível salvar as alterações.",
+        toTicketApiError(requestError, "Não foi possível salvar as alterações."),
       );
     }
   }
@@ -190,10 +196,7 @@ export default function TicketDetailDrawer({
           </div>
         ) : error ? (
           <div className="ticket-detail-error" role="alert">
-            <p>{error}</p>
-            <button type="button" onClick={onRetry}>
-              Tentar novamente
-            </button>
+            <TicketErrorNotice error={error} onRetry={onRetry} />
           </div>
         ) : ticket && detail ? (
           <div className="ticket-detail-content">
@@ -315,9 +318,7 @@ export default function TicketDetailDrawer({
                 </div>
 
                 {saveError ? (
-                  <p className="ticket-form-error" role="alert">
-                    {saveError}
-                  </p>
+                  <TicketErrorNotice error={saveError} compact />
                 ) : null}
 
                 <button
@@ -337,6 +338,7 @@ export default function TicketDetailDrawer({
               attachments={detail.attachments}
               canUpload={canUpload}
               canManage={canManage}
+              attachmentLimits={attachmentLimits}
               currentUserId={currentUserId}
               onChanged={onReload}
             />
@@ -374,4 +376,3 @@ export default function TicketDetailDrawer({
     </div>
   );
 }
-
