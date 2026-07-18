@@ -2,24 +2,24 @@ import React, { useCallback, useMemo, useState } from "react";
 
 import type { MaonoUser } from "../../../auth/session";
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
-import type { WorkspaceProject, WorkspaceSectionKey } from "../workspace-api";
+import type { ProjectListItem, ProjectSectionKey } from "../projects-api";
 import ProjectCard, { projectThumbnailKey } from "./ProjectCard";
 
-type WorkspaceSectionProps = {
-  section: WorkspaceSectionKey;
-  projects: WorkspaceProject[];
+type ProjectsSectionProps = {
+  section: ProjectSectionKey;
+  projects: ProjectListItem[];
   searchQuery: string;
   user: MaonoUser | null;
   loading?: boolean;
   error?: string | null;
   favoriteBusySlugs?: Record<string, true>;
-  canProjectSave: (project: WorkspaceProject) => boolean;
-  canProjectFavorite: (project: WorkspaceProject) => boolean;
-  onFavoriteToggle: (project: WorkspaceProject) => void | Promise<void>;
+  canProjectSave: (project: ProjectListItem) => boolean;
+  canProjectFavorite: (project: ProjectListItem) => boolean;
+  onFavoriteToggle: (project: ProjectListItem) => void | Promise<void>;
   onRetry?: () => void;
 };
 
-function sectionCopy(section: WorkspaceSectionKey) {
+function sectionCopy(section: ProjectSectionKey) {
   if (section === "recent") {
     return {
       emptyTitle: "Nenhum projeto recente",
@@ -43,7 +43,7 @@ function sectionCopy(section: WorkspaceSectionKey) {
   };
 }
 
-function matchesSearch(project: WorkspaceProject, searchQuery: string) {
+function matchesSearch(project: ProjectListItem, searchQuery: string) {
   const query = searchQuery.trim().toLowerCase();
 
   if (!query) {
@@ -81,7 +81,7 @@ function EmptyState({
   );
 }
 
-const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
+const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   section,
   projects,
   searchQuery,
@@ -108,7 +108,7 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
   const allVisibleThumbnailsSettled =
     visibleThumbnailKeys.length === 0 ||
     visibleThumbnailKeys.every((key) => settledThumbnailKeys[key]);
-  const handleThumbnailSettled = useCallback((project: WorkspaceProject) => {
+  const handleThumbnailSettled = useCallback((project: ProjectListItem) => {
     const thumbnailKey = projectThumbnailKey(project);
 
     setSettledThumbnailKeys((current) =>
@@ -129,7 +129,7 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
     return (
       <section className="mm-empty-state">
         <div>!</div>
-        <h2>Não foi possível carregar o workspace</h2>
+        <h2>Não foi possível carregar os projetos</h2>
         <p>{error}</p>
         {onRetry && (
           <button type="button" className="mm-btn" onClick={onRetry}>
@@ -189,5 +189,5 @@ const WorkspaceSection: React.FC<WorkspaceSectionProps> = ({
   );
 };
 
-export default WorkspaceSection;
-export type { WorkspaceSectionKey };
+export default ProjectsSection;
+export type { ProjectSectionKey };

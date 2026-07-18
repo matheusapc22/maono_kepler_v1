@@ -1,4 +1,10 @@
 export async function listProjectsForUser(env, user) {
+  const activeOrganizationId = getActiveOrganizationId(user);
+
+  if (!activeOrganizationId) {
+    return [];
+  }
+
   if (user.role === "super_admin") {
     const { results } = await env.DB.prepare(
       `SELECT
@@ -14,9 +20,15 @@ export async function listProjectsForUser(env, user) {
         projects.updated_at,
         'owner' AS access_level
       FROM projects
+      INNER JOIN organizations
+        ON organizations.id = projects.organization_id
+       AND organizations.active = 1
       WHERE projects.active = 1
+        AND projects.organization_id = ?
       ORDER BY projects.updated_at DESC, projects.name ASC`
-    ).all();
+    )
+      .bind(activeOrganizationId)
+      .all();
 
     return results || [];
   }
@@ -36,17 +48,30 @@ export async function listProjectsForUser(env, user) {
       user_projects.access_level
     FROM user_projects
     INNER JOIN projects ON projects.id = user_projects.project_id
+    INNER JOIN organizations
+      ON organizations.id = projects.organization_id
+     AND organizations.active = 1
+    INNER JOIN organization_users
+      ON organization_users.organization_id = projects.organization_id
+     AND organization_users.user_id = user_projects.user_id
     WHERE user_projects.user_id = ?
       AND projects.active = 1
+      AND projects.organization_id = ?
     ORDER BY projects.updated_at DESC, projects.name ASC`
   )
-    .bind(user.id)
+    .bind(user.id, activeOrganizationId)
     .all();
 
   return results || [];
 }
 
 export async function getAuthorizedProject(env, user, slug) {
+  const activeOrganizationId = getActiveOrganizationId(user);
+
+  if (!activeOrganizationId) {
+    return null;
+  }
+
   if (user.role === "super_admin") {
     const project = await env.DB.prepare(
       `SELECT
@@ -62,11 +87,15 @@ export async function getAuthorizedProject(env, user, slug) {
         projects.updated_at,
         'owner' AS access_level
       FROM projects
+      INNER JOIN organizations
+        ON organizations.id = projects.organization_id
+       AND organizations.active = 1
       WHERE projects.slug = ?
         AND projects.active = 1
+        AND projects.organization_id = ?
       LIMIT 1`
     )
-      .bind(slug)
+      .bind(slug, activeOrganizationId)
       .first();
 
     return project || null;
@@ -87,15 +116,32 @@ export async function getAuthorizedProject(env, user, slug) {
       user_projects.access_level
     FROM user_projects
     INNER JOIN projects ON projects.id = user_projects.project_id
+    INNER JOIN organizations
+      ON organizations.id = projects.organization_id
+     AND organizations.active = 1
+    INNER JOIN organization_users
+      ON organization_users.organization_id = projects.organization_id
+     AND organization_users.user_id = user_projects.user_id
     WHERE user_projects.user_id = ?
       AND projects.slug = ?
       AND projects.active = 1
+      AND projects.organization_id = ?
     LIMIT 1`
   )
-    .bind(user.id, slug)
+    .bind(user.id, slug, activeOrganizationId)
     .first();
 
   return project || null;
+}
+
+export function getActiveOrganizationId(user) {
+  return (
+    user?.activeOrganizationId ??
+    user?.active_organization_id ??
+    user?.organizationId ??
+    user?.organization_id ??
+    null
+  );
 }
 
 export function publicProject(project) {

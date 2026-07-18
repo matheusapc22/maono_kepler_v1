@@ -8,7 +8,12 @@ import {
 } from "../access-control/can";
 import { PERMISSION, type Permission } from "../access-control/permissions";
 import Logo from "../assets/images/Logo_Maono.png";
-import type { MaonoUser } from "../auth/session";
+import type {
+  MaonoId,
+  MaonoOrganization,
+  MaonoUser,
+} from "../auth/session";
+import OrganizationWorkspaceSwitcher from "./Projects/components/OrganizationWorkspaceSwitcher";
 
 export type ProjectSidebarSection =
   | "all"
@@ -25,11 +30,17 @@ export type ProjectSidebarSection =
 
 type ProjectsSidebarProps = {
   user: MaonoUser | null;
+  activeOrganization: MaonoOrganization | null;
+  organizations: MaonoOrganization[];
+  switchingOrganization: boolean;
+  organizationSwitchError: string | null;
   activeProjectsCount: number;
   searchQuery: string;
   sidebarSection: ProjectSidebarSection;
   onSearchQueryChange: (value: string) => void;
   onSidebarSectionChange: (section: ProjectSidebarSection) => void;
+  onOrganizationSwitch: (organizationId: MaonoId) => Promise<void>;
+  onDismissOrganizationSwitchError: () => void;
   onLogout: () => void | Promise<void>;
 };
 
@@ -264,7 +275,7 @@ function canShowItem(
 function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
   return [
     {
-      title: "Workspace",
+      title: "Projetos",
       items: [
         {
           key: "all",
@@ -417,11 +428,17 @@ function ItemButton({
 
 const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
   user,
+  activeOrganization,
+  organizations,
+  switchingOrganization,
+  organizationSwitchError,
   activeProjectsCount,
   searchQuery,
   sidebarSection,
   onSearchQueryChange,
   onSidebarSectionChange,
+  onOrganizationSwitch,
+  onDismissOrganizationSwitchError,
   onLogout,
 }) => {
   const [expanded, setExpanded] = useState(true);
@@ -444,10 +461,15 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
 
   return (
     <aside
-      className={
-        expanded ? "mm-projects-sidebar" : "mm-projects-sidebar collapsed"
-      }
+      className={[
+        "mm-projects-sidebar",
+        expanded ? "" : "collapsed",
+        switchingOrganization ? "is-context-switching" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       aria-label="Navegação da área de projetos"
+      aria-busy={switchingOrganization}
     >
       <div className="mm-sidebar-head">
         <div className="mm-sidebar-brand-row">
@@ -495,6 +517,16 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
             />
           </div>
         ) : null}
+
+        <OrganizationWorkspaceSwitcher
+          activeOrganization={activeOrganization}
+          organizations={organizations}
+          expanded={expanded}
+          switching={switchingOrganization}
+          error={organizationSwitchError}
+          onSwitch={onOrganizationSwitch}
+          onDismissError={onDismissOrganizationSwitchError}
+        />
       </div>
 
       <nav className="mm-sidebar-nav" aria-label="Navegação da área de projetos">

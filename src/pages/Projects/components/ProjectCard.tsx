@@ -3,17 +3,17 @@ import { Link } from "react-router";
 
 import type { MaonoUser } from "../../../auth/session";
 import { Skeleton } from "../../../components/loading/Skeleton";
-import type { WorkspaceProject } from "../workspace-api";
+import type { ProjectListItem } from "../projects-api";
 
 type ProjectCardProps = {
-  project: WorkspaceProject;
+  project: ProjectListItem;
   user: MaonoUser | null;
   canSave: boolean;
   canFavorite: boolean;
   favoriteBusy?: boolean;
   holdThumbnailShimmer?: boolean;
-  onFavoriteToggle?: (project: WorkspaceProject) => void | Promise<void>;
-  onThumbnailSettled?: (project: WorkspaceProject) => void;
+  onFavoriteToggle?: (project: ProjectListItem) => void | Promise<void>;
+  onThumbnailSettled?: (project: ProjectListItem) => void;
 };
 
 function normalize(value?: string | null) {
@@ -99,7 +99,7 @@ function permissionLabel(value?: string) {
   return labels[normalize(value)] || value || "Acesso";
 }
 
-export function projectThumbnailUrl(project: WorkspaceProject) {
+export function projectThumbnailUrl(project: ProjectListItem) {
   if (project.thumbnailUrl) {
     return project.thumbnailUrl;
   }
@@ -109,7 +109,7 @@ export function projectThumbnailUrl(project: WorkspaceProject) {
   return `/api/projects/${encodeURIComponent(project.slug)}/thumbnail?v=${cacheKey}`;
 }
 
-export function projectThumbnailKey(project: WorkspaceProject) {
+export function projectThumbnailKey(project: ProjectListItem) {
   return `${project.slug}::${projectThumbnailUrl(project)}`;
 }
 

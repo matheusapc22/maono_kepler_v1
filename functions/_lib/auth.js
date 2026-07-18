@@ -222,17 +222,19 @@ function normalizeSessionUser(row) {
 
   const rawRole = row.role;
   const role = normalizeRole(rawRole);
-  const organizationId =
+  const activeOrganizationId =
+    toId(row.sessionActiveOrganizationId) ||
+    toId(row.session_active_organization_id) ||
+    toId(row.activeOrganizationId) ||
+    toId(row.active_organization_id) ||
     toId(row.organizationId) ||
     toId(row.organization_id) ||
-    toId(row.activeOrganizationId) ||
-    toId(row.active_organization_id) ||
     null;
 
-  const activeOrganizationId =
-    toId(row.activeOrganizationId) ||
-    toId(row.active_organization_id) ||
-    organizationId ||
+  const organizationId =
+    activeOrganizationId ||
+    toId(row.organizationId) ||
+    toId(row.organization_id) ||
     null;
 
   return {
@@ -249,6 +251,27 @@ function normalizeSessionUser(row) {
     expires_at: row.expires_at,
     sessionExpiresAt: row.expires_at,
   };
+}
+
+async function getSessionUserWithSessionOrganizationColumn(env, tokenHash, now) {
+  return optionalFirst(
+    env,
+    `SELECT
+      users.id,
+      users.email,
+      users.name,
+      users.role,
+      users.active,
+      sessions.active_organization_id AS session_active_organization_id,
+      sessions.expires_at
+    FROM sessions
+    INNER JOIN users ON users.id = sessions.user_id
+    WHERE sessions.token_hash = ?
+      AND sessions.expires_at > ?
+      AND users.active = 1
+    LIMIT 1`,
+    [tokenHash, now],
+  );
 }
 
 async function getSessionUserWithOrganizationColumns(env, tokenHash, now) {
@@ -306,6 +329,17 @@ export async function getSessionUser(env, request) {
   const tokenHash = await sha256Hex(token);
   const now = new Date().toISOString();
 
+  const resultWithSessionOrganization =
+    await getSessionUserWithSessionOrganizationColumn(
+      env,
+      tokenHash,
+      now,
+    );
+
+  if (resultWithSessionOrganization) {
+    return normalizeSessionUser(resultWithSessionOrganization);
+  }
+
   const resultWithOrganization = await getSessionUserWithOrganizationColumns(
     env,
     tokenHash,
@@ -319,6 +353,41 @@ export async function getSessionUser(env, request) {
   const result = await getSessionUserBase(env, tokenHash, now);
 
   return normalizeSessionUser(result);
+}
+
+export async function setSessionActiveOrganization(
+  env,
+  request,
+  organizationId,
+) {
+  const token = getCookie(request, SESSION_COOKIE_NAME);
+
+  if (!token) {
+    const error = new Error("Sessão inválida ou expirada.");
+    error.status = 401;
+    error.code = "UNAUTHORIZED";
+    throw error;
+  }
+
+  const db = getDb(env);
+  const tokenHash = await sha256Hex(token);
+  const now = new Date().toISOString();
+  const result = await db
+    .prepare(
+      `UPDATE sessions
+       SET active_organization_id = ?
+       WHERE token_hash = ?
+         AND expires_at > ?`,
+    )
+    .bind(organizationId, tokenHash, now)
+    .run();
+
+  if (result?.success === false || Number(result?.meta?.changes || 0) < 1) {
+    const error = new Error("Sessão inválida ou expirada.");
+    error.status = 401;
+    error.code = "UNAUTHORIZED";
+    throw error;
+  }
 }
 
 export async function requireSession(env, request) {

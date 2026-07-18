@@ -1,4 +1,4 @@
-import { publicProject } from "./projects.js";
+import { getActiveOrganizationId, publicProject } from "./projects.js";
 
 const ACCESS_LEVELS = new Set(["owner", "editor", "viewer"]);
 
@@ -108,13 +108,19 @@ async function listFavoriteIdsForUser(env, userId) {
 
     return new Set((results || []).map((row) => Number(row.project_id)));
   } catch (error) {
-    console.warn("[Maono workspace] favorite_projects indisponível:", error.message);
+    console.warn("[Maono projects] favorite_projects indisponível:", error.message);
     return new Set();
   }
 }
 
-export async function listWorkspaceProjectsForUser(env, user) {
+export async function listProjectsForActiveOrganization(env, user) {
   const role = normalizeRole(user?.role);
+  const activeOrganizationId = getActiveOrganizationId(user);
+
+  if (!activeOrganizationId) {
+    return [];
+  }
+
   const favoriteIds = await listFavoriteIdsForUser(env, user.id);
 
   if (role === "super_admin") {
@@ -130,9 +136,15 @@ export async function listWorkspaceProjectsForUser(env, user) {
         projects.updated_at,
         'owner' AS access_level
        FROM projects
+       INNER JOIN organizations
+         ON organizations.id = projects.organization_id
+        AND organizations.active = 1
        WHERE projects.active = 1
+         AND projects.organization_id = ?
        ORDER BY projects.updated_at DESC, projects.name ASC`,
-    ).all();
+    )
+      .bind(activeOrganizationId)
+      .all();
 
     return (results || [])
       .map((project) => publicSafeProject(project, favoriteIds))
@@ -152,11 +164,18 @@ export async function listWorkspaceProjectsForUser(env, user) {
       user_projects.access_level
      FROM user_projects
      INNER JOIN projects ON projects.id = user_projects.project_id
+     INNER JOIN organizations
+       ON organizations.id = projects.organization_id
+      AND organizations.active = 1
+     INNER JOIN organization_users
+       ON organization_users.organization_id = projects.organization_id
+      AND organization_users.user_id = user_projects.user_id
      WHERE user_projects.user_id = ?
        AND projects.active = 1
+       AND projects.organization_id = ?
      ORDER BY projects.updated_at DESC, projects.name ASC`,
   )
-    .bind(user.id)
+    .bind(user.id, activeOrganizationId)
     .all();
 
   return (results || [])
@@ -164,13 +183,13 @@ export async function listWorkspaceProjectsForUser(env, user) {
     .filter(Boolean);
 }
 
-export async function listRecentWorkspaceProjectsForUser(env, user) {
-  const projects = await listWorkspaceProjectsForUser(env, user);
+export async function listRecentProjectsForActiveOrganization(env, user) {
+  const projects = await listProjectsForActiveOrganization(env, user);
   return sortByUpdatedAtDesc(projects.filter((project) => isRecentProject(project)));
 }
 
-export async function listFavoriteWorkspaceProjectsForUser(env, user) {
-  const projects = await listWorkspaceProjectsForUser(env, user);
+export async function listFavoriteProjectsForActiveOrganization(env, user) {
+  const projects = await listProjectsForActiveOrganization(env, user);
   return sortByUpdatedAtDesc(projects.filter((project) => project.favorite));
 }
 
@@ -182,6 +201,12 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
   }
 
   const role = normalizeRole(user?.role);
+  const activeOrganizationId = getActiveOrganizationId(user);
+
+  if (!activeOrganizationId) {
+    return null;
+  }
+
   const favoriteIds = await listFavoriteIdsForUser(env, user.id);
 
   if (role === "super_admin") {
@@ -197,11 +222,15 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
         projects.updated_at,
         'owner' AS access_level
        FROM projects
+       INNER JOIN organizations
+         ON organizations.id = projects.organization_id
+        AND organizations.active = 1
        WHERE projects.slug = ?
          AND projects.active = 1
+         AND projects.organization_id = ?
        LIMIT 1`,
     )
-      .bind(normalizedSlug)
+      .bind(normalizedSlug, activeOrganizationId)
       .first();
 
     return project ? publicSafeProject(project, favoriteIds) : null;
@@ -220,12 +249,19 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
       user_projects.access_level
      FROM user_projects
      INNER JOIN projects ON projects.id = user_projects.project_id
+     INNER JOIN organizations
+       ON organizations.id = projects.organization_id
+      AND organizations.active = 1
+     INNER JOIN organization_users
+       ON organization_users.organization_id = projects.organization_id
+      AND organization_users.user_id = user_projects.user_id
      WHERE user_projects.user_id = ?
        AND projects.slug = ?
        AND projects.active = 1
+       AND projects.organization_id = ?
      LIMIT 1`,
   )
-    .bind(user.id, normalizedSlug)
+    .bind(user.id, normalizedSlug, activeOrganizationId)
     .first();
 
   return project ? publicSafeProject(project, favoriteIds) : null;

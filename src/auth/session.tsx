@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -119,6 +120,10 @@ type SessionState = {
   projects: MaonoProject[];
   activeOrganization: MaonoOrganization | null;
   organizations: MaonoOrganization[];
+  switchingOrganization: boolean;
+  organizationSwitchError: string | null;
+  switchOrganization: (organizationId: MaonoId) => Promise<void>;
+  clearOrganizationSwitchError: () => void;
   refreshSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -485,6 +490,18 @@ async function readJsonResponse(response: Response): Promise<unknown> {
   }
 }
 
+function getResponseErrorMessage(data: unknown, fallback: string) {
+  return isRecord(data) &&
+    isRecord(data.error) &&
+    typeof data.error.message === "string"
+    ? data.error.message
+    : fallback;
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -493,6 +510,12 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   const [activeOrganization, setActiveOrganization] =
     useState<MaonoOrganization | null>(null);
   const [organizations, setOrganizations] = useState<MaonoOrganization[]>([]);
+  const [switchingOrganization, setSwitchingOrganization] = useState(false);
+  const [organizationSwitchError, setOrganizationSwitchError] = useState<
+    string | null
+  >(null);
+  const requestSequenceRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
 
   const applySession = useCallback((rawData: unknown) => {
     const nextSession = normalizeSessionPayload(rawData);
@@ -507,6 +530,11 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   }, []);
 
   const refreshSession = useCallback(async () => {
+    const requestId = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestId;
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setLoading(true);
 
     try {
@@ -516,9 +544,14 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         headers: {
           Accept: "application/json",
         },
+        signal: controller.signal,
       });
 
       const data = await readJsonResponse(response);
+
+      if (requestId !== requestSequenceRef.current) {
+        return;
+      }
 
       if (!response.ok) {
         applySession(EMPTY_SESSION);
@@ -527,12 +560,101 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
       applySession(data);
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       console.error("[Maono] Falha ao atualizar sessão.", error);
-      applySession(EMPTY_SESSION);
+      if (requestId === requestSequenceRef.current) {
+        applySession(EMPTY_SESSION);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestSequenceRef.current) {
+        setLoading(false);
+        requestControllerRef.current = null;
+      }
     }
   }, [applySession]);
+
+  const clearOrganizationSwitchError = useCallback(() => {
+    setOrganizationSwitchError(null);
+  }, []);
+
+  const switchOrganization = useCallback(
+    async (organizationId: MaonoId) => {
+      const normalizedId = toId(organizationId);
+
+      if (normalizedId === null) {
+        throw new Error("Organização inválida.");
+      }
+
+      if (String(activeOrganization?.id ?? "") === String(normalizedId)) {
+        setOrganizationSwitchError(null);
+        return;
+      }
+
+      const requestId = requestSequenceRef.current + 1;
+      requestSequenceRef.current = requestId;
+      requestControllerRef.current?.abort();
+      const controller = new AbortController();
+      requestControllerRef.current = controller;
+
+      setLoading(false);
+      setSwitchingOrganization(true);
+      setOrganizationSwitchError(null);
+
+      try {
+        const response = await fetch("/api/session/active-organization", {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ organizationId: normalizedId }),
+          signal: controller.signal,
+        });
+        const data = await readJsonResponse(response);
+
+        if (requestId !== requestSequenceRef.current) {
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            getResponseErrorMessage(
+              data,
+              "Não foi possível trocar a organização.",
+            ),
+          );
+        }
+
+        applySession(data);
+        setOrganizationSwitchError(null);
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Não foi possível trocar a organização.";
+
+        if (requestId === requestSequenceRef.current) {
+          setOrganizationSwitchError(message);
+        }
+
+        throw error;
+      } finally {
+        if (requestId === requestSequenceRef.current) {
+          setSwitchingOrganization(false);
+          requestControllerRef.current = null;
+        }
+      }
+    },
+    [activeOrganization?.id, applySession],
+  );
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -549,12 +671,10 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       const data = await readJsonResponse(response);
 
       if (!response.ok) {
-        const message =
-          isRecord(data) &&
-          isRecord(data.error) &&
-          typeof data.error.message === "string"
-            ? data.error.message
-            : "Não foi possível fazer login.";
+        const message = getResponseErrorMessage(
+          data,
+          "Não foi possível fazer login.",
+        );
 
         throw new Error(message);
       }
@@ -565,6 +685,13 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   );
 
   const logout = useCallback(async () => {
+    requestSequenceRef.current += 1;
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    setLoading(false);
+    setSwitchingOrganization(false);
+    setOrganizationSwitchError(null);
+
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -579,7 +706,12 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   }, [applySession]);
 
   useEffect(() => {
-    refreshSession();
+    void refreshSession();
+
+    return () => {
+      requestSequenceRef.current += 1;
+      requestControllerRef.current?.abort();
+    };
   }, [refreshSession]);
 
   const value = useMemo(
@@ -590,6 +722,10 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       projects,
       activeOrganization,
       organizations,
+      switchingOrganization,
+      organizationSwitchError,
+      switchOrganization,
+      clearOrganizationSwitchError,
       refreshSession,
       login,
       logout,
@@ -601,6 +737,10 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       projects,
       activeOrganization,
       organizations,
+      switchingOrganization,
+      organizationSwitchError,
+      switchOrganization,
+      clearOrganizationSwitchError,
       refreshSession,
       login,
       logout,

@@ -1,8 +1,8 @@
 import type { MaonoProject } from "../../auth/session";
 
-export type WorkspaceSectionKey = "all" | "recent" | "favorites";
+export type ProjectSectionKey = "all" | "recent" | "favorites";
 
-export type WorkspaceProject = MaonoProject & {
+export type ProjectListItem = MaonoProject & {
   favorite?: boolean;
   favorited?: boolean;
   thumbnailUrl?: string;
@@ -10,7 +10,7 @@ export type WorkspaceProject = MaonoProject & {
 
 type ProjectsResponse = {
   ok?: boolean;
-  projects?: WorkspaceProject[];
+  projects?: ProjectListItem[];
   error?: {
     message?: string;
   };
@@ -18,13 +18,13 @@ type ProjectsResponse = {
 
 type FavoriteResponse = {
   ok?: boolean;
-  project?: WorkspaceProject;
+  project?: ProjectListItem;
   error?: {
     message?: string;
   };
 };
 
-function endpointForSection(section: WorkspaceSectionKey) {
+function endpointForSection(section: ProjectSectionKey) {
   if (section === "recent") {
     return "/api/projects/recent";
   }
@@ -70,15 +70,17 @@ function errorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
-export async function fetchWorkspaceProjects(
-  section: WorkspaceSectionKey = "all",
-): Promise<WorkspaceProject[]> {
+export async function fetchProjects(
+  section: ProjectSectionKey = "all",
+  options: { signal?: AbortSignal } = {},
+): Promise<ProjectListItem[]> {
   const response = await fetch(endpointForSection(section), {
     method: "GET",
     credentials: "include",
     headers: {
       Accept: "application/json",
     },
+    signal: options.signal,
   });
 
   const data = await readJsonResponse<ProjectsResponse>(response);
@@ -93,7 +95,7 @@ export async function fetchWorkspaceProjects(
 export async function setProjectFavorite(
   slug: string,
   favorite: boolean,
-): Promise<WorkspaceProject> {
+): Promise<ProjectListItem> {
   const response = await fetch(
     `/api/projects/${encodeURIComponent(slug)}/favorite`,
     {
