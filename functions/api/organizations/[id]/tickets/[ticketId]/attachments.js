@@ -5,16 +5,18 @@ import {
 import {
   getOrganizationOrThrow,
   getRouteParam,
-  handleApiError,
   jsonResponse,
   methodNotAllowed,
   parsePositiveInteger,
+  readJsonBody,
 } from "../../../../../_lib/organizations.js";
 import {
   createTicketAttachment,
   ensureTicketCenterSchema,
   getTicketOrThrow,
+  initiateTicketAttachmentUpload,
   listTicketAttachments,
+  ticketCenterErrorResponse,
 } from "../../../../../_lib/ticket-center.js";
 
 export async function onRequest(context) {
@@ -72,7 +74,7 @@ export async function onRequestGet({ env, request, params }) {
       ),
     });
   } catch (error) {
-    return handleApiError(error);
+    return ticketCenterErrorResponse(error, request);
   }
 }
 
@@ -114,6 +116,18 @@ export async function onRequestPost({ env, request, params }) {
       throw error;
     }
 
+    const contentType = request.headers.get("Content-Type") || "";
+    if (contentType.toLowerCase().includes("application/json")) {
+      const result = await initiateTicketAttachmentUpload(
+        env,
+        organizationId,
+        ticketId,
+        user,
+        await readJsonBody(request),
+      );
+      return jsonResponse({ ok: true, ...result }, { status: 201 });
+    }
+
     const attachment = await createTicketAttachment(
       env,
       organizationId,
@@ -124,7 +138,6 @@ export async function onRequestPost({ env, request, params }) {
 
     return jsonResponse({ ok: true, attachment }, { status: 201 });
   } catch (error) {
-    return handleApiError(error);
+    return ticketCenterErrorResponse(error, request);
   }
 }
-

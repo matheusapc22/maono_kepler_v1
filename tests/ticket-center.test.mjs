@@ -6,10 +6,13 @@ import {
   canCreatorDeleteAttachment,
   getTicketAttachmentOrThrow,
   getTicketOrThrow,
+  normalizeLegacyTicketRow,
   normalizeTicketStatus,
   parseTicketListOptions,
   publicTicketAttachment,
   readTicketAttachmentUpload,
+  TICKET_ATTACHMENT_LIMITS,
+  validateTicketAttachmentMetadata,
   validateTicketCreatePayload,
   validateTicketPatchPayload,
 } from "../functions/_lib/ticket-center.js";
@@ -21,6 +24,56 @@ test("normaliza aliases legados para o domínio canônico", () => {
   assert.throws(
     () => normalizeTicketStatus("unknown"),
     (error) => error.code === "INVALID_STATUS",
+  );
+});
+
+test("importação legada tolera valores antigos sem bloquear a Central", () => {
+  const row = normalizeLegacyTicketRow(
+    {
+      id: 17,
+      title: "x".repeat(300),
+      body: "y".repeat(7000),
+      status: "status-fora-do-dominio",
+      priority: "urgente",
+      category: "categoria-antiga",
+      due_at: "data-inválida",
+      created_by: 999,
+    },
+    {
+      organizationId: 3,
+      fallbackUserId: 9,
+      validUserIds: new Set(["9"]),
+    },
+  );
+
+  assert.equal(row.status, "open");
+  assert.equal(row.priority, "normal");
+  assert.equal(row.category, "support");
+  assert.equal(row.createdBy, 9);
+  assert.equal(row.subject.length, 160);
+  assert.equal(row.description.length, 5000);
+  assert.equal(row.dueAt, null);
+});
+
+test("limites canônicos aceitam 80 MB por arquivo e 150 MB por chamado", () => {
+  assert.equal(TICKET_ATTACHMENT_LIMITS.maxFileBytes, 80 * 1024 * 1024);
+  assert.equal(TICKET_ATTACHMENT_LIMITS.maxTicketBytes, 150 * 1024 * 1024);
+  assert.equal(TICKET_ATTACHMENT_LIMITS.chunkBytes, 8 * 1024 * 1024);
+
+  const metadata = validateTicketAttachmentMetadata({
+    name: "evidencia.pdf",
+    mimeType: "application/pdf",
+    size: 80 * 1024 * 1024,
+  });
+  assert.equal(metadata.size, 80 * 1024 * 1024);
+  assert.throws(
+    () =>
+      validateTicketAttachmentMetadata({
+        name: "evidencia.pdf",
+        mimeType: "application/pdf",
+        size: 80 * 1024 * 1024 + 1,
+      }),
+    (error) => error.code === "ATTACHMENT_TOO_LARGE",
   );
 });
 
@@ -183,7 +236,7 @@ test("impede acesso cruzado por organização, chamado e anexo", async () => {
   assert.equal("storageKey" in publicAttachment, false);
 });
 
-test("criador só pode excluir o próprio anexo enquanto o chamado está aberto", () => {
+test("criador exclui o próprio anexo ativo aberto e sempre cancela upload pendente", () => {
   assert.equal(
     canCreatorDeleteAttachment(
       { status: "open" },
@@ -199,6 +252,14 @@ test("criador só pode excluir o próprio anexo enquanto o chamado está aberto"
       9,
     ),
     false,
+  );
+  assert.equal(
+    canCreatorDeleteAttachment(
+      { status: "closed" },
+      { uploaded_by: 9, status: "PENDING" },
+      9,
+    ),
+    true,
   );
   assert.equal(
     canCreatorDeleteAttachment(

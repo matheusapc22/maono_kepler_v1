@@ -2,7 +2,6 @@ import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import {
   getOrganizationOrThrow,
   getRouteParam,
-  handleApiError,
   jsonResponse,
   methodNotAllowed,
   parsePositiveInteger,
@@ -12,6 +11,7 @@ import {
   ensureTicketCenterSchema,
   getTicketDetails,
   migrateLegacyTickets,
+  ticketCenterErrorResponse,
   updateTicket,
 } from "../../../../_lib/ticket-center.js";
 
@@ -63,7 +63,7 @@ export async function onRequestGet({ env, request, params }) {
       ...(await getTicketDetails(env, organizationId, ticketId)),
     });
   } catch (error) {
-    return handleApiError(error);
+    return ticketCenterErrorResponse(error, request);
   }
 }
 
@@ -101,7 +101,6 @@ export async function onRequestPatch({ env, request, params }) {
 
     return jsonResponse({ ok: true, ticket });
   } catch (error) {
-    return handleApiError(error);
+    return ticketCenterErrorResponse(error, request);
   }
 }
-

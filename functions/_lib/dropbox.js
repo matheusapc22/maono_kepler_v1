@@ -3,6 +3,12 @@ import { requireEnv } from "./http.js";
 const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
 const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
+const DROPBOX_UPLOAD_SESSION_START_URL =
+  "https://content.dropboxapi.com/2/files/upload_session/start";
+const DROPBOX_UPLOAD_SESSION_APPEND_URL =
+  "https://content.dropboxapi.com/2/files/upload_session/append_v2";
+const DROPBOX_UPLOAD_SESSION_FINISH_URL =
+  "https://content.dropboxapi.com/2/files/upload_session/finish";
 const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder";
 const DROPBOX_CREATE_FOLDER_URL =
   "https://api.dropboxapi.com/2/files/create_folder_v2";
@@ -308,4 +314,97 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content) 
   }
 
   return await response.json();
+}
+
+async function uploadSessionRequest(
+  env,
+  url,
+  apiArgument,
+  content,
+  errorMessage,
+) {
+  const accessToken = await getDropboxAccessToken(env);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
+      "Dropbox-API-Arg": JSON.stringify(apiArgument),
+    },
+    body: content,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    const error = new Error(`${errorMessage}: ${response.status} ${text}`);
+    error.status = 502;
+    error.code = "DROPBOX_UPLOAD_SESSION_FAILED";
+    error.dropboxStatus = response.status;
+    throw error;
+  }
+
+  return await response.json();
+}
+
+export async function startDropboxUploadSession(env) {
+  return uploadSessionRequest(
+    env,
+    DROPBOX_UPLOAD_SESSION_START_URL,
+    { close: false },
+    new Uint8Array(0),
+    "Falha ao iniciar sessão de upload no Dropbox",
+  );
+}
+
+export async function appendDropboxUploadSession(
+  env,
+  sessionId,
+  offset,
+  content,
+) {
+  return uploadSessionRequest(
+    env,
+    DROPBOX_UPLOAD_SESSION_APPEND_URL,
+    {
+      cursor: {
+        session_id: sessionId,
+        offset,
+      },
+      close: false,
+    },
+    content,
+    "Falha ao continuar sessão de upload no Dropbox",
+  );
+}
+
+export async function finishDropboxUploadSession(
+  env,
+  sessionId,
+  offset,
+  rootPath,
+  fileName,
+  content,
+) {
+  const normalizedRootPath = normalizeDropboxFolderPath(rootPath);
+  const path = joinDropboxPath(normalizedRootPath, fileName);
+
+  return uploadSessionRequest(
+    env,
+    DROPBOX_UPLOAD_SESSION_FINISH_URL,
+    {
+      cursor: {
+        session_id: sessionId,
+        offset,
+      },
+      commit: {
+        path,
+        mode: "overwrite",
+        autorename: false,
+        mute: false,
+        strict_conflict: false,
+      },
+    },
+    content,
+    `Falha ao concluir upload no Dropbox ${path}`,
+  );
 }

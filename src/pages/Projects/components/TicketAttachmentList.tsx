@@ -22,6 +22,9 @@ type TicketAttachmentListProps = {
   onChanged: () => void;
 };
 
+const MAX_FILE_BYTES = 80 * 1024 * 1024;
+const MAX_TICKET_BYTES = 150 * 1024 * 1024;
+
 export default function TicketAttachmentList({
   organizationId,
   ticket,
@@ -43,6 +46,18 @@ export default function TicketAttachmentList({
   async function handleUpload(file: File) {
     if (!uploadAllowed) return;
     setError(null);
+    if (file.size > MAX_FILE_BYTES) {
+      setError("Cada arquivo pode ter no máximo 80 MB.");
+      return;
+    }
+    const currentBytes = attachments.reduce(
+      (total, attachment) => total + Number(attachment.size || 0),
+      0,
+    );
+    if (currentBytes + file.size > MAX_TICKET_BYTES) {
+      setError("Os anexos do chamado não podem ultrapassar 150 MB.");
+      return;
+    }
     setUploadProgress(0);
     const controller = new AbortController();
     uploadControllerRef.current = controller;
@@ -120,7 +135,7 @@ export default function TicketAttachmentList({
         <div>
           <h4 id="ticket-attachments-title">Anexos</h4>
           <p>
-            {attachments.length}/5 arquivos · limite total de 25 MB
+            {attachments.length}/5 arquivos · 80 MB por arquivo · 150 MB no total
           </p>
         </div>
 
@@ -216,4 +231,3 @@ export default function TicketAttachmentList({
     </section>
   );
 }
-

@@ -5,13 +5,13 @@ import {
 import {
   getOrganizationOrThrow,
   getRouteParam,
-  handleApiError,
   methodNotAllowed,
   parsePositiveInteger,
 } from "../../../../../../../_lib/organizations.js";
 import {
   downloadTicketAttachment,
   ensureTicketCenterSchema,
+  ticketCenterErrorResponse,
 } from "../../../../../../../_lib/ticket-center.js";
 
 export async function onRequest(context) {
@@ -74,7 +74,6 @@ export async function onRequestGet({ env, request, params }) {
       headers: download.headers,
     });
   } catch (error) {
-    return handleApiError(error);
+    return ticketCenterErrorResponse(error, request);
   }
 }
-
