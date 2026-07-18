@@ -300,6 +300,7 @@
 }
 
 .ticket-filter-surface {
+  container-type: inline-size;
   display: grid;
   gap: 16px;
   padding: 14px 26px 18px;
@@ -347,7 +348,13 @@
 }
 
 .ticket-filter-bar {
-  grid-template-columns: minmax(250px, 1.65fr) repeat(3, minmax(150px, 1fr)) repeat(2, minmax(130px, 0.85fr));
+  display: grid;
+  grid-template-columns:
+    minmax(250px, 1.7fr)
+    minmax(145px, 0.9fr)
+    minmax(170px, 1fr)
+    minmax(180px, 1.05fr)
+    minmax(290px, 1.75fr);
   gap: 14px;
   align-items: end;
 }
@@ -365,6 +372,30 @@
   padding: 9px 12px;
   outline: 0;
   background-color: #0c1016;
+}
+
+.ticket-period-filter {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ticket-period-filter > legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.ticket-period-filter > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ticket-date-filter {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
 }
 
 .ticket-filter-search {
@@ -1821,9 +1852,14 @@
   }
 }
 
-@media (max-width: 1450px) {
+@container (max-width: 1120px) {
   .ticket-filter-bar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ticket-filter-search,
+  .ticket-period-filter {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1845,14 +1881,6 @@
 
   .ticket-error-actions {
     justify-content: flex-end;
-  }
-
-  .ticket-filter-bar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .ticket-filter-search {
-    grid-column: 1 / -1;
   }
 
   .ticket-metrics {
