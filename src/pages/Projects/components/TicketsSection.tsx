@@ -495,8 +495,8 @@ export default function TicketsSection({
               }))
             }
           >
-            <span>Abertos</span>
-            <strong>{openCount}</strong>
+            <span className="ticket-metric-icon metric-open" aria-hidden="true">▣</span>
+            <span className="ticket-metric-copy"><span>Abertos</span><strong>{openCount}</strong></span>
           </button>
           <button
             type="button"
@@ -510,8 +510,8 @@ export default function TicketsSection({
               }))
             }
           >
-            <span>Em andamento</span>
-            <strong>{facets.byStatus.in_progress}</strong>
+            <span className="ticket-metric-icon metric-progress" aria-hidden="true">◔</span>
+            <span className="ticket-metric-copy"><span>Em andamento</span><strong>{facets.byStatus.in_progress}</strong></span>
           </button>
           <button
             type="button"
@@ -525,8 +525,8 @@ export default function TicketsSection({
               }))
             }
           >
-            <span>Em revisão</span>
-            <strong>{facets.byStatus.in_review}</strong>
+            <span className="ticket-metric-icon metric-review" aria-hidden="true">◉</span>
+            <span className="ticket-metric-copy"><span>Em revisão</span><strong>{facets.byStatus.in_review}</strong></span>
           </button>
           <button
             type="button"
@@ -540,8 +540,8 @@ export default function TicketsSection({
               }))
             }
           >
-            <span>Vencidos</span>
-            <strong>{facets.overdue}</strong>
+            <span className="ticket-metric-icon metric-overdue" aria-hidden="true">⚠</span>
+            <span className="ticket-metric-copy"><span>Vencidos</span><strong>{facets.overdue}</strong></span>
           </button>
           <button
             type="button"
@@ -555,8 +555,8 @@ export default function TicketsSection({
               }))
             }
           >
-            <span>Concluídos</span>
-            <strong>{facets.byStatus.closed}</strong>
+            <span className="ticket-metric-icon metric-closed" aria-hidden="true">✓</span>
+            <span className="ticket-metric-copy"><span>Concluídos</span><strong>{facets.byStatus.closed}</strong></span>
           </button>
         </section>
       )}

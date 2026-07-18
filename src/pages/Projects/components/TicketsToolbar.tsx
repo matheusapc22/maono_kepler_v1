@@ -54,13 +54,10 @@ export default function TicketsToolbar({
         <div className="ticket-center-heading">
           <span className="ticket-center-eyebrow">Atendimento operacional</span>
           <h2>Central de Chamados</h2>
-          <p>
-            <strong>
-              {organizationName?.trim() || `Organização #${organizationId}`} Workspace
-            </strong>
-            <span aria-hidden="true"> · </span>
-            acompanhe solicitações operacionais
-          </p>
+          <p>Consulte, priorize e acompanhe solicitações operacionais.</p>
+          <span className="mm-sr-only">
+            Organização ativa: {organizationName?.trim() || `Organização #${organizationId}`}
+          </span>
         </div>
 
         <div className="ticket-center-actions">
@@ -78,7 +75,6 @@ export default function TicketsToolbar({
 
           <label className="ticket-view-control">
             <span className="mm-sr-only">Visualização ativa</span>
-            <span aria-hidden="true">▦</span>
             <select
               value={viewMode}
               aria-label="Visualização dos chamados"
@@ -96,10 +92,11 @@ export default function TicketsToolbar({
 
       <section className="ticket-filter-surface" aria-label="Filtros de chamados">
         <header className="ticket-filter-header">
-          <div>
+          <div className="ticket-filter-title">
+            <span aria-hidden="true">☷</span>
             <strong>Filtros</strong>
-            <span>Encontre chamados por contexto, responsável ou período.</span>
           </div>
+          <span className="ticket-filter-help">Resultados por contexto, responsável ou período.</span>
           <button
             type="button"
             className="ticket-filter-clear"
@@ -117,6 +114,7 @@ export default function TicketsToolbar({
               })
             }
           >
+            <span aria-hidden="true">◌</span>
             Limpar filtros
           </button>
         </header>
