@@ -1,0 +1,85 @@
+name: Apply access delegation build hotfix
+
+on:
+  push:
+    branches:
+      - codex/hotfix-access-delegation-build
+
+permissions:
+  contents: write
+
+jobs:
+  apply-hotfix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/hotfix-access-delegation-build
+          fetch-depth: 0
+
+      - name: Apply typed Map correction
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/pages/Admin/components/AdminUserManager.tsx")
+          source = path.read_text(encoding="utf-8")
+
+          catalog_type = '''type DelegationCatalogItem = {
+            code: string;
+            group: string;
+            name: string;
+            risk?: string;
+          };
+
+          type DelegationPermissionDraft = {'''
+          catalog_replacement = '''type DelegationCatalogItem = {
+            code: string;
+            group: string;
+            name: string;
+            risk?: string;
+          };
+
+          type DelegationPermission = {
+            permission: string;
+            canGrant: boolean;
+            canRevoke: boolean;
+          };
+
+          type DelegationPermissionDraft = {'''
+
+          map_source = '''      const selectedPermissions = new Map(
+                  (existing?.permissions || []).map(
+                    (item: {
+                      permission: string;
+                      canGrant: boolean;
+                      canRevoke: boolean;
+                    }) => [item.permission, item],
+                  ),
+                );'''
+          map_replacement = '''      const selectedPermissions = new Map<string, DelegationPermission>(
+                  (existing?.permissions || []).map(
+                    (item: DelegationPermission) => [item.permission, item] as const,
+                  ),
+                );'''
+
+          if source.count(catalog_type) != 1:
+              raise SystemExit("Expected exactly one catalog type insertion point")
+          if source.count(map_source) != 1:
+              raise SystemExit("Expected exactly one Map replacement point")
+
+          source = source.replace(catalog_type, catalog_replacement, 1)
+          source = source.replace(map_source, map_replacement, 1)
+          path.write_text(source, encoding="utf-8")
+
+      - name: Remove temporary workflow and commit correction
+        run: |
+          rm .github/workflows/apply-access-hotfix.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/Admin/components/AdminUserManager.tsx .github/workflows/apply-access-hotfix.yml
+          git commit -m "fix(access): type delegation permission map"
+          git push origin HEAD:codex/hotfix-access-delegation-build
