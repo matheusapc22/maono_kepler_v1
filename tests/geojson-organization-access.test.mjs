@@ -11,10 +11,12 @@ const deletion = await readFile(new URL("../functions/api/organizations/[id]/fil
 const grantRoute = await readFile(new URL("../functions/api/organizations/[id]/users/[userId]/permissions.js", import.meta.url), "utf8");
 const commercial = await readFile(new URL("../src/pages/Projects/components/user-access-commercial.ts", import.meta.url), "utf8");
 
-test("classifica somente JSON/GeoJSON vinculados a projeto como protegidos", () => {
+test("classifica JSON/GeoJSON atuais e legados como protegidos", () => {
   assert.equal(guardModule.isProjectGeoJsonFile({ project_id: 10, file_type: "geojson", name: "mapa.geojson" }), true);
   assert.equal(guardModule.isProjectGeoJsonFile({ project_id: 10, file_type: "json", name: "mapa.json", mime_type: "application/json" }), true);
-  assert.equal(guardModule.isProjectGeoJsonFile({ project_id: null, file_type: "geojson", name: "livre.geojson" }), false);
+  assert.equal(guardModule.isProjectGeoJsonFile({ project_id: null, file_type: null, name: "config.kepler.json" }), true);
+  assert.equal(guardModule.isProjectGeoJsonFile({ project_id: null, file_type: null, original_name: "Projeto_MRA_v1.json" }), true);
+  assert.equal(guardModule.isProjectGeoJsonFile({ project_id: null, file_type: "geojson", name: "livre.geojson" }), true);
   assert.equal(guardModule.isProjectGeoJsonFile({ project_id: 10, file_type: "pdf", name: "relatorio.pdf" }), false);
 });
 
@@ -40,6 +42,13 @@ test("document.view e vínculo direto não revelam GeoJSON sem concessão ampla"
   assert.doesNotMatch(guardSource, /direct_project/);
   assert.match(guardSource, /ORGANIZATION_GEOJSON_VIEW_PERMISSION/);
   assert.equal(guardModule.isProjectGeoJsonFile({ project_id: 7, file_type: "geojson", name: "restrito.geojson" }), true);
+});
+
+test("arquivo JSON legado sem project_id exige a concessão organizacional", () => {
+  const guardSource = String(guardModule.decideProjectGeoJsonAccess);
+  assert.match(guardSource, /if \(projectId\)/);
+  assert.match(guardSource, /ORGANIZATION_GEOJSON_VIEW_PERMISSION/);
+  assert.equal(guardModule.isProjectGeoJsonFile({ name: "Projeto_MRA_v1.json" }), true);
 });
 
 test("negação oculta a existência do arquivo protegido", async () => {
