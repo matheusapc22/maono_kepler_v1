@@ -84,9 +84,13 @@ test("gestão delegada permanece em Projects e depende das capabilities do backe
   assert.match(source, /\/access-governance/);
   assert.match(source, /governance\?\.canManageAdditionalAccesses/);
   assert.match(source, /GESTÃO POR ORGANIZAÇÃO/);
-  assert.match(source, /Projects → Usuários e Acessos/);
+  assert.match(source, /Usuários e Acessos/);
+  assert.match(source, /Delegação limitada ativa/);
   assert.doesNotMatch(
-    source.slice(source.indexOf("function can("), source.indexOf("function profileOptions")),
+    source.slice(
+      source.indexOf("function can("),
+      source.indexOf("function profileOptions"),
+    ),
     /permission\.grant|permission\.revoke|users\.manage_access/,
   );
 });
