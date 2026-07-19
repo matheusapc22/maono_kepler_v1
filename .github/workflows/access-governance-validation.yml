@@ -11,11 +11,13 @@ on:
       - "migrations/0012_access_delegation_policy.sql"
       - "schema.sql"
       - "package.json"
+      - "vite.config.ts"
       - "src/access-control/permissions.ts"
       - "src/pages/Admin/**"
       - "src/pages/Projects/components/UsersAccessSection.tsx"
       - "tests/access-delegation.test.mjs"
       - "tests/admin-user-manager-delegation-map.test.mjs"
+      - "tests/cloudflare-build-chunking.test.mjs"
       - ".github/workflows/access-governance-validation.yml"
   workflow_dispatch:
 
@@ -25,7 +27,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,8 +55,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-      - name: Access governance tests
+      - name: Access governance and build tests
         run: >-
           node --test
           tests/access-delegation.test.mjs
           tests/admin-user-manager-delegation-map.test.mjs
+          tests/cloudflare-build-chunking.test.mjs
