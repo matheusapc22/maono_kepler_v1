@@ -16,6 +16,7 @@ import {
   organizationFileRequestId,
   recordOrganizationFileAudit,
 } from "../../../../_lib/organization-files.js";
+import { requireProjectGeoJsonAccess } from "../../../../_lib/geojson-access.js";
 
 export async function onRequest(context) {
   if (context.request.method === "DELETE") return onRequestDelete(context);
@@ -69,6 +70,15 @@ export async function onRequestDelete({ env, request, params }) {
       error.publicMessage = error.message;
       throw error;
     }
+
+    await requireProjectGeoJsonAccess(
+      env,
+      request,
+      user,
+      organizationId,
+      file,
+      { surface: "document.delete", auditAllowed: true },
+    );
 
     const dropboxPath = getFileDropboxPath(file);
     if (dropboxPath) await deleteOrganizationBinary(env, dropboxPath);
