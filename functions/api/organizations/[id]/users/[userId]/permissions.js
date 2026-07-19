@@ -1,5 +1,5 @@
-import { requireSession, normalizeRole } from "../../../../../_lib/auth.js";
-import { can, recordAuditLog } from "../../../../../_lib/permissions.js";
+import { requireSession } from "../../../../../_lib/auth.js";
+import { authorizeOrganizationPermissionMutation } from "../../../../../_lib/access-governance.js";
 import {
   getRouteParam,
   grantOrganizationPermission,
@@ -18,20 +18,10 @@ function getUserId(params) {
   return parsePositiveInteger(getRouteParam(params, "userId"), "userId");
 }
 
-function createForbiddenError(reason = "FORBIDDEN") {
-  const error = new Error("Acesso negado.");
-  error.status = 403;
-  error.code = "FORBIDDEN";
-  error.reason = reason;
-
-  return error;
-}
-
 function createInvalidPayloadError(message = "Payload inválido.") {
   const error = new Error(message);
   error.status = 400;
   error.code = "INVALID_PAYLOAD";
-
   return error;
 }
 
@@ -41,77 +31,13 @@ function normalizePermissionFromPayload(payload) {
   }
 
   const permission = String(payload.permission || "").trim();
-
   if (!permission) {
     throw createInvalidPayloadError("Permissão não informada.");
   }
-
   if (permission.length > 120) {
     throw createInvalidPayloadError("Permissão excede o limite permitido.");
   }
-
   return permission;
-}
-
-async function requireGrantAccess(
-  env,
-  request,
-  user,
-  organizationId,
-  targetUserId,
-  permission,
-) {
-  const context = {
-    organizationId,
-    scopeType: "organization",
-    resourceId: targetUserId,
-  };
-
-  const manageAccessDecision = await can(
-    env,
-    user,
-    "users.manage_access",
-    context,
-  );
-
-  const grantDecision = await can(
-    env,
-    user,
-    "permission.grant",
-    context,
-  );
-
-  if (manageAccessDecision.allowed && grantDecision.allowed) {
-    return {
-      manageAccessDecision,
-      grantDecision,
-    };
-  }
-
-  await recordAuditLog(env, {
-    actorUserId: user?.id,
-    organizationId,
-    action: "permission.grant",
-    resourceType: "user",
-    resourceId: targetUserId,
-    result: "denied",
-    metadata: {
-      targetUserId,
-      permission,
-      requiredPermissions: ["users.manage_access", "permission.grant"],
-      usersManageAccess: {
-        allowed: manageAccessDecision.allowed,
-        reason: manageAccessDecision.reason,
-      },
-      permissionGrant: {
-        allowed: grantDecision.allowed,
-        reason: grantDecision.reason,
-      },
-    },
-    request,
-  });
-
-  throw createForbiddenError("USERS_MANAGE_ACCESS_AND_PERMISSION_GRANT_REQUIRED");
 }
 
 export async function onRequestPost({ env, request, params }) {
@@ -122,14 +48,7 @@ export async function onRequestPost({ env, request, params }) {
     const permission = normalizePermissionFromPayload(payload);
     const warningAcknowledged = payload.warningAcknowledged === true;
     const justification = String(payload.justification || "").trim();
-    const user = await requireSession(env, request);
-
-    if (
-      permission === "organization.projects.geojson.view" &&
-      normalizeRole(user.role) !== "super_admin"
-    ) {
-      throw createForbiddenError("SUPER_ADMIN_REQUIRED");
-    }
+    const actor = await requireSession(env, request);
 
     if (
       permission === "organization.projects.geojson.view" &&
@@ -138,21 +57,22 @@ export async function onRequestPost({ env, request, params }) {
       throw createInvalidPayloadError("Justificativa excede o limite permitido.");
     }
 
-    await requireGrantAccess(
+    await authorizeOrganizationPermissionMutation({
       env,
       request,
-      user,
+      actor,
       organizationId,
       targetUserId,
       permission,
-    );
+      operation: "grant",
+    });
 
     const grant = await grantOrganizationPermission(
       env,
       organizationId,
       targetUserId,
       permission,
-      user,
+      actor,
       { warningAcknowledged, justification },
     );
 
