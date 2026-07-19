@@ -114,4 +114,6 @@ test("migration, rotas e interfaces preservam a fronteira Admin → Projects", a
   assert.match(adminUi, /Projects → Usuários e Acessos/);
   assert.match(grantRoute, /authorizePermissionMutation/);
   assert.match(revokeRoute, /authorizePermissionMutation/);
+  assert.match(revokeRoute, /assertDoesNotBreakLastOperationalOwner/);
+  assert.match(revokeRoute, /LAST_OWNER_REQUIRED/);
 });
