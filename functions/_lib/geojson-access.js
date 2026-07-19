@@ -23,9 +23,11 @@ export function isProjectGeoJsonFile(file) {
 }
 
 function forbidden(reason) {
-  const error = new Error("Acesso negado ao GeoJSON deste projeto.");
-  error.status = 403;
-  error.code = "GEOJSON_PROJECT_ACCESS_DENIED";
+  // Não revele que o arquivo existe para quem não possui a permissão
+  // explícita. A mesma resposta é usada para um identificador inexistente.
+  const error = new Error("Arquivo não encontrado.");
+  error.status = 404;
+  error.code = "ORGANIZATION_FILE_NOT_FOUND";
   error.stage = "geojson.authorization";
   error.reason = reason;
   error.publicMessage = error.message;
@@ -71,14 +73,9 @@ export async function decideProjectGeoJsonAccess(env, user, organizationId, proj
     return { allowed: true, reason: broad.reason, mode: "organization" };
   }
 
-  // Modo compatível: preserva o vínculo direto existente em user_projects.
-  const direct = await can(env, user, "project.view", {
-    ...context,
-    scopeType: "project",
-  });
-  return direct.allowed
-    ? { allowed: true, reason: direct.reason, mode: "direct_project" }
-    : { allowed: false, reason: broad.reason || direct.reason || "DENY_BY_DEFAULT" };
+  // A autorização é exclusivamente explícita e organizacional. Ter acesso ao
+  // projeto ou a document.view não permite inferir a existência do GeoJSON.
+  return { allowed: false, reason: broad.reason || "DENY_BY_DEFAULT" };
 }
 
 export async function requireProjectGeoJsonAccess(env, request, user, organizationId, file, options = {}) {
