@@ -44,6 +44,10 @@ test("migration mantém política, whitelist e perfis vinculados à organizaçã
   assert.match(sql, /CREATE TABLE IF NOT EXISTS delegation_target_levels/);
   assert.match(sql, /CHECK \(access_level IN \('viewer', 'editor'\)\)/);
   assert.match(sql, /ON DELETE CASCADE/);
+  assert.match(sql, /trg_access_delegation_membership_downgrade/);
+  assert.match(sql, /trg_access_delegation_membership_removed/);
+  assert.match(sql, /trg_access_delegation_user_ineligible/);
+  assert.match(sql, /SET enabled = 0/);
 });
 
 test("rotas de grant e revoke usam o mesmo motor de decisão delegado", async () => {
