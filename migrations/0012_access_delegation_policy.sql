@@ -52,3 +52,51 @@ CREATE INDEX IF NOT EXISTS idx_delegation_permissions_delegation
   ON delegation_permissions(delegation_id);
 CREATE INDEX IF NOT EXISTS idx_delegation_target_levels_delegation
   ON delegation_target_levels(delegation_id);
+
+-- Uma política não pode ficar dormente e voltar a valer depois de um downgrade.
+CREATE TRIGGER IF NOT EXISTS trg_access_delegation_membership_downgrade
+AFTER UPDATE OF access_level ON organization_users
+WHEN LOWER(COALESCE(NEW.access_level, '')) <> 'owner'
+  AND LOWER(COALESCE((SELECT role FROM users WHERE id = NEW.user_id), '')) <> 'admin'
+BEGIN
+  UPDATE organization_access_delegations
+     SET enabled = 0,
+         version = version + 1,
+         updated_at = CURRENT_TIMESTAMP
+   WHERE organization_id = NEW.organization_id
+     AND delegate_user_id = NEW.user_id
+     AND enabled = 1;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_access_delegation_membership_removed
+AFTER DELETE ON organization_users
+BEGIN
+  UPDATE organization_access_delegations
+     SET enabled = 0,
+         version = version + 1,
+         updated_at = CURRENT_TIMESTAMP
+   WHERE organization_id = OLD.organization_id
+     AND delegate_user_id = OLD.user_id
+     AND enabled = 1;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_access_delegation_user_ineligible
+AFTER UPDATE OF role, active ON users
+WHEN NEW.active = 0
+   OR (
+     LOWER(COALESCE(NEW.role, '')) <> 'admin'
+     AND NOT EXISTS (
+       SELECT 1
+         FROM organization_users ou
+        WHERE ou.user_id = NEW.id
+          AND LOWER(COALESCE(ou.access_level, '')) = 'owner'
+     )
+   )
+BEGIN
+  UPDATE organization_access_delegations
+     SET enabled = 0,
+         version = version + 1,
+         updated_at = CURRENT_TIMESTAMP
+   WHERE delegate_user_id = NEW.id
+     AND enabled = 1;
+END;
