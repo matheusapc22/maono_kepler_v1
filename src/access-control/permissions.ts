@@ -42,6 +42,8 @@ export const PERMISSION = {
   ORGANIZATION_EDIT: "organization.edit",
   ORGANIZATION_METRICS_VIEW: "organization.metrics.view",
   ORGANIZATION_PROJECTS_GEOJSON_VIEW: "organization.projects.geojson.view",
+  ORGANIZATION_USERS_PERMISSIONS_DELEGATE:
+    "organization.users.permissions.delegate",
 
   LIMITS_VIEW: "limits.view",
   LIMITS_INCREASE_REQUEST: "limits.increase_request",
