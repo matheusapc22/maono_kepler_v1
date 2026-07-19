@@ -83,20 +83,22 @@ END;
 CREATE TRIGGER IF NOT EXISTS trg_access_delegation_user_ineligible
 AFTER UPDATE OF role, active ON users
 WHEN NEW.active = 0
-   OR (
-     LOWER(COALESCE(NEW.role, '')) <> 'admin'
-     AND NOT EXISTS (
-       SELECT 1
-         FROM organization_users ou
-        WHERE ou.user_id = NEW.id
-          AND LOWER(COALESCE(ou.access_level, '')) = 'owner'
-     )
-   )
+   OR LOWER(COALESCE(NEW.role, '')) <> 'admin'
 BEGIN
   UPDATE organization_access_delegations
      SET enabled = 0,
          version = version + 1,
          updated_at = CURRENT_TIMESTAMP
    WHERE delegate_user_id = NEW.id
-     AND enabled = 1;
+     AND enabled = 1
+     AND (
+       NEW.active = 0
+       OR NOT EXISTS (
+         SELECT 1
+           FROM organization_users ou
+          WHERE ou.user_id = NEW.id
+            AND ou.organization_id = organization_access_delegations.organization_id
+            AND LOWER(COALESCE(ou.access_level, '')) = 'owner'
+       )
+     );
 END;
