@@ -10,10 +10,12 @@ on:
       - "functions/api/organizations/**"
       - "migrations/0012_access_delegation_policy.sql"
       - "schema.sql"
+      - "package.json"
       - "src/access-control/permissions.ts"
       - "src/pages/Admin/**"
       - "src/pages/Projects/components/UsersAccessSection.tsx"
       - "tests/access-delegation.test.mjs"
+      - "tests/admin-user-manager-delegation-map.test.mjs"
       - ".github/workflows/access-governance-validation.yml"
   workflow_dispatch:
 
@@ -23,7 +25,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,4 +54,7 @@ jobs:
           retention-days: 3
 
       - name: Access governance tests
-        run: node --test tests/access-delegation.test.mjs
+        run: >-
+          node --test
+          tests/access-delegation.test.mjs
+          tests/admin-user-manager-delegation-map.test.mjs
