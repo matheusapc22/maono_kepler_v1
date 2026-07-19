@@ -93,6 +93,7 @@ export type UpdateOrganizationUserPayload = {
   role?: "owner" | "editor" | "viewer" | "admin" | "super_admin" | string;
   accessLevel?: "owner" | "editor" | "viewer" | string;
   access_level?: "owner" | "editor" | "viewer" | string;
+  password?: string;
 };
 
 export type OrganizationUserPermissionGrant = {
@@ -554,6 +555,16 @@ export function updateOrganizationUser(
       method: "PATCH",
       body: JSON.stringify(payload),
     },
+  );
+}
+
+export function deleteOrganizationUserMembership(
+  organizationId: number | string,
+  userId: number | string,
+) {
+  return requestJson<{ ok: boolean; removed: boolean }>(
+    organizationUserPath(organizationId, userId),
+    { method: "DELETE" },
   );
 }
 
