@@ -36,6 +36,12 @@ type DelegationCatalogItem = {
   risk?: string;
 };
 
+type DelegationPermission = {
+  permission: string;
+  canGrant: boolean;
+  canRevoke: boolean;
+};
+
 type DelegationPermissionDraft = {
   enabled: boolean;
   canGrant: boolean;
@@ -289,13 +295,9 @@ export default function AdminUserManager({
         },
       ).then(json);
       const existing = data.delegation;
-      const selectedPermissions = new Map(
+      const selectedPermissions = new Map<string, DelegationPermission>(
         (existing?.permissions || []).map(
-          (item: {
-            permission: string;
-            canGrant: boolean;
-            canRevoke: boolean;
-          }) => [item.permission, item],
+          (item: DelegationPermission) => [item.permission, item] as const,
         ),
       );
       const permissionDraft: Record<string, DelegationPermissionDraft> = {};
