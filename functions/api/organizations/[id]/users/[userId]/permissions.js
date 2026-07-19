@@ -1,5 +1,6 @@
 import { requireSession, normalizeRole } from "../../../../../_lib/auth.js";
-import { can, recordAuditLog } from "../../../../../_lib/permissions.js";
+import { ACCESS_DELEGATION_PERMISSION, accessGovernanceV2Enabled, authorizeLegacyPermissionMutation, authorizePermissionMutation } from "../../../../../_lib/access-delegation.js";
+import { recordAuditLog } from "../../../../../_lib/permissions.js";
 import {
   getRouteParam,
   grantOrganizationPermission,
@@ -53,67 +54,6 @@ function normalizePermissionFromPayload(payload) {
   return permission;
 }
 
-async function requireGrantAccess(
-  env,
-  request,
-  user,
-  organizationId,
-  targetUserId,
-  permission,
-) {
-  const context = {
-    organizationId,
-    scopeType: "organization",
-    resourceId: targetUserId,
-  };
-
-  const manageAccessDecision = await can(
-    env,
-    user,
-    "users.manage_access",
-    context,
-  );
-
-  const grantDecision = await can(
-    env,
-    user,
-    "permission.grant",
-    context,
-  );
-
-  if (manageAccessDecision.allowed && grantDecision.allowed) {
-    return {
-      manageAccessDecision,
-      grantDecision,
-    };
-  }
-
-  await recordAuditLog(env, {
-    actorUserId: user?.id,
-    organizationId,
-    action: "permission.grant",
-    resourceType: "user",
-    resourceId: targetUserId,
-    result: "denied",
-    metadata: {
-      targetUserId,
-      permission,
-      requiredPermissions: ["users.manage_access", "permission.grant"],
-      usersManageAccess: {
-        allowed: manageAccessDecision.allowed,
-        reason: manageAccessDecision.reason,
-      },
-      permissionGrant: {
-        allowed: grantDecision.allowed,
-        reason: grantDecision.reason,
-      },
-    },
-    request,
-  });
-
-  throw createForbiddenError("USERS_MANAGE_ACCESS_AND_PERMISSION_GRANT_REQUIRED");
-}
-
 export async function onRequestPost({ env, request, params }) {
   try {
     const organizationId = getOrganizationId(params);
@@ -123,6 +63,10 @@ export async function onRequestPost({ env, request, params }) {
     const warningAcknowledged = payload.warningAcknowledged === true;
     const justification = String(payload.justification || "").trim();
     const user = await requireSession(env, request);
+
+    if (permission === ACCESS_DELEGATION_PERMISSION) {
+      throw createForbiddenError("DELEGATION_POLICY_ENDPOINT_REQUIRED");
+    }
 
     if (
       permission === "organization.projects.geojson.view" &&
@@ -138,14 +82,9 @@ export async function onRequestPost({ env, request, params }) {
       throw createInvalidPayloadError("Justificativa excede o limite permitido.");
     }
 
-    await requireGrantAccess(
-      env,
-      request,
-      user,
-      organizationId,
-      targetUserId,
-      permission,
-    );
+    const authorization = accessGovernanceV2Enabled(env)
+      ? await authorizePermissionMutation(env, request, user, organizationId, targetUserId, permission, "grant")
+      : await authorizeLegacyPermissionMutation(env, request, user, organizationId, targetUserId, permission, "grant");
 
     const grant = await grantOrganizationPermission(
       env,
@@ -155,6 +94,10 @@ export async function onRequestPost({ env, request, params }) {
       user,
       { warningAcknowledged, justification },
     );
+
+    if (authorization.mode === "delegated") {
+      await recordAuditLog(env, { actorUserId: user.id, organizationId, action: "delegated.permission.grant", resourceType: "user", resourceId: targetUserId, result: "success", metadata: { permission, policyVersion: authorization.policyVersion }, request });
+    }
 
     return jsonResponse(
       {

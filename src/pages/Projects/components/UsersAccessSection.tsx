@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 
 import {
   createOrganizationUser,
+  getOrganizationAccessCapabilities,
   getOrganizationLimits,
   grantOrganizationUserPermission,
   listOrganizationUsers,
   revokeOrganizationUserPermission,
   updateOrganizationUser,
-  deleteOrganizationUserMembership,
   type OrganizationLimits,
+  type OrganizationAccessCapabilities,
   type OrganizationUser,
 } from "../../../lib/api";
 import {
@@ -95,14 +96,6 @@ function profileOptions(user: MaonoUser | null) {
   return COMMERCIAL_PROFILES.filter((item) => item.id === "consultation");
 }
 
-function accessOptions(user: MaonoUser | null) {
-  const role = roleOf(user);
-  if (role === "super_admin") return COMMERCIAL_ACCESSES;
-  if (role === "admin") return COMMERCIAL_ACCESSES.filter((item) => !item.platformOnly);
-  if (role === "owner" || role === "client") return COMMERCIAL_ACCESSES.filter((item) => item.ownerGrantable);
-  return COMMERCIAL_ACCESSES.filter((item) => userPermissions(user).includes(item.code));
-}
-
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Não foi possível concluir a operação.";
 }
@@ -124,7 +117,7 @@ function summarize(profileId: CommercialProfileId, accesses: string[]): string {
   return `${profile?.name ?? "Esta pessoa"} poderá ${profile?.summary ?? "usar os acessos configurados"}${extra}.`;
 }
 
-function AccessChecklist({ selected, onChange, options }: { selected: string[]; onChange: (next: string[]) => void; options: typeof COMMERCIAL_ACCESSES }) {
+function AccessChecklist({ selected, onChange, options, canToggle = () => true }: { selected: string[]; onChange: (next: string[]) => void; options: typeof COMMERCIAL_ACCESSES; canToggle?: (code: string, checked: boolean) => boolean }) {
   const groups = Array.from(new Set(options.map((item) => item.group)));
   return <div className="people-access-groups">
     {groups.map((group) => <fieldset key={group} className="people-access-group">
@@ -133,7 +126,7 @@ function AccessChecklist({ selected, onChange, options }: { selected: string[]; 
         const checked = selected.includes(item.code);
         const alert = riskLabel(item.risk);
         return <label key={item.code} className="people-access-option">
-          <input type="checkbox" checked={checked} onChange={() => onChange(checked ? selected.filter((code) => code !== item.code) : [...selected, item.code])} />
+          <input type="checkbox" checked={checked} disabled={!canToggle(item.code, checked)} onChange={() => onChange(checked ? selected.filter((code) => code !== item.code) : [...selected, item.code])} />
           <span><strong>{item.name}</strong><small>{item.description}</small>{alert && <em className={`people-risk ${item.risk}`}>{alert}</em>}</span>
         </label>;
       })}
@@ -154,25 +147,30 @@ export default function UsersAccessSection({ user, organizationId: organizationI
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  const [capabilities, setCapabilities] = useState<OrganizationAccessCapabilities | null>(null);
 
   const permissions = useMemo(() => ({
-    view: can(user, "users.view"), create: can(user, "users.create"), edit: can(user, "users.edit"),
-    disable: can(user, "users.disable"), manage: can(user, "users.manage_access"), grant: can(user, "permission.grant"),
-    revoke: can(user, "permission.revoke"), assign: can(user, "role.assign"), limits: can(user, "limits.view"),
-  }), [user]);
+    view: can(user, "users.view"), create: false, edit: false,
+    disable: false, manage: capabilities?.canManageAdditionalAccess === true,
+    grant: capabilities?.allowedOperations.includes("grant") === true,
+    revoke: capabilities?.allowedOperations.includes("revoke") === true,
+    assign: false, limits: can(user, "limits.view"),
+  }), [user, capabilities]);
   const profiles = useMemo(() => profileOptions(user), [user]);
-  const accesses = useMemo(() => accessOptions(user), [user]);
+  const accesses = useMemo(() => (capabilities?.allowedPermissions ?? []).map(accessFromCode), [capabilities]);
 
   const load = useCallback(async () => {
     if (!organizationId || !permissions.view) return;
     setLoading(true); setMessage(null);
     try {
-      const [peopleResult, limitResult] = await Promise.all([
+      const [peopleResult, limitResult, capabilityResult] = await Promise.all([
         listOrganizationUsers(organizationId),
         permissions.limits ? getOrganizationLimits(organizationId).catch(() => null) : Promise.resolve(null),
+        getOrganizationAccessCapabilities(organizationId),
       ]);
       setPeople(peopleResult.users ?? []);
       setLimits(limitResult?.limits ?? null);
+      setCapabilities(capabilityResult.capabilities);
     } catch (error) { setMessage({ kind: "error", text: errorText(error) }); }
     finally { setLoading(false); }
   }, [organizationId, permissions.limits, permissions.view]);
@@ -229,7 +227,7 @@ export default function UsersAccessSection({ user, organizationId: organizationI
     try {
       const payload: { name?: string; active?: boolean; role?: string; accessLevel?: string } = {};
       if (permissions.edit && editing.name.trim() !== (editing.person.name ?? "")) payload.name = editing.name.trim();
-      if ((permissions.assign || permissions.manage) && profile) { payload.role = profile.role; payload.accessLevel = profile.accessLevel; }
+      if (permissions.assign && profile) { payload.role = profile.role; payload.accessLevel = profile.accessLevel; }
       if (editing.active !== (editing.person.active !== false)) payload.active = editing.active;
       if (roleOf(user) === "super_admin" && editing.password) (payload as { password?: string }).password = editing.password;
       if (Object.keys(payload).length) await updateOrganizationUser(organizationId, editing.person.id, payload);
@@ -243,19 +241,14 @@ export default function UsersAccessSection({ user, organizationId: organizationI
     finally { setBusy(false); }
   }
 
-  async function removePerson() {
-    if (!editing || !organizationId || !window.confirm(`Remover ${editing.person.name || editing.person.email} desta organização?`)) return;
-    setBusy(true); setMessage(null);
-    try { await deleteOrganizationUserMembership(organizationId, editing.person.id); setEditing(null); setMessage({ kind: "success", text: "Acesso removido da organização." }); await load(); }
-    catch (error) { setMessage({ kind: "error", text: errorText(error) }); }
-    finally { setBusy(false); }
-  }
-
   if (!organizationId) return <section className="mm-card mm-section-card"><h2>Usuários e Acessos</h2><p>Não foi possível identificar a organização ativa.</p></section>;
   if (!permissions.view) return <section className="mm-card mm-section-card"><h2>Usuários e Acessos</h2><p>Você não possui acesso para consultar a equipe.</p></section>;
 
   return <section className="people-access-section">
-    <header className="people-access-header"><div><span className="people-eyebrow">GESTÃO DE PESSOAS</span><h2>Usuários e Acessos</h2><p>Gerencie quem participa da organização e o que cada pessoa pode fazer.</p></div>{permissions.create && <button className="mm-btn primary" type="button" onClick={() => setCreateOpen(true)}>＋ Adicionar pessoa</button>}</header>
+    <header className="people-access-header"><div><span className="people-eyebrow">EQUIPE DA ORGANIZAÇÃO</span><h2>Usuários e Acessos</h2><p>{permissions.manage ? "Você possui delegação limitada para gerir acessos adicionais nesta organização." : "Consulte a equipe. Alterações administrativas são realizadas pelo Painel Admin."}</p></div>{permissions.create && <button className="mm-btn primary" type="button" onClick={() => setCreateOpen(true)}>＋ Adicionar pessoa</button>}</header>
+
+    {capabilities?.configureInAdmin && <div className="people-notice success" role="status">Como Super Admin, configure usuários, acessos e delegações em Painel Admin → Usuários e Permissões.</div>}
+    {!permissions.manage && capabilities?.reason === "DELEGATION_REQUIRED" && ["owner","client","admin"].includes(roleOf(user)) && <div className="people-notice success" role="status">Este perfil não recebeu delegação para alterar acessos adicionais.</div>}
 
     <div className="people-capacity-grid">
       <article><span>Pessoas com acesso</span><strong>{active}</strong></article><article><span>Limite da organização</span><strong>{limit}</strong></article><article><span>Vagas disponíveis</span><strong>{available}</strong></article><article><span>Acessos suspensos</span><strong>{suspended}</strong></article>
@@ -269,13 +262,13 @@ export default function UsersAccessSection({ user, organizationId: organizationI
     <div className="people-table-wrap"><table><thead><tr><th>Pessoa</th><th>Situação</th><th>Perfil</th><th>Acessos adicionais</th><th>Atualizado em</th><th>Ações</th></tr></thead><tbody>
       {loading && <tr><td colSpan={6}>Carregando pessoas com acesso...</td></tr>}
       {!loading && filtered.length === 0 && <tr><td colSpan={6}>Nenhuma pessoa encontrada.</td></tr>}
-      {!loading && filtered.map((person) => <tr key={person.id}><td><strong>{person.name || "Pessoa sem nome"}</strong><small>{person.email}</small></td><td><span className={`people-status ${person.active === false ? "suspended" : "active"}`}>{person.active === false ? "Suspenso" : "Ativo"}</span></td><td>{profileLabel(person)}</td><td>{(person.permissions ?? []).length ? `${person.permissions?.length} acesso${person.permissions?.length === 1 ? "" : "s"}` : "Nenhum adicional"}</td><td>{formatDate(person.updatedAt ?? person.createdAt)}</td><td><button type="button" className="people-edit-button" onClick={() => openEditor(person)} aria-label={`Editar acesso de ${person.name || person.email}`}>✎</button></td></tr>)}
+      {!loading && filtered.map((person) => { const targetRole = String(person.role || "viewer").toLowerCase(); const eligible = permissions.manage && person.active !== false && ["viewer", "editor"].includes(targetRole) && capabilities?.targetLevels.includes(String(person.accessLevel || "viewer").toLowerCase()) && Number(person.id) !== Number(object(user).id); return <tr key={person.id}><td><strong>{person.name || "Pessoa sem nome"}</strong><small>{person.email}</small></td><td><span className={`people-status ${person.active === false ? "suspended" : "active"}`}>{person.active === false ? "Suspenso" : "Ativo"}</span></td><td>{profileLabel(person)}</td><td>{(person.permissions ?? []).length ? `${person.permissions?.length} acesso${person.permissions?.length === 1 ? "" : "s"}` : "Nenhum adicional"}</td><td>{formatDate(person.updatedAt ?? person.createdAt)}</td><td>{eligible ? <button type="button" className="people-edit-button" onClick={() => openEditor(person)} aria-label={`Editar acessos adicionais de ${person.name || person.email}`}>✎</button> : <span aria-label="Somente consulta">—</span>}</td></tr>})}
     </tbody></table></div>
 
     {(createOpen || editing) && <div className="people-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) { setCreateOpen(false); setEditing(null); } }}><aside className="people-drawer" role="dialog" aria-modal="true" aria-labelledby="people-drawer-title">
       <header><div><span className="people-eyebrow">{editing ? "GESTÃO DE ACESSO" : "NOVO ACESSO"}</span><h3 id="people-drawer-title">{editing ? "Editar acesso" : "Novo acesso à organização"}</h3><p>{editing ? "Revise o perfil, a situação e os acessos desta pessoa." : "Escolha um perfil de participação e, se necessário, libere acessos adicionais."}</p></div><button type="button" onClick={() => { setCreateOpen(false); setEditing(null); }} aria-label="Fechar">×</button></header>
       {!editing ? <form onSubmit={createPerson} className="people-drawer-form"><div className="people-form-grid"><label>Nome completo<input value={create.name} onChange={(event) => setCreate({ ...create, name: event.target.value })} required /></label><label>E-mail de acesso<input type="email" value={create.email} onChange={(event) => setCreate({ ...create, email: event.target.value })} required /></label><label>Perfil de participação<select value={create.profile} onChange={(event) => setCreate({ ...create, profile: event.target.value as CommercialProfileId })}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label>Situação inicial<select value={create.active ? "active" : "suspended"} onChange={(event) => setCreate({ ...create, active: event.target.value === "active" })}><option value="active">Ativo</option><option value="suspended">Suspenso</option></select></label></div><div className="people-profile-description">{COMMERCIAL_PROFILES.find((item) => item.id === create.profile)?.description}<strong>{available} vaga{available === 1 ? "" : "s"} disponível{available === 1 ? "" : "is"}</strong></div>{permissions.manage && <><h4>Acessos adicionais</h4><AccessChecklist selected={create.accesses} onChange={(next) => setCreate({ ...create, accesses: next })} options={accesses} /></>}<div className="people-summary"><strong>Resumo</strong><p>{summarize(create.profile, create.accesses)}</p></div><footer><button type="button" className="mm-btn" onClick={() => setCreateOpen(false)}>Cancelar</button><button type="submit" className="mm-btn primary" disabled={busy}>{busy ? "Adicionando..." : "Adicionar pessoa"}</button></footer></form>
-      : <form onSubmit={savePerson} className="people-drawer-form"><div className="people-form-grid"><label>Nome completo<input value={editing.name} disabled={!permissions.edit} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></label><label>E-mail de acesso<input value={editing.person.email ?? ""} disabled /></label><label>Perfil de participação<select value={editing.profile} disabled={!permissions.assign && !permissions.manage} onChange={(event) => setEditing({ ...editing, profile: event.target.value as CommercialProfileId })}><option value="custom">Perfil personalizado</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label>Situação do acesso<select value={editing.active ? "active" : "suspended"} disabled={!permissions.edit && !permissions.disable} onChange={(event) => setEditing({ ...editing, active: event.target.value === "active" })}><option value="active">Ativo</option><option value="suspended">Suspenso</option></select></label>{roleOf(user) === "super_admin" && <label>Definir nova senha<input type="password" value={editing.password} onChange={(event) => setEditing({ ...editing, password: event.target.value })} minLength={8} placeholder="Deixe vazio para manter" autoComplete="new-password" /></label>}</div>{permissions.manage && <><h4>O que esta pessoa pode fazer?</h4><AccessChecklist selected={editing.accesses} onChange={(next) => setEditing({ ...editing, accesses: next })} options={accesses} />{editing.accesses.includes("organization.projects.geojson.view") && ["viewer","editor"].includes(String(editing.person.role || "viewer").toLowerCase()) && <div className="people-geojson-warning" role="alert"><strong>Acesso amplo a GeoJSON</strong><p>Esta pessoa poderá visualizar os dados GeoJSON de todos os projetos ativos desta organização, inclusive os não atribuídos individualmente. O acesso não permite editar ou excluir.</p><label><input type="checkbox" checked={editing.geoJsonAcknowledged} onChange={(event) => setEditing({ ...editing, geoJsonAcknowledged: event.target.checked })} /> Estou ciente do alcance deste acesso.</label><label>Justificativa obrigatória<textarea value={editing.geoJsonJustification} onChange={(event) => setEditing({ ...editing, geoJsonJustification: event.target.value })} maxLength={500} /></label></div>}</>}<div className="people-summary"><strong>Resumo das mudanças</strong><p>{summarize(editing.profile, editing.accesses)}</p></div><footer>{permissions.manage && <button type="button" className="mm-btn danger" onClick={() => void removePerson()} disabled={busy}>Remover da organização</button>}<button type="button" className="mm-btn" onClick={() => setEditing(null)}>Cancelar</button><button type="submit" className="mm-btn primary" disabled={busy}>{busy ? "Salvando..." : "Salvar alterações"}</button></footer></form>}
+      : <form onSubmit={savePerson} className="people-drawer-form"><div className="people-form-grid"><label>Nome completo<input value={editing.name} disabled /></label><label>E-mail de acesso<input value={editing.person.email ?? ""} disabled /></label><label>Perfil de participação<select value={editing.profile} disabled><option value="custom">Perfil personalizado</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label>Situação do acesso<select value={editing.active ? "active" : "suspended"} disabled><option value="active">Ativo</option><option value="suspended">Suspenso</option></select></label></div>{permissions.manage && <><h4>Acessos adicionais permitidos pela delegação</h4><AccessChecklist selected={editing.accesses} onChange={(next) => setEditing({ ...editing, accesses: next })} options={accesses} canToggle={(code, checked) => { const operation = capabilities?.permissionOperations?.find(item => item.permission === code); return checked ? operation?.canRevoke === true : operation?.canGrant === true; }} /></>}<div className="people-summary"><strong>Limites desta operação</strong><p>Você pode conceder ou revogar somente os itens configurados pelo Super Admin. Itens sem a ação correspondente aparecem desabilitados. Perfil, situação, senha, GeoJSON amplo e vínculos permanecem bloqueados.</p></div><footer><button type="button" className="mm-btn" onClick={() => setEditing(null)}>Cancelar</button><button type="submit" className="mm-btn primary" disabled={busy}>{busy ? "Salvando..." : "Salvar acessos"}</button></footer></form>}
     </aside></div>}
   </section>;
 }
