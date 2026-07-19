@@ -104,6 +104,20 @@ export type OrganizationUserPermissionGrant = {
   createdAt?: string;
 };
 
+export type OrganizationAccessCapabilities = {
+  governanceV2: boolean;
+  canManageAdditionalAccess: boolean;
+  configureInAdmin?: boolean;
+  reason: string;
+  policyVersion?: number;
+  expiresAt?: string | null;
+  allowedPermissions: string[];
+  allowedOperations: string[];
+  permissionOperations?: Array<{ permission: string; canGrant: boolean; canRevoke: boolean }>;
+  targetLevels: string[];
+  catalog: Array<{ code: string; name: string; group: string; ownerDelegable?: boolean; reason?: string }>;
+};
+
 export type OrganizationUserPermissionRevoke = {
   organizationId?: number | string;
   userId?: number | string;
@@ -528,6 +542,12 @@ export function createOrganizationExport(
 export function listOrganizationUsers(organizationId: number | string) {
   return requestJson<{ ok: boolean; users: OrganizationUser[] }>(
     `${organizationPath(organizationId)}/users`,
+  );
+}
+
+export function getOrganizationAccessCapabilities(organizationId: number | string) {
+  return requestJson<{ ok: boolean; capabilities: OrganizationAccessCapabilities }>(
+    `${organizationPath(organizationId)}/access-capabilities`,
   );
 }
 

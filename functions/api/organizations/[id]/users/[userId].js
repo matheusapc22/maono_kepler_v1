@@ -1,4 +1,5 @@
 import { hashPassword, normalizeRole, requireSession } from "../../../../_lib/auth.js";
+import { accessGovernanceV2Enabled } from "../../../../_lib/access-delegation.js";
 import { can, recordAuditLog } from "../../../../_lib/permissions.js";
 import {
   getRouteParam,
@@ -175,6 +176,10 @@ export async function onRequestPatch({ env, request, params }) {
 
     const user = await requireSession(env, request);
 
+    if (accessGovernanceV2Enabled(env) && normalizeRole(user.role) !== "super_admin") {
+      throw createForbiddenError("users.edit", "SUPER_ADMIN_REQUIRED");
+    }
+
     if (hasOwn(payload, "password")) {
       if (normalizeRole(user.role) !== "super_admin") {
         throw createForbiddenError("admin.users.update", "SUPER_ADMIN_REQUIRED");
@@ -304,6 +309,9 @@ export async function onRequestDelete({ env, request, params }) {
     const organizationId = getOrganizationId(params);
     const targetUserId = getUserId(params);
     const user = await requireSession(env, request);
+    if (accessGovernanceV2Enabled(env) && normalizeRole(user.role) !== "super_admin") {
+      throw createForbiddenError("users.delete", "SUPER_ADMIN_REQUIRED");
+    }
     await requireOrganizationAction(env, request, user, organizationId, "users.delete", { resourceId: targetUserId, auditAction: "users.membership.delete" });
     if (Number(user.id) === Number(targetUserId)) {
       const error = new Error("Você não pode remover o próprio acesso em uso."); error.status = 400; error.code = "SELF_MEMBERSHIP_DELETE_BLOCKED"; throw error;

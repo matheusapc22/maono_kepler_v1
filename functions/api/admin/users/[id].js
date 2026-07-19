@@ -7,6 +7,7 @@ import {
 import { hashPassword, normalizeEmail } from "../../../_lib/auth.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import { logAudit } from "../../../_lib/projects.js";
+import { disableDelegationsIfIneligible } from "../../../_lib/access-delegation.js";
 
 const ALLOWED_ROLES = new Set(["admin", "client", "viewer", "editor"]);
 
@@ -435,6 +436,8 @@ export async function onRequest(context) {
       if (error) {
         return error;
       }
+
+      await disableDelegationsIfIneligible(env, targetUserId);
 
       await logAudit(env, {
         userId: user.id,
