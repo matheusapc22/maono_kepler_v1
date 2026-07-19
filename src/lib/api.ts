@@ -561,12 +561,13 @@ export function grantOrganizationUserPermission(
   organizationId: number | string,
   userId: number | string,
   permission: string,
+  options?: { warningAcknowledged?: boolean; justification?: string },
 ) {
   return requestJson<{ ok: boolean; grant: OrganizationUserPermissionGrant }>(
     `${organizationUserPath(organizationId, userId)}/permissions`,
     {
       method: "POST",
-      body: JSON.stringify({ permission }),
+      body: JSON.stringify({ permission, ...options }),
     },
   );
 }

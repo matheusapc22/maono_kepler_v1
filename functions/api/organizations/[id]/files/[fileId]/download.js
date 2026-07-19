@@ -14,6 +14,7 @@ import {
   organizationFileRequestId,
   recordOrganizationFileAudit,
 } from "../../../../../_lib/organization-files.js";
+import { requireProjectGeoJsonAccess } from "../../../../../_lib/geojson-access.js";
 
 export async function onRequest(context) {
   if (context.request.method === "GET") return onRequestGet(context);
@@ -68,6 +69,15 @@ export async function onRequestGet({ env, request, params }) {
       throw error;
     }
 
+    await requireProjectGeoJsonAccess(
+      env,
+      request,
+      user,
+      organizationId,
+      file,
+      { surface: "document.download", auditAllowed: true },
+    );
+
     const dropboxPath = getFileDropboxPath(file);
     if (!dropboxPath) {
       const error = new Error("Arquivo sem caminho de armazenamento.");
@@ -96,6 +106,7 @@ export async function onRequestGet({ env, request, params }) {
       headers: {
         ...fileDownloadHeaders(file, dropboxResponse),
         "X-Request-Id": requestId,
+        "Cache-Control": "private, no-store",
       },
     });
   } catch (error) {

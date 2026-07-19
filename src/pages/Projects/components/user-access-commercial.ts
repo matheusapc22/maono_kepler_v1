@@ -36,6 +36,7 @@ export const COMMERCIAL_PROFILES: CommercialProfile[] = [
 ];
 
 export const COMMERCIAL_ACCESSES: CommercialAccess[] = [
+  { code: "organization.projects.geojson.view", name: "Visualizar GeoJSON de todos os projetos da organização", description: "Permite consultar, em modo somente leitura, os GeoJSON de todos os projetos ativos desta organização.", group: "Projetos", risk: "sensitive", platformOnly: true },
   { code: "project.view", name: "Visualizar projetos", description: "Consultar projetos e seus detalhes.", group: "Projetos", ownerGrantable: true },
   { code: "project.create", name: "Criar novos projetos", description: "Iniciar um novo projeto na organização.", group: "Projetos", ownerGrantable: true },
   { code: "project.edit", name: "Editar projetos existentes", description: "Alterar dados e configurações dos projetos.", group: "Projetos", ownerGrantable: true },

@@ -1252,6 +1252,14 @@ function assertCanManagePermission(actor, permission) {
     return;
   }
 
+  if (permission === "organization.projects.geojson.view") {
+    throw createApiError(
+      "Somente Super Admin pode gerenciar o acesso amplo a GeoJSON.",
+      403,
+      "PERMISSION_ESCALATION_BLOCKED",
+    );
+  }
+
   if (actorRole === "admin") {
     if (permission === "admin.panel.access" || permission.startsWith("audit.")) {
       throw createApiError("Admin não pode gerenciar esta permissão.", 403, "PERMISSION_ESCALATION_BLOCKED");
@@ -1271,7 +1279,7 @@ function assertCanManagePermission(actor, permission) {
   throw createApiError("Usuário não pode gerenciar permissões.", 403, "FORBIDDEN");
 }
 
-export async function grantOrganizationPermission(env, organizationId, targetUserId, permission, actor) {
+export async function grantOrganizationPermission(env, organizationId, targetUserId, permission, actor, options = {}) {
   const id = parsePositiveInteger(organizationId, "organizationId");
   const userId = parsePositiveInteger(targetUserId, "userId");
   const normalizedPermission = assertKnownPermission(permission);
@@ -1340,6 +1348,11 @@ export async function grantOrganizationPermission(env, organizationId, targetUse
     resourceId: userId,
     metadata: {
       permission: normalizedPermission,
+      warningAcknowledged: Boolean(options.warningAcknowledged),
+      justification: options.justification
+        ? String(options.justification).slice(0, 500)
+        : null,
+      targetRole: target.role || null,
     },
   });
 
