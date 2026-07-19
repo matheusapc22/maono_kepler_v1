@@ -116,10 +116,12 @@ export async function onRequestDelete({ env, request, params }) {
       userId,
       operation: "disable",
     });
+    const version = new URL(request.url).searchParams.get("version");
     const delegation = await disableDelegationPolicy(
       env,
       organizationId,
       userId,
+      version,
       actor,
       request,
     );

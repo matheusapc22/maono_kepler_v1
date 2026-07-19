@@ -1,5 +1,5 @@
 import { normalizeRole } from "./auth.js";
-import { can, recordAuditLog } from "./permissions.js";
+import { PERMISSIONS, can, recordAuditLog } from "./permissions.js";
 
 export const ORGANIZATION_ACCESS_DELEGATE_PERMISSION =
   "organization.users.permissions.delegate";
@@ -7,21 +7,96 @@ export const ORGANIZATION_ACCESS_DELEGATE_PERMISSION =
 const TARGET_LEVELS = new Set(["viewer", "editor"]);
 
 export const DELEGABLE_PERMISSION_CATALOG = Object.freeze([
-  { code: "document.view", group: "Arquivos e documentos", name: "Consultar documentos", risk: "standard", ownerDelegable: true },
-  { code: "document.upload", group: "Arquivos e documentos", name: "Enviar documentos", risk: "standard", ownerDelegable: true },
-  { code: "document.download", group: "Arquivos e documentos", name: "Baixar documentos", risk: "standard", ownerDelegable: true },
-  { code: "document.delete", group: "Arquivos e documentos", name: "Excluir documentos", risk: "irreversible", ownerDelegable: true },
-  { code: "ticket.view", group: "Central de chamados", name: "Acompanhar chamados", risk: "standard", ownerDelegable: true },
-  { code: "ticket.create", group: "Central de chamados", name: "Abrir novos chamados", risk: "standard", ownerDelegable: true },
-  { code: "ticket.comment", group: "Central de chamados", name: "Comentar em chamados", risk: "standard", ownerDelegable: true },
-  { code: "export.view", group: "Exportações", name: "Consultar exportações", risk: "standard", ownerDelegable: true },
-  { code: "export.create", group: "Exportações", name: "Criar exportações", risk: "operational", ownerDelegable: true },
-  { code: "users.view", group: "Equipe e acessos", name: "Consultar equipe", risk: "sensitive", ownerDelegable: true },
-  { code: "organization.view", group: "Organização e capacidade", name: "Consultar dados da organização", risk: "standard", ownerDelegable: true },
-  { code: "organization.metrics.view", group: "Organização e capacidade", name: "Consultar indicadores da organização", risk: "standard", ownerDelegable: true },
-  { code: "limits.view", group: "Organização e capacidade", name: "Consultar limites do plano", risk: "standard", ownerDelegable: true },
-  { code: "limits.increase_request", group: "Organização e capacidade", name: "Solicitar mais capacidade", risk: "operational", ownerDelegable: true },
+  { code: "document.view", group: "Arquivos e documentos", name: "Consultar documentos", description: "Ver a lista de documentos comuns da organização.", risk: "standard", ownerDelegable: true },
+  { code: "document.upload", group: "Arquivos e documentos", name: "Enviar documentos", description: "Adicionar documentos comuns à organização.", risk: "operational", ownerDelegable: true },
+  { code: "document.download", group: "Arquivos e documentos", name: "Baixar documentos", description: "Baixar documentos comuns permitidos.", risk: "sensitive", ownerDelegable: true },
+  { code: "document.delete", group: "Arquivos e documentos", name: "Excluir documentos", description: "Excluir documentos comuns da organização.", risk: "irreversible", ownerDelegable: true },
+  { code: "ticket.view", group: "Central de chamados", name: "Acompanhar chamados", description: "Consultar chamados da organização.", risk: "standard", ownerDelegable: true },
+  { code: "ticket.create", group: "Central de chamados", name: "Abrir novos chamados", description: "Criar chamados para a organização.", risk: "operational", ownerDelegable: true },
+  { code: "ticket.comment", group: "Central de chamados", name: "Comentar em chamados", description: "Adicionar comentários em chamados.", risk: "operational", ownerDelegable: true },
+  { code: "export.view", group: "Exportações", name: "Consultar exportações", description: "Ver exportações solicitadas.", risk: "standard", ownerDelegable: true },
+  { code: "export.create", group: "Exportações", name: "Criar exportações", description: "Solicitar novas exportações.", risk: "operational", ownerDelegable: true },
+  { code: "users.view", group: "Equipe e acessos", name: "Consultar equipe", description: "Ver as pessoas da organização.", risk: "sensitive", ownerDelegable: true },
+  { code: "organization.view", group: "Organização e capacidade", name: "Consultar dados da organização", description: "Ver informações da organização.", risk: "standard", ownerDelegable: true },
+  { code: "organization.metrics.view", group: "Organização e capacidade", name: "Consultar indicadores da organização", description: "Ver indicadores da organização.", risk: "standard", ownerDelegable: true },
+  { code: "limits.view", group: "Organização e capacidade", name: "Consultar limites do plano", description: "Ver consumo e limites contratados.", risk: "standard", ownerDelegable: true },
+  { code: "limits.increase_request", group: "Organização e capacidade", name: "Solicitar mais capacidade", description: "Solicitar aumento de capacidade.", risk: "operational", ownerDelegable: true },
 ]);
+
+const BLOCKED_PERMISSION_PRESENTATION = Object.freeze([
+  ["project.view", "Projetos", "Consultar projetos", "Exige vínculo individual com o projeto.", "sensitive"],
+  ["project.create", "Projetos", "Criar projetos", "Cria recursos fora da delegação de acessos adicionais.", "operational"],
+  ["project.edit", "Projetos", "Editar projetos", "Exige escopo individual de projeto.", "sensitive"],
+  ["project.save", "Projetos", "Salvar projetos", "Exige escopo individual de projeto.", "sensitive"],
+  ["project.favorite", "Projetos", "Favoritar projetos", "Exige escopo individual de projeto.", "standard"],
+  ["project.thumbnail.update", "Projetos", "Atualizar capas", "Exige escopo individual de projeto.", "operational"],
+  ["document.edit", "Arquivos e documentos", "Editar documentos", "Fora do teto canônico de delegação do owner.", "sensitive"],
+  ["document.manage", "Arquivos e documentos", "Administrar documentos", "A gestão completa não pode ser redelegada.", "platform"],
+  ["ticket.manage", "Central de chamados", "Administrar chamados", "Fora do teto canônico de delegação do owner.", "sensitive"],
+  ["ticket.close", "Central de chamados", "Encerrar chamados", "Fora do teto canônico de delegação do owner.", "operational"],
+  ["ticket.assign", "Central de chamados", "Atribuir chamados", "Fora do teto canônico de delegação do owner.", "sensitive"],
+  ["export.download", "Exportações", "Baixar exportações", "Fora do teto canônico de delegação do owner.", "sensitive"],
+  ["export.manage", "Exportações", "Administrar exportações", "A gestão completa não pode ser redelegada.", "platform"],
+  ["roadmap.view", "Roadmap", "Consultar roadmap", "Roadmap será incluído após reconciliação própria de escopo.", "standard"],
+  ["roadmap.comment.create", "Roadmap", "Comentar no roadmap", "Roadmap será incluído após reconciliação própria de escopo.", "operational"],
+  ["roadmap.comment.edit_own", "Roadmap", "Editar comentário próprio", "Roadmap será incluído após reconciliação própria de escopo.", "operational"],
+  ["roadmap.comment.moderate", "Roadmap", "Moderar comentários", "Roadmap será incluído após reconciliação própria de escopo.", "sensitive"],
+  ["roadmap.manage", "Roadmap", "Administrar roadmap", "Roadmap será incluído após reconciliação própria de escopo.", "platform"],
+  ["roadmap.task.manage", "Roadmap", "Administrar tarefas", "Roadmap será incluído após reconciliação própria de escopo.", "platform"],
+  ["roadmap.dependency.manage", "Roadmap", "Administrar dependências", "Roadmap será incluído após reconciliação própria de escopo.", "platform"],
+  ["users.create", "Equipe e acessos", "Adicionar pessoas", "A delegação permite gerir acessos adicionais, não criar contas.", "sensitive"],
+  ["users.edit", "Equipe e acessos", "Editar pessoas", "A delegação permite gerir acessos adicionais, não editar contas.", "sensitive"],
+  ["users.disable", "Equipe e acessos", "Suspender pessoas", "A delegação permite gerir acessos adicionais, não suspender contas.", "irreversible"],
+  ["users.delete", "Equipe e acessos", "Remover pessoas", "A delegação permite gerir acessos adicionais, não remover vínculos.", "irreversible"],
+  ["users.invite", "Equipe e acessos", "Convidar pessoas", "Fora do teto de acessos adicionais delegados.", "sensitive"],
+  ["users.manage_access", "Governança", "Administrar acessos sem limites", "A gestão deve permanecer limitada à política desta organização.", "platform"],
+  ["permission.grant", "Governança", "Conceder qualquer acesso", "Não pode substituir a whitelist configurada pelo Super Admin.", "platform"],
+  ["permission.revoke", "Governança", "Revogar qualquer acesso", "Não pode substituir a whitelist configurada pelo Super Admin.", "platform"],
+  ["role.assign", "Governança", "Alterar perfis", "A delegação não permite promover perfis.", "platform"],
+  ["organization.edit", "Organização e capacidade", "Editar organização", "Fora do teto canônico de delegação do owner.", "platform"],
+  ["organization.projects.geojson.view", "Projetos", "Visualizar GeoJSON de todos os projetos", "Permanece sob concessão direta e exclusiva do Super Admin.", "sensitive"],
+  ["billing.view", "Organização e capacidade", "Consultar cobrança", "Informação financeira fora da delegação operacional.", "sensitive"],
+  ["plan.view", "Organização e capacidade", "Consultar plano", "Fora do teto canônico de delegação do owner.", "sensitive"],
+  ["plan.change_request", "Organização e capacidade", "Solicitar mudança de plano", "Fora do teto canônico de delegação do owner.", "operational"],
+  ["admin.panel.access", "Administração Maõno", "Acessar administração global", "Acesso reservado à administração da plataforma.", "platform"],
+  ["audit.view", "Administração Maõno", "Consultar auditoria", "Acesso reservado à administração da plataforma.", "platform"],
+  ["audit.export", "Administração Maõno", "Exportar auditoria", "Acesso reservado à administração da plataforma.", "platform"],
+  ["audit.security.view", "Administração Maõno", "Consultar auditoria de segurança", "Acesso reservado à administração da plataforma.", "platform"],
+  ["audit.platform.view", "Administração Maõno", "Consultar auditoria da plataforma", "Acesso reservado à administração da plataforma.", "platform"],
+  ["audit.organization.view", "Administração Maõno", "Consultar auditoria da organização", "Acesso reservado à administração da plataforma.", "platform"],
+  [ORGANIZATION_ACCESS_DELEGATE_PERMISSION, "Governança", "Delegar a gestão de acessos", "A meta-delegação permanece exclusiva do Super Admin.", "platform"],
+]);
+
+const PRESENTATION_BY_CODE = new Map(
+  BLOCKED_PERMISSION_PRESENTATION.map(([code, group, name, description, risk]) => [
+    code,
+    { code, group, name, description, risk },
+  ]),
+);
+const DELEGABLE_CODES = new Set(DELEGABLE_PERMISSION_CATALOG.map((item) => item.code));
+
+export const DELEGATION_POLICY_CATALOG = Object.freeze(
+  DELEGABLE_PERMISSION_CATALOG.map((item) => ({
+    ...item,
+    disabledReason: null,
+  })).concat(
+    Array.from(new Set([...PERMISSIONS, ORGANIZATION_ACCESS_DELEGATE_PERMISSION]))
+      .filter((code) => !DELEGABLE_CODES.has(code))
+      .map((code) => ({
+        ...(PRESENTATION_BY_CODE.get(code) || {
+          code,
+          group: "Outros acessos",
+          name: "Acesso restrito",
+          description: "Este acesso não integra a delegação organizacional.",
+          risk: "platform",
+        }),
+        ownerDelegable: false,
+        disabledReason:
+          PRESENTATION_BY_CODE.get(code)?.description ||
+          "Fora do teto canônico de delegação do owner.",
+      })),
+  ),
+);
 
 const CATALOG_BY_CODE = new Map(
   DELEGABLE_PERMISSION_CATALOG.map((item) => [item.code, item]),
@@ -77,6 +152,21 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function revisionToken() {
+  return globalThis.crypto?.randomUUID?.() ||
+    `delegation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function requestId(request) {
+  return request?.headers?.get?.("x-request-id") ||
+    request?.headers?.get?.("cf-ray") ||
+    revisionToken();
+}
+
+function changedRows(result) {
+  return Number(result?.meta?.changes ?? result?.changes ?? 0);
+}
+
 function normalizedRole(value) {
   return normalizeRole(value) || String(value || "viewer").trim().toLowerCase();
 }
@@ -115,6 +205,18 @@ export async function requireAccessGovernanceSchema(env) {
       "A migration de governança de acessos ainda não foi aplicada.",
       503,
       "ACCESS_GOVERNANCE_MIGRATION_REQUIRED",
+    );
+  }
+
+  const columnsResult = await getDb(env)
+    .prepare("PRAGMA table_info(organization_access_delegations)")
+    .all();
+  const columns = new Set((columnsResult?.results || []).map((row) => String(row.name)));
+  if (!columns.has("justification") || !columns.has("revision_token")) {
+    throw apiError(
+      "A migration de endurecimento da governança ainda não foi aplicada.",
+      503,
+      "ACCESS_GOVERNANCE_HARDENING_REQUIRED",
     );
   }
 }
@@ -209,6 +311,7 @@ function publicDelegation(row) {
     expiresAt: row.expires_at || null,
     expired: delegationExpired(row),
     version: Number(row.version || 1),
+    justification: row.justification || "",
     targetLevels: row.targetLevels || [],
     permissions: (row.permissions || []).map((item) => ({
       permission: item.permission,
@@ -232,6 +335,7 @@ async function ensureOrganizationContext(actor, organizationId) {
 
 export async function getAccessGovernanceCapabilities(env, organizationIdValue, actor) {
   const organizationId = positiveId(organizationIdValue, "organizationId");
+  await requireAccessGovernanceSchema(env);
   await ensureOrganizationContext(actor, organizationId);
 
   if (isSuperAdmin(actor)) {
@@ -313,7 +417,7 @@ export async function getAccessGovernanceCapabilities(env, organizationIdValue, 
   };
 }
 
-async function auditDenied(env, request, actor, organizationId, targetUserId, permission, operation, error) {
+async function auditDenied(env, request, actor, organizationId, targetUserId, permission, operation, error, traceId) {
   await recordAuditLog(env, {
     actorUserId: actor?.id,
     organizationId,
@@ -326,6 +430,8 @@ async function auditDenied(env, request, actor, organizationId, targetUserId, pe
       operation,
       code: error.code,
       reason: error.reason || error.code,
+      requestId: traceId,
+      policyVersion: error.policyVersion ?? null,
     },
     request,
   });
@@ -343,9 +449,14 @@ export async function authorizeOrganizationPermissionMutation({
   const organizationId = positiveId(organizationIdValue, "organizationId");
   const targetUserId = positiveId(targetUserIdValue, "userId");
   const normalizedPermission = String(permission || "").trim();
-  const normalizedOperation = operation === "revoke" ? "revoke" : "grant";
+  const normalizedOperation = String(operation || "").trim().toLowerCase();
+  const traceId = requestId(request);
 
   try {
+    await requireAccessGovernanceSchema(env);
+    if (normalizedOperation !== "grant" && normalizedOperation !== "revoke") {
+      throw apiError("Operação de acesso inválida.", 400, "INVALID_PERMISSION_OPERATION");
+    }
     if (normalizedPermission === ORGANIZATION_ACCESS_DELEGATE_PERMISSION) {
       throw apiError(
         "A delegação deve ser configurada pelo painel obrigatório do Super Admin.",
@@ -361,7 +472,14 @@ export async function authorizeOrganizationPermissionMutation({
     }
 
     if (isSuperAdmin(actor)) {
-      return { allowed: true, reason: "SUPER_ADMIN", target };
+      return {
+        allowed: true,
+        delegated: false,
+        reason: "SUPER_ADMIN",
+        requestId: traceId,
+        policyVersion: null,
+        target,
+      };
     }
 
     const actorRow = await readUserInOrganization(env, organizationId, actor?.id);
@@ -382,10 +500,14 @@ export async function authorizeOrganizationPermissionMutation({
 
     const delegation = await readDelegationRows(env, organizationId, actor.id);
     if (!delegation || !(delegation.enabled === 1 || delegation.enabled === "1")) {
-      throw apiError("A delegação de acessos não está ativa.", 403, "DELEGATION_REQUIRED");
+      throw apiError("A delegação de acessos não está ativa.", 403, "DELEGATION_REQUIRED", {
+        policyVersion: delegation ? Number(delegation.version) : null,
+      });
     }
     if (delegationExpired(delegation)) {
-      throw apiError("A delegação de acessos expirou.", 403, "DELEGATION_EXPIRED");
+      throw apiError("A delegação de acessos expirou.", 403, "DELEGATION_EXPIRED", {
+        policyVersion: Number(delegation.version),
+      });
     }
     if (!(delegation.targetLevels || []).includes(String(target.access_level || "").toLowerCase())) {
       throw apiError("O perfil de destino não está autorizado pela política.", 403, "TARGET_ROLE_NOT_ALLOWED");
@@ -411,12 +533,25 @@ export async function authorizeOrganizationPermissionMutation({
 
     return {
       allowed: true,
+      delegated: true,
       reason: "DELEGATION_ACTIVE",
+      requestId: traceId,
+      policyVersion: Number(delegation.version),
       target,
       delegation: publicDelegation(delegation),
     };
   } catch (error) {
-    await auditDenied(env, request, actor, organizationId, targetUserId, normalizedPermission, normalizedOperation, error);
+    await auditDenied(
+      env,
+      request,
+      actor,
+      organizationId,
+      targetUserId,
+      normalizedPermission,
+      normalizedOperation,
+      error,
+      traceId,
+    );
     throw error;
   }
 }
@@ -463,11 +598,28 @@ function normalizePolicyPayload(payload) {
     throw apiError("Versão da política inválida.", 400, "INVALID_POLICY_VERSION");
   }
 
+  const justification = String(payload?.justification || "").trim();
+  if (justification.length < 5 || justification.length > 500) {
+    throw apiError(
+      "Informe uma justificativa entre 5 e 500 caracteres.",
+      400,
+      "DELEGATION_JUSTIFICATION_REQUIRED",
+    );
+  }
+  if (payload?.confirmed !== true) {
+    throw apiError(
+      "Confirme a revisão do escopo antes de salvar.",
+      400,
+      "DELEGATION_CONFIRMATION_REQUIRED",
+    );
+  }
+
   return {
     targetLevels,
     permissions,
     expiresAt: expiresAt ? expiresAt.toISOString() : null,
     version,
+    justification,
   };
 }
 
@@ -476,7 +628,7 @@ export async function getDelegationPolicy(env, organizationIdValue, delegateUser
   const delegateUserId = positiveId(delegateUserIdValue, "userId");
   await requireAccessGovernanceSchema(env);
   return {
-    catalog: DELEGABLE_PERMISSION_CATALOG,
+    catalog: DELEGATION_POLICY_CATALOG,
     delegation: publicDelegation(await readDelegationRows(env, organizationId, delegateUserId)),
   };
 }
@@ -496,29 +648,78 @@ export async function saveDelegationPolicy(env, organizationIdValue, delegateUse
 
   const db = getDb(env);
   let existing = await readDelegationRows(env, organizationId, delegateUserId);
-  if (existing && normalized.version !== null && Number(existing.version) !== normalized.version) {
-    throw apiError("A política foi alterada por outra sessão.", 409, "POLICY_VERSION_CONFLICT", {
-      policyVersion: Number(existing.version),
-    });
-  }
-
-  const now = nowIso();
-  if (!existing) {
-    await db
-      .prepare(
-        `INSERT INTO organization_access_delegations
-          (organization_id, delegate_user_id, enabled, expires_at, version, granted_by, updated_by, created_at, updated_at)
-         VALUES (?, ?, 0, ?, 1, ?, ?, ?, ?)`,
-      )
-      .bind(organizationId, delegateUserId, normalized.expiresAt, actor.id, actor.id, now, now)
-      .run();
+  let seeded = false;
+  if (existing) {
+    if (normalized.version === null || Number(existing.version) !== normalized.version) {
+      throw apiError("A política foi alterada por outra sessão.", 409, "POLICY_VERSION_CONFLICT", {
+        policyVersion: Number(existing.version),
+      });
+    }
+  } else {
+    if (normalized.version !== null) {
+      throw apiError("A política foi criada por outra sessão.", 409, "POLICY_VERSION_CONFLICT", {
+        policyVersion: 0,
+      });
+    }
+    const now = nowIso();
+    try {
+      const seed = await db
+        .prepare(
+          `INSERT INTO organization_access_delegations
+            (organization_id, delegate_user_id, enabled, expires_at, version,
+             justification, revision_token, granted_by, updated_by, created_at, updated_at)
+           VALUES (?, ?, 0, NULL, 1, '', ?, ?, ?, ?, ?)`,
+        )
+        .bind(organizationId, delegateUserId, revisionToken(), actor.id, actor.id, now, now)
+        .run();
+      if (changedRows(seed) !== 1) {
+        throw apiError("A política foi criada por outra sessão.", 409, "POLICY_VERSION_CONFLICT");
+      }
+    } catch (error) {
+      if (/UNIQUE constraint failed/i.test(String(error?.message || ""))) {
+        const concurrent = await readDelegationRows(env, organizationId, delegateUserId);
+        throw apiError("A política foi criada por outra sessão.", 409, "POLICY_VERSION_CONFLICT", {
+          policyVersion: Number(concurrent?.version || 0),
+        });
+      }
+      throw error;
+    }
     existing = await readDelegationRows(env, organizationId, delegateUserId);
+    seeded = true;
   }
 
-  const nextVersion = Number(existing.version || 1) + 1;
+  const expectedVersion = Number(existing.version);
+  const nextVersion = seeded ? expectedVersion : expectedVersion + 1;
+  const now = nowIso();
+  const token = revisionToken();
+  const guard = `EXISTS (
+    SELECT 1 FROM organization_access_delegations
+    WHERE id = ? AND version = ? AND revision_token = ?
+  )`;
   const statements = [
-    db.prepare("DELETE FROM delegation_permissions WHERE delegation_id = ?").bind(existing.id),
-    db.prepare("DELETE FROM delegation_target_levels WHERE delegation_id = ?").bind(existing.id),
+    db
+      .prepare(
+        `UPDATE organization_access_delegations
+         SET enabled = 1, expires_at = ?, version = ?, justification = ?,
+             revision_token = ?, updated_by = ?, updated_at = ?
+         WHERE id = ? AND version = ?`,
+      )
+      .bind(
+        normalized.expiresAt,
+        nextVersion,
+        normalized.justification,
+        token,
+        actor.id,
+        now,
+        existing.id,
+        expectedVersion,
+      ),
+    db
+      .prepare(`DELETE FROM delegation_permissions WHERE delegation_id = ? AND ${guard}`)
+      .bind(existing.id, existing.id, nextVersion, token),
+    db
+      .prepare(`DELETE FROM delegation_target_levels WHERE delegation_id = ? AND ${guard}`)
+      .bind(existing.id, existing.id, nextVersion, token),
   ];
   for (const item of normalized.permissions) {
     statements.push(
@@ -526,9 +727,20 @@ export async function saveDelegationPolicy(env, organizationIdValue, delegateUse
         .prepare(
           `INSERT INTO delegation_permissions
             (delegation_id, permission, can_grant, can_revoke, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+           SELECT ?, ?, ?, ?, ?, ?
+           WHERE ${guard}`,
         )
-        .bind(existing.id, item.permission, item.canGrant ? 1 : 0, item.canRevoke ? 1 : 0, now, now),
+        .bind(
+          existing.id,
+          item.permission,
+          item.canGrant ? 1 : 0,
+          item.canRevoke ? 1 : 0,
+          now,
+          now,
+          existing.id,
+          nextVersion,
+          token,
+        ),
     );
   }
   for (const accessLevel of normalized.targetLevels) {
@@ -536,22 +748,22 @@ export async function saveDelegationPolicy(env, organizationIdValue, delegateUse
       db
         .prepare(
           `INSERT INTO delegation_target_levels (delegation_id, access_level, created_at)
-           VALUES (?, ?, ?)`,
+           SELECT ?, ?, ?
+           WHERE ${guard}`,
         )
-        .bind(existing.id, accessLevel, now),
+        .bind(existing.id, accessLevel, now, existing.id, nextVersion, token),
     );
   }
-  statements.push(
-    db
-      .prepare(
-        `UPDATE organization_access_delegations
-         SET enabled = 1, expires_at = ?, version = ?, updated_by = ?, updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind(normalized.expiresAt, nextVersion, actor.id, now, existing.id),
-  );
-  await db.batch(statements);
 
+  const results = await db.batch(statements);
+  if (changedRows(results?.[0]) !== 1) {
+    const concurrent = await readDelegationRows(env, organizationId, delegateUserId);
+    throw apiError("A política foi alterada por outra sessão.", 409, "POLICY_VERSION_CONFLICT", {
+      policyVersion: Number(concurrent?.version || 0),
+    });
+  }
+
+  const traceId = requestId(request);
   await recordAuditLog(env, {
     actorUserId: actor.id,
     organizationId,
@@ -559,10 +771,13 @@ export async function saveDelegationPolicy(env, organizationIdValue, delegateUse
     resourceType: "user",
     resourceId: delegateUserId,
     metadata: {
+      requestId: traceId,
       policyVersion: nextVersion,
       targetLevels: normalized.targetLevels,
       permissions: normalized.permissions,
       expiresAt: normalized.expiresAt,
+      justification: normalized.justification,
+      confirmed: true,
     },
     request,
   });
@@ -570,24 +785,46 @@ export async function saveDelegationPolicy(env, organizationIdValue, delegateUse
   return publicDelegation(await readDelegationRows(env, organizationId, delegateUserId));
 }
 
-export async function disableDelegationPolicy(env, organizationIdValue, delegateUserIdValue, actor, request) {
+export async function disableDelegationPolicy(
+  env,
+  organizationIdValue,
+  delegateUserIdValue,
+  expectedVersionValue,
+  actor,
+  request,
+) {
   if (!isSuperAdmin(actor)) {
     throw apiError("Somente Super Admin pode revogar delegações.", 403, "SUPER_ADMIN_REQUIRED");
   }
   const organizationId = positiveId(organizationIdValue, "organizationId");
   const delegateUserId = positiveId(delegateUserIdValue, "userId");
+  const expectedVersion = Number(expectedVersionValue);
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+    throw apiError("Versão da política inválida.", 400, "INVALID_POLICY_VERSION");
+  }
   await requireAccessGovernanceSchema(env);
   const existing = await readDelegationRows(env, organizationId, delegateUserId);
   if (!existing) return null;
-  const nextVersion = Number(existing.version || 1) + 1;
-  await getDb(env)
+  if (Number(existing.version) !== expectedVersion) {
+    throw apiError("A política foi alterada por outra sessão.", 409, "POLICY_VERSION_CONFLICT", {
+      policyVersion: Number(existing.version),
+    });
+  }
+  const nextVersion = expectedVersion + 1;
+  const result = await getDb(env)
     .prepare(
       `UPDATE organization_access_delegations
-       SET enabled = 0, version = ?, updated_by = ?, updated_at = ?
-       WHERE id = ?`,
+       SET enabled = 0, version = ?, revision_token = ?, updated_by = ?, updated_at = ?
+       WHERE id = ? AND version = ?`,
     )
-    .bind(nextVersion, actor.id, nowIso(), existing.id)
+    .bind(nextVersion, revisionToken(), actor.id, nowIso(), existing.id, expectedVersion)
     .run();
+  if (changedRows(result) !== 1) {
+    const concurrent = await readDelegationRows(env, organizationId, delegateUserId);
+    throw apiError("A política foi alterada por outra sessão.", 409, "POLICY_VERSION_CONFLICT", {
+      policyVersion: Number(concurrent?.version || 0),
+    });
+  }
 
   await recordAuditLog(env, {
     actorUserId: actor.id,
@@ -595,7 +832,11 @@ export async function disableDelegationPolicy(env, organizationIdValue, delegate
     action: "delegation.policy.disable",
     resourceType: "user",
     resourceId: delegateUserId,
-    metadata: { policyVersion: nextVersion },
+    metadata: {
+      requestId: requestId(request),
+      policyVersion: nextVersion,
+      previousVersion: expectedVersion,
+    },
     request,
   });
   return publicDelegation(await readDelegationRows(env, organizationId, delegateUserId));

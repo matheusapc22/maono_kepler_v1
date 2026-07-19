@@ -57,7 +57,7 @@ export async function onRequestPost({ env, request, params }) {
       throw createInvalidPayloadError("Justificativa excede o limite permitido.");
     }
 
-    await authorizeOrganizationPermissionMutation({
+    const authorization = await authorizeOrganizationPermissionMutation({
       env,
       request,
       actor,
@@ -73,7 +73,7 @@ export async function onRequestPost({ env, request, params }) {
       targetUserId,
       permission,
       actor,
-      { warningAcknowledged, justification },
+      { warningAcknowledged, justification, authorization, request },
     );
 
     return jsonResponse(

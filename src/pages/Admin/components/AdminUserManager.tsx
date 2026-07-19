@@ -33,7 +33,10 @@ type DelegationCatalogItem = {
   code: string;
   group: string;
   name: string;
+  description?: string;
   risk?: string;
+  ownerDelegable: boolean;
+  disabledReason?: string | null;
 };
 
 type DelegationPermissionDraft = {
@@ -48,6 +51,8 @@ type DelegationEditor = {
   version: number | null;
   enabled: boolean;
   expiresAt: string;
+  justification: string;
+  confirmed: boolean;
   targetLevels: string[];
   permissions: Record<string, DelegationPermissionDraft>;
 };
@@ -69,6 +74,17 @@ const headers = {
 
 function role(value: unknown) {
   return String(value || "").trim().toLowerCase();
+}
+
+function riskLabel(value?: string) {
+  const labels: Record<string, string> = {
+    standard: "Padrão",
+    operational: "Operacional",
+    sensitive: "Sensível",
+    irreversible: "Irreversível",
+    platform: "Plataforma",
+  };
+  return labels[String(value || "standard")] || String(value || "Padrão");
 }
 
 function toDateTimeLocal(value?: string | null) {
@@ -289,7 +305,14 @@ export default function AdminUserManager({
         },
       ).then(json);
       const existing = data.delegation;
-      const selectedPermissions = new Map(
+      const selectedPermissions = new Map<
+        string,
+        {
+          permission: string;
+          canGrant: boolean;
+          canRevoke: boolean;
+        }
+      >(
         (existing?.permissions || []).map(
           (item: {
             permission: string;
@@ -313,6 +336,8 @@ export default function AdminUserManager({
         version: existing?.version ?? null,
         enabled: Boolean(existing?.enabled && !existing?.expired),
         expiresAt: toDateTimeLocal(existing?.expiresAt),
+        justification: existing?.justification || "",
+        confirmed: false,
         targetLevels:
           existing?.targetLevels?.length > 0
             ? existing.targetLevels
@@ -339,6 +364,7 @@ export default function AdminUserManager({
       targetLevels: active
         ? delegationEditor.targetLevels.filter((item) => item !== level)
         : [...delegationEditor.targetLevels, level],
+      confirmed: false,
     });
   }
 
@@ -347,6 +373,8 @@ export default function AdminUserManager({
     patch: Partial<DelegationPermissionDraft>,
   ) {
     if (!delegationEditor) return;
+    const capability = delegationEditor.catalog.find((item) => item.code === code);
+    if (!capability?.ownerDelegable) return;
     const current = delegationEditor.permissions[code] || {
       enabled: false,
       canGrant: true,
@@ -363,6 +391,7 @@ export default function AdminUserManager({
         ...delegationEditor.permissions,
         [code]: next,
       },
+      confirmed: false,
     });
   }
 
@@ -371,7 +400,12 @@ export default function AdminUserManager({
     if (!selected || !delegationEditor) return;
 
     const permissions = Object.entries(delegationEditor.permissions)
-      .filter(([, item]) => item.enabled)
+      .filter(([code, item]) =>
+        item.enabled &&
+        delegationEditor.catalog.some(
+          (capability) => capability.code === code && capability.ownerDelegable,
+        ),
+      )
       .map(([permission, item]) => ({
         permission,
         canGrant: item.canGrant,
@@ -392,6 +426,14 @@ export default function AdminUserManager({
       );
       return;
     }
+    if (delegationEditor.justification.trim().length < 5) {
+      onMessage("error", "Informe uma justificativa com ao menos 5 caracteres.");
+      return;
+    }
+    if (!delegationEditor.confirmed) {
+      onMessage("error", "Revise o resumo e confirme o escopo antes de salvar.");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -409,6 +451,8 @@ export default function AdminUserManager({
             expiresAt,
             targetLevels: delegationEditor.targetLevels,
             permissions,
+            justification: delegationEditor.justification.trim(),
+            confirmed: delegationEditor.confirmed,
           }),
         },
       ).then(json);
@@ -441,7 +485,7 @@ export default function AdminUserManager({
     setBusy(true);
     try {
       await fetch(
-        `/api/admin/organizations/${delegationEditor.organization.id}/access-delegations/${selected.id}`,
+        `/api/admin/organizations/${delegationEditor.organization.id}/access-delegations/${selected.id}?version=${encodeURIComponent(String(delegationEditor.version ?? ""))}`,
         {
           method: "DELETE",
           credentials: "include",
@@ -758,12 +802,21 @@ export default function AdminUserManager({
                         .map((item) => {
                           const permission =
                             delegationEditor.permissions[item.code];
+                          const blocked = !item.ownerDelegable;
                           return (
-                            <div key={item.code}>
+                            <div
+                              key={item.code}
+                              className={
+                                blocked ? "delegation-access-blocked" : undefined
+                              }
+                            >
                               <label className="delegation-access-main">
                                 <input
                                   type="checkbox"
-                                  checked={permission?.enabled ?? false}
+                                  checked={
+                                    blocked ? false : (permission?.enabled ?? false)
+                                  }
+                                  disabled={blocked}
                                   onChange={(event) =>
                                     updateDelegationPermission(item.code, {
                                       enabled: event.target.checked,
@@ -771,16 +824,34 @@ export default function AdminUserManager({
                                   }
                                 />
                                 <span>
-                                  <strong>{item.name}</strong>
-                                  <small>{item.code}</small>
+                                  <span className="delegation-access-title">
+                                    <strong>{item.name}</strong>
+                                    <span
+                                      className={`delegation-risk ${String(
+                                        item.risk || "standard",
+                                      )}`}
+                                    >
+                                      {riskLabel(item.risk)}
+                                    </span>
+                                  </span>
+                                  {item.description && (
+                                    <small>{item.description}</small>
+                                  )}
+                                  {blocked && item.disabledReason && (
+                                    <small className="delegation-disabled-reason">
+                                      Não delegável: {item.disabledReason}
+                                    </small>
+                                  )}
                                 </span>
                               </label>
                               <div className="delegation-operations">
                                 <label>
                                   <input
                                     type="checkbox"
-                                    checked={permission?.canGrant ?? false}
-                                    disabled={!permission?.enabled}
+                                    checked={
+                                      blocked ? false : (permission?.canGrant ?? false)
+                                    }
+                                    disabled={blocked || !permission?.enabled}
                                     onChange={(event) =>
                                       updateDelegationPermission(item.code, {
                                         canGrant: event.target.checked,
@@ -792,8 +863,10 @@ export default function AdminUserManager({
                                 <label>
                                   <input
                                     type="checkbox"
-                                    checked={permission?.canRevoke ?? false}
-                                    disabled={!permission?.enabled}
+                                    checked={
+                                      blocked ? false : (permission?.canRevoke ?? false)
+                                    }
+                                    disabled={blocked || !permission?.enabled}
                                     onChange={(event) =>
                                       updateDelegationPermission(item.code, {
                                         canRevoke: event.target.checked,
@@ -821,9 +894,31 @@ export default function AdminUserManager({
                       setDelegationEditor({
                         ...delegationEditor,
                         expiresAt: event.target.value,
+                        confirmed: false,
                       })
                     }
                   />
+                </label>
+                <label className="delegation-justification">
+                  Justificativa da delegação
+                  <textarea
+                    required
+                    minLength={5}
+                    maxLength={500}
+                    rows={4}
+                    value={delegationEditor.justification}
+                    placeholder="Explique por que este admin ou owner precisa administrar estes acessos nesta organização."
+                    onChange={(event) =>
+                      setDelegationEditor({
+                        ...delegationEditor,
+                        justification: event.target.value,
+                        confirmed: false,
+                      })
+                    }
+                  />
+                  <small>
+                    Obrigatória e registrada na auditoria ({delegationEditor.justification.trim().length}/500).
+                  </small>
                 </label>
                 <div className="delegation-policy-protection">
                   <strong>Proteções fixas</strong>
@@ -832,6 +927,55 @@ export default function AdminUserManager({
                   <span>Somente Consulta/Colaborador</span>
                   <span>Teto canônico do owner</span>
                 </div>
+              </section>
+
+              <section className="delegation-policy-summary">
+                <h4>Resumo para confirmação</h4>
+                <dl>
+                  <div>
+                    <dt>Organização</dt>
+                    <dd>{delegationEditor.organization.name}</dd>
+                  </div>
+                  <div>
+                    <dt>Perfis de destino</dt>
+                    <dd>{delegationEditor.targetLevels.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Acessos delegáveis</dt>
+                    <dd>
+                      {
+                        Object.entries(delegationEditor.permissions).filter(
+                          ([code, item]) =>
+                            item.enabled &&
+                            delegationEditor.catalog.some(
+                              (capability) =>
+                                capability.code === code &&
+                                capability.ownerDelegable,
+                            ),
+                        ).length
+                      }
+                    </dd>
+                  </div>
+                </dl>
+                <p>
+                  Esta política só autoriza a gestão. As concessões e revogações
+                  reais deverão ser feitas pelo delegado em Projects → Usuários e
+                  Acessos, sempre dentro desta organização.
+                </p>
+                <label className="delegation-confirmation">
+                  <input
+                    type="checkbox"
+                    checked={delegationEditor.confirmed}
+                    onChange={(event) =>
+                      setDelegationEditor({
+                        ...delegationEditor,
+                        confirmed: event.target.checked,
+                      })
+                    }
+                  />
+                  Revisei o escopo, a organização e os riscos e confirmo esta
+                  delegação.
+                </label>
               </section>
 
               <footer>

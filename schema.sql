@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS organization_access_delegations (
   enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
   expires_at TEXT,
   version INTEGER NOT NULL DEFAULT 1,
+  justification TEXT NOT NULL DEFAULT '',
+  revision_token TEXT,
   granted_by INTEGER NOT NULL,
   updated_by INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

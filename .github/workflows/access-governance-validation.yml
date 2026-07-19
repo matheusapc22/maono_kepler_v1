@@ -9,6 +9,7 @@ on:
       - "functions/api/admin/organizations/**"
       - "functions/api/organizations/**"
       - "migrations/0012_access_delegation_policy.sql"
+      - "migrations/0013_access_delegation_hardening.sql"
       - "schema.sql"
       - "src/access-control/permissions.ts"
       - "src/pages/Admin/**"
