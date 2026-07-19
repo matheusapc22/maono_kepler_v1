@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
+    "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -41,7 +41,7 @@
     "esbuild": "^0.25.0",
     "global": "^4.3.0",
     "html2canvas": "^1.4.1",
-    "keymirror": "^0.1.1",
+    "keymirror": "^1.1.0",
     "markdown-to-jsx": "^7.7.6",
     "prop-types": "^15.6.0",
     "ramda": "^0.32.0",
