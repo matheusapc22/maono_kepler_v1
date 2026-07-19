@@ -30,6 +30,7 @@ const ORGANIZATION_CONTEXT_PERMISSION_PREFIXES = [
   "document.",
   "ticket.",
   "export.",
+  "roadmap.",
   "users.",
   "permission.",
   "role.",
@@ -83,6 +84,14 @@ const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
     "export.view",
     "export.create",
     "export.download",
+
+    "roadmap.view",
+    "roadmap.comment.create",
+    "roadmap.comment.edit_own",
+    "roadmap.comment.moderate",
+    "roadmap.manage",
+    "roadmap.task.manage",
+    "roadmap.dependency.manage",
 
     "users.view",
     "users.create",

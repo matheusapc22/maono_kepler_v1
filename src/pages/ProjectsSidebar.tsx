@@ -22,7 +22,7 @@ export type ProjectSidebarSection =
   | "favorites"
   | "files"
   | "requests"
-  | "exports"
+  | "roadmap"
   | "users"
   | "organization"
   | "limits"
@@ -312,10 +312,10 @@ function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
           permission: PERMISSION.TICKET_VIEW,
         },
         {
-          key: "exports",
-          label: "Exportações",
-          icon: "⇩",
-          permission: PERMISSION.EXPORT_VIEW,
+          key: "roadmap",
+          label: "Roadmap",
+          icon: "◫",
+          permission: PERMISSION.ROADMAP_VIEW,
         },
       ],
     },

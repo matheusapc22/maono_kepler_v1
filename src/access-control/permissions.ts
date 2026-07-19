@@ -19,6 +19,14 @@ export const PERMISSION = {
   EXPORT_CREATE: "export.create",
   EXPORT_DOWNLOAD: "export.download",
 
+  ROADMAP_VIEW: "roadmap.view",
+  ROADMAP_COMMENT_CREATE: "roadmap.comment.create",
+  ROADMAP_COMMENT_EDIT_OWN: "roadmap.comment.edit_own",
+  ROADMAP_COMMENT_MODERATE: "roadmap.comment.moderate",
+  ROADMAP_MANAGE: "roadmap.manage",
+  ROADMAP_TASK_MANAGE: "roadmap.task.manage",
+  ROADMAP_DEPENDENCY_MANAGE: "roadmap.dependency.manage",
+
   USERS_VIEW: "users.view",
   USERS_CREATE: "users.create",
   USERS_EDIT: "users.edit",

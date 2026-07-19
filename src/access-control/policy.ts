@@ -81,6 +81,14 @@ export const ROLE_PERMISSIONS: Record<MaonoRole, readonly Permission[]> = {
     "export.view",
     "export.create",
     "export.download",
+
+    "roadmap.view",
+    "roadmap.comment.create",
+    "roadmap.comment.edit_own",
+    "roadmap.comment.moderate",
+    "roadmap.manage",
+    "roadmap.task.manage",
+    "roadmap.dependency.manage",
   ],
 
   editor: [
@@ -98,11 +106,18 @@ export const ROLE_PERMISSIONS: Record<MaonoRole, readonly Permission[]> = {
     "export.view",
     "export.create",
     "export.download",
+
+    "roadmap.view",
+    "roadmap.comment.create",
+    "roadmap.comment.edit_own",
   ],
 
   viewer: [
     "project.view",
     "project.favorite",
+    "roadmap.view",
+    "roadmap.comment.create",
+    "roadmap.comment.edit_own",
   ],
 };
 

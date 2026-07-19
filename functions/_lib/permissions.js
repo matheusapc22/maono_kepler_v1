@@ -28,6 +28,14 @@ export const PERMISSIONS = [
   "export.download",
   "export.manage",
 
+  "roadmap.view",
+  "roadmap.comment.create",
+  "roadmap.comment.edit_own",
+  "roadmap.comment.moderate",
+  "roadmap.manage",
+  "roadmap.task.manage",
+  "roadmap.dependency.manage",
+
   "users.view",
   "users.create",
   "users.edit",
@@ -80,6 +88,7 @@ const ORGANIZATION_PERMISSION_PREFIXES = [
   "document.",
   "ticket.",
   "export.",
+  "roadmap.",
   "users.",
   "permission.",
   "role.",
@@ -110,6 +119,14 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "export.view",
   "export.create",
   "export.download",
+
+  "roadmap.view",
+  "roadmap.comment.create",
+  "roadmap.comment.edit_own",
+  "roadmap.comment.moderate",
+  "roadmap.manage",
+  "roadmap.task.manage",
+  "roadmap.dependency.manage",
 
   "users.view",
   "users.create",
@@ -155,6 +172,13 @@ const SENSITIVE_ACTIONS = new Set([
   "export.create",
   "export.download",
   "export.manage",
+
+  "roadmap.comment.create",
+  "roadmap.comment.edit_own",
+  "roadmap.comment.moderate",
+  "roadmap.manage",
+  "roadmap.task.manage",
+  "roadmap.dependency.manage",
 
   "users.create",
   "users.edit",
