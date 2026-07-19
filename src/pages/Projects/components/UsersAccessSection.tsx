@@ -34,6 +34,8 @@ type EditorState = {
   profile: CommercialProfileId;
   active: boolean;
   accesses: string[];
+  geoJsonAcknowledged: boolean;
+  geoJsonJustification: string;
 };
 type CreateState = {
   name: string;
@@ -41,6 +43,8 @@ type CreateState = {
   profile: CommercialProfileId;
   active: boolean;
   accesses: string[];
+  geoJsonAcknowledged: boolean;
+  geoJsonJustification: string;
 };
 
 const EMPTY_CREATE: CreateState = {
@@ -49,6 +53,8 @@ const EMPTY_CREATE: CreateState = {
   profile: "consultation",
   active: true,
   accesses: [],
+  geoJsonAcknowledged: false,
+  geoJsonJustification: "",
 };
 
 function object(value: unknown): Record<string, unknown> {
@@ -203,13 +209,20 @@ export default function UsersAccessSection({ user, organizationId: organizationI
   }
 
   function openEditor(person: OrganizationUser) {
-    setEditing({ person, name: person.name ?? "", profile: profileFromTechnical(person.role, person.accessLevel)?.id ?? "custom", active: person.active !== false, accesses: [...(person.permissions ?? [])] });
+    setEditing({ person, name: person.name ?? "", profile: profileFromTechnical(person.role, person.accessLevel)?.id ?? "custom", active: person.active !== false, accesses: [...(person.permissions ?? [])], geoJsonAcknowledged: false, geoJsonJustification: "" });
   }
 
   async function savePerson(event: FormEvent) {
     event.preventDefault();
     if (!editing || !organizationId) return;
     const profile = COMMERCIAL_PROFILES.find((item) => item.id === editing.profile);
+    const geoJsonCode = "organization.projects.geojson.view";
+    const grantsBroadGeoJson = editing.accesses.includes(geoJsonCode) && !(editing.person.permissions ?? []).includes(geoJsonCode);
+    const targetRole = String(editing.person.role || "viewer").toLowerCase();
+    if (grantsBroadGeoJson && (targetRole === "viewer" || targetRole === "editor") && (!editing.geoJsonAcknowledged || !editing.geoJsonJustification.trim())) {
+      setMessage({ kind: "error", text: "Confirme a ciência e informe uma justificativa para liberar GeoJSON amplo a este perfil." });
+      return;
+    }
     setBusy(true); setMessage(null);
     try {
       const payload: { name?: string; active?: boolean; role?: string; accessLevel?: string } = {};
@@ -219,7 +232,7 @@ export default function UsersAccessSection({ user, organizationId: organizationI
       if (Object.keys(payload).length) await updateOrganizationUser(organizationId, editing.person.id, payload);
       if (permissions.manage) {
         const before = editing.person.permissions ?? [];
-        if (permissions.grant) for (const code of editing.accesses.filter((code) => !before.includes(code))) await grantOrganizationUserPermission(organizationId, editing.person.id, code);
+        if (permissions.grant) for (const code of editing.accesses.filter((code) => !before.includes(code))) await grantOrganizationUserPermission(organizationId, editing.person.id, code, code === geoJsonCode ? { warningAcknowledged: editing.geoJsonAcknowledged, justification: editing.geoJsonJustification.trim() } : undefined);
         if (permissions.revoke) for (const code of before.filter((code) => !editing.accesses.includes(code))) await revokeOrganizationUserPermission(organizationId, editing.person.id, code);
       }
       setEditing(null); setMessage({ kind: "success", text: "Acesso atualizado com sucesso." }); await load();
@@ -251,7 +264,7 @@ export default function UsersAccessSection({ user, organizationId: organizationI
     {(createOpen || editing) && <div className="people-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) { setCreateOpen(false); setEditing(null); } }}><aside className="people-drawer" role="dialog" aria-modal="true" aria-labelledby="people-drawer-title">
       <header><div><span className="people-eyebrow">{editing ? "GESTÃO DE ACESSO" : "NOVO ACESSO"}</span><h3 id="people-drawer-title">{editing ? "Editar acesso" : "Novo acesso à organização"}</h3><p>{editing ? "Revise o perfil, a situação e os acessos desta pessoa." : "Escolha um perfil de participação e, se necessário, libere acessos adicionais."}</p></div><button type="button" onClick={() => { setCreateOpen(false); setEditing(null); }} aria-label="Fechar">×</button></header>
       {!editing ? <form onSubmit={createPerson} className="people-drawer-form"><div className="people-form-grid"><label>Nome completo<input value={create.name} onChange={(event) => setCreate({ ...create, name: event.target.value })} required /></label><label>E-mail de acesso<input type="email" value={create.email} onChange={(event) => setCreate({ ...create, email: event.target.value })} required /></label><label>Perfil de participação<select value={create.profile} onChange={(event) => setCreate({ ...create, profile: event.target.value as CommercialProfileId })}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label>Situação inicial<select value={create.active ? "active" : "suspended"} onChange={(event) => setCreate({ ...create, active: event.target.value === "active" })}><option value="active">Ativo</option><option value="suspended">Suspenso</option></select></label></div><div className="people-profile-description">{COMMERCIAL_PROFILES.find((item) => item.id === create.profile)?.description}<strong>{available} vaga{available === 1 ? "" : "s"} disponível{available === 1 ? "" : "is"}</strong></div>{permissions.manage && <><h4>Acessos adicionais</h4><AccessChecklist selected={create.accesses} onChange={(next) => setCreate({ ...create, accesses: next })} options={accesses} /></>}<div className="people-summary"><strong>Resumo</strong><p>{summarize(create.profile, create.accesses)}</p></div><footer><button type="button" className="mm-btn" onClick={() => setCreateOpen(false)}>Cancelar</button><button type="submit" className="mm-btn primary" disabled={busy}>{busy ? "Adicionando..." : "Adicionar pessoa"}</button></footer></form>
-      : <form onSubmit={savePerson} className="people-drawer-form"><div className="people-form-grid"><label>Nome completo<input value={editing.name} disabled={!permissions.edit} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></label><label>E-mail de acesso<input value={editing.person.email ?? ""} disabled /></label><label>Perfil de participação<select value={editing.profile} disabled={!permissions.assign && !permissions.manage} onChange={(event) => setEditing({ ...editing, profile: event.target.value as CommercialProfileId })}><option value="custom">Perfil personalizado</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label>Situação do acesso<select value={editing.active ? "active" : "suspended"} disabled={!permissions.edit && !permissions.disable} onChange={(event) => setEditing({ ...editing, active: event.target.value === "active" })}><option value="active">Ativo</option><option value="suspended">Suspenso</option></select></label></div>{permissions.manage && <><h4>O que esta pessoa pode fazer?</h4><AccessChecklist selected={editing.accesses} onChange={(next) => setEditing({ ...editing, accesses: next })} options={accesses} /></>}<div className="people-summary"><strong>Resumo das mudanças</strong><p>{summarize(editing.profile, editing.accesses)}</p></div><footer><button type="button" className="mm-btn" onClick={() => setEditing(null)}>Cancelar</button><button type="submit" className="mm-btn primary" disabled={busy}>{busy ? "Salvando..." : "Salvar alterações"}</button></footer></form>}
+      : <form onSubmit={savePerson} className="people-drawer-form"><div className="people-form-grid"><label>Nome completo<input value={editing.name} disabled={!permissions.edit} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></label><label>E-mail de acesso<input value={editing.person.email ?? ""} disabled /></label><label>Perfil de participação<select value={editing.profile} disabled={!permissions.assign && !permissions.manage} onChange={(event) => setEditing({ ...editing, profile: event.target.value as CommercialProfileId })}><option value="custom">Perfil personalizado</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label>Situação do acesso<select value={editing.active ? "active" : "suspended"} disabled={!permissions.edit && !permissions.disable} onChange={(event) => setEditing({ ...editing, active: event.target.value === "active" })}><option value="active">Ativo</option><option value="suspended">Suspenso</option></select></label></div>{permissions.manage && <><h4>O que esta pessoa pode fazer?</h4><AccessChecklist selected={editing.accesses} onChange={(next) => setEditing({ ...editing, accesses: next })} options={accesses} />{editing.accesses.includes("organization.projects.geojson.view") && ["viewer","editor"].includes(String(editing.person.role || "viewer").toLowerCase()) && <div className="people-geojson-warning" role="alert"><strong>Acesso amplo a GeoJSON</strong><p>Esta pessoa poderá visualizar os dados GeoJSON de todos os projetos ativos desta organização, inclusive os não atribuídos individualmente. O acesso não permite editar ou excluir.</p><label><input type="checkbox" checked={editing.geoJsonAcknowledged} onChange={(event) => setEditing({ ...editing, geoJsonAcknowledged: event.target.checked })} /> Estou ciente do alcance deste acesso.</label><label>Justificativa obrigatória<textarea value={editing.geoJsonJustification} onChange={(event) => setEditing({ ...editing, geoJsonJustification: event.target.value })} maxLength={500} /></label></div>}</>}<div className="people-summary"><strong>Resumo das mudanças</strong><p>{summarize(editing.profile, editing.accesses)}</p></div><footer><button type="button" className="mm-btn" onClick={() => setEditing(null)}>Cancelar</button><button type="submit" className="mm-btn primary" disabled={busy}>{busy ? "Salvando..." : "Salvar alterações"}</button></footer></form>}
     </aside></div>}
   </section>;
 }

@@ -1,0 +1,135 @@
+import { can, recordAuditLog } from "./permissions.js";
+
+export const ORGANIZATION_GEOJSON_VIEW_PERMISSION =
+  "organization.projects.geojson.view";
+
+function getDb(env) {
+  const db = env.DB || env.D1 || env.MAONO_DB;
+  if (!db?.prepare) throw forbidden("DATABASE_NOT_CONFIGURED");
+  return db;
+}
+
+function extension(name) {
+  return String(name || "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
+}
+
+export function isProjectGeoJsonFile(file) {
+  if (!file?.project_id) return false;
+  const type = String(file.file_type || "").toLowerCase();
+  const ext = extension(file.original_name || file.name || file.file_name);
+  const mime = String(file.mime_type || file.content_type || "").toLowerCase();
+  return type === "geojson" || ext === "geojson" ||
+    (ext === "json" && (type === "json" || mime.includes("json")));
+}
+
+function forbidden(reason) {
+  const error = new Error("Acesso negado ao GeoJSON deste projeto.");
+  error.status = 403;
+  error.code = "GEOJSON_PROJECT_ACCESS_DENIED";
+  error.stage = "geojson.authorization";
+  error.reason = reason;
+  error.publicMessage = error.message;
+  return error;
+}
+
+export async function decideProjectGeoJsonAccess(env, user, organizationId, projectId) {
+  if (!user?.id || !organizationId || !projectId) {
+    return { allowed: false, reason: "CONTEXT_REQUIRED" };
+  }
+
+  const project = await getDb(env)
+    .prepare(`
+      SELECT p.id, p.organization_id, p.active AS project_active,
+             o.active AS organization_active
+      FROM projects p
+      INNER JOIN organizations o ON o.id = p.organization_id
+      WHERE p.id = ?
+      LIMIT 1
+    `)
+    .bind(projectId)
+    .first();
+  if (!project || String(project.organization_id) !== String(organizationId)) {
+    return { allowed: false, reason: "PROJECT_ORGANIZATION_MISMATCH" };
+  }
+  if (project.project_active === 0 || project.organization_active === 0) {
+    return { allowed: false, reason: "INACTIVE_CONTEXT" };
+  }
+
+  const context = {
+    organizationId,
+    projectId,
+    scopeType: "organization",
+    resourceType: "project_geojson",
+  };
+  const broad = await can(
+    env,
+    user,
+    ORGANIZATION_GEOJSON_VIEW_PERMISSION,
+    context,
+  );
+  if (broad.allowed) {
+    return { allowed: true, reason: broad.reason, mode: "organization" };
+  }
+
+  // Modo compatível: preserva o vínculo direto existente em user_projects.
+  const direct = await can(env, user, "project.view", {
+    ...context,
+    scopeType: "project",
+  });
+  return direct.allowed
+    ? { allowed: true, reason: direct.reason, mode: "direct_project" }
+    : { allowed: false, reason: broad.reason || direct.reason || "DENY_BY_DEFAULT" };
+}
+
+export async function requireProjectGeoJsonAccess(env, request, user, organizationId, file, options = {}) {
+  if (!isProjectGeoJsonFile(file)) return { allowed: true, mode: "regular_document" };
+
+  const decision = await decideProjectGeoJsonAccess(
+    env,
+    user,
+    organizationId,
+    file.project_id,
+  );
+  if (!decision.allowed) {
+    await recordAuditLog(env, {
+      actorUserId: user?.id,
+      organizationId,
+      projectId: file.project_id,
+      action: "organization.projects.geojson.access_denied",
+      resourceType: "project_geojson",
+      resourceId: file.id,
+      result: "denied",
+      metadata: { reason: decision.reason, surface: options.surface || "unknown" },
+      request,
+    });
+    throw forbidden(decision.reason);
+  }
+
+  if (options.auditAllowed) {
+    await recordAuditLog(env, {
+      actorUserId: user?.id,
+      organizationId,
+      projectId: file.project_id,
+      action: "organization.projects.geojson.access_allowed",
+      resourceType: "project_geojson",
+      resourceId: file.id,
+      result: "success",
+      metadata: { mode: decision.mode, surface: options.surface || "unknown" },
+      request,
+    });
+  }
+  return decision;
+}
+
+export async function filterVisibleOrganizationFiles(env, request, user, organizationId, files) {
+  const visible = [];
+  for (const file of files) {
+    if (!isProjectGeoJsonFile(file)) {
+      visible.push(file);
+      continue;
+    }
+    const decision = await decideProjectGeoJsonAccess(env, user, organizationId, file.project_id);
+    if (decision.allowed) visible.push(file);
+  }
+  return visible;
+}

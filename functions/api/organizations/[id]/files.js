@@ -27,6 +27,7 @@ import {
   ensureOrganizationStorage,
   publicOrganizationStorage,
 } from "../../../_lib/organization-storage.js";
+import { filterVisibleOrganizationFiles } from "../../../_lib/geojson-access.js";
 
 export async function onRequest(context) {
   const { request } = context;
@@ -46,7 +47,7 @@ export async function onRequestGet({ env, request, params }) {
       "organizationId",
     );
 
-    await requireOrganizationPermission(
+    const { user } = await requireOrganizationPermission(
       env,
       request,
       "document.view",
@@ -72,16 +73,26 @@ export async function onRequestGet({ env, request, params }) {
       "organization_files",
       organizationId,
     );
+    const visibleRows = await filterVisibleOrganizationFiles(
+      env,
+      request,
+      user,
+      organizationId,
+      rows,
+    );
 
     return jsonResponse(
       {
         ok: true,
         requestId,
         storage: publicOrganizationStorage(storage),
-        files: rows.map(publicOrganizationFile),
+        files: visibleRows.map(publicOrganizationFile),
       },
       {
-        headers: { "X-Request-Id": requestId },
+        headers: {
+          "X-Request-Id": requestId,
+          "Cache-Control": "private, no-store",
+        },
       },
     );
   } catch (error) {

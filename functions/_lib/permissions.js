@@ -51,6 +51,7 @@ export const PERMISSIONS = [
   "organization.view",
   "organization.edit",
   "organization.metrics.view",
+  "organization.projects.geojson.view",
 
   "billing.view",
   "plan.view",

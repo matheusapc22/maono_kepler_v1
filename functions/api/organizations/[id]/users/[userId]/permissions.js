@@ -1,4 +1,4 @@
-import { requireSession } from "../../../../../_lib/auth.js";
+import { requireSession, normalizeRole } from "../../../../../_lib/auth.js";
 import { can, recordAuditLog } from "../../../../../_lib/permissions.js";
 import {
   getRouteParam,
@@ -120,7 +120,23 @@ export async function onRequestPost({ env, request, params }) {
     const targetUserId = getUserId(params);
     const payload = await readJsonBody(request);
     const permission = normalizePermissionFromPayload(payload);
+    const warningAcknowledged = payload.warningAcknowledged === true;
+    const justification = String(payload.justification || "").trim();
     const user = await requireSession(env, request);
+
+    if (
+      permission === "organization.projects.geojson.view" &&
+      normalizeRole(user.role) !== "super_admin"
+    ) {
+      throw createForbiddenError("SUPER_ADMIN_REQUIRED");
+    }
+
+    if (
+      permission === "organization.projects.geojson.view" &&
+      justification.length > 500
+    ) {
+      throw createInvalidPayloadError("Justificativa excede o limite permitido.");
+    }
 
     await requireGrantAccess(
       env,
@@ -137,6 +153,7 @@ export async function onRequestPost({ env, request, params }) {
       targetUserId,
       permission,
       user,
+      { warningAcknowledged, justification },
     );
 
     return jsonResponse(
