@@ -21,7 +21,7 @@ import ProjectsSidebar, {
 import AdminShortcutSection from "./Projects/components/AdminShortcutSection";
 import AuditShortcutSection from "./Projects/components/AuditShortcutSection";
 import DocumentsSection from "./Projects/components/DocumentsSection";
-import ExportsSection from "./Projects/components/ExportsSection";
+import RoadmapSection from "./Projects/components/RoadmapSection";
 import LimitsPlansSection from "./Projects/components/LimitsPlansSection";
 import OrganizationSection from "./Projects/components/OrganizationSection";
 import TicketsSection from "./Projects/components/TicketsSection";
@@ -38,7 +38,7 @@ import "./Projects/projects.css";
 const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = {
   files: PERMISSION.DOCUMENT_VIEW,
   requests: PERMISSION.TICKET_VIEW,
-  exports: PERMISSION.EXPORT_VIEW,
+  roadmap: PERMISSION.ROADMAP_VIEW,
   users: PERMISSION.USERS_VIEW,
   organization: PERMISSION.ORGANIZATION_VIEW,
   limits: PERMISSION.LIMITS_VIEW,
@@ -92,7 +92,7 @@ function sectionTitle(section: ProjectSidebarSection) {
     favorites: "Favoritos",
     files: "Arquivos e Documentos",
     requests: "Central de Chamados",
-    exports: "Exportações",
+    roadmap: "Roadmap",
     users: "Usuários e Acessos",
     organization: "Organização",
     limits: "Limites e Planos",
@@ -366,22 +366,6 @@ const ProjectsPage: React.FC = () => {
     return source.filter((project) => project.active !== false);
   }, [allProjects, projectContextIsCurrent, sessionProjects]);
 
-  const editableProjectsCount = useMemo(
-    () =>
-      activeProjects.filter((project) =>
-        canProject(user, PERMISSION.PROJECT_SAVE, project),
-      ).length,
-    [activeProjects, user],
-  );
-
-  const readOnlyProjectsCount = useMemo(
-    () =>
-      activeProjects.filter(
-        (project) => !canProject(user, PERMISSION.PROJECT_SAVE, project),
-      ).length,
-    [activeProjects, user],
-  );
-
   useEffect(() => {
     if (!loading && !authenticated) {
       navigate("/login?next=/projects", { replace: true });
@@ -563,8 +547,6 @@ const ProjectsPage: React.FC = () => {
                 user={user}
                 organizationId={activeOrganizationId}
                 organizationName={activeOrganization?.name}
-                editableProjectsCount={editableProjectsCount}
-                readOnlyProjectsCount={readOnlyProjectsCount}
               />
             )}
           </div>
@@ -580,16 +562,12 @@ function ProjectsSectionRouter({
   user,
   organizationId,
   organizationName,
-  editableProjectsCount,
-  readOnlyProjectsCount,
 }: {
   section: ProjectSidebarSection;
   projects: MaonoProject[];
   user: MaonoUser | null;
   organizationId: number | string | null;
   organizationName?: string | null;
-  editableProjectsCount: number;
-  readOnlyProjectsCount: number;
 }) {
   const accessControlUser = userAsAccessControlUser(user);
   const requiredPermission = SECTION_PERMISSIONS[section];
@@ -627,13 +605,12 @@ function ProjectsSectionRouter({
         />
       );
 
-    case "exports":
+    case "roadmap":
       return (
-        <ExportsSection
+        <RoadmapSection
           user={accessControlUser}
           organizationId={organizationId}
-          editableProjectsCount={editableProjectsCount}
-          readOnlyProjectsCount={readOnlyProjectsCount}
+          organizationName={organizationName}
         />
       );
 
