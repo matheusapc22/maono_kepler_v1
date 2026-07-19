@@ -37,7 +37,19 @@ jobs:
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Build
-        run: npm run build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
+
+      - name: Upload build diagnostic
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: access-governance-build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Access governance tests
         run: node --test tests/access-delegation.test.mjs
