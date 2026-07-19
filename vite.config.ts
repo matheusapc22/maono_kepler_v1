@@ -63,6 +63,7 @@ export function manualChunks(id: string): string | undefined {
 }
 
 export default defineConfig({
+  // Keep the Cloudflare build below the previous Rollup memory peak.
   build: {
     target: "es2020",
     sourcemap: false,
