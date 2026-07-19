@@ -139,6 +139,8 @@ export function handleApiError(error) {
           : error?.message || "Erro na requisição.",
       code: error?.code || undefined,
       reason: error?.reason || undefined,
+      requestId: error?.requestId || undefined,
+      policyVersion: error?.policyVersion ?? undefined,
     },
     { status: safeStatus },
   );
@@ -1343,7 +1345,9 @@ export async function grantOrganizationPermission(env, organizationId, targetUse
   await recordAuditLog(env, {
     actorUserId: actor?.id,
     organizationId: id,
-    action: "permission.grant",
+    action: options.authorization?.delegated
+      ? "delegated.permission.grant"
+      : "permission.grant",
     resourceType: "user",
     resourceId: userId,
     metadata: {
@@ -1353,7 +1357,11 @@ export async function grantOrganizationPermission(env, organizationId, targetUse
         ? String(options.justification).slice(0, 500)
         : null,
       targetRole: target.role || null,
+      delegated: options.authorization?.delegated === true,
+      policyVersion: options.authorization?.policyVersion ?? null,
+      requestId: options.authorization?.requestId ?? null,
     },
+    request: options.request,
   });
 
   return {
@@ -1363,7 +1371,7 @@ export async function grantOrganizationPermission(env, organizationId, targetUse
   };
 }
 
-export async function revokeOrganizationPermission(env, organizationId, targetUserId, permission, actor) {
+export async function revokeOrganizationPermission(env, organizationId, targetUserId, permission, actor, options = {}) {
   const id = parsePositiveInteger(organizationId, "organizationId");
   const userId = parsePositiveInteger(targetUserId, "userId");
   const normalizedPermission = assertKnownPermission(permission);
@@ -1419,12 +1427,18 @@ export async function revokeOrganizationPermission(env, organizationId, targetUs
   await recordAuditLog(env, {
     actorUserId: actor?.id,
     organizationId: id,
-    action: "permission.revoke",
+    action: options.authorization?.delegated
+      ? "delegated.permission.revoke"
+      : "permission.revoke",
     resourceType: "user",
     resourceId: userId,
     metadata: {
       permission: normalizedPermission,
+      delegated: options.authorization?.delegated === true,
+      policyVersion: options.authorization?.policyVersion ?? null,
+      requestId: options.authorization?.requestId ?? null,
     },
+    request: options.request,
   });
 
   return {

@@ -87,7 +87,7 @@ export async function onRequestDelete({ env, request, params }) {
     const permission = getPermissionParam(params);
     const actor = await requireSession(env, request);
 
-    await authorizeOrganizationPermissionMutation({
+    const authorization = await authorizeOrganizationPermissionMutation({
       env,
       request,
       actor,
@@ -110,6 +110,7 @@ export async function onRequestDelete({ env, request, params }) {
       targetUserId,
       permission,
       actor,
+      { authorization, request },
     );
 
     return jsonResponse({

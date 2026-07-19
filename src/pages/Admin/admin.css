@@ -551,6 +551,148 @@
   font-size: .68rem;
 }
 
+
+.delegation-catalog fieldset > div.delegation-access-blocked {
+  opacity: .72;
+  border-style: dashed;
+  background: #0b1016;
+}
+
+.delegation-access-title {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.delegation-risk {
+  display: inline-flex !important;
+  width: fit-content;
+  border: 1px solid rgba(148,163,184,.28);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: #cbd5e1;
+  background: rgba(148,163,184,.08);
+  font-size: .61rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.delegation-risk.sensitive,
+.delegation-risk.irreversible {
+  border-color: rgba(248,113,113,.34);
+  color: #fecaca;
+  background: rgba(239,68,68,.09);
+}
+
+.delegation-risk.platform {
+  border-color: rgba(192,132,252,.34);
+  color: #e9d5ff;
+  background: rgba(168,85,247,.09);
+}
+
+.delegation-access-main small {
+  overflow: visible;
+  font-family: inherit;
+  line-height: 1.35;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.delegation-disabled-reason {
+  color: #fbbf24 !important;
+  font-weight: 700;
+}
+
+.delegation-policy-section.compact {
+  grid-template-columns: minmax(220px, 280px) minmax(300px, 1fr);
+  align-items: start;
+}
+
+.delegation-justification {
+  display: grid;
+  gap: 7px;
+}
+
+.delegation-justification textarea {
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 9px;
+  padding: 10px 11px;
+  color: #f4f5f6;
+  background: #080d12;
+  font: inherit;
+}
+
+.delegation-justification small {
+  color: var(--mm-muted);
+  font-size: .68rem;
+  font-weight: 500;
+}
+
+.delegation-policy-protection {
+  grid-column: 1 / -1;
+}
+
+.delegation-policy-summary {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(214,168,79,.28);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(214,168,79,.06);
+}
+
+.delegation-policy-summary h4,
+.delegation-policy-summary p,
+.delegation-policy-summary dl,
+.delegation-policy-summary dd {
+  margin: 0;
+}
+
+.delegation-policy-summary dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.delegation-policy-summary dl > div {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  padding: 9px;
+  background: rgba(8,13,18,.7);
+}
+
+.delegation-policy-summary dt {
+  color: var(--mm-muted);
+  font-size: .66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.delegation-policy-summary dd {
+  margin-top: 4px;
+  color: #f3f4f6;
+  font-weight: 800;
+}
+
+.delegation-policy-summary p {
+  color: #cbd5df;
+  font-size: .76rem;
+  line-height: 1.5;
+}
+
+.delegation-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #f8e7bd;
+  font-size: .76rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .admin-command-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -621,7 +763,8 @@
   .delegation-operations {
     padding-left: 25px;
   }
-  .delegation-policy-section.compact {
+  .delegation-policy-section.compact,
+  .delegation-policy-summary dl {
     grid-template-columns: 1fr;
   }
 }
