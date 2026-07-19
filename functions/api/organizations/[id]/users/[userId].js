@@ -1,4 +1,4 @@
-import { requireSession } from "../../../../_lib/auth.js";
+import { hashPassword, normalizeRole, requireSession } from "../../../../_lib/auth.js";
 import { can, recordAuditLog } from "../../../../_lib/permissions.js";
 import {
   getRouteParam,
@@ -42,7 +42,7 @@ function hasSupportedPatch(payload) {
   return (
     hasNamePatch(payload) ||
     hasActivePatch(payload) ||
-    hasRoleOrAccessPatch(payload)
+    hasRoleOrAccessPatch(payload) || hasOwn(payload, "password")
   );
 }
 
@@ -175,6 +175,29 @@ export async function onRequestPatch({ env, request, params }) {
 
     const user = await requireSession(env, request);
 
+    if (hasOwn(payload, "password")) {
+      if (normalizeRole(user.role) !== "super_admin") {
+        throw createForbiddenError("admin.users.update", "SUPER_ADMIN_REQUIRED");
+      }
+      const password = String(payload.password || "");
+      if (password.length < 8) {
+        const error = new Error("A nova senha precisa ter pelo menos 8 caracteres.");
+        error.status = 400;
+        error.code = "USER_PASSWORD_INVALID";
+        throw error;
+      }
+      const passwordHash = await hashPassword(password);
+      await env.DB.batch([
+        env.DB.prepare("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(passwordHash, targetUserId),
+        env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(targetUserId),
+      ]);
+      await recordAuditLog(env, { actorUserId: user.id, organizationId, action: "admin.users.password_changed", resourceType: "user", resourceId: targetUserId, result: "success", metadata: { sessionsInvalidated: true }, request });
+      delete payload.password;
+      if (!hasSupportedPatch(payload)) {
+        return jsonResponse({ ok: true, passwordChanged: true });
+      }
+    }
+
     if (hasNamePatch(payload)) {
       await requireOrganizationAction(
         env,
@@ -276,6 +299,32 @@ export async function onRequestPatch({ env, request, params }) {
   }
 }
 
-export async function onRequest({ request }) {
-  return methodNotAllowed(request.method, ["PATCH"]);
+export async function onRequestDelete({ env, request, params }) {
+  try {
+    const organizationId = getOrganizationId(params);
+    const targetUserId = getUserId(params);
+    const user = await requireSession(env, request);
+    await requireOrganizationAction(env, request, user, organizationId, "users.delete", { resourceId: targetUserId, auditAction: "users.membership.delete" });
+    if (Number(user.id) === Number(targetUserId)) {
+      const error = new Error("Você não pode remover o próprio acesso em uso."); error.status = 400; error.code = "SELF_MEMBERSHIP_DELETE_BLOCKED"; throw error;
+    }
+    const target = await env.DB.prepare("SELECT ou.id, ou.access_level FROM organization_users ou WHERE ou.organization_id = ? AND ou.user_id = ? LIMIT 1").bind(organizationId, targetUserId).first();
+    if (!target) { const error = new Error("Acesso não encontrado na organização."); error.status = 404; error.code = "MEMBERSHIP_NOT_FOUND"; throw error; }
+    if (String(target.access_level).toLowerCase() === "owner") {
+      const owners = await env.DB.prepare("SELECT COUNT(*) AS total FROM organization_users WHERE organization_id = ? AND LOWER(access_level) = 'owner'").bind(organizationId).first();
+      if (Number(owners?.total || 0) <= 1) { const error = new Error("Não é possível remover o último responsável da organização."); error.status = 409; error.code = "LAST_OWNER_REMOVAL_BLOCKED"; throw error; }
+    }
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM user_permissions WHERE user_id = ? AND organization_id = ?").bind(targetUserId, organizationId),
+      env.DB.prepare("DELETE FROM organization_users WHERE user_id = ? AND organization_id = ?").bind(targetUserId, organizationId),
+    ]);
+    await recordAuditLog(env, { actorUserId: user.id, organizationId, action: "users.membership.delete", resourceType: "user", resourceId: targetUserId, result: "success", request });
+    return jsonResponse({ ok: true, removed: true });
+  } catch (error) { return handleApiError(error); }
+}
+
+export async function onRequest(context) {
+  if (context.request.method === "PATCH") return onRequestPatch(context);
+  if (context.request.method === "DELETE") return onRequestDelete(context);
+  return methodNotAllowed(context.request.method, ["PATCH", "DELETE"]);
 }

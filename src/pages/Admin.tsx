@@ -5,6 +5,7 @@ import { useSession } from "../auth/session";
 import { AdminPageSkeleton } from "../components/loading/Skeleton";
 import "./Projects/projects.css";
 import "./Admin/admin.css";
+import AdminUserManager from "./Admin/components/AdminUserManager";
 
 type AdminSection = "overview" | "organizations" | "users" | "projects" | "requests" | "audit" | "system";
 
@@ -235,22 +236,7 @@ const AdminPage: React.FC = () => {
   }
 
   function renderUsers() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2>Usuários e Permissões</h2>
-        <p>Super Admin, Admin, Owner, Editor e Viewer.</p>
-        <Table
-          headers={["Nome", "E-mail", "Perfil", "Projetos", "Status"]}
-          rows={users.map((item) => [
-            item.name || "—",
-            item.email,
-            roleLabel(item.role),
-            String(item.projectCount || 0),
-            statusLabel(item.active),
-          ])}
-        />
-      </section>
-    );
+    return <AdminUserManager users={users} currentUserId={user?.id} isSuperAdmin={normalizeRole(user?.role)==="super_admin"} onRefresh={refreshAdminData} onMessage={(kind,text)=>kind==="error"?setError(text):setSuccess(text)} />;
   }
 
   function renderProjects() {
