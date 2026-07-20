@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link
@@ -26,8 +26,43 @@
     />
     <title>Maõno Tecnologia | Mapa</title>
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="margin: 0; background: #202022">
+    <div id="root">
+      <main
+        id="app-boot-fallback"
+        role="status"
+        aria-live="polite"
+        style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:#202022;color:#fff;font-family:Arial,sans-serif;text-align:center"
+      >
+        <div>
+          <strong style="display:block;font-size:18px;margin-bottom:8px">Carregando Maõno Maps...</strong>
+          <span style="color:rgba(255,255,255,.62);font-size:14px">Preparando a página de acesso.</span>
+        </div>
+      </main>
+    </div>
+    <script>
+      (function () {
+        function showBootFailure() {
+          var fallback = document.getElementById("app-boot-fallback");
+          if (!fallback || fallback.dataset.failed === "true") return;
+          fallback.dataset.failed = "true";
+          fallback.innerHTML =
+            '<div><strong style="display:block;font-size:18px;margin-bottom:10px">Não foi possível iniciar a plataforma.</strong>' +
+            '<span style="display:block;color:rgba(255,255,255,.68);font-size:14px;margin-bottom:18px">Atualize a página. Se o problema continuar, informe o suporte.</span>' +
+            '<button type="button" onclick="window.location.reload()" style="border:0;border-radius:8px;padding:11px 18px;background:#6f5cff;color:#fff;font-weight:700;cursor:pointer">Tentar novamente</button></div>';
+        }
+
+        window.__MAONO_SHOW_BOOT_FAILURE__ = showBootFailure;
+        window.__MAONO_BOOT_TIMEOUT__ = window.setTimeout(showBootFailure, 12000);
+        window.addEventListener("error", showBootFailure, { once: true });
+        window.addEventListener("unhandledrejection", showBootFailure, { once: true });
+      })();
+    </script>
+    <noscript>
+      <div style="padding:24px;background:#202022;color:#fff;font-family:Arial,sans-serif">
+        Ative o JavaScript para acessar a Maõno Maps.
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
