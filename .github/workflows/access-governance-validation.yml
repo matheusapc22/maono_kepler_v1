@@ -12,6 +12,8 @@ on:
       - "schema.sql"
       - "package.json"
       - "vite.config.ts"
+      - "index.html"
+      - "src/main.tsx"
       - "src/access-control/permissions.ts"
       - "src/pages/Admin/**"
       - "src/pages/Projects/components/UsersAccessSection.tsx"
@@ -55,7 +57,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-      - name: Access governance and build tests
+      - name: Access governance and runtime tests
         run: >-
           node --test
           tests/access-delegation.test.mjs
