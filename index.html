@@ -24,42 +24,351 @@
       name="robots"
       content="noindex,nofollow,noarchive,noimageindex,nosnippet"
     />
+    <meta name="theme-color" content="#060606" />
     <title>Maõno Tecnologia | Mapa</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --mm-boot-bg: #060606;
+        --mm-boot-text: #f3efe4;
+        --mm-boot-muted: rgba(243, 239, 228, 0.68);
+        --mm-boot-gold: #d6a84f;
+        --mm-boot-gold-bright: #f2cf7a;
+        --mm-boot-gold-soft: rgba(214, 168, 79, 0.18);
+        --mm-boot-scan-duration: 1.25s;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #root {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        min-width: 320px;
+        overflow: hidden;
+        background: var(--mm-boot-bg);
+        color: var(--mm-boot-text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      .mm-boot-screen {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 24px;
+        background:
+          radial-gradient(
+            circle at center,
+            rgba(214, 168, 79, 0.055),
+            transparent 44%
+          ),
+          linear-gradient(180deg, #090909 0%, #060606 100%);
+      }
+
+      .mm-boot-core {
+        display: grid;
+        place-items: center;
+        gap: 18px;
+        width: min(84vw, 480px);
+      }
+
+      .mm-boot-logo-wrap {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: min(78vw, 380px);
+        aspect-ratio: 1;
+        overflow: hidden;
+      }
+
+      .mm-boot-logo-wrap::before {
+        position: absolute;
+        inset: 5%;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(214, 168, 79, 0.08),
+          transparent 70%
+        );
+        filter: blur(14px);
+        content: "";
+      }
+
+      .mm-boot-logo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        user-select: none;
+        pointer-events: none;
+      }
+
+      .mm-boot-logo--blur {
+        z-index: 1;
+        opacity: 0.92;
+        filter:
+          blur(3px)
+          saturate(0.94)
+          drop-shadow(0 0 20px rgba(214, 168, 79, 0.1));
+        transform: scale(0.995);
+      }
+
+      .mm-boot-logo--clear {
+        z-index: 2;
+        opacity: 0;
+        filter:
+          contrast(1.04)
+          drop-shadow(0 0 16px rgba(214, 168, 79, 0.18));
+        clip-path: inset(0 0 76% 0);
+        animation: mm-boot-reveal var(--mm-boot-scan-duration) linear infinite;
+        will-change: clip-path, opacity;
+      }
+
+      .mm-boot-scan {
+        position: absolute;
+        z-index: 3;
+        top: 5%;
+        right: 5%;
+        left: 5%;
+        height: 2px;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          transparent 0%,
+          rgba(214, 168, 79, 0.72) 18%,
+          var(--mm-boot-gold-bright) 50%,
+          rgba(214, 168, 79, 0.72) 82%,
+          transparent 100%
+        );
+        box-shadow:
+          0 0 10px rgba(242, 207, 122, 0.95),
+          0 0 24px rgba(214, 168, 79, 0.42),
+          0 0 42px rgba(214, 168, 79, 0.16);
+        opacity: 0;
+        transform: translateY(-50%);
+        animation: mm-boot-scan-line var(--mm-boot-scan-duration) linear infinite;
+        will-change: top, opacity;
+      }
+
+      .mm-boot-scan::before {
+        position: absolute;
+        top: -13px;
+        right: 0;
+        bottom: -13px;
+        left: 0;
+        background: linear-gradient(
+          180deg,
+          transparent,
+          rgba(214, 168, 79, 0.075),
+          transparent
+        );
+        content: "";
+      }
+
+      .mm-boot-caption {
+        margin: 0;
+        color: var(--mm-boot-muted);
+        font-size: clamp(12px, 2.8vw, 14px);
+        letter-spacing: 0.16em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .mm-boot-screen.mm-boot-failed {
+        padding: 24px;
+      }
+
+      .mm-boot-failed .mm-boot-core {
+        width: min(92vw, 520px);
+      }
+
+      .mm-boot-failed .mm-boot-logo-wrap {
+        width: min(58vw, 240px);
+      }
+
+      .mm-boot-failure-title {
+        margin: 0;
+        font-size: clamp(24px, 6vw, 36px);
+        line-height: 1.08;
+        text-align: center;
+      }
+
+      .mm-boot-failure-copy {
+        margin: 0;
+        color: var(--mm-boot-muted);
+        font-size: 14px;
+        line-height: 1.6;
+        text-align: center;
+      }
+
+      .mm-boot-retry {
+        min-height: 44px;
+        padding: 0 22px;
+        border: 1px solid var(--mm-boot-gold);
+        background: transparent;
+        color: var(--mm-boot-text);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+
+      .mm-boot-retry:hover {
+        background: var(--mm-boot-gold-soft);
+      }
+
+      @keyframes mm-boot-scan-line {
+        0% {
+          top: 4%;
+          opacity: 0;
+        }
+
+        6% {
+          top: 7%;
+          opacity: 1;
+        }
+
+        50% {
+          top: 50%;
+          opacity: 1;
+        }
+
+        94% {
+          top: 93%;
+          opacity: 1;
+        }
+
+        100% {
+          top: 96%;
+          opacity: 0;
+        }
+      }
+
+      @keyframes mm-boot-reveal {
+        0% {
+          clip-path: inset(0 0 76% 0);
+          opacity: 0;
+        }
+
+        6% {
+          clip-path: inset(0 0 76% 0);
+          opacity: 1;
+        }
+
+        50% {
+          clip-path: inset(38% 0 38% 0);
+          opacity: 1;
+        }
+
+        94% {
+          clip-path: inset(76% 0 0 0);
+          opacity: 1;
+        }
+
+        100% {
+          clip-path: inset(76% 0 0 0);
+          opacity: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .mm-boot-logo--clear,
+        .mm-boot-scan {
+          animation: none;
+        }
+
+        .mm-boot-logo--clear {
+          clip-path: inset(38% 0 38% 0);
+          opacity: 1;
+        }
+
+        .mm-boot-scan {
+          top: 50%;
+          opacity: 1;
+        }
+      }
+    </style>
   </head>
-  <body style="margin: 0; background: #202022">
+  <body>
     <div id="root">
       <main
         id="app-boot-fallback"
+        class="mm-boot-screen"
         role="status"
         aria-live="polite"
-        style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:#202022;color:#fff;font-family:Arial,sans-serif;text-align:center"
+        aria-busy="true"
       >
-        <div>
-          <strong style="display:block;font-size:18px;margin-bottom:8px">Carregando Maõno Maps...</strong>
-          <span style="color:rgba(255,255,255,.62);font-size:14px">Preparando a página de acesso.</span>
-        </div>
+        <section
+          class="mm-boot-core"
+          aria-label="Inicialização da plataforma Maõno Maps"
+        >
+          <div class="mm-boot-logo-wrap" aria-hidden="true">
+            <img
+              class="mm-boot-logo mm-boot-logo--blur"
+              src="/images/Simbolo_Maono.png"
+              alt=""
+            />
+            <img
+              class="mm-boot-logo mm-boot-logo--clear"
+              src="/images/Simbolo_Maono.png"
+              alt=""
+            />
+            <span class="mm-boot-scan"></span>
+          </div>
+          <p class="mm-boot-caption">Carregando Maõno Maps</p>
+        </section>
       </main>
     </div>
     <script>
       (function () {
+        if (window.location.pathname === "/") {
+          window.history.replaceState(null, "", "/login");
+        }
+
         function showBootFailure() {
           var fallback = document.getElementById("app-boot-fallback");
           if (!fallback || fallback.dataset.failed === "true") return;
+
           fallback.dataset.failed = "true";
+          fallback.setAttribute("aria-busy", "false");
+          fallback.classList.add("mm-boot-failed");
           fallback.innerHTML =
-            '<div><strong style="display:block;font-size:18px;margin-bottom:10px">Não foi possível iniciar a plataforma.</strong>' +
-            '<span style="display:block;color:rgba(255,255,255,.68);font-size:14px;margin-bottom:18px">Atualize a página. Se o problema continuar, informe o suporte.</span>' +
-            '<button type="button" onclick="window.location.reload()" style="border:0;border-radius:8px;padding:11px 18px;background:#6f5cff;color:#fff;font-weight:700;cursor:pointer">Tentar novamente</button></div>';
+            '<section class="mm-boot-core" aria-label="Falha na inicialização da plataforma">' +
+            '<div class="mm-boot-logo-wrap" aria-hidden="true">' +
+            '<img class="mm-boot-logo mm-boot-logo--blur" src="/images/Simbolo_Maono.png" alt="" />' +
+            '</div>' +
+            '<h1 class="mm-boot-failure-title">Não foi possível iniciar a plataforma.</h1>' +
+            '<p class="mm-boot-failure-copy">Atualize a página. Se o problema continuar, informe o suporte da Maõno.</p>' +
+            '<button class="mm-boot-retry" type="button" onclick="window.location.reload()">Tentar novamente</button>' +
+            '</section>';
         }
 
         window.__MAONO_SHOW_BOOT_FAILURE__ = showBootFailure;
-        window.__MAONO_BOOT_TIMEOUT__ = window.setTimeout(showBootFailure, 12000);
+        window.__MAONO_BOOT_TIMEOUT__ = window.setTimeout(
+          showBootFailure,
+          12000,
+        );
         window.addEventListener("error", showBootFailure, { once: true });
-        window.addEventListener("unhandledrejection", showBootFailure, { once: true });
+        window.addEventListener("unhandledrejection", showBootFailure, {
+          once: true,
+        });
       })();
     </script>
     <noscript>
-      <div style="padding:24px;background:#202022;color:#fff;font-family:Arial,sans-serif">
+      <div
+        style="padding:24px;background:#060606;color:#f3efe4;font-family:Arial,sans-serif"
+      >
         Ative o JavaScript para acessar a Maõno Maps.
       </div>
     </noscript>
