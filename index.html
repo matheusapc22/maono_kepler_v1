@@ -35,6 +35,7 @@
         --mm-boot-gold: #d6a84f;
         --mm-boot-gold-bright: #f2cf7a;
         --mm-boot-gold-soft: rgba(214, 168, 79, 0.18);
+        --mm-boot-scan-duration: 1.25s;
       }
 
       * {
@@ -128,7 +129,8 @@
           contrast(1.04)
           drop-shadow(0 0 16px rgba(214, 168, 79, 0.18));
         clip-path: inset(0 0 76% 0);
-        animation: mm-boot-reveal 2.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        animation: mm-boot-reveal var(--mm-boot-scan-duration) linear infinite;
+        will-change: clip-path, opacity;
       }
 
       .mm-boot-scan {
@@ -153,8 +155,8 @@
           0 0 42px rgba(214, 168, 79, 0.16);
         opacity: 0;
         transform: translateY(-50%);
-        animation: mm-boot-scan-line 2.65s cubic-bezier(0.4, 0, 0.2, 1)
-          infinite;
+        animation: mm-boot-scan-line var(--mm-boot-scan-duration) linear infinite;
+        will-change: top, opacity;
       }
 
       .mm-boot-scan::before {
@@ -232,8 +234,8 @@
           opacity: 0;
         }
 
-        8% {
-          top: 8%;
+        6% {
+          top: 7%;
           opacity: 1;
         }
 
@@ -242,8 +244,8 @@
           opacity: 1;
         }
 
-        92% {
-          top: 92%;
+        94% {
+          top: 93%;
           opacity: 1;
         }
 
@@ -259,7 +261,7 @@
           opacity: 0;
         }
 
-        8% {
+        6% {
           clip-path: inset(0 0 76% 0);
           opacity: 1;
         }
@@ -269,7 +271,7 @@
           opacity: 1;
         }
 
-        92% {
+        94% {
           clip-path: inset(76% 0 0 0);
           opacity: 1;
         }
@@ -330,6 +332,10 @@
     </div>
     <script>
       (function () {
+        if (window.location.pathname === "/") {
+          window.history.replaceState(null, "", "/login");
+        }
+
         function showBootFailure() {
           var fallback = document.getElementById("app-boot-fallback");
           if (!fallback || fallback.dataset.failed === "true") return;
