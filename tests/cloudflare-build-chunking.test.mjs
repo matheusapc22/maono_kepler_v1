@@ -32,9 +32,13 @@ test("Cloudflare build grants Vite a 6144 MB heap", () => {
 });
 
 test("Vite keeps runtime-safe automatic chunk ordering", () => {
+  const viteConfigCode = viteConfig
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
   assert.doesNotMatch(
-    viteConfig,
-    /manualChunks/,
+    viteConfigCode,
+    /\bmanualChunks\b/,
     "manual package chunks can introduce circular runtime initialization",
   );
   assert.match(viteConfig, /reportCompressedSize:\s*false/);
@@ -49,4 +53,18 @@ test("application displays a visible boot state instead of a blank page", () => 
   assert.match(indexHtml, /Tentar novamente/);
   assert.match(mainEntry, /clearTimeout\(window\.__MAONO_BOOT_TIMEOUT__\)/);
   assert.match(mainEntry, /Elemento raiz da aplicação não foi encontrado/);
+});
+
+test("boot screen releases vertical page scrolling after React mounts", () => {
+  assert.doesNotMatch(
+    indexHtml,
+    /body\s*\{[^}]*\boverflow:\s*hidden\s*;/s,
+    "the permanent body rule must not lock scrolling across application routes",
+  );
+  assert.match(indexHtml, /body\s*\{[^}]*overflow-x:\s*hidden\s*;/s);
+  assert.match(
+    indexHtml,
+    /body:has\(#app-boot-fallback\)\s*\{[^}]*overflow:\s*hidden\s*;/s,
+    "scroll locking must exist only while the boot fallback is mounted",
+  );
 });
