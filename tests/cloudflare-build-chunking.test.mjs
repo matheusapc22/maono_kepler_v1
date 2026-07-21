@@ -32,9 +32,13 @@ test("Cloudflare build grants Vite a 6144 MB heap", () => {
 });
 
 test("Vite keeps runtime-safe automatic chunk ordering", () => {
+  const viteConfigCode = viteConfig
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
   assert.doesNotMatch(
-    viteConfig,
-    /manualChunks/,
+    viteConfigCode,
+    /\bmanualChunks\b/,
     "manual package chunks can introduce circular runtime initialization",
   );
   assert.match(viteConfig, /reportCompressedSize:\s*false/);
