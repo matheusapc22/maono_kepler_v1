@@ -40,7 +40,18 @@ function enableWebglScreenshotReadback() {
 // o canvas fica legível para toDataURL/drawImage no momento do salvamento.
 enableWebglScreenshotReadback();
 
-createRoot(document.getElementById("root")!).render(
+if (typeof window !== "undefined" && window.__MAONO_BOOT_TIMEOUT__) {
+  window.clearTimeout(window.__MAONO_BOOT_TIMEOUT__);
+  window.__MAONO_BOOT_TIMEOUT__ = undefined;
+}
+
+const rootElement = document.getElementById("root");
+
+if (!rootElement) {
+  throw new Error("Elemento raiz da aplicação não foi encontrado.");
+}
+
+createRoot(rootElement).render(
   <StrictMode>
     <Provider store={store}>
       <BrowserRouter>
