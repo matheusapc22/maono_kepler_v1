@@ -24,22 +24,16 @@
       name="robots"
       content="noindex,nofollow,noarchive,noimageindex,nosnippet"
     />
-    <meta name="theme-color" content="#08090b" />
+    <meta name="theme-color" content="#060606" />
     <title>Maõno Tecnologia | Mapa</title>
     <style>
       :root {
         color-scheme: dark;
-        --mm-boot-bg: #08090b;
-        --mm-boot-surface: #0e1116;
-        --mm-boot-surface-strong: #11151c;
-        --mm-boot-line: rgba(214, 168, 79, 0.22);
-        --mm-boot-line-soft: rgba(255, 255, 255, 0.07);
+        --mm-boot-bg: #060606;
+        --mm-boot-text: #f3efe4;
+        --mm-boot-muted: rgba(243, 239, 228, 0.68);
         --mm-boot-gold: #d6a84f;
-        --mm-boot-gold-bright: #f2c766;
-        --mm-boot-gold-muted: #8a6a2f;
-        --mm-boot-text: #f4f1e9;
-        --mm-boot-muted: #929aa6;
-        --mm-boot-cyan: #4bb8ba;
+        --mm-boot-gold-soft: rgba(214, 168, 79, 0.18);
       }
 
       * {
@@ -64,396 +58,162 @@
       }
 
       .mm-boot-screen {
-        position: relative;
         display: grid;
         min-height: 100vh;
         place-items: center;
-        overflow: hidden;
-        padding: clamp(22px, 5vw, 64px);
-        isolation: isolate;
+        padding: 24px;
         background:
-          linear-gradient(rgba(214, 168, 79, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(214, 168, 79, 0.035) 1px, transparent 1px),
-          linear-gradient(135deg, #08090b 0%, #0a0d12 55%, #08090b 100%);
-        background-size: 44px 44px, 44px 44px, auto;
+          radial-gradient(
+            circle at center,
+            rgba(214, 168, 79, 0.06),
+            transparent 42%
+          ),
+          linear-gradient(180deg, #090909 0%, #060606 100%);
       }
 
-      .mm-boot-screen::before,
-      .mm-boot-screen::after {
-        position: absolute;
-        z-index: -1;
-        content: "";
-        pointer-events: none;
-      }
-
-      .mm-boot-screen::before {
-        inset: 0;
-        background:
-          linear-gradient(90deg, transparent 0 49.8%, rgba(75, 184, 186, 0.08) 50%, transparent 50.2%),
-          linear-gradient(0deg, transparent 0 49.8%, rgba(214, 168, 79, 0.07) 50%, transparent 50.2%);
-        mask-image: radial-gradient(circle at center, #000 0 34%, transparent 72%);
-      }
-
-      .mm-boot-screen::after {
-        width: min(780px, 92vw);
-        height: min(780px, 92vw);
-        border: 1px solid rgba(214, 168, 79, 0.08);
-        transform: rotate(45deg);
-      }
-
-      .mm-boot-panel {
-        position: relative;
-        width: min(620px, 100%);
-        padding: clamp(26px, 5vw, 48px);
-        border: 1px solid var(--mm-boot-line);
-        border-radius: 4px;
-        background: linear-gradient(145deg, rgba(17, 21, 28, 0.97), rgba(8, 9, 11, 0.96));
-        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
-      }
-
-      .mm-boot-panel::before,
-      .mm-boot-panel::after {
-        position: absolute;
-        width: 42px;
-        height: 42px;
-        content: "";
-        pointer-events: none;
-      }
-
-      .mm-boot-panel::before {
-        top: -1px;
-        left: -1px;
-        border-top: 2px solid var(--mm-boot-gold-bright);
-        border-left: 2px solid var(--mm-boot-gold-bright);
-      }
-
-      .mm-boot-panel::after {
-        right: -1px;
-        bottom: -1px;
-        border-right: 2px solid var(--mm-boot-gold-muted);
-        border-bottom: 2px solid var(--mm-boot-gold-muted);
-      }
-
-      .mm-boot-kicker {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0 0 28px;
-        color: var(--mm-boot-gold-bright);
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 0.28em;
-        text-transform: uppercase;
-      }
-
-      .mm-boot-kicker::before {
-        width: 34px;
-        height: 1px;
-        background: var(--mm-boot-gold);
-        content: "";
-      }
-
-      .mm-boot-brand {
+      .mm-boot-core {
         display: grid;
-        grid-template-columns: auto 1fr;
-        align-items: center;
-        gap: 22px;
-      }
-
-      .mm-boot-emblem {
-        position: relative;
-        display: grid;
-        width: 82px;
-        height: 82px;
         place-items: center;
-        border: 1px solid rgba(214, 168, 79, 0.34);
-        background: #090b0f;
+        gap: 18px;
+        width: min(82vw, 460px);
       }
 
-      .mm-boot-emblem::before,
-      .mm-boot-emblem::after {
+      .mm-boot-logo-wrap {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: min(76vw, 360px);
+        aspect-ratio: 1;
+      }
+
+      .mm-boot-logo-wrap::before {
         position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(214, 168, 79, 0.08),
+          transparent 68%
+        );
+        filter: blur(12px);
         content: "";
-      }
-
-      .mm-boot-emblem::before {
-        inset: 8px;
-        border: 1px solid rgba(75, 184, 186, 0.22);
-        animation: mm-boot-pulse 2.4s ease-in-out infinite;
-      }
-
-      .mm-boot-emblem::after {
-        top: -1px;
-        left: 50%;
-        width: 1px;
-        height: calc(100% + 2px);
-        background: linear-gradient(transparent, var(--mm-boot-gold-bright), transparent);
-        animation: mm-boot-scan-emblem 2.2s linear infinite;
       }
 
       .mm-boot-logo {
         position: relative;
         z-index: 1;
-        width: 50px;
-        height: 50px;
+        width: 100%;
+        height: 100%;
         object-fit: contain;
-        filter: drop-shadow(0 0 12px rgba(214, 168, 79, 0.2));
+        filter: drop-shadow(0 0 22px rgba(214, 168, 79, 0.12));
       }
 
-      .mm-boot-title {
+      .mm-boot-scan {
+        position: absolute;
+        top: 50%;
+        right: 8%;
+        left: 8%;
+        height: 2px;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--mm-boot-gold),
+          transparent
+        );
+        box-shadow:
+          0 0 14px rgba(214, 168, 79, 0.9),
+          0 0 26px rgba(214, 168, 79, 0.35);
+        transform: translateY(-50%);
+        animation: mm-boot-scan 1.9s ease-in-out infinite;
+      }
+
+      .mm-boot-scan::before,
+      .mm-boot-scan::after {
+        position: absolute;
+        top: 50%;
+        width: 10px;
+        height: 10px;
+        border-top: 1px solid var(--mm-boot-gold);
+        border-right: 1px solid var(--mm-boot-gold);
+        transform: translateY(-50%) rotate(45deg);
+        content: "";
+      }
+
+      .mm-boot-scan::before {
+        left: 0;
+      }
+
+      .mm-boot-scan::after {
+        right: 0;
+      }
+
+      .mm-boot-caption {
         margin: 0;
-        font-size: clamp(28px, 7vw, 46px);
-        font-weight: 800;
-        letter-spacing: -0.045em;
-        line-height: 0.95;
-      }
-
-      .mm-boot-title span {
-        color: var(--mm-boot-gold-bright);
-      }
-
-      .mm-boot-subtitle {
-        margin: 10px 0 0;
         color: var(--mm-boot-muted);
         font-size: clamp(12px, 2.8vw, 14px);
-        line-height: 1.65;
-      }
-
-      .mm-boot-subtitle strong {
-        color: #d9dde3;
-        font-weight: 650;
-      }
-
-      .mm-boot-process {
-        margin-top: 36px;
-        padding-top: 22px;
-        border-top: 1px solid var(--mm-boot-line-soft);
-      }
-
-      .mm-boot-process-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 12px;
-        color: #c7cbd1;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .mm-boot-process-state {
-        color: var(--mm-boot-cyan);
-        font-variant-numeric: tabular-nums;
-      }
-
-      .mm-boot-track {
-        position: relative;
-        height: 3px;
-        overflow: hidden;
-        background: rgba(255, 255, 255, 0.08);
-      }
-
-      .mm-boot-track::before {
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 38%;
-        background: linear-gradient(90deg, transparent, var(--mm-boot-gold-bright), var(--mm-boot-cyan), transparent);
-        content: "";
-        animation: mm-boot-progress 1.65s ease-in-out infinite;
-      }
-
-      .mm-boot-modules {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        margin-top: 18px;
-      }
-
-      .mm-boot-module {
-        min-width: 0;
-        padding: 10px 12px;
-        border-left: 2px solid var(--mm-boot-gold-muted);
-        background: rgba(255, 255, 255, 0.025);
-      }
-
-      .mm-boot-module b {
-        display: block;
-        overflow: hidden;
-        color: #d8dbe0;
-        font-size: 10px;
-        letter-spacing: 0.08em;
-        text-overflow: ellipsis;
-        text-transform: uppercase;
-        white-space: nowrap;
-      }
-
-      .mm-boot-module span {
-        display: block;
-        margin-top: 4px;
-        color: var(--mm-boot-muted);
-        font-size: 9px;
-        letter-spacing: 0.05em;
-      }
-
-      .mm-boot-signature {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        margin-top: 26px;
-        color: #656e7b;
-        font-size: 9px;
-        font-weight: 700;
         letter-spacing: 0.16em;
+        text-align: center;
         text-transform: uppercase;
       }
 
-      .mm-boot-signal {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        color: var(--mm-boot-gold);
+      .mm-boot-screen.mm-boot-failed {
+        padding: 24px;
       }
 
-      .mm-boot-signal::before {
-        width: 6px;
-        height: 6px;
-        background: var(--mm-boot-cyan);
-        box-shadow: 0 0 0 3px rgba(75, 184, 186, 0.09);
-        content: "";
-        animation: mm-boot-status 1.2s steps(2, end) infinite;
-      }
-
-      .mm-boot-screen.mm-boot-failed .mm-boot-panel {
-        border-color: rgba(242, 199, 102, 0.38);
+      .mm-boot-failed .mm-boot-core {
+        width: min(92vw, 520px);
       }
 
       .mm-boot-failure-title {
         margin: 0;
-        color: var(--mm-boot-text);
         font-size: clamp(24px, 6vw, 36px);
         line-height: 1.08;
+        text-align: center;
       }
 
       .mm-boot-failure-copy {
-        max-width: 480px;
-        margin: 14px auto 0;
+        margin: 0;
         color: var(--mm-boot-muted);
         font-size: 14px;
-        line-height: 1.65;
+        line-height: 1.6;
+        text-align: center;
       }
 
       .mm-boot-retry {
         min-height: 44px;
-        margin-top: 24px;
-        padding: 0 20px;
+        padding: 0 22px;
         border: 1px solid var(--mm-boot-gold);
-        border-radius: 2px;
-        background: rgba(214, 168, 79, 0.08);
-        color: var(--mm-boot-gold-bright);
+        background: transparent;
+        color: var(--mm-boot-text);
         font: inherit;
         font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
+        font-weight: 700;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
         cursor: pointer;
       }
 
       .mm-boot-retry:hover {
-        background: rgba(214, 168, 79, 0.16);
+        background: var(--mm-boot-gold-soft);
       }
 
-      @keyframes mm-boot-progress {
-        0% {
-          transform: translateX(-110%);
-        }
-        100% {
-          transform: translateX(360%);
-        }
-      }
-
-      @keyframes mm-boot-scan-emblem {
-        0% {
-          transform: translateX(-36px);
-          opacity: 0;
-        }
-        20%,
-        80% {
-          opacity: 0.75;
-        }
-        100% {
-          transform: translateX(36px);
-          opacity: 0;
-        }
-      }
-
-      @keyframes mm-boot-pulse {
+      @keyframes mm-boot-scan {
         0%,
         100% {
-          opacity: 0.35;
-          transform: scale(0.94);
+          transform: translateY(-50%) translateX(-4%);
+          opacity: 0.6;
         }
-        50% {
-          opacity: 0.95;
-          transform: scale(1);
-        }
-      }
 
-      @keyframes mm-boot-status {
-        0%,
         50% {
-          opacity: 0.35;
-        }
-        51%,
-        100% {
+          transform: translateY(-50%) translateX(4%);
           opacity: 1;
         }
       }
 
-      @media (max-width: 560px) {
-        .mm-boot-panel {
-          padding: 26px 20px;
-        }
-
-        .mm-boot-brand {
-          grid-template-columns: 1fr;
-          gap: 18px;
-        }
-
-        .mm-boot-emblem {
-          width: 68px;
-          height: 68px;
-        }
-
-        .mm-boot-logo {
-          width: 42px;
-          height: 42px;
-        }
-
-        .mm-boot-modules {
-          grid-template-columns: 1fr;
-          gap: 8px;
-        }
-
-        .mm-boot-signature {
-          align-items: flex-start;
-          flex-direction: column;
-        }
-      }
-
       @media (prefers-reduced-motion: reduce) {
-        .mm-boot-emblem::before,
-        .mm-boot-emblem::after,
-        .mm-boot-track::before,
-        .mm-boot-signal::before {
+        .mm-boot-scan {
           animation: none;
-        }
-
-        .mm-boot-track::before {
-          width: 58%;
-          background: linear-gradient(90deg, var(--mm-boot-gold), var(--mm-boot-cyan));
         }
       }
     </style>
@@ -467,54 +227,19 @@
         aria-live="polite"
         aria-busy="true"
       >
-        <section class="mm-boot-panel" aria-label="Inicialização da plataforma Maõno Maps">
-          <p class="mm-boot-kicker">Maõno Technology Systems</p>
-
-          <div class="mm-boot-brand">
-            <div class="mm-boot-emblem" aria-hidden="true">
-              <img
-                class="mm-boot-logo"
-                src="/images/Simbolo_Maono.png"
-                alt=""
-              />
-            </div>
-
-            <div>
-              <h1 class="mm-boot-title">Maõno <span>Maps</span></h1>
-              <p class="mm-boot-subtitle">
-                Inicializando o cockpit de <strong>inteligência geográfica</strong>,
-                dados e operações.
-              </p>
-            </div>
+        <section
+          class="mm-boot-core"
+          aria-label="Inicialização da plataforma Maõno Maps"
+        >
+          <div class="mm-boot-logo-wrap" aria-hidden="true">
+            <img
+              class="mm-boot-logo"
+              src="/images/Simbolo_Maono.png"
+              alt=""
+            />
+            <span class="mm-boot-scan"></span>
           </div>
-
-          <div class="mm-boot-process">
-            <div class="mm-boot-process-head">
-              <span>Inicialização segura</span>
-              <span class="mm-boot-process-state">Processando</span>
-            </div>
-            <div class="mm-boot-track" aria-hidden="true"></div>
-
-            <div class="mm-boot-modules" aria-hidden="true">
-              <div class="mm-boot-module">
-                <b>Sessão</b>
-                <span>Autenticação</span>
-              </div>
-              <div class="mm-boot-module">
-                <b>Organizações</b>
-                <span>Contexto ativo</span>
-              </div>
-              <div class="mm-boot-module">
-                <b>Mapas</b>
-                <span>Camadas e dados</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="mm-boot-signature">
-            <span>Tecnologia • Dados • Inteligência geográfica</span>
-            <span class="mm-boot-signal">Sistema online</span>
-          </div>
+          <p class="mm-boot-caption">Carregando Maõno Maps</p>
         </section>
       </main>
     </div>
@@ -528,23 +253,31 @@
           fallback.setAttribute("aria-busy", "false");
           fallback.classList.add("mm-boot-failed");
           fallback.innerHTML =
-            '<section class="mm-boot-panel" aria-label="Falha na inicialização da plataforma">' +
-            '<p class="mm-boot-kicker">Maõno Technology Systems</p>' +
-            '<h1 class="mm-boot-failure-title">A plataforma não conseguiu concluir a inicialização.</h1>' +
-            '<p class="mm-boot-failure-copy">Tente carregar novamente. Se o aviso permanecer, registre o horário e informe o suporte técnico da Maõno.</p>' +
+            '<section class="mm-boot-core" aria-label="Falha na inicialização da plataforma">' +
+            '<div class="mm-boot-logo-wrap" aria-hidden="true">' +
+            '<img class="mm-boot-logo" src="/images/Simbolo_Maono.png" alt="" />' +
+            '</div>' +
+            '<h1 class="mm-boot-failure-title">Não foi possível iniciar a plataforma.</h1>' +
+            '<p class="mm-boot-failure-copy">Atualize a página. Se o problema continuar, informe o suporte da Maõno.</p>' +
             '<button class="mm-boot-retry" type="button" onclick="window.location.reload()">Tentar novamente</button>' +
-            '<div class="mm-boot-signature"><span>Protocolo de inicialização interrompido</span><span class="mm-boot-signal">Diagnóstico ativo</span></div>' +
             '</section>';
         }
 
         window.__MAONO_SHOW_BOOT_FAILURE__ = showBootFailure;
-        window.__MAONO_BOOT_TIMEOUT__ = window.setTimeout(showBootFailure, 12000);
+        window.__MAONO_BOOT_TIMEOUT__ = window.setTimeout(
+          showBootFailure,
+          12000,
+        );
         window.addEventListener("error", showBootFailure, { once: true });
-        window.addEventListener("unhandledrejection", showBootFailure, { once: true });
+        window.addEventListener("unhandledrejection", showBootFailure, {
+          once: true,
+        });
       })();
     </script>
     <noscript>
-      <div style="padding:24px;background:#08090b;color:#f4f1e9;font-family:Arial,sans-serif">
+      <div
+        style="padding:24px;background:#060606;color:#f3efe4;font-family:Arial,sans-serif"
+      >
         Ative o JavaScript para acessar a Maõno Maps.
       </div>
     </noscript>
