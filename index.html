@@ -33,6 +33,7 @@
         --mm-boot-text: #f3efe4;
         --mm-boot-muted: rgba(243, 239, 228, 0.68);
         --mm-boot-gold: #d6a84f;
+        --mm-boot-gold-bright: #f2cf7a;
         --mm-boot-gold-soft: rgba(214, 168, 79, 0.18);
       }
 
@@ -65,8 +66,8 @@
         background:
           radial-gradient(
             circle at center,
-            rgba(214, 168, 79, 0.06),
-            transparent 42%
+            rgba(214, 168, 79, 0.055),
+            transparent 44%
           ),
           linear-gradient(180deg, #090909 0%, #060606 100%);
       }
@@ -75,77 +76,100 @@
         display: grid;
         place-items: center;
         gap: 18px;
-        width: min(82vw, 460px);
+        width: min(84vw, 480px);
       }
 
       .mm-boot-logo-wrap {
         position: relative;
         display: grid;
         place-items: center;
-        width: min(76vw, 360px);
+        width: min(78vw, 380px);
         aspect-ratio: 1;
+        overflow: hidden;
       }
 
       .mm-boot-logo-wrap::before {
         position: absolute;
-        inset: 0;
+        inset: 5%;
         border-radius: 50%;
         background: radial-gradient(
           circle,
           rgba(214, 168, 79, 0.08),
-          transparent 68%
+          transparent 70%
         );
-        filter: blur(12px);
+        filter: blur(14px);
         content: "";
       }
 
       .mm-boot-logo {
-        position: relative;
-        z-index: 1;
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
         object-fit: contain;
-        filter: drop-shadow(0 0 22px rgba(214, 168, 79, 0.12));
+        user-select: none;
+        pointer-events: none;
+      }
+
+      .mm-boot-logo--blur {
+        z-index: 1;
+        opacity: 0.92;
+        filter:
+          blur(3px)
+          saturate(0.94)
+          drop-shadow(0 0 20px rgba(214, 168, 79, 0.1));
+        transform: scale(0.995);
+      }
+
+      .mm-boot-logo--clear {
+        z-index: 2;
+        opacity: 0;
+        filter:
+          contrast(1.04)
+          drop-shadow(0 0 16px rgba(214, 168, 79, 0.18));
+        clip-path: inset(0 0 76% 0);
+        animation: mm-boot-reveal 2.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
 
       .mm-boot-scan {
         position: absolute;
-        top: 50%;
-        right: 8%;
-        left: 8%;
+        z-index: 3;
+        top: 5%;
+        right: 5%;
+        left: 5%;
         height: 2px;
         border-radius: 999px;
         background: linear-gradient(
           90deg,
-          transparent,
-          var(--mm-boot-gold),
-          transparent
+          transparent 0%,
+          rgba(214, 168, 79, 0.72) 18%,
+          var(--mm-boot-gold-bright) 50%,
+          rgba(214, 168, 79, 0.72) 82%,
+          transparent 100%
         );
         box-shadow:
-          0 0 14px rgba(214, 168, 79, 0.9),
-          0 0 26px rgba(214, 168, 79, 0.35);
+          0 0 10px rgba(242, 207, 122, 0.95),
+          0 0 24px rgba(214, 168, 79, 0.42),
+          0 0 42px rgba(214, 168, 79, 0.16);
+        opacity: 0;
         transform: translateY(-50%);
-        animation: mm-boot-scan 1.9s ease-in-out infinite;
-      }
-
-      .mm-boot-scan::before,
-      .mm-boot-scan::after {
-        position: absolute;
-        top: 50%;
-        width: 10px;
-        height: 10px;
-        border-top: 1px solid var(--mm-boot-gold);
-        border-right: 1px solid var(--mm-boot-gold);
-        transform: translateY(-50%) rotate(45deg);
-        content: "";
+        animation: mm-boot-scan-line 2.65s cubic-bezier(0.4, 0, 0.2, 1)
+          infinite;
       }
 
       .mm-boot-scan::before {
-        left: 0;
-      }
-
-      .mm-boot-scan::after {
+        position: absolute;
+        top: -13px;
         right: 0;
+        bottom: -13px;
+        left: 0;
+        background: linear-gradient(
+          180deg,
+          transparent,
+          rgba(214, 168, 79, 0.075),
+          transparent
+        );
+        content: "";
       }
 
       .mm-boot-caption {
@@ -163,6 +187,10 @@
 
       .mm-boot-failed .mm-boot-core {
         width: min(92vw, 520px);
+      }
+
+      .mm-boot-failed .mm-boot-logo-wrap {
+        width: min(58vw, 240px);
       }
 
       .mm-boot-failure-title {
@@ -198,22 +226,74 @@
         background: var(--mm-boot-gold-soft);
       }
 
-      @keyframes mm-boot-scan {
-        0%,
-        100% {
-          transform: translateY(-50%) translateX(-4%);
-          opacity: 0.6;
+      @keyframes mm-boot-scan-line {
+        0% {
+          top: 4%;
+          opacity: 0;
+        }
+
+        8% {
+          top: 8%;
+          opacity: 1;
         }
 
         50% {
-          transform: translateY(-50%) translateX(4%);
+          top: 50%;
           opacity: 1;
+        }
+
+        92% {
+          top: 92%;
+          opacity: 1;
+        }
+
+        100% {
+          top: 96%;
+          opacity: 0;
+        }
+      }
+
+      @keyframes mm-boot-reveal {
+        0% {
+          clip-path: inset(0 0 76% 0);
+          opacity: 0;
+        }
+
+        8% {
+          clip-path: inset(0 0 76% 0);
+          opacity: 1;
+        }
+
+        50% {
+          clip-path: inset(38% 0 38% 0);
+          opacity: 1;
+        }
+
+        92% {
+          clip-path: inset(76% 0 0 0);
+          opacity: 1;
+        }
+
+        100% {
+          clip-path: inset(76% 0 0 0);
+          opacity: 0;
         }
       }
 
       @media (prefers-reduced-motion: reduce) {
+        .mm-boot-logo--clear,
         .mm-boot-scan {
           animation: none;
+        }
+
+        .mm-boot-logo--clear {
+          clip-path: inset(38% 0 38% 0);
+          opacity: 1;
+        }
+
+        .mm-boot-scan {
+          top: 50%;
+          opacity: 1;
         }
       }
     </style>
@@ -233,7 +313,12 @@
         >
           <div class="mm-boot-logo-wrap" aria-hidden="true">
             <img
-              class="mm-boot-logo"
+              class="mm-boot-logo mm-boot-logo--blur"
+              src="/images/Simbolo_Maono.png"
+              alt=""
+            />
+            <img
+              class="mm-boot-logo mm-boot-logo--clear"
               src="/images/Simbolo_Maono.png"
               alt=""
             />
@@ -255,7 +340,7 @@
           fallback.innerHTML =
             '<section class="mm-boot-core" aria-label="Falha na inicialização da plataforma">' +
             '<div class="mm-boot-logo-wrap" aria-hidden="true">' +
-            '<img class="mm-boot-logo" src="/images/Simbolo_Maono.png" alt="" />' +
+            '<img class="mm-boot-logo mm-boot-logo--blur" src="/images/Simbolo_Maono.png" alt="" />' +
             '</div>' +
             '<h1 class="mm-boot-failure-title">Não foi possível iniciar a plataforma.</h1>' +
             '<p class="mm-boot-failure-copy">Atualize a página. Se o problema continuar, informe o suporte da Maõno.</p>' +
