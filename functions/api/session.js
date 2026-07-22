@@ -7,6 +7,7 @@ import {
   getSessionUser,
   setSessionActiveOrganization,
 } from "../_lib/auth.js";
+import { PERMISSIONS } from "../_lib/permissions.js";
 import { listProjectsForUser, publicProject } from "../_lib/projects.js";
 
 const ROLE_ALIASES = {
@@ -21,48 +22,7 @@ const OFFICIAL_ROLES = new Set([
   "viewer",
 ]);
 
-const PUBLIC_PERMISSION_SET = new Set([
-  "project.view",
-  "project.create",
-  "project.edit",
-  "project.save",
-  "project.favorite",
-  "project.thumbnail.update",
-
-  "document.view",
-  "document.upload",
-  "document.download",
-  "document.delete",
-
-  "ticket.view",
-  "ticket.create",
-  "ticket.manage",
-
-  "export.view",
-  "export.create",
-  "export.download",
-
-  "users.view",
-  "users.create",
-  "users.edit",
-  "users.disable",
-  "users.manage_access",
-
-  "permission.grant",
-  "permission.revoke",
-
-  "role.assign",
-
-  "organization.view",
-  "organization.edit",
-  "organization.metrics.view",
-
-  "limits.view",
-  "limits.increase_request",
-
-  "admin.panel.access",
-  "audit.view",
-]);
+const PUBLIC_PERMISSION_SET = new Set(PERMISSIONS);
 
 const OWNER_DEFAULT_PERMISSIONS = [
   "document.view",
@@ -538,6 +498,25 @@ async function listConfiguredPermissions(env, user, role, activeOrganizationId) 
   ]);
 }
 
+async function listPermissionDenials(env, userId, activeOrganizationId) {
+  if (!activeOrganizationId) return [];
+
+  const rows = await optionalAll(
+    env,
+    `
+      SELECT permission
+      FROM user_permission_denials
+      WHERE user_id = ?
+        AND organization_id = ?
+      ORDER BY permission
+      LIMIT 500
+    `,
+    [userId, activeOrganizationId],
+  );
+
+  return normalizePermissionRows(rows);
+}
+
 async function listStoredScopes(env, userId) {
   const rows = await optionalAll(
     env,
@@ -758,6 +737,7 @@ function publicUser(
   activeOrganizationId,
   organizations,
   permissions,
+  deniedPermissions,
   scopes,
   featureFlags,
   limits,
@@ -788,6 +768,7 @@ function publicUser(
     organizations,
 
     permissions,
+    deniedPermissions,
     scopes,
     accessLevel,
     access_level: accessLevel,
@@ -804,6 +785,7 @@ export function unauthenticatedSession() {
     activeOrganization: null,
     organizations: [],
     permissions: [],
+    deniedPermissions: [],
     scopes: [],
   };
 }
@@ -830,13 +812,25 @@ export async function buildAuthenticatedSession(env, user) {
     organization_id: activeOrganization?.id ?? null,
   };
 
-  const [projects, permissions, scopes, featureFlags, limits] =
+  const [
+    projects,
+    permissions,
+    deniedPermissions,
+    scopes,
+    featureFlags,
+    limits,
+  ] =
     await Promise.all([
       listProjectsForUser(env, scopedUser),
       listConfiguredPermissions(
         env,
         scopedUser,
         role,
+        activeOrganization?.id ?? null,
+      ),
+      listPermissionDenials(
+        env,
+        scopedUser.id,
         activeOrganization?.id ?? null,
       ),
       listScopes(env, scopedUser, role, activeOrganization?.id ?? null),
@@ -852,6 +846,7 @@ export async function buildAuthenticatedSession(env, user) {
       activeOrganization?.id ?? null,
       organizations,
       permissions,
+      deniedPermissions,
       scopes,
       featureFlags,
       limits,
@@ -860,6 +855,7 @@ export async function buildAuthenticatedSession(env, user) {
     activeOrganization,
     organizations,
     permissions,
+    deniedPermissions,
     scopes,
   };
 }
