@@ -76,30 +76,60 @@ test("rotas de grant e revoke usam o mesmo motor de decisão delegado", async ()
   assert.doesNotMatch(revokeSource, /requireRevokeAccess/);
 });
 
-test("gestão delegada permanece em Projects e depende das capabilities do backend", async () => {
-  const source = await readFile(
-    new URL(
-      "../src/pages/Projects/components/UsersAccessSection.tsx",
-      import.meta.url,
+test("Projects fica em consulta e a exceção delegada exige ausência de Painel Admin", async () => {
+  const [entrySource, overviewSource, managerSource] = await Promise.all([
+    readFile(
+      new URL(
+        "../src/pages/Projects/components/UsersAccessSection.tsx",
+        import.meta.url,
+      ),
+      "utf8",
     ),
-    "utf8",
-  );
+    readFile(
+      new URL(
+        "../src/pages/Projects/components/UsersAccessOverviewSection.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../src/components/access/OrganizationPermissionManager.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
 
-  assert.match(source, /\/access-governance/);
-  assert.match(source, /governance\?\.canManageAdditionalAccesses/);
-  assert.match(source, /GESTÃO POR ORGANIZAÇÃO/);
-  assert.match(source, /Usuários e Acessos/);
-  assert.match(source, /Delegação limitada ativa/);
+  assert.match(entrySource, /UsersAccessOverviewSection/);
   assert.doesNotMatch(
-    source.slice(
-      source.indexOf("function can("),
-      source.indexOf("function profileOptions"),
-    ),
-    /permission\.grant|permission\.revoke|users\.manage_access/,
+    entrySource,
+    /grantOrganizationUserPermission|revokeOrganizationUserPermission/,
   );
+  assert.doesNotMatch(
+    overviewSource,
+    /grantOrganizationUserPermission|revokeOrganizationUserPermission|createOrganizationUser|updateOrganizationUser|deleteOrganizationUserMembership/,
+  );
+  assert.match(overviewSource, /governance\?\.mode === "organization"/);
+  assert.match(overviewSource, /governance\.canManageAdditionalAccesses/);
+  assert.match(overviewSource, /!hasAdminPanelAccess/);
+  const adminPermissionCheck = overviewSource.slice(
+    overviewSource.indexOf("function hasPermission"),
+    overviewSource.indexOf("function canViewTeam"),
+  );
+  assert.doesNotMatch(adminPermissionCheck, /role === "admin"/);
+  assert.match(adminPermissionCheck, /admin\.panel\.access|userPermissions/);
+  assert.match(overviewSource, /Gerenciar acessos delegados/);
+  assert.match(overviewSource, /managementOpen && delegatedAlternative/);
+  assert.match(overviewSource, /Gerenciar no Painel Admin/);
+  assert.match(managerSource, /mode: "admin" \| "delegated"/);
+  assert.match(managerSource, /grantOrganizationUserPermission/);
+  assert.match(managerSource, /revokeOrganizationUserPermission/);
+  assert.match(managerSource, /allowedTargetLevels/);
+  assert.match(managerSource, /actorUserId/);
 });
 
-test("Painel Admin apenas configura limites e direciona a operação para Projects", async () => {
+test("Painel Admin centraliza grants e mantém a política exclusiva do Super Admin", async () => {
   const source = await readFile(
     new URL(
       "../src/pages/Admin/components/AdminUserManager.tsx",
@@ -111,6 +141,13 @@ test("Painel Admin apenas configura limites e direciona a operação para Projec
   assert.match(source, /access-delegations/);
   assert.match(source, /PAINEL OBRIGATÓRIO/);
   assert.match(source, /Limites de delegação/);
-  assert.match(source, /Projects → Usuários e Acessos/);
-  assert.match(source, /Somente Consulta\/Colaborador/);
+  assert.match(source, /Gerenciar acessos/);
+  assert.match(source, /OrganizationPermissionManager/);
+  assert.match(source, /mode="admin"/);
+  assert.match(source, /isSuperAdmin &&/);
+  assert.match(source, /painel suspenso de Projects é uma exceção exclusiva/);
+  assert.doesNotMatch(
+    source,
+    /A gestão ocorrerá em Projects → Usuários e Acessos/,
+  );
 });

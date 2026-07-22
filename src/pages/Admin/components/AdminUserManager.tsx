@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
+import OrganizationPermissionManager from "../../../components/access/OrganizationPermissionManager";
+
 type User = {
   id: number;
   name?: string;
@@ -105,12 +107,17 @@ export default function AdminUserManager({
   const [creating, setCreating] = useState(false);
   const [delegationEditor, setDelegationEditor] =
     useState<DelegationEditor | null>(null);
+  const [accessEditor, setAccessEditor] = useState<{
+    organization: Membership;
+    targetUserId: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!selected) {
       setDraft(null);
       setMemberships([]);
       setDelegationEditor(null);
+      setAccessEditor(null);
       return;
     }
 
@@ -257,6 +264,9 @@ export default function AdminUserManager({
       );
       if (!assigned && delegationEditor?.organization.id === organization.id) {
         setDelegationEditor(null);
+      }
+      if (!assigned && accessEditor?.organization.id === organization.id) {
+        setAccessEditor(null);
       }
       onMessage(
         "success",
@@ -416,7 +426,7 @@ export default function AdminUserManager({
       ).then(json);
       onMessage(
         "success",
-        "Delegação ativada. A gestão ocorrerá em Projects → Usuários e Acessos.",
+        "Delegação ativada. A gestão principal permanece no Painel Admin; o painel alternativo em Projects será exibido somente se o delegado não possuir acesso ao Admin.",
       );
       setDelegationEditor(null);
     } catch (error) {
@@ -649,6 +659,24 @@ export default function AdminUserManager({
                       </select>
                       <button
                         type="button"
+                        className="mm-btn"
+                        disabled={busy || !organization.assigned}
+                        title={
+                          organization.assigned
+                            ? "Gerenciar acessos adicionais nesta organização"
+                            : "Atribua a organização antes de gerenciar acessos"
+                        }
+                        onClick={() =>
+                          setAccessEditor({
+                            organization,
+                            targetUserId: selected.id,
+                          })
+                        }
+                      >
+                        Gerenciar acessos
+                      </button>
+                      <button
+                        type="button"
                         className="mm-btn delegation"
                         disabled={
                           busy || !isEligibleForDelegation(organization)
@@ -693,6 +721,17 @@ export default function AdminUserManager({
         </div>
       )}
 
+      {accessEditor && selected && (
+        <OrganizationPermissionManager
+          organizationId={accessEditor.organization.id}
+          actorUserId={currentUserId}
+          initialTargetUserId={accessEditor.targetUserId}
+          mode="admin"
+          onClose={() => setAccessEditor(null)}
+          onSaved={onRefresh}
+        />
+      )}
+
       {delegationEditor && selected && (
         <div className="admin-user-modal" role="dialog" aria-modal="true">
           <div className="admin-user-dialog delegation-policy-dialog">
@@ -717,8 +756,10 @@ export default function AdminUserManager({
                 <strong>Delegar acessos da organização</strong>
                 <p>
                   Defina exatamente quais perfis, operações e acessos poderão
-                  ser geridos em Projects → Usuários e Acessos. O código de
-                  delegação, GeoJSON amplo e acessos globais ficam fora desta
+                  ser atribuídos. A gestão principal ocorre nesta subaba. O
+                  painel suspenso de Projects é uma exceção exclusiva para o
+                  delegado ativo que não possui acesso ao Painel Admin. O código
+                  de delegação, GeoJSON amplo e acessos globais ficam fora desta
                   whitelist.
                 </p>
               </div>
