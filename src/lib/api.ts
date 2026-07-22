@@ -73,6 +73,7 @@ export type OrganizationUser = {
   accessLevel?: "owner" | "editor" | "viewer" | string;
   active?: boolean;
   permissions?: string[];
+  deniedPermissions?: string[];
   createdAt?: string;
   updatedAt?: string;
   membershipCreatedAt?: string;
@@ -101,6 +102,8 @@ export type OrganizationUserPermissionGrant = {
   organizationId?: number | string;
   userId?: number | string;
   permission?: string;
+  native?: boolean;
+  denied?: boolean;
   createdAt?: string;
 };
 
@@ -109,6 +112,8 @@ export type OrganizationUserPermissionRevoke = {
   userId?: number | string;
   permission?: string;
   revoked?: boolean;
+  native?: boolean;
+  denied?: boolean;
 };
 
 export type OrganizationMetrics = {
