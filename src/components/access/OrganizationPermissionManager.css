@@ -1,0 +1,226 @@
+.org-permission-modal {
+  position: fixed;
+  z-index: 1700;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, .76);
+  backdrop-filter: blur(6px);
+}
+
+.org-permission-panel {
+  width: min(1040px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 18px;
+  color: #f5f7fa;
+  background: #0d1218;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .62);
+}
+
+.org-permission-panel > header {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--mm-border);
+  background: #111820;
+}
+
+.org-permission-panel > header span {
+  color: #e6b632;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.org-permission-panel > header h3 {
+  margin: 5px 0 0;
+}
+
+.org-permission-panel > header p {
+  margin: 6px 0 0;
+  color: var(--mm-muted);
+}
+
+.org-permission-panel > header button {
+  border: 0;
+  color: #fff;
+  background: transparent;
+  font-size: 1.8rem;
+  cursor: pointer;
+}
+
+.org-permission-body {
+  display: grid;
+  gap: 17px;
+  padding: 22px;
+}
+
+.org-permission-scope,
+.org-permission-notice {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(214, 168, 79, .3);
+  border-left: 3px solid #d6a84f;
+  border-radius: 10px;
+  padding: 13px 15px;
+  background: rgba(214, 168, 79, .07);
+}
+
+.org-permission-scope span {
+  color: var(--mm-muted);
+  font-size: .8rem;
+}
+
+.org-permission-notice.error {
+  border-color: rgba(239, 68, 68, .4);
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, .08);
+}
+
+.org-permission-notice.success {
+  border-color: rgba(34, 197, 94, .35);
+  border-left-color: #22c55e;
+  background: rgba(34, 197, 94, .08);
+}
+
+.org-permission-target {
+  display: grid;
+  gap: 7px;
+  color: #dce3ea;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.org-permission-target select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 9px;
+  color: #fff;
+  background: #080d12;
+}
+
+.org-permission-catalog {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.org-permission-catalog fieldset {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--mm-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: #0a1016;
+}
+
+.org-permission-catalog legend {
+  padding: 0 7px;
+  color: #e7bd62;
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.org-permission-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 9px;
+  padding: 10px;
+  background: #10171e;
+}
+
+.org-permission-option.disabled {
+  opacity: .62;
+}
+
+.org-permission-option span,
+.org-permission-option strong,
+.org-permission-option small,
+.org-permission-option em {
+  display: block;
+}
+
+.org-permission-option small {
+  margin-top: 3px;
+  color: var(--mm-muted);
+  line-height: 1.4;
+}
+
+.org-permission-option em {
+  margin-top: 5px;
+  color: #d7ad55;
+  font-size: .68rem;
+  font-style: normal;
+}
+
+.org-permission-geojson {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(245, 158, 11, .4);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(245, 158, 11, .08);
+}
+
+.org-permission-geojson label {
+  display: grid;
+  gap: 6px;
+}
+
+.org-permission-geojson label:first-of-type {
+  display: flex;
+  align-items: center;
+}
+
+.org-permission-geojson textarea {
+  min-height: 82px;
+  padding: 10px;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 9px;
+  color: #fff;
+  background: #080d12;
+  resize: vertical;
+}
+
+.org-permission-panel > footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 15px 22px;
+  border-top: 1px solid var(--mm-border);
+  background: #111820;
+}
+
+@media (max-width: 760px) {
+  .org-permission-modal {
+    align-items: end;
+    padding: 0;
+  }
+
+  .org-permission-panel {
+    max-height: 94vh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .org-permission-catalog {
+    grid-template-columns: 1fr;
+  }
+}
