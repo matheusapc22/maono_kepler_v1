@@ -161,6 +161,12 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "limits.increase_request",
 ]);
 
+export const ADMIN_OWNER_NATIVE_PERMISSIONS = new Set([
+  "project.create",
+  ...NATIVE_PROJECT_PERSISTENCE_PERMISSIONS,
+  ...OWNER_ORGANIZATION_PERMISSIONS,
+]);
+
 const VIEWER_EXPLICIT_ONLY_PERMISSIONS = new Set();
 
 const SENSITIVE_ACTIONS = new Set([
@@ -322,6 +328,20 @@ function isExpiredPermission(row) {
 
 function normalizeAccessLevel(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+export function isNativeAdminOrOwnerPermission(user, permission) {
+  const role = normalizeRole(user?.role);
+  const accessLevel = normalizeAccessLevel(
+    user?.accessLevel ?? user?.access_level,
+  );
+  const hasNativeProfile =
+    role === "admin" || role === "owner" || accessLevel === "owner";
+
+  return (
+    hasNativeProfile &&
+    ADMIN_OWNER_NATIVE_PERMISSIONS.has(String(permission || "").trim())
+  );
 }
 
 function getUserOrganizationId(user) {
@@ -546,6 +566,29 @@ async function hasUserPermission(env, user, permission, context) {
   );
 
   return rows.some((row) => !isExpiredPermission(row));
+}
+
+async function hasUserPermissionDenial(env, user, permission, context) {
+  const organizationId = getContextOrganizationId(context);
+
+  if (!user?.id || !organizationId) {
+    return false;
+  }
+
+  const row = await optionalFirst(
+    env,
+    `
+      SELECT id
+      FROM user_permission_denials
+      WHERE user_id = ?
+        AND organization_id = ?
+        AND permission = ?
+      LIMIT 1
+    `,
+    [user.id, toNumberOrString(organizationId), permission],
+  );
+
+  return Boolean(row?.id);
 }
 
 async function hasScopedOrganizationUserPermission(env, user, permission, context) {
@@ -876,6 +919,23 @@ export async function can(env, user, permission, context = {}) {
         normalizedPermission === "admin.panel.access"
           ? "ADMIN_PANEL_SUPER_ADMIN_ONLY"
           : "AUDIT_SUPER_ADMIN_ONLY",
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
+
+  if (
+    await hasUserPermissionDenial(
+      env,
+      user,
+      normalizedPermission,
+      resolvedContext,
+    )
+  ) {
+    return {
+      allowed: false,
+      reason: "USER_PERMISSION_EXPLICITLY_DENIED",
       user,
       permission: normalizedPermission,
       context: resolvedContext,
