@@ -265,12 +265,12 @@ export default function OrganizationPermissionManager({
           code,
         );
       }
+      await load();
+      await onSaved?.();
       setMessage({
         kind: "success",
         text: "Acessos adicionais atualizados dentro da política vigente.",
       });
-      await load();
-      await onSaved?.();
     } catch (error) {
       setMessage({ kind: "error", text: errorText(error) });
     } finally {
