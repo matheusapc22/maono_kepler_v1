@@ -113,6 +113,12 @@ test("Projects fica em consulta e a exceção delegada exige ausência de Painel
   assert.match(overviewSource, /governance\?\.mode === "organization"/);
   assert.match(overviewSource, /governance\.canManageAdditionalAccesses/);
   assert.match(overviewSource, /!hasAdminPanelAccess/);
+  const adminPermissionCheck = overviewSource.slice(
+    overviewSource.indexOf("function hasPermission"),
+    overviewSource.indexOf("function canViewTeam"),
+  );
+  assert.doesNotMatch(adminPermissionCheck, /role === "admin"/);
+  assert.match(adminPermissionCheck, /admin\.panel\.access|userPermissions/);
   assert.match(overviewSource, /Gerenciar acessos delegados/);
   assert.match(overviewSource, /managementOpen && delegatedAlternative/);
   assert.match(overviewSource, /Gerenciar no Painel Admin/);
