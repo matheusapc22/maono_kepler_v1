@@ -1,4 +1,7 @@
-import { requireSession } from "../../../../../../_lib/auth.js";
+import {
+  normalizeRole,
+  requireSession,
+} from "../../../../../../_lib/auth.js";
 import { authorizeOrganizationPermissionMutation } from "../../../../../../_lib/access-governance.js";
 import {
   countActiveOwners,
@@ -62,7 +65,9 @@ async function assertDoesNotBreakLastOperationalOwner(
   organizationId,
   targetUserId,
   permission,
+  actor,
 ) {
+  if (normalizeRole(actor?.role) === "super_admin") return;
   if (!CRITICAL_OWNER_OPERATION_PERMISSIONS.has(permission)) return;
 
   const users = await listOrganizationUsers(env, organizationId);
@@ -102,6 +107,7 @@ export async function onRequestDelete({ env, request, params }) {
       organizationId,
       targetUserId,
       permission,
+      actor,
     );
 
     const revoke = await revokeOrganizationPermission(
