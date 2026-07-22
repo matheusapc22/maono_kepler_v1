@@ -40,6 +40,13 @@ type AdminUser = {
   role: string;
   active?: boolean;
   projectCount?: number;
+  organizations?: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    accessLevel: string;
+    active?: boolean;
+  }>;
 };
 
 type AdminAccess = {
@@ -59,11 +66,6 @@ async function readJson(response: Response) {
 
 function normalizeRole(role?: string) {
   return String(role || "").trim().toLowerCase();
-}
-
-function isAdminLike(role?: string) {
-  const normalized = normalizeRole(role);
-  return normalized === "admin" || normalized === "super_admin";
 }
 
 function roleLabel(role?: string) {
@@ -107,7 +109,7 @@ const AdminPage: React.FC = () => {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const adminLike = isAdminLike(user?.role);
+  const isSuperAdmin = normalizeRole(user?.role) === "super_admin";
 
   async function refreshAdminData() {
     setIsRefreshing(true);
@@ -138,15 +140,15 @@ const AdminPage: React.FC = () => {
   }, [authenticated, loading, navigate]);
 
   useEffect(() => {
-    if (!loading && authenticated && !adminLike) navigate("/projects", { replace: true });
-  }, [authenticated, adminLike, loading, navigate]);
+    if (!loading && authenticated && !isSuperAdmin) navigate("/projects", { replace: true });
+  }, [authenticated, isSuperAdmin, loading, navigate]);
 
   useEffect(() => {
-    if (!loading && authenticated && adminLike) {
+    if (!loading && authenticated && isSuperAdmin) {
       void refreshAdminData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authenticated, adminLike, loading]);
+  }, [authenticated, isSuperAdmin, loading]);
 
   async function handleLogout() {
     await logout();
@@ -163,7 +165,7 @@ const AdminPage: React.FC = () => {
   }
 
   if (!authenticated) return null;
-  if (!adminLike) return <Navigate to="/projects" replace />;
+  if (!isSuperAdmin) return <Navigate to="/projects" replace />;
 
   if (!hasLoaded) {
     return <AdminPageSkeleton section={section} />;
@@ -236,7 +238,19 @@ const AdminPage: React.FC = () => {
   }
 
   function renderUsers() {
-    return <AdminUserManager users={users} currentUserId={user?.id} isSuperAdmin={normalizeRole(user?.role)==="super_admin"} onRefresh={refreshAdminData} onMessage={(kind,text)=>kind==="error"?setError(text):setSuccess(text)} />;
+    return (
+      <AdminUserManager
+        users={users}
+        organizations={organizations}
+        initialOrganizationId={params.get("organization")}
+        currentUserId={user?.id}
+        isSuperAdmin={isSuperAdmin}
+        onRefresh={refreshAdminData}
+        onMessage={(kind, text) =>
+          kind === "error" ? setError(text) : setSuccess(text)
+        }
+      />
+    );
   }
 
   function renderProjects() {

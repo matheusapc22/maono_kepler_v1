@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   grantOrganizationUserPermission,
@@ -18,6 +13,42 @@ import {
 import "./OrganizationPermissionManager.css";
 
 type ApiId = number | string;
+
+const ADMIN_OWNER_NATIVE_ACCESS_CODES = new Set([
+  "project.create",
+  "project.edit",
+  "project.save",
+  "project.thumbnail.update",
+  "document.view",
+  "document.upload",
+  "document.download",
+  "document.delete",
+  "ticket.view",
+  "ticket.create",
+  "ticket.comment",
+  "ticket.manage",
+  "ticket.close",
+  "ticket.assign",
+  "roadmap.view",
+  "roadmap.comment.create",
+  "roadmap.comment.edit_own",
+  "roadmap.comment.moderate",
+  "roadmap.manage",
+  "roadmap.task.manage",
+  "roadmap.dependency.manage",
+  "users.view",
+  "users.create",
+  "users.edit",
+  "users.disable",
+  "users.delete",
+  "users.invite",
+  "organization.view",
+  "organization.edit",
+  "organization.metrics.view",
+  "plan.view",
+  "limits.view",
+  "limits.increase_request",
+]);
 
 export type AccessGovernanceCapabilities = {
   mode: "super_admin" | "organization";
@@ -75,11 +106,27 @@ function profileLabel(person: OrganizationUser): string {
 }
 
 function targetLevel(person: OrganizationUser): string {
-  return String(person.accessLevel || "").trim().toLowerCase();
+  return String(person.accessLevel || "")
+    .trim()
+    .toLowerCase();
+}
+
+function hasAdminOrOwnerNativeProfile(person: OrganizationUser): boolean {
+  const role = String(person.role || "")
+    .trim()
+    .toLowerCase();
+  return (
+    role === "admin" ||
+    role === "owner" ||
+    role === "client" ||
+    targetLevel(person) === "owner"
+  );
 }
 
 function sameId(left: ApiId | undefined, right: ApiId | undefined): boolean {
-  return left !== undefined && right !== undefined && String(left) === String(right);
+  return (
+    left !== undefined && right !== undefined && String(left) === String(right)
+  );
 }
 
 export default function OrganizationPermissionManager({
@@ -147,9 +194,7 @@ export default function OrganizationPermissionManager({
   useEffect(() => {
     if (initialTargetUserId !== undefined) {
       if (
-        eligiblePeople.some((person) =>
-          sameId(person.id, initialTargetUserId),
-        )
+        eligiblePeople.some((person) => sameId(person.id, initialTargetUserId))
       ) {
         setTargetId(initialTargetUserId);
       }
@@ -185,10 +230,15 @@ export default function OrganizationPermissionManager({
   );
   const accessOptions = useMemo(
     () =>
-      (governance?.allowedPermissions ?? []).map((code) =>
-        accessFromCode(code),
-      ),
-    [governance],
+      (governance?.allowedPermissions ?? [])
+        .filter(
+          (code) =>
+            !target ||
+            !hasAdminOrOwnerNativeProfile(target) ||
+            !ADMIN_OWNER_NATIVE_ACCESS_CODES.has(code),
+        )
+        .map((code) => accessFromCode(code)),
+    [governance, target],
   );
   const groups = useMemo(
     () => Array.from(new Set(accessOptions.map((item) => item.group))),
@@ -259,11 +309,7 @@ export default function OrganizationPermissionManager({
         );
       }
       for (const code of removals) {
-        await revokeOrganizationUserPermission(
-          organizationId,
-          target.id,
-          code,
-        );
+        await revokeOrganizationUserPermission(organizationId, target.id, code);
       }
       await load();
       await onSaved?.();
@@ -302,8 +348,8 @@ export default function OrganizationPermissionManager({
             <h3 id="org-permission-title">Gerenciar acessos adicionais</h3>
             <p>
               {mode === "admin"
-                ? "Gestão centralizada no Painel Admin."
-                : "Painel alternativo restrito à organização ativa e à whitelist concedida."}
+                ? "Gestão exclusiva do Super Admin no Painel Admin."
+                : "Gestão delegada em Projects, restrita à organização ativa e à whitelist concedida."}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Fechar">
@@ -355,6 +401,14 @@ export default function OrganizationPermissionManager({
                   ))}
                 </select>
               </label>
+
+              {target && hasAdminOrOwnerNativeProfile(target) && (
+                <div className="org-permission-notice" role="note">
+                  As capacidades nativas de Gestor/Responsável são garantidas
+                  pelo código e não aparecem como concessões adicionais. Este
+                  painel mostra somente o que está fora do perfil básico.
+                </div>
+              )}
 
               {target && (
                 <div className="org-permission-catalog">

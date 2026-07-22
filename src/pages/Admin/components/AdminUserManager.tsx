@@ -9,6 +9,13 @@ type User = {
   role: string;
   active?: boolean;
   projectCount?: number;
+  organizations?: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    accessLevel: string;
+    active?: boolean;
+  }>;
 };
 
 type Organization = {
@@ -76,7 +83,9 @@ const headers = {
 };
 
 function role(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function toDateTimeLocal(value?: string | null) {
@@ -89,22 +98,38 @@ function toDateTimeLocal(value?: string | null) {
 
 export default function AdminUserManager({
   users,
+  organizations,
+  initialOrganizationId,
   currentUserId,
   isSuperAdmin,
   onRefresh,
   onMessage,
 }: {
   users: User[];
+  organizations: Organization[];
+  initialOrganizationId?: number | string | null;
   currentUserId?: number;
   isSuperAdmin: boolean;
   onRefresh: () => Promise<void>;
   onMessage: (kind: "error" | "success", text: string) => void;
 }) {
   const [selected, setSelected] = useState<User | null>(null);
+  const [selectedView, setSelectedView] = useState<"profile" | "accesses">(
+    "profile",
+  );
   const [draft, setDraft] = useState<Draft | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [busy, setBusy] = useState(false);
+  const [membershipsLoading, setMembershipsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [organizationFilter, setOrganizationFilter] = useState(
+    initialOrganizationId === null || initialOrganizationId === undefined
+      ? "all"
+      : String(initialOrganizationId),
+  );
+  const [profileFilter, setProfileFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [delegationEditor, setDelegationEditor] =
     useState<DelegationEditor | null>(null);
   const [accessEditor, setAccessEditor] = useState<{
@@ -113,11 +138,18 @@ export default function AdminUserManager({
   } | null>(null);
 
   useEffect(() => {
+    if (initialOrganizationId !== null && initialOrganizationId !== undefined) {
+      setOrganizationFilter(String(initialOrganizationId));
+    }
+  }, [initialOrganizationId]);
+
+  useEffect(() => {
     if (!selected) {
       setDraft(null);
       setMemberships([]);
       setDelegationEditor(null);
       setAccessEditor(null);
+      setMembershipsLoading(false);
       return;
     }
 
@@ -132,6 +164,7 @@ export default function AdminUserManager({
     if (!isSuperAdmin) return;
 
     let cancelled = false;
+    setMembershipsLoading(true);
     fetch(`/api/admin/users/${selected.id}/organizations`, {
       credentials: "include",
       headers: { Accept: "application/json" },
@@ -142,6 +175,9 @@ export default function AdminUserManager({
       })
       .catch((error) => {
         if (!cancelled) onMessage("error", error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setMembershipsLoading(false);
       });
 
     return () => {
@@ -426,15 +462,13 @@ export default function AdminUserManager({
       ).then(json);
       onMessage(
         "success",
-        "Delegação ativada. A gestão principal permanece no Painel Admin; o painel alternativo em Projects será exibido somente se o delegado não possuir acesso ao Admin.",
+        "Delegação ativada. O delegado fará a gestão pelos botões por usuário em Projects → Usuários e Acessos.",
       );
       setDelegationEditor(null);
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error
-          ? error.message
-          : "Falha ao salvar a delegação.",
+        error instanceof Error ? error.message : "Falha ao salvar a delegação.",
       );
     } finally {
       setBusy(false);
@@ -481,14 +515,66 @@ export default function AdminUserManager({
     );
   }, [delegationEditor]);
 
+  const filteredUsers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return users.filter((user) => {
+      const userOrganizations = user.organizations || [];
+      const nativeRole =
+        role(user.role) === "client" ? "owner" : role(user.role);
+      const organizationProfiles = userOrganizations.map((item) =>
+        role(item.accessLevel) === "client" ? "owner" : role(item.accessLevel),
+      );
+      const matchesQuery =
+        !query ||
+        [
+          user.name,
+          user.email,
+          nativeRole,
+          ...userOrganizations.flatMap((item) => [
+            item.name,
+            item.slug,
+            item.accessLevel,
+          ]),
+        ].some((value) =>
+          String(value || "")
+            .toLowerCase()
+            .includes(query),
+        );
+      const matchesOrganization =
+        organizationFilter === "all" ||
+        userOrganizations.some(
+          (item) => String(item.id) === organizationFilter,
+        );
+      const matchesProfile =
+        profileFilter === "all" ||
+        nativeRole === profileFilter ||
+        organizationProfiles.includes(profileFilter);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active"
+          ? user.active !== false
+          : user.active === false);
+
+      return (
+        matchesQuery && matchesOrganization && matchesProfile && matchesStatus
+      );
+    });
+  }, [users, searchQuery, organizationFilter, profileFilter, statusFilter]);
+
+  function openUser(user: User, view: "profile" | "accesses") {
+    setSelectedView(view);
+    setSelected(user);
+  }
+
   return (
     <section className="admin-user-manager">
       <header>
         <div>
           <h2>Usuários e Permissões</h2>
           <p>
-            Gerencie contas globais, vínculos organizacionais e os limites da
-            delegação de acessos.
+            Gerencie contas da plataforma, vínculos organizacionais e os limites
+            da delegação de acessos.
           </p>
         </div>
         <button
@@ -499,6 +585,60 @@ export default function AdminUserManager({
           ＋ Novo usuário
         </button>
       </header>
+
+      <div className="admin-user-filters" aria-label="Filtros de usuários">
+        <label className="wide">
+          Buscar
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Nome, e-mail, organização ou perfil"
+          />
+        </label>
+        <label>
+          Organização
+          <select
+            value={organizationFilter}
+            onChange={(event) => setOrganizationFilter(event.target.value)}
+          >
+            <option value="all">Todas</option>
+            {organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>
+                {organization.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Perfil
+          <select
+            value={profileFilter}
+            onChange={(event) => setProfileFilter(event.target.value)}
+          >
+            <option value="all">Todos</option>
+            <option value="super_admin">Super Admin</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+            <option value="editor">Editor</option>
+            <option value="viewer">Viewer</option>
+          </select>
+        </label>
+        <label>
+          Status
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="all">Todos</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
+          </select>
+        </label>
+        <span className="admin-user-filter-count">
+          {filteredUsers.length} de {users.length} usuário(s)
+        </span>
+      </div>
 
       <div className="admin-users-table">
         <table>
@@ -513,7 +653,7 @@ export default function AdminUserManager({
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <tr key={user.id}>
                 <td>{user.name || "—"}</td>
                 <td>{user.email}</td>
@@ -521,16 +661,32 @@ export default function AdminUserManager({
                 <td>{user.projectCount || 0}</td>
                 <td>{user.active === false ? "Inativo" : "Ativo"}</td>
                 <td>
-                  <button
-                    className="mm-btn tiny"
-                    type="button"
-                    onClick={() => setSelected(user)}
-                  >
-                    Editar
-                  </button>
+                  <div className="admin-users-actions">
+                    <button
+                      className="mm-btn tiny"
+                      type="button"
+                      onClick={() => openUser(user, "profile")}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="mm-btn tiny"
+                      type="button"
+                      onClick={() => openUser(user, "accesses")}
+                    >
+                      Acessos
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
+            {filteredUsers.length === 0 && (
+              <tr>
+                <td colSpan={6} className="admin-users-empty">
+                  Nenhum usuário corresponde aos filtros selecionados.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -540,7 +696,7 @@ export default function AdminUserManager({
           <div className="admin-user-dialog">
             <header>
               <div>
-                <span>GESTÃO GLOBAL</span>
+                <span>GESTÃO DO SUPER ADMIN</span>
                 <h3>Editar usuário</h3>
               </div>
               <button onClick={() => setSelected(null)} aria-label="Fechar">
@@ -548,162 +704,206 @@ export default function AdminUserManager({
               </button>
             </header>
             <form onSubmit={save}>
-              <div className="admin-user-form-grid">
-                <label>
-                  Nome
-                  <input
-                    value={draft.name}
-                    onChange={(event) =>
-                      setDraft({ ...draft, name: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  E-mail
-                  <input
-                    type="email"
-                    value={draft.email}
-                    onChange={(event) =>
-                      setDraft({ ...draft, email: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Perfil
-                  <select
-                    value={draft.role}
-                    onChange={(event) =>
-                      setDraft({ ...draft, role: event.target.value })
-                    }
-                  >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                    <option value="client">Cliente/Owner</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </label>
-                <label>
-                  Situação
-                  <select
-                    value={draft.active ? "active" : "inactive"}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        active: event.target.value === "active",
-                      })
-                    }
-                  >
-                    <option value="active">Ativo</option>
-                    <option value="inactive">Inativo</option>
-                  </select>
-                </label>
-                <label className="wide">
-                  Atribuir ou alterar senha
-                  <input
-                    type="password"
-                    minLength={8}
-                    autoComplete="new-password"
-                    value={draft.password}
-                    onChange={(event) =>
-                      setDraft({ ...draft, password: event.target.value })
-                    }
-                    placeholder="Deixe vazio para manter a senha atual"
-                  />
-                </label>
-              </div>
+              <nav
+                className="admin-user-dialog-tabs"
+                aria-label="Áreas da gestão do usuário"
+              >
+                <button
+                  type="button"
+                  className={selectedView === "profile" ? "active" : ""}
+                  onClick={() => setSelectedView("profile")}
+                >
+                  Dados do usuário
+                </button>
+                <button
+                  type="button"
+                  className={selectedView === "accesses" ? "active" : ""}
+                  onClick={() => setSelectedView("accesses")}
+                >
+                  Acessos e delegação
+                </button>
+              </nav>
 
-              {isSuperAdmin && (
+              {selectedView === "profile" && (
+                <div className="admin-user-form-grid">
+                  <label>
+                    Nome
+                    <input
+                      value={draft.name}
+                      onChange={(event) =>
+                        setDraft({ ...draft, name: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    E-mail
+                    <input
+                      type="email"
+                      value={draft.email}
+                      onChange={(event) =>
+                        setDraft({ ...draft, email: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Perfil
+                    <select
+                      value={draft.role}
+                      onChange={(event) =>
+                        setDraft({ ...draft, role: event.target.value })
+                      }
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                      <option value="client">Cliente/Owner</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </label>
+                  <label>
+                    Situação
+                    <select
+                      value={draft.active ? "active" : "inactive"}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          active: event.target.value === "active",
+                        })
+                      }
+                    >
+                      <option value="active">Ativo</option>
+                      <option value="inactive">Inativo</option>
+                    </select>
+                  </label>
+                  <label className="wide">
+                    Atribuir ou alterar senha
+                    <input
+                      type="password"
+                      minLength={8}
+                      autoComplete="new-password"
+                      value={draft.password}
+                      onChange={(event) =>
+                        setDraft({ ...draft, password: event.target.value })
+                      }
+                      placeholder="Deixe vazio para manter a senha atual"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {isSuperAdmin && selectedView === "accesses" && (
                 <section className="admin-memberships">
                   <div className="admin-memberships-heading">
                     <div>
-                      <h4>Organizações atribuídas</h4>
+                      <h4>Acessos adicionais e delegação por organização</h4>
                       <p>
-                        A delegação só pode ser configurada para admin ou owner
-                        ativo e sempre fica vinculada a uma organização.
+                        Use <strong>Gerenciar acessos</strong> para concessões
+                        diretas. A delegação só pode ser configurada para admin
+                        ou owner ativo e sempre fica vinculada à organização.
                       </p>
                     </div>
                   </div>
-                  {memberships.map((organization) => (
-                    <div key={organization.id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={organization.assigned}
-                          disabled={busy}
+                  {membershipsLoading && (
+                    <p className="admin-memberships-status">
+                      Carregando vínculos e acessos...
+                    </p>
+                  )}
+                  {!membershipsLoading && memberships.length === 0 && (
+                    <p className="admin-memberships-status">
+                      Nenhuma organização disponível.
+                    </p>
+                  )}
+                  {!membershipsLoading &&
+                    memberships.map((organization) => (
+                      <div key={organization.id}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={organization.assigned}
+                            disabled={busy}
+                            onChange={(event) =>
+                              void updateMembership(
+                                organization,
+                                event.target.checked,
+                              )
+                            }
+                          />
+                          <span>
+                            <strong>{organization.name}</strong>
+                            <small>{organization.slug}</small>
+                          </span>
+                        </label>
+                        <select
+                          value={organization.accessLevel}
+                          disabled={!organization.assigned || busy}
                           onChange={(event) =>
                             void updateMembership(
                               organization,
-                              event.target.checked,
+                              true,
+                              event.target.value,
                             )
                           }
-                        />
-                        <span>
-                          <strong>{organization.name}</strong>
-                          <small>{organization.slug}</small>
-                        </span>
-                      </label>
-                      <select
-                        value={organization.accessLevel}
-                        disabled={!organization.assigned || busy}
-                        onChange={(event) =>
-                          void updateMembership(
-                            organization,
-                            true,
-                            event.target.value,
-                          )
-                        }
-                      >
-                        <option value="viewer">Consulta</option>
-                        <option value="editor">Colaborador</option>
-                        <option value="owner">Responsável</option>
-                      </select>
-                      <button
-                        type="button"
-                        className="mm-btn"
-                        disabled={busy || !organization.assigned}
-                        title={
-                          organization.assigned
-                            ? "Gerenciar acessos adicionais nesta organização"
-                            : "Atribua a organização antes de gerenciar acessos"
-                        }
-                        onClick={() =>
-                          setAccessEditor({
-                            organization,
-                            targetUserId: selected.id,
-                          })
-                        }
-                      >
-                        Gerenciar acessos
-                      </button>
-                      <button
-                        type="button"
-                        className="mm-btn delegation"
-                        disabled={
-                          busy || !isEligibleForDelegation(organization)
-                        }
-                        title={
-                          isEligibleForDelegation(organization)
-                            ? "Configurar limites da delegação"
-                            : "Disponível somente para admin ou owner ativo"
-                        }
-                        onClick={() => void openDelegation(organization)}
-                      >
-                        Delegar acessos
-                      </button>
-                    </div>
-                  ))}
+                        >
+                          <option value="viewer">Consulta</option>
+                          <option value="editor">Colaborador</option>
+                          <option value="owner">Responsável</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="mm-btn"
+                          disabled={
+                            busy ||
+                            !organization.assigned ||
+                            selected.active === false
+                          }
+                          title={
+                            selected.active === false
+                              ? "Reative o usuário antes de gerenciar acessos"
+                              : organization.assigned
+                              ? "Gerenciar acessos adicionais nesta organização"
+                              : "Atribua a organização antes de gerenciar acessos"
+                          }
+                          onClick={() =>
+                            setAccessEditor({
+                              organization,
+                              targetUserId: selected.id,
+                            })
+                          }
+                        >
+                          Gerenciar acessos
+                        </button>
+                        <button
+                          type="button"
+                          className="mm-btn delegation"
+                          disabled={
+                            busy || !isEligibleForDelegation(organization)
+                          }
+                          title={
+                            isEligibleForDelegation(organization)
+                              ? "Configurar limites da delegação"
+                              : "Disponível somente para admin ou owner ativo"
+                          }
+                          onClick={() => void openDelegation(organization)}
+                        >
+                          Delegar acessos
+                        </button>
+                      </div>
+                    ))}
                 </section>
               )}
 
               <footer>
-                <button
-                  type="button"
-                  className="mm-btn danger"
-                  disabled={busy || selected.id === currentUserId}
-                  onClick={() => void remove()}
-                >
-                  Excluir usuário
-                </button>
+                {selectedView === "profile" ? (
+                  <button
+                    type="button"
+                    className="mm-btn danger"
+                    disabled={busy || selected.id === currentUserId}
+                    onClick={() => void remove()}
+                  >
+                    Excluir usuário
+                  </button>
+                ) : (
+                  <span />
+                )}
                 <span />
                 <button
                   type="button"
@@ -712,9 +912,19 @@ export default function AdminUserManager({
                 >
                   Cancelar
                 </button>
-                <button className="mm-btn primary" disabled={busy}>
-                  {busy ? "Salvando..." : "Salvar"}
-                </button>
+                {selectedView === "profile" ? (
+                  <button className="mm-btn primary" disabled={busy}>
+                    {busy ? "Salvando..." : "Salvar"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="mm-btn primary"
+                    onClick={() => setSelected(null)}
+                  >
+                    Concluir
+                  </button>
+                )}
               </footer>
             </form>
           </div>
@@ -740,7 +950,7 @@ export default function AdminUserManager({
                 <span>PAINEL OBRIGATÓRIO</span>
                 <h3>Limites de delegação</h3>
                 <p>
-                  {selected.name || selected.email} • {" "}
+                  {selected.name || selected.email} •{" "}
                   {delegationEditor.organization.name}
                 </p>
               </div>
@@ -756,11 +966,10 @@ export default function AdminUserManager({
                 <strong>Delegar acessos da organização</strong>
                 <p>
                   Defina exatamente quais perfis, operações e acessos poderão
-                  ser atribuídos. A gestão principal ocorre nesta subaba. O
-                  painel suspenso de Projects é uma exceção exclusiva para o
-                  delegado ativo que não possui acesso ao Painel Admin. O código
-                  de delegação, GeoJSON amplo e acessos globais ficam fora desta
-                  whitelist.
+                  ser atribuídos. Somente o Super Admin configura esta política
+                  no Painel Admin. O delegado ativo usa os botões por usuário em
+                  Projects → Usuários e Acessos. O código de delegação, GeoJSON
+                  amplo e acessos de plataforma ficam fora desta whitelist.
                 </p>
               </div>
 

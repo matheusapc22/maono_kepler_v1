@@ -236,6 +236,17 @@
   text-decoration: none;
 }
 
+.people-manage-button {
+  min-width: 94px;
+  border-color: rgba(214, 168, 79, .38);
+  color: var(--mm-gold-bright);
+  background: rgba(214, 168, 79, .08);
+}
+
+.people-action-unavailable {
+  color: var(--mm-muted);
+}
+
 @media (max-width: 760px) {
   .people-access-actions {
     width: 100%;

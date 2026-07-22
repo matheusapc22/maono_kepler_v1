@@ -87,6 +87,18 @@ function profileLabel(person: OrganizationUser): string {
   );
 }
 
+function targetLevel(person: OrganizationUser): string {
+  return String(person.accessLevel || "").trim().toLowerCase();
+}
+
+function sameId(left?: ApiId, right?: ApiId): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    String(left) === String(right)
+  );
+}
+
 function formatDate(value?: string): string {
   if (!value) return "-";
   const date = new Date(value);
@@ -108,7 +120,8 @@ export default function UsersAccessOverviewSection({
   const [limits, setLimits] = useState<OrganizationLimits | null>(null);
   const [governance, setGovernance] =
     useState<AccessGovernanceCapabilities | null>(null);
-  const [managementOpen, setManagementOpen] = useState(false);
+  const [managementTargetUserId, setManagementTargetUserId] =
+    useState<ApiId | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [profileFilter, setProfileFilter] = useState("all");
@@ -119,7 +132,7 @@ export default function UsersAccessOverviewSection({
   } | null>(null);
 
   const canView = canViewTeam(user);
-  const hasAdminPanelAccess = hasPermission(user, "admin.panel.access");
+  const isSuperAdmin = roleOf(user) === "super_admin";
 
   const load = useCallback(async () => {
     if (!organizationId || !canView) return;
@@ -161,8 +174,16 @@ export default function UsersAccessOverviewSection({
 
   const delegatedAlternative = Boolean(
     governance?.mode === "organization" &&
-      governance.canManageAdditionalAccesses &&
-      !hasAdminPanelAccess,
+      governance.canManageAdditionalAccesses,
+  );
+
+  const canManagePerson = useCallback(
+    (person: OrganizationUser) =>
+      delegatedAlternative &&
+      person.active !== false &&
+      !sameId(person.id, user?.id) &&
+      Boolean(governance?.allowedTargetLevels.includes(targetLevel(person))),
+    [delegatedAlternative, governance, user?.id],
   );
 
   const active = people.filter((item) => item.active !== false).length;
@@ -225,12 +246,12 @@ export default function UsersAccessOverviewSection({
           <span className="people-eyebrow">VISÃO DA EQUIPE</span>
           <h2>Usuários e Acessos</h2>
           <p>
-            Consulte pessoas, perfis e acessos da organização. A gestão
-            principal ocorre em Painel Admin → Usuários e Permissões.
+            Consulte pessoas, perfis e acessos da organização. O Super Admin
+            configura políticas no Painel Admin; delegados atuam nesta lista.
           </p>
         </div>
         <div className="people-access-actions">
-          {hasAdminPanelAccess && (
+          {isSuperAdmin && (
             <a
               className="mm-btn primary"
               href={
@@ -241,15 +262,6 @@ export default function UsersAccessOverviewSection({
               Gerenciar no Painel Admin
             </a>
           )}
-          {delegatedAlternative && (
-            <button
-              className="mm-btn primary"
-              type="button"
-              onClick={() => setManagementOpen(true)}
-            >
-              Gerenciar acessos delegados
-            </button>
-          )}
         </div>
       </header>
 
@@ -257,9 +269,9 @@ export default function UsersAccessOverviewSection({
         <div className="people-notice governance active" role="status">
           <strong>Delegação limitada ativa</strong>
           <span>
-            Como esta conta não possui acesso ao Painel Admin, o botão acima
-            abre o painel suspenso excepcional. Ele respeita a organização
-            ativa, os perfis permitidos e a whitelist do Super Admin.
+            Use o botão <strong>Gerenciar</strong> na linha de cada pessoa
+            elegível. O painel respeita a organização ativa, os perfis
+            permitidos e a whitelist definida pelo Super Admin.
           </span>
         </div>
       ) : (
@@ -354,17 +366,18 @@ export default function UsersAccessOverviewSection({
               <th>Perfil</th>
               <th>Acessos adicionais</th>
               <th>Atualizado em</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5}>Carregando pessoas com acesso...</td>
+                <td colSpan={6}>Carregando pessoas com acesso...</td>
               </tr>
             )}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={5}>Nenhuma pessoa encontrada.</td>
+                <td colSpan={6}>Nenhuma pessoa encontrada.</td>
               </tr>
             )}
             {!loading &&
@@ -393,18 +406,32 @@ export default function UsersAccessOverviewSection({
                       : "Nenhum adicional"}
                   </td>
                   <td>{formatDate(person.updatedAt ?? person.createdAt)}</td>
+                  <td>
+                    {canManagePerson(person) ? (
+                      <button
+                        className="mm-btn tiny people-manage-button"
+                        type="button"
+                        onClick={() => setManagementTargetUserId(person.id)}
+                      >
+                        Gerenciar
+                      </button>
+                    ) : (
+                      <span className="people-action-unavailable">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
           </tbody>
         </table>
       </div>
 
-      {managementOpen && delegatedAlternative && (
+      {managementTargetUserId !== null && delegatedAlternative && (
         <OrganizationPermissionManager
           organizationId={organizationId}
           actorUserId={user?.id}
+          initialTargetUserId={managementTargetUserId}
           mode="delegated"
-          onClose={() => setManagementOpen(false)}
+          onClose={() => setManagementTargetUserId(null)}
           onSaved={load}
         />
       )}

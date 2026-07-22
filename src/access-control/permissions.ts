@@ -9,11 +9,16 @@ export const PERMISSION = {
   DOCUMENT_VIEW: "document.view",
   DOCUMENT_UPLOAD: "document.upload",
   DOCUMENT_DOWNLOAD: "document.download",
+  DOCUMENT_EDIT: "document.edit",
   DOCUMENT_DELETE: "document.delete",
+  DOCUMENT_MANAGE: "document.manage",
 
   TICKET_VIEW: "ticket.view",
   TICKET_CREATE: "ticket.create",
+  TICKET_COMMENT: "ticket.comment",
   TICKET_MANAGE: "ticket.manage",
+  TICKET_CLOSE: "ticket.close",
+  TICKET_ASSIGN: "ticket.assign",
 
   EXPORT_VIEW: "export.view",
   EXPORT_CREATE: "export.create",
@@ -31,6 +36,8 @@ export const PERMISSION = {
   USERS_CREATE: "users.create",
   USERS_EDIT: "users.edit",
   USERS_DISABLE: "users.disable",
+  USERS_DELETE: "users.delete",
+  USERS_INVITE: "users.invite",
   USERS_MANAGE_ACCESS: "users.manage_access",
 
   PERMISSION_GRANT: "permission.grant",
@@ -47,6 +54,8 @@ export const PERMISSION = {
 
   LIMITS_VIEW: "limits.view",
   LIMITS_INCREASE_REQUEST: "limits.increase_request",
+  PLAN_VIEW: "plan.view",
+  PLAN_CHANGE_REQUEST: "plan.change_request",
 
   ADMIN_PANEL_ACCESS: "admin.panel.access",
 
