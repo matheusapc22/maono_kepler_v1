@@ -46,7 +46,13 @@ function userPermissions(user: MaonoUser | null): string[] {
 
 function hasPermission(user: MaonoUser | null, permission: string): boolean {
   const role = roleOf(user);
-  if (role === "super_admin" || role === "admin") return true;
+  if (role === "super_admin") return true;
+  if (
+    (role === "owner" || role === "client") &&
+    ["users.view", "limits.view"].includes(permission)
+  ) {
+    return true;
+  }
   return userPermissions(user).includes(permission);
 }
 
