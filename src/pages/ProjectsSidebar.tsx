@@ -238,13 +238,15 @@ function canShowAdministrationItem(
     return false;
   }
 
-  if (item.permission === PERMISSION.ADMIN_PANEL_ACCESS) {
+  if (
+    item.permission === PERMISSION.ADMIN_PANEL_ACCESS ||
+    item.permission === PERMISSION.AUDIT_VIEW
+  ) {
     return isSuperAdmin(user);
   }
 
   /**
-   * O Painel Admin é exclusivo do Super Admin. Para Auditoria, a sidebar
-   * continua perguntando ao can.ts se o item pode aparecer visualmente.
+   * Painel Admin e Auditoria são superfícies exclusivas do Super Admin.
    *
    * Segurança real continua nas rotas e endpoints.
    */

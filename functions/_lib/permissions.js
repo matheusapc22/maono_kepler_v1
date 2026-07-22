@@ -866,10 +866,16 @@ export async function can(env, user, permission, context = {}) {
     };
   }
 
-  if (normalizedPermission === "admin.panel.access") {
+  if (
+    normalizedPermission === "admin.panel.access" ||
+    normalizedPermission.startsWith("audit.")
+  ) {
     return {
       allowed: false,
-      reason: "ADMIN_PANEL_SUPER_ADMIN_ONLY",
+      reason:
+        normalizedPermission === "admin.panel.access"
+          ? "ADMIN_PANEL_SUPER_ADMIN_ONLY"
+          : "AUDIT_SUPER_ADMIN_ONLY",
       user,
       permission: normalizedPermission,
       context: resolvedContext,

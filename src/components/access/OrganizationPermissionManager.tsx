@@ -233,12 +233,16 @@ export default function OrganizationPermissionManager({
       (governance?.allowedPermissions ?? [])
         .filter(
           (code) =>
+            grantPermissions.has(code) || selectedPermissions.includes(code),
+        )
+        .filter(
+          (code) =>
             !target ||
             !hasAdminOrOwnerNativeProfile(target) ||
             !ADMIN_OWNER_NATIVE_ACCESS_CODES.has(code),
         )
         .map((code) => accessFromCode(code)),
-    [governance, target],
+    [governance, grantPermissions, selectedPermissions, target],
   );
   const groups = useMemo(
     () => Array.from(new Set(accessOptions.map((item) => item.group))),

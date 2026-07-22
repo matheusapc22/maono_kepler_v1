@@ -451,9 +451,10 @@ function administrativePermissionAllows(
   context: PermissionContext,
   explicitPermission: boolean,
 ): boolean {
-  if (permission === "admin.panel.access") {
-    // O Painel Admin é uma superfície exclusiva do Super Admin. A exceção
-    // do Super Admin já foi tratada no início de can().
+  if (permission === "admin.panel.access" || isAuditPermission(permission)) {
+    // Painel Admin e todas as superfícies de Auditoria são exclusivos do
+    // Super Admin. O bypass do Super Admin ocorre no início de can(). Grants,
+    // roles e scopes não podem ampliar esta fronteira.
     return false;
   }
 
