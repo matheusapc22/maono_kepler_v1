@@ -150,6 +150,7 @@ export default function OrganizationPermissionManager({
   const [targetId, setTargetId] = useState<ApiId | "">(
     initialTargetUserId ?? "",
   );
+  const [baselinePermissions, setBaselinePermissions] = useState<string[]>([]);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [geoJsonAcknowledged, setGeoJsonAcknowledged] = useState(false);
   const [geoJsonJustification, setGeoJsonJustification] = useState("");
@@ -214,7 +215,22 @@ export default function OrganizationPermissionManager({
   );
 
   useEffect(() => {
-    setSelectedPermissions([...(target?.permissions ?? [])]);
+    if (!target) {
+      setBaselinePermissions([]);
+      setSelectedPermissions([]);
+      return;
+    }
+
+    const denied = new Set(target.deniedPermissions ?? []);
+    const nativePermissions = hasAdminOrOwnerNativeProfile(target)
+      ? Array.from(ADMIN_OWNER_NATIVE_ACCESS_CODES)
+      : [];
+    const effectivePermissions = Array.from(
+      new Set([...(target.permissions ?? []), ...nativePermissions]),
+    ).filter((code) => !denied.has(code));
+
+    setBaselinePermissions(effectivePermissions);
+    setSelectedPermissions(effectivePermissions);
     setGeoJsonAcknowledged(false);
     setGeoJsonJustification("");
     setMessage(null);
@@ -235,14 +251,8 @@ export default function OrganizationPermissionManager({
           (code) =>
             grantPermissions.has(code) || selectedPermissions.includes(code),
         )
-        .filter(
-          (code) =>
-            !target ||
-            !hasAdminOrOwnerNativeProfile(target) ||
-            !ADMIN_OWNER_NATIVE_ACCESS_CODES.has(code),
-        )
         .map((code) => accessFromCode(code)),
-    [governance, grantPermissions, selectedPermissions, target],
+    [governance, grantPermissions, selectedPermissions],
   );
   const groups = useMemo(
     () => Array.from(new Set(accessOptions.map((item) => item.group))),
@@ -251,13 +261,13 @@ export default function OrganizationPermissionManager({
 
   const changed = useMemo(() => {
     if (!target) return false;
-    const before = new Set(target.permissions ?? []);
+    const before = new Set(baselinePermissions);
     const after = new Set(selectedPermissions);
     return (
       selectedPermissions.some((code) => !before.has(code)) ||
-      (target.permissions ?? []).some((code) => !after.has(code))
+      baselinePermissions.some((code) => !after.has(code))
     );
-  }, [selectedPermissions, target]);
+  }, [baselinePermissions, selectedPermissions, target]);
 
   function togglePermission(code: string) {
     const selected = selectedPermissions.includes(code);
@@ -275,7 +285,7 @@ export default function OrganizationPermissionManager({
   async function save() {
     if (!target || !governance || !changed) return;
 
-    const before = target.permissions ?? [];
+    const before = baselinePermissions;
     const additions = selectedPermissions.filter(
       (code) => !before.includes(code) && grantPermissions.has(code),
     );
@@ -319,7 +329,7 @@ export default function OrganizationPermissionManager({
       await onSaved?.();
       setMessage({
         kind: "success",
-        text: "Acessos adicionais atualizados dentro da política vigente.",
+        text: "Funcionalidades atualizadas. Negações nativas prevalecem sobre o perfil até serem restauradas pelo Super Admin.",
       });
     } catch (error) {
       setMessage({ kind: "error", text: errorText(error) });
@@ -349,7 +359,7 @@ export default function OrganizationPermissionManager({
                 ? "USUÁRIOS E PERMISSÕES"
                 : "DELEGAÇÃO LIMITADA"}
             </span>
-            <h3 id="org-permission-title">Gerenciar acessos adicionais</h3>
+            <h3 id="org-permission-title">Gerenciar funcionalidades e acessos</h3>
             <p>
               {mode === "admin"
                 ? "Gestão exclusiva do Super Admin no Painel Admin."
@@ -408,9 +418,10 @@ export default function OrganizationPermissionManager({
 
               {target && hasAdminOrOwnerNativeProfile(target) && (
                 <div className="org-permission-notice" role="note">
-                  As capacidades nativas de Gestor/Responsável são garantidas
-                  pelo código e não aparecem como concessões adicionais. Este
-                  painel mostra somente o que está fora do perfil básico.
+                  O Super Admin pode retirar capacidades nativas de
+                  Gestor/Responsável nesta organização. Ao desmarcar uma
+                  capacidade nativa, uma negação explícita será aplicada antes
+                  do perfil; marque novamente para restaurá-la.
                 </div>
               )}
 
@@ -423,6 +434,12 @@ export default function OrganizationPermissionManager({
                         .filter((item) => item.group === group)
                         .map((item) => {
                           const selected = selectedPermissions.includes(
+                            item.code,
+                          );
+                          const native =
+                            hasAdminOrOwnerNativeProfile(target) &&
+                            ADMIN_OWNER_NATIVE_ACCESS_CODES.has(item.code);
+                          const wasSelected = baselinePermissions.includes(
                             item.code,
                           );
                           const canChange = selected
@@ -445,6 +462,17 @@ export default function OrganizationPermissionManager({
                               <span>
                                 <strong>{item.name}</strong>
                                 <small>{item.description}</small>
+                                {native && (
+                                  <em>
+                                    {selected
+                                      ? wasSelected
+                                        ? "Acesso nativo ativo"
+                                        : "Será restaurado ao salvar"
+                                      : wasSelected
+                                        ? "Será negado ao salvar"
+                                        : "Acesso nativo negado"}
+                                  </em>
+                                )}
                                 {!canChange && (
                                   <em>
                                     {selected
@@ -465,7 +493,7 @@ export default function OrganizationPermissionManager({
                 selectedPermissions.includes(
                   "organization.projects.geojson.view",
                 ) &&
-                !(target.permissions ?? []).includes(
+                !baselinePermissions.includes(
                   "organization.projects.geojson.view",
                 ) && (
                   <div className="org-permission-geojson" role="alert">
