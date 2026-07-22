@@ -224,3 +224,25 @@
     grid-template-columns: 1fr;
   }
 }
+
+.people-access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.people-access-actions a {
+  text-decoration: none;
+}
+
+@media (max-width: 760px) {
+  .people-access-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .people-access-actions .mm-btn {
+    flex: 1 1 100%;
+  }
+}
