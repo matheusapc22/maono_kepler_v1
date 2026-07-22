@@ -77,6 +77,23 @@ const PROJECT_PERSISTENCE_PERMISSIONS = new Set([
   "project.thumbnail.update",
 ]);
 
+const NATIVE_PROJECT_PERSISTENCE_PERMISSIONS = new Set([
+  "project.save",
+  "project.edit",
+  "project.thumbnail.update",
+]);
+
+const PROJECT_MEMBERSHIP_ONLY_PERMISSIONS = new Set([
+  "project.view",
+  "project.favorite",
+]);
+
+const EDITOR_NATIVE_PROJECT_PERSISTENCE_PERMISSIONS = new Set([
+  "project.save",
+]);
+
+const EDITOR_PROJECT_SAVE_ACCESS_LEVELS = new Set(["editor", "write"]);
+
 const PROJECT_CONTEXT_PERMISSIONS = new Set([
   "project.view",
   "project.edit",
@@ -116,10 +133,9 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "ticket.view",
   "ticket.create",
   "ticket.comment",
-
-  "export.view",
-  "export.create",
-  "export.download",
+  "ticket.manage",
+  "ticket.close",
+  "ticket.assign",
 
   "roadmap.view",
   "roadmap.comment.create",
@@ -133,12 +149,8 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "users.create",
   "users.edit",
   "users.disable",
+  "users.delete",
   "users.invite",
-  "users.manage_access",
-
-  "permission.grant",
-  "permission.revoke",
-  "role.assign",
 
   "organization.view",
   "organization.edit",
@@ -149,7 +161,7 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "limits.increase_request",
 ]);
 
-const VIEWER_EXPLICIT_ONLY_PERMISSIONS = new Set(["export.download"]);
+const VIEWER_EXPLICIT_ONLY_PERMISSIONS = new Set();
 
 const SENSITIVE_ACTIONS = new Set([
   "project.create",
@@ -683,14 +695,19 @@ async function organizationPermissionAllows(
   const managementPermission = isManagementPermission(permission);
 
   if (role === "admin") {
+    const adminHasNativeAccess =
+      relation.isMember && OWNER_ORGANIZATION_PERMISSIONS.has(permission);
     const adminHasScopedAccess =
       scopedOrganizationUserPermission ||
       (relation.isMember && (explicitUserPermission || configuredRolePermission));
+    const adminHasAccess = adminHasNativeAccess || adminHasScopedAccess;
 
     return {
-      allowed: adminHasScopedAccess,
-      reason: adminHasScopedAccess
-        ? "ADMIN_ORGANIZATION_SCOPED_PERMISSION"
+      allowed: adminHasAccess,
+      reason: adminHasNativeAccess
+        ? "ADMIN_NATIVE_ORGANIZATION_PERMISSION"
+        : adminHasScopedAccess
+          ? "ADMIN_ORGANIZATION_SCOPED_PERMISSION"
         : "ADMIN_REQUIRES_ORGANIZATION_SCOPE",
     };
   }
@@ -823,6 +840,16 @@ export async function can(env, user, permission, context = {}) {
   const activeOrganizationId = getUserOrganizationId(user);
   const contextOrganizationId = getContextOrganizationId(resolvedContext);
 
+  if (role === "super_admin") {
+    return {
+      allowed: true,
+      reason: "SUPER_ADMIN",
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
+
   if (
     contextOrganizationId &&
     (
@@ -839,10 +866,10 @@ export async function can(env, user, permission, context = {}) {
     };
   }
 
-  if (role === "super_admin") {
+  if (normalizedPermission === "admin.panel.access") {
     return {
-      allowed: true,
-      reason: "SUPER_ADMIN",
+      allowed: false,
+      reason: "ADMIN_PANEL_SUPER_ADMIN_ONLY",
       user,
       permission: normalizedPermission,
       context: resolvedContext,
@@ -887,6 +914,25 @@ export async function can(env, user, permission, context = {}) {
       };
     }
 
+    const relation = contextOrganizationId
+      ? await getOrganizationRelation(env, user, contextOrganizationId)
+      : { isMember: false, isOwner: false };
+    const nativeAdminOrOwnerPersistence =
+      NATIVE_PROJECT_PERSISTENCE_PERMISSIONS.has(normalizedPermission) &&
+      (
+        (role === "owner" && relation.isOwner) ||
+        (role === "admin" && relation.isMember)
+      );
+    const editorProjectAccess =
+      role === "editor" && project?.id
+        ? await getProjectAccess(env, user.id, project.id)
+        : null;
+    const nativeEditorPersistence =
+      role === "editor" &&
+      EDITOR_NATIVE_PROJECT_PERSISTENCE_PERMISSIONS.has(normalizedPermission) &&
+      EDITOR_PROJECT_SAVE_ACCESS_LEVELS.has(
+        normalizeAccessLevel(editorProjectAccess?.access_level),
+      );
     const scopedProjectPersistencePermission =
       await hasScopedProjectPersistencePermission(
         env,
@@ -894,11 +940,21 @@ export async function can(env, user, permission, context = {}) {
         normalizedPermission,
         resolvedContext,
       );
+    const projectPersistenceAllowed =
+      nativeAdminOrOwnerPersistence ||
+      nativeEditorPersistence ||
+      scopedProjectPersistencePermission;
 
     return {
-      allowed: scopedProjectPersistencePermission,
-      reason: scopedProjectPersistencePermission
-        ? "PROJECT_PERSISTENCE_PERMISSION"
+      allowed: projectPersistenceAllowed,
+      reason: nativeAdminOrOwnerPersistence
+        ? role === "admin"
+          ? "ADMIN_NATIVE_PROJECT_PERSISTENCE"
+          : "OWNER_NATIVE_PROJECT_PERSISTENCE"
+        : nativeEditorPersistence
+          ? "EDITOR_NATIVE_LINKED_PROJECT_SAVE"
+        : scopedProjectPersistencePermission
+          ? "PROJECT_PERSISTENCE_PERMISSION"
         : "PROJECT_PERSISTENCE_PERMISSION_REQUIRED",
       user,
       permission: normalizedPermission,
@@ -924,6 +980,16 @@ export async function can(env, user, permission, context = {}) {
     };
   }
 
+  if (PROJECT_MEMBERSHIP_ONLY_PERMISSIONS.has(normalizedPermission)) {
+    return {
+      allowed: false,
+      reason: "PROJECT_MEMBERSHIP_REQUIRED",
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
+
   if (isOrganizationScopedPermission(normalizedPermission)) {
     const organizationDecision = await organizationPermissionAllows(
       env,
@@ -939,6 +1005,46 @@ export async function can(env, user, permission, context = {}) {
     return {
       allowed: organizationDecision.allowed,
       reason: organizationDecision.reason,
+      user,
+      permission: normalizedPermission,
+      context: resolvedContext,
+    };
+  }
+
+  if (normalizedPermission === "project.create") {
+    if (!contextOrganizationId) {
+      return {
+        allowed: false,
+        reason: "ORGANIZATION_CONTEXT_REQUIRED",
+        user,
+        permission: normalizedPermission,
+        context: resolvedContext,
+      };
+    }
+
+    const relation = await getOrganizationRelation(
+      env,
+      user,
+      contextOrganizationId,
+    );
+    const nativeProjectCreation =
+      (role === "admin" && relation.isMember) ||
+      (role === "owner" && relation.isOwner);
+    const configuredProjectCreation =
+      relation.isMember &&
+      (explicitUserPermission || configuredRolePermission);
+    const projectCreationAllowed =
+      nativeProjectCreation || configuredProjectCreation;
+
+    return {
+      allowed: projectCreationAllowed,
+      reason: nativeProjectCreation
+        ? role === "admin"
+          ? "ADMIN_NATIVE_PROJECT_CREATION"
+          : "OWNER_NATIVE_PROJECT_CREATION"
+        : configuredProjectCreation
+          ? "PROJECT_CREATION_CONFIGURED_PERMISSION"
+          : "PROJECT_CREATION_PERMISSION_REQUIRED",
       user,
       permission: normalizedPermission,
       context: resolvedContext,

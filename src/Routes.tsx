@@ -2,14 +2,8 @@
 import React, { lazy, Suspense, useEffect } from "react";
 import { Navigate, Routes, Route, useLocation } from "react-router";
 
-import {
-  can,
-  type AccessControlOrganization,
-  type AccessControlUser,
-  type PermissionContext,
-} from "./access-control/can";
-import { PERMISSION } from "./access-control/permissions";
-import { useSession, type MaonoUser } from "./auth/session";
+import { normalizeRole } from "./access-control/roles";
+import { useSession } from "./auth/session";
 import {
   AdminPageSkeleton,
   ProjectsPageSkeleton,
@@ -47,37 +41,6 @@ const WithSuspense: React.FC<{
   <Suspense fallback={fallback}>{children}</Suspense>
 );
 
-function buildSessionPermissionContext(
-  user: MaonoUser | null,
-): PermissionContext {
-  if (!user) {
-    return {};
-  }
-
-  const accessUser = user as AccessControlUser & {
-    activeOrganization?: AccessControlOrganization | null;
-    organization?: AccessControlOrganization | null;
-  };
-
-  const organization =
-    accessUser.activeOrganization ?? accessUser.organization ?? undefined;
-
-  const organizationId =
-    accessUser.activeOrganizationId ??
-    accessUser.organizationId ??
-    accessUser.organization_id ??
-    organization?.id ??
-    organization?.organizationId ??
-    undefined;
-
-  return {
-    organizationId,
-    organization: organization ?? undefined,
-    permissions: accessUser.permissions,
-    scopes: accessUser.scopes,
-  };
-}
-
 function buildLoginRedirect(location: ReturnType<typeof useLocation>) {
   const next = `${location.pathname}${location.search || ""}`;
 
@@ -113,12 +76,7 @@ const AdminRouteGuard: React.FC<{ children: React.ReactNode }> = ({
     );
   }
 
-  const permissionContext = buildSessionPermissionContext(user);
-  const allowed = can(
-    user as AccessControlUser | null,
-    PERMISSION.ADMIN_PANEL_ACCESS,
-    permissionContext,
-  );
+  const allowed = normalizeRole(user?.role) === "super_admin";
 
   if (!allowed) {
     return <RestrictedAccess />;

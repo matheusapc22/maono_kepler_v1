@@ -43,86 +43,69 @@ export interface PermissionContext {
   featureFlags?: readonly string[] | null;
 }
 
+const OWNER_NATIVE_PERMISSIONS: readonly Permission[] = [
+  "project.create",
+  "project.edit",
+  "project.save",
+  "project.thumbnail.update",
+
+  "document.view",
+  "document.upload",
+  "document.download",
+  "document.delete",
+
+  "ticket.view",
+  "ticket.create",
+  "ticket.comment",
+  "ticket.manage",
+  "ticket.close",
+  "ticket.assign",
+
+  "users.view",
+  "users.create",
+  "users.edit",
+  "users.disable",
+  "users.delete",
+  "users.invite",
+
+  "organization.view",
+  "organization.edit",
+  "organization.metrics.view",
+
+  "limits.view",
+  "limits.increase_request",
+  "plan.view",
+
+  "roadmap.view",
+  "roadmap.comment.create",
+  "roadmap.comment.edit_own",
+  "roadmap.comment.moderate",
+  "roadmap.manage",
+  "roadmap.task.manage",
+  "roadmap.dependency.manage",
+];
+
 export const ROLE_PERMISSIONS: Record<MaonoRole, readonly Permission[]> = {
   super_admin: ALL_PERMISSIONS,
 
-  // Admins internos da Maõno não recebem acesso global por padrão.
-  // Acesso real deve vir de permissions/scopes retornados pela sessão segura.
-  admin: [],
+  // Admin e owner compartilham o mesmo conjunto nativo somente dentro da
+  // organização ativa e vinculada. GeoJSON amplo, auditoria, delegação e o
+  // Painel Admin não integram este conjunto.
+  admin: OWNER_NATIVE_PERMISSIONS,
 
-  owner: [
-    "project.view",
-    "project.create",
-    "project.save",
-    "project.favorite",
+  owner: OWNER_NATIVE_PERMISSIONS,
 
-    "document.view",
-    "document.upload",
-    "document.download",
-    "document.delete",
+  // O editor salva apenas projeto ao qual esteja vinculado com nível de
+  // edição. As demais capacidades organizacionais continuam explícitas.
+  editor: ["project.save"],
 
-    "ticket.view",
-    "ticket.create",
-    "ticket.manage",
-
-    "users.view",
-    "users.create",
-    "users.manage_access",
-
-    "permission.grant",
-    "permission.revoke",
-
-    "organization.view",
-    "organization.edit",
-
-    "limits.view",
-    "limits.increase_request",
-
-    "export.view",
-    "export.create",
-    "export.download",
-
-    "roadmap.view",
-    "roadmap.comment.create",
-    "roadmap.comment.edit_own",
-    "roadmap.comment.moderate",
-    "roadmap.manage",
-    "roadmap.task.manage",
-    "roadmap.dependency.manage",
-  ],
-
-  editor: [
-    "project.view",
-    "project.save",
-    "project.favorite",
-
-    "document.view",
-    "document.upload",
-    "document.download",
-
-    "ticket.view",
-    "ticket.create",
-
-    "export.view",
-    "export.create",
-    "export.download",
-
-    "roadmap.view",
-    "roadmap.comment.create",
-    "roadmap.comment.edit_own",
-  ],
-
-  viewer: [
-    "project.view",
-    "project.favorite",
-    "roadmap.view",
-    "roadmap.comment.create",
-    "roadmap.comment.edit_own",
-  ],
+  viewer: [],
 };
 
 export const PROJECT_CONTEXT_REQUIRED_PERMISSIONS: readonly Permission[] = [
   "project.save",
+  "project.edit",
+  "project.thumbnail.update",
 ];
 
 export const PROJECT_VIEW_ACCESS_LEVELS = [
@@ -133,11 +116,7 @@ export const PROJECT_VIEW_ACCESS_LEVELS = [
   "read",
 ] as const;
 
-export const PROJECT_SAVE_ACCESS_LEVELS = [
-  "owner",
-  "editor",
-  "write",
-] as const;
+export const PROJECT_SAVE_ACCESS_LEVELS = ["owner", "editor", "write"] as const;
 
 export function roleAllows(role: MaonoRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);

@@ -2,6 +2,7 @@ import { normalizePermissions, type Permission } from "./permissions";
 import { normalizeRole } from "./roles";
 import {
   PROJECT_CONTEXT_REQUIRED_PERMISSIONS,
+  PROJECT_SAVE_ACCESS_LEVELS,
   PROJECT_VIEW_ACCESS_LEVELS,
   roleAllows,
   type AccessControlOrganization,
@@ -39,15 +40,16 @@ const ORGANIZATION_CONTEXT_PERMISSION_PREFIXES = [
   "plan.",
 ] as const;
 
-const ADMINISTRATIVE_PERMISSIONS: ReadonlySet<Permission> =
-  new Set<Permission>([
+const ADMINISTRATIVE_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>(
+  [
     "admin.panel.access",
     "audit.view",
     "audit.export",
     "audit.security.view",
     "audit.platform.view",
     "audit.organization.view",
-  ]);
+  ],
+);
 
 const AUDIT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   "audit.view",
@@ -57,11 +59,9 @@ const AUDIT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   "audit.organization.view",
 ]);
 
-const PLATFORM_AUDIT_PERMISSIONS: ReadonlySet<Permission> =
-  new Set<Permission>([
-    "audit.security.view",
-    "audit.platform.view",
-  ]);
+const PLATFORM_AUDIT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>(
+  ["audit.security.view", "audit.platform.view"],
+);
 
 const ORGANIZATION_AUDIT_PERMISSIONS: ReadonlySet<Permission> =
   new Set<Permission>([
@@ -79,11 +79,10 @@ const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
 
     "ticket.view",
     "ticket.create",
+    "ticket.comment",
     "ticket.manage",
-
-    "export.view",
-    "export.create",
-    "export.download",
+    "ticket.close",
+    "ticket.assign",
 
     "roadmap.view",
     "roadmap.comment.create",
@@ -97,17 +96,16 @@ const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
     "users.create",
     "users.edit",
     "users.disable",
-    "users.manage_access",
-
-    "permission.grant",
-    "permission.revoke",
-    "role.assign",
+    "users.delete",
+    "users.invite",
 
     "organization.view",
+    "organization.edit",
     "organization.metrics.view",
 
     "limits.view",
     "limits.increase_request",
+    "plan.view",
   ]);
 
 const PROJECT_PERSISTENCE_PERMISSIONS: ReadonlySet<Permission> =
@@ -116,6 +114,9 @@ const PROJECT_PERSISTENCE_PERMISSIONS: ReadonlySet<Permission> =
     "project.edit",
     "project.thumbnail.update",
   ]);
+
+const PROJECT_MEMBERSHIP_ONLY_PERMISSIONS: ReadonlySet<Permission> =
+  new Set<Permission>(["project.view", "project.favorite"]);
 
 function toId(value: IdLike | null | undefined): string | null {
   if (value === null || value === undefined || value === "") {
@@ -219,8 +220,8 @@ function isSameOrganization(
 
   const userOrganizationId = getUserOrganizationId(user);
 
-  if (userOrganizationId === targetOrganizationId) {
-    return true;
+  if (userOrganizationId) {
+    return userOrganizationId === targetOrganizationId;
   }
 
   return hasOrganizationInUserList(user, targetOrganizationId);
@@ -406,7 +407,10 @@ function hasAdministrativeScope(
   return hasPlatformScope(user, context) || hasOrganizationScope(user, context);
 }
 
-function hasScope(user: AccessControlUser, context: PermissionContext): boolean {
+function hasScope(
+  user: AccessControlUser,
+  context: PermissionContext,
+): boolean {
   const scopes = getScopes(user, context);
 
   if (scopes.length === 0) {
@@ -448,10 +452,8 @@ function administrativePermissionAllows(
   explicitPermission: boolean,
 ): boolean {
   if (permission === "admin.panel.access") {
-    if (role === "admin") {
-      return explicitPermission && hasAdministrativeScope(user, context);
-    }
-
+    // O Painel Admin é uma superfície exclusiva do Super Admin. A exceção
+    // do Super Admin já foi tratada no início de can().
     return false;
   }
 
@@ -501,11 +503,7 @@ function organizationPermissionAllows(
     return false;
   }
 
-  if (role === "admin") {
-    return explicitPermission;
-  }
-
-  if (role === "owner" || role === "client") {
+  if (role === "admin" || role === "owner" || role === "client") {
     return (
       explicitPermission ||
       ownerPolicyAllows(permission) ||
@@ -522,6 +520,8 @@ function organizationPermissionAllows(
 
 function projectPersistencePermissionAllows(
   user: AccessControlUser,
+  role: string,
+  permission: Permission,
   context: PermissionContext,
   explicitPermission: boolean,
 ): boolean {
@@ -529,11 +529,44 @@ function projectPersistencePermissionAllows(
     return false;
   }
 
-  if (!explicitPermission) {
+  if (!isSameOrganization(user, context) || !hasScope(user, context)) {
     return false;
   }
 
-  return hasScope(user, context);
+  const nativeAdminOrOwnerPersistence =
+    (role === "admin" || role === "owner") &&
+    PROJECT_PERSISTENCE_PERMISSIONS.has(permission);
+  const projectAccessLevel = getProjectAccessLevel(context);
+  const nativeEditorSave =
+    role === "editor" &&
+    permission === "project.save" &&
+    Boolean(
+      projectAccessLevel &&
+        PROJECT_SAVE_ACCESS_LEVELS.includes(
+          projectAccessLevel as (typeof PROJECT_SAVE_ACCESS_LEVELS)[number],
+        ),
+    );
+
+  return (
+    nativeAdminOrOwnerPersistence || nativeEditorSave || explicitPermission
+  );
+}
+
+function projectCreationPermissionAllows(
+  user: AccessControlUser,
+  role: string,
+  context: PermissionContext,
+  explicitPermission: boolean,
+): boolean {
+  if (!hasOrganizationContext(context)) {
+    return false;
+  }
+
+  if (!isSameOrganization(user, context) || !hasScope(user, context)) {
+    return false;
+  }
+
+  return role === "admin" || role === "owner" || explicitPermission;
 }
 
 export function can(
@@ -577,6 +610,15 @@ export function can(
     );
   }
 
+  if (permission === "project.create") {
+    return projectCreationPermissionAllows(
+      user,
+      role,
+      context,
+      explicitPermission,
+    );
+  }
+
   if (requiresProjectContext(permission) && !hasProjectContext(context)) {
     return false;
   }
@@ -584,20 +626,21 @@ export function can(
   if (isProjectPersistencePermission(permission)) {
     return projectPersistencePermissionAllows(
       user,
+      role,
+      permission,
       context,
       explicitPermission,
     );
   }
 
-  if (role === "admin") {
-    return explicitPermission && hasScope(user, context);
-  }
-
   const allowedByRole = roleAllowsSafely(role, permission);
   const allowedByProjectAccess = projectAccessAllows(permission, context);
 
-  if (hasProjectContext(context) && allowedByProjectAccess) {
-    return true;
+  if (
+    hasProjectContext(context) &&
+    PROJECT_MEMBERSHIP_ONLY_PERMISSIONS.has(permission)
+  ) {
+    return allowedByProjectAccess;
   }
 
   if (!allowedByRole && !explicitPermission) {

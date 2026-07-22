@@ -238,11 +238,13 @@ function canShowAdministrationItem(
     return false;
   }
 
+  if (item.permission === PERMISSION.ADMIN_PANEL_ACCESS) {
+    return isSuperAdmin(user);
+  }
+
   /**
-   * Não duplicamos regra sensível aqui.
-   * A sidebar pergunta ao can.ts se o item pode aparecer visualmente:
-   * - Painel Admin depende de admin.panel.access.
-   * - Auditoria depende de audit.view.
+   * O Painel Admin é exclusivo do Super Admin. Para Auditoria, a sidebar
+   * continua perguntando ao can.ts se o item pode aparecer visualmente.
    *
    * Segurança real continua nas rotas e endpoints.
    */

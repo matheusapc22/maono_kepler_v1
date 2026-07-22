@@ -45,29 +45,62 @@ function publicAdminUser(row) {
     role: row.role,
     active: Boolean(row.active),
     projectCount: row.project_count || 0,
+    organizations: Array.isArray(row.organizations) ? row.organizations : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 async function listAdminUsers(env) {
-  const { results } = await env.DB.prepare(
-    `SELECT
-      users.id,
-      users.email,
-      users.name,
-      users.role,
-      users.active,
-      users.created_at,
-      users.updated_at,
-      COUNT(user_projects.id) AS project_count
-    FROM users
-    LEFT JOIN user_projects ON user_projects.user_id = users.id
-    GROUP BY users.id
-    ORDER BY users.active DESC, users.email ASC`,
-  ).all();
+  const [usersResult, membershipsResult] = await Promise.all([
+    env.DB.prepare(
+      `SELECT
+        users.id,
+        users.email,
+        users.name,
+        users.role,
+        users.active,
+        users.created_at,
+        users.updated_at,
+        COUNT(DISTINCT user_projects.id) AS project_count
+      FROM users
+      LEFT JOIN user_projects ON user_projects.user_id = users.id
+      GROUP BY users.id
+      ORDER BY users.active DESC, users.email ASC`,
+    ).all(),
+    env.DB.prepare(
+      `SELECT
+        organization_users.user_id,
+        organizations.id AS organization_id,
+        organizations.name AS organization_name,
+        organizations.slug AS organization_slug,
+        organizations.active AS organization_active,
+        organization_users.access_level
+      FROM organization_users
+      INNER JOIN organizations
+        ON organizations.id = organization_users.organization_id
+      ORDER BY organizations.name ASC`,
+    ).all(),
+  ]);
 
-  return results || [];
+  const organizationsByUser = new Map();
+
+  for (const membership of membershipsResult.results || []) {
+    const userOrganizations = organizationsByUser.get(membership.user_id) || [];
+    userOrganizations.push({
+      id: membership.organization_id,
+      name: membership.organization_name,
+      slug: membership.organization_slug,
+      active: Boolean(membership.organization_active),
+      accessLevel: membership.access_level,
+    });
+    organizationsByUser.set(membership.user_id, userOrganizations);
+  }
+
+  return (usersResult.results || []).map((user) => ({
+    ...user,
+    organizations: organizationsByUser.get(user.id) || [],
+  }));
 }
 
 function validateRoleCreationPermission(actingUser, role) {
@@ -226,6 +259,7 @@ export async function onRequest(context) {
           user: publicAdminUser({
             ...createdUser,
             project_count: 0,
+            organizations: [],
           }),
         },
         { status: 201 },
