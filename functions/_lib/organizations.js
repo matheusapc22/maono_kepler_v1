@@ -1,4 +1,9 @@
-import { can, isKnownPermission, recordAuditLog } from "./permissions.js";
+import {
+  can,
+  isKnownPermission,
+  isNativeAdminOrOwnerPermission,
+  recordAuditLog,
+} from "./permissions.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -679,7 +684,11 @@ export function sanitizeOrganization(row, metrics = null) {
   };
 }
 
-export function sanitizeOrganizationUser(row, permissions = []) {
+export function sanitizeOrganizationUser(
+  row,
+  permissions = [],
+  deniedPermissions = [],
+) {
   if (!row) {
     return null;
   }
@@ -700,6 +709,7 @@ export function sanitizeOrganizationUser(row, permissions = []) {
     accessLevel: row.access_level || "viewer",
     active: !(activeValue === 0 || activeValue === "0"),
     permissions,
+    deniedPermissions,
     createdAt: row.created_at || row.user_created_at || null,
     updatedAt: row.updated_at || row.user_updated_at || null,
     membershipCreatedAt: row.membership_created_at || null,
@@ -807,6 +817,43 @@ async function listOrganizationUserPermissions(env, organizationId, userIds) {
   return map;
 }
 
+async function listOrganizationUserPermissionDenials(
+  env,
+  organizationId,
+  userIds,
+) {
+  if (
+    !userIds.length ||
+    !(await tableExists(env, "user_permission_denials"))
+  ) {
+    return new Map();
+  }
+
+  const placeholders = userIds.map(() => "?").join(", ");
+  const result = await getDb(env)
+    .prepare(
+      `
+      SELECT user_id, permission
+      FROM user_permission_denials
+      WHERE user_id IN (${placeholders})
+        AND organization_id = ?
+      ORDER BY permission ASC
+      `,
+    )
+    .bind(...userIds, organizationId)
+    .all();
+
+  const map = new Map();
+
+  for (const row of result?.results || []) {
+    const key = String(row.user_id);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(row.permission);
+  }
+
+  return map;
+}
+
 export async function listOrganizationUsers(env, organizationId) {
   const id = parsePositiveInteger(organizationId, "organizationId");
 
@@ -859,14 +906,18 @@ export async function listOrganizationUsers(env, organizationId) {
     .all();
 
   const rows = result?.results || [];
-  const permissionsByUser = await listOrganizationUserPermissions(
-    env,
-    id,
-    rows.map((row) => row.id),
-  );
+  const userIds = rows.map((row) => row.id);
+  const [permissionsByUser, denialsByUser] = await Promise.all([
+    listOrganizationUserPermissions(env, id, userIds),
+    listOrganizationUserPermissionDenials(env, id, userIds),
+  ]);
 
   return rows.map((row) =>
-    sanitizeOrganizationUser(row, permissionsByUser.get(String(row.id)) || []),
+    sanitizeOrganizationUser(
+      row,
+      permissionsByUser.get(String(row.id)) || [],
+      denialsByUser.get(String(row.id)) || [],
+    ),
   );
 }
 
@@ -1294,6 +1345,56 @@ export async function grantOrganizationPermission(env, organizationId, targetUse
 
   assertCanManagePermission(actor, normalizedPermission);
 
+  if (isNativeAdminOrOwnerPermission(target, normalizedPermission)) {
+    if (getActorRole(actor) !== "super_admin") {
+      throw createApiError(
+        "Somente Super Admin pode restaurar uma capacidade nativa.",
+        403,
+        "SUPER_ADMIN_REQUIRED",
+      );
+    }
+
+    await requireTable(env, "user_permission_denials");
+    await getDb(env)
+      .prepare(
+        `DELETE FROM user_permission_denials
+         WHERE user_id = ? AND organization_id = ? AND permission = ?`,
+      )
+      .bind(userId, id, normalizedPermission)
+      .run();
+
+    await recordAuditLog(env, {
+      actorUserId: actor?.id,
+      organizationId: id,
+      action: "permission.native.restore",
+      resourceType: "user",
+      resourceId: userId,
+      metadata: {
+        permission: normalizedPermission,
+        targetRole: target.role || null,
+        targetAccessLevel: target.access_level || null,
+      },
+    });
+
+    return {
+      userId,
+      organizationId: id,
+      permission: normalizedPermission,
+      native: true,
+      denied: false,
+    };
+  }
+
+  if (await tableExists(env, "user_permission_denials")) {
+    await getDb(env)
+      .prepare(
+        `DELETE FROM user_permission_denials
+         WHERE user_id = ? AND organization_id = ? AND permission = ?`,
+      )
+      .bind(userId, id, normalizedPermission)
+      .run();
+  }
+
   await requireTable(env, "user_permissions");
 
   const columns = await getTableColumns(env, "user_permissions");
@@ -1377,6 +1478,50 @@ export async function revokeOrganizationPermission(env, organizationId, targetUs
   }
 
   assertCanManagePermission(actor, normalizedPermission);
+
+  if (isNativeAdminOrOwnerPermission(target, normalizedPermission)) {
+    if (getActorRole(actor) !== "super_admin") {
+      throw createApiError(
+        "Somente Super Admin pode negar uma capacidade nativa.",
+        403,
+        "SUPER_ADMIN_REQUIRED",
+      );
+    }
+
+    await requireTable(env, "user_permission_denials");
+    const now = nowIso();
+    await getDb(env)
+      .prepare(
+        `INSERT INTO user_permission_denials
+          (user_id, organization_id, permission, denied_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, organization_id, permission)
+         DO UPDATE SET denied_by = excluded.denied_by, updated_at = excluded.updated_at`,
+      )
+      .bind(userId, id, normalizedPermission, actor?.id || null, now, now)
+      .run();
+
+    await recordAuditLog(env, {
+      actorUserId: actor?.id,
+      organizationId: id,
+      action: "permission.native.deny",
+      resourceType: "user",
+      resourceId: userId,
+      metadata: {
+        permission: normalizedPermission,
+        targetRole: target.role || null,
+        targetAccessLevel: target.access_level || null,
+      },
+    });
+
+    return {
+      userId,
+      organizationId: id,
+      permission: normalizedPermission,
+      native: true,
+      denied: true,
+    };
+  }
 
   await requireTable(env, "user_permissions");
 
