@@ -194,6 +194,12 @@ function getOrganizationPermissions(
   return organization?.permissions;
 }
 
+function getOrganizationDeniedPermissions(
+  context: PermissionContext,
+): readonly unknown[] | undefined {
+  return context.organization?.deniedPermissions ?? undefined;
+}
+
 function hasOrganizationInUserList(
   user: AccessControlUser,
   organizationId: string,
@@ -261,6 +267,26 @@ function hasExplicitPermission(
   context: PermissionContext,
 ): boolean {
   return getExplicitPermissions(user, context).includes(permission);
+}
+
+function getExplicitDenials(
+  user: AccessControlUser,
+  context: PermissionContext,
+): Permission[] {
+  return [
+    ...normalizePermissions(user.deniedPermissions),
+    ...normalizePermissions(context.deniedPermissions),
+    ...normalizePermissions(context.project?.deniedPermissions),
+    ...normalizePermissions(getOrganizationDeniedPermissions(context)),
+  ];
+}
+
+function hasExplicitDenial(
+  user: AccessControlUser,
+  permission: Permission,
+  context: PermissionContext,
+): boolean {
+  return getExplicitDenials(user, context).includes(permission);
 }
 
 function hasProjectContext(context: PermissionContext): boolean {
@@ -587,6 +613,13 @@ export function can(
 
   if (role === "super_admin") {
     return true;
+  }
+
+  // Uma negação explícita definida pelo Super Admin prevalece sobre grants,
+  // role_permissions e capacidades nativas do perfil. O bypass acima preserva
+  // o acesso irrestrito do próprio Super Admin.
+  if (hasExplicitDenial(user, permission, context)) {
+    return false;
   }
 
   const explicitPermission = hasExplicitPermission(user, permission, context);

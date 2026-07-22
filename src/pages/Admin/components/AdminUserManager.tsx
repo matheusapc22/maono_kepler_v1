@@ -970,9 +970,10 @@ export default function AdminUserManager({
                   <div className="admin-user-guidance">
                     <strong>Como esta gestão funciona</strong>
                     <span>
-                      As capacidades nativas do perfil são garantidas pelo
-                      código e não aparecem como acessos adicionais. Auditoria e
-                      Painel Admin são exclusivos do Super Admin.
+                      O Super Admin pode conceder acessos adicionais e também
+                      negar ou restaurar capacidades nativas de Admin/Owner por
+                      organização. Auditoria e Painel Admin continuam exclusivos
+                      do Super Admin.
                     </span>
                   </div>
                   {membershipsLoading && (

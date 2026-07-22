@@ -41,6 +41,7 @@ type MaonoOrganization = {
   active?: boolean;
   plan?: string;
   permissions?: Permission[];
+  deniedPermissions?: Permission[];
   scopes?: string[];
   featureFlags?: MaonoFeatureFlag[];
   limits?: MaonoLimits;
@@ -66,6 +67,7 @@ type MaonoUser = {
   organizations?: MaonoOrganization[];
 
   permissions?: Permission[];
+  deniedPermissions?: Permission[];
   scopes?: string[];
   accessLevel?: string | null;
   access_level?: string | null;
@@ -83,6 +85,7 @@ type MaonoProject = {
   accessLevel: "owner" | "editor" | "viewer" | string;
   access_level?: "owner" | "editor" | "viewer" | string;
   permissions?: Permission[];
+  deniedPermissions?: Permission[];
   active?: boolean;
   thumbnailUrl?: string;
   thumbnail_url?: string;
@@ -105,6 +108,7 @@ type PublicSession = {
   projects: MaonoProject[];
   activeOrganization?: MaonoOrganization | null;
   organizations?: MaonoOrganization[];
+  deniedPermissions?: Permission[];
 };
 
 declare global {
@@ -234,6 +238,9 @@ function normalizeOrganization(value: unknown): MaonoOrganization | null {
     active: toBooleanValue(value.active),
     plan: toStringValue(value.plan),
     permissions: toPermissionArray(value.permissions),
+    deniedPermissions: toPermissionArray(
+      value.deniedPermissions ?? value.denied_permissions,
+    ),
     scopes: toStringArray(value.scopes),
     featureFlags: toStringArray(
       value.featureFlags ?? value.feature_flags ?? value.flags,
@@ -304,6 +311,9 @@ function normalizeUser(value: unknown): MaonoUser | null {
     organizations,
 
     permissions: toPermissionArray(value.permissions),
+    deniedPermissions: toPermissionArray(
+      value.deniedPermissions ?? value.denied_permissions,
+    ),
     scopes: toStringArray(value.scopes),
     accessLevel,
     access_level: accessLevel,
@@ -344,6 +354,9 @@ function normalizeProject(value: unknown): MaonoProject | null {
     accessLevel,
     access_level: accessLevel,
     permissions: toPermissionArray(value.permissions),
+    deniedPermissions: toPermissionArray(
+      value.deniedPermissions ?? value.denied_permissions,
+    ),
     active: typeof value.active === "boolean" ? value.active : undefined,
     thumbnailUrl:
       toStringValue(value.thumbnailUrl) ?? toStringValue(value.thumbnail_url),
@@ -371,12 +384,14 @@ function enrichUserWithSessionContext({
   activeOrganization,
   organizations,
   rootPermissions,
+  rootDeniedPermissions,
   rootScopes,
 }: {
   user: MaonoUser;
   activeOrganization: MaonoOrganization | null;
   organizations: MaonoOrganization[];
   rootPermissions: Permission[];
+  rootDeniedPermissions: Permission[];
   rootScopes: string[];
 }): MaonoUser {
   const nextActiveOrganization =
@@ -403,6 +418,10 @@ function enrichUserWithSessionContext({
     organization: nextActiveOrganization,
     organizations: nextOrganizations,
     permissions: mergePermissions(user.permissions, rootPermissions),
+    deniedPermissions: mergePermissions(
+      user.deniedPermissions,
+      rootDeniedPermissions,
+    ),
     scopes: mergeStringArrays(user.scopes, rootScopes),
   };
 }
@@ -422,6 +441,9 @@ function normalizeSessionPayload(value: unknown): PublicSession {
     normalizeOrganization(value.active_organization);
 
   const rootPermissions = toPermissionArray(value.permissions);
+  const rootDeniedPermissions = toPermissionArray(
+    value.deniedPermissions ?? value.denied_permissions,
+  );
   const rootScopes = toStringArray(value.scopes);
 
   const organizations =
@@ -443,6 +465,7 @@ function normalizeSessionPayload(value: unknown): PublicSession {
           activeOrganization,
           organizations,
           rootPermissions,
+          rootDeniedPermissions,
           rootScopes,
         })
       : null;

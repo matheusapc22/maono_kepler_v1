@@ -90,6 +90,20 @@ CREATE TABLE IF NOT EXISTS delegation_target_levels (
   FOREIGN KEY (delegation_id) REFERENCES organization_access_delegations(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS user_permission_denials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  organization_id INTEGER NOT NULL,
+  permission TEXT NOT NULL CHECK (length(permission) BETWEEN 1 AND 120),
+  denied_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, organization_id, permission),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  FOREIGN KEY (denied_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS organization_files (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   organization_id INTEGER,
@@ -170,6 +184,8 @@ CREATE INDEX IF NOT EXISTS idx_access_delegations_delegate ON organization_acces
 CREATE INDEX IF NOT EXISTS idx_access_delegations_enabled ON organization_access_delegations(organization_id, enabled, expires_at);
 CREATE INDEX IF NOT EXISTS idx_delegation_permissions_delegation ON delegation_permissions(delegation_id);
 CREATE INDEX IF NOT EXISTS idx_delegation_target_levels_delegation ON delegation_target_levels(delegation_id);
+CREATE INDEX IF NOT EXISTS idx_user_permission_denials_user_org ON user_permission_denials(user_id, organization_id);
+CREATE INDEX IF NOT EXISTS idx_user_permission_denials_org_permission ON user_permission_denials(organization_id, permission);
 CREATE INDEX IF NOT EXISTS idx_organization_files_org_id ON organization_files(organization_id);
 CREATE INDEX IF NOT EXISTS idx_organization_files_project_id ON organization_files(project_id);
 CREATE INDEX IF NOT EXISTS idx_organization_files_dropbox_path ON organization_files(dropbox_path);
@@ -267,3 +283,12 @@ CREATE INDEX IF NOT EXISTS idx_ticket_events_scope
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_project_id ON audit_logs(project_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+
+CREATE TRIGGER IF NOT EXISTS trg_user_permission_denials_membership_removed
+AFTER DELETE ON organization_users
+FOR EACH ROW
+BEGIN
+  DELETE FROM user_permission_denials
+  WHERE user_id = OLD.user_id
+    AND organization_id = OLD.organization_id;
+END;

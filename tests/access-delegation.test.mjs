@@ -13,13 +13,31 @@ const catalogCodes = new Set(
   DELEGABLE_PERMISSION_CATALOG.map((item) => item.code),
 );
 
-function permissionDb({ memberships = [], projectAccesses = [] } = {}) {
+function permissionDb({
+  memberships = [],
+  projectAccesses = [],
+  denials = [],
+} = {}) {
   return {
     prepare(sql) {
       return {
         bind(...params) {
           return {
             async all() {
+              if (sql.includes("FROM user_permission_denials")) {
+                const [userId, organizationId, permission] = params;
+                return {
+                  results: denials
+                    .filter(
+                      (row) =>
+                        String(row.user_id) === String(userId) &&
+                        String(row.organization_id) ===
+                          String(organizationId) &&
+                        row.permission === permission,
+                    )
+                    .map((row, index) => ({ id: row.id ?? index + 1 })),
+                };
+              }
               if (sql.includes("FROM organization_users")) {
                 const [userId, organizationId] = params;
                 return {
@@ -253,6 +271,71 @@ test("matriz nativa respeita organização ativa, vínculo e perfil", async () =
   );
 });
 
+test("negação do Super Admin prevalece sobre acesso nativo por organização", async () => {
+  const env = {
+    DB: permissionDb({
+      memberships: [
+        { user_id: 2, organization_id: 10, access_level: "owner" },
+        { user_id: 3, organization_id: 10, access_level: "owner" },
+      ],
+      projectAccesses: [
+        { user_id: 3, project_id: 77, access_level: "owner" },
+      ],
+      denials: [
+        {
+          id: 1,
+          user_id: 2,
+          organization_id: 10,
+          permission: "document.download",
+        },
+        {
+          id: 2,
+          user_id: 3,
+          organization_id: 10,
+          permission: "project.save",
+        },
+      ],
+    }),
+  };
+  const admin = { id: 2, role: "admin", activeOrganizationId: 10 };
+  const owner = { id: 3, role: "owner", activeOrganizationId: 10 };
+  const organization = { organizationId: 10 };
+  const project = {
+    organizationId: 10,
+    project: { id: 77, slug: "projeto-77", organization_id: 10 },
+  };
+
+  const adminDenied = await backendCan(
+    env,
+    admin,
+    "document.download",
+    organization,
+  );
+  const ownerDenied = await backendCan(
+    env,
+    owner,
+    "project.save",
+    project,
+  );
+  const superAdminAllowed = await backendCan(
+    env,
+    { id: 2, role: "super_admin" },
+    "document.download",
+    organization,
+  );
+
+  assert.equal(adminDenied.allowed, false);
+  assert.equal(adminDenied.reason, "USER_PERMISSION_EXPLICITLY_DENIED");
+  assert.equal(ownerDenied.allowed, false);
+  assert.equal(ownerDenied.reason, "USER_PERMISSION_EXPLICITLY_DENIED");
+  assert.equal(
+    (await backendCan(env, admin, "ticket.view", organization)).allowed,
+    true,
+  );
+  assert.equal(superAdminAllowed.allowed, true);
+  assert.equal(superAdminAllowed.reason, "SUPER_ADMIN");
+});
+
 test("migration mantém política, whitelist e perfis vinculados à organização", async () => {
   const sql = await readFile(
     new URL("../migrations/0012_access_delegation_policy.sql", import.meta.url),
@@ -272,6 +355,23 @@ test("migration mantém política, whitelist e perfis vinculados à organizaçã
   assert.match(sql, /trg_access_delegation_membership_removed/);
   assert.match(sql, /trg_access_delegation_user_ineligible/);
   assert.match(sql, /SET enabled = 0/);
+});
+
+test("migration cria negações nativas isoladas por usuário e organização", async () => {
+  const sql = await readFile(
+    new URL("../migrations/0013_user_permission_denials.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS user_permission_denials/);
+  assert.match(sql, /UNIQUE\s*\(user_id, organization_id, permission\)/);
+  assert.match(sql, /denied_by INTEGER/);
+  assert.match(sql, /FOREIGN KEY \(denied_by\).*ON DELETE SET NULL/);
+  assert.match(sql, /REFERENCES users\(id\)/);
+  assert.match(sql, /REFERENCES organizations\(id\)/);
+  assert.match(sql, /idx_user_permission_denials_user_org/);
+  assert.match(sql, /idx_user_permission_denials_org_permission/);
+  assert.match(sql, /trg_user_permission_denials_membership_removed/);
 });
 
 test("rotas de grant e revoke usam o mesmo motor de decisão delegado", async () => {
@@ -352,6 +452,9 @@ test("Projects mantém consulta e abre a delegação por usuário elegível", as
   assert.match(managerSource, /allowedTargetLevels/);
   assert.match(managerSource, /actorUserId/);
   assert.match(managerSource, /targetLevel\(person\) === "owner"/);
+  assert.match(managerSource, /deniedPermissions/);
+  assert.match(managerSource, /Acesso nativo negado/);
+  assert.match(managerSource, /baselinePermissions/);
 });
 
 test("Painel Admin centraliza grants e mantém a política exclusiva do Super Admin", async () => {
@@ -426,6 +529,8 @@ test("frontend e backend declaram a mesma matriz nativa revisada", async () => {
   assert.match(clientCanSource, /nativeEditorSave/);
   assert.match(clientCanSource, /PROJECT_MEMBERSHIP_ONLY_PERMISSIONS/);
   assert.match(clientCanSource, /projectCreationPermissionAllows/);
+  assert.match(clientCanSource, /hasExplicitDenial/);
+  assert.match(clientCanSource, /user\.deniedPermissions/);
   assert.match(backendCanSource, /ADMIN_NATIVE_PROJECT_PERSISTENCE/);
   assert.match(backendCanSource, /OWNER_NATIVE_PROJECT_PERSISTENCE/);
   assert.match(backendCanSource, /EDITOR_NATIVE_LINKED_PROJECT_SAVE/);
@@ -435,6 +540,8 @@ test("frontend e backend declaram a mesma matriz nativa revisada", async () => {
   assert.match(backendCanSource, /ADMIN_NATIVE_ORGANIZATION_PERMISSION/);
   assert.match(backendCanSource, /ADMIN_PANEL_SUPER_ADMIN_ONLY/);
   assert.match(backendCanSource, /AUDIT_SUPER_ADMIN_ONLY/);
+  assert.match(backendCanSource, /USER_PERMISSION_EXPLICITLY_DENIED/);
+  assert.match(backendCanSource, /FROM user_permission_denials/);
   assert.match(clientCanSource, /todas as superfícies de Auditoria/);
   assert.ok(
     backendCanSource.indexOf('reason: "SUPER_ADMIN"') <

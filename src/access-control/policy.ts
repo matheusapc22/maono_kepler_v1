@@ -8,6 +8,7 @@ export interface AccessControlOrganization {
   id?: IdLike | null;
   organizationId?: IdLike | null;
   slug?: string | null;
+  deniedPermissions?: readonly string[] | null;
 }
 
 export interface AccessControlProject {
@@ -18,6 +19,7 @@ export interface AccessControlProject {
   accessLevel?: string | null;
   access_level?: string | null;
   permissions?: readonly string[] | null;
+  deniedPermissions?: readonly string[] | null;
 }
 
 export interface AccessControlUser {
@@ -29,6 +31,7 @@ export interface AccessControlUser {
   organization?: AccessControlOrganization | null;
   organizations?: readonly AccessControlOrganization[] | null;
   permissions?: readonly string[] | null;
+  deniedPermissions?: readonly string[] | null;
   scopes?: readonly string[] | null;
 }
 
@@ -39,6 +42,7 @@ export interface PermissionContext {
   projectId?: IdLike | null;
   projectAccessLevel?: string | null;
   permissions?: readonly string[] | null;
+  deniedPermissions?: readonly string[] | null;
   scopes?: readonly string[] | null;
   featureFlags?: readonly string[] | null;
 }
