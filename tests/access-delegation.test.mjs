@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   DELEGABLE_PERMISSION_CATALOG,
+  getAccessGovernanceCapabilities,
   ORGANIZATION_ACCESS_DELEGATE_PERMISSION,
 } from "../functions/_lib/access-governance.js";
 import { can as backendCan } from "../functions/_lib/permissions.js";
@@ -56,7 +57,7 @@ function permissionDb({ memberships = [], projectAccesses = [] } = {}) {
   };
 }
 
-test("Painel Admin é exclusivo e o Super Admin mantém bypass irrestrito", async () => {
+test("Painel Admin e Auditoria são exclusivos do Super Admin", async () => {
   const superAdminDecision = await backendCan(
     {},
     { id: 1, role: "super_admin" },
@@ -69,11 +70,32 @@ test("Painel Admin é exclusivo e o Super Admin mantém bypass irrestrito", asyn
     "admin.panel.access",
     { organizationId: 999 },
   );
+  const superAdminAuditDecision = await backendCan(
+    {},
+    { id: 1, role: "super_admin" },
+    "audit.view",
+    { organizationId: 999 },
+  );
+  const adminAuditDecision = await backendCan(
+    {},
+    {
+      id: 2,
+      role: "admin",
+      activeOrganizationId: 999,
+      permissions: ["audit.view"],
+    },
+    "audit.view",
+    { organizationId: 999 },
+  );
 
   assert.equal(superAdminDecision.allowed, true);
   assert.equal(superAdminDecision.reason, "SUPER_ADMIN");
   assert.equal(adminDecision.allowed, false);
   assert.equal(adminDecision.reason, "ADMIN_PANEL_SUPER_ADMIN_ONLY");
+  assert.equal(superAdminAuditDecision.allowed, true);
+  assert.equal(superAdminAuditDecision.reason, "SUPER_ADMIN");
+  assert.equal(adminAuditDecision.allowed, false);
+  assert.equal(adminAuditDecision.reason, "AUDIT_SUPER_ADMIN_ONLY");
 });
 
 test("catálogo delegado respeita o teto do owner e exclui meta-permissões", () => {
@@ -98,6 +120,17 @@ test("catálogo delegado respeita o teto do owner e exclui meta-permissões", ()
   assert.equal(catalogCodes.has("organization.metrics.view"), true);
   assert.equal(catalogCodes.has("plan.view"), true);
   assert.equal(catalogCodes.has("limits.increase_request"), true);
+});
+
+test("Super Admin pode limpar grants legados de Auditoria, mas não concedê-los", async () => {
+  const capabilities = await getAccessGovernanceCapabilities({}, 10, {
+    id: 1,
+    role: "super_admin",
+  });
+
+  assert.equal(capabilities.grantPermissions.includes("audit.view"), false);
+  assert.equal(capabilities.revokePermissions.includes("audit.view"), true);
+  assert.equal(capabilities.allowedPermissions.includes("audit.view"), true);
 });
 
 test("matriz nativa respeita organização ativa, vínculo e perfil", async () => {
@@ -344,7 +377,14 @@ test("Painel Admin centraliza grants e mantém a política exclusiva do Super Ad
   assert.match(source, /OrganizationPermissionManager/);
   assert.match(source, /mode="admin"/);
   assert.match(source, /isSuperAdmin &&/);
-  assert.match(source, /Acessos e delegação/);
+  assert.match(source, /Dados do usuário/);
+  assert.match(source, /selectedView === "organizations"/);
+  assert.match(source, /selectedView === "features"/);
+  assert.match(source, /selectedView === "delegation"/);
+  assert.match(source, /Abrir concessão\/revogação/);
+  assert.match(source, /setAccessEditor/);
+  assert.match(source, /Configurar delegação/);
+  assert.doesNotMatch(source, /selectedView === "accesses"/);
   assert.match(source, /admin-user-filters/);
   assert.match(source, /organizationFilter/);
   assert.match(source, /profileFilter/);
@@ -394,6 +434,8 @@ test("frontend e backend declaram a mesma matriz nativa revisada", async () => {
   assert.match(backendCanSource, /PROJECT_MEMBERSHIP_REQUIRED/);
   assert.match(backendCanSource, /ADMIN_NATIVE_ORGANIZATION_PERMISSION/);
   assert.match(backendCanSource, /ADMIN_PANEL_SUPER_ADMIN_ONLY/);
+  assert.match(backendCanSource, /AUDIT_SUPER_ADMIN_ONLY/);
+  assert.match(clientCanSource, /todas as superfícies de Auditoria/);
   assert.ok(
     backendCanSource.indexOf('reason: "SUPER_ADMIN"') <
       backendCanSource.indexOf(

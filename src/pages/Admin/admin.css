@@ -295,9 +295,11 @@
 }
 
 .admin-user-dialog {
-  width: min(850px,100%);
+  width: min(1080px,100%);
   max-height: 92vh;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--mm-border-strong);
   border-radius: 18px;
   background: #0d1218;
@@ -309,6 +311,7 @@
 }
 
 .admin-user-dialog > header {
+  flex: 0 0 auto;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -318,6 +321,16 @@
   padding: 20px 22px;
   border-bottom: 1px solid var(--mm-border);
   background: #11171e;
+}
+
+.admin-user-dialog-title {
+  min-width: 0;
+  display: block;
+}
+
+.admin-user-dialog-title h3,
+.admin-user-dialog-title p {
+  display: block;
 }
 
 .admin-user-dialog > header span {
@@ -349,9 +362,17 @@
   padding: 22px;
 }
 
+.admin-user-dialog-body {
+  min-height: 0;
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px 22px;
+  overflow: auto;
+}
+
 .admin-user-dialog-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 5px;
   border: 1px solid var(--mm-border);
@@ -360,19 +381,76 @@
 }
 
 .admin-user-dialog-tabs button {
-  min-height: 42px;
+  min-height: 70px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
   border: 1px solid transparent;
   border-radius: 8px;
+  padding: 10px 12px;
   color: var(--mm-muted);
   background: transparent;
   font-weight: 800;
+  text-align: left;
   cursor: pointer;
+}
+
+.admin-user-dialog-tabs button strong,
+.admin-user-dialog-tabs button small {
+  display: block;
+}
+
+.admin-user-dialog-tabs button small {
+  color: var(--mm-muted);
+  font-size: .68rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .admin-user-dialog-tabs button.active {
   border-color: rgba(214, 168, 79, .4);
   color: var(--admin-gold-bright);
   background: rgba(214, 168, 79, .1);
+}
+
+.admin-user-dialog-tabs button.active small {
+  color: #d8c79f;
+}
+
+.admin-user-profile-form {
+  gap: 14px !important;
+  padding: 0 !important;
+}
+
+.admin-user-management-panel {
+  display: grid;
+  gap: 13px;
+  border: 1px solid var(--mm-border);
+  border-radius: 12px;
+  padding: 16px;
+  background: #0a1016;
+}
+
+.admin-user-management-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+
+.admin-user-management-panel > header h4 {
+  margin: 0;
+  color: #f4f1e8;
+}
+
+.admin-user-management-panel > header p {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--mm-muted);
+  font-size: .78rem;
+  line-height: 1.5;
 }
 
 .admin-user-form-grid {
@@ -396,6 +474,7 @@
 .admin-user-form-grid input,
 .admin-user-form-grid select,
 .admin-memberships select,
+.admin-membership-level select,
 .delegation-policy-section input[type="datetime-local"] {
   height: 43px;
   padding: 0 11px;
@@ -403,6 +482,121 @@
   border-radius: 9px;
   color: #f4f5f6;
   background: #080d12;
+}
+
+.admin-organization-membership-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(230px, 320px) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--mm-border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #0d141b;
+}
+
+.admin-membership-switch {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.admin-membership-switch span,
+.admin-membership-switch strong,
+.admin-membership-switch small {
+  display: block;
+}
+
+.admin-membership-switch small,
+.admin-functionality-scopes small {
+  margin-top: 3px;
+  color: var(--mm-muted);
+}
+
+.admin-membership-level {
+  display: grid;
+  gap: 5px;
+  color: #d9dde1;
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.admin-membership-state {
+  min-width: 82px;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--mm-muted);
+  font-size: .68rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.admin-membership-state.active {
+  border-color: rgba(34,197,94,.36);
+  color: #bbf7d0;
+  background: rgba(34,197,94,.08);
+}
+
+.admin-user-guidance {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(59,130,246,.3);
+  border-left: 3px solid #3b82f6;
+  border-radius: 9px;
+  padding: 11px 13px;
+  color: #dbeafe;
+  background: rgba(59,130,246,.07);
+}
+
+.admin-user-guidance.warning {
+  border-color: rgba(214,168,79,.32);
+  border-left-color: var(--admin-gold);
+  color: #f5e8c7;
+  background: rgba(214,168,79,.07);
+}
+
+.admin-user-guidance span {
+  color: inherit;
+  font-size: .76rem;
+  line-height: 1.5;
+}
+
+.admin-functionality-scopes {
+  display: grid;
+  gap: 9px;
+}
+
+.admin-functionality-scopes article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--mm-border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #0d141b;
+}
+
+.admin-functionality-scopes strong,
+.admin-functionality-scopes small {
+  display: block;
+}
+
+.admin-user-profile-actions,
+.admin-user-section-actions {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 9px;
+  padding-top: 0 !important;
+}
+
+.admin-user-section-actions {
+  grid-template-columns: 1fr auto;
+}
+
+.admin-user-section-actions .mm-btn {
+  grid-column: 2;
 }
 
 .admin-memberships {
@@ -465,6 +659,14 @@
   grid-template-columns: auto 1fr auto auto;
   gap: 9px;
   padding-top: 4px;
+}
+
+.admin-user-dialog footer.admin-user-section-actions {
+  grid-template-columns: 1fr auto;
+}
+
+.admin-user-dialog footer.admin-user-section-actions .mm-btn {
+  grid-column: 2;
 }
 
 .mm-btn.danger {
@@ -672,6 +874,16 @@
   .admin-user-filters .wide {
     grid-column: 1 / -1;
   }
+  .admin-user-dialog-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-organization-membership-row {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  }
+  .admin-organization-membership-row .admin-membership-state {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
   .admin-memberships > div:not(.admin-memberships-heading) {
     grid-template-columns: minmax(0, 1fr) 160px;
   }
@@ -698,11 +910,36 @@
   .admin-user-form-grid .wide {
     grid-column: 1;
   }
+  .admin-user-dialog-body {
+    padding: 14px;
+  }
+  .admin-user-dialog-tabs {
+    grid-template-columns: 1fr;
+  }
+  .admin-organization-membership-row,
+  .admin-functionality-scopes article {
+    grid-template-columns: 1fr;
+  }
+  .admin-organization-membership-row .admin-membership-state {
+    grid-column: 1;
+  }
+  .admin-functionality-scopes article .mm-btn {
+    width: 100%;
+  }
   .admin-memberships > div:not(.admin-memberships-heading) {
     grid-template-columns: 1fr;
   }
   .admin-user-dialog footer {
     grid-template-columns: 1fr 1fr;
+  }
+  .admin-user-dialog footer.admin-user-profile-actions,
+  .admin-user-dialog footer.admin-user-section-actions {
+    grid-template-columns: 1fr;
+  }
+  .admin-user-dialog footer.admin-user-profile-actions .mm-btn,
+  .admin-user-dialog footer.admin-user-section-actions .mm-btn {
+    grid-column: 1;
+    width: 100%;
   }
   .admin-user-dialog footer span {
     display: none;

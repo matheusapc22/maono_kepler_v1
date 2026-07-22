@@ -49,7 +49,14 @@ const SUPER_ADMIN_PROJECTS_PERMISSIONS = Object.freeze([
   "users.delete",
   "users.invite",
   "organization.edit",
+]);
+
+const SUPER_ADMIN_REVOKE_ONLY_PERMISSIONS = Object.freeze([
   "audit.view",
+  "audit.export",
+  "audit.security.view",
+  "audit.platform.view",
+  "audit.organization.view",
 ]);
 
 function getDb(env) {
@@ -238,15 +245,20 @@ export async function getAccessGovernanceCapabilities(env, organizationIdValue, 
   await ensureOrganizationContext(actor, organizationId);
 
   if (isSuperAdmin(actor)) {
+    const revokePermissions = [
+      ...SUPER_ADMIN_PROJECTS_PERMISSIONS,
+      ...SUPER_ADMIN_REVOKE_ONLY_PERMISSIONS,
+    ];
+
     return {
       mode: "super_admin",
       organizationId,
       canManageAdditionalAccesses: true,
       canGrant: true,
       canRevoke: true,
-      allowedPermissions: [...SUPER_ADMIN_PROJECTS_PERMISSIONS],
+      allowedPermissions: [...revokePermissions],
       grantPermissions: [...SUPER_ADMIN_PROJECTS_PERMISSIONS],
-      revokePermissions: [...SUPER_ADMIN_PROJECTS_PERMISSIONS],
+      revokePermissions,
       allowedTargetLevels: ["viewer", "editor", "owner"],
       delegation: null,
       reason: "SUPER_ADMIN",
@@ -364,6 +376,17 @@ export async function authorizeOrganizationPermissionMutation({
     }
 
     if (isSuperAdmin(actor)) {
+      if (
+        normalizedOperation === "grant" &&
+        normalizedPermission.startsWith("audit.")
+      ) {
+        throw apiError(
+          "Auditoria é uma capacidade exclusiva do Super Admin e não pode ser concedida.",
+          403,
+          "AUDIT_SUPER_ADMIN_ONLY",
+        );
+      }
+
       return { allowed: true, reason: "SUPER_ADMIN", target };
     }
 
