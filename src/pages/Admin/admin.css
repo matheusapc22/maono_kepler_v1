@@ -346,7 +346,7 @@
 
 .admin-memberships > div:not(.admin-memberships-heading) {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 170px 150px;
+  grid-template-columns: minmax(210px, 1fr) 145px 145px 145px;
   align-items: center;
   gap: 12px;
   padding: 11px;
