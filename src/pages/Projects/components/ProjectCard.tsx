@@ -21,6 +21,114 @@ type ProjectCardProps = {
   onThumbnailSettled?: (project: ProjectListItem) => void;
 };
 
+function OwnerIcon() {
+  return (
+    <svg
+      className="mm-project-card__chip-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg
+      className="mm-project-card__metadata-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M12 7v5l3 2"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function TagIcon() {
+  return (
+    <svg
+      className="mm-project-card__metadata-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M4 5h7.6a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.8l-4.6 4.6a2 2 0 0 1-2.8 0L5.6 13A2 2 0 0 1 5 11.6V5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <circle cx="9" cy="9" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg
+      className="mm-project-card__open-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M5 12h13m-5-5 5 5-5 5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function FavoriteIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      className="mm-project-card__favorite-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="m12 3 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 17.03l-5.5 2.89 1.05-6.12L3.1 9.47l6.15-.9L12 3Z"
+        fill={active ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   canSave,
@@ -146,6 +254,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 : "Adicionar projeto aos favoritos"
             }
             aria-pressed={isFavorite}
+            aria-busy={favoriteBusy}
             title={
               isFavorite
                 ? "Remover dos favoritos"
@@ -158,7 +267,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               void onFavoriteToggle?.(project);
             }}
           >
-            <span aria-hidden="true">{isFavorite ? "★" : "☆"}</span>
+            <FavoriteIcon active={isFavorite} />
             {favoriteBusy ? (
               <span className="mm-sr-only" role="status">
                 Atualizando favorito.
@@ -172,17 +281,20 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         <div className="mm-project-card__status" aria-label="Acesso ao projeto">
           {isOwner ? (
             <span className="mm-project-card__chip is-owner">
-              Proprietário
+              <OwnerIcon />
+              <span>Proprietário</span>
             </span>
           ) : null}
 
           {canSave ? (
             <span className="mm-project-card__chip is-save">
-              Pode salvar
+              <span className="mm-project-card__status-dot" aria-hidden="true" />
+              <span>Pode salvar</span>
             </span>
           ) : (
             <span className="mm-project-card__chip is-read-only">
-              Somente leitura
+              <span className="mm-project-card__status-dot" aria-hidden="true" />
+              <span>Somente leitura</span>
             </span>
           )}
         </div>
@@ -198,16 +310,26 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
         <footer className="mm-project-card__footer">
           <div className="mm-project-card__metadata">
-            <span>
-              {formatProjectRelativeDate(
-                project.updatedAt || project.createdAt,
-              )}
+            <span className="mm-project-card__metadata-item">
+              <ClockIcon />
+              <span>
+                {formatProjectRelativeDate(
+                  project.updatedAt || project.createdAt,
+                )}
+              </span>
             </span>
+
             <span
-              className="mm-project-card__slug"
+              className="mm-project-card__metadata-divider"
+              aria-hidden="true"
+            />
+
+            <span
+              className="mm-project-card__metadata-item mm-project-card__metadata-slug"
               title={project.slug}
             >
-              {project.slug}
+              <TagIcon />
+              <span className="mm-project-card__slug">{project.slug}</span>
             </span>
           </div>
 
@@ -225,7 +347,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               onOpen?.(project);
             }}
           >
-            {opening ? "Abrindo..." : "Abrir projeto"}
+            <span>{opening ? "Abrindo..." : "Abrir projeto"}</span>
+            <ArrowIcon />
           </Link>
         </footer>
       </div>
