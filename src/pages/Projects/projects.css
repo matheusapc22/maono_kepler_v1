@@ -3048,252 +3048,13 @@
 
 /* =========================================================
    8. CARDS DE PROJETO
+
+   Os estilos da grade e dos cards foram isolados em:
+   ./components/project-cards.css
+
+   Este arquivo permanece responsável pelo layout geral, sidebar,
+   topbar, seções administrativas, chamados e roadmap.
 ========================================================= */
-
-.mm-project-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(230px, 1fr));
-  grid-auto-rows: 390px;
-  align-items: stretch;
-  gap: 16px;
-}
-
-.mm-project-card-link {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  color: inherit;
-  text-decoration: none;
-}
-
-.mm-project-card {
-  width: 100%;
-  height: 390px;
-  min-width: 0;
-  position: relative;
-  overflow: hidden;
-  box-sizing: border-box;
-  border: 1px solid var(--mm-border);
-  border-radius: var(--mm-radius-lg);
-  padding: 10px;
-  background: var(--mm-surface);
-  transition:
-    background 180ms ease,
-    border-color 180ms ease;
-}
-
-.mm-project-favorite {
-  width: 36px;
-  height: 36px;
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  z-index: 5;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--mm-border-strong);
-  border-radius: 10px;
-  background: rgba(10, 14, 20, 0.88);
-  color: var(--mm-text);
-  cursor: pointer;
-}
-
-.mm-project-favorite.active {
-  color: var(--mm-gold-bright);
-  border-color: rgba(242, 199, 102, 0.58);
-}
-
-.mm-project-favorite:disabled {
-  cursor: wait;
-  opacity: 0.62;
-}
-
-.mm-project-card:hover {
-  background: #131820;
-  border-color: rgba(214, 168, 79, .44);
-}
-
-.mm-project-thumb {
-  height: 156px;
-  min-height: 156px;
-  max-height: 156px;
-  flex: 0 0 156px;
-  border: 1px solid var(--mm-border-strong);
-  border-radius: var(--mm-radius-md);
-  overflow: hidden;
-  position: relative;
-  background: var(--mm-surface-3);
-}
-
-.mm-project-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-}
-
-.mm-project-thumb-fallback {
-  width: 100%;
-  height: 100%;
-  background-color: var(--mm-bg);
-  background-image: var(--thumb-census-maono);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 132px auto;
-}
-
-.mm-project-thumb::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: linear-gradient(90deg, rgba(214, 168, 79, .9), rgba(32, 199, 181, .72));
-  pointer-events: none;
-}
-
-.mm-thumb-badge {
-  position: absolute;
-  bottom: 10px;
-  border: 1px solid rgba(255, 255, 255, .18);
-  border-radius: var(--mm-radius-sm);
-  padding: 4px 7px;
-  font-size: 11px;
-  font-weight: 900;
-  backdrop-filter: blur(8px);
-}
-
-.mm-thumb-badge.left {
-  left: 10px;
-  background: rgba(244, 241, 232, .88);
-  color: #111827;
-}
-
-.mm-thumb-badge.right {
-  right: 10px;
-  background: rgba(13, 31, 24, .86);
-  color: #bbf7d0;
-  border-color: rgba(34, 197, 94, .35);
-}
-
-.mm-project-card-body {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  padding: 10px 2px 2px;
-}
-
-.mm-project-title-row {
-  min-height: 52px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.mm-project-title-row > div {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.mm-project-title-row h2 {
-  margin: 0;
-  color: var(--mm-text);
-  font-size: 15px;
-  line-height: 1.25;
-  font-weight: 900;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.mm-project-title-row p {
-  margin: 4px 0 0;
-  color: var(--mm-text-soft);
-  font-size: 12px;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mm-tag {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(32, 199, 181, .28);
-  border-radius: var(--mm-radius-sm);
-  padding: 4px 7px;
-  background: rgba(32, 199, 181, .08);
-  color: #9af5eb;
-  font-size: 11px;
-  font-weight: 900;
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-.mm-tag.gold {
-  border-color: rgba(214, 168, 79, .36);
-  background: rgba(214, 168, 79, .08);
-  color: var(--mm-gold-bright);
-}
-
-.mm-tag.green {
-  border-color: rgba(34, 197, 94, .32);
-  background: rgba(34, 197, 94, .08);
-  color: #bbf7d0;
-}
-
-.mm-tag.red {
-  border-color: rgba(239, 68, 68, .32);
-  background: rgba(239, 68, 68, .08);
-  color: #fecaca;
-}
-
-.mm-project-desc {
-  height: 52px;
-  min-height: 52px;
-  margin: 10px 0;
-  color: #c7ced8;
-  font-size: 12px;
-  line-height: 1.45;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.mm-project-meta {
-  min-height: 18px;
-  max-height: 34px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  color: var(--mm-muted);
-  font-size: 12px;
-  overflow: hidden;
-}
-
-.mm-card-action {
-  margin-top: auto;
-  border: 1px solid var(--mm-border);
-  border-radius: var(--mm-radius-md);
-  padding: 8px 11px;
-  color: var(--mm-gold-bright);
-  font-size: 12px;
-  font-weight: 900;
-  background: #16140d;
-}
-
-.mm-project-card:hover .mm-card-action {
-  border-color: rgba(242, 199, 102, .58);
-}
 
 /* =========================================================
    9. ESTADOS VAZIOS E SEÇÕES INTERNAS
@@ -3421,7 +3182,6 @@
 ========================================================= */
 
 @media (max-width: 1200px) {
-  .mm-project-grid,
   .mm-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3459,7 +3219,6 @@
     justify-content: center;
   }
 
-  .mm-project-grid,
   .mm-metrics-grid,
   .mm-metrics-grid.compact {
     grid-template-columns: 1fr;

@@ -1,134 +1,47 @@
 import React from "react";
 import { Link } from "react-router";
 
-import type { MaonoUser } from "../../../auth/session";
 import { Skeleton } from "../../../components/loading/Skeleton";
 import type { ProjectListItem } from "../projects-api";
+import {
+  formatProjectRelativeDate,
+  normalizeProjectAccessLevel,
+  projectThumbnailUrl,
+} from "./project-card-utils";
 
 type ProjectCardProps = {
   project: ProjectListItem;
-  user: MaonoUser | null;
   canSave: boolean;
   canFavorite: boolean;
   favoriteBusy?: boolean;
   holdThumbnailShimmer?: boolean;
+  opening?: boolean;
+  onOpen?: (project: ProjectListItem) => void;
   onFavoriteToggle?: (project: ProjectListItem) => void | Promise<void>;
   onThumbnailSettled?: (project: ProjectListItem) => void;
 };
 
-function normalize(value?: string | null) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function parseApiDate(value?: string) {
-  const trimmed = String(value || "").trim();
-
-  if (!trimmed) {
-    return null;
-  }
-
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
-    return new Date(`${trimmed.replace(" ", "T")}Z`);
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(trimmed)) {
-    return new Date(`${trimmed}Z`);
-  }
-
-  return new Date(trimmed);
-}
-
-function formatDate(value?: string) {
-  if (!value) {
-    return "Não informado";
-  }
-
-  try {
-    const date = parseApiDate(value);
-
-    if (!date || Number.isNaN(date.getTime())) {
-      return value;
-    }
-
-    return new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
-  } catch {
-    return value;
-  }
-}
-
-function relativeUpdateLabel(value?: string) {
-  if (!value) {
-    return "Atualização não informada";
-  }
-
-  const date = parseApiDate(value);
-
-  if (!date || Number.isNaN(date.getTime())) {
-    return `Atualizado em ${value}`;
-  }
-
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  const diffMonths = Math.floor(diffDays / 30);
-
-  if (diffMinutes < 1) return "Atualizado agora";
-  if (diffMinutes < 60) return `Atualizado há ${diffMinutes} min`;
-  if (diffHours < 24) return `Atualizado há ${diffHours} h`;
-  if (diffDays < 30) return `Atualizado há ${diffDays} dia${diffDays > 1 ? "s" : ""}`;
-  if (diffMonths < 12) return `Atualizado há ${diffMonths} mês${diffMonths > 1 ? "es" : ""}`;
-
-  return `Atualizado em ${formatDate(value)}`;
-}
-
-function permissionLabel(value?: string) {
-  const labels: Record<string, string> = {
-    viewer: "Visualização",
-    editor: "Edição",
-    owner: "Proprietário",
-    client: "Proprietário",
-  };
-
-  return labels[normalize(value)] || value || "Acesso";
-}
-
-export function projectThumbnailUrl(project: ProjectListItem) {
-  if (project.thumbnailUrl) {
-    return project.thumbnailUrl;
-  }
-
-  const stableVersion = project.updatedAt || project.createdAt || project.slug;
-  const cacheKey = encodeURIComponent(stableVersion);
-  return `/api/projects/${encodeURIComponent(project.slug)}/thumbnail?v=${cacheKey}`;
-}
-
-export function projectThumbnailKey(project: ProjectListItem) {
-  return `${project.slug}::${projectThumbnailUrl(project)}`;
-}
-
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
-  user,
   canSave,
   canFavorite,
   favoriteBusy = false,
   holdThumbnailShimmer = false,
+  opening = false,
+  onOpen,
   onFavoriteToggle,
   onThumbnailSettled,
 }) => {
   const thumbnailUrl = projectThumbnailUrl(project);
+  const sourceVersionRef = React.useRef(0);
   const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
   const [thumbnailMissing, setThumbnailMissing] = React.useState(false);
   const isFavorite = Boolean(project.favorite || project.favorited);
+  const accessLevel = normalizeProjectAccessLevel(project.accessLevel);
+  const isOwner = accessLevel === "owner";
 
   React.useEffect(() => {
+    sourceVersionRef.current += 1;
     setThumbnailLoaded(false);
     setThumbnailMissing(false);
   }, [thumbnailUrl]);
@@ -137,14 +50,20 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     async (event: React.SyntheticEvent<HTMLImageElement>) => {
       const image = event.currentTarget;
       const loadedSource = image.currentSrc || image.src;
+      const sourceVersion = sourceVersionRef.current;
 
-      try {
-        await image.decode();
-      } catch {
-        // onLoad já confirma bytes válidos; decode pode rejeitar em alguns browsers.
+      if (typeof image.decode === "function") {
+        try {
+          await image.decode();
+        } catch {
+          // onLoad já confirmou a leitura dos bytes.
+        }
       }
 
-      if ((image.currentSrc || image.src) !== loadedSource) {
+      if (
+        sourceVersion !== sourceVersionRef.current ||
+        (image.currentSrc || image.src) !== loadedSource
+      ) {
         return;
       }
 
@@ -155,102 +74,161 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     [onThumbnailSettled, project],
   );
 
-  const handleThumbnailError = React.useCallback(() => {
-    setThumbnailLoaded(false);
-    setThumbnailMissing(true);
-    onThumbnailSettled?.(project);
-  }, [onThumbnailSettled, project]);
+  const handleThumbnailError = React.useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const image = event.currentTarget;
+      const failedSource = image.getAttribute("src");
+
+      if (failedSource !== thumbnailUrl) {
+        return;
+      }
+
+      setThumbnailLoaded(false);
+      setThumbnailMissing(true);
+      onThumbnailSettled?.(project);
+    },
+    [onThumbnailSettled, project, thumbnailUrl],
+  );
 
   const showThumbnailShimmer =
     holdThumbnailShimmer || (!thumbnailLoaded && !thumbnailMissing);
   const revealThumbnail = thumbnailLoaded && !holdThumbnailShimmer;
+  const cardClassName = [
+    "mm-project-card",
+    holdThumbnailShimmer ? "is-media-pending" : "",
+    opening ? "is-opening" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <article
-      className={
-        holdThumbnailShimmer
-          ? "mm-project-card is-media-pending"
-          : "mm-project-card"
-      }
-      aria-busy={holdThumbnailShimmer}
-    >
-      {canFavorite && (
-        <button
-          type="button"
-          className={isFavorite ? "mm-project-favorite active" : "mm-project-favorite"}
-          aria-label={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-          title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-          disabled={favoriteBusy}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            void onFavoriteToggle?.(project);
-          }}
-        >
-          {isFavorite ? "★" : "☆"}
-        </button>
-      )}
+    <article className={cardClassName} aria-busy={holdThumbnailShimmer}>
+      <div className="mm-project-card__preview">
+        {showThumbnailShimmer ? (
+          <Skeleton
+            className="mm-project-card__preview-loading"
+            radius={0}
+          />
+        ) : null}
 
-      <Link
-        to={`/projects/${encodeURIComponent(project.slug)}/map`}
-        className="mm-project-card-link"
-      >
-        <div className="mm-project-thumb">
-          {showThumbnailShimmer ? (
-            <Skeleton className="mm-project-thumb-loading" radius={0} />
+        {!thumbnailMissing ? (
+          <img
+            src={thumbnailUrl}
+            alt={`Prévia do projeto ${project.name}`}
+            loading="eager"
+            decoding="async"
+            className={revealThumbnail ? "is-loaded" : "is-loading"}
+            onLoad={handleThumbnailLoad}
+            onError={handleThumbnailError}
+          />
+        ) : (
+          <div
+            className="mm-project-card__preview-fallback"
+            role="img"
+            aria-label={`Prévia indisponível para o projeto ${project.name}`}
+          >
+            <span aria-hidden="true">◇</span>
+            <strong>Prévia indisponível</strong>
+          </div>
+        )}
+
+        {canFavorite ? (
+          <button
+            type="button"
+            className={
+              isFavorite
+                ? "mm-project-card__favorite is-active"
+                : "mm-project-card__favorite"
+            }
+            aria-label={
+              isFavorite
+                ? "Remover projeto dos favoritos"
+                : "Adicionar projeto aos favoritos"
+            }
+            aria-pressed={isFavorite}
+            title={
+              isFavorite
+                ? "Remover dos favoritos"
+                : "Adicionar aos favoritos"
+            }
+            disabled={favoriteBusy}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void onFavoriteToggle?.(project);
+            }}
+          >
+            <span aria-hidden="true">{isFavorite ? "★" : "☆"}</span>
+            {favoriteBusy ? (
+              <span className="mm-sr-only" role="status">
+                Atualizando favorito.
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="mm-project-card__content">
+        <div className="mm-project-card__status" aria-label="Acesso ao projeto">
+          {isOwner ? (
+            <span className="mm-project-card__chip is-owner">
+              Proprietário
+            </span>
           ) : null}
 
-          {!thumbnailMissing && (
-            <img
-              src={thumbnailUrl}
-              alt={`Preview do projeto ${project.name}`}
-              loading="eager"
-              decoding="async"
-              className={revealThumbnail ? "is-loaded" : "is-loading"}
-              onLoad={handleThumbnailLoad}
-              onError={handleThumbnailError}
-            />
-          )}
-
-          {thumbnailMissing && (
-            <div className="mm-project-thumb-fallback" aria-hidden="true" />
-          )}
-
-          <span className="mm-thumb-badge left">
-            {permissionLabel(project.accessLevel)}
-          </span>
-
-          {!thumbnailMissing && (
-            <span className="mm-thumb-badge right">Preview salvo</span>
+          {canSave ? (
+            <span className="mm-project-card__chip is-save">
+              Pode salvar
+            </span>
+          ) : (
+            <span className="mm-project-card__chip is-read-only">
+              Somente leitura
+            </span>
           )}
         </div>
 
-        <div className="mm-project-card-body">
-          <div className="mm-project-title-row">
-            <div>
-              <h2>{project.name}</h2>
-              <p>{user?.name || user?.email}</p>
-            </div>
+        <header className="mm-project-card__header">
+          <h2 title={project.name}>{project.name}</h2>
+        </header>
 
-            <span className={canSave ? "mm-tag green" : "mm-tag red"}>
-              {canSave ? "Pode salvar" : "Não salva"}
+        <p className="mm-project-card__description">
+          {project.description ||
+            "Projeto geográfico disponível para consulta e análise."}
+        </p>
+
+        <footer className="mm-project-card__footer">
+          <div className="mm-project-card__metadata">
+            <span>
+              {formatProjectRelativeDate(
+                project.updatedAt || project.createdAt,
+              )}
+            </span>
+            <span
+              className="mm-project-card__slug"
+              title={project.slug}
+            >
+              {project.slug}
             </span>
           </div>
 
-          <p className="mm-project-desc">
-            {project.description ||
-              "Projeto geográfico disponível para consulta e análise."}
-          </p>
+          <Link
+            to={`/projects/${encodeURIComponent(project.slug)}/map`}
+            className="mm-project-card__open"
+            aria-disabled={opening}
+            tabIndex={opening ? -1 : 0}
+            onClick={(event) => {
+              if (opening) {
+                event.preventDefault();
+                return;
+              }
 
-          <div className="mm-project-meta">
-            <span>{relativeUpdateLabel(project.updatedAt || project.createdAt)}</span>
-            <span>•</span>
-            <span>{project.slug}</span>
-          </div>
-
-          <div className="mm-card-action">Abrir mapa</div>
-        </div>
-      </Link>
+              onOpen?.(project);
+            }}
+          >
+            {opening ? "Abrindo..." : "Abrir projeto"}
+          </Link>
+        </footer>
+      </div>
     </article>
   );
 };

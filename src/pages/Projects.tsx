@@ -34,6 +34,7 @@ import {
   type ProjectSectionKey,
 } from "./Projects/projects-api";
 import "./Projects/projects.css";
+import "./Projects/components/project-cards.css";
 
 const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = {
   files: PERMISSION.DOCUMENT_VIEW,
@@ -526,7 +527,6 @@ const ProjectsPage: React.FC = () => {
                 section={sidebarSection}
                 projects={visibleProjectItems}
                 searchQuery={searchQuery}
-                user={user}
                 loading={projectsLoading}
                 error={projectsError}
                 favoriteBusySlugs={favoriteBusySlugs}

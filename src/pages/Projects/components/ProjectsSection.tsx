@@ -1,15 +1,19 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-import type { MaonoUser } from "../../../auth/session";
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
 import type { ProjectListItem, ProjectSectionKey } from "../projects-api";
-import ProjectCard, { projectThumbnailKey } from "./ProjectCard";
+import ProjectCard from "./ProjectCard";
+import { projectThumbnailKey } from "./project-card-utils";
 
 type ProjectsSectionProps = {
   section: ProjectSectionKey;
   projects: ProjectListItem[];
   searchQuery: string;
-  user: MaonoUser | null;
   loading?: boolean;
   error?: string | null;
   favoriteBusySlugs?: Record<string, true>;
@@ -85,7 +89,6 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   section,
   projects,
   searchQuery,
-  user,
   loading = false,
   error = null,
   favoriteBusySlugs = {},
@@ -101,13 +104,17 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   const [settledThumbnailKeys, setSettledThumbnailKeys] = useState<
     Record<string, true>
   >({});
+  const [openingSlug, setOpeningSlug] = useState<string | null>(null);
+
   const visibleThumbnailKeys = useMemo(
     () => filteredProjects.map(projectThumbnailKey),
     [filteredProjects],
   );
+
   const allVisibleThumbnailsSettled =
     visibleThumbnailKeys.length === 0 ||
     visibleThumbnailKeys.every((key) => settledThumbnailKeys[key]);
+
   const handleThumbnailSettled = useCallback((project: ProjectListItem) => {
     const thumbnailKey = projectThumbnailKey(project);
 
@@ -121,21 +128,30 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     );
   }, []);
 
+  useEffect(() => {
+    if (
+      openingSlug &&
+      !filteredProjects.some((project) => project.slug === openingSlug)
+    ) {
+      setOpeningSlug(null);
+    }
+  }, [filteredProjects, openingSlug]);
+
   if (loading && projects.length === 0) {
     return <ProjectGridSkeleton />;
   }
 
   if (error) {
     return (
-      <section className="mm-empty-state">
+      <section className="mm-empty-state" role="alert">
         <div>!</div>
         <h2>Não foi possível carregar os projetos</h2>
         <p>{error}</p>
-        {onRetry && (
+        {onRetry ? (
           <button type="button" className="mm-btn" onClick={onRetry}>
             Tentar novamente
           </button>
-        )}
+        ) : null}
       </section>
     );
   }
@@ -160,26 +176,33 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     );
   }
 
+  const thumbnailsPending = !allVisibleThumbnailsSettled;
+
   return (
     <section
       className="mm-project-grid"
-      aria-busy={loading || !allVisibleThumbnailsSettled}
+      aria-busy={loading || thumbnailsPending}
+      aria-label="Projetos disponíveis"
     >
       {filteredProjects.map((project) => (
         <ProjectCard
           key={project.slug}
           project={project}
-          user={user}
           canSave={canProjectSave(project)}
           canFavorite={canProjectFavorite(project)}
           favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
-          holdThumbnailShimmer={!allVisibleThumbnailsSettled}
+          holdThumbnailShimmer={thumbnailsPending}
+          opening={openingSlug === project.slug}
+          onOpen={(selectedProject) => {
+            setOpeningSlug(selectedProject.slug);
+          }}
           onFavoriteToggle={onFavoriteToggle}
           onThumbnailSettled={handleThumbnailSettled}
         />
       ))}
-      {loading || !allVisibleThumbnailsSettled ? (
-        <span className="mm-sr-only" role="status">
+
+      {loading || thumbnailsPending ? (
+        <span className="mm-sr-only" role="status" aria-live="polite">
           {loading
             ? "Atualizando projetos."
             : "Carregando imagens dos projetos."}

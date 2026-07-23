@@ -88,24 +88,36 @@ export function MetricsSkeleton({ count = 4 }: CountProps) {
 
 export function ProjectCardSkeleton() {
   return (
-    <article className="mm-project-card mm-project-skeleton" aria-hidden="true">
-      <div className="mm-project-thumb">
+    <article
+      className="mm-project-card mm-project-skeleton"
+      aria-hidden="true"
+    >
+      <div className="mm-project-card__preview">
         <Skeleton className="mm-skeleton-fill" radius={0} />
       </div>
-      <div className="mm-project-card-body">
-        <div className="mm-project-title-row">
-          <div className="mm-skeleton-stack mm-skeleton-grow">
-            <Skeleton width="68%" height={18} />
-            <Skeleton width="46%" height={12} />
+
+      <div className="mm-project-card__content">
+        <div className="mm-project-card__status">
+          <Skeleton width={88} height={24} radius={999} />
+          <Skeleton width={82} height={24} radius={999} />
+        </div>
+
+        <header className="mm-project-card__header">
+          <Skeleton width="72%" height={20} />
+        </header>
+
+        <div className="mm-project-card__description mm-skeleton-stack">
+          <Skeleton width="100%" height={12} />
+          <Skeleton width="84%" height={12} />
+        </div>
+
+        <footer className="mm-project-card__footer">
+          <div className="mm-project-card__metadata mm-skeleton-stack">
+            <Skeleton width="62%" height={11} />
+            <Skeleton width="45%" height={11} />
           </div>
-          <Skeleton width={78} height={24} radius={999} />
-        </div>
-        <div className="mm-skeleton-stack">
-          <Skeleton width="96%" height={12} />
-          <Skeleton width="82%" height={12} />
-        </div>
-        <Skeleton width="64%" height={11} />
-        <Skeleton width="100%" height={34} />
+          <Skeleton width="100%" height={46} radius={9} />
+        </footer>
       </div>
     </article>
   );
