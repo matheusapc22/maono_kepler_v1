@@ -1749,7 +1749,6 @@ const MaonoSaveButton: React.FC = () => {
       return;
     }
 
-    setCreationDraft(input);
     operationInFlightRef.current = true;
     setSaving(true);
     setMessage("");
@@ -1839,6 +1838,7 @@ const MaonoSaveButton: React.FC = () => {
       return;
     }
 
+    setCreationDraft(input);
     operationInFlightRef.current = true;
     setSaving(true);
     setCreationError(null);
