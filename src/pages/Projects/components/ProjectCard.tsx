@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import { Skeleton } from "../../../components/loading/Skeleton";
 import type { ProjectListItem } from "../projects-api";
+import ProjectActionsMenu from "./ProjectActionsMenu";
 import {
   formatProjectRelativeDate,
   normalizeProjectAccessLevel,
@@ -13,10 +14,14 @@ type ProjectCardProps = {
   project: ProjectListItem;
   canSave: boolean;
   canFavorite: boolean;
+  canEditMetadata?: boolean;
+  actionsOpen?: boolean;
   favoriteBusy?: boolean;
   holdThumbnailShimmer?: boolean;
   opening?: boolean;
   onOpen?: (project: ProjectListItem) => void;
+  onActionsOpenChange?: (open: boolean) => void;
+  onEditMetadata?: (project: ProjectListItem) => void;
   onFavoriteToggle?: (project: ProjectListItem) => void | Promise<void>;
   onThumbnailSettled?: (project: ProjectListItem) => void;
 };
@@ -133,10 +138,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   canSave,
   canFavorite,
+  canEditMetadata = false,
+  actionsOpen = false,
   favoriteBusy = false,
   holdThumbnailShimmer = false,
   opening = false,
   onOpen,
+  onActionsOpenChange,
+  onEditMetadata,
   onFavoriteToggle,
   onThumbnailSettled,
 }) => {
@@ -240,40 +249,70 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </div>
         )}
 
-        {canFavorite ? (
-          <button
-            type="button"
-            className={
-              isFavorite
-                ? "mm-project-card__favorite is-active"
-                : "mm-project-card__favorite"
-            }
-            aria-label={
-              isFavorite
-                ? "Remover projeto dos favoritos"
-                : "Adicionar projeto aos favoritos"
-            }
-            aria-pressed={isFavorite}
-            aria-busy={favoriteBusy}
-            title={
-              isFavorite
-                ? "Remover dos favoritos"
-                : "Adicionar aos favoritos"
-            }
-            disabled={favoriteBusy}
+        {canEditMetadata || canFavorite ? (
+          <div
+            className="mm-project-card__actions"
+            aria-label="Ações do projeto"
+            style={{
+              position: "absolute",
+              zIndex: 5,
+              top: 12,
+              right: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              void onFavoriteToggle?.(project);
             }}
           >
-            <FavoriteIcon active={isFavorite} />
-            {favoriteBusy ? (
-              <span className="mm-sr-only" role="status">
-                Atualizando favorito.
-              </span>
+            {canEditMetadata ? (
+              <ProjectActionsMenu
+                projectName={project.name}
+                open={actionsOpen}
+                onOpenChange={(open) => onActionsOpenChange?.(open)}
+                onEdit={() => onEditMetadata?.(project)}
+              />
             ) : null}
-          </button>
+
+            {canFavorite ? (
+          <button
+                          type="button"
+                          className={
+                            isFavorite
+                              ? "mm-project-card__favorite is-active"
+                              : "mm-project-card__favorite"
+                          }
+                          aria-label={
+                            isFavorite
+                              ? "Remover projeto dos favoritos"
+                              : "Adicionar projeto aos favoritos"
+                          }
+                          aria-pressed={isFavorite}
+                          aria-busy={favoriteBusy}
+                          title={
+                            isFavorite
+                              ? "Remover dos favoritos"
+                              : "Adicionar aos favoritos"
+                          }
+                          disabled={favoriteBusy}
+                          style={{ position: "static", flex: "0 0 auto" }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void onFavoriteToggle?.(project);
+                          }}
+                        >
+                          <FavoriteIcon active={isFavorite} />
+                          {favoriteBusy ? (
+                            <span className="mm-sr-only" role="status">
+                              Atualizando favorito.
+                            </span>
+                          ) : null}
+                        </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -301,6 +340,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
         <header className="mm-project-card__header">
           <h2 title={project.name}>{project.name}</h2>
+          {project.createdBy?.name ? (
+            <p
+              className="mm-project-card__creator"
+              title={`Criado por ${project.createdBy.name}`}
+            >
+              {project.createdBy.name}
+            </p>
+          ) : null}
         </header>
 
         <p className="mm-project-card__description">

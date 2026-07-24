@@ -6,6 +6,7 @@ import {
 } from "../../../_lib/http.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { requirePermission } from "../../../_lib/permissions.js";
+import { serializeProjectActor } from "../../../_lib/project-service.js";
 import { logAudit } from "../../../_lib/projects.js";
 
 function normalizeText(value) {
@@ -102,6 +103,9 @@ function publicAdminProject(project) {
       : null,
     organizationFileId: project.organization_file_id || null,
     active: Boolean(project.active),
+    createdBy: serializeProjectActor(project, "created"),
+    updatedBy: serializeProjectActor(project, "updated"),
+    metadataVersion: Number(project.metadata_version || 1),
     createdAt: project.created_at,
     updatedAt: project.updated_at,
   };
@@ -118,14 +122,28 @@ async function getProjectById(env, projectId) {
       projects.default_config_file,
       projects.organization_id,
       projects.organization_file_id,
+      projects.created_by,
+      projects.created_by_name_snapshot,
+      projects.updated_by,
+      projects.updated_by_name_snapshot,
+      projects.metadata_version,
       projects.active,
       projects.created_at,
       projects.updated_at,
       organizations.name AS organization_name,
       organizations.slug AS organization_slug,
-      organizations.dropbox_root_path AS organization_dropbox_root_path
+      organizations.dropbox_root_path AS organization_dropbox_root_path,
+      creator.id AS creator_user_id,
+      creator.name AS creator_current_name,
+      updater.id AS updater_user_id,
+      updater.name AS updater_current_name
     FROM projects
-    LEFT JOIN organizations ON organizations.id = projects.organization_id
+    LEFT JOIN organizations
+      ON organizations.id = projects.organization_id
+    LEFT JOIN users AS creator
+      ON creator.id = projects.created_by
+    LEFT JOIN users AS updater
+      ON updater.id = projects.updated_by
     WHERE projects.id = ?
     LIMIT 1`,
   )
@@ -157,7 +175,28 @@ async function syncOrganizationFileProjectFlag(env, organizationFileId) {
     .run();
 }
 
-async function updateProject(env, current, body) {
+function changedProjectFields(current, next) {
+  const fields = [];
+
+  if (next.name !== current.name) fields.push("name");
+  if (next.slug !== current.slug) fields.push("slug");
+  if (next.description !== normalizeText(current.description)) {
+    fields.push("description");
+  }
+  if (next.dropboxRootPath !== normalizeDropboxPath(current.dropbox_root_path)) {
+    fields.push("dropboxRootPath");
+  }
+  if (next.defaultConfigFile !== current.default_config_file) {
+    fields.push("defaultConfigFile");
+  }
+  if (Number(next.active) !== Number(current.active || 0)) {
+    fields.push("active");
+  }
+
+  return fields;
+}
+
+async function updateProject(env, current, body, actor) {
   const projectId = current.id;
   const name = normalizeText(body?.name ?? current.name);
   const slug = normalizeSlug(body?.slug ?? current.slug);
@@ -235,6 +274,29 @@ async function updateProject(env, current, body) {
     };
   }
 
+  const next = {
+    name,
+    slug,
+    description,
+    dropboxRootPath,
+    defaultConfigFile,
+    active,
+  };
+  const changedFields = changedProjectFields(current, next);
+  const metadataChanged =
+    changedFields.includes("name") ||
+    changedFields.includes("description");
+  const previousVersion = Number(current.metadata_version || 1);
+
+  if (changedFields.length === 0) {
+    return {
+      project: current,
+      changedFields,
+      previousVersion,
+      newVersion: previousVersion,
+    };
+  }
+
   try {
     const updated = await env.DB.prepare(
       `UPDATE projects
@@ -245,7 +307,10 @@ async function updateProject(env, current, body) {
         dropbox_root_path = ?,
         default_config_file = ?,
         active = ?,
-        updated_at = CURRENT_TIMESTAMP
+        updated_by = ?,
+        updated_by_name_snapshot = ?,
+        updated_at = CURRENT_TIMESTAMP,
+        metadata_version = metadata_version + ?
        WHERE id = ?
        RETURNING *`,
     )
@@ -256,11 +321,16 @@ async function updateProject(env, current, body) {
         dropboxRootPath,
         defaultConfigFile,
         active,
+        actor.id,
+        actor.name || "Usuário",
+        metadataChanged ? 1 : 0,
         projectId,
       )
       .first();
 
     await syncOrganizationFileProjectFlag(env, updated.organization_file_id);
+
+    const newVersion = Number(updated.metadata_version || previousVersion);
 
     return {
       project: {
@@ -268,7 +338,14 @@ async function updateProject(env, current, body) {
         organization_name: current.organization_name,
         organization_slug: current.organization_slug,
         organization_dropbox_root_path: current.organization_dropbox_root_path,
+        creator_user_id: current.creator_user_id,
+        creator_current_name: current.creator_current_name,
+        updater_user_id: actor.id,
+        updater_current_name: actor.name,
       },
+      changedFields,
+      previousVersion,
+      newVersion,
     };
   } catch (error) {
     if (String(error.message || "").includes("UNIQUE")) {
@@ -285,7 +362,14 @@ async function updateProject(env, current, body) {
   }
 }
 
-async function deleteProject(env, current, hardDelete = true) {
+async function deleteProject(
+  env,
+  current,
+  {
+    hardDelete = true,
+    actor,
+  },
+) {
   const projectId = current.id;
 
   if (hardDelete) {
@@ -302,15 +386,26 @@ async function deleteProject(env, current, hardDelete = true) {
       ),
       env.DB.prepare(
         `UPDATE projects
-         SET active = 0, updated_at = CURRENT_TIMESTAMP
+         SET
+          active = 0,
+          updated_by = ?,
+          updated_by_name_snapshot = ?,
+          updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-      ).bind(projectId),
+      ).bind(
+        actor.id,
+        actor.name || "Usuário",
+        projectId,
+      ),
     ]);
   }
 
   await syncOrganizationFileProjectFlag(env, current.organization_file_id);
 
-  return { project: current };
+  return {
+    project: current,
+    changedFields: hardDelete ? ["deleted"] : ["active"],
+  };
 }
 
 export async function onRequest(context) {
@@ -374,10 +469,20 @@ export async function onRequest(context) {
       );
 
       const body = await readJsonBody(request);
-      const { project, error } = await updateProject(
+      const {
+        project,
+        error,
+        changedFields,
+        previousVersion,
+        newVersion,
+      } = await updateProject(
         env,
         currentProject,
         body,
+        {
+          id: user.id,
+          name: user.name,
+        },
       );
 
       if (error) {
@@ -393,6 +498,9 @@ export async function onRequest(context) {
           organizationId: project.organization_id || null,
           slug: project.slug,
           active: Boolean(project.active),
+          changedFields,
+          previousVersion,
+          newVersion,
         },
       });
 
@@ -413,10 +521,16 @@ export async function onRequest(context) {
 
       const url = new URL(request.url);
       const hardDelete = url.searchParams.get("deactivate") !== "true";
-      const { project } = await deleteProject(
+      const { project, changedFields } = await deleteProject(
         env,
         currentProject,
-        hardDelete,
+        {
+          hardDelete,
+          actor: {
+            id: user.id,
+            name: user.name,
+          },
+        },
       );
 
       await logAudit(env, {
@@ -431,6 +545,9 @@ export async function onRequest(context) {
           slug: project.slug,
           name: project.name,
           hardDelete,
+          changedFields,
+          previousVersion: Number(project.metadata_version || 1),
+          newVersion: Number(project.metadata_version || 1),
         },
       });
 
@@ -447,6 +564,7 @@ export async function onRequest(context) {
       error.message,
       error.status || 500,
       error.code || "ADMIN_PROJECT_ERROR",
+      error.details || null,
     );
   }
 }

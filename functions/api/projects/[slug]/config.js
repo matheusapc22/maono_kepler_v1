@@ -7,6 +7,9 @@ import {
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, publicProject } from "../../../_lib/projects.js";
 import {
+  touchProjectAfterConfigSave,
+} from "../../../_lib/project-service.js";
+import {
   can,
   recordAuditLog,
 } from "../../../_lib/permissions.js";
@@ -66,6 +69,24 @@ function publicProjectForConfigResponse(project) {
       typeof base.active === "boolean"
         ? base.active
         : project?.active === 1 || project?.active === true,
+    createdAt:
+      base.createdAt ??
+      base.created_at ??
+      project?.created_at ??
+      undefined,
+    organizationId:
+      base.organizationId ??
+      base.organization_id ??
+      project?.organization_id ??
+      undefined,
+    createdBy: base.createdBy ?? null,
+    updatedBy: base.updatedBy ?? null,
+    metadataVersion: Number(
+      base.metadataVersion ??
+      project?.metadata_version ??
+      project?.metadataVersion ??
+      1,
+    ),
     createdAt:
       base.createdAt ??
       base.created_at ??
@@ -214,16 +235,6 @@ async function updateLinkedOrganizationFileSize(env, project, sizeBytes) {
     .run();
 }
 
-async function markProjectConfigUpdated(env, projectId) {
-  return env.DB.prepare(
-    `UPDATE projects
-     SET updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?
-     RETURNING *`,
-  )
-    .bind(projectId)
-    .first();
-}
 
 async function saveProjectThumbnail(env, project, fileName, thumbnailDataUrl) {
   const decoded = decodeDataUrl(thumbnailDataUrl);
@@ -554,7 +565,14 @@ export async function onRequest(context) {
     }
 
     await updateLinkedOrganizationFileSize(env, project, sizeBytes);
-    const updatedProject = await markProjectConfigUpdated(env, project.id);
+    const updatedProject = await touchProjectAfterConfigSave(env, {
+      projectId: project.id,
+      organizationId: getProjectOrganizationId(project),
+      actor: {
+        id: user.id,
+        name: user.name,
+      },
+    });
     const publicPreview = publicPreviewForConfigResponse(preview);
 
     await auditProjectConfigAccess(

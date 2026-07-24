@@ -6,6 +6,10 @@ import {
 } from "../../../_lib/http.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { requirePermission } from "../../../_lib/permissions.js";
+import {
+  createProjectRecord,
+  serializeProjectActor,
+} from "../../../_lib/project-service.js";
 import { logAudit } from "../../../_lib/projects.js";
 
 function normalizeText(value) {
@@ -110,6 +114,9 @@ function publicAdminProject(project) {
     defaultConfigFile: project.default_config_file,
     active: Boolean(project.active),
     accessCount: project.access_count || 0,
+    createdBy: serializeProjectActor(project, "created"),
+    updatedBy: serializeProjectActor(project, "updated"),
+    metadataVersion: Number(project.metadata_version || 1),
     createdAt: project.created_at,
     updatedAt: project.updated_at,
   };
@@ -134,8 +141,7 @@ async function getOrganization(env, organizationId) {
 async function listAdminProjects(env, { organizationId = null } = {}) {
   const scopedOrganizationId = normalizePositiveInteger(organizationId);
 
-  const sql = scopedOrganizationId
-    ? `SELECT
+  const selectColumns = `
         projects.id,
         projects.name,
         projects.slug,
@@ -143,35 +149,44 @@ async function listAdminProjects(env, { organizationId = null } = {}) {
         projects.dropbox_root_path,
         projects.default_config_file,
         projects.organization_id,
+        projects.created_by,
+        projects.created_by_name_snapshot,
+        projects.updated_by,
+        projects.updated_by_name_snapshot,
+        projects.metadata_version,
         organizations.name AS organization_name,
         organizations.slug AS organization_slug,
+        creator.id AS creator_user_id,
+        creator.name AS creator_current_name,
+        updater.id AS updater_user_id,
+        updater.name AS updater_current_name,
         projects.active,
         projects.created_at,
         projects.updated_at,
-        COUNT(user_projects.id) AS access_count
+        COUNT(DISTINCT user_projects.id) AS access_count
+  `;
+
+  const joins = `
+      LEFT JOIN organizations
+        ON organizations.id = projects.organization_id
+      LEFT JOIN users AS creator
+        ON creator.id = projects.created_by
+      LEFT JOIN users AS updater
+        ON updater.id = projects.updated_by
+      LEFT JOIN user_projects
+        ON user_projects.project_id = projects.id
+  `;
+
+  const sql = scopedOrganizationId
+    ? `SELECT ${selectColumns}
       FROM projects
-      LEFT JOIN organizations ON organizations.id = projects.organization_id
-      LEFT JOIN user_projects ON user_projects.project_id = projects.id
+      ${joins}
       WHERE projects.organization_id = ?
       GROUP BY projects.id
       ORDER BY projects.updated_at DESC, projects.name ASC`
-    : `SELECT
-        projects.id,
-        projects.name,
-        projects.slug,
-        projects.description,
-        projects.dropbox_root_path,
-        projects.default_config_file,
-        projects.organization_id,
-        organizations.name AS organization_name,
-        organizations.slug AS organization_slug,
-        projects.active,
-        projects.created_at,
-        projects.updated_at,
-        COUNT(user_projects.id) AS access_count
+    : `SELECT ${selectColumns}
       FROM projects
-      LEFT JOIN organizations ON organizations.id = projects.organization_id
-      LEFT JOIN user_projects ON user_projects.project_id = projects.id
+      ${joins}
       GROUP BY projects.id
       ORDER BY projects.updated_at DESC, projects.name ASC`;
 
@@ -183,7 +198,7 @@ async function listAdminProjects(env, { organizationId = null } = {}) {
   return result.results || [];
 }
 
-async function createProject(env, body, organization) {
+async function createProject(env, body, organization, actor) {
   const organizationId = normalizePositiveInteger(organization?.id);
   const name = normalizeText(body?.name);
   const slug = normalizeSlug(body?.slug || body?.name);
@@ -199,7 +214,7 @@ async function createProject(env, body, organization) {
       body?.default_config_file ||
       "config.kepler.json",
   );
-  const active = body?.active === false ? 0 : 1;
+  const active = body?.active === false ? false : true;
 
   if (!organizationId) {
     return {
@@ -267,39 +282,36 @@ async function createProject(env, body, organization) {
   }
 
   try {
-    const result = await env.DB.prepare(
-      `INSERT INTO projects (
-        name,
-        slug,
-        description,
-        dropbox_root_path,
-        default_config_file,
-        organization_id,
-        active
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      RETURNING *`,
-    )
-      .bind(
-        name,
-        slug,
-        description || null,
-        dropboxRootPath,
-        defaultConfigFile,
-        organizationId,
-        active,
-      )
-      .first();
+    const project = await createProjectRecord(env, {
+      organizationId,
+      name,
+      slug,
+      description,
+      dropboxRootPath,
+      defaultConfigFile,
+      active,
+      actor: {
+        id: actor.id,
+        name: actor.name,
+      },
+    });
 
     return {
       project: {
-        ...result,
+        ...project,
         organization_name: organization.name,
         organization_slug: organization.slug,
+        creator_user_id: actor.id,
+        creator_current_name: actor.name,
+        updater_user_id: actor.id,
+        updater_current_name: actor.name,
       },
     };
   } catch (error) {
-    if (String(error.message || "").includes("UNIQUE")) {
+    if (
+      error?.code === "PROJECT_SLUG_EXISTS" ||
+      String(error?.message || "").includes("UNIQUE")
+    ) {
       return {
         error: errorResponse(
           "Já existe um projeto com este slug.",
@@ -392,6 +404,10 @@ export async function onRequest(context) {
         env,
         body,
         organization,
+        {
+          id: user.id,
+          name: user.name,
+        },
       );
 
       if (error) {
@@ -406,6 +422,7 @@ export async function onRequest(context) {
           organizationId,
           slug: project.slug,
           active: Boolean(project.active),
+          metadataVersion: Number(project.metadata_version || 1),
         },
       });
 
@@ -427,6 +444,7 @@ export async function onRequest(context) {
       error.message,
       error.status || 500,
       error.code || "ADMIN_PROJECTS_ERROR",
+      error.details || null,
     );
   }
 }

@@ -80,6 +80,23 @@ const LimitsPlansSectionWithProps =
     >
   >;
 
+/**
+ * Adaptador temporário do Grupo 5.
+ *
+ * O Grupo 6 adicionará estas props diretamente ao tipo de ProjectsSection.
+ * Até lá, o React encaminha as props sem impacto e o build permanece
+ * compatível com a implementação anterior do componente.
+ */
+type ProjectsSectionMetadataProps = React.ComponentProps<
+  typeof ProjectsSection
+> & {
+  canProjectEdit: (project: ProjectListItem) => boolean;
+  onProjectUpdated: (project: ProjectListItem) => void;
+};
+
+const ProjectsSectionWithMetadata =
+  ProjectsSection as React.ComponentType<ProjectsSectionMetadataProps>;
+
 function isProjectSection(
   section: ProjectSidebarSection,
 ): section is ProjectSectionKey {
@@ -196,19 +213,66 @@ function canProject(
   return canUser(user, permission, buildProjectContext(user, project));
 }
 
-function mergeProjectIntoList(
+function sameProject(
+  project: ProjectListItem,
+  updatedProject: ProjectListItem,
+) {
+  if (
+    project.id !== null &&
+    project.id !== undefined &&
+    updatedProject.id !== null &&
+    updatedProject.id !== undefined
+  ) {
+    return String(project.id) === String(updatedProject.id);
+  }
+
+  return project.slug === updatedProject.slug;
+}
+
+export function mergeProjectSnapshot(
   projects: ProjectListItem[],
   updatedProject: ProjectListItem,
 ) {
-  return projects.map((project) =>
-    project.slug === updatedProject.slug
-      ? {
-          ...project,
-          favorite: updatedProject.favorite,
-          favorited: updatedProject.favorite,
-        }
-      : project,
-  );
+  return projects.map((project) => {
+    if (!sameProject(project, updatedProject)) {
+      return project;
+    }
+
+    const favorite =
+      updatedProject.favorite ??
+      updatedProject.favorited ??
+      project.favorite ??
+      project.favorited;
+
+    return {
+      ...project,
+      ...updatedProject,
+      favorite,
+      favorited: favorite,
+      thumbnailUrl:
+        updatedProject.thumbnailUrl ??
+        updatedProject.thumbnail_url ??
+        project.thumbnailUrl ??
+        project.thumbnail_url,
+      thumbnail_url:
+        updatedProject.thumbnail_url ??
+        updatedProject.thumbnailUrl ??
+        project.thumbnail_url ??
+        project.thumbnailUrl,
+      accessLevel:
+        updatedProject.accessLevel ??
+        updatedProject.access_level ??
+        project.accessLevel,
+      access_level:
+        updatedProject.access_level ??
+        updatedProject.accessLevel ??
+        project.access_level ??
+        project.accessLevel,
+      permissions: updatedProject.permissions ?? project.permissions,
+      deniedPermissions:
+        updatedProject.deniedPermissions ?? project.deniedPermissions,
+    };
+  });
 }
 
 function RestrictedSection({
@@ -394,6 +458,18 @@ const ProjectsPage: React.FC = () => {
     setFavoriteBusySlugs({});
   }
 
+  const handleProjectUpdated = useCallback(
+    (updatedProject: ProjectListItem) => {
+      setAllProjects((current) =>
+        mergeProjectSnapshot(current, updatedProject),
+      );
+      setProjectItems((current) =>
+        mergeProjectSnapshot(current, updatedProject),
+      );
+    },
+    [],
+  );
+
   async function handleFavoriteToggle(project: ProjectListItem) {
     const nextFavorite = !Boolean(project.favorite || project.favorited);
     const requestOrganizationKey = activeOrganizationKey;
@@ -413,10 +489,10 @@ const ProjectsPage: React.FC = () => {
         return;
       }
 
-      setAllProjects((current) => mergeProjectIntoList(current, updatedProject));
+      setAllProjects((current) => mergeProjectSnapshot(current, updatedProject));
 
       setProjectItems((current) => {
-        const updated = mergeProjectIntoList(current, updatedProject);
+        const updated = mergeProjectSnapshot(current, updatedProject);
 
         if (sidebarSection === "favorites" && !updatedProject.favorite) {
           return updated.filter((item) => item.slug !== updatedProject.slug);
@@ -522,7 +598,7 @@ const ProjectsPage: React.FC = () => {
                 </p>
               </section>
             ) : isProjectSection(sidebarSection) ? (
-              <ProjectsSection
+              <ProjectsSectionWithMetadata
                 key={`${activeOrganizationKey}:${sidebarSection}`}
                 section={sidebarSection}
                 projects={visibleProjectItems}
@@ -536,7 +612,11 @@ const ProjectsPage: React.FC = () => {
                 canProjectFavorite={(project) =>
                   canProject(user, PERMISSION.PROJECT_FAVORITE, project)
                 }
+                canProjectEdit={(project) =>
+                  canProject(user, PERMISSION.PROJECT_EDIT, project)
+                }
                 onFavoriteToggle={handleFavoriteToggle}
+                onProjectUpdated={handleProjectUpdated}
                 onRetry={() => loadProjectSection(sidebarSection)}
               />
             ) : (

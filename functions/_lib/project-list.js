@@ -2,6 +2,35 @@ import { getActiveOrganizationId, publicProject } from "./projects.js";
 
 const ACCESS_LEVELS = new Set(["owner", "editor", "viewer"]);
 
+const PUBLIC_PROJECT_COLUMNS = `
+  projects.id,
+  projects.name,
+  projects.slug,
+  projects.description,
+  projects.organization_id,
+  projects.created_by,
+  projects.created_by_name_snapshot,
+  projects.updated_by,
+  projects.updated_by_name_snapshot,
+  projects.metadata_version,
+  projects.active,
+  projects.created_at,
+  projects.updated_at,
+  organizations.name AS organization_name,
+  organizations.slug AS organization_slug,
+  creator.id AS creator_user_id,
+  creator.name AS creator_current_name,
+  updater.id AS updater_user_id,
+  updater.name AS updater_current_name
+`;
+
+const ACTOR_JOINS = `
+  LEFT JOIN users AS creator
+    ON creator.id = projects.created_by
+  LEFT JOIN users AS updater
+    ON updater.id = projects.updated_by
+`;
+
 function normalizeRole(role) {
   const normalized = String(role || "").trim().toLowerCase();
   if (normalized === "client") return "owner";
@@ -18,7 +47,7 @@ function nowIso() {
 }
 
 function publicSafeProject(project, favoriteProjectIds = new Set()) {
-  const base = publicProject(project) || project || {};
+  const base = publicProject(project) || {};
 
   const id = base.id ?? project?.id;
   const slug = base.slug ?? project?.slug;
@@ -41,6 +70,10 @@ function publicSafeProject(project, favoriteProjectIds = new Set()) {
     description: base.description ?? undefined,
     organizationId,
     organization_id: organizationId,
+    organization: base.organization ?? null,
+    createdBy: base.createdBy ?? null,
+    updatedBy: base.updatedBy ?? null,
+    metadataVersion: Number(base.metadataVersion ?? 1),
     accessLevel: normalizeAccessLevel(
       base.accessLevel ?? base.access_level ?? project?.access_level,
     ),
@@ -126,19 +159,13 @@ export async function listProjectsForActiveOrganization(env, user) {
   if (role === "super_admin") {
     const { results } = await env.DB.prepare(
       `SELECT
-        projects.id,
-        projects.name,
-        projects.slug,
-        projects.description,
-        projects.organization_id,
-        projects.active,
-        projects.created_at,
-        projects.updated_at,
+        ${PUBLIC_PROJECT_COLUMNS},
         'owner' AS access_level
        FROM projects
        INNER JOIN organizations
          ON organizations.id = projects.organization_id
         AND organizations.active = 1
+       ${ACTOR_JOINS}
        WHERE projects.active = 1
          AND projects.organization_id = ?
        ORDER BY projects.updated_at DESC, projects.name ASC`,
@@ -153,14 +180,7 @@ export async function listProjectsForActiveOrganization(env, user) {
 
   const { results } = await env.DB.prepare(
     `SELECT
-      projects.id,
-      projects.name,
-      projects.slug,
-      projects.description,
-      projects.organization_id,
-      projects.active,
-      projects.created_at,
-      projects.updated_at,
+      ${PUBLIC_PROJECT_COLUMNS},
       user_projects.access_level
      FROM user_projects
      INNER JOIN projects ON projects.id = user_projects.project_id
@@ -170,6 +190,7 @@ export async function listProjectsForActiveOrganization(env, user) {
      INNER JOIN organization_users
        ON organization_users.organization_id = projects.organization_id
       AND organization_users.user_id = user_projects.user_id
+     ${ACTOR_JOINS}
      WHERE user_projects.user_id = ?
        AND projects.active = 1
        AND projects.organization_id = ?
@@ -212,19 +233,13 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
   if (role === "super_admin") {
     const project = await env.DB.prepare(
       `SELECT
-        projects.id,
-        projects.name,
-        projects.slug,
-        projects.description,
-        projects.organization_id,
-        projects.active,
-        projects.created_at,
-        projects.updated_at,
+        ${PUBLIC_PROJECT_COLUMNS},
         'owner' AS access_level
        FROM projects
        INNER JOIN organizations
          ON organizations.id = projects.organization_id
         AND organizations.active = 1
+       ${ACTOR_JOINS}
        WHERE projects.slug = ?
          AND projects.active = 1
          AND projects.organization_id = ?
@@ -238,14 +253,7 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
 
   const project = await env.DB.prepare(
     `SELECT
-      projects.id,
-      projects.name,
-      projects.slug,
-      projects.description,
-      projects.organization_id,
-      projects.active,
-      projects.created_at,
-      projects.updated_at,
+      ${PUBLIC_PROJECT_COLUMNS},
       user_projects.access_level
      FROM user_projects
      INNER JOIN projects ON projects.id = user_projects.project_id
@@ -255,6 +263,7 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
      INNER JOIN organization_users
        ON organization_users.organization_id = projects.organization_id
       AND organization_users.user_id = user_projects.user_id
+     ${ACTOR_JOINS}
      WHERE user_projects.user_id = ?
        AND projects.slug = ?
        AND projects.active = 1

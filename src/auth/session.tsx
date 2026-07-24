@@ -29,6 +29,11 @@ type MaonoFeatureFlag = string;
 
 type MaonoLimits = Record<string, unknown>;
 
+type ProjectActor = {
+  id: MaonoId;
+  name: string;
+};
+
 type MaonoOrganization = {
   id: MaonoId;
   organizationId?: MaonoId | null;
@@ -89,6 +94,9 @@ type MaonoProject = {
   active?: boolean;
   thumbnailUrl?: string;
   thumbnail_url?: string;
+  createdBy?: ProjectActor | null;
+  updatedBy?: ProjectActor | null;
+  metadataVersion?: number;
   createdAt?: string;
   updatedAt?: string;
 
@@ -173,6 +181,35 @@ function toStringValue(value: unknown): string | undefined {
 
 function toBooleanValue(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function toPositiveInteger(value: unknown): number | undefined {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function normalizeProjectActor(value: unknown): ProjectActor | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id =
+    toId(value.id) ??
+    toId(value.userId) ??
+    toId(value.user_id);
+  const name = toStringValue(value.name);
+
+  if (id === null || !name) {
+    return null;
+  }
+
+  return { id, name };
 }
 
 function toStringArray(value: unknown): string[] {
@@ -362,6 +399,15 @@ function normalizeProject(value: unknown): MaonoProject | null {
       toStringValue(value.thumbnailUrl) ?? toStringValue(value.thumbnail_url),
     thumbnail_url:
       toStringValue(value.thumbnail_url) ?? toStringValue(value.thumbnailUrl),
+    createdBy: normalizeProjectActor(
+      value.createdBy ?? value.created_by,
+    ),
+    updatedBy: normalizeProjectActor(
+      value.updatedBy ?? value.updated_by,
+    ),
+    metadataVersion: toPositiveInteger(
+      value.metadataVersion ?? value.metadata_version,
+    ),
     createdAt:
       toStringValue(value.createdAt) ?? toStringValue(value.created_at),
     updatedAt:
@@ -792,6 +838,7 @@ export type {
   MaonoOrganization,
   MaonoProject,
   MaonoRole,
+  ProjectActor,
   MaonoUser,
   Permission,
   PublicSession,

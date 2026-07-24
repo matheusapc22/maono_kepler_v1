@@ -141,11 +141,18 @@ CREATE TABLE IF NOT EXISTS projects (
   default_config_file TEXT NOT NULL DEFAULT 'config.kepler.json',
   organization_id INTEGER,
   organization_file_id INTEGER,
+  created_by INTEGER,
+  created_by_name_snapshot TEXT,
+  updated_by INTEGER,
+  updated_by_name_snapshot TEXT,
+  metadata_version INTEGER NOT NULL DEFAULT 1,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL,
-  FOREIGN KEY (organization_file_id) REFERENCES organization_files(id) ON DELETE SET NULL
+  FOREIGN KEY (organization_file_id) REFERENCES organization_files(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS user_projects (
@@ -199,6 +206,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_files_idempotency
 CREATE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug);
 CREATE INDEX IF NOT EXISTS idx_projects_organization_id ON projects(organization_id);
 CREATE INDEX IF NOT EXISTS idx_projects_organization_file_id ON projects(organization_file_id);
+CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
+CREATE INDEX IF NOT EXISTS idx_projects_updated_by ON projects(updated_by);
 CREATE INDEX IF NOT EXISTS idx_user_projects_user_id ON user_projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_projects_project_id ON user_projects(project_id);
 

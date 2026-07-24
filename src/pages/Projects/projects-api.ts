@@ -1,4 +1,8 @@
-import type { MaonoProject } from "../../auth/session";
+import type {
+  MaonoId,
+  MaonoProject,
+  ProjectActor,
+} from "../../auth/session";
 
 export type ProjectSectionKey = "all" | "recent" | "favorites";
 
@@ -8,21 +12,70 @@ export type ProjectListItem = MaonoProject & {
   thumbnailUrl?: string;
 };
 
-type ProjectsResponse = {
+export type ProjectMetadata = ProjectListItem & {
+  organization?: {
+    id: MaonoId | null;
+    name: string;
+    slug?: string | null;
+  } | null;
+  createdBy?: ProjectActor | null;
+  updatedBy?: ProjectActor | null;
+  metadataVersion: number;
+};
+
+export type UpdateProjectMetadataInput = {
+  name: string;
+  description: string;
+  metadataVersion: number;
+};
+
+type ApiErrorPayload = {
   ok?: boolean;
-  projects?: ProjectListItem[];
   error?: {
+    code?: string;
     message?: string;
+    details?: {
+      currentProject?: ProjectMetadata | null;
+      [key: string]: unknown;
+    } | null;
   };
 };
 
-type FavoriteResponse = {
-  ok?: boolean;
-  project?: ProjectListItem;
-  error?: {
-    message?: string;
-  };
+type ProjectsResponse = ApiErrorPayload & {
+  projects?: ProjectListItem[];
 };
+
+type FavoriteResponse = ApiErrorPayload & {
+  project?: ProjectListItem;
+};
+
+type ProjectMetadataResponse = ApiErrorPayload & {
+  project?: ProjectMetadata;
+};
+
+export class ProjectMetadataApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly currentProject: ProjectMetadata | null;
+
+  constructor({
+    message,
+    status,
+    code,
+    currentProject = null,
+  }: {
+    message: string;
+    status: number;
+    code?: string;
+    currentProject?: ProjectMetadata | null;
+  }) {
+    super(message);
+    this.name = "ProjectMetadataApiError";
+    this.status = status;
+    this.code = code || "PROJECT_METADATA_ERROR";
+    this.currentProject = currentProject;
+  }
+}
 
 function endpointForSection(section: ProjectSectionKey) {
   if (section === "recent") {
@@ -36,7 +89,11 @@ function endpointForSection(section: ProjectSectionKey) {
   return "/api/projects";
 }
 
-async function readJsonResponse<T>(response: Response): Promise<T> {
+function metadataEndpoint(slug: string) {
+  return `/api/projects/${encodeURIComponent(slug)}/metadata`;
+}
+
+export async function readJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
 
   if (!text) {
@@ -54,7 +111,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   }
 }
 
-function errorMessage(data: unknown, fallback: string) {
+export function errorMessage(data: unknown, fallback: string) {
   if (
     data &&
     typeof data === "object" &&
@@ -68,6 +125,28 @@ function errorMessage(data: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+function errorCode(data: ApiErrorPayload, fallback: string) {
+  return data.error?.code || fallback;
+}
+
+function projectMetadataErrorFromResponse(
+  response: Response,
+  data: ProjectMetadataResponse,
+  fallback: string,
+) {
+  const currentProject =
+    response.status === 409
+      ? data.error?.details?.currentProject ?? null
+      : null;
+
+  return new ProjectMetadataApiError({
+    message: errorMessage(data, fallback),
+    status: response.status,
+    code: errorCode(data, "PROJECT_METADATA_ERROR"),
+    currentProject,
+  });
 }
 
 export async function fetchProjects(
@@ -115,6 +194,83 @@ export async function setProjectFavorite(
 
   if (!data.project) {
     throw new Error("A API não retornou o projeto atualizado.");
+  }
+
+  return data.project;
+}
+
+export async function fetchProjectMetadata(
+  slug: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<ProjectMetadata> {
+  const response = await fetch(metadataEndpoint(slug), {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+    signal: options.signal,
+  });
+
+  const data = await readJsonResponse<ProjectMetadataResponse>(response);
+
+  if (!response.ok) {
+    throw projectMetadataErrorFromResponse(
+      response,
+      data,
+      "Não foi possível carregar as informações do projeto.",
+    );
+  }
+
+  if (!data.project) {
+    throw new ProjectMetadataApiError({
+      message: "A API não retornou os metadados do projeto.",
+      status: response.status,
+      code: "PROJECT_METADATA_RESPONSE_INVALID",
+    });
+  }
+
+  return data.project;
+}
+
+export async function updateProjectMetadata(
+  slug: string,
+  input: UpdateProjectMetadataInput,
+): Promise<ProjectMetadata> {
+  const payload: UpdateProjectMetadataInput = {
+    name: input.name,
+    description: input.description,
+    metadataVersion: input.metadataVersion,
+  };
+
+  const response = await fetch(metadataEndpoint(slug), {
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await readJsonResponse<ProjectMetadataResponse>(response);
+
+  if (!response.ok) {
+    throw projectMetadataErrorFromResponse(
+      response,
+      data,
+      response.status === 409
+        ? "Este projeto foi alterado por outra pessoa."
+        : "Não foi possível atualizar as informações do projeto.",
+    );
+  }
+
+  if (!data.project) {
+    throw new ProjectMetadataApiError({
+      message: "A API não retornou o projeto atualizado.",
+      status: response.status,
+      code: "PROJECT_METADATA_RESPONSE_INVALID",
+    });
   }
 
   return data.project;

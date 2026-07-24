@@ -8,7 +8,9 @@
     "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs"
+    "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs",
+    "test:project-metadata": "node --test tests/project-metadata-migration.test.mjs tests/project-metadata-api.test.mjs tests/project-card-actions.test.mjs tests/project-creation-metadata.test.mjs",
+    "test:projects": "npm run test:project-cards && npm run test:project-metadata"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

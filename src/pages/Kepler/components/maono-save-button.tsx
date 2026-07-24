@@ -1,12 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { KeplerGlSchema } from "@kepler.gl/schemas";
 import { WebMercatorViewport } from "@deck.gl/core";
 import html2canvas from "html2canvas";
 import { useSession } from "../../../auth/session";
 import { can } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
+import ProjectCreatePanel, {
+  type ProjectCreateInput,
+  type ProjectCreationStage,
+} from "./project-create-panel";
 
 const PREVIEW_WIDTH = 960;
 const PREVIEW_HEIGHT = 540;
@@ -1455,34 +1459,202 @@ async function captureThumbnail(
   );
 }
 
+const CREATION_KEY_PREFIX = "maono.project-create.idempotency";
+
+type ProjectCreationResponse = {
+  ok?: boolean;
+  status?: string;
+  idempotent?: boolean;
+  project?: {
+    slug?: string;
+    name?: string;
+  };
+  error?: {
+    code?: string;
+    message?: string;
+    details?: {
+      stage?: string;
+      retryable?: boolean;
+      idempotencyKey?: string;
+    } | null;
+  };
+};
+
+function getActiveOrganizationId(user: any) {
+  return (
+    user?.activeOrganizationId ??
+    user?.active_organization_id ??
+    user?.organizationId ??
+    user?.organization_id ??
+    user?.organization?.id ??
+    null
+  );
+}
+
+function getActiveOrganizationName(user: any) {
+  const activeId = getActiveOrganizationId(user);
+  const organizations = Array.isArray(user?.organizations)
+    ? user.organizations
+    : [];
+  const active = organizations.find(
+    (organization: any) =>
+      String(organization?.id ?? "") === String(activeId ?? ""),
+  );
+
+  return (
+    active?.name ??
+    user?.organization?.name ??
+    "Organização ativa"
+  );
+}
+
+function creationStorageKey(organizationId: unknown) {
+  return `${CREATION_KEY_PREFIX}:${String(organizationId ?? "none")}`;
+}
+
+function randomCreationKey() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return `project-create:${crypto.randomUUID()}`;
+  }
+
+  return `project-create:${Date.now()}:${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
+function getOrCreateCreationKey(organizationId: unknown) {
+  const storageKey = creationStorageKey(organizationId);
+
+  try {
+    const existing = window.sessionStorage.getItem(storageKey);
+
+    if (existing) {
+      return existing;
+    }
+
+    const created = randomCreationKey();
+    window.sessionStorage.setItem(storageKey, created);
+    return created;
+  } catch {
+    return randomCreationKey();
+  }
+}
+
+function clearCreationKey(organizationId: unknown) {
+  try {
+    window.sessionStorage.removeItem(
+      creationStorageKey(organizationId),
+    );
+  } catch {
+    // sessionStorage pode estar bloqueado; não impede a criação.
+  }
+}
+
+function normalizeCreationStage(value: unknown) {
+  const stage = String(value || "");
+
+  if (
+    stage === "capturing" ||
+    stage === "creating_record" ||
+    stage === "preparing_files" ||
+    stage === "linking_user" ||
+    stage === "finalizing"
+  ) {
+    return stage as Exclude<
+      ProjectCreationStage,
+      "ready" | "success" | "error"
+    >;
+  }
+
+  return "creating_record";
+}
+
+function getCreationResponseError(
+  response: Response,
+  data: ProjectCreationResponse,
+) {
+  const backendMessage = data?.error?.message;
+
+  if (response.status === 401) {
+    return "Sua sessão expirou. Entre novamente para criar o projeto.";
+  }
+
+  if (response.status === 403) {
+    return "Você não tem permissão para criar projetos nesta organização.";
+  }
+
+  if (response.status === 409) {
+    return (
+      backendMessage ||
+      "A criação já está em andamento ou entrou em conflito. Tente novamente."
+    );
+  }
+
+  if (response.status >= 500) {
+    return (
+      backendMessage ||
+      "A criação não foi concluída. O projeto permaneceu inativo e pode ser retomado."
+    );
+  }
+
+  return backendMessage || "Não foi possível criar o projeto.";
+}
+
 const MaonoSaveButton: React.FC = () => {
   const { projectSlug } = useParams();
+  const navigate = useNavigate();
   const { authenticated, user, projects } = useSession();
-  const mapState = useSelector((state: any) => state?.demo?.keplerGl?.map);
+  const mapState = useSelector(
+    (state: any) => state?.demo?.keplerGl?.map,
+  );
+  const operationInFlightRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState<"success" | "error">("success");
+  const [messageType, setMessageType] =
+    useState<"success" | "error">("success");
+  const [createPanelOpen, setCreatePanelOpen] = useState(false);
+  const [creationStage, setCreationStage] =
+    useState<ProjectCreationStage>("ready");
+  const [creationFailedStage, setCreationFailedStage] =
+    useState<Exclude<
+      ProjectCreationStage,
+      "ready" | "success" | "error"
+    > | null>(null);
+  const [creationError, setCreationError] =
+    useState<string | null>(null);
+  const [creationDraft, setCreationDraft] =
+    useState<ProjectCreateInput | null>(null);
 
   const currentProject = useMemo(() => {
     return (
       (projects || []).find(
-        (project: any) => normalize(project?.slug) === normalize(projectSlug),
+        (project: any) =>
+          normalize(project?.slug) === normalize(projectSlug),
       ) || null
     );
   }, [projects, projectSlug]);
+
+  const activeOrganizationId = useMemo(
+    () => getActiveOrganizationId(user as any),
+    [user],
+  );
+  const activeOrganizationName = useMemo(
+    () => getActiveOrganizationName(user as any),
+    [user],
+  );
 
   const savePermissionContext = useMemo(() => {
     if (!currentProject) {
       return null;
     }
 
-    const userContext = user as any;
     const organizationId =
       currentProject.organizationId ??
       currentProject.organization_id ??
-      userContext?.activeOrganizationId ??
-      userContext?.organizationId ??
-      userContext?.organization_id ??
+      activeOrganizationId ??
       null;
 
     return {
@@ -1492,58 +1664,136 @@ const MaonoSaveButton: React.FC = () => {
       organizationId,
       permissions: currentProject.permissions ?? [],
     };
-  }, [currentProject, projectSlug, user]);
+  }, [activeOrganizationId, currentProject, projectSlug]);
 
-  const allowed = useMemo(() => {
-    if (!authenticated || !projectSlug || !savePermissionContext) {
+  const canSaveExisting = useMemo(() => {
+    if (
+      !authenticated ||
+      !projectSlug ||
+      !savePermissionContext
+    ) {
       return false;
     }
 
-    return can(user as any, PERMISSION.PROJECT_SAVE, savePermissionContext);
-  }, [authenticated, projectSlug, savePermissionContext, user]);
+    return can(
+      user as any,
+      PERMISSION.PROJECT_SAVE,
+      savePermissionContext,
+    );
+  }, [
+    authenticated,
+    projectSlug,
+    savePermissionContext,
+    user,
+  ]);
 
-  async function handleSave() {
-    if (!allowed) {
+  const canCreateNew = useMemo(() => {
+    if (
+      !authenticated ||
+      projectSlug ||
+      !activeOrganizationId
+    ) {
+      return false;
+    }
+
+    return can(
+      user as any,
+      PERMISSION.PROJECT_CREATE,
+      {
+        organizationId: activeOrganizationId,
+      },
+    );
+  }, [
+    activeOrganizationId,
+    authenticated,
+    projectSlug,
+    user,
+  ]);
+
+  const allowed = projectSlug
+    ? canSaveExisting
+    : canCreateNew;
+
+  async function captureCreationAttempt() {
+    if (!mapState) {
+      throw new Error(
+        "O mapa ainda não está pronto para ser salvo.",
+      );
+    }
+
+    // Uma única serialização e uma única captura por tentativa.
+    const rawSaved = KeplerGlSchema.save(mapState);
+    const config = normalizeSavedKeplerConfig(
+      rawSaved,
+      mapState,
+    );
+    const capture = await captureThumbnail(mapState, config);
+
+    return { config, capture };
+  }
+
+  async function handleExistingProjectSave() {
+    if (!canSaveExisting) {
       setMessageType("error");
-      setMessage("Você não tem permissão para salvar alterações permanentes neste projeto.");
+      setMessage(
+        "Você não tem permissão para salvar alterações permanentes neste projeto.",
+      );
       return;
     }
 
-    if (!projectSlug || !mapState) return;
+    if (
+      !projectSlug ||
+      !mapState ||
+      operationInFlightRef.current
+    ) {
+      return;
+    }
 
+    setCreationDraft(input);
+    operationInFlightRef.current = true;
     setSaving(true);
     setMessage("");
 
     try {
-      const rawSaved = KeplerGlSchema.save(mapState);
-      const config = normalizeSavedKeplerConfig(rawSaved, mapState);
-      const capture = await captureThumbnail(mapState, config);
+      const { config, capture } =
+        await captureCreationAttempt();
 
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          config,
-          thumbnailDataUrl: capture.dataUrl,
-          thumbnailCapture: {
-            method: capture.method,
-            diagnostics: capture.diagnostics.join(" | "),
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(
+          projectSlug,
+        )}/config`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            config,
+            thumbnailDataUrl: capture.dataUrl,
+            thumbnailCapture: {
+              method: capture.method,
+              diagnostics: capture.diagnostics.join(" | "),
+            },
+          }),
+        },
+      );
 
       const data = await readJsonResponse(response);
 
       if (!response.ok || data?.ok === false) {
-        throw new Error(getSaveErrorMessage(response, data));
+        throw new Error(
+          getSaveErrorMessage(response, data),
+        );
       }
 
-      const previewError = getPreviewErrorMessage(data?.previewError);
-      const captureDiagnostics = shortDiagnostics(capture.diagnostics);
+      const previewError = getPreviewErrorMessage(
+        data?.previewError,
+      );
+      const captureDiagnostics = shortDiagnostics(
+        capture.diagnostics,
+      );
 
       setMessageType("success");
 
@@ -1572,39 +1822,172 @@ const MaonoSaveButton: React.FC = () => {
       setMessageType("error");
       setMessage(getSaveFailureMessage(error));
     } finally {
+      operationInFlightRef.current = false;
       setSaving(false);
     }
   }
 
-  if (!allowed) return null;
+  async function handleCreateProject(
+    input: ProjectCreateInput,
+  ) {
+    if (
+      !canCreateNew ||
+      !mapState ||
+      !activeOrganizationId ||
+      operationInFlightRef.current
+    ) {
+      return;
+    }
+
+    operationInFlightRef.current = true;
+    setSaving(true);
+    setCreationError(null);
+    setCreationFailedStage(null);
+    setCreationStage("capturing");
+
+    try {
+      const { config, capture } =
+        await captureCreationAttempt();
+      const idempotencyKey = getOrCreateCreationKey(
+        activeOrganizationId,
+      );
+
+      setCreationStage("creating_record");
+
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          name: input.name,
+          description: input.description,
+          organizationId: activeOrganizationId,
+          idempotencyKey,
+          config,
+          thumbnailDataUrl: capture.dataUrl,
+          thumbnailCapture: {
+            method: capture.method,
+            diagnostics: capture.diagnostics.join(" | "),
+          },
+        }),
+      });
+
+      const data =
+        await readJsonResponse(response) as ProjectCreationResponse;
+
+      if (
+        !response.ok ||
+        data?.ok === false ||
+        !data?.project?.slug
+      ) {
+        const failedStage = normalizeCreationStage(
+          data?.error?.details?.stage,
+        );
+
+        setCreationFailedStage(failedStage);
+        throw new Error(
+          getCreationResponseError(response, data),
+        );
+      }
+
+      setCreationStage("success");
+      clearCreationKey(activeOrganizationId);
+
+      const createdSlug = data.project.slug;
+      navigate(
+        `/projects/${encodeURIComponent(createdSlug)}/map`,
+        { replace: true },
+      );
+    } catch (error) {
+      setCreationStage("error");
+      setCreationError(
+        getSaveFailureMessage(error),
+      );
+    } finally {
+      operationInFlightRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  function handlePrimaryAction() {
+    if (projectSlug) {
+      void handleExistingProjectSave();
+      return;
+    }
+
+    setCreationError(null);
+    setCreationFailedStage(null);
+
+    if (creationStage !== "error") {
+      setCreationStage("ready");
+    }
+
+    setCreatePanelOpen(true);
+  }
+
+  if (!allowed) {
+    return null;
+  }
 
   return (
-    <div
-      data-maono-no-preview="true"
-      className="fixed bottom-6 right-6 z-[99998] flex flex-col items-end gap-3"
-    >
-      {message && (
-        <div
-          className={
-            messageType === "success"
-              ? "max-w-xl rounded-2xl border border-emerald-300/50 bg-emerald-800/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
-              : "max-w-xl rounded-2xl border border-red-300/50 bg-red-900/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
+    <>
+      <div
+        data-maono-no-preview="true"
+        className="fixed bottom-6 right-6 z-[99998] flex flex-col items-end gap-3"
+      >
+        {message ? (
+          <div
+            className={
+              messageType === "success"
+                ? "max-w-xl rounded-2xl border border-emerald-300/50 bg-emerald-800/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
+                : "max-w-xl rounded-2xl border border-red-300/50 bg-red-900/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
+            }
+          >
+            {message}
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={handlePrimaryAction}
+          disabled={saving || !mapState}
+          className="rounded-2xl border border-emerald-300/50 bg-emerald-600 px-5 py-4 text-sm font-extrabold text-white shadow-2xl transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+          title={
+            projectSlug
+              ? "Salvar alterações no arquivo JSON original do projeto no Dropbox"
+              : "Transformar este mapa em um novo projeto Maõno"
           }
         >
-          {message}
-        </div>
-      )}
+          {saving
+            ? projectSlug
+              ? "Salvando..."
+              : "Criando..."
+            : projectSlug
+              ? "Salvar na Maõno"
+              : "Salvar como projeto"}
+        </button>
+      </div>
 
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={saving || !mapState}
-        className="rounded-2xl border border-emerald-300/50 bg-emerald-600 px-5 py-4 text-sm font-extrabold text-white shadow-2xl transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-        title="Salvar alterações no arquivo JSON original do projeto no Dropbox"
-      >
-        {saving ? "Salvando..." : "Salvar na Maõno"}
-      </button>
-    </div>
+      <ProjectCreatePanel
+        open={createPanelOpen}
+        organizationName={activeOrganizationName}
+        initialName={creationDraft?.name}
+        initialDescription={creationDraft?.description}
+        busy={saving}
+        stage={creationStage}
+        failedStage={creationFailedStage}
+        error={creationError}
+        onClose={() => {
+          if (!saving) {
+            setCreatePanelOpen(false);
+          }
+        }}
+        onSubmit={handleCreateProject}
+      />
+    </>
   );
 };
 

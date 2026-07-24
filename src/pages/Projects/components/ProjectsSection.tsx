@@ -8,6 +8,7 @@ import React, {
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
 import type { ProjectListItem, ProjectSectionKey } from "../projects-api";
 import ProjectCard from "./ProjectCard";
+import ProjectMetadataPanel from "./ProjectMetadataPanel";
 import { projectThumbnailKey } from "./project-card-utils";
 
 type ProjectsSectionProps = {
@@ -19,7 +20,9 @@ type ProjectsSectionProps = {
   favoriteBusySlugs?: Record<string, true>;
   canProjectSave: (project: ProjectListItem) => boolean;
   canProjectFavorite: (project: ProjectListItem) => boolean;
+  canProjectEdit: (project: ProjectListItem) => boolean;
   onFavoriteToggle: (project: ProjectListItem) => void | Promise<void>;
+  onProjectUpdated: (project: ProjectListItem) => void;
   onRetry?: () => void;
 };
 
@@ -94,7 +97,9 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   favoriteBusySlugs = {},
   canProjectSave,
   canProjectFavorite,
+  canProjectEdit,
   onFavoriteToggle,
+  onProjectUpdated,
   onRetry,
 }) => {
   const filteredProjects = useMemo(
@@ -105,6 +110,9 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     Record<string, true>
   >({});
   const [openingSlug, setOpeningSlug] = useState<string | null>(null);
+  const [actionsOpenSlug, setActionsOpenSlug] = useState<string | null>(null);
+  const [editingProject, setEditingProject] =
+    useState<ProjectListItem | null>(null);
 
   const visibleThumbnailKeys = useMemo(
     () => filteredProjects.map(projectThumbnailKey),
@@ -135,7 +143,34 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     ) {
       setOpeningSlug(null);
     }
-  }, [filteredProjects, openingSlug]);
+
+    if (
+      actionsOpenSlug &&
+      !filteredProjects.some((project) => project.slug === actionsOpenSlug)
+    ) {
+      setActionsOpenSlug(null);
+    }
+
+    if (
+      editingProject &&
+      !filteredProjects.some(
+        (project) => project.slug === editingProject.slug,
+      )
+    ) {
+      setEditingProject(null);
+    }
+  }, [
+    actionsOpenSlug,
+    editingProject,
+    filteredProjects,
+    openingSlug,
+  ]);
+
+  useEffect(() => {
+    setActionsOpenSlug(null);
+    setEditingProject(null);
+  }, [section]);
+
 
   if (loading && projects.length === 0) {
     return <ProjectGridSkeleton />;
@@ -179,36 +214,58 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   const thumbnailsPending = !allVisibleThumbnailsSettled;
 
   return (
-    <section
-      className="mm-project-grid"
-      aria-busy={loading || thumbnailsPending}
-      aria-label="Projetos disponíveis"
-    >
-      {filteredProjects.map((project) => (
-        <ProjectCard
-          key={project.slug}
-          project={project}
-          canSave={canProjectSave(project)}
-          canFavorite={canProjectFavorite(project)}
-          favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
-          holdThumbnailShimmer={thumbnailsPending}
-          opening={openingSlug === project.slug}
-          onOpen={(selectedProject) => {
-            setOpeningSlug(selectedProject.slug);
-          }}
-          onFavoriteToggle={onFavoriteToggle}
-          onThumbnailSettled={handleThumbnailSettled}
-        />
-      ))}
+    <>
+      <section
+        className="mm-project-grid"
+        aria-busy={loading || thumbnailsPending}
+        aria-label="Projetos disponíveis"
+      >
+        {filteredProjects.map((project) => (
+          <ProjectCard
+            key={project.slug}
+            project={project}
+            canSave={canProjectSave(project)}
+            canFavorite={canProjectFavorite(project)}
+            canEditMetadata={canProjectEdit(project)}
+            actionsOpen={actionsOpenSlug === project.slug}
+            favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
+            holdThumbnailShimmer={thumbnailsPending}
+            opening={openingSlug === project.slug}
+            onOpen={(selectedProject) => {
+              setOpeningSlug(selectedProject.slug);
+              setActionsOpenSlug(null);
+            }}
+            onActionsOpenChange={(open) => {
+              setActionsOpenSlug(open ? project.slug : null);
+            }}
+            onEditMetadata={(selectedProject) => {
+              setActionsOpenSlug(null);
+              setEditingProject(selectedProject);
+            }}
+            onFavoriteToggle={onFavoriteToggle}
+            onThumbnailSettled={handleThumbnailSettled}
+          />
+        ))}
 
-      {loading || thumbnailsPending ? (
-        <span className="mm-sr-only" role="status" aria-live="polite">
-          {loading
-            ? "Atualizando projetos."
-            : "Carregando imagens dos projetos."}
-        </span>
-      ) : null}
-    </section>
+        {loading || thumbnailsPending ? (
+          <span className="mm-sr-only" role="status" aria-live="polite">
+            {loading
+              ? "Atualizando projetos."
+              : "Carregando imagens dos projetos."}
+          </span>
+        ) : null}
+      </section>
+
+      <ProjectMetadataPanel
+        project={editingProject}
+        open={Boolean(editingProject)}
+        onClose={() => setEditingProject(null)}
+        onUpdated={(updatedProject) => {
+          setEditingProject(updatedProject);
+          onProjectUpdated(updatedProject);
+        }}
+      />
+    </>
   );
 };
 
