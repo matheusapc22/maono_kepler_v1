@@ -96,12 +96,17 @@ test("seção fecha menu e painel ao trocar seção ou ocultar projeto", () => {
   assert.match(sectionSource, /setEditingProject\(null\)/);
 });
 
-test("gate de thumbnails permanece preservado", () => {
-  assert.match(sectionSource, /settledThumbnailKeys/);
-  assert.match(sectionSource, /visibleThumbnailKeys/);
-  assert.match(sectionSource, /allVisibleThumbnailsSettled/);
-  assert.match(sectionSource, /holdThumbnailShimmer=\{thumbnailsPending\}/);
-  assert.match(sectionSource, /onThumbnailSettled=\{handleThumbnailSettled\}/);
+test("cards deixam de depender de um gate global de thumbnails", () => {
+  assert.doesNotMatch(sectionSource, /settledThumbnailKeys/);
+  assert.doesNotMatch(sectionSource, /visibleThumbnailKeys/);
+  assert.doesNotMatch(sectionSource, /allVisibleThumbnailsSettled/);
+  assert.doesNotMatch(sectionSource, /holdThumbnailShimmer/);
+  assert.doesNotMatch(sectionSource, /onThumbnailSettled/);
+  assert.match(
+    sectionSource,
+    /const delays = \[2000, 4000, 8000, 15000\]/,
+  );
+  assert.match(sectionSource, /new AbortController\(\)/);
 });
 
 test("drawer consulta metadados atuais e edita somente título e descrição", () => {

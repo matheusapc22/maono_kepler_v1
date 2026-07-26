@@ -1,15 +1,17 @@
 import React, {
-  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
-import type { ProjectListItem, ProjectSectionKey } from "../projects-api";
+import {
+  fetchProjectThumbnailStatus,
+  type ProjectListItem,
+  type ProjectSectionKey,
+} from "../projects-api";
 import ProjectCard from "./ProjectCard";
 import ProjectMetadataPanel from "./ProjectMetadataPanel";
-import { projectThumbnailKey } from "./project-card-utils";
 
 type ProjectsSectionProps = {
   section: ProjectSectionKey;
@@ -106,35 +108,10 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     () => projects.filter((project) => matchesSearch(project, searchQuery)),
     [projects, searchQuery],
   );
-  const [settledThumbnailKeys, setSettledThumbnailKeys] = useState<
-    Record<string, true>
-  >({});
   const [openingSlug, setOpeningSlug] = useState<string | null>(null);
   const [actionsOpenSlug, setActionsOpenSlug] = useState<string | null>(null);
   const [editingProject, setEditingProject] =
     useState<ProjectListItem | null>(null);
-
-  const visibleThumbnailKeys = useMemo(
-    () => filteredProjects.map(projectThumbnailKey),
-    [filteredProjects],
-  );
-
-  const allVisibleThumbnailsSettled =
-    visibleThumbnailKeys.length === 0 ||
-    visibleThumbnailKeys.every((key) => settledThumbnailKeys[key]);
-
-  const handleThumbnailSettled = useCallback((project: ProjectListItem) => {
-    const thumbnailKey = projectThumbnailKey(project);
-
-    setSettledThumbnailKeys((current) =>
-      current[thumbnailKey]
-        ? current
-        : {
-            ...current,
-            [thumbnailKey]: true,
-          },
-    );
-  }, []);
 
   useEffect(() => {
     if (
@@ -171,6 +148,85 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     setEditingProject(null);
   }, [section]);
 
+  useEffect(() => {
+    const pendingProjects = projects.filter(
+      (project) => project.thumbnailStatus === "PENDING",
+    );
+
+    if (pendingProjects.length === 0) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const delays = [2000, 4000, 8000, 15000];
+    let attempt = 0;
+    let timer = 0;
+
+    const schedule = () => {
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      timer = window.setTimeout(() => {
+        void poll();
+      }, delay);
+    };
+
+    const poll = async () => {
+      const results = await Promise.allSettled(
+        pendingProjects.map(async (project) => ({
+          project,
+          state: await fetchProjectThumbnailStatus(project.slug, {
+            signal: controller.signal,
+          }),
+        })),
+      );
+
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      let stillPending = false;
+
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") {
+          stillPending = true;
+          return;
+        }
+
+        const { project, state } = result.value;
+
+        if (state.thumbnailStatus === "PENDING") {
+          stillPending = true;
+        }
+
+        const changed =
+          state.thumbnailStatus !== project.thumbnailStatus ||
+          state.configRevision !== Number(project.configRevision || 0) ||
+          state.thumbnailRevision !==
+            (project.thumbnailRevision ?? null) ||
+          state.thumbnailAttempts !==
+            Number(project.thumbnailAttempts || 0);
+
+        if (changed) {
+          onProjectUpdated({
+            ...project,
+            ...state,
+          });
+        }
+      });
+
+      attempt += 1;
+
+      if (stillPending) {
+        schedule();
+      }
+    };
+
+    schedule();
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [onProjectUpdated, projects]);
 
   if (loading && projects.length === 0) {
     return <ProjectGridSkeleton />;
@@ -211,13 +267,11 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     );
   }
 
-  const thumbnailsPending = !allVisibleThumbnailsSettled;
-
   return (
     <>
       <section
         className="mm-project-grid"
-        aria-busy={loading || thumbnailsPending}
+        aria-busy={loading}
         aria-label="Projetos disponíveis"
       >
         {filteredProjects.map((project) => (
@@ -229,7 +283,6 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
             canEditMetadata={canProjectEdit(project)}
             actionsOpen={actionsOpenSlug === project.slug}
             favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
-            holdThumbnailShimmer={thumbnailsPending}
             opening={openingSlug === project.slug}
             onOpen={(selectedProject) => {
               setOpeningSlug(selectedProject.slug);
@@ -243,15 +296,12 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
               setEditingProject(selectedProject);
             }}
             onFavoriteToggle={onFavoriteToggle}
-            onThumbnailSettled={handleThumbnailSettled}
           />
         ))}
 
-        {loading || thumbnailsPending ? (
+        {loading ? (
           <span className="mm-sr-only" role="status" aria-live="polite">
-            {loading
-              ? "Atualizando projetos."
-              : "Carregando imagens dos projetos."}
+            Atualizando projetos.
           </span>
         ) : null}
       </section>

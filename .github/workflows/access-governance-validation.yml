@@ -6,9 +6,15 @@ on:
       - mano_kepler_v1
     paths:
       - "functions/_lib/access-governance.js"
+      - "functions/_lib/dropbox.js"
+      - "functions/_lib/project-*.js"
+      - "functions/_lib/projects.js"
       - "functions/api/admin/organizations/**"
+      - "functions/api/admin/project-previews/**"
       - "functions/api/organizations/**"
+      - "functions/api/projects/**"
       - "migrations/0012_access_delegation_policy.sql"
+      - "migrations/0015_project_preview_lifecycle.sql"
       - "schema.sql"
       - "package.json"
       - "vite.config.ts"
@@ -16,10 +22,12 @@ on:
       - "src/main.tsx"
       - "src/access-control/permissions.ts"
       - "src/pages/Admin/**"
-      - "src/pages/Projects/components/UsersAccessSection.tsx"
+      - "src/pages/Kepler/**"
+      - "src/pages/Projects/**"
       - "tests/access-delegation.test.mjs"
       - "tests/admin-user-manager-delegation-map.test.mjs"
       - "tests/cloudflare-build-chunking.test.mjs"
+      - "tests/project-*.test.mjs"
       - ".github/workflows/access-governance-validation.yml"
   workflow_dispatch:
 
@@ -63,3 +71,6 @@ jobs:
           tests/access-delegation.test.mjs
           tests/admin-user-manager-delegation-map.test.mjs
           tests/cloudflare-build-chunking.test.mjs
+
+      - name: Project preview and card tests
+        run: npm run test:projects

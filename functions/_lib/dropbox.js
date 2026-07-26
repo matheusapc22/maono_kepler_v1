@@ -13,6 +13,7 @@ const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder"
 const DROPBOX_CREATE_FOLDER_URL =
   "https://api.dropboxapi.com/2/files/create_folder_v2";
 const DROPBOX_DELETE_URL = "https://api.dropboxapi.com/2/files/delete_v2";
+const DROPBOX_METADATA_URL = "https://api.dropboxapi.com/2/files/get_metadata";
 const DROPBOX_UPLOAD_CONTENT_TYPE = "application/octet-stream";
 
 export function normalizeDropboxFolderPath(path) {
@@ -79,6 +80,28 @@ export function getPreviewFileNameFromConfigFile(
   }
 
   return `${cleanFile}.png`;
+}
+
+export function getRevisionedPreviewFileNameFromConfigFile(
+  fileName = "config.kepler.json",
+  revision,
+) {
+  const normalizedRevision = Number(revision);
+
+  if (!Number.isInteger(normalizedRevision) || normalizedRevision < 0) {
+    const error = new Error("Revisão de preview inválida.");
+    error.status = 400;
+    error.code = "THUMBNAIL_REVISION_INVALID";
+    throw error;
+  }
+
+  const canonicalName = getPreviewFileNameFromConfigFile(fileName);
+
+  if (/\.png$/i.test(canonicalName)) {
+    return canonicalName.replace(/\.png$/i, `.r${normalizedRevision}.png`);
+  }
+
+  return `${canonicalName}.r${normalizedRevision}.png`;
 }
 
 async function getDropboxAccessToken(env) {
@@ -194,6 +217,39 @@ export async function listDropboxFolder(env, path = "") {
     throw new Error(
       `Falha ao listar pasta Dropbox ${normalizedPath || "/"}: ${response.status} ${text}`,
     );
+  }
+
+  return await response.json();
+}
+
+export async function getDropboxMetadata(env, rootPath, fileName) {
+  const accessToken = await getDropboxAccessToken(env);
+  const path = joinDropboxPath(rootPath, fileName);
+  const response = await fetch(DROPBOX_METADATA_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      path,
+      include_media_info: false,
+      include_deleted: false,
+      include_has_explicit_shared_members: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    const error = new Error(
+      `Falha ao consultar arquivo Dropbox ${path}: ${response.status} ${text}`,
+    );
+
+    error.status = response.status;
+    error.code = text.includes("path/not_found")
+      ? "DROPBOX_PATH_NOT_FOUND"
+      : "DROPBOX_METADATA_FAILED";
+    throw error;
   }
 
   return await response.json();

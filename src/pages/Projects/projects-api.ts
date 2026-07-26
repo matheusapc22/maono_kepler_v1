@@ -6,10 +6,22 @@ import type {
 
 export type ProjectSectionKey = "all" | "recent" | "favorites";
 
+export type ProjectThumbnailStatus =
+  | "UNKNOWN"
+  | "PENDING"
+  | "READY"
+  | "FAILED"
+  | "MISSING";
+
 export type ProjectListItem = MaonoProject & {
   favorite?: boolean;
   favorited?: boolean;
   thumbnailUrl?: string;
+  thumbnailStatus?: ProjectThumbnailStatus;
+  configRevision?: number;
+  thumbnailRevision?: number | null;
+  thumbnailUpdatedAt?: string | null;
+  thumbnailAttempts?: number;
 };
 
 export type ProjectMetadata = ProjectListItem & {
@@ -51,6 +63,14 @@ type FavoriteResponse = ApiErrorPayload & {
 
 type ProjectMetadataResponse = ApiErrorPayload & {
   project?: ProjectMetadata;
+};
+
+type ProjectThumbnailStatusResponse = ApiErrorPayload & {
+  thumbnailStatus?: ProjectThumbnailStatus;
+  configRevision?: number;
+  thumbnailRevision?: number | null;
+  thumbnailUpdatedAt?: string | null;
+  thumbnailAttempts?: number;
 };
 
 export class ProjectMetadataApiError extends Error {
@@ -169,6 +189,47 @@ export async function fetchProjects(
   }
 
   return Array.isArray(data.projects) ? data.projects : [];
+}
+
+export async function fetchProjectThumbnailStatus(
+  slug: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  const response = await fetch(
+    `/api/projects/${encodeURIComponent(slug)}/thumbnail/status`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+      signal: options.signal,
+    },
+  );
+  const data =
+    await readJsonResponse<ProjectThumbnailStatusResponse>(response);
+
+  if (!response.ok) {
+    throw new Error(
+      errorMessage(
+        data,
+        "Não foi possível consultar a visualização do projeto.",
+      ),
+    );
+  }
+
+  return {
+    thumbnailStatus: data.thumbnailStatus || "UNKNOWN",
+    configRevision: Math.max(0, Number(data.configRevision || 0)),
+    thumbnailRevision:
+      data.thumbnailRevision === null ||
+      data.thumbnailRevision === undefined
+        ? null
+        : Math.max(0, Number(data.thumbnailRevision || 0)),
+    thumbnailUpdatedAt: data.thumbnailUpdatedAt ?? null,
+    thumbnailAttempts: Math.max(
+      0,
+      Number(data.thumbnailAttempts || 0),
+    ),
+  };
 }
 
 export async function setProjectFavorite(

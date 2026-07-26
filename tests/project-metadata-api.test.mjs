@@ -163,10 +163,12 @@ test("salvar mapa não incrementa metadata_version", () => {
 test("política de preview continua independente do salvamento do JSON", () => {
   assert.match(
     configSource,
-    /A falha do preview nunca deve bloquear[\s\S]*uploadDropboxTextFile/,
+    /O JSON é o arquivo crítico[\s\S]*uploadDropboxTextFile/,
   );
-  assert.match(configSource, /try\s*\{[\s\S]*saveProjectThumbnail/);
-  assert.match(configSource, /previewError\s*=\s*getErrorMessage\(error\)/);
+  assert.match(configSource, /asyncThumbnailEnabled\(env\)/);
+  assert.match(configSource, /configRevision/);
+  assert.match(configSource, /preview_status = 'PENDING'|thumbnailState/);
+  assert.match(configSource, /Server-Timing/);
 });
 
 test("resposta do config inclui último editor e versão", () => {
@@ -174,6 +176,6 @@ test("resposta do config inclui último editor e versão", () => {
   assert.match(configSource, /metadataVersion:\s*Number\(/);
   assert.match(
     configSource,
-    /publicProjectForConfigResponse\(\{\s*\.\.\.project,\s*\.\.\.updatedProject\s*\}\)/,
+    /publicProjectForConfigResponse\(\{\s*\.\.\.project,\s*\.\.\.updatedProject,\s*\}\)/,
   );
 });

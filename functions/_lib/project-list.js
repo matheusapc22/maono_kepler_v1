@@ -1,4 +1,5 @@
 import { getActiveOrganizationId, publicProject } from "./projects.js";
+import { publicProjectPreview } from "./project-preview.js";
 
 const ACCESS_LEVELS = new Set(["owner", "editor", "viewer"]);
 
@@ -16,6 +17,11 @@ const PUBLIC_PROJECT_COLUMNS = `
   projects.active,
   projects.created_at,
   projects.updated_at,
+  projects.config_revision,
+  projects.preview_status,
+  projects.preview_revision,
+  projects.preview_updated_at,
+  projects.preview_attempts,
   organizations.name AS organization_name,
   organizations.slug AS organization_slug,
   creator.id AS creator_user_id,
@@ -93,6 +99,7 @@ function publicSafeProject(project, favoriteProjectIds = new Set()) {
       base.updated_at ??
       project?.updated_at ??
       undefined,
+    ...publicProjectPreview(project),
     favorite: favoriteProjectIds.has(Number(id)),
   };
 }

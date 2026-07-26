@@ -646,7 +646,12 @@ export async function touchProjectAfterConfigSave(
      SET
        updated_by = ?,
        updated_by_name_snapshot = ?,
-       updated_at = CURRENT_TIMESTAMP
+       updated_at = CURRENT_TIMESTAMP,
+       config_revision = config_revision + 1,
+       preview_status = 'PENDING',
+       preview_attempts = 0,
+       preview_last_error = NULL,
+       preview_capture_method = NULL
      WHERE id = ?
        ${organizationClause}
      RETURNING *`,
