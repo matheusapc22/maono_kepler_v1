@@ -1,4 +1,7 @@
-import type { ProjectListItem } from "../projects-api";
+import type {
+  ProjectListItem,
+  ProjectThumbnailStatus,
+} from "../projects-api";
 
 export type NormalizedProjectAccessLevel =
   | "owner"
@@ -103,20 +106,73 @@ export function formatProjectRelativeDate(value?: string | null) {
   return `Atualizado em ${formatAbsoluteProjectDate(value)}`;
 }
 
+export function normalizeProjectThumbnailStatus(
+  value?: string | null,
+): ProjectThumbnailStatus {
+  const normalized = String(value || "").trim().toUpperCase();
+
+  if (
+    normalized === "PENDING" ||
+    normalized === "READY" ||
+    normalized === "FAILED" ||
+    normalized === "MISSING"
+  ) {
+    return normalized;
+  }
+
+  return "UNKNOWN";
+}
+
+export function projectThumbnailStatusLabel(
+  value?: string | null,
+) {
+  const status = normalizeProjectThumbnailStatus(value);
+
+  if (status === "PENDING") {
+    return "Atualizando prévia";
+  }
+
+  if (status === "FAILED") {
+    return "Prévia temporariamente indisponível";
+  }
+
+  if (status === "MISSING") {
+    return "Prévia ainda não gerada";
+  }
+
+  return null;
+}
+
 export function projectThumbnailUrl(project: ProjectListItem) {
+  const status = normalizeProjectThumbnailStatus(
+    project.thumbnailStatus,
+  );
+
+  if (!["READY", "UNKNOWN"].includes(status)) {
+    return null;
+  }
+
   if (project.thumbnailUrl) {
     return project.thumbnailUrl;
   }
 
-  const stableVersion =
-    project.updatedAt || project.createdAt || project.slug;
-  const cacheKey = encodeURIComponent(stableVersion);
+  const revision =
+    status === "READY"
+      ? project.thumbnailRevision
+      : project.configRevision ?? 0;
+
+  if (
+    status === "READY" &&
+    (revision === null || revision === undefined)
+  ) {
+    return null;
+  }
 
   return `/api/projects/${encodeURIComponent(
     project.slug,
-  )}/thumbnail?v=${cacheKey}`;
+  )}/thumbnail?v=${encodeURIComponent(String(revision ?? 0))}`;
 }
 
 export function projectThumbnailKey(project: ProjectListItem) {
-  return `${project.slug}::${projectThumbnailUrl(project)}`;
+  return `${project.slug}::${projectThumbnailUrl(project) || "svg"}`;
 }

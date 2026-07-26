@@ -115,7 +115,7 @@ test("criação completa começa inativa antes dos arquivos", () => {
   assert.match(projectsIndex, /status = 'ERROR'/);
 });
 
-test("ativação acontece somente depois de Dropbox, preview e owner", () => {
+test("ativação depende do JSON e owner, sem bloquear no preview assíncrono", () => {
   const finalize = functionBlock(
     projectsIndex,
     "finalizeProjectCreation",
@@ -123,15 +123,15 @@ test("ativação acontece somente depois de Dropbox, preview e owner", () => {
 
   const folderIndex = finalize.indexOf("ensureDropboxFolder");
   const configIndex = finalize.indexOf("uploadDropboxTextFile");
-  const previewIndex = finalize.indexOf("uploadDropboxBinaryFile");
   const ownerIndex = finalize.indexOf("INSERT INTO user_projects");
   const activateIndex = finalize.indexOf("active = 1");
 
   assert.ok(folderIndex >= 0);
   assert.ok(configIndex > folderIndex);
-  assert.ok(previewIndex > configIndex);
-  assert.ok(ownerIndex > previewIndex);
+  assert.ok(ownerIndex > configIndex);
   assert.ok(activateIndex > ownerIndex);
+  assert.match(finalize, /let previewStatus = "PENDING"/);
+  assert.match(finalize, /if \(thumbnail\)/);
   assert.match(finalize, /access_level\s*\)\s*VALUES \(\?, \?, 'owner'\)/);
 });
 
@@ -156,7 +156,14 @@ test("idempotência usa chave persistida e reserva única", () => {
 
 test("Novo mapa exibe botão com project.create sem projectSlug", () => {
   assert.match(saveButton, /PERMISSION\.PROJECT_CREATE/);
-  assert.match(saveButton, /!authenticated \|\|\s*projectSlug/);
+  assert.match(
+    saveButton,
+    /authenticated\s*&&\s*!projectSlug\s*&&\s*activeOrganizationId/,
+  );
+  assert.match(
+    saveButton,
+    /const allowed = projectSlug \? canSaveExisting : canCreateNew/,
+  );
   assert.match(saveButton, /"Salvar como projeto"/);
   assert.match(saveButton, /<ProjectCreatePanel/);
 });
@@ -171,32 +178,38 @@ test("mapa existente mantém PUT de config", () => {
   assert.match(saveButton, /handleExistingProjectSave/);
 });
 
-test("captura ocorre uma única vez por tentativa", () => {
-  const captureAttempt = functionBlock(
-    saveButton,
-    "captureCreationAttempt",
-  );
-
+test("criação serializa uma vez e não captura no caminho crítico", () => {
+  const create = functionBlock(saveButton, "handleCreateProject");
   assert.equal(
-    (captureAttempt.match(/KeplerGlSchema\.save/g) || []).length,
+    (create.match(/serializeProjectConfig\(mapState\)/g) || []).length,
     1,
   );
   assert.equal(
-    (captureAttempt.match(/captureThumbnail\(/g) || []).length,
-    1,
+    (create.match(/captureProjectThumbnail\(/g) || []).length,
+    0,
   );
+  assert.match(create, /enqueuePreview\(createdSlug, revision, config\)/);
   assert.match(saveButton, /operationInFlightRef\.current/);
 });
 
-test("criação envia config e thumbnail no mesmo pedido coordenado", () => {
+test("criação confirma JSON antes de enfileirar preview", () => {
   const create = functionBlock(saveButton, "handleCreateProject");
+  const legacyCapture = functionBlock(saveButton, "legacyCapture");
 
   assert.match(create, /fetch\("\/api\/projects"/);
   assert.match(create, /method:\s*"POST"/);
   assert.match(create, /idempotencyKey,/);
   assert.match(create, /config,/);
-  assert.match(create, /thumbnailDataUrl:\s*capture\.dataUrl/);
-  assert.match(create, /thumbnailCapture/);
+  assert.match(create, /const legacy = await legacyCapture\(config\)/);
+  assert.match(create, /thumbnailDataUrl:\s*legacy\.dataUrl/);
+  assert.match(
+    legacyCapture,
+    /if \(ASYNC_THUMBNAIL_ENABLED\) \{\s*return null;/,
+  );
+  assert.ok(
+    create.indexOf("!response.ok") <
+      create.indexOf("enqueuePreview(createdSlug, revision, config)"),
+  );
 });
 
 test("sucesso redireciona para a rota do projeto criado", () => {

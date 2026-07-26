@@ -21,18 +21,25 @@ import {
   publicProject,
 } from "../../_lib/projects.js";
 import {
-  deleteDropboxPathIfExists,
   ensureDropboxFolder,
-  getPreviewFileNameFromConfigFile,
+  getRevisionedPreviewFileNameFromConfigFile,
   joinDropboxPath,
   uploadDropboxBinaryFile,
   uploadDropboxTextFile,
 } from "../../_lib/dropbox.js";
+import {
+  publicProjectPreview,
+  sanitizeCaptureMethod,
+} from "../../_lib/project-preview.js";
 
 const DEFAULT_CONFIG_FILE = "config.kepler.json";
 const MAX_CONFIG_BYTES = 25 * 1024 * 1024;
 const MAX_THUMBNAIL_BYTES = 8 * 1024 * 1024;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9:_-]{12,128}$/;
+
+function asyncThumbnailEnabled(env) {
+  return String(env?.ASYNC_PROJECT_THUMBNAIL ?? "true").toLowerCase() !== "false";
+}
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -493,6 +500,7 @@ async function finalizeProjectCreation(
     actor,
     config,
     thumbnail,
+    thumbnailCapture,
     onStage = () => {},
   },
 ) {
@@ -517,22 +525,47 @@ async function finalizeProjectCreation(
     content,
   );
 
-  const previewFileName = getPreviewFileNameFromConfigFile(
-    project.default_config_file || DEFAULT_CONFIG_FILE,
-  );
-  const previewPath = joinDropboxPath(
-    project.dropbox_root_path,
-    previewFileName,
-  );
+  const configRevision = 1;
+  let previewStatus = "PENDING";
+  let previewRevision = null;
+  let previewAttempts = 0;
+  let previewLastError = null;
+  let preview = null;
+  const previewCaptureMethod = thumbnail
+    ? sanitizeCaptureMethod(thumbnailCapture?.method || "legacy-blocking")
+    : null;
 
-  await deleteDropboxPathIfExists(env, previewPath);
-  await uploadDropboxBinaryFile(
-    env,
-    project.dropbox_root_path,
-    previewFileName,
-    thumbnail.bytes,
-    thumbnail.contentType,
-  );
+  // A criação deixa de depender da captura. Este bloco só preserva o
+  // rollback operacional quando ASYNC_PROJECT_THUMBNAIL=false.
+  if (thumbnail) {
+    previewAttempts = 1;
+    const previewFileName = getRevisionedPreviewFileNameFromConfigFile(
+      project.default_config_file || DEFAULT_CONFIG_FILE,
+      configRevision,
+    );
+
+    try {
+      await uploadDropboxBinaryFile(
+        env,
+        project.dropbox_root_path,
+        previewFileName,
+        thumbnail.bytes,
+        thumbnail.contentType,
+      );
+      previewStatus = "READY";
+      previewRevision = configRevision;
+      preview = {
+        previewFileName,
+        previewSizeBytes: thumbnail.bytes.byteLength,
+        previewContentType: thumbnail.contentType,
+      };
+    } catch (error) {
+      previewStatus = "FAILED";
+      previewLastError = String(
+        error?.code || "LEGACY_THUMBNAIL_UPLOAD_FAILED",
+      ).slice(0, 160);
+    }
+  }
 
   onStage("linking_user");
 
@@ -592,6 +625,16 @@ async function finalizeProjectCreation(
        organization_file_id = ?,
        updated_by = ?,
        updated_by_name_snapshot = ?,
+       config_revision = ?,
+       preview_status = ?,
+       preview_revision = ?,
+       preview_updated_at = CASE
+         WHEN ? IN ('READY', 'FAILED') THEN CURRENT_TIMESTAMP
+         ELSE NULL
+       END,
+       preview_attempts = ?,
+       preview_last_error = ?,
+       preview_capture_method = ?,
        updated_at = CURRENT_TIMESTAMP
      WHERE id = ?
        AND organization_id = ?
@@ -601,6 +644,13 @@ async function finalizeProjectCreation(
       reservation.reservation_id,
       actor.id,
       actor.name || "Usuário",
+      configRevision,
+      previewStatus,
+      previewRevision,
+      previewStatus,
+      previewAttempts,
+      previewLastError,
+      previewCaptureMethod,
       project.id,
       organization.id,
     )
@@ -619,11 +669,13 @@ async function finalizeProjectCreation(
     },
     fileName: project.default_config_file || DEFAULT_CONFIG_FILE,
     sizeBytes,
-    preview: {
-      previewFileName,
-      previewSizeBytes: thumbnail.bytes.byteLength,
-      previewContentType: thumbnail.contentType,
+    configRevision,
+    thumbnail: {
+      status: previewStatus,
+      revision: configRevision,
+      thumbnailRevision: previewRevision,
     },
+    preview,
   };
 }
 
@@ -635,6 +687,18 @@ function publicCreatedProject(project) {
     permissions: [],
     active: true,
     favorite: false,
+  };
+}
+
+function creationThumbnailState(project) {
+  const state = publicProjectPreview(project);
+
+  return {
+    status: state.thumbnailStatus,
+    revision: state.configRevision,
+    thumbnailRevision: state.thumbnailRevision,
+    updatedAt: state.thumbnailUpdatedAt,
+    attempts: state.thumbnailAttempts,
   };
 }
 
@@ -734,7 +798,9 @@ async function createProjectFromKepler(env, request, user, body) {
     throw error;
   }
 
-  const thumbnail = decodeImageDataUrl(body?.thumbnailDataUrl);
+  const thumbnail = asyncThumbnailEnabled(env)
+    ? null
+    : decodeImageDataUrl(body?.thumbnailDataUrl);
   const actor = {
     id: user.id,
     name: user.name || "Usuário",
@@ -783,6 +849,8 @@ async function createProjectFromKepler(env, request, user, body) {
           },
           fileName:
             activeProject.default_config_file || DEFAULT_CONFIG_FILE,
+          configRevision: Number(activeProject.config_revision || 0),
+          thumbnail: creationThumbnailState(activeProject),
           preview: null,
         };
       }
@@ -816,6 +884,8 @@ async function createProjectFromKepler(env, request, user, body) {
             },
             fileName:
               activeProject.default_config_file || DEFAULT_CONFIG_FILE,
+            configRevision: Number(activeProject.config_revision || 0),
+            thumbnail: creationThumbnailState(activeProject),
             preview: null,
           };
         }
@@ -851,6 +921,7 @@ async function createProjectFromKepler(env, request, user, body) {
       actor,
       config,
       thumbnail,
+      thumbnailCapture: body?.thumbnailCapture,
       onStage(nextStage) {
         stage = nextStage;
       },
@@ -875,6 +946,8 @@ async function createProjectFromKepler(env, request, user, body) {
         ),
         fileName: finalized.fileName,
         sizeBytes: finalized.sizeBytes,
+        configRevision: finalized.configRevision,
+        thumbnail: finalized.thumbnail,
         preview: finalized.preview,
         thumbnailCapture: {
           method: normalizeText(body?.thumbnailCapture?.method).slice(
@@ -998,6 +1071,8 @@ export async function onRequest(context) {
         project: publicCreatedProject(result.project),
         fileName: result.fileName,
         sizeBytes: result.sizeBytes,
+        configRevision: result.configRevision,
+        thumbnail: result.thumbnail,
         preview: result.preview,
       },
       { status: result.status },

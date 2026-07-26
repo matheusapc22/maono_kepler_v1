@@ -1,6 +1,7 @@
 import {
   serializePublicProjectMetadata,
 } from "./project-service.js";
+import { publicProjectPreview } from "./project-preview.js";
 
 const INTERNAL_PROJECT_COLUMNS = `
   projects.id,
@@ -19,6 +20,11 @@ const INTERNAL_PROJECT_COLUMNS = `
   projects.active,
   projects.created_at,
   projects.updated_at,
+  projects.config_revision,
+  projects.preview_status,
+  projects.preview_revision,
+  projects.preview_updated_at,
+  projects.preview_attempts,
   organizations.name AS organization_name,
   organizations.slug AS organization_slug,
   creator.id AS creator_user_id,
@@ -162,6 +168,7 @@ export function publicProject(project) {
 
   return {
     ...metadata,
+    ...publicProjectPreview(project),
     accessLevel,
     access_level: accessLevel,
     permissions: Array.isArray(project.permissions) ? project.permissions : [],

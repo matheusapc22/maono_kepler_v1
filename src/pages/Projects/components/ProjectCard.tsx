@@ -1,12 +1,13 @@
 import React from "react";
 import { Link } from "react-router";
 
-import { Skeleton } from "../../../components/loading/Skeleton";
 import type { ProjectListItem } from "../projects-api";
 import ProjectActionsMenu from "./ProjectActionsMenu";
+import ProjectMapPlaceholder from "./ProjectMapPlaceholder";
 import {
   formatProjectRelativeDate,
   normalizeProjectAccessLevel,
+  normalizeProjectThumbnailStatus,
   projectThumbnailUrl,
 } from "./project-card-utils";
 
@@ -17,13 +18,11 @@ type ProjectCardProps = {
   canEditMetadata?: boolean;
   actionsOpen?: boolean;
   favoriteBusy?: boolean;
-  holdThumbnailShimmer?: boolean;
   opening?: boolean;
   onOpen?: (project: ProjectListItem) => void;
   onActionsOpenChange?: (open: boolean) => void;
   onEditMetadata?: (project: ProjectListItem) => void;
   onFavoriteToggle?: (project: ProjectListItem) => void | Promise<void>;
-  onThumbnailSettled?: (project: ProjectListItem) => void;
 };
 
 function OwnerIcon() {
@@ -141,13 +140,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   canEditMetadata = false,
   actionsOpen = false,
   favoriteBusy = false,
-  holdThumbnailShimmer = false,
   opening = false,
   onOpen,
   onActionsOpenChange,
   onEditMetadata,
   onFavoriteToggle,
-  onThumbnailSettled,
 }) => {
   const thumbnailUrl = projectThumbnailUrl(project);
   const sourceVersionRef = React.useRef(0);
@@ -155,6 +152,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [thumbnailMissing, setThumbnailMissing] = React.useState(false);
   const isFavorite = Boolean(project.favorite || project.favorited);
   const accessLevel = normalizeProjectAccessLevel(project.accessLevel);
+  const thumbnailStatus = normalizeProjectThumbnailStatus(
+    project.thumbnailStatus,
+  );
   const isOwner = accessLevel === "owner";
 
   React.useEffect(() => {
@@ -186,9 +186,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
       setThumbnailMissing(false);
       setThumbnailLoaded(true);
-      onThumbnailSettled?.(project);
     },
-    [onThumbnailSettled, project],
+    [],
   );
 
   const handleThumbnailError = React.useCallback(
@@ -202,52 +201,39 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
       setThumbnailLoaded(false);
       setThumbnailMissing(true);
-      onThumbnailSettled?.(project);
     },
-    [onThumbnailSettled, project, thumbnailUrl],
+    [thumbnailUrl],
   );
 
-  const showThumbnailShimmer =
-    holdThumbnailShimmer || (!thumbnailLoaded && !thumbnailMissing);
-  const revealThumbnail = thumbnailLoaded && !holdThumbnailShimmer;
   const cardClassName = [
     "mm-project-card",
-    holdThumbnailShimmer ? "is-media-pending" : "",
+    thumbnailStatus === "PENDING" ? "is-media-pending" : "",
     opening ? "is-opening" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   return (
-    <article className={cardClassName} aria-busy={holdThumbnailShimmer}>
+    <article className={cardClassName} aria-busy={thumbnailStatus === "PENDING"}>
       <div className="mm-project-card__preview">
-        {showThumbnailShimmer ? (
-          <Skeleton
-            className="mm-project-card__preview-loading"
-            radius={0}
-          />
-        ) : null}
+        <ProjectMapPlaceholder
+          project={project}
+          imageFailed={thumbnailMissing}
+        />
 
-        {!thumbnailMissing ? (
+        {thumbnailUrl && !thumbnailMissing ? (
           <img
             src={thumbnailUrl}
             alt={`Prévia do projeto ${project.name}`}
-            loading="eager"
+            loading="lazy"
             decoding="async"
-            className={revealThumbnail ? "is-loaded" : "is-loading"}
+            className={
+              thumbnailLoaded ? "is-loaded" : "is-loading"
+            }
             onLoad={handleThumbnailLoad}
             onError={handleThumbnailError}
           />
-        ) : (
-          <div
-            className="mm-project-card__preview-fallback"
-            role="img"
-            aria-label={`Prévia indisponível para o projeto ${project.name}`}
-          >
-            <span aria-hidden="true">◇</span>
-            <strong>Prévia indisponível</strong>
-          </div>
-        )}
+        ) : null}
 
         {canEditMetadata || canFavorite ? (
           <div
@@ -277,40 +263,40 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             ) : null}
 
             {canFavorite ? (
-          <button
-                          type="button"
-                          className={
-                            isFavorite
-                              ? "mm-project-card__favorite is-active"
-                              : "mm-project-card__favorite"
-                          }
-                          aria-label={
-                            isFavorite
-                              ? "Remover projeto dos favoritos"
-                              : "Adicionar projeto aos favoritos"
-                          }
-                          aria-pressed={isFavorite}
-                          aria-busy={favoriteBusy}
-                          title={
-                            isFavorite
-                              ? "Remover dos favoritos"
-                              : "Adicionar aos favoritos"
-                          }
-                          disabled={favoriteBusy}
-                          style={{ position: "static", flex: "0 0 auto" }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void onFavoriteToggle?.(project);
-                          }}
-                        >
-                          <FavoriteIcon active={isFavorite} />
-                          {favoriteBusy ? (
-                            <span className="mm-sr-only" role="status">
-                              Atualizando favorito.
-                            </span>
-                          ) : null}
-                        </button>
+              <button
+                type="button"
+                className={
+                  isFavorite
+                    ? "mm-project-card__favorite is-active"
+                    : "mm-project-card__favorite"
+                }
+                aria-label={
+                  isFavorite
+                    ? "Remover projeto dos favoritos"
+                    : "Adicionar projeto aos favoritos"
+                }
+                aria-pressed={isFavorite}
+                aria-busy={favoriteBusy}
+                title={
+                  isFavorite
+                    ? "Remover dos favoritos"
+                    : "Adicionar aos favoritos"
+                }
+                disabled={favoriteBusy}
+                style={{ position: "static", flex: "0 0 auto" }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void onFavoriteToggle?.(project);
+                }}
+              >
+                <FavoriteIcon active={isFavorite} />
+                {favoriteBusy ? (
+                  <span className="mm-sr-only" role="status">
+                    Atualizando favorito.
+                  </span>
+                ) : null}
+              </button>
             ) : null}
           </div>
         ) : null}

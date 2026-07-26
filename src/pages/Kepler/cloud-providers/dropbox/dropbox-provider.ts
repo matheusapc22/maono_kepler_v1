@@ -56,6 +56,10 @@ const IMAGE_URL_PREFIX = "data:image/png;base64,";
 const THUMBNAIL_WIDTH = 960;
 const THUMBNAIL_HEIGHT = 540;
 const MAP_RENDER_CAPTURE_DELAY_MS = 700;
+const ASYNC_PROJECT_THUMBNAIL_ENABLED =
+  String(
+    import.meta.env.VITE_ASYNC_PROJECT_THUMBNAIL ?? "true"
+  ).toLowerCase() !== "false";
 
 function unwrapDropboxResponse(response: any) {
   return response?.result ?? response;
@@ -82,6 +86,12 @@ function isDropboxPathNotFound(err: any): boolean {
 
 function getThumbnailPathFromMapPath(path: string) {
   return path.replace(/\.json$/i, ".png");
+}
+
+function isMaonoManagedProjectRoute() {
+  const pathname = String(Window.location?.pathname || "");
+
+  return /^\/projects\/[^/]+\/map\/?$/i.test(pathname);
 }
 
 export default class DropboxProvider extends Provider {
@@ -190,8 +200,13 @@ export default class DropboxProvider extends Provider {
     const fileName = `${name}.json`;
     const path = `${this._path}/${fileName}`;
 
-    // A captura é feita antes do upload/navegação para preservar a tela visível do último salvamento.
-    const thumbnailToSave = thumbnail || (await this._safeCaptureCurrentMapThumbnail());
+    // Nos projetos Maono, o endpoint versionado faz a captura depois que o
+    // JSON foi confirmado. O provider mantém o comportamento nativo fora
+    // dessa rota e durante um rollback explícito da feature flag.
+    const thumbnailToSave =
+      ASYNC_PROJECT_THUMBNAIL_ENABLED && isMaonoManagedProjectRoute()
+        ? null
+        : thumbnail || (await this._safeCaptureCurrentMapThumbnail());
 
     const uploadRes = await this._dropbox.filesUpload({
       path,

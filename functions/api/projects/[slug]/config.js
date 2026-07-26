@@ -14,16 +14,23 @@ import {
   recordAuditLog,
 } from "../../../_lib/permissions.js";
 import {
-  deleteDropboxPathIfExists,
   downloadDropboxTextFile,
-  getPreviewFileNameFromConfigFile,
-  joinDropboxPath,
+  getRevisionedPreviewFileNameFromConfigFile,
   uploadDropboxBinaryFile,
   uploadDropboxTextFile,
 } from "../../../_lib/dropbox.js";
+import {
+  markProjectPreviewFailed,
+  markProjectPreviewReady,
+  publicProjectPreview,
+} from "../../../_lib/project-preview.js";
 
 const AUDIT_TEXT_LIMIT = 800;
 const AUDIT_SHORT_TEXT_LIMIT = 160;
+
+function asyncThumbnailEnabled(env) {
+  return String(env?.ASYNC_PROJECT_THUMBNAIL ?? "true").toLowerCase() !== "false";
+}
 
 function decodeProjectSlug(value) {
   try {
@@ -69,11 +76,6 @@ function publicProjectForConfigResponse(project) {
       typeof base.active === "boolean"
         ? base.active
         : project?.active === 1 || project?.active === true,
-    createdAt:
-      base.createdAt ??
-      base.created_at ??
-      project?.created_at ??
-      undefined,
     organizationId:
       base.organizationId ??
       base.organization_id ??
@@ -97,6 +99,7 @@ function publicProjectForConfigResponse(project) {
       base.updated_at ??
       project?.updated_at ??
       undefined,
+    ...publicProjectPreview({ ...project, ...base }),
   };
 }
 
@@ -236,19 +239,23 @@ async function updateLinkedOrganizationFileSize(env, project, sizeBytes) {
 }
 
 
-async function saveProjectThumbnail(env, project, fileName, thumbnailDataUrl) {
+async function saveProjectThumbnail(
+  env,
+  project,
+  fileName,
+  thumbnailDataUrl,
+  revision,
+) {
   const decoded = decodeDataUrl(thumbnailDataUrl);
 
   if (!decoded) {
     return null;
   }
 
-  const previewFileName = getPreviewFileNameFromConfigFile(fileName);
-  const previewPath = joinDropboxPath(project.dropbox_root_path, previewFileName);
-
-  // Política Maõno: apenas uma imagem canônica por projeto.
-  // Exclui a anterior antes de salvar a nova para não acumular previews.
-  await deleteDropboxPathIfExists(env, previewPath);
+  const previewFileName = getRevisionedPreviewFileNameFromConfigFile(
+    fileName,
+    revision,
+  );
 
   await uploadDropboxBinaryFile(
     env,
@@ -260,7 +267,6 @@ async function saveProjectThumbnail(env, project, fileName, thumbnailDataUrl) {
 
   return {
     previewFileName,
-    previewPath,
     previewSizeBytes: decoded.bytes.byteLength,
     previewContentType: decoded.contentType,
   };
@@ -538,34 +544,24 @@ export async function onRequest(context) {
 
     const content = JSON.stringify(config, null, 2);
     const sizeBytes = jsonSizeBytes(content);
+    const saveStartedAt = Date.now();
 
-    // O JSON é o arquivo crítico. A falha do preview nunca deve bloquear
-    // o salvamento do projeto.
+    // O JSON é o arquivo crítico. Nenhuma captura, base64 ou upload de PNG
+    // participa deste caminho quando o preview assíncrono está ativo.
+    const dropboxStartedAt = Date.now();
     await uploadDropboxTextFile(
       env,
       project.dropbox_root_path,
       fileName,
       content,
     );
+    const saveJsonDropboxMs = Date.now() - dropboxStartedAt;
 
     let preview = null;
     let previewError = null;
 
-    if (body?.thumbnailDataUrl) {
-      try {
-        preview = await saveProjectThumbnail(
-          env,
-          project,
-          fileName,
-          body.thumbnailDataUrl,
-        );
-      } catch (error) {
-        previewError = getErrorMessage(error);
-      }
-    }
-
     await updateLinkedOrganizationFileSize(env, project, sizeBytes);
-    const updatedProject = await touchProjectAfterConfigSave(env, {
+    let updatedProject = await touchProjectAfterConfigSave(env, {
       projectId: project.id,
       organizationId: getProjectOrganizationId(project),
       actor: {
@@ -573,7 +569,54 @@ export async function onRequest(context) {
         name: user.name,
       },
     });
+    const configRevision = Number(updatedProject?.config_revision || 0);
+
+    // Rollback operacional: quando a flag está desligada, clientes legados
+    // ainda podem enviar a imagem junto do config. O caminho padrão não usa
+    // este bloco.
+    if (
+      !asyncThumbnailEnabled(env) &&
+      body?.thumbnailDataUrl &&
+      configRevision > 0
+    ) {
+      try {
+        preview = await saveProjectThumbnail(
+          env,
+          project,
+          fileName,
+          body.thumbnailDataUrl,
+          configRevision,
+        );
+
+        const readyState = await markProjectPreviewReady(env, {
+          projectId: project.id,
+          organizationId: getProjectOrganizationId(project),
+          revision: configRevision,
+          captureMethod: body?.thumbnailCapture?.method,
+        });
+
+        if (readyState) {
+          updatedProject = { ...updatedProject, ...readyState };
+        }
+      } catch (error) {
+        previewError = getErrorMessage(error);
+        const failedState = await markProjectPreviewFailed(env, {
+          projectId: project.id,
+          organizationId: getProjectOrganizationId(project),
+          revision: configRevision,
+          errorCode: error?.code || "LEGACY_THUMBNAIL_UPLOAD_FAILED",
+          captureMethod: body?.thumbnailCapture?.method,
+        });
+
+        if (failedState) {
+          updatedProject = { ...updatedProject, ...failedState };
+        }
+      }
+    }
+
     const publicPreview = publicPreviewForConfigResponse(preview);
+    const thumbnailState = publicProjectPreview(updatedProject);
+    const saveConfigMs = Date.now() - saveStartedAt;
 
     await auditProjectConfigAccess(
       env,
@@ -587,20 +630,44 @@ export async function onRequest(context) {
         fileName,
         permission: "project.save",
         sizeBytes,
+        configRevision,
+        previewStatus: thumbnailState.thumbnailStatus,
+        saveJsonDropboxMs,
+        saveConfigMs,
         preview: publicPreview,
         previewError: sanitizeAuditText(previewError, AUDIT_TEXT_LIMIT),
         thumbnailCapture: publicThumbnailCaptureForAudit(body?.thumbnailCapture),
       },
     );
 
-    return jsonResponse({
-      ok: true,
-      project: publicProjectForConfigResponse({ ...project, ...updatedProject }),
-      fileName,
-      sizeBytes,
-      preview: publicPreview,
-      previewError,
-    });
+    return jsonResponse(
+      {
+        ok: true,
+        project: publicProjectForConfigResponse({
+          ...project,
+          ...updatedProject,
+        }),
+        fileName,
+        sizeBytes,
+        configRevision,
+        thumbnail: {
+          status: thumbnailState.thumbnailStatus,
+          revision: configRevision,
+          thumbnailRevision: thumbnailState.thumbnailRevision,
+          updatedAt: thumbnailState.thumbnailUpdatedAt,
+        },
+        preview: publicPreview,
+        previewError,
+      },
+      {
+        headers: {
+          "Server-Timing": [
+            `dropbox-json;dur=${saveJsonDropboxMs}`,
+            `save-config;dur=${saveConfigMs}`,
+          ].join(", "),
+        },
+      },
+    );
   } catch (error) {
     logUnexpectedError(error);
 

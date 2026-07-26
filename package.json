@@ -9,8 +9,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs",
+    "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs",
     "test:project-metadata": "node --test tests/project-metadata-migration.test.mjs tests/project-metadata-api.test.mjs tests/project-card-actions.test.mjs tests/project-creation-metadata.test.mjs",
-    "test:projects": "npm run test:project-cards && npm run test:project-metadata"
+    "test:projects": "npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

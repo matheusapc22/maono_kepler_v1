@@ -149,11 +149,25 @@ CREATE TABLE IF NOT EXISTS projects (
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  config_revision INTEGER NOT NULL DEFAULT 0 CHECK (config_revision >= 0),
+  preview_status TEXT NOT NULL DEFAULT 'UNKNOWN'
+    CHECK (preview_status IN ('UNKNOWN', 'PENDING', 'READY', 'FAILED', 'MISSING')),
+  preview_revision INTEGER CHECK (preview_revision IS NULL OR preview_revision >= 0),
+  preview_updated_at TEXT,
+  preview_attempts INTEGER NOT NULL DEFAULT 0 CHECK (preview_attempts >= 0),
+  preview_last_error TEXT,
+  preview_capture_method TEXT,
   FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL,
   FOREIGN KEY (organization_file_id) REFERENCES organization_files(id) ON DELETE SET NULL,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_projects_preview_status_org
+ON projects (preview_status, organization_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_projects_preview_revision
+ON projects (id, config_revision, preview_revision);
 
 CREATE TABLE IF NOT EXISTS user_projects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
