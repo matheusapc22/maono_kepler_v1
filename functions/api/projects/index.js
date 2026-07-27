@@ -31,6 +31,13 @@ import {
   publicProjectPreview,
   sanitizeCaptureMethod,
 } from "../../_lib/project-preview.js";
+import {
+  commitProjectQuota,
+  isProjectQuotaReservationEnabled,
+  markProjectQuotaProcessing,
+  releaseProjectQuota,
+  reserveProjectQuota,
+} from "../../_lib/organization-limit-service.js";
 
 const DEFAULT_CONFIG_FILE = "config.kepler.json";
 const MAX_CONFIG_BYTES = 25 * 1024 * 1024;
@@ -64,6 +71,20 @@ function safeErrorMessage(error) {
       : String(error || "Erro desconhecido.");
 
   return value.slice(0, 800);
+}
+
+async function recordQuotaAudit(env, request, event) {
+  try {
+    await recordAuditLog(env, {
+      ...event,
+      request,
+    });
+  } catch (error) {
+    console.error(
+      "[Maono projects] Falha ao registrar auditoria de quota:",
+      error,
+    );
+  }
 }
 
 function getCreateProjectContext(body) {
@@ -806,11 +827,35 @@ async function createProjectFromKepler(env, request, user, body) {
     name: user.name || "Usuário",
   };
 
-  let stage = "reserving";
+  let stage = "reserving_quota";
+  let quotaReservation = null;
   let reservation = null;
   let project = null;
 
   try {
+    if (isProjectQuotaReservationEnabled(env)) {
+      quotaReservation = await reserveProjectQuota(env, {
+        organizationId: organization.id,
+        idempotencyKey,
+        actorUserId: actor.id,
+      });
+
+      await recordQuotaAudit(env, request, {
+        actorUserId: user.id,
+        organizationId: organization.id,
+        action: "projects.create.quota_reserved",
+        resourceType: "organization",
+        resourceId: organization.id,
+        result: "success",
+        metadata: {
+          reservationId: quotaReservation.id,
+          idempotencyKey,
+          idempotent: quotaReservation.idempotent,
+        },
+      });
+    }
+
+    stage = "reserving_project";
     reservation = await reserveProjectCreation(env, {
       organization,
       name,
@@ -825,6 +870,26 @@ async function createProjectFromKepler(env, request, user, body) {
       );
 
       if (activeProject?.active) {
+        const idempotentQuota = await commitProjectQuota(env, {
+          reservationId: quotaReservation?.id,
+          projectId: activeProject.id,
+        });
+        if (idempotentQuota) {
+          await recordQuotaAudit(env, request, {
+            actorUserId: user.id,
+            organizationId: organization.id,
+            projectId: activeProject.id,
+            action: "projects.create.quota_committed",
+            resourceType: "project",
+            resourceId: activeProject.id,
+            result: "success",
+            metadata: {
+              reservationId: idempotentQuota.id,
+              idempotent: true,
+            },
+          });
+        }
+
         await recordAuditLog(env, {
           actorUserId: user.id,
           organizationId: organization.id,
@@ -875,6 +940,26 @@ async function createProjectFromKepler(env, request, user, body) {
         );
 
         if (activeProject?.active) {
+          const idempotentQuota = await commitProjectQuota(env, {
+            reservationId: quotaReservation?.id,
+            projectId: activeProject.id,
+          });
+          if (idempotentQuota) {
+            await recordQuotaAudit(env, request, {
+              actorUserId: user.id,
+              organizationId: organization.id,
+              projectId: activeProject.id,
+              action: "projects.create.quota_committed",
+              resourceType: "project",
+              resourceId: activeProject.id,
+              result: "success",
+              metadata: {
+                reservationId: idempotentQuota.id,
+                idempotent: true,
+              },
+            });
+          }
+
           return {
             status: 200,
             idempotent: true,
@@ -904,6 +989,11 @@ async function createProjectFromKepler(env, request, user, body) {
       throw error;
     }
 
+    await markProjectQuotaProcessing(
+      env,
+      quotaReservation?.id,
+    );
+
     stage = "creating_record";
     project = await createOrLoadPendingProject(env, {
       reservation,
@@ -926,6 +1016,27 @@ async function createProjectFromKepler(env, request, user, body) {
         stage = nextStage;
       },
     });
+
+    stage = "committing_quota";
+    const committedQuota = await commitProjectQuota(env, {
+      reservationId: quotaReservation?.id,
+      projectId: finalized.project.id,
+    });
+    if (committedQuota) {
+      await recordQuotaAudit(env, request, {
+        actorUserId: user.id,
+        organizationId: organization.id,
+        projectId: finalized.project.id,
+        action: "projects.create.quota_committed",
+        resourceType: "project",
+        resourceId: finalized.project.id,
+        result: "success",
+        metadata: {
+          reservationId: committedQuota.id,
+          idempotent: false,
+        },
+      });
+    }
 
     try {
       await recordAuditLog(env, {
@@ -958,6 +1069,12 @@ async function createProjectFromKepler(env, request, user, body) {
             body?.thumbnailCapture?.diagnostics,
           ).slice(0, 800),
         },
+        quotaReservation: committedQuota
+          ? {
+              id: committedQuota.id,
+              status: committedQuota.status,
+            }
+          : null,
       },
         request,
       });
@@ -976,6 +1093,41 @@ async function createProjectFromKepler(env, request, user, body) {
   } catch (error) {
     if (error?.code === "PROJECT_CREATION_IN_PROGRESS") {
       throw error;
+    }
+
+    const releasedQuota = await releaseProjectQuota(env, {
+      reservationId: quotaReservation?.id,
+      errorCode: error?.code || "PROJECT_CREATION_FAILED",
+    });
+    if (releasedQuota) {
+      await recordQuotaAudit(env, request, {
+        actorUserId: user.id,
+        organizationId: organization.id,
+        projectId: project?.id ?? reservation?.project_id ?? null,
+        action: "projects.create.quota_released",
+        resourceType: "organization",
+        resourceId: organization.id,
+        result: "error",
+        metadata: {
+          reservationId: releasedQuota.id,
+          reason: error?.code || "PROJECT_CREATION_FAILED",
+        },
+      });
+    } else if (
+      error?.code === "ORGANIZATION_PROJECT_LIMIT_REACHED"
+    ) {
+      await recordQuotaAudit(env, request, {
+        actorUserId: user.id,
+        organizationId: organization.id,
+        action: "projects.create.limit_denied",
+        resourceType: "organization",
+        resourceId: organization.id,
+        result: "denied",
+        metadata: {
+          idempotencyKey,
+          details: error?.details || null,
+        },
+      });
     }
 
     await markCreationFailed(env, {
@@ -999,6 +1151,12 @@ async function createProjectFromKepler(env, request, user, body) {
           retryable: true,
           reason: error?.code || "PROJECT_CREATION_FAILED",
           errorMessage: safeErrorMessage(error),
+          quotaReservation: releasedQuota
+            ? {
+                id: releasedQuota.id,
+                status: releasedQuota.status,
+              }
+            : null,
         },
         request,
       });

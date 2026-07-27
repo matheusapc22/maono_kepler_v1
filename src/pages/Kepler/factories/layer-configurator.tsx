@@ -1,20 +1,12 @@
 // @ts-nocheck
 import React from "react";
 import { LayerConfiguratorFactory } from "@kepler.gl/components";
+import { useMapPanel } from "../map-panel/MapPanelContext";
 
 const POINT_STYLE_LAYER_TYPES = new Set(["point", "cluster", "heatmap"]);
 
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase();
-}
-
-function shouldRestrictLayerTypeSelector() {
-  const session = window.__MAONO_SESSION__;
-  const role = normalize(session?.user?.role);
-
-  // O admin mantém o Kepler completo para manutenção interna.
-  // Usuários de cliente, editor, owner por projeto e visualizadores ficam no fluxo controlado.
-  return role !== "admin";
 }
 
 function isPointStyleOption(option: any) {
@@ -26,10 +18,10 @@ function getCurrentLayerOption(options: any[], layer: any) {
   return options.find((option) => normalize(option?.id) === currentLayerType);
 }
 
-function getSafeLayerTypeConfig(props: any) {
+function getSafeLayerTypeConfig(props: any, restrict: boolean) {
   const options = Array.isArray(props?.layerTypeOptions) ? props.layerTypeOptions : [];
 
-  if (!shouldRestrictLayerTypeSelector()) {
+  if (!restrict) {
     return {
       layerTypeOptions: options,
       disableTypeSelect: props?.disableTypeSelect,
@@ -62,7 +54,11 @@ export function CustomLayerConfiguratorFactory(...deps: any[]) {
   const DefaultLayerConfigurator = LayerConfiguratorFactory(...deps);
 
   const Wrapped = (props: any) => {
-    const safeLayerTypeConfig = getSafeLayerTypeConfig(props);
+    const { context } = useMapPanel();
+    const safeLayerTypeConfig = getSafeLayerTypeConfig(
+      props,
+      !context?.capabilities?.editLayerStyle,
+    );
 
     return <DefaultLayerConfigurator {...props} {...safeLayerTypeConfig} />;
   };

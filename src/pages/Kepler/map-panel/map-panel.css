@@ -1,0 +1,46 @@
+.maono-map-gate {
+  align-items: center;
+  background: #10131a;
+  color: #f8fafc;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  position: fixed;
+  z-index: 100000;
+}
+
+.maono-map-gate__card {
+  background: #1c2330;
+  border: 1px solid #344054;
+  border-radius: 16px;
+  display: grid;
+  gap: 10px;
+  max-width: 480px;
+  padding: 24px;
+  width: 100%;
+}
+
+.maono-map-gate__card strong {
+  font-size: 18px;
+}
+
+.maono-map-gate__card span {
+  color: #cbd5e1;
+}
+
+.maono-map-gate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.maono-map-gate__actions a {
+  background: #2f7df4;
+  border-radius: 8px;
+  color: #fff;
+  padding: 9px 12px;
+}
+

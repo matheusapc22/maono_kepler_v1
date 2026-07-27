@@ -1,0 +1,132 @@
+.maono-map-management {
+  background:
+    radial-gradient(circle at 12% 10%, #e8f2ff 0, transparent 30%),
+    #f6f8fb;
+  color: #172033;
+  min-height: 100vh;
+  padding: 0 32px 48px;
+}
+
+.maono-map-management.is-loading {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.maono-map-management__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 24px 0;
+}
+
+.maono-map-management a {
+  color: #2163c4;
+  text-decoration: none;
+}
+
+.maono-map-management__intro,
+.maono-map-management__options,
+.maono-map-management__permission-note,
+.maono-map-management__error {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1040px;
+}
+
+.maono-map-management__intro {
+  padding: 64px 0 26px;
+}
+
+.maono-map-management__intro > span {
+  color: #55708f;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.maono-map-management__intro h1 {
+  font-size: clamp(32px, 5vw, 52px);
+  margin: 8px 0;
+}
+
+.maono-map-management__intro p {
+  color: #596579;
+  font-size: 17px;
+  margin: 0;
+}
+
+.maono-map-management__options {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.maono-map-management__options article {
+  background: #fff;
+  border: 1px solid #d8e0eb;
+  border-radius: 18px;
+  box-shadow: 0 14px 40px #1e34510d;
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.maono-map-management__icon {
+  align-items: center;
+  background: #e8f2ff;
+  border-radius: 12px;
+  color: #2163c4;
+  display: flex;
+  font-size: 24px;
+  height: 48px;
+  justify-content: center;
+  width: 48px;
+}
+
+.maono-map-management__options h2 {
+  margin: 0 0 6px;
+}
+
+.maono-map-management__options p {
+  color: #637086;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.maono-map-management__options a {
+  border: 1px solid #9fb7d5;
+  border-radius: 9px;
+  justify-self: start;
+  padding: 10px 14px;
+}
+
+.maono-map-management__options a.is-primary {
+  background: #2163c4;
+  border-color: #2163c4;
+  color: #fff;
+}
+
+.maono-map-management__permission-note {
+  color: #667085;
+  padding-top: 24px;
+}
+
+.maono-map-management__error {
+  padding-top: 20vh;
+}
+
+@media (max-width: 640px) {
+  .maono-map-management {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .maono-map-management__intro {
+    padding-top: 36px;
+  }
+}
+

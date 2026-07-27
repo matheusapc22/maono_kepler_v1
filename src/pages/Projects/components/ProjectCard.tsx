@@ -789,7 +789,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </div>
 
           <Link
-            to={`/projects/${encodeURIComponent(project.slug)}/map`}
+            to={`/projects/${encodeURIComponent(project.slug)}/manage`}
             className="mm-project-card__open"
             aria-disabled={opening}
             tabIndex={opening ? -1 : 0}

@@ -5,7 +5,6 @@
 import React, {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -90,9 +89,13 @@ import { injectComponents } from "@kepler.gl/components";
 import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
 import { replaceSidePanel } from "./factories/side-panel";
-import checkAdminUser from "./utils/is-admin-user";
 import MapUrlLoader from "./map-url-loader";
 import { useHideMapAttribution } from "../../hooks/useHideMapAttrition";
+import {
+  MapPanelAccessGate,
+  MapPanelProvider,
+} from "./map-panel/MapPanelProvider";
+import "./map-panel/map-panel.css";
 
 const KeplerGl = injectComponents([
   replaceSidePanel(),
@@ -196,7 +199,7 @@ const StyledVerticalResizeHandle = styled(PanelResizeHandle)`
 const App = (props) => {
   const [showBanner, toggleShowBanner] = useState(false);
 
-  const { id, provider, projectSlug } = useParams();
+  const { id, provider } = useParams();
   const [searchParams] = useSearchParams();
   const query = Object.fromEntries(searchParams.entries());
   const dispatch = useDispatch();
@@ -361,11 +364,6 @@ const App = (props) => {
 
   const _loadSampleData = useCallback(() => {}, []);
 
-  const isAdminUser = useMemo(
-    () => checkAdminUser({ projectSlug }),
-    [projectSlug]
-  );
-
   useEffect(() => {
     dispatch(toggleModal(null));
   }, [dispatch]);
@@ -399,11 +397,6 @@ const App = (props) => {
               </Banner>
               <div
                 style={CONTAINER_STYLE}
-                className={
-                  !isAdminUser
-                    ? "hide-layer-header hide-layer-toggle-option"
-                    : ""
-                }
               >
                 <PanelGroup direction="horizontal">
                   <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
@@ -461,4 +454,14 @@ const App = (props) => {
 const mapStateToProps = (state) => state;
 const dispatchToProps = (dispatch) => ({ dispatch });
 
-export default connect(mapStateToProps, dispatchToProps)(App);
+const ConnectedApp = connect(mapStateToProps, dispatchToProps)(App);
+
+const KeplerMapPanelRoot = () => (
+  <MapPanelProvider>
+    <MapPanelAccessGate>
+      <ConnectedApp />
+    </MapPanelAccessGate>
+  </MapPanelProvider>
+);
+
+export default KeplerMapPanelRoot;

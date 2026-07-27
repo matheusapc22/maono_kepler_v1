@@ -2,8 +2,6 @@ import React, { useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import { useSession } from "../../../auth/session";
-import { can } from "../../../access-control/can";
-import { PERMISSION } from "../../../access-control/permissions";
 import {
   captureProjectThumbnail,
   serializeProjectConfig,
@@ -17,6 +15,8 @@ import ProjectCreatePanel, {
   type ProjectCreateInput,
   type ProjectCreationStage,
 } from "./project-create-panel";
+import { useMapPanel } from "../map-panel/MapPanelContext";
+import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
 
 const CREATION_KEY_PREFIX = "maono.project-create.idempotency";
 const ASYNC_THUMBNAIL_ENABLED =
@@ -50,10 +50,6 @@ type ProjectWriteResponse = {
   };
   error?: ApiError;
 };
-
-function normalize(value?: string | null) {
-  return String(value || "").trim().toLowerCase();
-}
 
 async function readJsonResponse(response: Response): Promise<any> {
   const text = await response.text();
@@ -250,7 +246,8 @@ function resolveConfigRevision(data: ProjectWriteResponse) {
 const MaonoSaveButton: React.FC = () => {
   const { projectSlug } = useParams();
   const navigate = useNavigate();
-  const { authenticated, user, projects } = useSession();
+  const { authenticated, user } = useSession();
+  const { context, refresh } = useMapPanel();
   const mapState = useSelector(
     (state: any) => state?.demo?.keplerGl?.map,
   );
@@ -272,14 +269,6 @@ const MaonoSaveButton: React.FC = () => {
   const [creationDraft, setCreationDraft] =
     useState<ProjectCreateInput | null>(null);
 
-  const currentProject = useMemo(
-    () =>
-      (projects || []).find(
-        (project: any) =>
-          normalize(project?.slug) === normalize(projectSlug),
-      ) || null,
-    [projects, projectSlug],
-  );
   const activeOrganizationId = useMemo(
     () => getActiveOrganizationId(user as any),
     [user],
@@ -288,57 +277,30 @@ const MaonoSaveButton: React.FC = () => {
     () => getActiveOrganizationName(user as any),
     [user],
   );
-  const savePermissionContext = useMemo(() => {
-    if (!currentProject) {
-      return null;
-    }
-
-    return {
-      project: currentProject,
-      projectId: currentProject.id ?? null,
-      projectSlug: currentProject.slug ?? projectSlug ?? null,
-      organizationId:
-        currentProject.organizationId ??
-        currentProject.organization_id ??
-        activeOrganizationId ??
-        null,
-      permissions: currentProject.permissions ?? [],
-    };
-  }, [activeOrganizationId, currentProject, projectSlug]);
   const canSaveExisting = useMemo(
-    () =>
-      Boolean(
-        authenticated &&
-          projectSlug &&
-          savePermissionContext &&
-          can(
-            user as any,
-            PERMISSION.PROJECT_SAVE,
-            savePermissionContext,
-          ),
-      ),
+    () => Boolean(
+      authenticated &&
+      projectSlug &&
+      context?.capabilities?.saveMap
+    ),
     [
       authenticated,
+      context?.capabilities?.saveMap,
       projectSlug,
-      savePermissionContext,
-      user,
     ],
   );
   const canCreateNew = useMemo(
-    () =>
-      Boolean(
-        authenticated &&
-          !projectSlug &&
-          activeOrganizationId &&
-          can(user as any, PERMISSION.PROJECT_CREATE, {
-            organizationId: activeOrganizationId,
-          }),
-      ),
+    () => Boolean(
+      authenticated &&
+      !projectSlug &&
+      activeOrganizationId &&
+      context?.capabilities?.saveMap
+    ),
     [
       activeOrganizationId,
       authenticated,
+      context?.capabilities?.saveMap,
       projectSlug,
-      user,
     ],
   );
   const allowed = projectSlug ? canSaveExisting : canCreateNew;
@@ -403,6 +365,13 @@ const MaonoSaveButton: React.FC = () => {
     operationInFlightRef.current = true;
     setSaving(true);
     setMessage("");
+    emitMapPanelTelemetry("map_save_requested", {
+      mode: context?.mode ?? null,
+      projectId: context?.project?.id ?? null,
+      organizationId: context?.organization?.id ?? null,
+      policyVersion: context?.policyVersion ?? null,
+      operation: "update",
+    });
 
     try {
       const config: any = serializeProjectConfig(mapState);
@@ -437,10 +406,29 @@ const MaonoSaveButton: React.FC = () => {
       const data = await readJsonResponse(response);
 
       if (!response.ok || data?.ok === false) {
+        if (response.status === 403) {
+          refresh();
+        }
+        if (response.status === 409) {
+          emitMapPanelTelemetry("map_save_conflict", {
+            mode: context?.mode ?? null,
+            projectId: context?.project?.id ?? null,
+            organizationId: context?.organization?.id ?? null,
+            code: data?.error?.code ?? "PROJECT_VERSION_CONFLICT",
+            operation: "update",
+          });
+        }
         throw new Error(getSaveErrorMessage(response, data));
       }
 
       const revision = resolveConfigRevision(data);
+      emitMapPanelTelemetry("map_save_succeeded", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        policyVersion: context?.policyVersion ?? null,
+        operation: "update",
+      });
       setMessageType("success");
       setMessage(
         ASYNC_THUMBNAIL_ENABLED
@@ -480,6 +468,12 @@ const MaonoSaveButton: React.FC = () => {
     setCreationStage(
       ASYNC_THUMBNAIL_ENABLED ? "creating_record" : "capturing",
     );
+    emitMapPanelTelemetry("map_save_requested", {
+      mode: context?.mode ?? null,
+      organizationId: context?.organization?.id ?? activeOrganizationId,
+      policyVersion: context?.policyVersion ?? null,
+      operation: "create",
+    });
 
     try {
       const config: any = serializeProjectConfig(mapState);
@@ -525,6 +519,9 @@ const MaonoSaveButton: React.FC = () => {
         data?.ok === false ||
         !data?.project?.slug
       ) {
+        if (response.status === 403) {
+          refresh();
+        }
         const failedStage = normalizeCreationStage(
           data?.error?.details?.stage,
         );
@@ -537,9 +534,15 @@ const MaonoSaveButton: React.FC = () => {
 
       const createdSlug = data.project.slug;
       const revision = resolveConfigRevision(data);
+      emitMapPanelTelemetry("map_save_succeeded", {
+        mode: context?.mode ?? null,
+        organizationId: context?.organization?.id ?? activeOrganizationId,
+        policyVersion: context?.policyVersion ?? null,
+        operation: "create",
+      });
       enqueuePreview(createdSlug, revision, config);
       navigate(
-        `/projects/${encodeURIComponent(createdSlug)}/map`,
+        `/projects/${encodeURIComponent(createdSlug)}/edit`,
         { replace: true },
       );
     } catch (error) {

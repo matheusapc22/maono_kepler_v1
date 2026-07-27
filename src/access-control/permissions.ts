@@ -3,6 +3,7 @@ export const PERMISSION = {
   PROJECT_CREATE: "project.create",
   PROJECT_SAVE: "project.save",
   PROJECT_EDIT: "project.edit",
+  PROJECT_MAP_EDIT: "project.map.edit",
   PROJECT_FAVORITE: "project.favorite",
   PROJECT_THUMBNAIL_UPDATE: "project.thumbnail.update",
 
@@ -76,12 +77,14 @@ export const PROJECT_MAP_PERMISSIONS = [
   PERMISSION.PROJECT_VIEW,
   PERMISSION.PROJECT_SAVE,
   PERMISSION.PROJECT_EDIT,
+  PERMISSION.PROJECT_MAP_EDIT,
   PERMISSION.PROJECT_THUMBNAIL_UPDATE,
 ] as const satisfies readonly Permission[];
 
 export const PROJECT_PERSISTENCE_PERMISSIONS = [
   PERMISSION.PROJECT_SAVE,
   PERMISSION.PROJECT_EDIT,
+  PERMISSION.PROJECT_MAP_EDIT,
   PERMISSION.PROJECT_THUMBNAIL_UPDATE,
 ] as const satisfies readonly Permission[];
 
