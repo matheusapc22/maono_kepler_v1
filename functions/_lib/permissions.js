@@ -4,6 +4,7 @@ export const PERMISSIONS = [
   "project.view",
   "project.create",
   "project.edit",
+  "project.map.edit",
   "project.save",
   "project.favorite",
   "project.thumbnail.update",
@@ -74,12 +75,14 @@ const PROJECT_VIEW_ACCESS_LEVELS = new Set(["viewer", "editor", "owner"]);
 const PROJECT_PERSISTENCE_PERMISSIONS = new Set([
   "project.save",
   "project.edit",
+  "project.map.edit",
   "project.thumbnail.update",
 ]);
 
 const NATIVE_PROJECT_PERSISTENCE_PERMISSIONS = new Set([
   "project.save",
   "project.edit",
+  "project.map.edit",
   "project.thumbnail.update",
 ]);
 
@@ -90,6 +93,7 @@ const PROJECT_MEMBERSHIP_ONLY_PERMISSIONS = new Set([
 
 const EDITOR_NATIVE_PROJECT_PERSISTENCE_PERMISSIONS = new Set([
   "project.save",
+  "project.map.edit",
 ]);
 
 const EDITOR_PROJECT_SAVE_ACCESS_LEVELS = new Set(["editor", "write"]);
@@ -97,6 +101,7 @@ const EDITOR_PROJECT_SAVE_ACCESS_LEVELS = new Set(["editor", "write"]);
 const PROJECT_CONTEXT_PERMISSIONS = new Set([
   "project.view",
   "project.edit",
+  "project.map.edit",
   "project.save",
   "project.favorite",
   "project.thumbnail.update",
@@ -172,6 +177,7 @@ const VIEWER_EXPLICIT_ONLY_PERMISSIONS = new Set();
 const SENSITIVE_ACTIONS = new Set([
   "project.create",
   "project.edit",
+  "project.map.edit",
   "project.save",
   "project.favorite",
   "project.thumbnail.update",
