@@ -6,8 +6,14 @@ import ProjectActionsMenu from "./ProjectActionsMenu";
 import ProjectMapPlaceholder from "./ProjectMapPlaceholder";
 import {
   formatProjectRelativeDate,
+  isProjectThumbnailDecoded,
   normalizeProjectAccessLevel,
   normalizeProjectThumbnailStatus,
+  projectPreviousReadyThumbnailUrl,
+  rememberProjectThumbnailDecoded,
+  resolvePreviewPresentation,
+  type PreviewPresentation,
+  projectThumbnailRevision,
   projectThumbnailUrl,
 } from "./project-card-utils";
 
@@ -24,6 +30,88 @@ type ProjectCardProps = {
   onEditMetadata?: (project: ProjectListItem) => void;
   onFavoriteToggle?: (project: ProjectListItem) => void | Promise<void>;
 };
+
+type PreviewTransitionState = {
+  generationRevision: number | null;
+  loadingRevision: number | null;
+  decodedRevision: number | null;
+  decodedUrl: string | null;
+  previousReadyUrl: string | null;
+  imageError: boolean;
+  imageErrorUrl: string | null;
+};
+
+const PROJECT_PREVIEW_TRANSITION_V2_ENABLED =
+  String(
+    import.meta.env.VITE_PROJECT_PREVIEW_TRANSITION_V2 ?? "true",
+  )
+    .trim()
+    .toLowerCase() !== "false";
+
+function normalizedRevision(value?: number | null) {
+  const revision = Number(value);
+
+  return Number.isInteger(revision) && revision >= 0
+    ? revision
+    : null;
+}
+
+function logPreviewTransition(
+  event: "PENDING" | "READY-decode" | "image-error",
+  projectSlug: string,
+  revision: number | null,
+) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  console.debug("[Maono project preview]", event, {
+    project: projectSlug,
+    revision,
+  });
+}
+
+function ProjectPreviewNeutralState({
+  presentation,
+  projectName,
+}: {
+  presentation:
+    | "loading-neutral"
+    | "missing-neutral"
+    | "failed-neutral";
+  projectName: string;
+}) {
+  const copy = {
+    "loading-neutral": {
+      icon: "▧",
+      title: "Carregando prévia",
+      description: "Preparando a imagem existente.",
+    },
+    "missing-neutral": {
+      icon: "◇",
+      title: "Sem prévia",
+      description: "Este projeto ainda não possui uma imagem.",
+    },
+    "failed-neutral": {
+      icon: "!",
+      title: "Prévia indisponível",
+      description: "Não foi possível exibir a imagem deste projeto.",
+    },
+  }[presentation];
+
+  return (
+    <div
+      className={`mm-project-card__preview-fallback is-${presentation}`}
+      role={presentation === "loading-neutral" ? "status" : "img"}
+      aria-label={`${copy.title} do projeto ${projectName}. ${copy.description}`}
+      data-preview-state={presentation}
+    >
+      <span aria-hidden="true">{copy.icon}</span>
+      <strong>{copy.title}</strong>
+      <small>{copy.description}</small>
+    </div>
+  );
+}
 
 function OwnerIcon() {
   return (
@@ -146,93 +234,425 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onEditMetadata,
   onFavoriteToggle,
 }) => {
-  const thumbnailUrl = projectThumbnailUrl(project);
-  const sourceVersionRef = React.useRef(0);
-  const [thumbnailLoaded, setThumbnailLoaded] = React.useState(false);
-  const [thumbnailMissing, setThumbnailMissing] = React.useState(false);
-  const isFavorite = Boolean(project.favorite || project.favorited);
-  const accessLevel = normalizeProjectAccessLevel(project.accessLevel);
   const thumbnailStatus = normalizeProjectThumbnailStatus(
     project.thumbnailStatus,
   );
+  const thumbnailUrl = projectThumbnailUrl(project);
+  const thumbnailRevision = projectThumbnailRevision(project);
+  const configRevision = normalizedRevision(project.configRevision);
+  const previousReadyCandidate =
+    projectPreviousReadyThumbnailUrl(project);
+  const previousReadyRevision = normalizedRevision(
+    project.thumbnailRevision,
+  );
+  const thumbnailDecodedInSession = isProjectThumbnailDecoded(
+    project,
+    thumbnailUrl,
+  );
+  const previousDecodedInSession = isProjectThumbnailDecoded(
+    project,
+    previousReadyCandidate,
+  );
+  const displayedSourceRef = React.useRef<string | null>(null);
+  const [previewState, setPreviewState] =
+    React.useState<PreviewTransitionState>(() => {
+      const initialDecodedUrl = thumbnailDecodedInSession
+        ? thumbnailUrl
+        : previousDecodedInSession
+          ? previousReadyCandidate
+          : null;
+
+      return {
+        generationRevision:
+          thumbnailStatus === "PENDING" ? configRevision : null,
+        loadingRevision:
+          thumbnailUrl && !thumbnailDecodedInSession
+            ? thumbnailRevision
+            : null,
+        decodedRevision: initialDecodedUrl
+          ? normalizedRevision(project.thumbnailRevision) ??
+            thumbnailRevision
+          : null,
+        decodedUrl: initialDecodedUrl,
+        previousReadyUrl: previousReadyCandidate,
+        imageError: false,
+        imageErrorUrl: null,
+      };
+    });
+  const isFavorite = Boolean(project.favorite || project.favorited);
+  const accessLevel = normalizeProjectAccessLevel(project.accessLevel);
   const isOwner = accessLevel === "owner";
 
   React.useEffect(() => {
-    sourceVersionRef.current += 1;
-    setThumbnailLoaded(false);
-    setThumbnailMissing(false);
-  }, [thumbnailUrl]);
+    if (thumbnailStatus === "PENDING") {
+      logPreviewTransition(
+        "PENDING",
+        project.slug,
+        configRevision,
+      );
+    }
 
-  const handleThumbnailLoad = React.useCallback(
+    setPreviewState((current) => {
+      const decodedPreviousUrl =
+        current.decodedUrl &&
+        current.decodedUrl !== thumbnailUrl
+          ? current.decodedUrl
+          : null;
+      const retainedPreviousUrl =
+        [
+          decodedPreviousUrl,
+          current.previousReadyUrl,
+          previousReadyCandidate,
+        ].find(
+          (candidate) =>
+            Boolean(candidate) &&
+            candidate !== thumbnailUrl &&
+            candidate !== current.imageErrorUrl,
+        ) || null;
+
+      if (thumbnailStatus === "PENDING") {
+        return {
+          ...current,
+          generationRevision: configRevision,
+          loadingRevision: null,
+          previousReadyUrl:
+            decodedPreviousUrl ||
+            current.previousReadyUrl ||
+            previousReadyCandidate,
+          imageError: false,
+          imageErrorUrl: null,
+        };
+      }
+
+      if (
+        thumbnailStatus === "READY" ||
+        thumbnailStatus === "UNKNOWN"
+      ) {
+        const decodedCurrentUrl =
+          thumbnailDecodedInSession ||
+          current.decodedUrl === thumbnailUrl
+            ? thumbnailUrl
+            : null;
+        const generationRevision =
+          thumbnailStatus === "READY" &&
+          current.generationRevision === thumbnailRevision
+            ? current.generationRevision
+            : null;
+        const currentImageStillFailed =
+          current.imageError &&
+          current.imageErrorUrl === thumbnailUrl;
+
+        return {
+          generationRevision:
+            decodedCurrentUrl ? null : generationRevision,
+          loadingRevision:
+            thumbnailUrl && !decodedCurrentUrl
+              ? thumbnailRevision
+              : null,
+          decodedRevision: decodedCurrentUrl
+            ? thumbnailRevision
+            : null,
+          decodedUrl: decodedCurrentUrl,
+          previousReadyUrl:
+            retainedPreviousUrl || previousReadyCandidate,
+          imageError: currentImageStillFailed,
+          imageErrorUrl: currentImageStillFailed
+            ? current.imageErrorUrl
+            : null,
+        };
+      }
+
+      if (thumbnailStatus === "FAILED") {
+        const failedFallbackUrl =
+          decodedPreviousUrl ||
+          [
+            current.previousReadyUrl,
+            previousReadyCandidate,
+          ].find(
+            (candidate) =>
+              Boolean(candidate) &&
+              candidate !== current.imageErrorUrl,
+          ) ||
+          null;
+        const fallbackDecoded =
+          Boolean(failedFallbackUrl) &&
+          (current.decodedUrl === failedFallbackUrl ||
+            previousDecodedInSession);
+
+        return {
+          generationRevision: null,
+          loadingRevision:
+            failedFallbackUrl && !fallbackDecoded
+              ? previousReadyRevision
+              : null,
+          decodedRevision: fallbackDecoded
+            ? previousReadyRevision
+            : null,
+          decodedUrl: fallbackDecoded ? failedFallbackUrl : null,
+          previousReadyUrl: failedFallbackUrl,
+          imageError:
+            current.imageError && !failedFallbackUrl,
+          imageErrorUrl:
+            current.imageError && !failedFallbackUrl
+              ? current.imageErrorUrl
+              : null,
+        };
+      }
+
+      return {
+        ...current,
+        generationRevision: null,
+        loadingRevision: null,
+        decodedRevision: null,
+        decodedUrl: null,
+        imageError: false,
+        imageErrorUrl: null,
+      };
+    });
+  }, [
+    configRevision,
+    previousDecodedInSession,
+    previousReadyCandidate,
+    previousReadyRevision,
+    project.slug,
+    thumbnailDecodedInSession,
+    thumbnailRevision,
+    thumbnailStatus,
+    thumbnailUrl,
+  ]);
+
+  const previousReadyUrl =
+    previewState.previousReadyUrl ||
+    (previewState.imageErrorUrl === previousReadyCandidate
+      ? null
+      : previousReadyCandidate);
+  const currentImageFailed =
+    previewState.imageError &&
+    previewState.imageErrorUrl === thumbnailUrl;
+  const resolvedPresentation = resolvePreviewPresentation({
+    status: thumbnailStatus,
+    currentUrl: thumbnailUrl,
+    currentRevision: thumbnailRevision,
+    generationRevision: previewState.generationRevision,
+    decodedUrl: previewState.decodedUrl,
+    imageError: currentImageFailed,
+    previousReadyUrl,
+  });
+  const legacyPresentation: PreviewPresentation =
+    thumbnailUrl &&
+    previewState.decodedUrl === thumbnailUrl &&
+    !currentImageFailed
+      ? "current-image"
+      : "generation-svg";
+  const previewPresentation =
+    PROJECT_PREVIEW_TRANSITION_V2_ENABLED
+      ? resolvedPresentation
+      : legacyPresentation;
+  const displayImageUrl =
+    previewPresentation === "failed-previous-image"
+      ? previousReadyUrl
+      : thumbnailStatus === "READY" ||
+          thumbnailStatus === "UNKNOWN"
+        ? currentImageFailed
+          ? null
+          : thumbnailUrl
+        : null;
+  const displayImageDecoded =
+    Boolean(displayImageUrl) &&
+    (previewState.decodedUrl === displayImageUrl ||
+      isProjectThumbnailDecoded(project, displayImageUrl));
+  displayedSourceRef.current = displayImageUrl;
+  const showGenerationSvg =
+    previewPresentation === "generation-svg";
+  const neutralPresentation:
+    | "loading-neutral"
+    | "missing-neutral"
+    | "failed-neutral"
+    | null =
+    previewPresentation === "loading-neutral" ||
+    previewPresentation === "missing-neutral" ||
+    previewPresentation === "failed-neutral"
+      ? previewPresentation
+      : previewPresentation === "failed-previous-image" &&
+          !displayImageDecoded
+        ? "loading-neutral"
+        : null;
+  const previewBusy =
+    thumbnailStatus === "PENDING" ||
+    (PROJECT_PREVIEW_TRANSITION_V2_ENABLED &&
+      thumbnailStatus === "READY" &&
+      showGenerationSvg);
+
+  const markDisplayedImageFailed = React.useCallback(
+    (failedUrl: string) => {
+      logPreviewTransition(
+        "image-error",
+        project.slug,
+        thumbnailRevision,
+      );
+      setPreviewState((current) => ({
+        ...current,
+        generationRevision: null,
+        loadingRevision: null,
+        decodedRevision:
+          current.decodedUrl === failedUrl
+            ? null
+            : current.decodedRevision,
+        decodedUrl:
+          current.decodedUrl === failedUrl
+            ? null
+            : current.decodedUrl,
+        previousReadyUrl:
+          current.previousReadyUrl === failedUrl
+            ? null
+            : current.previousReadyUrl,
+        imageError: true,
+        imageErrorUrl: failedUrl,
+      }));
+    },
+    [project.slug, thumbnailRevision],
+  );
+
+  const handleDisplayedImageLoad = React.useCallback(
     async (event: React.SyntheticEvent<HTMLImageElement>) => {
       const image = event.currentTarget;
-      const loadedSource = image.currentSrc || image.src;
-      const sourceVersion = sourceVersionRef.current;
+      const expectedSource = displayImageUrl;
+
+      if (!expectedSource) {
+        return;
+      }
 
       if (typeof image.decode === "function") {
         try {
           await image.decode();
         } catch {
-          // onLoad já confirmou a leitura dos bytes.
+          markDisplayedImageFailed(expectedSource);
+          return;
         }
       }
 
       if (
-        sourceVersion !== sourceVersionRef.current ||
-        (image.currentSrc || image.src) !== loadedSource
+        displayedSourceRef.current !== expectedSource ||
+        image.getAttribute("src") !== expectedSource
       ) {
         return;
       }
 
-      setThumbnailMissing(false);
-      setThumbnailLoaded(true);
+      rememberProjectThumbnailDecoded(project, expectedSource);
+      const decodedCurrentImage =
+        expectedSource === thumbnailUrl;
+
+      if (decodedCurrentImage) {
+        logPreviewTransition(
+          "READY-decode",
+          project.slug,
+          thumbnailRevision,
+        );
+      }
+
+      setPreviewState((current) => ({
+        ...current,
+        generationRevision:
+          decodedCurrentImage &&
+          current.generationRevision === thumbnailRevision
+            ? null
+            : current.generationRevision,
+        loadingRevision: null,
+        decodedRevision:
+          decodedCurrentImage
+            ? thumbnailRevision
+            : previousReadyRevision,
+        decodedUrl: expectedSource,
+        previousReadyUrl:
+          decodedCurrentImage
+            ? expectedSource
+            : current.previousReadyUrl || expectedSource,
+        imageError:
+          decodedCurrentImage ||
+          current.imageErrorUrl === expectedSource
+            ? false
+            : current.imageError,
+        imageErrorUrl:
+          decodedCurrentImage ||
+          current.imageErrorUrl === expectedSource
+            ? null
+            : current.imageErrorUrl,
+      }));
     },
-    [],
+    [
+      displayImageUrl,
+      markDisplayedImageFailed,
+      project,
+      previousReadyRevision,
+      thumbnailRevision,
+      thumbnailUrl,
+    ],
   );
 
-  const handleThumbnailError = React.useCallback(
+  const handleDisplayedImageError = React.useCallback(
     (event: React.SyntheticEvent<HTMLImageElement>) => {
-      const image = event.currentTarget;
-      const failedSource = image.getAttribute("src");
+      const failedSource = event.currentTarget.getAttribute("src");
 
-      if (failedSource !== thumbnailUrl) {
+      if (!failedSource || failedSource !== displayImageUrl) {
         return;
       }
 
-      setThumbnailLoaded(false);
-      setThumbnailMissing(true);
+      markDisplayedImageFailed(failedSource);
     },
-    [thumbnailUrl],
+    [displayImageUrl, markDisplayedImageFailed],
   );
 
   const cardClassName = [
     "mm-project-card",
-    thumbnailStatus === "PENDING" ? "is-media-pending" : "",
+    previewBusy ? "is-media-pending" : "",
     opening ? "is-opening" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   return (
-    <article className={cardClassName} aria-busy={thumbnailStatus === "PENDING"}>
-      <div className="mm-project-card__preview">
-        <ProjectMapPlaceholder
-          project={project}
-          imageFailed={thumbnailMissing}
-        />
+    <article className={cardClassName} aria-busy={previewBusy}>
+      <div
+        className="mm-project-card__preview"
+        data-preview-presentation={previewPresentation}
+      >
+        {showGenerationSvg ? (
+          <ProjectMapPlaceholder project={project} />
+        ) : null}
 
-        {thumbnailUrl && !thumbnailMissing ? (
+        {neutralPresentation ? (
+          <ProjectPreviewNeutralState
+            presentation={neutralPresentation}
+            projectName={project.name}
+          />
+        ) : null}
+
+        {displayImageUrl ? (
           <img
-            src={thumbnailUrl}
-            alt={`Prévia do projeto ${project.name}`}
-            loading="lazy"
+            src={displayImageUrl}
+            alt={
+              previewPresentation === "failed-previous-image"
+                ? `Última prévia válida do projeto ${project.name}`
+                : `Prévia do projeto ${project.name}`
+            }
+            loading={showGenerationSvg ? "eager" : "lazy"}
             decoding="async"
             className={
-              thumbnailLoaded ? "is-loaded" : "is-loading"
+              displayImageDecoded ? "is-loaded" : "is-loading"
             }
-            onLoad={handleThumbnailLoad}
-            onError={handleThumbnailError}
+            onLoad={handleDisplayedImageLoad}
+            onError={handleDisplayedImageError}
           />
+        ) : null}
+
+        {previewPresentation === "failed-previous-image" &&
+        displayImageDecoded ? (
+          <span
+            className="mm-project-card__preview-notice is-failed"
+            role="status"
+          >
+            Falha ao atualizar. Exibindo a última prévia.
+          </span>
         ) : null}
 
         {canEditMetadata || canFavorite ? (
@@ -248,7 +668,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               alignItems: "center",
               gap: 8,
             }}
-            onClick={(event) => {
+            onClick={(
+              event: React.MouseEvent<HTMLDivElement>,
+            ) => {
               event.preventDefault();
               event.stopPropagation();
             }}
@@ -371,7 +793,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             className="mm-project-card__open"
             aria-disabled={opening}
             tabIndex={opening ? -1 : 0}
-            onClick={(event) => {
+            onClick={(
+              event: React.MouseEvent<HTMLAnchorElement>,
+            ) => {
               if (opening) {
                 event.preventDefault();
                 return;

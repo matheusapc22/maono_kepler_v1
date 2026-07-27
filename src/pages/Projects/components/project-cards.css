@@ -106,7 +106,7 @@
 .mm-projects-content .mm-project-card__preview::after {
   content: "";
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   inset: 0;
   pointer-events: none;
   background:
@@ -129,7 +129,7 @@
 
 .mm-projects-content .mm-project-card__preview img {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   inset: 0;
   display: block;
   object-fit: cover;
@@ -159,7 +159,7 @@
 
 .mm-projects-content .mm-project-map-placeholder__status {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   left: 12px;
   bottom: 12px;
   display: inline-flex;
@@ -178,12 +178,6 @@
   backdrop-filter: blur(7px);
 }
 
-.mm-projects-content
-  .mm-project-map-placeholder__status:is(.is-failed, .is-missing) {
-  border-color: rgba(251, 191, 36, 0.36);
-  color: #fde68a;
-}
-
 .mm-projects-content .mm-project-map-placeholder__status-dot {
   width: 7px;
   height: 7px;
@@ -194,8 +188,9 @@
 }
 
 .mm-projects-content .mm-project-card__preview-fallback {
-  position: relative;
+  position: absolute;
   z-index: 0;
+  inset: 0;
   display: grid;
   place-items: center;
   align-content: center;
@@ -209,13 +204,89 @@
   text-align: center;
 }
 
+.mm-projects-content
+  .mm-project-card__preview-fallback.is-loading-neutral {
+  color: #cbd5e1;
+  background:
+    radial-gradient(
+      circle at 50% 38%,
+      rgba(148, 163, 184, 0.13),
+      transparent 40%
+    ),
+    #0b141d;
+}
+
+.mm-projects-content
+  .mm-project-card__preview-fallback.is-missing-neutral {
+  background:
+    radial-gradient(
+      circle at 50% 38%,
+      rgba(52, 211, 153, 0.1),
+      transparent 40%
+    ),
+    #0a1518;
+}
+
+.mm-projects-content
+  .mm-project-card__preview-fallback.is-failed-neutral {
+  color: #fde68a;
+  background:
+    radial-gradient(
+      circle at 50% 38%,
+      rgba(251, 191, 36, 0.1),
+      transparent 40%
+    ),
+    #17140d;
+}
+
 .mm-projects-content .mm-project-card__preview-fallback > span {
   color: #6ee7b7;
   font-size: 2rem;
 }
 
+.mm-projects-content
+  .mm-project-card__preview-fallback.is-loading-neutral
+  > span {
+  color: #94a3b8;
+}
+
+.mm-projects-content
+  .mm-project-card__preview-fallback.is-failed-neutral
+  > span {
+  color: #facc15;
+}
+
 .mm-projects-content .mm-project-card__preview-fallback strong {
   font-size: 0.8rem;
+}
+
+.mm-projects-content .mm-project-card__preview-fallback small {
+  max-width: 28ch;
+  color: inherit;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  opacity: 0.78;
+}
+
+.mm-projects-content .mm-project-card__preview-notice {
+  position: absolute;
+  z-index: 4;
+  left: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #fde68a;
+  background: rgba(23, 18, 7, 0.86);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.24);
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.25;
+  backdrop-filter: blur(7px);
 }
 
 .mm-projects-content .mm-project-card__actions {

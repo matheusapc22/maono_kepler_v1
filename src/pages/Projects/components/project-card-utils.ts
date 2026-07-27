@@ -3,6 +3,16 @@ import type {
   ProjectThumbnailStatus,
 } from "../projects-api";
 
+export { resolvePreviewPresentation } from "./project-preview-presentation.mjs";
+export type {
+  PreviewPresentation,
+  PreviewPresentationInput,
+} from "./project-preview-presentation.mjs";
+
+const MAX_DECODED_THUMBNAIL_URLS = 256;
+const decodedThumbnailUrls = new Set<string>();
+let activeThumbnailOrganization: string | null = null;
+
 export type NormalizedProjectAccessLevel =
   | "owner"
   | "editor"
@@ -173,6 +183,112 @@ export function projectThumbnailUrl(project: ProjectListItem) {
   )}/thumbnail?v=${encodeURIComponent(String(revision ?? 0))}`;
 }
 
+export function projectThumbnailRevision(project: ProjectListItem) {
+  const status = normalizeProjectThumbnailStatus(
+    project.thumbnailStatus,
+  );
+  const revision =
+    status === "READY"
+      ? project.thumbnailRevision
+      : project.configRevision;
+  const normalized = Number(revision);
+
+  return Number.isInteger(normalized) && normalized >= 0
+    ? normalized
+    : null;
+}
+
+export function projectPreviousReadyThumbnailUrl(
+  project: ProjectListItem,
+) {
+  const revision = Number(project.thumbnailRevision);
+
+  if (!Number.isInteger(revision) || revision < 0) {
+    return null;
+  }
+
+  if (
+    normalizeProjectThumbnailStatus(project.thumbnailStatus) ===
+      "FAILED" &&
+    project.thumbnailUrl
+  ) {
+    return project.thumbnailUrl;
+  }
+
+  return `/api/projects/${encodeURIComponent(
+    project.slug,
+  )}/thumbnail?v=${encodeURIComponent(String(revision))}`;
+}
+
+export function projectOrganizationCacheKey(
+  project: ProjectListItem,
+) {
+  return String(
+    project.organizationId ??
+      project.organization_id ??
+      "unknown-organization",
+  );
+}
+
+export function activateProjectThumbnailCacheContext(
+  organizationKey?: string | null,
+) {
+  const value = String(organizationKey || "").trim();
+  const normalized = value || null;
+
+  if (normalized === activeThumbnailOrganization) {
+    return;
+  }
+
+  decodedThumbnailUrls.clear();
+  activeThumbnailOrganization = normalized;
+}
+
+export function isProjectThumbnailDecoded(
+  project: ProjectListItem,
+  url?: string | null,
+) {
+  if (!url) {
+    return false;
+  }
+
+  return (
+    activeThumbnailOrganization ===
+      projectOrganizationCacheKey(project) &&
+    decodedThumbnailUrls.has(url)
+  );
+}
+
+export function rememberProjectThumbnailDecoded(
+  project: ProjectListItem,
+  url?: string | null,
+) {
+  if (!url) {
+    return;
+  }
+
+  activateProjectThumbnailCacheContext(
+    projectOrganizationCacheKey(project),
+  );
+  decodedThumbnailUrls.add(url);
+
+  if (decodedThumbnailUrls.size > MAX_DECODED_THUMBNAIL_URLS) {
+    const oldestUrl = decodedThumbnailUrls.values().next().value;
+
+    if (typeof oldestUrl === "string") {
+      decodedThumbnailUrls.delete(oldestUrl);
+    }
+  }
+}
+
+export function projectCardKey(project: ProjectListItem) {
+  const stableId = project.id ?? project.slug;
+
+  return `${projectOrganizationCacheKey(project)}::${String(
+    stableId,
+  )}`;
+}
+
 export function projectThumbnailKey(project: ProjectListItem) {
-  return `${project.slug}::${projectThumbnailUrl(project) || "svg"}`;
+  return projectCardKey(project);
 }
