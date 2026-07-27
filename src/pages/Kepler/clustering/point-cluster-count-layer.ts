@@ -38,7 +38,9 @@ function pointCoordinates(value) {
     : [Number.NaN, Number.NaN];
 }
 
-class MaonoDeckGLClusterLayer extends DeckGLClusterLayer {
+export class MaonoDeckGLClusterLayer extends DeckGLClusterLayer {
+  static layerName = "MaonoDeckGLClusterLayer";
+
   renderLayers() {
     const nativeLayer = super.renderLayers();
     const { id, visible, opacity } = this.props;
@@ -79,6 +81,13 @@ class MaonoDeckGLClusterLayer extends DeckGLClusterLayer {
       }),
     ];
   }
+}
+
+export function createCountedClusterLayer(nativeLayer) {
+  // deck.gl keeps normalized props on a prototype-backed object. Spreading
+  // nativeLayer.props drops non-enumerable values such as `data`, leaving the
+  // counted layer empty. Passing the props object itself preserves them.
+  return new MaonoDeckGLClusterLayer(nativeLayer.props);
 }
 
 export default class MaonoClusterLayer extends LayerClasses.cluster {
@@ -131,10 +140,7 @@ export default class MaonoClusterLayer extends LayerClasses.cluster {
     }
 
     return [
-      new MaonoDeckGLClusterLayer({
-        ...nativeLayer.props,
-        id: nativeLayer.id,
-      }),
+      createCountedClusterLayer(nativeLayer),
       ...renderedLayers.slice(1),
     ];
   }
