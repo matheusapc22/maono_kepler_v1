@@ -1,10 +1,6 @@
 import React from "react";
 
 import type { ProjectListItem } from "../projects-api";
-import {
-  normalizeProjectThumbnailStatus,
-  projectThumbnailStatusLabel,
-} from "./project-card-utils";
 
 const PALETTES = [
   ["#0b1715", "#183d34", "#d9a441", "#f5d486"],
@@ -37,27 +33,17 @@ function stableSeed(project: ProjectListItem) {
 
 const ProjectMapPlaceholder: React.FC<{
   project: ProjectListItem;
-  imageFailed?: boolean;
-}> = ({ project, imageFailed = false }) => {
+}> = ({ project }) => {
   const seed = stableSeed(project);
   const palette = PALETTES[seed % PALETTES.length];
   const lineOffset = seed % MAP_LINES.length;
-  const status = imageFailed
-    ? "MISSING"
-    : normalizeProjectThumbnailStatus(project.thumbnailStatus);
-  const statusLabel =
-    imageFailed
-      ? "Prévia temporariamente indisponível"
-      : projectThumbnailStatusLabel(status);
 
   return (
     <div
-      className="mm-project-map-placeholder"
+      className="mm-project-map-placeholder is-generation"
       role="img"
-      aria-label={`Mapa ilustrativo do projeto ${project.name}${
-        statusLabel ? `. ${statusLabel}.` : ""
-      }`}
-      data-preview-status={status}
+      aria-label={`Mapa ilustrativo do projeto ${project.name}. Atualizando prévia.`}
+      data-preview-status="PENDING"
       style={
         {
           "--mm-map-background": palette[0],
@@ -111,19 +97,13 @@ const ProjectMapPlaceholder: React.FC<{
         </g>
       </svg>
 
-      {statusLabel ? (
+      <span className="mm-project-map-placeholder__status is-pending">
         <span
-          className={`mm-project-map-placeholder__status is-${status.toLowerCase()}`}
-        >
-          {status === "PENDING" ? (
-            <span
-              className="mm-project-map-placeholder__status-dot"
-              aria-hidden="true"
-            />
-          ) : null}
-          {statusLabel}
-        </span>
-      ) : null}
+          className="mm-project-map-placeholder__status-dot"
+          aria-hidden="true"
+        />
+        Atualizando prévia
+      </span>
     </div>
   );
 };

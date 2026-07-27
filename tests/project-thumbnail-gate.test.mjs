@@ -49,16 +49,30 @@ test("grade não fica bloqueada aguardando todos os PNGs", () => {
   assert.match(section, /aria-busy=\{loading\}/);
 });
 
-test("card mostra SVG imediato e só revela PNG depois de decode", () => {
-  assert.match(card, /<ProjectMapPlaceholder/);
+test("card limita o SVG à apresentação de geração e conclui no decode", () => {
+  assert.match(
+    card,
+    /showGenerationSvg \? \(\s*<ProjectMapPlaceholder/,
+  );
+  assert.match(card, /resolvePreviewPresentation\(\{/);
+  assert.match(card, /generationRevision/);
+  assert.match(card, /decodedRevision/);
+  assert.match(card, /previousReadyUrl/);
   assert.match(card, /typeof image\.decode === "function"/);
   assert.match(card, /await image\.decode\(\)/);
-  assert.match(card, /thumbnailLoaded \? "is-loaded" : "is-loading"/);
-  assert.match(card, /loading="lazy"/);
-  assert.match(card, /onError=\{handleThumbnailError\}/);
+  assert.match(
+    card,
+    /displayImageDecoded \? "is-loaded" : "is-loading"/,
+  );
+  assert.match(
+    card,
+    /loading=\{showGenerationSvg \? "eager" : "lazy"\}/,
+  );
+  assert.match(card, /onError=\{handleDisplayedImageError\}/);
+  assert.match(card, /VITE_PROJECT_PREVIEW_TRANSITION_V2/);
 });
 
-test("fallback é determinístico por organização e slug sem dados do mapa", () => {
+test("SVG de geração é determinístico e não representa falha ou ausência", () => {
   assert.match(
     placeholder,
     /project\.organizationId \?\? project\.organization_id/,
@@ -66,22 +80,33 @@ test("fallback é determinístico por organização e slug sem dados do mapa", (
   assert.match(placeholder, /project\.slug/);
   assert.match(placeholder, /function stableSeed/);
   assert.match(placeholder, /const PALETTES = \[/);
+  assert.match(placeholder, /data-preview-status="PENDING"/);
+  assert.doesNotMatch(
+    placeholder,
+    /imageFailed|FAILED|MISSING/,
+  );
   assert.doesNotMatch(placeholder, /datasets|GeoJSON|longitude|latitude/);
   assert.match(cardStyles, /--project-preview-ratio:\s*16 \/ 9/);
   assert.match(cardStyles, /aspect-ratio:\s*var\(--project-preview-ratio\)/);
 });
 
-test("somente READY ou legado UNKNOWN tentam carregar imagem real", () => {
+test("READY e UNKNOWN carregam imagem; falhas usam fallback neutro ou anterior", () => {
   assert.match(
     utils,
     /!\["READY", "UNKNOWN"\]\.includes\(status\)/,
   );
   assert.match(utils, /project\.thumbnailRevision/);
   assert.match(utils, /thumbnail\?v=/);
+  assert.match(utils, /projectPreviousReadyThumbnailUrl/);
+  assert.match(card, /ProjectPreviewNeutralState/);
+  assert.match(cardStyles, /is-loading-neutral/);
+  assert.match(cardStyles, /is-missing-neutral/);
+  assert.match(cardStyles, /is-failed-neutral/);
 });
 
 test("PENDING usa polling progressivo e cancelável", () => {
-  assert.match(section, /project\.thumbnailStatus === "PENDING"/);
+  assert.match(section, /normalizeProjectThumbnailStatus\(/);
+  assert.match(section, /\) === "PENDING"/);
   assert.match(section, /\[2000, 4000, 8000, 15000\]/);
   assert.match(section, /new AbortController\(\)/);
   assert.match(section, /controller\.abort\(\)/);
@@ -100,6 +125,33 @@ test("transição não causa flash e respeita redução de movimento", () => {
   assert.match(cardStyles, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.match(skeletonStyles, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.match(skeletonStyles, /animation:\s*none/);
+});
+
+test("cache de decode é contextual e a key não depende da revisão", () => {
+  assert.match(utils, /const decodedThumbnailUrls = new Set<string>\(\)/);
+  assert.match(utils, /activateProjectThumbnailCacheContext/);
+  assert.match(utils, /rememberProjectThumbnailDecoded/);
+  assert.match(utils, /projectCardKey/);
+  assert.match(section, /key=\{projectCardKey\(project\)\}/);
+  assert.match(
+    section,
+    /activateProjectThumbnailCacheContext\(/,
+  );
+  assert.doesNotMatch(
+    utils.match(
+      /export function projectCardKey[\s\S]*?\n\}/,
+    )?.[0] || "",
+    /projectThumbnailUrl/,
+  );
+});
+
+test("aria-busy acompanha geração real, não o carregamento inicial", () => {
+  assert.match(card, /const previewBusy =/);
+  assert.match(card, /aria-busy=\{previewBusy\}/);
+  assert.match(
+    card,
+    /thumbnailStatus === "READY"[\s\S]*showGenerationSvg/,
+  );
 });
 
 test("altura fixa legada e shimmer de sidebar permanecem ausentes", () => {

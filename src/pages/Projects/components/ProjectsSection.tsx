@@ -12,6 +12,12 @@ import {
 } from "../projects-api";
 import ProjectCard from "./ProjectCard";
 import ProjectMetadataPanel from "./ProjectMetadataPanel";
+import {
+  activateProjectThumbnailCacheContext,
+  normalizeProjectThumbnailStatus,
+  projectCardKey,
+  projectOrganizationCacheKey,
+} from "./project-card-utils";
 
 type ProjectsSectionProps = {
   section: ProjectSectionKey;
@@ -108,6 +114,13 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     () => projects.filter((project) => matchesSearch(project, searchQuery)),
     [projects, searchQuery],
   );
+  const thumbnailOrganizationKey = useMemo(
+    () =>
+      projects.length > 0
+        ? projectOrganizationCacheKey(projects[0])
+        : null,
+    [projects],
+  );
   const [openingSlug, setOpeningSlug] = useState<string | null>(null);
   const [actionsOpenSlug, setActionsOpenSlug] = useState<string | null>(null);
   const [editingProject, setEditingProject] =
@@ -149,8 +162,17 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   }, [section]);
 
   useEffect(() => {
+    activateProjectThumbnailCacheContext(
+      thumbnailOrganizationKey,
+    );
+  }, [thumbnailOrganizationKey]);
+
+  useEffect(() => {
     const pendingProjects = projects.filter(
-      (project) => project.thumbnailStatus === "PENDING",
+      (project) =>
+        normalizeProjectThumbnailStatus(
+          project.thumbnailStatus,
+        ) === "PENDING",
     );
 
     if (pendingProjects.length === 0) {
@@ -276,7 +298,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
       >
         {filteredProjects.map((project) => (
           <ProjectCard
-            key={project.slug}
+            key={projectCardKey(project)}
             project={project}
             canSave={canProjectSave(project)}
             canFavorite={canProjectFavorite(project)}
