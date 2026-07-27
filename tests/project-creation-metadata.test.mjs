@@ -154,11 +154,14 @@ test("idempotência usa chave persistida e reserva única", () => {
   assert.match(projectsIndex, /project\.create\.idempotent/);
 });
 
-test("Novo mapa exibe botão com project.create sem projectSlug", () => {
-  assert.match(saveButton, /PERMISSION\.PROJECT_CREATE/);
+test("Novo mapa exibe botão somente com capacidade backend sem projectSlug", () => {
   assert.match(
     saveButton,
-    /authenticated\s*&&\s*!projectSlug\s*&&\s*activeOrganizationId/,
+    /context\?\.capabilities\?\.saveMap/,
+  );
+  assert.match(
+    saveButton,
+    /authenticated\s*&&\s*!projectSlug\s*&&\s*activeOrganizationId\s*&&\s*context\?\.capabilities\?\.saveMap/,
   );
   assert.match(
     saveButton,
@@ -169,7 +172,10 @@ test("Novo mapa exibe botão com project.create sem projectSlug", () => {
 });
 
 test("mapa existente mantém PUT de config", () => {
-  assert.match(saveButton, /PERMISSION\.PROJECT_SAVE/);
+  assert.match(
+    saveButton,
+    /projectSlug\s*&&\s*context\?\.capabilities\?\.saveMap/,
+  );
   assert.match(
     saveButton,
     /`\/api\/projects\/\$\{encodeURIComponent\(\s*projectSlug/,
@@ -216,7 +222,7 @@ test("sucesso redireciona para a rota do projeto criado", () => {
   assert.match(saveButton, /useNavigate\(\)/);
   assert.match(
     saveButton,
-    /`\/projects\/\$\{encodeURIComponent\(createdSlug\)\}\/map`/,
+    /`\/projects\/\$\{encodeURIComponent\(createdSlug\)\}\/edit`/,
   );
   assert.match(saveButton, /\{\s*replace:\s*true\s*\}/);
 });
