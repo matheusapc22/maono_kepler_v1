@@ -8,6 +8,7 @@ import {
   captureProjectThumbnail,
   serializeProjectConfig,
 } from "../thumbnail/capture-thumbnail";
+import { getMaonoConfigForSave } from "../clustering/point-cluster-store";
 import {
   enqueueProjectThumbnailJob,
   type ProjectThumbnailJobState,
@@ -404,7 +405,11 @@ const MaonoSaveButton: React.FC = () => {
     setMessage("");
 
     try {
-      const config = serializeProjectConfig(mapState);
+      const config: any = serializeProjectConfig(mapState);
+      const maonoConfig = getMaonoConfigForSave();
+      if (maonoConfig) {
+        config.maono = maonoConfig;
+      }
       const legacy = await legacyCapture(config);
       const response = await fetch(
         `/api/projects/${encodeURIComponent(projectSlug)}/config`,
@@ -477,7 +482,11 @@ const MaonoSaveButton: React.FC = () => {
     );
 
     try {
-      const config = serializeProjectConfig(mapState);
+      const config: any = serializeProjectConfig(mapState);
+      const maonoConfig = getMaonoConfigForSave();
+      if (maonoConfig) {
+        config.maono = maonoConfig;
+      }
       const legacy = await legacyCapture(config);
       const idempotencyKey = getOrCreateCreationKey(
         activeOrganizationId,
