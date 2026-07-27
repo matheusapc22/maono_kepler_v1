@@ -3,24 +3,27 @@
 // @ts-nocheck
 
 import { SidePanelFactory } from "@kepler.gl/components";
-import checkAdminUser from "../utils/is-admin-user";
+import MaonoLayerPanelErrorBoundary from "../components/maono-layer-panel/ErrorBoundary";
+import MaonoLayerPanel from "../components/maono-layer-panel/MaonoLayerPanel";
+import { useMapPanel } from "../map-panel/MapPanelContext";
 
 export function CustomSidePanelFactory(...deps: any[]) {
   const DefaultSidePanel = SidePanelFactory(...deps);
 
   const Wrapped = (props: any) => {
-    const isAdminUser = checkAdminUser();
+    const { customLayerPanelEnabled } = useMapPanel();
 
-    const EXCLUDED_IDS = !isAdminUser
-      ? new Set(["interaction", "interactions"])
-      : new Set([]);
+    if (customLayerPanelEnabled) {
+      return (
+        <MaonoLayerPanelErrorBoundary
+          fallback={<DefaultSidePanel {...props} />}
+        >
+          <MaonoLayerPanel />
+        </MaonoLayerPanelErrorBoundary>
+      );
+    }
 
-    const basePanels =
-      props?.panels ?? (DefaultSidePanel as any)?.defaultPanels ?? [];
-
-    const panels = basePanels.filter((p: any) => !EXCLUDED_IDS.has(p?.id));
-
-    return <DefaultSidePanel {...props} panels={panels} />;
+    return <DefaultSidePanel {...props} />;
   };
 
   (Wrapped as any).deps = (DefaultSidePanel as any).deps;

@@ -8,12 +8,12 @@ import {
   USER_GUIDE_DOC,
 } from "@kepler.gl/constants";
 import Logo from "../../../assets/images/Logo_Maono.png";
-import checkAdminUser from "../utils/is-admin-user";
+import { useMapPanel } from "../map-panel/MapPanelContext";
 
 export function CustomPanelHeaderFactory(...deps) {
-  const PanelHeader = PanelHeaderFactory(...deps);
-  const defaultActionItems = PanelHeader.defaultProps.actionItems;
-  const isAdminUser = checkAdminUser();
+  const DefaultPanelHeader = PanelHeaderFactory(...deps);
+  const defaultActionItems =
+    DefaultPanelHeader.defaultProps?.actionItems ?? [];
 
   const CustomKeplerLogo = () => {
     /*
@@ -26,27 +26,27 @@ export function CustomPanelHeaderFactory(...deps) {
     );
   };
 
-  PanelHeader.defaultProps = {
-    ...PanelHeader.defaultProps,
-    logoComponent: CustomKeplerLogo,
-    actionItems: isAdminUser
-      ? [
-          {
-            id: "bug",
-            iconComponent: Icons.Bug,
-            href: BUG_REPORT_LINK,
-            blank: true,
-            tooltip: "Bug Report",
-            onClick: () => {},
-          },
-          {
-            id: "docs",
-            iconComponent: Icons.Docs2,
-            href: USER_GUIDE_DOC,
-            blank: true,
-            tooltip: "User Guide",
-            onClick: () => {},
-          },
+  const WrappedPanelHeader = (props) => {
+    const { context } = useMapPanel();
+    const actionItems = [
+      {
+        id: "bug",
+        iconComponent: Icons.Bug,
+        href: BUG_REPORT_LINK,
+        blank: true,
+        tooltip: "Bug Report",
+        onClick: () => {},
+      },
+      {
+        id: "docs",
+        iconComponent: Icons.Docs2,
+        href: USER_GUIDE_DOC,
+        blank: true,
+        tooltip: "User Guide",
+        onClick: () => {},
+      },
+      ...(context?.capabilities?.saveMap
+        ? [
           defaultActionItems.find((item) => item.id === "storage"),
           {
             ...defaultActionItems.find((item) => item.id === "save"),
@@ -57,10 +57,20 @@ export function CustomPanelHeaderFactory(...deps) {
             // iconComponent: () => <></>,
           },
         ]
-      : [],
+        : []),
+    ].filter(Boolean);
+
+    return (
+      <DefaultPanelHeader
+        {...props}
+        logoComponent={CustomKeplerLogo}
+        actionItems={actionItems}
+      />
+    );
   };
 
-  return PanelHeader;
+  WrappedPanelHeader.deps = DefaultPanelHeader.deps;
+  return WrappedPanelHeader;
 }
 
 CustomPanelHeaderFactory.deps = PanelHeaderFactory.deps;
