@@ -7,6 +7,14 @@ import type { RootState } from "../../../store";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
+import { prepareSavedConfigForPointClustering } from "../clustering/point-cluster-controller.ts";
+import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
+import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
+
+const POINT_CLUSTERING_FEATURE_ENABLED =
+  isPointClusteringFeatureEnabled(
+    import.meta.env.VITE_POINT_CLUSTERING_V1,
+  );
 
 const mapStateToProps = (state: RootState) => ({
   isMapLoading: selectIsMapLoading(state),
@@ -65,18 +73,32 @@ function normalizeDatasetForKepler(dataset: any) {
   };
 }
 
-function loadSavedKeplerConfig(savedConfig: any) {
+export function loadSavedKeplerConfig(savedConfig: any) {
   validateSavedKeplerConfig(savedConfig);
 
+  const prepared = prepareSavedConfigForPointClustering(
+    savedConfig,
+    {
+      featureEnabled: POINT_CLUSTERING_FEATURE_ENABLED,
+    },
+  );
+  loadPointClusterState(
+    savedConfig.maono,
+    prepared.pairs,
+  );
+
   try {
-    const loaded = KeplerGlSchema.load(savedConfig) as any;
+    const loaded = KeplerGlSchema.load(
+      prepared.savedConfig,
+    ) as any;
 
     if (isRecord(loaded)) {
       const datasets = Array.isArray(loaded.datasets)
         ? loaded.datasets
         : savedConfig.datasets.map(normalizeDatasetForKepler);
 
-      const config = loaded.config ?? savedConfig.config;
+      const config =
+        loaded.config ?? prepared.savedConfig.config;
 
       return {
         datasets,
@@ -92,7 +114,7 @@ function loadSavedKeplerConfig(savedConfig: any) {
 
   return {
     datasets: savedConfig.datasets.map(normalizeDatasetForKepler),
-    config: savedConfig.config,
+    config: prepared.savedConfig.config,
   };
 }
 
@@ -154,6 +176,7 @@ const MapUrlLoader = connectStore(
     useEffect(() => {
       if (!projectSlug) {
         loadedProjectRef.current = null;
+        loadPointClusterState(undefined);
         return;
       }
 

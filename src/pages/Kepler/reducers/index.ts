@@ -19,6 +19,7 @@ import keplerGlReducer, {
 } from "@kepler.gl/reducers";
 import KeplerGlSchema from "@kepler.gl/schemas";
 import { KeplerTable } from "@kepler.gl/table";
+import { LayerClasses } from "@kepler.gl/layers";
 import { getApplicationConfig } from "@kepler.gl/utils";
 import { LOCALE_CODES } from "@kepler.gl/localization";
 
@@ -36,6 +37,7 @@ import {
 } from "../actions";
 
 import { CLOUD_PROVIDERS_CONFIGURATION } from "../constants/default-settings";
+import MaonoClusterLayer from "../clustering/point-cluster-count-layer.ts";
 import { generateHashId } from "../utils/strings";
 import checkAdminUser from "../utils/is-admin-user";
 
@@ -142,6 +144,10 @@ const demoReducer = combineReducers({
       },
     },
     visState: {
+      layerClasses: {
+        ...LayerClasses,
+        cluster: MaonoClusterLayer,
+      },
       loaders: [], // Add additional loaders.gl loaders here
       loadOptions: {}, // Add additional loaders.gl loader options here
     },

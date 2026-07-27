@@ -32,6 +32,8 @@ import Banner from "./components/banner";
 import Announcement, { FormLink } from "./components/announcement";
 import MaonoSaveButton from "./components/maono-save-button";
 import BackToProjectsButton from "./components/back-to-projects-button";
+import PointClusterSettingsPanel from "./components/point-cluster-settings-panel";
+import { usePointClustering } from "./hooks/use-point-clustering";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
 import { replacePanelHeader } from "./factories/panel-header";
@@ -199,6 +201,7 @@ const App = (props) => {
   const query = Object.fromEntries(searchParams.entries());
   const dispatch = useDispatch();
   const screenshotRequestRef = useRef(null);
+  const pointClustering = usePointClustering();
 
   const duckDbPluginEnabled = (getApplicationConfig().plugins || []).some(
     (p) => p.name === "duckdb"
@@ -374,6 +377,7 @@ const App = (props) => {
       <MapUrlLoader />
       <BackToProjectsButton />
       <MaonoSaveButton />
+      <PointClusterSettingsPanel controller={pointClustering} />
       <StyleSheetManager shouldForwardProp={shouldForwardProp}>
         <ThemeProvider theme={theme}>
           <GlobalStyle>
