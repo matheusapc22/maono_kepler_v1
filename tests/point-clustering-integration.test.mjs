@@ -2,9 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { DeckGLClusterLayer } from "@kepler.gl/deckgl-layers";
+
 import {
   prepareSavedConfigForPointClustering,
 } from "../src/pages/Kepler/clustering/point-cluster-controller.ts";
+import {
+  createCountedClusterLayer,
+} from "../src/pages/Kepler/clustering/point-cluster-count-layer.ts";
 import {
   getMaonoConfigForSave,
   getPointClusterSnapshot,
@@ -303,6 +308,40 @@ test("store preserva outras extensões Maõno ao salvar", () => {
     70,
   );
   assert.equal(snapshot.pairs.length, 1);
+});
+
+test("camada com contagem preserva os dados normalizados do deck.gl", () => {
+  const data = Array.from({ length: 250 }, (_, index) => ({
+    index,
+  }));
+  const getPosition = ({ index }) => [
+    -45.43 + index / 10_000,
+    -21.55 + index / 10_000,
+  ];
+  const nativeLayer = new DeckGLClusterLayer({
+    id: "maono-cluster-estabelecimentos",
+    data,
+    getPosition,
+    clusterRadius: 50,
+    zoom: 8,
+    width: 1_600,
+    height: 900,
+  });
+
+  assert.equal(
+    Object.prototype.propertyIsEnumerable.call(
+      nativeLayer.props,
+      "data",
+    ),
+    false,
+  );
+
+  const countedLayer = createCountedClusterLayer(nativeLayer);
+
+  assert.equal(countedLayer.props.data, data);
+  assert.equal(countedLayer.props.data.length, 250);
+  assert.equal(countedLayer.props.getPosition, getPosition);
+  assert.equal(countedLayer.props.clusterRadius, 50);
 });
 
 test("integração fonte conecta loader, save, painel e flag", async () => {
