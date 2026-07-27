@@ -3,20 +3,20 @@ import { connect } from "react-redux";
 import { useParams } from "react-router";
 import { addDataToMap } from "@kepler.gl/actions";
 import KeplerGlSchema from "@kepler.gl/schemas";
-import type { RootState } from "../../../store";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
 import { prepareSavedConfigForPointClustering } from "../clustering/point-cluster-controller.ts";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
+import { useMapPanel } from "../map-panel/MapPanelContext";
 
 const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
 
-const mapStateToProps = (state: RootState) => ({
+const mapStateToProps = (state: any) => ({
   isMapLoading: selectIsMapLoading(state),
 });
 
@@ -122,6 +122,7 @@ async function loadProjectConfig(
   projectSlug: string,
   dispatch: any,
   signal: AbortSignal,
+  readOnly: boolean,
 ) {
   dispatch(setLoadingMapStatus(true));
 
@@ -158,7 +159,7 @@ async function loadProjectConfig(
         config: loadedConfig.config,
         options: {
           centerMap: true,
-          readOnly: false,
+          readOnly: readOnly,
         },
       }),
     );
@@ -169,7 +170,8 @@ async function loadProjectConfig(
 
 const MapUrlLoader = connectStore(
   ({ isMapLoading, dispatch }: { isMapLoading: boolean; dispatch: any }) => {
-    const { projectSlug } = useParams<{ projectSlug: string }>();
+    const { projectSlug } = useParams();
+    const { context } = useMapPanel();
     const loadedProjectRef = useRef<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -180,16 +182,28 @@ const MapUrlLoader = connectStore(
         return;
       }
 
-      if (loadedProjectRef.current === projectSlug) {
+      const contextKey = [
+        projectSlug,
+        context?.organization?.id ?? "none",
+        context?.version ?? 0,
+        context?.mode ?? "unknown",
+      ].join(":");
+
+      if (loadedProjectRef.current === contextKey) {
         return;
       }
 
       const controller = new AbortController();
 
-      loadedProjectRef.current = projectSlug;
+      loadedProjectRef.current = contextKey;
       setError(null);
 
-      loadProjectConfig(projectSlug, dispatch, controller.signal).catch((err) => {
+      loadProjectConfig(
+        projectSlug,
+        dispatch,
+        controller.signal,
+        context?.mode === "viewer",
+      ).catch((err) => {
         if (controller.signal.aborted) {
           return;
         }
@@ -206,7 +220,13 @@ const MapUrlLoader = connectStore(
       return () => {
         controller.abort();
       };
-    }, [projectSlug, dispatch]);
+    }, [
+      context?.mode,
+      context?.organization?.id,
+      context?.version,
+      dispatch,
+      projectSlug,
+    ]);
 
     if (error) {
       return (

@@ -579,7 +579,10 @@ const ProjectsPage: React.FC = () => {
 
               <div className="mm-topbar-actions">
                 {canCreateMap && (
-                  <Link to="/map" className="mm-btn primary mm-new-map-btn">
+                  <Link
+                    to="/maps/new/edit"
+                    className="mm-btn primary mm-new-map-btn"
+                  >
                     Novo mapa
                   </Link>
                 )}

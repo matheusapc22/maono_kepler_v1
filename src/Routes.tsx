@@ -1,6 +1,12 @@
 // AppRoutes.tsx
 import React, { lazy, Suspense, useEffect } from "react";
-import { Navigate, Routes, Route, useLocation } from "react-router";
+import {
+  Navigate,
+  Routes,
+  Route,
+  useLocation,
+  useParams,
+} from "react-router";
 
 import { normalizeRole } from "./access-control/roles";
 import { useSession } from "./auth/session";
@@ -20,6 +26,9 @@ const KeplerApp = lazy(() => import("./pages/Kepler"));
 const LoginPage = lazy(() => import("./pages/Login"));
 const ProjectsPage = lazy(() => import("./pages/Projects"));
 const AdminPage = lazy(() => import("./pages/Admin"));
+const MapManagementPage = lazy(
+  () => import("./pages/Kepler/map-panel/MapManagementPage"),
+);
 
 const RouteLoading: React.FC = () => (
   <main className="mm-loading-screen" aria-busy="true">
@@ -114,6 +123,19 @@ const NotFound: React.FC = () => (
   <div style={{ padding: 16 }}>Page not found.</div>
 );
 
+const LegacyProjectMapRedirect: React.FC = () => {
+  const { projectSlug = "" } = useParams<{
+    projectSlug: string;
+  }>();
+
+  return (
+    <Navigate
+      to={`/projects/${encodeURIComponent(projectSlug)}/manage`}
+      replace
+    />
+  );
+};
+
 const AppRoutes: React.FC = () => {
   return (
     <Routes>
@@ -154,24 +176,49 @@ const AppRoutes: React.FC = () => {
       />
 
       <Route
-        path="/projects/:projectSlug/map"
+        path="/projects/:projectSlug/manage"
+        element={
+          <WithSuspense>
+            <MapManagementPage />
+          </WithSuspense>
+        }
+      />
+
+      <Route
+        path="/projects/:projectSlug/view"
         element={
           <WithSuspense>
             <KeplerApp />
           </WithSuspense>
         }
+      />
+
+      <Route
+        path="/projects/:projectSlug/edit"
+        element={
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
+        }
+      />
+
+      <Route
+        path="/projects/:projectSlug/map"
+        element={<LegacyProjectMapRedirect />}
       />
 
       <Route path="/auth" element={<AuthCallback />} />
 
       <Route
-        path="map"
+        path="/maps/new/edit"
         element={
           <WithSuspense>
             <KeplerApp />
           </WithSuspense>
         }
       />
+
+      <Route path="/map" element={<Navigate to="/maps/new/edit" replace />} />
 
       <Route path="(:id)" element={<KeplerApp />} />
       <Route path="map/:provider" element={<KeplerApp />} />

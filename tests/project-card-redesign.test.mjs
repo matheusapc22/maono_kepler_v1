@@ -32,7 +32,7 @@ test("ProjectCard uses semantic article with an explicit CTA Link", () => {
   assert.match(card, /className="mm-project-card__open"/);
   assert.match(
     card,
-    /to=\{`\/projects\/\$\{encodeURIComponent\(project\.slug\)\}\/map`\}/,
+    /to=\{`\/projects\/\$\{encodeURIComponent\(project\.slug\)\}\/manage`\}/,
   );
   assert.match(card, /Abrir projeto/);
   assert.doesNotMatch(card, /Abrir mapa/);
