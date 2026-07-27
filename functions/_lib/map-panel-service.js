@@ -28,6 +28,12 @@ const MAP_CAPABILITY_KEYS = Object.freeze([
   "inspectLayer",
   "toggleLayerVisibility",
   "viewFilters",
+  "focusMapData",
+  "configureTooltips",
+  "toggleLegend",
+  "previewIsochrone",
+  "persistIsochrone",
+  "removeIsochrone",
   "editLayers",
   "editStyle",
   "editLayerStyle",
@@ -93,6 +99,22 @@ function emptyCapabilities() {
 }
 
 export function getMapPanelFeatures(env) {
+  const maonoLayerManager = isFeatureFlagEnabled(
+    env?.MAONO_LAYER_MANAGER_V1,
+    false,
+  );
+  const maonoMapShell = isFeatureFlagEnabled(
+    env?.MAONO_MAP_SHELL_V1,
+    maonoLayerManager,
+  );
+  const maonoMapOverlay = isFeatureFlagEnabled(
+    env?.MAONO_MAP_OVERLAY_V1,
+    maonoLayerManager,
+  );
+  const isochroneProviderConfigured = Boolean(
+    String(env?.GEOAPIFY_API_KEY || "").trim(),
+  );
+
   return {
     mapManagementHome: isFeatureFlagEnabled(
       env?.MAP_MANAGEMENT_HOME_V1,
@@ -107,10 +129,16 @@ export function getMapPanelFeatures(env) {
       false,
     ),
     projectQuotaReservation: isProjectQuotaReservationEnabled(env),
-    maonoLayerManager: isFeatureFlagEnabled(
-      env?.MAONO_LAYER_MANAGER_V1,
-      false,
-    ),
+    maonoLayerManager,
+    maonoMapShell,
+    maonoMapOverlay,
+    maonoIsochrone:
+      maonoMapOverlay &&
+      isochroneProviderConfigured &&
+      isFeatureFlagEnabled(
+        env?.MAONO_ISOCHRONE_V1,
+        false,
+      ),
   };
 }
 
@@ -119,6 +147,12 @@ export function buildMapCapabilities({
   editorAllowed = false,
   editMetadataAllowed = false,
   updateThumbnailAllowed = false,
+  focusMapDataAllowed = viewerAllowed,
+  configureTooltipsAllowed = editorAllowed,
+  toggleLegendAllowed = viewerAllowed,
+  previewIsochroneAllowed = viewerAllowed,
+  persistIsochroneAllowed = editorAllowed,
+  removeIsochroneAllowed = editorAllowed,
 } = {}) {
   const capabilities = emptyCapabilities();
 
@@ -129,9 +163,23 @@ export function buildMapCapabilities({
     capabilities.inspectLayer = true;
     capabilities.toggleLayerVisibility = true;
     capabilities.viewFilters = true;
+    capabilities.focusMapData = Boolean(focusMapDataAllowed);
+    capabilities.toggleLegend = Boolean(toggleLegendAllowed);
+    capabilities.previewIsochrone = Boolean(
+      previewIsochroneAllowed,
+    );
   }
 
   if (editorAllowed) {
+    capabilities.configureTooltips = Boolean(
+      configureTooltipsAllowed,
+    );
+    capabilities.persistIsochrone = Boolean(
+      persistIsochroneAllowed,
+    );
+    capabilities.removeIsochrone = Boolean(
+      removeIsochroneAllowed,
+    );
     capabilities.editLayers = true;
     capabilities.editStyle = true;
     capabilities.editLayerStyle = true;
@@ -377,6 +425,24 @@ export async function resolveExistingProjectMapNavigation(
       updateThumbnailAllowed:
         thumbnailDecision.allowed &&
         panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
+      focusMapDataAllowed:
+        features.maonoMapOverlay && viewerAllowed,
+      configureTooltipsAllowed:
+        features.maonoMapOverlay &&
+        editorAllowed &&
+        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
+      toggleLegendAllowed:
+        features.maonoMapOverlay && viewerAllowed,
+      previewIsochroneAllowed:
+        features.maonoIsochrone && viewerAllowed,
+      persistIsochroneAllowed:
+        features.maonoIsochrone &&
+        editorAllowed &&
+        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
+      removeIsochroneAllowed:
+        features.maonoIsochrone &&
+        editorAllowed &&
+        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
     }),
     project: publicProject(project),
     organization: await getSafeOrganization(
@@ -464,6 +530,18 @@ export async function resolveNewMapEditorContext(
     editorAllowed: preflight.allowed,
     editMetadataAllowed: preflight.allowed,
     updateThumbnailAllowed: preflight.allowed,
+    focusMapDataAllowed:
+      features.maonoMapOverlay && preflight.allowed,
+    configureTooltipsAllowed:
+      features.maonoMapOverlay && preflight.allowed,
+    toggleLegendAllowed:
+      features.maonoMapOverlay && preflight.allowed,
+    previewIsochroneAllowed:
+      features.maonoIsochrone && preflight.allowed,
+    persistIsochroneAllowed:
+      features.maonoIsochrone && preflight.allowed,
+    removeIsochroneAllowed:
+      features.maonoIsochrone && preflight.allowed,
   });
 
   await safeAudit(env, {

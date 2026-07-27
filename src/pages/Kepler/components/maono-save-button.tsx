@@ -1,4 +1,9 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import { useSession } from "../../../auth/session";
@@ -252,6 +257,7 @@ const MaonoSaveButton: React.FC = () => {
     (state: any) => state?.demo?.keplerGl?.map,
   );
   const operationInFlightRef = useRef(false);
+  const primaryActionRef = useRef<() => void>(() => {});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] =
@@ -304,6 +310,24 @@ const MaonoSaveButton: React.FC = () => {
     ],
   );
   const allowed = projectSlug ? canSaveExisting : canCreateNew;
+
+  useEffect(() => {
+    const handleExternalSaveRequest = () => {
+      primaryActionRef.current();
+    };
+
+    window.addEventListener(
+      "maono:save-map",
+      handleExternalSaveRequest,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "maono:save-map",
+        handleExternalSaveRequest,
+      );
+    };
+  }, []);
 
   function handlePreviewState(state: ProjectThumbnailJobState) {
     if (state === "READY") {
@@ -569,6 +593,8 @@ const MaonoSaveButton: React.FC = () => {
 
     setCreatePanelOpen(true);
   }
+
+  primaryActionRef.current = handlePrimaryAction;
 
   if (!allowed) {
     return null;

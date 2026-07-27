@@ -1,5 +1,6 @@
 .maono-layer-panel {
-  background: #111827;
+  background: #080c13;
+  border-right: 1px solid #1f2b3e;
   color: #e5e7eb;
   display: flex;
   flex: 0 0 340px;
@@ -40,9 +41,10 @@
 }
 
 .maono-layer-panel__mode {
-  background: #173d35;
+  background: rgba(197, 160, 89, 0.1);
+  border: 1px solid rgba(197, 160, 89, 0.28);
   border-radius: 999px;
-  color: #6ee7b7 !important;
+  color: #c5a059 !important;
   padding: 5px 8px;
 }
 
@@ -61,8 +63,8 @@
 }
 
 .maono-layer-panel__tabs button.is-active {
-  border-bottom-color: #4f9cff;
-  color: #fff;
+  border-bottom-color: #c5a059;
+  color: #f8f2e8;
 }
 
 .maono-layer-panel__tabs span {
@@ -90,10 +92,10 @@
 
 .maono-layer-panel__toolbar button,
 .maono-filter-panel header button {
-  background: #2f7df4;
-  border: 0;
+  background: #c5a059;
+  border: 1px solid #d4b978;
   border-radius: 8px;
-  color: #fff;
+  color: #090d14;
   cursor: pointer;
   padding: 8px 11px;
 }
@@ -116,8 +118,8 @@
 }
 
 .maono-layer-list__item.is-selected {
-  background: #1d2c40;
-  border-color: #36577e;
+  background: rgba(197, 160, 89, 0.1);
+  border-color: rgba(197, 160, 89, 0.45);
 }
 
 .maono-layer-list__select {
@@ -277,7 +279,8 @@
 }
 
 .maono-layer-inspector__notice {
-  background: #172335;
+  background: rgba(197, 160, 89, 0.08);
+  border: 1px solid rgba(197, 160, 89, 0.2);
   border-radius: 8px;
   color: #b8c5d8;
   margin: 0;

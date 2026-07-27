@@ -147,6 +147,9 @@ test("feature flags têm rollback seguro e opt-in", () => {
     projectMapEditPermission: false,
     projectQuotaReservation: false,
     maonoLayerManager: false,
+    maonoMapShell: false,
+    maonoMapOverlay: false,
+    maonoIsochrone: false,
   });
   assert.deepEqual(
     getMapPanelFeatures({
@@ -155,6 +158,10 @@ test("feature flags têm rollback seguro e opt-in", () => {
       PROJECT_MAP_EDIT_PERMISSION_V1: "on",
       PROJECT_QUOTA_RESERVATION_V1: "yes",
       MAONO_LAYER_MANAGER_V1: "true",
+      MAONO_MAP_SHELL_V1: "true",
+      MAONO_MAP_OVERLAY_V1: "true",
+      MAONO_ISOCHRONE_V1: "true",
+      GEOAPIFY_API_KEY: "configured-in-secret-store",
     }),
     {
       mapManagementHome: true,
@@ -162,6 +169,9 @@ test("feature flags têm rollback seguro e opt-in", () => {
       projectMapEditPermission: true,
       projectQuotaReservation: true,
       maonoLayerManager: true,
+      maonoMapShell: true,
+      maonoMapOverlay: true,
+      maonoIsochrone: true,
     },
   );
 });

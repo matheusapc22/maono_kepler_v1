@@ -13,6 +13,8 @@ export type MapPanelRuntimeContext = {
   context: MapPanelContextValue | null;
   refresh: () => void;
   customLayerPanelEnabled: boolean;
+  customMapShellEnabled: boolean;
+  customMapOverlayEnabled: boolean;
 };
 
 const MapPanelContext = createContext<MapPanelRuntimeContext | null>(null);

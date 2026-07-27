@@ -39,6 +39,14 @@ export function selectKeplerVisState(rootState: any) {
   return selectKeplerMapState(rootState)?.visState ?? null;
 }
 
+export function selectKeplerUiState(rootState: any) {
+  return selectKeplerMapState(rootState)?.uiState ?? null;
+}
+
+export function selectKeplerViewportState(rootState: any) {
+  return selectKeplerMapState(rootState)?.mapState ?? null;
+}
+
 export type MaonoLayerSnapshot = {
   id: string;
   type: string;
