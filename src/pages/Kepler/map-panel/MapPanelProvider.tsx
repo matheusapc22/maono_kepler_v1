@@ -39,6 +39,18 @@ function isFrontendLayerManagerEnabled() {
   ).toLowerCase() !== "false";
 }
 
+function isFrontendMapShellEnabled() {
+  return String(
+    import.meta.env.VITE_MAONO_MAP_SHELL_V1 ?? "true",
+  ).toLowerCase() !== "false";
+}
+
+function isFrontendMapOverlayEnabled() {
+  return String(
+    import.meta.env.VITE_MAONO_MAP_OVERLAY_V1 ?? "true",
+  ).toLowerCase() !== "false";
+}
+
 function activeOrganizationKey(
   activeOrganization: any,
   user: any,
@@ -154,6 +166,12 @@ export function MapPanelProvider({
                 inspectLayer: true,
                 toggleLayerVisibility: true,
                 viewFilters: true,
+                focusMapData: true,
+                configureTooltips: true,
+                toggleLegend: true,
+                previewIsochrone: false,
+                persistIsochrone: false,
+                removeIsochrone: false,
                 editLayers: true,
                 editStyle: true,
                 editLayerStyle: true,
@@ -176,6 +194,9 @@ export function MapPanelProvider({
                 projectMapEditPermission: false,
                 projectQuotaReservation: false,
                 maonoLayerManager: false,
+                maonoMapShell: false,
+                maonoMapOverlay: false,
+                maonoIsochrone: false,
               },
             },
             error: null,
@@ -241,6 +262,16 @@ export function MapPanelProvider({
         state.context?.features?.mapPanelModes &&
           state.context?.features?.maonoLayerManager &&
           isFrontendLayerManagerEnabled(),
+      ),
+      customMapShellEnabled: Boolean(
+        state.context?.features?.mapPanelModes &&
+          state.context?.features?.maonoMapShell &&
+          isFrontendMapShellEnabled(),
+      ),
+      customMapOverlayEnabled: Boolean(
+        state.context?.features?.mapPanelModes &&
+          state.context?.features?.maonoMapOverlay &&
+          isFrontendMapOverlayEnabled(),
       ),
     }),
     [refresh, state],

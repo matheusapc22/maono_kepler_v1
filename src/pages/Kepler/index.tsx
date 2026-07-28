@@ -32,6 +32,8 @@ import Announcement, { FormLink } from "./components/announcement";
 import MaonoSaveButton from "./components/maono-save-button";
 import BackToProjectsButton from "./components/back-to-projects-button";
 import PointClusterSettingsPanel from "./components/point-cluster-settings-panel";
+import MaonoMapShell from "./components/maono-map-shell/MaonoMapShell";
+import MapOverlayControls from "./components/map-overlay/MapOverlayControls";
 import { usePointClustering } from "./hooks/use-point-clustering";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
@@ -387,62 +389,65 @@ const App = (props) => {
               setStartScreenCapture={_setStartScreenCapture}
               className="h-screen"
             >
-              <Banner
-                show={showBanner}
-                height={BannerHeight}
-                bgColor="#2E7CF6"
-                onClose={hideBanner}
-              >
-                <Announcement onDisable={_disableBanner} />
-              </Banner>
-              <div
-                style={CONTAINER_STYLE}
-              >
-                <PanelGroup direction="horizontal">
-                  <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
-                    <PanelGroup direction="vertical">
-                      <Panel defaultSize={isSqlPanelOpen ? 60 : 100}>
-                        <AutoSizer>
-                          {({ height, width }) => (
-                            <KeplerGl
-                              mapboxApiAccessToken={
-                                CLOUD_PROVIDERS_CONFIGURATION.MAPBOX_TOKEN
-                              }
-                              id="map"
-                              getState={keplerGlGetState}
-                              width={width}
-                              height={height}
-                              cloudProviders={CLOUD_PROVIDERS}
-                              localeMessages={messages}
-                              onExportToCloudSuccess={onExportFileSuccess}
-                              onLoadCloudMapSuccess={onLoadCloudMapSuccess}
-                              featureFlags={DEFAULT_FEATURE_FLAGS}
-                              onViewStateChange={onViewStateChange}
-                            />
-                          )}
-                        </AutoSizer>
-                      </Panel>
+              <MaonoMapShell>
+                <Banner
+                  show={showBanner}
+                  height={BannerHeight}
+                  bgColor="#2E7CF6"
+                  onClose={hideBanner}
+                >
+                  <Announcement onDisable={_disableBanner} />
+                </Banner>
+                <div
+                  style={CONTAINER_STYLE}
+                >
+                  <PanelGroup direction="horizontal">
+                    <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
+                      <PanelGroup direction="vertical">
+                        <Panel defaultSize={isSqlPanelOpen ? 60 : 100}>
+                          <AutoSizer>
+                            {({ height, width }) => (
+                              <KeplerGl
+                                mapboxApiAccessToken={
+                                  CLOUD_PROVIDERS_CONFIGURATION.MAPBOX_TOKEN
+                                }
+                                id="map"
+                                getState={keplerGlGetState}
+                                width={width}
+                                height={height}
+                                cloudProviders={CLOUD_PROVIDERS}
+                                localeMessages={messages}
+                                onExportToCloudSuccess={onExportFileSuccess}
+                                onLoadCloudMapSuccess={onLoadCloudMapSuccess}
+                                featureFlags={DEFAULT_FEATURE_FLAGS}
+                                onViewStateChange={onViewStateChange}
+                              />
+                            )}
+                          </AutoSizer>
+                        </Panel>
 
-                      {isSqlPanelOpen && (
-                        <>
-                          <StyledResizeHandle />
-                          <Panel defaultSize={40} minSize={20}>
-                            <SqlPanel initialSql={query.sql || ""} />
-                          </Panel>
-                        </>
-                      )}
-                    </PanelGroup>
-                  </Panel>
-                  {isAiAssistantPanelOpen && (
-                    <>
-                      <StyledVerticalResizeHandle />
-                      <Panel defaultSize={30} minSize={20}>
-                        <AiAssistantPanel />
-                      </Panel>
-                    </>
-                  )}
-                </PanelGroup>
-              </div>
+                        {isSqlPanelOpen && (
+                          <>
+                            <StyledResizeHandle />
+                            <Panel defaultSize={40} minSize={20}>
+                              <SqlPanel initialSql={query.sql || ""} />
+                            </Panel>
+                          </>
+                        )}
+                      </PanelGroup>
+                    </Panel>
+                    {isAiAssistantPanelOpen && (
+                      <>
+                        <StyledVerticalResizeHandle />
+                        <Panel defaultSize={30} minSize={20}>
+                          <AiAssistantPanel />
+                        </Panel>
+                      </>
+                    )}
+                  </PanelGroup>
+                </div>
+                <MapOverlayControls />
+              </MaonoMapShell>
             </ScreenshotWrapper>
           </GlobalStyle>
         </ThemeProvider>

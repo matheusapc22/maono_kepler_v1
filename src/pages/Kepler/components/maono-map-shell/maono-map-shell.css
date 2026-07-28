@@ -1,0 +1,395 @@
+:root {
+  --maono-gold: #c5a059;
+  --maono-gold-soft: #e2d7c1;
+  --maono-ink: #04060a;
+  --maono-panel: #0a0f18;
+  --maono-border: #1f2b3e;
+}
+
+.maono-map-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: #f7f2e8;
+  background: var(--maono-ink);
+}
+
+.maono-map-shell__sidebar {
+  position: relative;
+  z-index: 100020;
+  display: flex;
+  flex: 0 0 76px;
+  flex-direction: column;
+  align-items: center;
+  width: 76px;
+  padding: 20px 10px 16px;
+  border-right: 1px solid var(--maono-border);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 39, 0.45), transparent 42%),
+    var(--maono-ink);
+  box-shadow: 12px 0 32px rgba(0, 0, 0, 0.34);
+}
+
+.maono-map-shell__brand {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 32px;
+  border: 1px solid rgba(197, 160, 89, 0.32);
+  border-radius: 15px;
+  background: linear-gradient(145deg, #131c2a, #090d14);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.04),
+    0 8px 28px rgba(0, 0, 0, 0.42);
+}
+
+.maono-map-shell__brand img {
+  display: block;
+  width: 33px;
+  height: 33px;
+  object-fit: contain;
+}
+
+.maono-map-shell__nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.maono-map-shell__nav a,
+.maono-map-shell__nav button,
+.maono-map-shell__logout {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: #758196;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.maono-map-shell__nav a svg,
+.maono-map-shell__nav button svg,
+.maono-map-shell__logout svg {
+  width: 22px;
+  height: 22px;
+}
+
+.maono-map-shell__nav a span,
+.maono-map-shell__nav button span,
+.maono-map-shell__logout span {
+  position: absolute;
+  left: 57px;
+  z-index: 10;
+  display: none;
+  padding: 6px 9px;
+  border: 1px solid var(--maono-border);
+  border-radius: 8px;
+  color: #f7f2e8;
+  background: rgba(4, 6, 10, 0.96);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.maono-map-shell__nav a:hover span,
+.maono-map-shell__nav button:hover span,
+.maono-map-shell__logout:hover span {
+  display: block;
+}
+
+.maono-map-shell__nav a:hover,
+.maono-map-shell__nav button:hover,
+.maono-map-shell__logout:hover,
+.maono-map-shell__nav .is-active {
+  color: var(--maono-gold);
+  border-color: rgba(197, 160, 89, 0.32);
+  background: linear-gradient(180deg, #131c2a, #0b1019);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px rgba(197, 160, 89, 0.13),
+    0 0 18px rgba(197, 160, 89, 0.08);
+}
+
+.maono-map-shell__nav button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+  transform: none;
+}
+
+.maono-map-shell__logout {
+  margin-top: 16px;
+}
+
+.maono-map-shell__logout:hover {
+  color: #fb7185;
+  border-color: rgba(251, 113, 133, 0.3);
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.maono-map-shell__workspace {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.maono-map-shell__map {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.maono-map-shell__topbar {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  left: 18px;
+  z-index: 100010;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 52px;
+  padding: 8px 10px 8px 16px;
+  pointer-events: none;
+}
+
+.maono-map-shell__project,
+.maono-map-shell__account {
+  border: 1px solid rgba(31, 43, 62, 0.75);
+  background: rgba(4, 6, 10, 0.7);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+
+.maono-map-shell__project {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 8px 13px;
+  border-radius: 13px;
+}
+
+.maono-map-shell__project span {
+  color: #8c9fba;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.maono-map-shell__project strong {
+  overflow: hidden;
+  max-width: 320px;
+  color: #f8fafc;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maono-map-shell__account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 16px;
+}
+
+.maono-map-shell__mode {
+  padding: 5px 8px;
+  border: 1px solid rgba(197, 160, 89, 0.3);
+  border-radius: 999px;
+  color: var(--maono-gold);
+  background: rgba(197, 160, 89, 0.08);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.maono-map-shell__avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(197, 160, 89, 0.36);
+  border-radius: 50%;
+  color: var(--maono-gold);
+  background: linear-gradient(145deg, #1a2536, #0d131d);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.maono-map-shell__identity {
+  display: flex;
+  flex-direction: column;
+  max-width: 180px;
+}
+
+.maono-map-shell__identity strong,
+.maono-map-shell__identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maono-map-shell__identity strong {
+  color: #f8fafc;
+  font-size: 11px;
+}
+
+.maono-map-shell__identity span {
+  color: #8290a6;
+  font-size: 9px;
+}
+
+.maono-map-shell__panel-handle {
+  position: absolute;
+  top: 112px;
+  left: 338px;
+  z-index: 100018;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid var(--maono-gold);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  color: var(--maono-gold);
+  background: var(--maono-panel);
+  cursor: pointer;
+  box-shadow:
+    4px 0 12px rgba(197, 160, 89, 0.18),
+    inset 2px 0 6px rgba(197, 160, 89, 0.12);
+  transition: left 220ms ease;
+}
+
+.maono-map-shell__panel-handle span {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.maono-map-shell--panel-collapsed .maono-map-shell__panel-handle {
+  left: 0;
+}
+
+.maono-map-shell .maono-layer-panel,
+.maono-map-shell .side-panel {
+  transition:
+    transform 220ms ease,
+    opacity 180ms ease;
+}
+
+.maono-map-shell--panel-collapsed .maono-layer-panel,
+.maono-map-shell--panel-collapsed .side-panel {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-104%);
+}
+
+@media (max-width: 820px) {
+  .maono-map-shell {
+    padding-bottom: 64px;
+  }
+
+  .maono-map-shell__sidebar {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100030;
+    flex-direction: row;
+    width: auto;
+    height: 64px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--maono-border);
+    border-right: 0;
+  }
+
+  .maono-map-shell__brand {
+    width: 42px;
+    height: 42px;
+    margin: 0 12px 0 0;
+  }
+
+  .maono-map-shell__brand img {
+    width: 29px;
+    height: 29px;
+  }
+
+  .maono-map-shell__nav {
+    flex-direction: row;
+    justify-content: center;
+    gap: 7px;
+  }
+
+  .maono-map-shell__nav a,
+  .maono-map-shell__nav button,
+  .maono-map-shell__logout {
+    width: 42px;
+    height: 42px;
+  }
+
+  .maono-map-shell__logout {
+    margin: 0 0 0 8px;
+  }
+
+  .maono-map-shell__nav a span,
+  .maono-map-shell__nav button span,
+  .maono-map-shell__logout span {
+    display: none !important;
+  }
+
+  .maono-map-shell__topbar {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+  }
+
+  .maono-map-shell__identity {
+    display: none;
+  }
+
+  .maono-map-shell__project {
+    min-width: 0;
+    max-width: calc(100vw - 190px);
+  }
+}
+
+@media (max-width: 560px) {
+  .maono-map-shell__project {
+    display: none;
+  }
+
+  .maono-map-shell__topbar {
+    justify-content: flex-end;
+  }
+
+  .maono-map-shell__mode {
+    display: none;
+  }
+}

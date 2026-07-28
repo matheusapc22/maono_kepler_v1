@@ -1,0 +1,607 @@
+.maono-map-overlay {
+  position: fixed;
+  right: 24px;
+  bottom: 112px;
+  z-index: 100050;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: none;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.maono-map-overlay__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  pointer-events: auto;
+}
+
+.maono-map-overlay__buttons > button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid #1f2b3e;
+  border-radius: 14px;
+  color: #c5a059;
+  background:
+    linear-gradient(145deg, rgba(19, 28, 42, 0.94), rgba(6, 9, 14, 0.98));
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.035),
+    0 12px 28px rgba(0, 0, 0, 0.48);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.maono-map-overlay__buttons > button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.maono-map-overlay__buttons > button:hover:not(:disabled),
+.maono-map-overlay__buttons > button.is-active {
+  border-color: #c5a059;
+  transform: translateY(-1px) scale(1.03);
+  box-shadow:
+    inset 0 1px rgba(197, 160, 89, 0.16),
+    0 0 22px rgba(197, 160, 89, 0.2),
+    0 14px 30px rgba(0, 0, 0, 0.52);
+}
+
+.maono-map-overlay__buttons > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.maono-map-attribution {
+  position: fixed;
+  right: 22px;
+  bottom: 10px;
+  z-index: 100045;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(226, 215, 193, 0.78);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+.maono-map-attribution span:nth-child(2) {
+  opacity: 0.4;
+}
+
+.maono-marker-placement {
+  position: fixed;
+  z-index: 100040;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: rgba(197, 160, 89, 0.025);
+  cursor: crosshair;
+}
+
+.maono-marker-placement::after {
+  position: absolute;
+  top: 74px;
+  left: 50%;
+  padding: 9px 12px;
+  border: 1px solid rgba(197, 160, 89, 0.45);
+  border-radius: 10px;
+  color: #f8f2e8;
+  background: rgba(4, 6, 10, 0.9);
+  content: "Clique no mapa para definir a origem";
+  font-size: 11px;
+  font-weight: 750;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.maono-map-marker {
+  position: fixed;
+  z-index: 100048;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
+.maono-map-marker > button {
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 47px;
+  padding: 0 0 8px;
+  border: 0;
+  color: #c5a059;
+  background: transparent;
+  cursor: grab;
+  filter: drop-shadow(0 9px 7px rgba(0, 0, 0, 0.55));
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.maono-map-marker > button svg {
+  width: 38px;
+  height: 38px;
+  fill: rgba(197, 160, 89, 0.95);
+  stroke: #090d14;
+}
+
+.maono-map-marker > button.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.1);
+}
+
+.maono-map-marker > span {
+  margin-top: -6px;
+  padding: 3px 7px;
+  border: 1px solid rgba(197, 160, 89, 0.3);
+  border-radius: 6px;
+  color: #c5a059;
+  background: rgba(4, 6, 10, 0.88);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.maono-map-marker__menu {
+  position: absolute;
+  top: 2px;
+  left: calc(100% + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 184px;
+  padding: 6px;
+  border: 1px solid #1f2b3e;
+  border-radius: 12px;
+  background: rgba(4, 6, 10, 0.96);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+
+.maono-map-marker__menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #dce4ef;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.maono-map-marker__menu button:hover {
+  color: #c5a059;
+  background: #131c2a;
+}
+
+.maono-map-marker__menu button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.maono-tooltip-editor,
+.maono-isochrone-preview {
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid #26344a;
+  border-radius: 17px;
+  color: #f1f5f9;
+  background: rgba(8, 12, 19, 0.97);
+  box-shadow: 0 24px 52px rgba(0, 0, 0, 0.62);
+  pointer-events: auto;
+  backdrop-filter: blur(16px);
+}
+
+.maono-tooltip-editor {
+  display: flex;
+  flex-direction: column;
+  max-height: min(570px, calc(100vh - 170px));
+  overflow: hidden;
+}
+
+.maono-tooltip-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 16px;
+  border-bottom: 1px solid #1f2b3e;
+  background: #0f1522;
+}
+
+.maono-tooltip-editor > header div {
+  display: flex;
+  flex-direction: column;
+}
+
+.maono-tooltip-editor > header span {
+  color: #7f8ea4;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.maono-tooltip-editor > header strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.maono-tooltip-editor > header button {
+  width: 31px;
+  height: 31px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #8c9fba;
+  background: transparent;
+  cursor: pointer;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.maono-tooltip-editor > header button:hover {
+  color: #c5a059;
+  border-color: rgba(197, 160, 89, 0.25);
+}
+
+.maono-tooltip-editor__content {
+  flex: 1;
+  min-height: 80px;
+  padding: 12px;
+  overflow-y: auto;
+  scrollbar-color: #394960 transparent;
+  scrollbar-width: thin;
+}
+
+.maono-tooltip-editor fieldset {
+  margin: 0 0 10px;
+  padding: 11px;
+  border: 1px solid #1f2b3e;
+  border-radius: 12px;
+  background: rgba(19, 28, 42, 0.5);
+}
+
+.maono-tooltip-editor legend {
+  padding: 0 5px;
+  color: #c5a059;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+}
+
+.maono-tooltip-editor label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 4px;
+  color: #aeb9c9;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.maono-tooltip-editor label:hover {
+  color: #fff;
+}
+
+.maono-tooltip-editor input {
+  accent-color: #c5a059;
+}
+
+.maono-tooltip-editor > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid #1f2b3e;
+  background: #0f1522;
+}
+
+.maono-tooltip-editor > footer button,
+.maono-isochrone-preview button,
+.maono-isochrone-dialog footer button {
+  min-height: 36px;
+  padding: 8px 13px;
+  border: 1px solid #2a3a54;
+  border-radius: 9px;
+  color: #c5d0de;
+  background: #131c2a;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.maono-tooltip-editor > footer button.is-primary,
+.maono-isochrone-preview button.is-primary,
+.maono-isochrone-dialog footer button.is-primary {
+  color: #090d14;
+  border-color: #c5a059;
+  background: #c5a059;
+}
+
+.maono-tooltip-editor > footer button:hover,
+.maono-isochrone-preview button:hover,
+.maono-isochrone-dialog footer button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.maono-isochrone-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 15px;
+}
+
+.maono-isochrone-preview > div {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.maono-isochrone-preview > div:first-child > svg {
+  width: 28px;
+  height: 28px;
+  color: #c5a059;
+}
+
+.maono-isochrone-preview > div:first-child span {
+  display: flex;
+  flex-direction: column;
+}
+
+.maono-isochrone-preview small {
+  color: #7f8ea4;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.maono-isochrone-preview strong {
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+.maono-isochrone-preview > div:last-child {
+  justify-content: flex-end;
+}
+
+.maono-isochrone-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100080;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 3, 5, 0.78);
+  backdrop-filter: blur(7px);
+}
+
+.maono-isochrone-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, calc(100vw - 28px));
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  border: 1px solid #26344a;
+  border-radius: 20px;
+  color: #f1f5f9;
+  background: #0a0f18;
+  box-shadow: 0 30px 72px rgba(0, 0, 0, 0.7);
+}
+
+.maono-isochrone-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 17px 19px;
+  border-bottom: 1px solid #1f2b3e;
+  background: #101826;
+}
+
+.maono-isochrone-dialog > header div {
+  display: flex;
+  flex-direction: column;
+}
+
+.maono-isochrone-dialog > header span {
+  color: #c5a059;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.maono-isochrone-dialog h2 {
+  margin: 2px 0 0;
+  color: #f8fafc;
+  font-size: 17px;
+}
+
+.maono-isochrone-dialog > header button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #8c9fba;
+  background: transparent;
+  cursor: pointer;
+  font-size: 25px;
+}
+
+.maono-isochrone-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 19px;
+  overflow-y: auto;
+}
+
+.maono-isochrone-dialog fieldset,
+.maono-isochrone-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.maono-isochrone-dialog legend,
+.maono-isochrone-dialog label > span {
+  color: #8c9fba;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.maono-isochrone-dialog__segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border: 1px solid #26344a;
+  border-radius: 11px;
+  background: #080c13;
+}
+
+.maono-isochrone-dialog__segmented button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  color: #8290a6;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.maono-isochrone-dialog__segmented button.is-active {
+  color: #0a0f18;
+  background: #c5a059;
+}
+
+.maono-isochrone-dialog select,
+.maono-isochrone-dialog input {
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  border: 1px solid #2a3a54;
+  border-radius: 9px;
+  color: #f8fafc;
+  background: #111a29;
+  outline: none;
+  font-size: 11px;
+}
+
+.maono-isochrone-dialog select:focus,
+.maono-isochrone-dialog input:focus {
+  border-color: #c5a059;
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.11);
+}
+
+.maono-isochrone-dialog__ranges {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.maono-isochrone-dialog__ranges > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.maono-isochrone-dialog__ranges button,
+.maono-isochrone-dialog__add {
+  border: 0;
+  color: #fb7185;
+  background: transparent;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.maono-isochrone-dialog__add {
+  align-self: flex-start;
+  padding: 4px 0;
+  color: #c5a059;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.maono-isochrone-dialog__error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  border-radius: 9px;
+  color: #fecdd3;
+  background: rgba(127, 29, 29, 0.2);
+  font-size: 11px;
+}
+
+.maono-isochrone-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 14px 18px;
+  border-top: 1px solid #1f2b3e;
+  background: #0f1522;
+}
+
+.maono-isochrone-dialog footer button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+@media (max-width: 820px) {
+  .maono-map-overlay {
+    right: 14px;
+    bottom: 82px;
+  }
+
+  .maono-map-overlay__buttons {
+    flex-direction: row;
+  }
+
+  .maono-map-overlay__buttons > button {
+    width: 43px;
+    height: 43px;
+  }
+
+  .maono-map-attribution {
+    right: 14px;
+    bottom: 70px;
+  }
+
+  .maono-tooltip-editor,
+  .maono-isochrone-preview {
+    max-height: calc(100vh - 160px);
+  }
+}
