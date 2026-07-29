@@ -35,20 +35,20 @@ function requestedMode(pathname: string): MapPanelMode {
 
 function isFrontendLayerManagerEnabled() {
   return String(
-    import.meta.env.VITE_MAONO_LAYER_MANAGER_V1 ?? "true",
-  ).toLowerCase() !== "false";
+    import.meta.env.VITE_MAONO_LAYER_MANAGER_V1 ?? "false",
+  ).toLowerCase() === "true";
 }
 
 function isFrontendMapShellEnabled() {
   return String(
-    import.meta.env.VITE_MAONO_MAP_SHELL_V1 ?? "true",
-  ).toLowerCase() !== "false";
+    import.meta.env.VITE_MAONO_MAP_SHELL_V1 ?? "false",
+  ).toLowerCase() === "true";
 }
 
 function isFrontendMapOverlayEnabled() {
   return String(
-    import.meta.env.VITE_MAONO_MAP_OVERLAY_V1 ?? "true",
-  ).toLowerCase() !== "false";
+    import.meta.env.VITE_MAONO_MAP_OVERLAY_V1 ?? "false",
+  ).toLowerCase() === "true";
 }
 
 function activeOrganizationKey(
