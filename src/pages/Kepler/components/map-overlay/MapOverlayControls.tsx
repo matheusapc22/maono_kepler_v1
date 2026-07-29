@@ -55,6 +55,10 @@ type PreviewState = {
   label: string;
 };
 
+type AddDataToMapConfig = NonNullable<
+  Parameters<typeof addDataToMap>[0]["config"]
+>;
+
 type OverlayIconName =
   | "focus"
   | "tooltip"
@@ -521,14 +525,18 @@ export default function MapOverlayControls() {
     const fitted = viewport.fitBounds(bounds, {
       padding: 100,
     });
+    const [longitude, latitude] = fitted.unproject([
+      viewportState.width / 2,
+      viewportState.height / 2,
+    ]);
 
     dispatch(
       wrapTo(
         KEPLER_MAP_ID,
         updateMap({
           bearing: viewportState.bearing || 0,
-          latitude: fitted.latitude,
-          longitude: fitted.longitude,
+          latitude,
+          longitude,
           pitch: viewportState.pitch || 0,
           zoom: Math.max(0, fitted.zoom - 0.35),
         }),
@@ -679,8 +687,13 @@ export default function MapOverlayControls() {
       );
       const dataId = `maono_isochrone_${Date.now()}`;
       const label = `Análise: ${modeLabel(input.mode)}`;
+      const processedGeojson = processGeojson(result.geojson);
 
-      const config = {
+      if (!processedGeojson) {
+        throw new Error("GeoJSON de isócrona inválido.");
+      }
+
+      const config: AddDataToMapConfig = {
         version: "v1",
         config: {
           visState: {
@@ -715,7 +728,7 @@ export default function MapOverlayControls() {
           addDataToMap({
             datasets: {
               info: { id: dataId, label },
-              data: processGeojson(result.geojson),
+              data: processedGeojson,
             },
             options: {
               centerMap: true,
@@ -976,7 +989,7 @@ export default function MapOverlayControls() {
                 dispatch(
                   wrapTo(
                     KEPLER_MAP_ID,
-                    toggleMapControl("mapLegend"),
+                    toggleMapControl("mapLegend", 0),
                   ),
                 )
               }
