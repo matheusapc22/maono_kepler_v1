@@ -300,12 +300,20 @@ const MaonoSaveButton: React.FC = () => {
       authenticated &&
       !projectSlug &&
       activeOrganizationId &&
-      context?.capabilities?.saveMap
+      context?.mode === "create" &&
+      context.capabilities.openCreateWorkspace &&
+      context.capabilities.createProject &&
+      context.capabilities.initializeMap &&
+      context.capabilities.saveMap
     ),
     [
       activeOrganizationId,
       authenticated,
+      context?.capabilities?.createProject,
+      context?.capabilities?.initializeMap,
+      context?.capabilities?.openCreateWorkspace,
       context?.capabilities?.saveMap,
+      context?.mode,
       projectSlug,
     ],
   );
