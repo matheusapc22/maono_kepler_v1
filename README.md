@@ -32,3 +32,20 @@ runtime, alterar apenas as flags não reintroduz a UI anterior.
 
 Este rollback não remove endpoints, auditoria ou migrations e não exige
 alteração no D1.
+
+## Rota segura de criação de mapas
+
+O workspace de criação usa a rota canônica `/maps/new/create`. As rotas
+legadas `/maps/new/edit` e `/map` apenas redirecionam para ela com
+substituição do histórico.
+
+O backend mantém `MAP_CREATE_ROUTE_V1` desligado por padrão. Quando a flag
+está habilitada, a API ainda exige sessão, organização ativa,
+`project.create` e preflight aprovado de armazenamento e limite de projetos.
+Não há fallback frontend que contorne essa decisão server-side.
+O frontend libera o primeiro salvamento somente pelas capabilities
+`openCreateWorkspace`, `createProject`, `initializeMap` e `saveMap`.
+
+Após o primeiro salvamento, o usuário é redirecionado para
+`/projects/:slug/edit`. A flag deve ser ativada inicialmente apenas no
+ambiente ou grupo interno de validação.

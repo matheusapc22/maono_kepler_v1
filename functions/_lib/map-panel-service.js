@@ -19,6 +19,7 @@ export const MAP_PANEL_MODES = Object.freeze({
   MANAGE: "manage",
   VIEWER: "viewer",
   EDITOR: "editor",
+  CREATE: "create",
 });
 
 const MAP_CAPABILITY_KEYS = Object.freeze([
@@ -44,6 +45,9 @@ const MAP_CAPABILITY_KEYS = Object.freeze([
   "manageFilters",
   "editFilters",
   "saveMap",
+  "openCreateWorkspace",
+  "createProject",
+  "initializeMap",
   "editMetadata",
   "editProjectMetadata",
   "updateThumbnail",
@@ -87,7 +91,11 @@ function normalizeMode(value, fallback = MAP_PANEL_MODES.MANAGE) {
     "MAP_MODE_INVALID",
     {
       requestedMode: mode,
-      allowedModes: Object.values(MAP_PANEL_MODES),
+      allowedModes: [
+        MAP_PANEL_MODES.MANAGE,
+        MAP_PANEL_MODES.VIEWER,
+        MAP_PANEL_MODES.EDITOR,
+      ],
     },
   );
 }
@@ -129,6 +137,10 @@ export function getMapPanelFeatures(env) {
       false,
     ),
     projectQuotaReservation: isProjectQuotaReservationEnabled(env),
+    mapCreateRoute: isFeatureFlagEnabled(
+      env?.MAP_CREATE_ROUTE_V1,
+      false,
+    ),
     maonoLayerManager,
     maonoMapShell,
     maonoMapOverlay,
@@ -153,6 +165,7 @@ export function buildMapCapabilities({
   previewIsochroneAllowed = viewerAllowed,
   persistIsochroneAllowed = editorAllowed,
   removeIsochroneAllowed = editorAllowed,
+  createAllowed = false,
 } = {}) {
   const capabilities = emptyCapabilities();
 
@@ -189,6 +202,13 @@ export function buildMapCapabilities({
     capabilities.reorderLayers = true;
     capabilities.manageFilters = true;
     capabilities.editFilters = true;
+    capabilities.saveMap = true;
+  }
+
+  if (createAllowed) {
+    capabilities.openCreateWorkspace = true;
+    capabilities.createProject = true;
+    capabilities.initializeMap = true;
     capabilities.saveMap = true;
   }
 
@@ -259,6 +279,11 @@ function publicPanelAvailability(projectSlug, panel) {
       reason: panel.availablePanels.editor
         ? null
         : "MAP_EDITOR_FORBIDDEN",
+    },
+    create: {
+      allowed: false,
+      route: null,
+      reason: "EXISTING_PROJECT",
     },
   };
 }
@@ -454,7 +479,7 @@ export async function resolveExistingProjectMapNavigation(
   };
 }
 
-export async function resolveNewMapEditorContext(
+export async function resolveNewMapCreateContext(
   env,
   request,
   options = {},
@@ -484,7 +509,7 @@ export async function resolveNewMapEditorContext(
     await safeAudit(env, {
       actorUserId: user.id,
       organizationId,
-      action: "projects.create.preflight",
+      action: "projects.create.workspace.denied",
       resourceType: "organization",
       resourceId: organizationId,
       result: "denied",
@@ -498,6 +523,29 @@ export async function resolveNewMapEditorContext(
       "Você não possui permissão para criar projetos.",
       403,
       "PROJECT_CREATE_FORBIDDEN",
+    );
+  }
+
+  const features = getMapPanelFeatures(env);
+
+  if (!features.mapCreateRoute) {
+    await safeAudit(env, {
+      actorUserId: user.id,
+      organizationId,
+      action: "projects.create.workspace.denied",
+      resourceType: "organization",
+      resourceId: organizationId,
+      result: "denied",
+      metadata: {
+        reason: "MAP_CREATE_ROUTE_DISABLED",
+      },
+      request,
+    });
+
+    throw createMapPanelError(
+      "A área de criação de mapas ainda não está habilitada.",
+      404,
+      "MAP_CREATE_ROUTE_DISABLED",
     );
   }
 
@@ -524,7 +572,6 @@ export async function resolveNewMapEditorContext(
     organizationId,
     { organization },
   );
-  const features = getMapPanelFeatures(env);
   const capabilities = buildMapCapabilities({
     viewerAllowed: preflight.allowed,
     editorAllowed: preflight.allowed,
@@ -542,6 +589,7 @@ export async function resolveNewMapEditorContext(
       features.maonoIsochrone && preflight.allowed,
     removeIsochroneAllowed:
       features.maonoIsochrone && preflight.allowed,
+    createAllowed: preflight.allowed,
   });
 
   await safeAudit(env, {
@@ -549,8 +597,10 @@ export async function resolveNewMapEditorContext(
     organizationId,
     action:
       preflight.reason === "ORGANIZATION_PROJECT_LIMIT_REACHED"
-        ? "projects.create.limit_denied"
-        : "projects.create.preflight",
+        ? "projects.create.workspace.limit_denied"
+        : preflight.allowed
+          ? "projects.create.workspace.open"
+          : "projects.create.workspace.denied",
     resourceType: "organization",
     resourceId: organizationId,
     result: preflight.allowed ? "success" : "denied",
@@ -564,9 +614,9 @@ export async function resolveNewMapEditorContext(
 
   return {
     policyVersion: MAP_PANEL_POLICY_VERSION,
-    mode: MAP_PANEL_MODES.EDITOR,
-    requestedMode: MAP_PANEL_MODES.EDITOR,
-    defaultPanel: MAP_PANEL_MODES.EDITOR,
+    mode: MAP_PANEL_MODES.CREATE,
+    requestedMode: MAP_PANEL_MODES.CREATE,
+    defaultPanel: MAP_PANEL_MODES.CREATE,
     availablePanels: {
       viewer: {
         allowed: false,
@@ -574,8 +624,13 @@ export async function resolveNewMapEditorContext(
         reason: "NEW_PROJECT_NOT_PERSISTED",
       },
       editor: {
+        allowed: false,
+        route: null,
+        reason: "NEW_PROJECT_NOT_PERSISTED",
+      },
+      create: {
         allowed: preflight.allowed,
-        route: preflight.allowed ? "/maps/new/edit" : null,
+        route: preflight.allowed ? "/maps/new/create" : null,
         reason: preflight.allowed ? null : preflight.reason,
       },
     },
@@ -606,3 +661,6 @@ export async function resolveNewMapEditorContext(
     features,
   };
 }
+
+export const resolveNewMapEditorContext =
+  resolveNewMapCreateContext;

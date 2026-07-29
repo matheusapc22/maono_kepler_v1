@@ -1085,6 +1085,29 @@ async function createProjectFromKepler(env, request, user, body) {
       );
     }
 
+    try {
+      await recordAuditLog(env, {
+        actorUserId: user.id,
+        organizationId: organization.id,
+        projectId: finalized.project.id,
+        action: "projects.create.first_save",
+        resourceType: "project",
+        resourceId: finalized.project.id,
+        result: "success",
+        metadata: {
+          idempotencyKey,
+          slug: finalized.project.slug,
+          configRevision: finalized.configRevision,
+        },
+        request,
+      });
+    } catch (auditError) {
+      console.error(
+        "[Maono projects] Falha na auditoria do primeiro save:",
+        auditError,
+      );
+    }
+
     return {
       status: 201,
       idempotent: false,

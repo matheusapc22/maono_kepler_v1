@@ -154,15 +154,25 @@ test("idempotência usa chave persistida e reserva única", () => {
   assert.match(projectsIndex, /project\.create\.idempotent/);
 });
 
-test("Novo mapa exibe botão somente com capacidade backend sem projectSlug", () => {
+test("Novo mapa exige contexto create e capabilities backend", () => {
   assert.match(
     saveButton,
-    /context\?\.capabilities\?\.saveMap/,
+    /context\?\.mode === "create"/,
   );
-  assert.match(
-    saveButton,
-    /authenticated\s*&&\s*!projectSlug\s*&&\s*activeOrganizationId\s*&&\s*context\?\.capabilities\?\.saveMap/,
-  );
+
+  for (const capability of [
+    "openCreateWorkspace",
+    "createProject",
+    "initializeMap",
+    "saveMap",
+  ]) {
+    assert.match(
+      saveButton,
+      new RegExp(`context\\.capabilities\\.${capability}`),
+      capability,
+    );
+  }
+
   assert.match(
     saveButton,
     /const allowed = projectSlug \? canSaveExisting : canCreateNew/,

@@ -1,7 +1,7 @@
 import type {
   MapPanelApiError,
   MapPanelContextValue,
-  MapPanelMode,
+  MapNavigationMode,
 } from "./types";
 
 function normalizeAvailability(
@@ -95,7 +95,11 @@ async function requestMapContext(
         context.availablePanels?.editor,
         projectSlug
           ? `/projects/${encodeURIComponent(projectSlug)}/edit`
-          : "/maps/new/edit",
+          : null,
+      ),
+      create: normalizeAvailability(
+        context.availablePanels?.create,
+        "/maps/new/create",
       ),
     },
   } as MapPanelContextValue;
@@ -103,7 +107,7 @@ async function requestMapContext(
 
 export function fetchProjectMapNavigation(
   projectSlug: string,
-  mode: MapPanelMode,
+  mode: MapNavigationMode,
   signal?: AbortSignal,
 ) {
   return requestMapContext(
@@ -114,6 +118,8 @@ export function fetchProjectMapNavigation(
   );
 }
 
-export function fetchNewMapContext(signal?: AbortSignal) {
+export function fetchNewMapCreateContext(signal?: AbortSignal) {
   return requestMapContext("/api/maps/new/context", signal);
 }
+
+export const fetchNewMapContext = fetchNewMapCreateContext;
