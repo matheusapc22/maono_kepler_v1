@@ -13,7 +13,7 @@ import {
 
 import { useSession } from "../../../auth/session";
 import {
-  fetchNewMapContext,
+  fetchNewMapCreateContext,
   fetchProjectMapNavigation,
 } from "./map-panel-api";
 import {
@@ -24,10 +24,11 @@ import { emitMapPanelTelemetry } from "./map-panel-telemetry";
 import type {
   MapPanelApiError,
   MapPanelLoadState,
-  MapPanelMode,
+  MapNavigationMode,
 } from "./types";
 
-function requestedMode(pathname: string): MapPanelMode {
+function requestedMode(pathname: string): MapNavigationMode {
+  if (pathname === "/maps/new/create") return "create";
   if (pathname.endsWith("/view")) return "viewer";
   if (pathname.endsWith("/edit")) return "editor";
   return "manage";
@@ -88,7 +89,7 @@ export function MapPanelProvider({
     activeOrganization,
     user,
   );
-  const isNewMap = location.pathname.startsWith("/maps/new/");
+  const isNewMap = location.pathname === "/maps/new/create";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -124,7 +125,7 @@ export function MapPanelProvider({
     });
 
     const request = isNewMap
-      ? fetchNewMapContext(controller.signal)
+      ? fetchNewMapCreateContext(controller.signal)
       : projectSlug
         ? fetchProjectMapNavigation(
             projectSlug,
@@ -156,6 +157,11 @@ export function MapPanelProvider({
                   route: null,
                   reason: null,
                 },
+                create: {
+                  allowed: false,
+                  route: null,
+                  reason: "LEGACY_MAP",
+                },
               },
               allowed: true,
               reason: null,
@@ -182,6 +188,9 @@ export function MapPanelProvider({
                 manageFilters: true,
                 editFilters: true,
                 saveMap: true,
+                openCreateWorkspace: false,
+                createProject: false,
+                initializeMap: false,
                 editMetadata: true,
                 editProjectMetadata: true,
                 updateThumbnail: true,
@@ -193,6 +202,7 @@ export function MapPanelProvider({
                 mapPanelModes: false,
                 projectMapEditPermission: false,
                 projectQuotaReservation: false,
+                mapCreateRoute: false,
                 maonoLayerManager: false,
                 maonoMapShell: false,
                 maonoMapOverlay: false,
