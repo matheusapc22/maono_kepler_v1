@@ -1038,51 +1038,67 @@ async function createProjectFromKepler(env, request, user, body) {
       });
     }
 
-    try {
-      await recordAuditLog(env, {
-      actorUserId: user.id,
-      organizationId: organization.id,
-      projectId: finalized.project.id,
-      action: "project.create.complete",
-      resourceType: "project",
-      resourceId: finalized.project.id,
-      result: "success",
-      metadata: {
-        idempotencyKey,
-        slug: finalized.project.slug,
-        active: true,
-        accessLevel: "owner",
-        metadataVersion: Number(
-          finalized.project.metadata_version || 1,
-        ),
-        fileName: finalized.fileName,
-        sizeBytes: finalized.sizeBytes,
-        configRevision: finalized.configRevision,
-        thumbnail: finalized.thumbnail,
-        preview: finalized.preview,
-        thumbnailCapture: {
-          method: normalizeText(body?.thumbnailCapture?.method).slice(
-            0,
-            160,
+    const successAuditEvents = [
+      {
+        action: "project.create.complete",
+        metadata: {
+          idempotencyKey,
+          slug: finalized.project.slug,
+          active: true,
+          accessLevel: "owner",
+          metadataVersion: Number(
+            finalized.project.metadata_version || 1,
           ),
-          diagnostics: normalizeText(
-            body?.thumbnailCapture?.diagnostics,
-          ).slice(0, 800),
+          fileName: finalized.fileName,
+          sizeBytes: finalized.sizeBytes,
+          configRevision: finalized.configRevision,
+          thumbnail: finalized.thumbnail,
+          preview: finalized.preview,
+          thumbnailCapture: {
+            method: normalizeText(
+              body?.thumbnailCapture?.method,
+            ).slice(0, 160),
+            diagnostics: normalizeText(
+              body?.thumbnailCapture?.diagnostics,
+            ).slice(0, 800),
+          },
+          quotaReservation: committedQuota
+            ? {
+                id: committedQuota.id,
+                status: committedQuota.status,
+              }
+            : null,
         },
-        quotaReservation: committedQuota
-          ? {
-              id: committedQuota.id,
-              status: committedQuota.status,
-            }
-          : null,
       },
-        request,
-      });
-    } catch (auditError) {
-      console.error(
-        "[Maono projects] Projeto criado, mas auditoria de sucesso falhou:",
-        auditError,
-      );
+      {
+        action: "projects.create.first_save",
+        metadata: {
+          idempotencyKey,
+          slug: finalized.project.slug,
+          configRevision: finalized.configRevision,
+        },
+      },
+    ];
+
+    for (const auditEvent of successAuditEvents) {
+      try {
+        await recordAuditLog(env, {
+          actorUserId: user.id,
+          organizationId: organization.id,
+          projectId: finalized.project.id,
+          action: auditEvent.action,
+          resourceType: "project",
+          resourceId: finalized.project.id,
+          result: "success",
+          metadata: auditEvent.metadata,
+          request,
+        });
+      } catch (auditError) {
+        console.error(
+          `[Maono projects] Falha na auditoria ${auditEvent.action}:`,
+          auditError,
+        );
+      }
     }
 
     return {
