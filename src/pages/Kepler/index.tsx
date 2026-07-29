@@ -32,8 +32,6 @@ import Announcement, { FormLink } from "./components/announcement";
 import MaonoSaveButton from "./components/maono-save-button";
 import BackToProjectsButton from "./components/back-to-projects-button";
 import PointClusterSettingsPanel from "./components/point-cluster-settings-panel";
-import MaonoMapShell from "./components/maono-map-shell/MaonoMapShell";
-import MapOverlayControls from "./components/map-overlay/MapOverlayControls";
 import { usePointClustering } from "./hooks/use-point-clustering";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
@@ -90,7 +88,6 @@ import {
 import { injectComponents } from "@kepler.gl/components";
 import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
-import { replaceSidePanel } from "./factories/side-panel";
 import MapUrlLoader from "./map-url-loader";
 import { useHideMapAttribution } from "../../hooks/useHideMapAttrition";
 import {
@@ -100,7 +97,6 @@ import {
 import "./map-panel/map-panel.css";
 
 const KeplerGl = injectComponents([
-  replaceSidePanel(),
   replaceLoadDataModal(),
   replaceMapControl(),
   replacePanelHeader(),
@@ -389,7 +385,6 @@ const App = (props) => {
               setStartScreenCapture={_setStartScreenCapture}
               className="h-screen"
             >
-              <MaonoMapShell>
                 <Banner
                   show={showBanner}
                   height={BannerHeight}
@@ -446,8 +441,6 @@ const App = (props) => {
                     )}
                   </PanelGroup>
                 </div>
-                <MapOverlayControls />
-              </MaonoMapShell>
             </ScreenshotWrapper>
           </GlobalStyle>
         </ThemeProvider>
