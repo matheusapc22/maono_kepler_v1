@@ -42,6 +42,7 @@ substituição do histórico.
 O backend mantém `MAP_CREATE_ROUTE_V1` desligado por padrão. Quando a flag
 está habilitada, a API ainda exige sessão, organização ativa,
 `project.create` e preflight aprovado de armazenamento e limite de projetos.
+Não há fallback frontend que contorne essa decisão server-side.
 O frontend libera o primeiro salvamento somente pelas capabilities
 `openCreateWorkspace`, `createProject`, `initializeMap` e `saveMap`.
 
