@@ -55,7 +55,10 @@ test("shell usa capabilities e contexto sem decisão por role bruta", () => {
 test("controles promovem centralização, tooltip, legenda e marcador", () => {
   assert.match(source.overlay, /focusVisibleData/);
   assert.match(source.overlay, /interactionConfigChange/);
-  assert.match(source.overlay, /toggleMapControl\("mapLegend"\)/);
+  assert.match(
+    source.overlay,
+    /toggleMapControl\("mapLegend",\s*0\)/,
+  );
   assert.match(source.overlay, /setPlacingMarker/);
   assert.match(source.overlay, /WebMercatorViewport/);
 });
