@@ -168,7 +168,7 @@ test("Novo mapa exige contexto create e capabilities backend", () => {
   ]) {
     assert.match(
       saveButton,
-      new RegExp(\`context\\\\.capabilities\\\\.\${capability}\`),
+      new RegExp(`context\\.capabilities\\.${capability}`),
       capability,
     );
   }
