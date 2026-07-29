@@ -33,13 +33,37 @@ const source = Object.fromEntries(
   ),
 );
 
-test("shell e overlay são montados dentro do runtime preservado", () => {
-  assert.match(source.index, /<MaonoMapShell>/);
-  assert.match(source.index, /<MapOverlayControls \/>/);
+test("baseline preserva o runtime seguro sem a UI incompleta", () => {
+  assert.doesNotMatch(source.index, /replaceSidePanel/);
+  assert.doesNotMatch(source.index, /<MaonoMapShell>/);
+  assert.doesNotMatch(source.index, /<MapOverlayControls \/>/);
   assert.match(source.index, /<ScreenshotWrapper/);
   assert.match(source.index, /<PointClusterSettingsPanel/);
+  assert.match(source.index, /<MapUrlLoader \/>/);
+  assert.match(source.index, /<MaonoSaveButton \/>/);
+  assert.match(source.index, /<MapPanelProvider>/);
+  assert.match(source.index, /<MapPanelAccessGate>/);
   assert.match(source.shell, /customMapShellEnabled/);
   assert.match(source.overlay, /customMapOverlayEnabled/);
+});
+
+test("flags frontend customizadas são opt-in e desligadas por padrão", () => {
+  for (const flag of [
+    "VITE_MAONO_LAYER_MANAGER_V1",
+    "VITE_MAONO_MAP_SHELL_V1",
+    "VITE_MAONO_MAP_OVERLAY_V1",
+  ]) {
+    assert.match(
+      source.provider,
+      new RegExp(`${flag} \\?\\? "false"`),
+    );
+  }
+
+  assert.doesNotMatch(
+    source.provider,
+    /VITE_MAONO_(?:LAYER_MANAGER|MAP_SHELL|MAP_OVERLAY)_V1 \?\? "true"/,
+  );
+  assert.match(source.provider, /\.toLowerCase\(\) === "true"/);
 });
 
 test("shell usa capabilities e contexto sem decisão por role bruta", () => {
