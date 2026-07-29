@@ -210,7 +210,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/auth" element={<AuthCallback />} />
 
       <Route
-        path="/maps/new/edit"
+        path="/maps/new/create"
         element={
           <WithSuspense>
             <KeplerApp />
@@ -218,7 +218,12 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      <Route path="/map" element={<Navigate to="/maps/new/edit" replace />} />
+      <Route
+        path="/maps/new/edit"
+        element={<Navigate to="/maps/new/create" replace />}
+      />
+
+      <Route path="/map" element={<Navigate to="/maps/new/create" replace />} />
 
       <Route path="(:id)" element={<KeplerApp />} />
       <Route path="map/:provider" element={<KeplerApp />} />
