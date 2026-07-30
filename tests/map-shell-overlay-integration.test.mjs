@@ -37,7 +37,7 @@ const source = Object.fromEntries(
   ),
 );
 
-test("shell Maõno permanece opt-in e é montado pelo contexto seguro", () => {
+test("shell Maõno permanece opt-in e é montado pelo gate seguro", () => {
   assert.doesNotMatch(source.index, /replaceSidePanel/);
   assert.doesNotMatch(source.index, /<MapOverlayControls \/>/);
   assert.match(source.index, /<ScreenshotWrapper/);
@@ -46,8 +46,8 @@ test("shell Maõno permanece opt-in e é montado pelo contexto seguro", () => {
   assert.match(source.index, /<MaonoSaveButton \/>/);
   assert.match(source.index, /<MapPanelProvider>/);
   assert.match(source.index, /<MapPanelAccessGate>/);
-  assert.match(source.context, /import MaonoMapShell/);
-  assert.match(source.context, /<MaonoMapShell runtime=\{value\}>/);
+  assert.match(source.provider, /import MaonoMapShell/);
+  assert.match(source.provider, /<MaonoMapShell>\{children\}<\/MaonoMapShell>/);
   assert.match(source.shell, /if \(!customMapShellEnabled\)/);
   assert.match(source.overlay, /customMapOverlayEnabled/);
 });
