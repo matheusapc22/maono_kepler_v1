@@ -1,12 +1,6 @@
 // AppRoutes.tsx
 import React, { lazy, Suspense, useEffect } from "react";
-import {
-  Navigate,
-  Routes,
-  Route,
-  useLocation,
-  useParams,
-} from "react-router";
+import { Navigate, Routes, Route, useLocation, useParams } from "react-router";
 
 import { normalizeRole } from "./access-control/roles";
 import { useSession } from "./auth/session";
@@ -77,12 +71,7 @@ const AdminRouteGuard: React.FC<{ children: React.ReactNode }> = ({
   }
 
   if (!authenticated) {
-    return (
-      <Navigate
-        to={buildLoginRedirect(location)}
-        replace
-      />
-    );
+    return <Navigate to={buildLoginRedirect(location)} replace />;
   }
 
   const allowed = normalizeRole(user?.role) === "super_admin";
@@ -210,7 +199,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/auth" element={<AuthCallback />} />
 
       <Route
-        path="/maps/new/edit"
+        path="/maps/new/create"
         element={
           <WithSuspense>
             <KeplerApp />
@@ -218,7 +207,12 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      <Route path="/map" element={<Navigate to="/maps/new/edit" replace />} />
+      <Route
+        path="/maps/new/edit"
+        element={<Navigate to="/maps/new/create" replace />}
+      />
+
+      <Route path="/map" element={<Navigate to="/maps/new/create" replace />} />
 
       <Route path="(:id)" element={<KeplerApp />} />
       <Route path="map/:provider" element={<KeplerApp />} />

@@ -1,7 +1,7 @@
 import { DatasetSectionFactory } from "@kepler.gl/components";
 import { connect } from "react-redux";
-import checkAdminUser from "../utils/is-admin-user";
-// @ts-nocheck
+
+import { useMapPanelCapability } from "../map-panel/MapPanelContext";
 
 // eslint-disable-next-line react-refresh/only-export-components
 function CustomDatasetSectionFactory(...deps: any[]) {
@@ -9,12 +9,9 @@ function CustomDatasetSectionFactory(...deps: any[]) {
   const DefaultDatasetSection = DatasetSectionFactory(...deps);
 
   const WrappedDatasetSection = (props: any) => {
-    const isAdminUser = checkAdminUser();
-    return (
-      <div className="">
-        {isAdminUser && <DefaultDatasetSection {...props} />}
-      </div>
-    );
+    const canCreateLayer = useMapPanelCapability("createLayer");
+
+    return canCreateLayer ? <DefaultDatasetSection {...props} /> : null;
   };
 
   // keep dependency metadata intact

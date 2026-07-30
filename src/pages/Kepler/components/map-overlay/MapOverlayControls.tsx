@@ -7,30 +7,23 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  useDispatch,
-  useSelector,
-} from "react-redux";
 import { useParams } from "react-router";
 import { WebMercatorViewport } from "@deck.gl/core";
-import {
-  addDataToMap,
-  interactionConfigChange,
-  removeDataset,
-  toggleMapControl,
-  updateMap,
-  wrapTo,
-} from "@kepler.gl/actions";
-import { processGeojson } from "@kepler.gl/processors";
 
 import {
-  KEPLER_MAP_ID,
-  selectKeplerUiState,
-  selectKeplerViewportState,
-  selectKeplerVisState,
-} from "../../integration/keplerBridge";
+  useKeplerEngineAdapter,
+  type KeplerCommandResult,
+} from "../../engine-adapter";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
 import {
+  dispatchMapSaveRequest,
+  MAONO_MAP_SAVE_RESULT_EVENT,
+  mapSaveResultFromEvent,
+} from "../../map-panel/map-save-events";
+import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
+import {
+  isIsochroneAbortError,
+  isochroneErrorMessage,
   requestIsochrone,
   type IsochroneMode,
   type IsochroneType,
@@ -43,21 +36,17 @@ type MarkerOrigin = {
   longitude: number;
 };
 
-type DatasetView = {
-  id: string;
-  label: string;
-  fields: string[];
-  raw: any;
-};
-
 type PreviewState = {
   dataId: string;
   label: string;
+  canPersist: boolean;
+  saveRequestId: string | null;
 };
 
-type AddDataToMapConfig = NonNullable<
-  Parameters<typeof addDataToMap>[0]["config"]
->;
+type OverlayMessage = {
+  tone: "error" | "success";
+  text: string;
+};
 
 type OverlayIconName =
   | "focus"
@@ -122,250 +111,6 @@ function OverlayIcon({ name }: { name: OverlayIconName }) {
   );
 }
 
-function toArray(value: any): any[] {
-  if (Array.isArray(value)) return value;
-  if (typeof value?.toArray === "function") return value.toArray();
-  return [];
-}
-
-function toPlain(value: any) {
-  if (typeof value?.toJS === "function") return value.toJS();
-  return value;
-}
-
-function objectValue(value: any, key: string) {
-  if (typeof value?.get === "function") return value.get(key);
-  return value?.[key];
-}
-
-function datasetViews(datasets: any): DatasetView[] {
-  if (!datasets) return [];
-
-  const entries =
-    typeof datasets.entrySeq === "function"
-      ? datasets.entrySeq().toArray()
-      : datasets instanceof Map
-        ? Array.from(datasets.entries())
-        : Object.entries(datasets);
-
-  return entries.map(([key, raw]: [string, any]) => {
-    const fields = toArray(
-      objectValue(raw, "fields") ??
-        objectValue(objectValue(raw, "data"), "fields"),
-    )
-      .map((field) =>
-        String(objectValue(field, "name") || "").trim(),
-      )
-      .filter(Boolean);
-    const info = objectValue(raw, "info");
-
-    return {
-      id: String(objectValue(raw, "id") || key),
-      label: String(
-        objectValue(raw, "label") ||
-          objectValue(info, "label") ||
-          key,
-      ),
-      fields,
-      raw,
-    };
-  });
-}
-
-function visitCoordinates(
-  coordinates: any,
-  bounds: {
-    minLatitude: number;
-    minLongitude: number;
-    maxLatitude: number;
-    maxLongitude: number;
-  },
-) {
-  if (
-    Array.isArray(coordinates) &&
-    typeof coordinates[0] === "number" &&
-    typeof coordinates[1] === "number"
-  ) {
-    const [longitude, latitude] = coordinates;
-
-    if (
-      Number.isFinite(longitude) &&
-      Number.isFinite(latitude) &&
-      longitude >= -180 &&
-      longitude <= 180 &&
-      latitude >= -90 &&
-      latitude <= 90
-    ) {
-      bounds.minLongitude = Math.min(
-        bounds.minLongitude,
-        longitude,
-      );
-      bounds.maxLongitude = Math.max(
-        bounds.maxLongitude,
-        longitude,
-      );
-      bounds.minLatitude = Math.min(
-        bounds.minLatitude,
-        latitude,
-      );
-      bounds.maxLatitude = Math.max(
-        bounds.maxLatitude,
-        latitude,
-      );
-    }
-
-    return;
-  }
-
-  if (Array.isArray(coordinates)) {
-    coordinates.forEach((item) => visitCoordinates(item, bounds));
-  }
-}
-
-function datasetRowIndexes(dataset: any) {
-  const filteredIndex = objectValue(dataset, "filteredIndex");
-  const allIndexes = objectValue(dataset, "allIndexes");
-  const filteredIndexes = toArray(filteredIndex);
-  const everyIndex = toArray(allIndexes);
-
-  if (filteredIndexes.length) {
-    return filteredIndexes;
-  }
-
-  if (everyIndex.length) return everyIndex;
-
-  const rows = objectValue(dataset, "allData");
-  return toArray(rows).map((_, index) => index);
-}
-
-function readCell(dataset: any, rowIndex: number, columnIndex: number) {
-  const dataContainer = objectValue(dataset, "dataContainer");
-
-  if (typeof dataContainer?.valueAt === "function") {
-    return dataContainer.valueAt(rowIndex, columnIndex);
-  }
-
-  const rows = objectValue(dataset, "allData");
-  const row =
-    typeof rows?.get === "function"
-      ? rows.get(rowIndex)
-      : rows?.[rowIndex];
-
-  return typeof row?.get === "function"
-    ? row.get(columnIndex)
-    : row?.[columnIndex];
-}
-
-function calculateBounds(
-  layersInput: any,
-  datasets: DatasetView[],
-) {
-  const bounds = {
-    minLatitude: 90,
-    minLongitude: 180,
-    maxLatitude: -90,
-    maxLongitude: -180,
-  };
-  const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
-
-  for (const layerRaw of toArray(layersInput)) {
-    const layer = toPlain(layerRaw) || {};
-    const config = toPlain(layer.config) || {};
-    const type = String(layer.type || "");
-
-    if (config.isVisible === false) continue;
-    if (!["point", "cluster", "heatmap", "geojson"].includes(type)) {
-      continue;
-    }
-
-    const dataId = Array.isArray(config.dataId)
-      ? String(config.dataId[0] || "")
-      : String(config.dataId || "");
-    const dataset = byId.get(dataId);
-
-    if (!dataset) continue;
-
-    const columns = toPlain(config.columns) || {};
-    const indexes = datasetRowIndexes(dataset.raw);
-
-    if (type === "geojson") {
-      const geojsonColumn =
-        toPlain(columns.geojson)?.value || columns.geojson;
-      const columnIndex = dataset.fields.indexOf(geojsonColumn);
-
-      if (columnIndex < 0) continue;
-
-      indexes.forEach((rowIndex) => {
-        const raw = readCell(dataset.raw, rowIndex, columnIndex);
-        let geometry = raw;
-
-        if (typeof raw === "string") {
-          try {
-            geometry = JSON.parse(raw);
-          } catch {
-            geometry = null;
-          }
-        }
-
-        visitCoordinates(
-          geometry?.geometry?.coordinates ??
-            geometry?.coordinates ??
-            geometry,
-          bounds,
-        );
-      });
-      continue;
-    }
-
-    const latitudeField =
-      toPlain(columns.lat)?.value || columns.lat;
-    const longitudeField =
-      toPlain(columns.lng)?.value || columns.lng;
-    const latitudeIndex = dataset.fields.indexOf(latitudeField);
-    const longitudeIndex = dataset.fields.indexOf(longitudeField);
-
-    if (latitudeIndex < 0 || longitudeIndex < 0) continue;
-
-    indexes.forEach((rowIndex) => {
-      visitCoordinates(
-        [
-          Number(readCell(dataset.raw, rowIndex, longitudeIndex)),
-          Number(readCell(dataset.raw, rowIndex, latitudeIndex)),
-        ],
-        bounds,
-      );
-    });
-  }
-
-  if (
-    bounds.maxLatitude < bounds.minLatitude ||
-    bounds.maxLongitude < bounds.minLongitude
-  ) {
-    return null;
-  }
-
-  if (bounds.minLatitude === bounds.maxLatitude) {
-    bounds.minLatitude -= 0.01;
-    bounds.maxLatitude += 0.01;
-  }
-
-  if (bounds.minLongitude === bounds.maxLongitude) {
-    bounds.minLongitude -= 0.01;
-    bounds.maxLongitude += 0.01;
-  }
-
-  return [
-    [bounds.minLongitude, bounds.minLatitude],
-    [bounds.maxLongitude, bounds.maxLatitude],
-  ] as [[number, number], [number, number]];
-}
-
-function tooltipFields(value: any): string[] {
-  return toArray(value)
-    .map((field) => String(objectValue(field, "name") || ""))
-    .filter(Boolean);
-}
-
 function modeLabel(mode: IsochroneMode) {
   return {
     drive_traffic: "Carro com trânsito",
@@ -375,36 +120,34 @@ function modeLabel(mode: IsochroneMode) {
   }[mode];
 }
 
-function getCanvasRect() {
-  const canvas = document.querySelector(
+function previewLabel(input: {
+  type: IsochroneType;
+  mode: IsochroneMode;
+  ranges: number[];
+}) {
+  const unit = input.type === "time" ? "min" : "km";
+
+  return `${modeLabel(input.mode)} · ${input.ranges.join(", ")} ${unit}`;
+}
+
+function getCanvas() {
+  return document.querySelector(
     ".mapboxgl-canvas",
   ) as HTMLElement | null;
+}
 
-  return canvas?.getBoundingClientRect() || null;
+function getCanvasRect() {
+  return getCanvas()?.getBoundingClientRect() || null;
 }
 
 export default function MapOverlayControls() {
-  const dispatch = useDispatch();
   const { projectSlug } = useParams();
   const {
     context,
     customMapOverlayEnabled,
   } = useMapPanel();
-  const visState = useSelector(selectKeplerVisState) || {};
-  const uiState = useSelector(selectKeplerUiState) || {};
-  const viewportState =
-    useSelector(selectKeplerViewportState) || {};
+  const { commands, state } = useKeplerEngineAdapter();
   const capabilities = context?.capabilities;
-  const layers = objectValue(visState, "layers");
-  const rawDatasets = objectValue(visState, "datasets");
-  const datasets = useMemo(
-    () => datasetViews(rawDatasets),
-    [rawDatasets],
-  );
-  const bounds = useMemo(
-    () => calculateBounds(layers, datasets),
-    [datasets, layers],
-  );
   const [tooltipsOpen, setTooltipsOpen] = useState(false);
   const [tooltipDraft, setTooltipDraft] = useState<
     Record<string, string[]>
@@ -421,85 +164,207 @@ export default function MapOverlayControls() {
   const [preview, setPreview] = useState<PreviewState | null>(
     null,
   );
-  const isochroneRequestRef = useRef<AbortController | null>(null);
-  const mapControls = objectValue(uiState, "mapControls");
-  const mapLegend = objectValue(mapControls, "mapLegend");
-  const legendActive = Boolean(
-    objectValue(mapLegend, "active"),
+  const [message, setMessage] = useState<OverlayMessage | null>(
+    null,
   );
+  const [canvasVersion, setCanvasVersion] = useState(0);
+  const isochroneRequestRef = useRef<AbortController | null>(null);
+  const draggingPointerRef = useRef<number | null>(null);
+  const markerMovedRef = useRef(false);
+  const previewRef = useRef<PreviewState | null>(null);
+  const commandsRef = useRef(commands);
+
+  previewRef.current = preview;
+  commandsRef.current = commands;
+
+  useEffect(() => {
+    if (!message || message.tone === "error") return undefined;
+
+    const timeoutId = window.setTimeout(
+      () => setMessage(null),
+      6_000,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [message]);
+
+  useEffect(() => {
+    const canvas = getCanvas();
+    const observer =
+      canvas && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() =>
+            setCanvasVersion((current) => current + 1),
+          )
+        : null;
+    const updateCanvas = () =>
+      setCanvasVersion((current) => current + 1);
+
+    if (canvas && observer) observer.observe(canvas);
+    window.addEventListener("resize", updateCanvas);
+    window.addEventListener("scroll", updateCanvas, true);
+    const animationFrame = window.requestAnimationFrame(updateCanvas);
+
+    return () => {
+      observer?.disconnect();
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updateCanvas);
+      window.removeEventListener("scroll", updateCanvas, true);
+    };
+  }, [customMapOverlayEnabled]);
+
+  useEffect(() => {
+    function handleSaveResult(event: Event) {
+      const result = mapSaveResultFromEvent(event);
+      const current = previewRef.current;
+
+      if (
+        !result ||
+        !current ||
+        result.requestId !== current.saveRequestId ||
+        result.dataId !== current.dataId
+      ) {
+        return;
+      }
+
+      if (result.status === "success") {
+        setPreview(null);
+        setMarkerOrigin(null);
+        setMarkerMenuOpen(false);
+        setMessage({
+          tone: "success",
+          text: "A isócrona foi salva no projeto.",
+        });
+        emitMapPanelTelemetry("map_isochrone_persisted", {
+          mode: context?.mode ?? null,
+          projectId: context?.project?.id ?? null,
+          organizationId: context?.organization?.id ?? null,
+          source: "map-overlay",
+        });
+        return;
+      }
+
+      setPreview((value) =>
+        value?.dataId === result.dataId
+          ? { ...value, saveRequestId: null }
+          : value,
+      );
+      setMessage({
+        tone: "error",
+        text:
+          result.message ||
+          (result.status === "cancelled"
+            ? "O salvamento da isócrona foi cancelado."
+            : "Não foi possível salvar a isócrona."),
+      });
+    }
+
+    window.addEventListener(
+      MAONO_MAP_SAVE_RESULT_EVENT,
+      handleSaveResult,
+    );
+    return () =>
+      window.removeEventListener(
+        MAONO_MAP_SAVE_RESULT_EVENT,
+        handleSaveResult,
+      );
+  }, [
+    context?.mode,
+    context?.organization?.id,
+    context?.project?.id,
+  ]);
 
   useEffect(
-    () => () => isochroneRequestRef.current?.abort(),
+    () => () => {
+      isochroneRequestRef.current?.abort();
+      const current = previewRef.current;
+
+      if (current && !current.saveRequestId) {
+        commandsRef.current.removeTransientLayer(current.dataId);
+      }
+    },
     [],
+  );
+
+  const viewport = state.viewport;
+  const canvasRect = useMemo(
+    () =>
+      typeof document === "undefined" ? null : getCanvasRect(),
+    [
+      canvasVersion,
+      viewport?.height,
+      viewport?.width,
+    ],
   );
 
   const unproject = useCallback(
     (clientX: number, clientY: number) => {
-      const rect = getCanvasRect();
-
       if (
-        !rect ||
-        !viewportState?.width ||
-        !viewportState?.height
+        !canvasRect ||
+        !viewport ||
+        viewport.width <= 0 ||
+        viewport.height <= 0
       ) {
         return null;
       }
 
       const x =
-        ((clientX - rect.left) / rect.width) *
-        viewportState.width;
+        ((clientX - canvasRect.left) / canvasRect.width) *
+        viewport.width;
       const y =
-        ((clientY - rect.top) / rect.height) *
-        viewportState.height;
-      const viewport = new WebMercatorViewport(viewportState);
-      const [longitudeRaw, latitude] = viewport.unproject([x, y]);
+        ((clientY - canvasRect.top) / canvasRect.height) *
+        viewport.height;
+      const mapViewport = new WebMercatorViewport(viewport);
+      const [longitudeRaw, latitude] = mapViewport.unproject([
+        x,
+        y,
+      ]);
       let longitude = longitudeRaw;
 
       while (longitude > 180) longitude -= 360;
       while (longitude < -180) longitude += 360;
 
-      return {
-        latitude,
-        longitude,
-      };
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90
+      ) {
+        return null;
+      }
+
+      return { latitude, longitude };
     },
-    [viewportState],
+    [canvasRect, viewport],
   );
 
   const markerPosition = useMemo(() => {
-    const rect =
-      typeof document === "undefined" ? null : getCanvasRect();
-
     if (
-      !rect ||
+      !canvasRect ||
       !markerOrigin ||
-      !viewportState?.width ||
-      !viewportState?.height
+      !viewport ||
+      viewport.width <= 0 ||
+      viewport.height <= 0
     ) {
       return null;
     }
 
-    const viewport = new WebMercatorViewport(viewportState);
-    const [x, y] = viewport.project([
+    const mapViewport = new WebMercatorViewport(viewport);
+    const [x, y] = mapViewport.project([
       markerOrigin.longitude,
       markerOrigin.latitude,
     ]);
 
     return {
-      left: rect.left + (x / viewportState.width) * rect.width,
-      top: rect.top + (y / viewportState.height) * rect.height,
+      left: canvasRect.left + (x / viewport.width) * canvasRect.width,
+      top: canvasRect.top + (y / viewport.height) * canvasRect.height,
     };
-  }, [
-    markerOrigin,
-    viewportState,
-    viewportState?.bearing,
-    viewportState?.height,
-    viewportState?.latitude,
-    viewportState?.longitude,
-    viewportState?.pitch,
-    viewportState?.width,
-    viewportState?.zoom,
-  ]);
+  }, [canvasRect, markerOrigin, viewport]);
+
+  const filtersActive = state.filters.some(
+    (filter) => filter.enabled,
+  );
+  const focusAvailable = filtersActive
+    ? Boolean(state.filteredBounds)
+    : Boolean(state.bounds);
 
   if (
     !customMapOverlayEnabled ||
@@ -508,67 +373,52 @@ export default function MapOverlayControls() {
     return null;
   }
 
-  function focusVisibleData() {
-    if (
-      !bounds ||
-      !capabilities?.focusMapData ||
-      !viewportState?.width ||
-      !viewportState?.height
-    ) {
-      return;
+  function reportCommand(
+    result: KeplerCommandResult<unknown>,
+    fallback: string,
+  ) {
+    if (result.ok) {
+      setMessage(null);
+      return true;
     }
 
-    const viewport = new WebMercatorViewport({
-      width: viewportState.width,
-      height: viewportState.height,
+    setMessage({
+      tone: "error",
+      text: result.reason || fallback,
     });
-    const fitted = viewport.fitBounds(bounds, {
-      padding: 100,
-    });
-    const [longitude, latitude] = fitted.unproject([
-      viewportState.width / 2,
-      viewportState.height / 2,
-    ]);
+    return false;
+  }
 
-    dispatch(
-      wrapTo(
-        KEPLER_MAP_ID,
-        updateMap({
-          bearing: viewportState.bearing || 0,
-          latitude,
-          longitude,
-          pitch: viewportState.pitch || 0,
-          zoom: Math.max(0, fitted.zoom - 0.35),
-        }),
-      ),
+  function focusVisibleData() {
+    const result = filtersActive
+      ? commands.fitFilteredData()
+      : commands.fitVisibleData();
+
+    reportCommand(
+      result,
+      "Não foi possível enquadrar os dados visíveis.",
     );
   }
 
   function openTooltipEditor() {
     if (!capabilities?.configureTooltips) return;
 
-    const interactionConfig = objectValue(
-      visState,
-      "interactionConfig",
-    );
-    const tooltip = objectValue(interactionConfig, "tooltip");
-    const tooltipConfig =
-      toPlain(objectValue(tooltip, "config")) || {};
-    const fieldsToShow =
-      toPlain(tooltipConfig.fieldsToShow) || {};
     const nextDraft: Record<string, string[]> = {};
 
-    datasets.forEach((dataset) => {
-      nextDraft[dataset.id] = tooltipFields(
-        fieldsToShow[dataset.id],
-      );
+    state.datasets.forEach((dataset) => {
+      nextDraft[dataset.id] = (
+        state.tooltip.fieldsByDataset[dataset.id] || []
+      ).map((field) => field.name);
     });
 
     setTooltipDraft(nextDraft);
     setTooltipsOpen(true);
   }
 
-  function toggleTooltipField(datasetId: string, fieldName: string) {
+  function toggleTooltipField(
+    datasetId: string,
+    fieldName: string,
+  ) {
     setTooltipDraft((current) => {
       const currentFields = current[datasetId] || [];
       const nextFields = currentFields.includes(fieldName)
@@ -583,41 +433,14 @@ export default function MapOverlayControls() {
   }
 
   function saveTooltipConfiguration() {
-    if (!capabilities?.configureTooltips) return;
-
-    const interactionConfig = objectValue(
-      visState,
-      "interactionConfig",
-    );
-    const tooltip = objectValue(interactionConfig, "tooltip");
-    const tooltipState = toPlain(tooltip) || {};
-    const tooltipConfig =
-      toPlain(objectValue(tooltip, "config")) || {};
-    const fieldsToShow = Object.fromEntries(
-      Object.entries(tooltipDraft).map(
-        ([datasetId, fields]) => [
-          datasetId,
-          fields.map((name) => ({ name, format: null })),
-        ],
-      ),
-    );
-
-    dispatch(
-      wrapTo(
-        KEPLER_MAP_ID,
-        interactionConfigChange({
-          tooltip: {
-            ...tooltipState,
-            enabled: true,
-            config: {
-              ...tooltipConfig,
-              fieldsToShow,
-            },
-          },
-        } as any),
-      ),
-    );
-    setTooltipsOpen(false);
+    if (
+      reportCommand(
+        commands.setTooltipFields(tooltipDraft),
+        "Não foi possível atualizar os tooltips.",
+      )
+    ) {
+      setTooltipsOpen(false);
+    }
   }
 
   function resetMarker() {
@@ -629,31 +452,51 @@ export default function MapOverlayControls() {
   }
 
   function discardPreview() {
-    if (!preview) return;
+    if (!preview || preview.saveRequestId) return;
 
-    dispatch(
-      wrapTo(
-        KEPLER_MAP_ID,
-        removeDataset(preview.dataId),
-      ),
-    );
-    setPreview(null);
-    resetMarker();
+    if (
+      reportCommand(
+        commands.removeTransientLayer(preview.dataId),
+        "Não foi possível descartar a prévia.",
+      )
+    ) {
+      emitMapPanelTelemetry("map_isochrone_discarded", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        source: "map-overlay",
+      });
+      setPreview(null);
+      resetMarker();
+    }
   }
 
   function persistPreview() {
-    if (!preview || !capabilities?.persistIsochrone) return;
+    if (
+      !preview ||
+      preview.saveRequestId ||
+      !preview.canPersist ||
+      !capabilities?.persistIsochrone
+    ) {
+      return;
+    }
 
-    window.dispatchEvent(
-      new CustomEvent("maono:save-map", {
-        detail: {
-          source: "isochrone-preview",
-          dataId: preview.dataId,
-        },
-      }),
-    );
-    setPreview(null);
-    resetMarker();
+    const request = dispatchMapSaveRequest({
+      source: "isochrone-preview",
+      dataId: preview.dataId,
+    });
+
+    setPreview({
+      ...preview,
+      saveRequestId: request.requestId,
+    });
+    setMessage({
+      tone: "success",
+      text:
+        context?.mode === "create"
+          ? "Conclua os dados do novo projeto para salvar a isócrona."
+          : "Salvando a isócrona no projeto…",
+    });
   }
 
   async function createIsochrone(input: {
@@ -662,6 +505,7 @@ export default function MapOverlayControls() {
     ranges: number[];
   }) {
     if (
+      isochroneBusy ||
       !markerOrigin ||
       !capabilities?.previewIsochrone
     ) {
@@ -673,6 +517,13 @@ export default function MapOverlayControls() {
     isochroneRequestRef.current = controller;
     setIsochroneBusy(true);
     setIsochroneError(null);
+    setMessage(null);
+    emitMapPanelTelemetry("map_isochrone_requested", {
+      mode: context?.mode ?? null,
+      projectId: context?.project?.id ?? null,
+      organizationId: context?.organization?.id ?? null,
+      source: "map-overlay",
+    });
 
     try {
       const result = await requestIsochrone(
@@ -685,75 +536,54 @@ export default function MapOverlayControls() {
         },
         controller.signal,
       );
-      const dataId = `maono_isochrone_${Date.now()}`;
-      const label = `Análise: ${modeLabel(input.mode)}`;
-      const processedGeojson = processGeojson(result.geojson);
+      const label = previewLabel(input);
+      const added = commands.addGeoJsonLayer({
+        label,
+        geoJson: result.geojson,
+        color: [197, 160, 89],
+        strokeColor: [183, 121, 31],
+        opacity: 0.28,
+        transient: true,
+        centerMap: true,
+      });
 
-      if (!processedGeojson) {
-        throw new Error("GeoJSON de isócrona inválido.");
+      if (!added.ok || !added.value?.dataId) {
+        throw new Error(
+          added.ok
+            ? "O adaptador não retornou a camada de prévia."
+            : added.reason,
+        );
       }
 
-      const config: AddDataToMapConfig = {
-        version: "v1",
-        config: {
-          visState: {
-            layers: [
-              {
-                id: `layer_${dataId}`,
-                type: "geojson",
-                config: {
-                  dataId,
-                  label,
-                  color: [197, 160, 89],
-                  columns: { geojson: "_geojson" },
-                  isVisible: true,
-                  visConfig: {
-                    opacity: 0.28,
-                    filled: true,
-                    stroked: true,
-                    strokeColor: [183, 121, 31],
-                    strokeOpacity: 0.95,
-                    thickness: 1.5,
-                  },
-                },
-              },
-            ],
-          },
-        },
-      };
-
-      dispatch(
-        wrapTo(
-          KEPLER_MAP_ID,
-          addDataToMap({
-            datasets: {
-              info: { id: dataId, label },
-              data: processedGeojson,
-            },
-            options: {
-              centerMap: true,
-              keepExistingConfig: true,
-            },
-            config,
-          }),
-        ),
-      );
-      setPreview({ dataId, label });
+      setPreview({
+        dataId: added.value.dataId,
+        label,
+        canPersist: result.metadata.canPersist,
+        saveRequestId: null,
+      });
       setIsochroneOpen(false);
       setMarkerMenuOpen(false);
+      emitMapPanelTelemetry("map_isochrone_previewed", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        source: "map-overlay",
+      });
     } catch (error) {
-      if (
-        error instanceof DOMException &&
-        error.name === "AbortError"
-      ) {
-        return;
-      }
+      if (isIsochroneAbortError(error)) return;
 
-      setIsochroneError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível gerar a análise.",
-      );
+      const text = isochroneErrorMessage(error);
+      setIsochroneError(text);
+      emitMapPanelTelemetry("map_isochrone_failed", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        source: "map-overlay",
+        code:
+          error && typeof error === "object" && "code" in error
+            ? String(error.code)
+            : "ISOCHRONE_CLIENT_ERROR",
+      });
     } finally {
       if (isochroneRequestRef.current === controller) {
         isochroneRequestRef.current = null;
@@ -762,7 +592,35 @@ export default function MapOverlayControls() {
     }
   }
 
-  const canvasRect = getCanvasRect();
+  function nudgeMarker(
+    horizontalPixels: number,
+    verticalPixels: number,
+  ) {
+    if (!markerOrigin || !viewport) return;
+
+    const mapViewport = new WebMercatorViewport(viewport);
+    const [x, y] = mapViewport.project([
+      markerOrigin.longitude,
+      markerOrigin.latitude,
+    ]);
+    const [longitudeRaw, latitude] = mapViewport.unproject([
+      x + horizontalPixels,
+      y + verticalPixels,
+    ]);
+    let longitude = longitudeRaw;
+
+    while (longitude > 180) longitude -= 360;
+    while (longitude < -180) longitude += 360;
+
+    if (
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      latitude >= -90 &&
+      latitude <= 90
+    ) {
+      setMarkerOrigin({ latitude, longitude });
+    }
+  }
 
   return createPortal(
     <>
@@ -786,7 +644,10 @@ export default function MapOverlayControls() {
             height: canvasRect.height,
           }}
           onClick={(event) => {
-            const origin = unproject(event.clientX, event.clientY);
+            const origin = unproject(
+              event.clientX,
+              event.clientY,
+            );
 
             if (origin) {
               setMarkerOrigin(origin);
@@ -810,28 +671,73 @@ export default function MapOverlayControls() {
             className={draggingMarker ? "is-dragging" : ""}
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
+              draggingPointerRef.current = event.pointerId;
+              markerMovedRef.current = false;
               setDraggingMarker(true);
             }}
             onPointerMove={(event) => {
-              if (!draggingMarker) return;
+              if (draggingPointerRef.current !== event.pointerId) {
+                return;
+              }
               const origin = unproject(
                 event.clientX,
                 event.clientY,
               );
-              if (origin) setMarkerOrigin(origin);
+              if (origin) {
+                markerMovedRef.current = true;
+                setMarkerOrigin(origin);
+              }
             }}
             onPointerUp={(event) => {
-              event.currentTarget.releasePointerCapture(
-                event.pointerId,
-              );
+              if (
+                event.currentTarget.hasPointerCapture(event.pointerId)
+              ) {
+                event.currentTarget.releasePointerCapture(
+                  event.pointerId,
+                );
+              }
+              draggingPointerRef.current = null;
               setDraggingMarker(false);
               setMarkerMenuOpen(true);
             }}
-            onClick={() =>
-              setMarkerMenuOpen((current) => !current)
-            }
-            title="Arraste para mover a origem"
-            aria-label="Origem da isócrona; arraste para mover"
+            onPointerCancel={() => {
+              draggingPointerRef.current = null;
+              setDraggingMarker(false);
+            }}
+            onClick={() => {
+              if (markerMovedRef.current) {
+                markerMovedRef.current = false;
+                return;
+              }
+              setMarkerMenuOpen((current) => !current);
+            }}
+            onKeyDown={(event) => {
+              const step = event.shiftKey ? 30 : 10;
+              const movements: Record<
+                string,
+                [number, number]
+              > = {
+                ArrowLeft: [-step, 0],
+                ArrowRight: [step, 0],
+                ArrowUp: [0, -step],
+                ArrowDown: [0, step],
+              };
+              const movement = movements[event.key];
+
+              if (movement) {
+                event.preventDefault();
+                nudgeMarker(...movement);
+              } else if (
+                event.key === "Delete" ||
+                event.key === "Backspace"
+              ) {
+                event.preventDefault();
+                resetMarker();
+              }
+            }}
+            title="Arraste ou use as setas para mover a origem"
+            aria-label="Origem da isócrona; arraste ou use as setas para mover"
+            aria-expanded={markerMenuOpen}
           >
             <OverlayIcon name="marker" />
           </button>
@@ -865,6 +771,22 @@ export default function MapOverlayControls() {
         className="maono-map-overlay"
         data-maono-no-preview="true"
       >
+        {message ? (
+          <div
+            className={`maono-map-overlay__message is-${message.tone}`}
+            role={message.tone === "error" ? "alert" : "status"}
+          >
+            <span>{message.text}</span>
+            <button
+              type="button"
+              onClick={() => setMessage(null)}
+              aria-label="Fechar mensagem"
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
+
         {tooltipsOpen ? (
           <section
             className="maono-tooltip-editor"
@@ -884,22 +806,27 @@ export default function MapOverlayControls() {
               </button>
             </header>
             <div className="maono-tooltip-editor__content">
-              {datasets.length ? (
-                datasets.map((dataset) => (
+              {state.datasets.length ? (
+                state.datasets.map((dataset) => (
                   <fieldset key={dataset.id}>
                     <legend>{dataset.label}</legend>
                     {dataset.fields.map((field) => (
-                      <label key={field}>
+                      <label key={field.name}>
                         <input
                           type="checkbox"
                           checked={Boolean(
-                            tooltipDraft[dataset.id]?.includes(field),
+                            tooltipDraft[dataset.id]?.includes(
+                              field.name,
+                            ),
                           )}
                           onChange={() =>
-                            toggleTooltipField(dataset.id, field)
+                            toggleTooltipField(
+                              dataset.id,
+                              field.name,
+                            )
                           }
                         />
-                        <span>{field}</span>
+                        <span>{field.name}</span>
                       </label>
                     ))}
                   </fieldset>
@@ -931,21 +858,39 @@ export default function MapOverlayControls() {
             <div>
               <OverlayIcon name="isochrone" />
               <span>
-                <small>Prévia gerada</small>
+                <small>
+                  {preview.saveRequestId
+                    ? "Salvamento em andamento"
+                    : "Prévia temporária"}
+                </small>
                 <strong>{preview.label}</strong>
+                {!preview.canPersist ? (
+                  <em>
+                    Este modo permite consultar e descartar, mas não
+                    salvar a análise.
+                  </em>
+                ) : null}
               </span>
             </div>
             <div>
-              {capabilities?.persistIsochrone ? (
+              {preview.canPersist &&
+              capabilities?.persistIsochrone ? (
                 <button
                   type="button"
                   className="is-primary"
                   onClick={persistPreview}
+                  disabled={Boolean(preview.saveRequestId)}
                 >
-                  Salvar no projeto
+                  {preview.saveRequestId
+                    ? "Salvando…"
+                    : "Salvar no projeto"}
                 </button>
               ) : null}
-              <button type="button" onClick={discardPreview}>
+              <button
+                type="button"
+                onClick={discardPreview}
+                disabled={Boolean(preview.saveRequestId)}
+              >
                 Descartar
               </button>
             </div>
@@ -957,7 +902,7 @@ export default function MapOverlayControls() {
             <button
               type="button"
               onClick={focusVisibleData}
-              disabled={!bounds}
+              disabled={!focusAvailable}
               title="Centralizar nos dados visíveis"
               aria-label="Centralizar nos dados visíveis"
             >
@@ -976,6 +921,7 @@ export default function MapOverlayControls() {
               }
               title="Configurar tooltips"
               aria-label="Configurar tooltips"
+              aria-expanded={tooltipsOpen}
             >
               <OverlayIcon name="tooltip" />
             </button>
@@ -984,17 +930,16 @@ export default function MapOverlayControls() {
           {capabilities?.toggleLegend ? (
             <button
               type="button"
-              className={legendActive ? "is-active" : ""}
+              className={state.legendVisible ? "is-active" : ""}
               onClick={() =>
-                dispatch(
-                  wrapTo(
-                    KEPLER_MAP_ID,
-                    toggleMapControl("mapLegend", 0),
-                  ),
+                reportCommand(
+                  commands.toggleLegend(),
+                  "Não foi possível alterar a legenda.",
                 )
               }
               title="Mostrar ou ocultar legenda"
               aria-label="Mostrar ou ocultar legenda"
+              aria-pressed={state.legendVisible}
             >
               <OverlayIcon name="legend" />
             </button>
@@ -1023,6 +968,7 @@ export default function MapOverlayControls() {
                   ? "Cancelar inserção de marcador"
                   : "Inserir marcador para análise"
               }
+              aria-pressed={placingMarker}
             >
               <OverlayIcon name="marker" />
             </button>
@@ -1036,7 +982,6 @@ export default function MapOverlayControls() {
         error={isochroneError}
         onClose={() => {
           if (!isochroneBusy) {
-            isochroneRequestRef.current?.abort();
             setIsochroneOpen(false);
             setIsochroneError(null);
           }

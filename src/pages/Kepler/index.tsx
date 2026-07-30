@@ -37,6 +37,7 @@ import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
 import { replacePanelHeader } from "./factories/panel-header";
 import { replaceLayerConfigurator } from "./factories/layer-configurator";
+import { replaceSidePanel } from "./factories/side-panel";
 import {
   CLOUD_PROVIDERS_CONFIGURATION,
   DEFAULT_FEATURE_FLAGS,
@@ -94,6 +95,8 @@ import {
   MapPanelAccessGate,
   MapPanelProvider,
 } from "./map-panel/MapPanelProvider";
+import { KeplerEngineAdapterProvider } from "./engine-adapter/index.ts";
+import MaonoMapRuntime from "./components/maono-map-shell/MaonoMapRuntime";
 import "./map-panel/map-panel.css";
 
 const KeplerGl = injectComponents([
@@ -102,6 +105,7 @@ const KeplerGl = injectComponents([
   replacePanelHeader(),
   replaceDatasetSection(),
   replaceLayerConfigurator(),
+  replaceSidePanel(),
 ]);
 
 function shouldForwardProp(propName, target) {
@@ -457,7 +461,11 @@ const ConnectedApp = connect(mapStateToProps, dispatchToProps)(App);
 const KeplerMapPanelRoot = () => (
   <MapPanelProvider>
     <MapPanelAccessGate>
-      <ConnectedApp />
+      <KeplerEngineAdapterProvider>
+        <MaonoMapRuntime>
+          <ConnectedApp />
+        </MaonoMapRuntime>
+      </KeplerEngineAdapterProvider>
     </MapPanelAccessGate>
   </MapPanelProvider>
 );

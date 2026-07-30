@@ -5,57 +5,53 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  Link,
-  useLocation,
-  useParams,
-} from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 
 import { useSession } from "../../../auth/session";
-import MaonoMapShell from "../components/maono-map-shell/MaonoMapShell";
 import {
-  fetchNewMapContext,
+  fetchNewMapCreateContext,
   fetchProjectMapNavigation,
 } from "./map-panel-api";
-import {
-  MapPanelContextProvider,
-  useMapPanel,
-} from "./MapPanelContext";
+import { MapPanelContextProvider, useMapPanel } from "./MapPanelContext";
 import { emitMapPanelTelemetry } from "./map-panel-telemetry";
 import type {
   MapPanelApiError,
+  MapPanelContextValue,
   MapPanelLoadState,
-  MapPanelMode,
+  MapNavigationMode,
 } from "./types";
 
-function requestedMode(pathname: string): MapPanelMode {
+function requestedMode(pathname: string): MapNavigationMode {
+  if (pathname === "/maps/new/create") return "create";
   if (pathname.endsWith("/view")) return "viewer";
   if (pathname.endsWith("/edit")) return "editor";
   return "manage";
 }
 
 function isFrontendLayerManagerEnabled() {
-  return String(
-    import.meta.env.VITE_MAONO_LAYER_MANAGER_V1 ?? "false",
-  ).toLowerCase() === "true";
+  return (
+    String(
+      import.meta.env.VITE_MAONO_LAYER_MANAGER_V1 ?? "false",
+    ).toLowerCase() === "true"
+  );
 }
 
 function isFrontendMapShellEnabled() {
-  return String(
-    import.meta.env.VITE_MAONO_MAP_SHELL_V1 ?? "false",
-  ).toLowerCase() === "true";
+  return (
+    String(import.meta.env.VITE_MAONO_MAP_SHELL_V1 ?? "false").toLowerCase() ===
+    "true"
+  );
 }
 
 function isFrontendMapOverlayEnabled() {
-  return String(
-    import.meta.env.VITE_MAONO_MAP_OVERLAY_V1 ?? "false",
-  ).toLowerCase() === "true";
+  return (
+    String(
+      import.meta.env.VITE_MAONO_MAP_OVERLAY_V1 ?? "false",
+    ).toLowerCase() === "true"
+  );
 }
 
-function activeOrganizationKey(
-  activeOrganization: any,
-  user: any,
-) {
+function activeOrganizationKey(activeOrganization: any, user: any) {
   return String(
     activeOrganization?.id ??
       user?.activeOrganizationId ??
@@ -65,11 +61,106 @@ function activeOrganizationKey(
   );
 }
 
-export function MapPanelProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+const BLOCKED_MESSAGES: Record<string, string> = {
+  ACTIVE_ORGANIZATION_REQUIRED:
+    "Selecione uma organização ativa para continuar.",
+  MAP_CREATE_ROUTE_DISABLED:
+    "A área de criação de mapas ainda não está habilitada.",
+  MAP_EDITOR_FORBIDDEN: "Você não possui permissão para editar este mapa.",
+  MAP_VIEW_FORBIDDEN: "Você não possui permissão para visualizar este mapa.",
+  ORGANIZATION_PROJECT_LIMIT_REACHED:
+    "A organização atingiu o limite de projetos.",
+  ORGANIZATION_STORAGE_NOT_CONFIGURED:
+    "O armazenamento da organização ainda não está pronto.",
+  PROJECT_CREATE_FORBIDDEN: "Você não possui permissão para criar projetos.",
+  PROJECT_NOT_FOUND: "O projeto não foi encontrado neste contexto.",
+};
+
+function blockedMessage(code: string | null | undefined) {
+  return (
+    (code ? BLOCKED_MESSAGES[code] : null) ||
+    "Este painel não está disponível no contexto atual."
+  );
+}
+
+function isBlockedError(error: MapPanelApiError) {
+  const status = Number(error?.status || 0);
+
+  return status >= 400 && status < 500;
+}
+
+function legacyReadOnlyContext(): MapPanelContextValue {
+  return {
+    policyVersion: 0,
+    mode: "viewer",
+    requestedMode: "manage",
+    defaultPanel: "viewer",
+    availablePanels: {
+      viewer: {
+        allowed: true,
+        route: null,
+        reason: null,
+      },
+      editor: {
+        allowed: false,
+        route: null,
+        reason: "LEGACY_READ_ONLY",
+      },
+      create: {
+        allowed: false,
+        route: null,
+        reason: "LEGACY_READ_ONLY",
+      },
+    },
+    allowed: true,
+    reason: null,
+    capabilities: {
+      viewMap: true,
+      viewLayers: true,
+      openLayerPanel: true,
+      inspectLayer: true,
+      toggleLayerVisibility: true,
+      viewFilters: true,
+      focusMapData: true,
+      configureTooltips: false,
+      toggleLegend: true,
+      previewIsochrone: false,
+      persistIsochrone: false,
+      removeIsochrone: false,
+      editLayers: false,
+      editStyle: false,
+      editLayerStyle: false,
+      createLayer: false,
+      removeLayer: false,
+      duplicateLayer: false,
+      reorderLayers: false,
+      manageFilters: false,
+      editFilters: false,
+      saveMap: false,
+      openCreateWorkspace: false,
+      createProject: false,
+      initializeMap: false,
+      editMetadata: false,
+      editProjectMetadata: false,
+      updateThumbnail: false,
+    },
+    project: null,
+    organization: null,
+    features: {
+      mapManagementHome: false,
+      mapPanelModes: false,
+      projectMapEditPermission: false,
+      projectQuotaReservation: false,
+      mapCreateRoute: false,
+      maonoLayerManager: false,
+      maonoMapShell: false,
+      maonoMapOverlay: false,
+      maonoIsochrone: false,
+    },
+  };
+}
+
+export function MapPanelProvider({ children }: { children: React.ReactNode }) {
   const { projectSlug } = useParams();
   const location = useLocation();
   const { activeOrganization, user } = useSession();
@@ -85,11 +176,8 @@ export function MapPanelProvider({
     refreshToken: number;
   } | null>(null);
   const mode = requestedMode(location.pathname);
-  const organizationKey = activeOrganizationKey(
-    activeOrganization,
-    user,
-  );
-  const isNewMap = location.pathname.startsWith("/maps/new/");
+  const organizationKey = activeOrganizationKey(activeOrganization, user);
+  const isNewMap = location.pathname === "/maps/new/create";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -125,13 +213,9 @@ export function MapPanelProvider({
     });
 
     const request = isNewMap
-      ? fetchNewMapContext(controller.signal)
+      ? fetchNewMapCreateContext(controller.signal)
       : projectSlug
-        ? fetchProjectMapNavigation(
-            projectSlug,
-            mode,
-            controller.signal,
-          )
+        ? fetchProjectMapNavigation(projectSlug, mode, controller.signal)
         : Promise.resolve(null);
 
     request
@@ -139,67 +223,23 @@ export function MapPanelProvider({
         if (controller.signal.aborted) return;
 
         if (!context) {
+          if (projectSlug || isNewMap) {
+            const error = new Error(
+              "O servidor não devolveu um contexto de mapa válido.",
+            ) as MapPanelApiError;
+            error.code = "MAP_CONTEXT_REQUIRED";
+            error.status = 503;
+            setState({
+              status: "error",
+              context: null,
+              error,
+            });
+            return;
+          }
+
           setState({
             status: "ready",
-            context: {
-              policyVersion: 0,
-              mode: "editor",
-              requestedMode: "editor",
-              defaultPanel: "editor",
-              availablePanels: {
-                viewer: {
-                  allowed: false,
-                  route: null,
-                  reason: "LEGACY_MAP",
-                },
-                editor: {
-                  allowed: true,
-                  route: null,
-                  reason: null,
-                },
-              },
-              allowed: true,
-              reason: null,
-              capabilities: {
-                viewMap: true,
-                viewLayers: true,
-                openLayerPanel: true,
-                inspectLayer: true,
-                toggleLayerVisibility: true,
-                viewFilters: true,
-                focusMapData: true,
-                configureTooltips: true,
-                toggleLegend: true,
-                previewIsochrone: false,
-                persistIsochrone: false,
-                removeIsochrone: false,
-                editLayers: true,
-                editStyle: true,
-                editLayerStyle: true,
-                createLayer: true,
-                removeLayer: true,
-                duplicateLayer: true,
-                reorderLayers: true,
-                manageFilters: true,
-                editFilters: true,
-                saveMap: true,
-                editMetadata: true,
-                editProjectMetadata: true,
-                updateThumbnail: true,
-              },
-              project: null,
-              organization: null,
-              features: {
-                mapManagementHome: false,
-                mapPanelModes: false,
-                projectMapEditPermission: false,
-                projectQuotaReservation: false,
-                maonoLayerManager: false,
-                maonoMapShell: false,
-                maonoMapOverlay: false,
-                maonoIsochrone: false,
-              },
-            },
+            context: legacyReadOnlyContext(),
             error: null,
           });
           return;
@@ -207,9 +247,7 @@ export function MapPanelProvider({
 
         if (context.allowed === false) {
           const error = new Error(
-            context.reason === "ORGANIZATION_PROJECT_LIMIT_REACHED"
-              ? "A organização atingiu o limite de projetos."
-              : "O armazenamento da organização ainda não está pronto.",
+            blockedMessage(context.reason),
           ) as MapPanelApiError;
           error.code = context.reason || "NEW_MAP_BLOCKED";
           setState({
@@ -236,20 +274,14 @@ export function MapPanelProvider({
       .catch((error: MapPanelApiError) => {
         if (controller.signal.aborted) return;
         setState({
-          status: error?.status === 403 ? "blocked" : "error",
+          status: isBlockedError(error) ? "blocked" : "error",
           context: null,
           error,
         });
       });
 
     return () => controller.abort();
-  }, [
-    isNewMap,
-    mode,
-    organizationKey,
-    projectSlug,
-    refreshToken,
-  ]);
+  }, [isNewMap, mode, organizationKey, projectSlug, refreshToken]);
 
   const refresh = useCallback(() => {
     setRefreshToken((current) => current + 1);
@@ -260,17 +292,24 @@ export function MapPanelProvider({
       context: state.context,
       refresh,
       customLayerPanelEnabled: Boolean(
-        state.context?.features?.mapPanelModes &&
+        state.context?.allowed &&
+          state.context.capabilities.openLayerPanel &&
+          state.context.features.mapPanelModes &&
           state.context?.features?.maonoLayerManager &&
           isFrontendLayerManagerEnabled(),
       ),
       customMapShellEnabled: Boolean(
-        state.context?.features?.mapPanelModes &&
+        state.context?.allowed &&
+          (state.context.capabilities.viewMap ||
+            state.context.capabilities.openCreateWorkspace) &&
+          state.context.features.mapPanelModes &&
           state.context?.features?.maonoMapShell &&
           isFrontendMapShellEnabled(),
       ),
       customMapOverlayEnabled: Boolean(
-        state.context?.features?.mapPanelModes &&
+        state.context?.allowed &&
+          state.context.capabilities.viewMap &&
+          state.context.features.mapPanelModes &&
           state.context?.features?.maonoMapOverlay &&
           isFrontendMapOverlayEnabled(),
       ),
@@ -279,9 +318,7 @@ export function MapPanelProvider({
   );
 
   return (
-    <MapPanelContextProvider value={value}>
-      {children}
-    </MapPanelContextProvider>
+    <MapPanelContextProvider value={value}>{children}</MapPanelContextProvider>
   );
 }
 
@@ -318,9 +355,7 @@ export function MapPanelAccessGate({
           <span>{state.error?.message}</span>
           <div className="maono-map-gate__actions">
             {fallback === "viewer" && projectSlug ? (
-              <Link
-                to={`/projects/${encodeURIComponent(projectSlug)}/view`}
-              >
+              <Link to={`/projects/${encodeURIComponent(projectSlug)}/view`}>
                 Abrir visualizador
               </Link>
             ) : null}
@@ -331,5 +366,5 @@ export function MapPanelAccessGate({
     );
   }
 
-  return <MaonoMapShell>{children}</MaonoMapShell>;
+  return <>{children}</>;
 }

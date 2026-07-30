@@ -3,9 +3,7 @@ import {
   jsonResponse,
   methodNotAllowed,
 } from "../../../_lib/http.js";
-import {
-  resolveNewMapEditorContext,
-} from "../../../_lib/map-panel-service.js";
+import { resolveNewMapCreateContext } from "../../../_lib/map-panel-service.js";
 
 export async function onRequest({ request, env }) {
   if (request.method !== "GET") {
@@ -13,7 +11,7 @@ export async function onRequest({ request, env }) {
   }
 
   try {
-    const context = await resolveNewMapEditorContext(env, request);
+    const context = await resolveNewMapCreateContext(env, request);
 
     return jsonResponse({
       ok: true,
@@ -21,8 +19,7 @@ export async function onRequest({ request, env }) {
     });
   } catch (error) {
     return errorResponse(
-      error?.message ||
-        "Não foi possível abrir o editor de um novo mapa.",
+      error?.message || "Não foi possível abrir a área de criação de mapas.",
       Number(error?.status || 500),
       error?.code || "NEW_MAP_CONTEXT_ERROR",
       error?.details || null,
