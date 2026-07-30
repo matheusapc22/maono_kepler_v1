@@ -3,6 +3,7 @@ import React, {
   useContext,
 } from "react";
 
+import MaonoMapShell from "../components/maono-map-shell/MaonoMapShell";
 import type {
   MapPanelContextValue,
   MapPanelLoadState,
@@ -28,7 +29,7 @@ export function MapPanelContextProvider({
 }) {
   return (
     <MapPanelContext.Provider value={value}>
-      {children}
+      <MaonoMapShell runtime={value}>{children}</MaonoMapShell>
     </MapPanelContext.Provider>
   );
 }
@@ -44,4 +45,3 @@ export function useMapPanel() {
 
   return value;
 }
-
