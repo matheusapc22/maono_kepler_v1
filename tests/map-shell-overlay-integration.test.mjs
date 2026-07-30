@@ -6,8 +6,12 @@ const files = {
   index: "../src/pages/Kepler/index.tsx",
   provider:
     "../src/pages/Kepler/map-panel/MapPanelProvider.tsx",
+  context:
+    "../src/pages/Kepler/map-panel/MapPanelContext.tsx",
   shell:
     "../src/pages/Kepler/components/maono-map-shell/MaonoMapShell.tsx",
+  sidebar:
+    "../src/pages/Kepler/components/maono-map-shell/Sidebar.tsx",
   shellCss:
     "../src/pages/Kepler/components/maono-map-shell/maono-map-shell.css",
   overlay:
@@ -33,9 +37,8 @@ const source = Object.fromEntries(
   ),
 );
 
-test("baseline preserva o runtime seguro sem a UI incompleta", () => {
+test("shell Maõno permanece opt-in e é montado pelo contexto seguro", () => {
   assert.doesNotMatch(source.index, /replaceSidePanel/);
-  assert.doesNotMatch(source.index, /<MaonoMapShell>/);
   assert.doesNotMatch(source.index, /<MapOverlayControls \/>/);
   assert.match(source.index, /<ScreenshotWrapper/);
   assert.match(source.index, /<PointClusterSettingsPanel/);
@@ -43,7 +46,9 @@ test("baseline preserva o runtime seguro sem a UI incompleta", () => {
   assert.match(source.index, /<MaonoSaveButton \/>/);
   assert.match(source.index, /<MapPanelProvider>/);
   assert.match(source.index, /<MapPanelAccessGate>/);
-  assert.match(source.shell, /customMapShellEnabled/);
+  assert.match(source.context, /import MaonoMapShell/);
+  assert.match(source.context, /<MaonoMapShell runtime=\{value\}>/);
+  assert.match(source.shell, /if \(!customMapShellEnabled\)/);
   assert.match(source.overlay, /customMapOverlayEnabled/);
 });
 
@@ -66,14 +71,45 @@ test("flags frontend customizadas são opt-in e desligadas por padrão", () => {
   assert.match(source.provider, /\.toLowerCase\(\) === "true"/);
 });
 
-test("shell usa capabilities e contexto sem decisão por role bruta", () => {
+test("navegação usa sessão, capabilities e permissões atuais", () => {
   assert.match(source.shell, /context\?\.capabilities\?\.openLayerPanel/);
   assert.match(source.shell, /availablePanels\?\.viewer/);
   assert.match(source.shell, /availablePanels\?\.editor/);
-  assert.doesNotMatch(source.shell, /user\?\.role/);
-  assert.doesNotMatch(source.shell, /checkAdminUser/);
+  assert.match(source.shell, /PERMISSION\.DOCUMENT_VIEW/);
+  assert.match(source.shell, /PERMISSION\.USERS_VIEW/);
+  assert.match(source.shell, /normalizeRole\(user\?\.role\) === "super_admin"/);
+  assert.doesNotMatch(source.sidebar, /@maono:token/);
+  assert.doesNotMatch(source.sidebar, /maonoApi\.getMe/);
+  assert.doesNotMatch(source.shell, /Bearer\s/);
   assert.match(source.provider, /VITE_MAONO_MAP_SHELL_V1/);
-  assert.match(source.provider, /VITE_MAONO_MAP_OVERLAY_V1/);
+});
+
+test("tema da navegação é funcional e persistido sem credenciais", () => {
+  assert.match(source.shell, /maono-map-shell-theme/);
+  assert.match(source.shell, /handleToggleTheme/);
+  assert.match(source.sidebar, /onToggleTheme/);
+  assert.match(source.shellCss, /maono-map-shell--light/);
+  assert.doesNotMatch(source.shell, /@maono:token/);
+});
+
+test("menu preserva ferramentas e rotas conforme disponibilidade", () => {
+  for (const item of [
+    "layers",
+    "analytics",
+    "data",
+    "files",
+    "users",
+    "home",
+    "organizations",
+  ]) {
+    assert.match(source.sidebar, new RegExp(`"${item}"`));
+  }
+
+  assert.match(source.sidebar, /canOpenViewer/);
+  assert.match(source.sidebar, /canOpenEditor/);
+  assert.match(source.shell, /toggleModal\("addData"\)/);
+  assert.match(source.shell, /\/projects\?section=files/);
+  assert.match(source.shell, /\/projects\?section=users/);
 });
 
 test("controles promovem centralização, tooltip, legenda e marcador", () => {
@@ -100,6 +136,7 @@ test("isócronas usam somente o proxy autenticado", () => {
     source.overlay,
     source.api,
     source.shell,
+    source.sidebar,
   ]) {
     assert.doesNotMatch(frontend, /api\.geoapify\.com/);
     assert.doesNotMatch(frontend, /apiKey=/i);
