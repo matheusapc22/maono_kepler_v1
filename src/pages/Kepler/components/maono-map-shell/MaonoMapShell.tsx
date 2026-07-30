@@ -1,74 +1,34 @@
 import {
   type ReactNode,
+  useEffect,
   useMemo,
   useState,
 } from "react";
-import {
-  Link,
-  useNavigate,
-} from "react-router";
+import { toggleModal, wrapTo } from "@kepler.gl/actions";
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router";
 
-import maonoSymbol from "../../../../assets/images/Logo_Simbolo.png";
+import { can } from "../../../../access-control/can";
+import { PERMISSION } from "../../../../access-control/permissions";
+import { normalizeRole } from "../../../../access-control/roles";
 import { useSession } from "../../../../auth/session";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
+import {
+  Sidebar,
+  type MaonoSidebarPanel,
+  type MaonoSidebarTheme,
+} from "./Sidebar";
 import "./maono-map-shell.css";
 
-type IconName =
-  | "layers"
-  | "projects"
-  | "viewer"
-  | "editor"
-  | "logout";
+const KEPLER_ID = "map";
+const THEME_STORAGE_KEY = "maono-map-shell-theme";
 
-function ShellIcon({ name }: { name: IconName }) {
-  const paths: Record<IconName, ReactNode> = {
-    layers: (
-      <>
-        <path d="m12 2 9 5-9 5-9-5 9-5Z" />
-        <path d="m3 12 9 5 9-5" />
-        <path d="m3 17 9 5 9-5" />
-      </>
-    ),
-    projects: (
-      <>
-        <path d="M3 7h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
-        <path d="M3 7V5a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2" />
-      </>
-    ),
-    viewer: (
-      <>
-        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
-        <circle cx="12" cy="12" r="2.7" />
-      </>
-    ),
-    editor: (
-      <>
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4L16.5 3.5Z" />
-      </>
-    ),
-    logout: (
-      <>
-        <path d="M10 17l5-5-5-5" />
-        <path d="M15 12H3" />
-        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-      </>
-    ),
-  };
+function readInitialTheme(): MaonoSidebarTheme {
+  if (typeof window === "undefined") return "dark";
 
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {paths[name]}
-    </svg>
-  );
+  return window.localStorage.getItem(THEME_STORAGE_KEY) === "light"
+    ? "light"
+    : "dark";
 }
 
 function userInitials(name?: string, email?: string) {
@@ -82,11 +42,19 @@ function userInitials(name?: string, email?: string) {
   ).toUpperCase();
 }
 
+function modeLabel(mode?: string) {
+  if (mode === "editor") return "Editor";
+  if (mode === "create") return "Criação";
+  if (mode === "manage") return "Gestão";
+  return "Visualizador";
+}
+
 export default function MaonoMapShell({
   children,
 }: {
   children: ReactNode;
 }) {
+  const dispatch = useDispatch();
   const navigate = useNavigate();
   const {
     activeOrganization,
@@ -95,14 +63,38 @@ export default function MaonoMapShell({
   } = useSession();
   const {
     context,
-    customLayerPanelEnabled,
     customMapShellEnabled,
   } = useMapPanel();
+  const [activePanel, setActivePanel] =
+    useState<MaonoSidebarPanel>("layers");
   const [panelOpen, setPanelOpen] = useState(true);
+  const [theme, setTheme] = useState<MaonoSidebarTheme>(readInitialTheme);
+
   const initials = useMemo(
     () => userInitials(user?.name, user?.email),
     [user?.email, user?.name],
   );
+
+  const organizationPermissionContext = useMemo(
+    () => ({
+      organizationId:
+        activeOrganization?.id ??
+        user?.activeOrganizationId ??
+        user?.organizationId ??
+        user?.organization_id ??
+        undefined,
+      organization: activeOrganization ?? undefined,
+      permissions: user?.permissions,
+      scopes: user?.scopes,
+    }),
+    [activeOrganization, user],
+  );
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }, [theme]);
 
   if (!customMapShellEnabled) {
     return <>{children}</>;
@@ -119,10 +111,64 @@ export default function MaonoMapShell({
     (projectSlug
       ? `/projects/${encodeURIComponent(projectSlug)}/edit`
       : null);
-  const canTogglePanel = Boolean(
-    customLayerPanelEnabled &&
+
+  const canOpenLayers = Boolean(
+    context?.capabilities?.viewLayers &&
       context?.capabilities?.openLayerPanel,
   );
+  const canManageData = Boolean(
+    context?.mode !== "viewer" &&
+      (context?.capabilities?.createLayer ||
+        context?.capabilities?.editLayers),
+  );
+  const canViewFiles = can(
+    user as never,
+    PERMISSION.DOCUMENT_VIEW,
+    organizationPermissionContext,
+  );
+  const canViewUsers = can(
+    user as never,
+    PERMISSION.USERS_VIEW,
+    organizationPermissionContext,
+  );
+  const showCeoPanel = normalizeRole(user?.role) === "super_admin";
+
+  function handlePanelSelect(panel: MaonoSidebarPanel) {
+    setActivePanel(panel);
+
+    if (panel === "layers") {
+      setPanelOpen((current) => !current);
+      return;
+    }
+
+    if (panel === "data" && canManageData) {
+      dispatch(wrapTo(KEPLER_ID, toggleModal("addData")));
+      return;
+    }
+
+    if (panel === "files") {
+      navigate("/projects?section=files");
+      return;
+    }
+
+    if (panel === "users") {
+      navigate("/projects?section=users");
+      return;
+    }
+
+    if (panel === "organizations") {
+      navigate("/admin?section=organizations");
+      return;
+    }
+
+    if (panel === "home") {
+      navigate("/projects?section=all");
+    }
+  }
+
+  function handleToggleTheme() {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }
 
   async function handleLogout() {
     await logout();
@@ -133,90 +179,34 @@ export default function MaonoMapShell({
     <div
       className={[
         "maono-map-shell",
+        `maono-map-shell--${theme}`,
         panelOpen
           ? "maono-map-shell--panel-open"
           : "maono-map-shell--panel-collapsed",
       ].join(" ")}
       data-map-mode={context?.mode || "viewer"}
     >
-      <aside
-        className="maono-map-shell__sidebar"
-        aria-label="Navegação Maõno Maps"
-        data-maono-no-preview="true"
-      >
-        <Link
-          className="maono-map-shell__brand"
-          to="/projects"
-          title="Maõno Maps"
-          aria-label="Maõno Maps - Projetos"
-        >
-          <img src={maonoSymbol} alt="" />
-        </Link>
-
-        <nav className="maono-map-shell__nav">
-          <button
-            type="button"
-            className={panelOpen ? "is-active" : ""}
-            onClick={() => setPanelOpen((current) => !current)}
-            disabled={!canTogglePanel}
-            title="Camadas e filtros"
-            aria-label="Abrir ou recolher camadas e filtros"
-          >
-            <ShellIcon name="layers" />
-            <span>Camadas</span>
-          </button>
-
-          {viewerRoute &&
-          context?.availablePanels?.viewer?.allowed ? (
-            <Link
-              to={viewerRoute}
-              className={
-                context?.mode === "viewer" ? "is-active" : ""
-              }
-              title="Modo visualizador"
-              aria-label="Abrir modo visualizador"
-            >
-              <ShellIcon name="viewer" />
-              <span>Visualizar</span>
-            </Link>
-          ) : null}
-
-          {editorRoute &&
-          context?.availablePanels?.editor?.allowed ? (
-            <Link
-              to={editorRoute}
-              className={
-                context?.mode === "editor" ? "is-active" : ""
-              }
-              title="Modo editor"
-              aria-label="Abrir modo editor"
-            >
-              <ShellIcon name="editor" />
-              <span>Editar</span>
-            </Link>
-          ) : null}
-
-          <Link
-            to="/projects"
-            title="Voltar aos projetos"
-            aria-label="Voltar aos projetos"
-          >
-            <ShellIcon name="projects" />
-            <span>Projetos</span>
-          </Link>
-        </nav>
-
-        <button
-          type="button"
-          className="maono-map-shell__logout"
-          onClick={() => void handleLogout()}
-          title="Sair"
-          aria-label="Sair da Maõno"
-        >
-          <ShellIcon name="logout" />
-          <span>Sair</span>
-        </button>
-      </aside>
+      <Sidebar
+        activePanel={activePanel}
+        mode={context?.mode || "viewer"}
+        viewerRoute={viewerRoute}
+        editorRoute={editorRoute}
+        canOpenViewer={Boolean(
+          context?.availablePanels?.viewer?.allowed,
+        )}
+        canOpenEditor={Boolean(
+          context?.availablePanels?.editor?.allowed,
+        )}
+        canOpenLayers={canOpenLayers}
+        canManageData={canManageData}
+        canViewFiles={canViewFiles}
+        canViewUsers={canViewUsers}
+        showCeoPanel={showCeoPanel}
+        theme={theme}
+        onPanelSelect={handlePanelSelect}
+        onToggleTheme={handleToggleTheme}
+        onLogout={() => void handleLogout()}
+      />
 
       <section className="maono-map-shell__workspace">
         <header
@@ -237,9 +227,7 @@ export default function MaonoMapShell({
 
           <div className="maono-map-shell__account">
             <span className="maono-map-shell__mode">
-              {context?.mode === "editor"
-                ? "Editor"
-                : "Visualizador"}
+              {modeLabel(context?.mode)}
             </span>
             <div className="maono-map-shell__avatar" aria-hidden="true">
               {initials}
@@ -253,7 +241,7 @@ export default function MaonoMapShell({
 
         <div className="maono-map-shell__map">{children}</div>
 
-        {canTogglePanel ? (
+        {canOpenLayers ? (
           <button
             type="button"
             className="maono-map-shell__panel-handle"
@@ -262,9 +250,7 @@ export default function MaonoMapShell({
             title={panelOpen ? "Recolher painel" : "Abrir painel"}
             aria-label={panelOpen ? "Recolher painel" : "Abrir painel"}
           >
-            <span aria-hidden="true">
-              {panelOpen ? "‹" : "›"}
-            </span>
+            <span aria-hidden="true">{panelOpen ? "‹" : "›"}</span>
           </button>
         ) : null}
       </section>
