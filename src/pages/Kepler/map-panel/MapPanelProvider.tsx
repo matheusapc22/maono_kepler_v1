@@ -12,6 +12,7 @@ import {
 } from "react-router";
 
 import { useSession } from "../../../auth/session";
+import MaonoMapShell from "../components/maono-map-shell/MaonoMapShell";
 import {
   fetchNewMapContext,
   fetchProjectMapNavigation,
@@ -330,5 +331,5 @@ export function MapPanelAccessGate({
     );
   }
 
-  return <>{children}</>;
+  return <MaonoMapShell>{children}</MaonoMapShell>;
 }
