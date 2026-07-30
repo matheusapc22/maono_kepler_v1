@@ -12,7 +12,6 @@ import { can } from "../../../../access-control/can";
 import { PERMISSION } from "../../../../access-control/permissions";
 import { normalizeRole } from "../../../../access-control/roles";
 import { useSession } from "../../../../auth/session";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
 import {
   Sidebar,
   type MaonoSidebarPanel,
@@ -22,6 +21,36 @@ import "./maono-map-shell.css";
 
 const KEPLER_ID = "map";
 const THEME_STORAGE_KEY = "maono-map-shell-theme";
+
+type MapShellRuntime = {
+  context: {
+    mode?: string;
+    project?: {
+      slug?: string;
+      name?: string;
+    } | null;
+    organization?: {
+      name?: string;
+    } | null;
+    availablePanels?: {
+      viewer?: {
+        route?: string | null;
+        allowed?: boolean;
+      };
+      editor?: {
+        route?: string | null;
+        allowed?: boolean;
+      };
+    };
+    capabilities?: {
+      viewLayers?: boolean;
+      openLayerPanel?: boolean;
+      createLayer?: boolean;
+      editLayers?: boolean;
+    };
+  } | null;
+  customMapShellEnabled: boolean;
+};
 
 function readInitialTheme(): MaonoSidebarTheme {
   if (typeof window === "undefined") return "dark";
@@ -51,8 +80,10 @@ function modeLabel(mode?: string) {
 
 export default function MaonoMapShell({
   children,
+  runtime,
 }: {
   children: ReactNode;
+  runtime: MapShellRuntime;
 }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -64,7 +95,7 @@ export default function MaonoMapShell({
   const {
     context,
     customMapShellEnabled,
-  } = useMapPanel();
+  } = runtime;
   const [activePanel, setActivePanel] =
     useState<MaonoSidebarPanel>("layers");
   const [panelOpen, setPanelOpen] = useState(true);
