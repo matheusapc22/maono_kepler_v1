@@ -1,4 +1,14 @@
 import { requireEnv } from "./http.js";
+import {
+  deleteLocalStoragePath,
+  downloadLocalStorageFile,
+  ensureLocalStorageFolder,
+  getLocalStorageMetadata,
+  isLocalStorageMode,
+  listLocalStorageFolder,
+  uploadLocalStorageFile,
+} from "./local-storage.js";
+
 
 const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
@@ -173,6 +183,13 @@ async function createDropboxFolderWithToken(accessToken, path) {
 }
 
 export async function ensureDropboxFolder(env, path) {
+  if (isLocalStorageMode(env)) {
+    return await ensureLocalStorageFolder(
+      env,
+      path,
+    );
+  }
+
   const accessToken = await getDropboxAccessToken(env);
   const normalizedPath = normalizeDropboxFolderPath(path);
 
@@ -192,6 +209,13 @@ export async function ensureDropboxFolder(env, path) {
 }
 
 export async function listDropboxFolder(env, path = "") {
+  if (isLocalStorageMode(env)) {
+    return await listLocalStorageFolder(
+      env,
+      path,
+    );
+  }
+
   const accessToken = await getDropboxAccessToken(env);
   const normalizedPath = normalizeDropboxFolderPath(path);
 
@@ -223,6 +247,14 @@ export async function listDropboxFolder(env, path = "") {
 }
 
 export async function getDropboxMetadata(env, rootPath, fileName) {
+  if (isLocalStorageMode(env)) {
+    return await getLocalStorageMetadata(
+      env,
+      rootPath,
+      fileName,
+    );
+  }
+
   const accessToken = await getDropboxAccessToken(env);
   const path = joinDropboxPath(rootPath, fileName);
   const response = await fetch(DROPBOX_METADATA_URL, {
@@ -256,6 +288,13 @@ export async function getDropboxMetadata(env, rootPath, fileName) {
 }
 
 export async function deleteDropboxPath(env, path) {
+  if (isLocalStorageMode(env)) {
+    return await deleteLocalStoragePath(
+      env,
+      path,
+    );
+  }
+
   const accessToken = await getDropboxAccessToken(env);
   const normalizedPath = normalizeDropboxPath(path);
 
@@ -304,6 +343,14 @@ export async function downloadDropboxTextFile(env, rootPath, fileName) {
 }
 
 export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
+  if (isLocalStorageMode(env)) {
+    return await downloadLocalStorageFile(
+      env,
+      rootPath,
+      fileName,
+    );
+  }
+
   const accessToken = await getDropboxAccessToken(env);
   const path = joinDropboxPath(rootPath, fileName);
 
@@ -332,7 +379,17 @@ export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
   return await uploadDropboxBinaryFile(env, rootPath, fileName, content);
 }
 
-export async function uploadDropboxBinaryFile(env, rootPath, fileName, content) {
+export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, contentType = "") {
+  if (isLocalStorageMode(env)) {
+    return await uploadLocalStorageFile(
+      env,
+      rootPath,
+      fileName,
+      content,
+      contentType,
+    );
+  }
+
   const normalizedRootPath = normalizeDropboxFolderPath(rootPath);
   const path = joinDropboxPath(normalizedRootPath, fileName);
 
