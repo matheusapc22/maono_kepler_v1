@@ -1,42 +1,24 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
 import type {
+  MaonoDatasetSnapshot,
   MaonoLayerSnapshot,
 } from "../../integration/keplerBridge";
-import { MAONO_LAYER_PALETTES } from "./palettes";
-
-function componentToHex(value: number) {
-  return Math.min(255, Math.max(0, Math.round(value)))
-    .toString(16)
-    .padStart(2, "0");
-}
-
-function toHex(color: [number, number, number]) {
-  return `#${color.map(componentToHex).join("")}`;
-}
-
-function fromHex(value: string): [number, number, number] {
-  const normalized = value.replace("#", "");
-  return [
-    Number.parseInt(normalized.slice(0, 2), 16),
-    Number.parseInt(normalized.slice(2, 4), 16),
-    Number.parseInt(normalized.slice(4, 6), 16),
-  ];
-}
+import LayerStyleEditor, {
+  type LayerStyleChange,
+} from "./LayerStyleEditor";
 
 type Props = {
   layer: MaonoLayerSnapshot | null;
-  editable: boolean;
+  datasets: MaonoDatasetSnapshot[];
+  canRename: boolean;
+  canEditStyle: boolean;
   canDuplicate: boolean;
   canRemove: boolean;
-  onLabelChange: (layer: MaonoLayerSnapshot, label: string) => void;
-  onOpacityChange: (layer: MaonoLayerSnapshot, opacity: number) => void;
-  onColorChange: (
+  onLabelChange: (layer: MaonoLayerSnapshot, label: string) => boolean;
+  onStyleChange: (
     layer: MaonoLayerSnapshot,
-    color: [number, number, number],
+    change: LayerStyleChange,
   ) => void;
   onDuplicate: (layerId: string) => void;
   onRemove: (layerId: string) => void;
@@ -44,12 +26,13 @@ type Props = {
 
 export default function LayerInspector({
   layer,
-  editable,
+  datasets,
+  canRename,
+  canEditStyle,
   canDuplicate,
   canRemove,
   onLabelChange,
-  onOpacityChange,
-  onColorChange,
+  onStyleChange,
   onDuplicate,
   onRemove,
 }: Props) {
@@ -66,6 +49,9 @@ export default function LayerInspector({
       </div>
     );
   }
+
+  const dataset =
+    datasets.find((candidate) => layer.dataIds.includes(candidate.id)) ?? null;
 
   return (
     <section className="maono-layer-inspector">
@@ -93,66 +79,46 @@ export default function LayerInspector({
         </div>
       </dl>
 
-      {editable ? (
+      {canRename || canEditStyle ? (
         <div className="maono-layer-inspector__editor">
-          <label>
-            Nome
-            <input
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
-              onBlur={() => onLabelChange(layer, label)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  onLabelChange(layer, label);
-                }
-              }}
-            />
-          </label>
+          {canRename ? (
+            <label className="maono-layer-inspector__name">
+              Nome
+              <input
+                value={label}
+                maxLength={160}
+                onChange={(event) => setLabel(event.target.value)}
+                onBlur={() => {
+                  const normalized = label.trim();
+                  if (!normalized) {
+                    setLabel(layer.label);
+                  } else if (
+                    normalized !== layer.label &&
+                    !onLabelChange(layer, normalized)
+                  ) {
+                    setLabel(layer.label);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  } else if (event.key === "Escape") {
+                    setLabel(layer.label);
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+          ) : null}
 
-          <label>
-            Opacidade: {Math.round(layer.opacity * 100)}%
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={layer.opacity}
-              onChange={(event) =>
-                onOpacityChange(layer, Number(event.target.value))
-              }
+          {canEditStyle ? (
+            <LayerStyleEditor
+              layer={layer}
+              dataset={dataset}
+              onChange={(change) => onStyleChange(layer, change)}
             />
-          </label>
-
-          <label className="maono-layer-inspector__color">
-            Cor
-            <input
-              type="color"
-              value={toHex(layer.color)}
-              onChange={(event) =>
-                onColorChange(layer, fromHex(event.target.value))
-              }
-            />
-          </label>
-
-          <fieldset className="maono-layer-inspector__palettes">
-            <legend>Paletas rápidas</legend>
-            {MAONO_LAYER_PALETTES.map((palette) => (
-              <span key={palette.id}>
-                <small>{palette.label}</small>
-                {palette.colors.map((color) => (
-                  <button
-                    type="button"
-                    key={color.join("-")}
-                    style={{
-                      background: `rgb(${color.join(",")})`,
-                    }}
-                    onClick={() => onColorChange(layer, color)}
-                    aria-label={`Aplicar ${palette.label} ${color.join(", ")}`}
-                  />
-                ))}
-              </span>
-            ))}
-          </fieldset>
+          ) : null}
         </div>
       ) : (
         <p className="maono-layer-inspector__notice">
@@ -171,15 +137,7 @@ export default function LayerInspector({
             <button
               className="is-danger"
               type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Remover a camada “${layer.label}”?`,
-                  )
-                ) {
-                  onRemove(layer.id);
-                }
-              }}
+              onClick={() => onRemove(layer.id)}
             >
               Remover
             </button>

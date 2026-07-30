@@ -1,7 +1,14 @@
 import React from "react";
 import { Link } from "react-router";
+import { useOptionalMapPanel } from "../map-panel/MapPanelContext";
 
 const BackToProjectsButton: React.FC = () => {
+  const mapPanel = useOptionalMapPanel();
+
+  if (mapPanel?.customMapShellEnabled) {
+    return null;
+  }
+
   return (
     <Link
       to="/projects"
