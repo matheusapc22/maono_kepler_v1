@@ -201,7 +201,7 @@ test("salvar prévia reutiliza o fluxo oficial do projeto", () => {
 });
 
 
-test("painel do shell é estruturalmente único e não reduz o AutoSizer", () => {
+test("painel do shell é estruturalmente único e não reduz o viewport medido", () => {
   assert.match(
     source.runtime,
     /<MapPanelHost[\s\S]*<MaonoLayerPanel \/>[\s\S]*<\/MapPanelHost>/,
@@ -248,7 +248,7 @@ test("instrumentação cobre a cadeia geométrica e só ativa por opt-in", () =>
     ".maono-kepler-screenshot-root",
     ".maono-kepler-container",
     ".maono-kepler-panel-group",
-    ".maono-kepler-autosizer",
+    ".maono-kepler-viewport",
     ".kepler-gl",
     ".map-container",
     ".mapboxgl-map",

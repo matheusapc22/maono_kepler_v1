@@ -8,10 +8,10 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
-import AutoSizer from "react-virtualized/dist/commonjs/AutoSizer";
 import styled, { ThemeProvider, StyleSheetManager } from "styled-components";
 import Window from "global/window";
 import { connect, useDispatch } from "react-redux";
@@ -203,6 +203,12 @@ function normalizeScreenshotPayload(screenshot) {
 }
 
 const GlobalStyle = styled.div`
+  position: absolute;
+  inset: 0;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   font-family: ff-clan-web-pro, "Helvetica Neue", Helvetica, sans-serif;
   font-weight: 400;
   font-size: 0.875em;
@@ -231,11 +237,107 @@ const GlobalStyle = styled.div`
   }
 `;
 
+const EMPTY_MAP_SIZE = Object.freeze({ width: 0, height: 0 });
+
+function normalizeMapSize(rect) {
+  return {
+    width: Math.max(0, Math.round(Number(rect?.width) || 0)),
+    height: Math.max(0, Math.round(Number(rect?.height) || 0)),
+  };
+}
+
+function useParentElementSize() {
+  const elementRef = useRef(null);
+  const [size, setSize] = useState(EMPTY_MAP_SIZE);
+
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+    const parent = element?.parentElement;
+    if (!element || !parent) return undefined;
+
+    let frameId = 0;
+
+    const measure = () => {
+      frameId = 0;
+      const next = normalizeMapSize(parent.getBoundingClientRect());
+      setSize((current) =>
+        current.width === next.width && current.height === next.height
+          ? current
+          : next,
+      );
+    };
+
+    const scheduleMeasure = () => {
+      if (frameId) Window.cancelAnimationFrame(frameId);
+      frameId = Window.requestAnimationFrame(measure);
+    };
+
+    measure();
+
+    const observer =
+      typeof ResizeObserver === "function"
+        ? new ResizeObserver(scheduleMeasure)
+        : null;
+    observer?.observe(parent);
+    Window.addEventListener("resize", scheduleMeasure);
+
+    return () => {
+      observer?.disconnect();
+      Window.removeEventListener("resize", scheduleMeasure);
+      if (frameId) Window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  return [elementRef, size];
+}
+
+function useSynchronizedKeplerFrame(rootRef, size) {
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root || size.width <= 0 || size.height <= 0) return;
+
+    const width = `${size.width}px`;
+    const height = `${size.height}px`;
+
+    Object.assign(root.style, {
+      position: "absolute",
+      top: "0px",
+      left: "0px",
+      right: "auto",
+      bottom: "auto",
+      width,
+      height,
+      minWidth: "0px",
+      minHeight: "0px",
+      overflow: "hidden",
+    });
+
+    for (const selector of [
+      ".maono-kepler-screenshot-root",
+      ".maono-kepler-container",
+      ".maono-kepler-panel-group--horizontal",
+    ]) {
+      const node = root.querySelector(selector);
+      if (!(node instanceof HTMLElement)) continue;
+      Object.assign(node.style, {
+        position: "absolute",
+        top: "0px",
+        left: "0px",
+        right: "auto",
+        bottom: "auto",
+        width,
+        height,
+        minWidth: "0px",
+        minHeight: "0px",
+        overflow: "hidden",
+      });
+    }
+  }, [rootRef, size.height, size.width]);
+}
+
 const CONTAINER_STYLE = {
   position: "absolute",
   inset: 0,
-  width: "100%",
-  height: "100%",
   minWidth: 0,
   minHeight: 0,
   display: "flex",
@@ -243,6 +345,32 @@ const CONTAINER_STYLE = {
   overflow: "hidden",
   backgroundColor: "#333",
 };
+
+function MeasuredKeplerViewport({ fallbackSize, renderMap }) {
+  const [viewportRef, measuredSize] = useParentElementSize();
+  const width = measuredSize.width || fallbackSize.width;
+  const height = measuredSize.height || fallbackSize.height;
+
+  return (
+    <div
+      ref={viewportRef}
+      className="maono-kepler-viewport"
+      data-maono-layout-node="kepler-viewport"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: width > 0 ? `${width}px` : "100%",
+        height: height > 0 ? `${height}px` : "100%",
+        minWidth: 0,
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
+      {width > 0 && height > 0 ? renderMap({ width, height }) : null}
+    </div>
+  );
+}
 
 const StyledResizeHandle = styled(PanelResizeHandle)`
   background-color: ${panelBorderColor};
@@ -274,6 +402,8 @@ const App = (props) => {
   const dispatch = useDispatch();
   const screenshotRequestRef = useRef(null);
   const pointClustering = usePointClustering();
+  const [mapRootRef, mapRootSize] = useParentElementSize();
+  useSynchronizedKeplerFrame(mapRootRef, mapRootSize);
 
   const duckDbPluginEnabled = (getApplicationConfig().plugins || []).some(
     (p) => p.name === "duckdb"
@@ -447,7 +577,14 @@ const App = (props) => {
       <PointClusterSettingsPanel controller={pointClustering} />
       <StyleSheetManager shouldForwardProp={shouldForwardProp}>
         <ThemeProvider theme={theme}>
-          <GlobalStyle>
+          <GlobalStyle
+            ref={mapRootRef}
+            className="maono-kepler-root"
+            style={{
+              width: mapRootSize.width > 0 ? `${mapRootSize.width}px` : "100%",
+              height: mapRootSize.height > 0 ? `${mapRootSize.height}px` : "100%",
+            }}
+          >
             <ScreenshotWrapper
               startScreenCapture={
                 props.demo.aiAssistant.screenshotToAsk.startScreenCapture
@@ -485,8 +622,9 @@ const App = (props) => {
                           className="maono-kepler-map-panel"
                           defaultSize={isSqlPanelOpen ? 60 : 100}
                         >
-                          <AutoSizer className="maono-kepler-autosizer">
-                            {({ height, width }) => (
+                          <MeasuredKeplerViewport
+                            fallbackSize={mapRootSize}
+                            renderMap={({ height, width }) => (
                               <KeplerGl
                                 mapboxApiAccessToken={
                                   CLOUD_PROVIDERS_CONFIGURATION.MAPBOX_TOKEN
@@ -515,7 +653,7 @@ const App = (props) => {
                                 onViewStateChange={onViewStateChange}
                               />
                             )}
-                          </AutoSizer>
+                          />
                         </Panel>
 
                         {isSqlPanelOpen && (

@@ -137,14 +137,18 @@ test("layout usa overlay em todos os breakpoints sem flex-basis no painel", () =
   assert.doesNotMatch(layerPanelCss.slice(0, 700), /flex:\s*0\s+0\s+340px/);
 });
 
-test("cadeia ScreenshotWrapper → AutoSizer possui dimensões estáveis e debug removível", () => {
+test("cadeia ScreenshotWrapper → viewport medido possui dimensões estáveis", () => {
   assert.match(index, /className="maono-kepler-screenshot-root"/);
   assert.doesNotMatch(index, /className="h-screen"/);
   assert.match(index, /className="maono-kepler-container"/);
   assert.match(index, /className="maono-kepler-panel-group/);
   assert.match(index, /className="maono-kepler-map-panel"/);
-  assert.match(index, /<AutoSizer className="maono-kepler-autosizer">/);
+  assert.match(index, /function useParentElementSize/);
+  assert.match(index, /new ResizeObserver\(scheduleMeasure\)/);
+  assert.match(index, /<MeasuredKeplerViewport/);
+  assert.doesNotMatch(index, /<AutoSizer/);
   assert.match(shellCss, /\.maono-kepler-screenshot-root[\s\S]*height: 100%/);
+  assert.match(shellCss, /\.maono-kepler-viewport[\s\S]*position: absolute/);
   assert.match(layoutDebug, /getBoundingClientRect\(\)/);
   assert.match(layoutDebug, /window\.innerWidth/);
   assert.match(layoutDebug, /window\.innerHeight/);

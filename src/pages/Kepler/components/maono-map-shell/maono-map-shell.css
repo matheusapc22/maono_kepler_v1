@@ -198,29 +198,28 @@
   overflow: hidden;
 }
 
-.maono-map-runtime__map > * {
+.maono-map-runtime__map > .maono-kepler-root {
+  position: absolute;
+  inset: 0;
+  display: block;
   min-width: 0;
   min-height: 0;
-}
-
-.maono-kepler-screenshot-root {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 100vh;
-  min-width: 0;
-  min-height: 100vh;
   overflow: hidden;
 }
 
-.maono-map-runtime .maono-kepler-screenshot-root {
+.maono-kepler-screenshot-root {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .maono-kepler-container,
-.maono-kepler-panel-group,
-.maono-kepler-autosizer {
+.maono-kepler-panel-group {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -233,10 +232,22 @@
 .maono-kepler-map-panel,
 .maono-kepler-sql-panel,
 .maono-kepler-ai-panel,
-.maono-kepler-autosizer {
+.maono-kepler-viewport {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.maono-kepler-main-panel,
+.maono-kepler-map-panel {
+  position: relative;
+}
+
+.maono-kepler-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .maono-map-topbar {
@@ -582,6 +593,7 @@
   color: var(--maono-map-gold);
   background: var(--maono-map-panel);
   cursor: pointer;
+  pointer-events: auto;
   outline: 0;
   box-shadow:
     4px 0 12px rgba(197, 160, 89, 0.18),
