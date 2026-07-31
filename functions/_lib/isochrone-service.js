@@ -23,6 +23,7 @@ const MAX_TIME_MINUTES = 240;
 const MAX_DISTANCE_KILOMETERS = 100;
 const MAX_PROVIDER_RESPONSE_BYTES = 3 * 1024 * 1024;
 const MAX_PROVIDER_FEATURES = 12;
+const MAX_PROVIDER_COORDINATES = 50_000;
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_RATE_LIMIT = 8;
 const DEFAULT_RATE_WINDOW_SECONDS = 300;
@@ -103,12 +104,13 @@ export function normalizeIsochroneInput(value) {
     type === "time"
       ? MAX_TIME_MINUTES
       : MAX_DISTANCE_KILOMETERS;
+  const minimum = type === "time" ? 1 : 0.1;
   const ranges = [
     ...new Set(
       input.ranges.map((range, index) =>
         numberInRange(
           range,
-          0.1,
+          minimum,
           maximum,
           `ranges[${index}]`,
         ),
@@ -207,14 +209,47 @@ async function parseProviderJson(response) {
     );
   }
 
-  const text = await response.text();
+  const reader = response.body?.getReader?.();
+  const decoder = new TextDecoder();
+  let receivedBytes = 0;
+  let text = "";
 
-  if (text.length > MAX_PROVIDER_RESPONSE_BYTES) {
-    throw createIsochroneError(
-      "A resposta do provedor excedeu o limite permitido.",
-      502,
-      "ISOCHRONE_PROVIDER_RESPONSE_TOO_LARGE",
-    );
+  if (reader) {
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+
+        if (done) break;
+
+        receivedBytes += value.byteLength;
+
+        if (receivedBytes > MAX_PROVIDER_RESPONSE_BYTES) {
+          await reader.cancel();
+          throw createIsochroneError(
+            "A resposta do provedor excedeu o limite permitido.",
+            502,
+            "ISOCHRONE_PROVIDER_RESPONSE_TOO_LARGE",
+          );
+        }
+
+        text += decoder.decode(value, { stream: true });
+      }
+
+      text += decoder.decode();
+    } finally {
+      reader.releaseLock();
+    }
+  } else {
+    text = await response.text();
+    receivedBytes = new TextEncoder().encode(text).byteLength;
+
+    if (receivedBytes > MAX_PROVIDER_RESPONSE_BYTES) {
+      throw createIsochroneError(
+        "A resposta do provedor excedeu o limite permitido.",
+        502,
+        "ISOCHRONE_PROVIDER_RESPONSE_TOO_LARGE",
+      );
+    }
   }
 
   try {
@@ -260,7 +295,7 @@ async function providerRequest({
       );
     }
 
-    for (const delay of [350, 800]) {
+    for (const delay of [400, 900, 1_800, 3_200]) {
       await waitImpl(delay);
       response = await fetchImpl(
         providerUrl(apiKey, input, id),
@@ -306,14 +341,114 @@ async function providerRequest({
   return data;
 }
 
-function sanitizeFeature(feature, input) {
-  const geometry = feature?.geometry;
+function sanitizePosition(position, coordinateBudget) {
+  if (!Array.isArray(position) || position.length < 2) {
+    return null;
+  }
+
+  const longitude = Number(position[0]);
+  const latitude = Number(position[1]);
 
   if (
-    !geometry ||
-    !["Polygon", "MultiPolygon"].includes(geometry.type) ||
-    !Array.isArray(geometry.coordinates)
+    !Number.isFinite(longitude) ||
+    !Number.isFinite(latitude) ||
+    longitude < -180 ||
+    longitude > 180 ||
+    latitude < -90 ||
+    latitude > 90
   ) {
+    return null;
+  }
+
+  coordinateBudget.count += 1;
+
+  if (coordinateBudget.count > MAX_PROVIDER_COORDINATES) {
+    throw createIsochroneError(
+      "A geometria retornada pelo provedor excedeu o limite permitido.",
+      502,
+      "ISOCHRONE_PROVIDER_GEOMETRY_TOO_COMPLEX",
+    );
+  }
+
+  return [longitude, latitude];
+}
+
+function sanitizeLinearRing(ring, coordinateBudget) {
+  if (!Array.isArray(ring) || ring.length < 4) {
+    return null;
+  }
+
+  const sanitized = ring.map((position) =>
+    sanitizePosition(position, coordinateBudget),
+  );
+
+  if (sanitized.some((position) => !position)) {
+    return null;
+  }
+
+  const first = sanitized[0];
+  const last = sanitized[sanitized.length - 1];
+
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    return null;
+  }
+
+  return sanitized;
+}
+
+function sanitizePolygonCoordinates(coordinates, coordinateBudget) {
+  if (!Array.isArray(coordinates) || coordinates.length < 1) {
+    return null;
+  }
+
+  const rings = coordinates.map((ring) =>
+    sanitizeLinearRing(ring, coordinateBudget),
+  );
+
+  return rings.some((ring) => !ring) ? null : rings;
+}
+
+function sanitizeGeometry(geometry, coordinateBudget) {
+  if (!geometry || !Array.isArray(geometry.coordinates)) {
+    return null;
+  }
+
+  if (geometry.type === "Polygon") {
+    const coordinates = sanitizePolygonCoordinates(
+      geometry.coordinates,
+      coordinateBudget,
+    );
+
+    return coordinates
+      ? { type: "Polygon", coordinates }
+      : null;
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    if (geometry.coordinates.length < 1) {
+      return null;
+    }
+
+    const coordinates = geometry.coordinates.map((polygon) =>
+      sanitizePolygonCoordinates(polygon, coordinateBudget),
+    );
+
+    return coordinates.some((polygon) => !polygon)
+      ? null
+      : { type: "MultiPolygon", coordinates };
+  }
+
+  return null;
+}
+
+function sanitizeFeature(feature, input, coordinateBudget) {
+  const geometry = feature?.geometry;
+  const sanitizedGeometry = sanitizeGeometry(
+    geometry,
+    coordinateBudget,
+  );
+
+  if (!sanitizedGeometry) {
     return null;
   }
 
@@ -325,7 +460,7 @@ function sanitizeFeature(feature, input) {
 
   return {
     type: "Feature",
-    geometry,
+    geometry: sanitizedGeometry,
     properties: {
       maono_analysis: "isochrone",
       type: input.type,
@@ -349,8 +484,11 @@ export function sanitizeIsochroneGeoJson(data, input) {
     );
   }
 
+  const coordinateBudget = { count: 0 };
   const polygons = data.features
-    .map((feature) => sanitizeFeature(feature, input))
+    .map((feature) =>
+      sanitizeFeature(feature, input, coordinateBudget),
+    )
     .filter(Boolean)
     .slice(0, MAX_PROVIDER_FEATURES);
 
@@ -615,6 +753,15 @@ export async function generateIsochrone(
     resourceId: access.projectId || access.organizationId,
     request,
   };
+  const apiKey = String(env?.GEOAPIFY_API_KEY || "").trim();
+
+  if (!apiKey) {
+    throw createIsochroneError(
+      "O provedor de isócronas não está configurado.",
+      503,
+      "ISOCHRONE_PROVIDER_NOT_CONFIGURED",
+    );
+  }
 
   await consumeIsochroneRateLimit(env, {
     userId: access.user.id,
@@ -622,7 +769,6 @@ export async function generateIsochrone(
     now: options.now || new Date(),
   });
 
-  const apiKey = String(env?.GEOAPIFY_API_KEY || "").trim();
   const fetchImpl = options.fetchImpl || fetch;
   const waitImpl = options.waitImpl || wait;
   const timeoutMs = positiveInteger(

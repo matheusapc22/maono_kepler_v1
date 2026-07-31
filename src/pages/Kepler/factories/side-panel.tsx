@@ -3,24 +3,23 @@
 // @ts-nocheck
 
 import { SidePanelFactory } from "@kepler.gl/components";
-import MaonoLayerPanelErrorBoundary from "../components/maono-layer-panel/ErrorBoundary";
-import MaonoLayerPanel from "../components/maono-layer-panel/MaonoLayerPanel";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 
 export function CustomSidePanelFactory(...deps: any[]) {
   const DefaultSidePanel = SidePanelFactory(...deps);
 
   const Wrapped = (props: any) => {
-    const { customLayerPanelEnabled } = useMapPanel();
+    const {
+      context,
+      customLayerPanelEnabled,
+      customMapShellEnabled,
+    } = useMapPanel();
+    const shellHostedLayerPanelActive = Boolean(
+      context && customLayerPanelEnabled && customMapShellEnabled,
+    );
 
-    if (customLayerPanelEnabled) {
-      return (
-        <MaonoLayerPanelErrorBoundary
-          fallback={<DefaultSidePanel {...props} />}
-        >
-          <MaonoLayerPanel />
-        </MaonoLayerPanelErrorBoundary>
-      );
+    if (shellHostedLayerPanelActive) {
+      return null;
     }
 
     return <DefaultSidePanel {...props} />;

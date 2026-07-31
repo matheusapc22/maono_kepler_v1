@@ -62,6 +62,7 @@ test("política versionada resolve gerenciar, visualizar e editar", () => {
     }).resolvedMode,
     "viewer",
   );
+
   assert.equal(
     resolveMapPanelDecision({
       requestedMode: "editor",
@@ -122,6 +123,9 @@ test("capacidades do viewer não incluem mutações persistentes", () => {
     "manageFilters",
     "editFilters",
     "saveMap",
+    "openCreateWorkspace",
+    "createProject",
+    "initializeMap",
     "editProjectMetadata",
     "updateThumbnail",
   ]) {
@@ -137,7 +141,19 @@ test("editor recebe todos os comandos previstos", () => {
     updateThumbnailAllowed: true,
   });
 
-  assert.ok(Object.values(capabilities).every(Boolean));
+  const createOnlyCapabilities = new Set([
+    "openCreateWorkspace",
+    "createProject",
+    "initializeMap",
+  ]);
+
+  for (const [capability, allowed] of Object.entries(capabilities)) {
+    assert.equal(
+      allowed,
+      !createOnlyCapabilities.has(capability),
+      capability,
+    );
+  }
 });
 
 test("feature flags têm rollback seguro e opt-in", () => {
@@ -146,17 +162,20 @@ test("feature flags têm rollback seguro e opt-in", () => {
     mapPanelModes: false,
     projectMapEditPermission: false,
     projectQuotaReservation: false,
+    mapCreateRoute: false,
     maonoLayerManager: false,
     maonoMapShell: false,
     maonoMapOverlay: false,
     maonoIsochrone: false,
   });
+
   assert.deepEqual(
     getMapPanelFeatures({
       MAP_MANAGEMENT_HOME_V1: "true",
       MAP_PANEL_MODES_V1: "1",
       PROJECT_MAP_EDIT_PERMISSION_V1: "on",
       PROJECT_QUOTA_RESERVATION_V1: "yes",
+      MAP_CREATE_ROUTE_V1: "true",
       MAONO_LAYER_MANAGER_V1: "true",
       MAONO_MAP_SHELL_V1: "true",
       MAONO_MAP_OVERLAY_V1: "true",
@@ -168,6 +187,7 @@ test("feature flags têm rollback seguro e opt-in", () => {
       mapPanelModes: true,
       projectMapEditPermission: true,
       projectQuotaReservation: true,
+      mapCreateRoute: true,
       maonoLayerManager: true,
       maonoMapShell: true,
       maonoMapOverlay: true,
@@ -211,6 +231,7 @@ test("DTO usa publicProject e organização sanitizada", () => {
   const responseSection = service.slice(
     service.indexOf("return {\n    policyVersion"),
   );
+
   assert.doesNotMatch(responseSection, /dropbox_root_path/);
   assert.doesNotMatch(responseSection, /default_config_file/);
   assert.doesNotMatch(responseSection, /password_hash/);
@@ -231,7 +252,11 @@ test("abertura e negação produzem auditoria sem conteúdo do mapa", () => {
   assert.match(service, /projects\.map\.viewer\.open/);
   assert.match(service, /projects\.map\.editor\.open/);
   assert.match(service, /projects\.map\.editor\.denied/);
-  assert.match(service, /projects\.create\.preflight/);
+
+  assert.match(service, /projects\.create\.workspace\.open/);
+  assert.match(service, /projects\.create\.workspace\.denied/);
+  assert.match(service, /projects\.create\.workspace\.limit_denied/);
+
   assert.doesNotMatch(service, /datasets\s*:/);
   assert.doesNotMatch(service, /coordinates\s*:/);
 });

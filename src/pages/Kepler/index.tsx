@@ -2,6 +2,9 @@
 // Copyright contributors to the kepler.gl project
 // @ts-nocheck
 
+import "maplibre-gl/dist/maplibre-gl.css";
+import "mapbox-gl/dist/mapbox-gl.css";
+
 import React, {
   useCallback,
   useEffect,
@@ -37,6 +40,7 @@ import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
 import { replacePanelHeader } from "./factories/panel-header";
 import { replaceLayerConfigurator } from "./factories/layer-configurator";
+import { replaceSidePanel } from "./factories/side-panel";
 import {
   CLOUD_PROVIDERS_CONFIGURATION,
   DEFAULT_FEATURE_FLAGS,
@@ -94,6 +98,8 @@ import {
   MapPanelAccessGate,
   MapPanelProvider,
 } from "./map-panel/MapPanelProvider";
+import { KeplerEngineAdapterProvider } from "./engine-adapter/index.ts";
+import MaonoMapRuntime from "./components/maono-map-shell/MaonoMapRuntime";
 import "./map-panel/map-panel.css";
 
 const KeplerGl = injectComponents([
@@ -102,6 +108,7 @@ const KeplerGl = injectComponents([
   replacePanelHeader(),
   replaceDatasetSection(),
   replaceLayerConfigurator(),
+  replaceSidePanel(),
 ]);
 
 function shouldForwardProp(propName, target) {
@@ -115,6 +122,69 @@ const BannerHeight = 48;
 const BannerKey = `banner-${FormLink}`;
 const keplerGlGetState = (state) => state.demo.keplerGl;
 const MAONO_SCREENSHOT_TIMEOUT_MS = 6000;
+
+const observedMapInstances = new WeakSet<object>();
+
+function emitMaonoMapRuntimeEvent(
+  phase:
+    | "kepler-initialized"
+    | "deck-initialized"
+    | "map-ref"
+    | "style-loaded"
+    | "map-render"
+    | "map-error",
+  detail: Record<string, unknown> = {},
+) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("maono:map-runtime", {
+      detail: { phase, ...detail },
+    }),
+  );
+}
+
+function safeMapErrorMessage(value: unknown) {
+  return String(value ?? "Falha de carregamento do mapa")
+    .replace(/https?:\/\/\S+/gi, "[url omitida]")
+    .replace(/(access[_-]?token|token|api[_-]?key)=([^&\s]+)/gi, "$1=[redigido]")
+    .slice(0, 320);
+}
+
+function observeMaonoMapRef(mapRef: unknown) {
+  const ref = mapRef as {getMap?: () => unknown} | null;
+  const map = ref?.getMap?.() as {
+    isStyleLoaded?: () => boolean;
+    getStyle?: () => {layers?: unknown[]};
+    on?: (event: string, handler: (event?: unknown) => void) => void;
+  } | null;
+
+  emitMaonoMapRuntimeEvent("map-ref", {
+    attached: Boolean(map),
+    styleLoaded: Boolean(map?.isStyleLoaded?.()),
+  });
+
+  if (!map || observedMapInstances.has(map)) return;
+  observedMapInstances.add(map);
+
+  let firstRenderObserved = false;
+  map.on?.("style.load", () => {
+    const layerCount = map.getStyle?.()?.layers?.length ?? 0;
+    emitMaonoMapRuntimeEvent("style-loaded", {layerCount});
+  });
+  map.on?.("render", () => {
+    if (firstRenderObserved) return;
+    firstRenderObserved = true;
+    emitMaonoMapRuntimeEvent("map-render", {
+      styleLoaded: Boolean(map.isStyleLoaded?.()),
+    });
+  });
+  map.on?.("error", (event) => {
+    const error = (event as {error?: {message?: unknown}} | null)?.error;
+    emitMaonoMapRuntimeEvent("map-error", {
+      message: safeMapErrorMessage(error?.message),
+    });
+  });
+}
 
 function normalizeScreenshotPayload(screenshot) {
   if (!screenshot) return null;
@@ -162,14 +232,15 @@ const GlobalStyle = styled.div`
 `;
 
 const CONTAINER_STYLE = {
-  transition: "margin 1s, height 1s",
   position: "absolute",
+  inset: 0,
   width: "100%",
   height: "100%",
-  left: 0,
-  top: 0,
+  minWidth: 0,
+  minHeight: 0,
   display: "flex",
   flexDirection: "column",
+  overflow: "hidden",
   backgroundColor: "#333",
 };
 
@@ -383,7 +454,7 @@ const App = (props) => {
               }
               setScreenCaptured={_setScreenCaptured}
               setStartScreenCapture={_setStartScreenCapture}
-              className="h-screen"
+              className="maono-kepler-screenshot-root"
             >
                 <Banner
                   show={showBanner}
@@ -394,13 +465,27 @@ const App = (props) => {
                   <Announcement onDisable={_disableBanner} />
                 </Banner>
                 <div
+                  className="maono-kepler-container"
+                  data-maono-layout-node="kepler-container"
                   style={CONTAINER_STYLE}
                 >
-                  <PanelGroup direction="horizontal">
-                    <Panel defaultSize={isAiAssistantPanelOpen ? 70 : 100}>
-                      <PanelGroup direction="vertical">
-                        <Panel defaultSize={isSqlPanelOpen ? 60 : 100}>
-                          <AutoSizer>
+                  <PanelGroup
+                    className="maono-kepler-panel-group maono-kepler-panel-group--horizontal"
+                    direction="horizontal"
+                  >
+                    <Panel
+                      className="maono-kepler-main-panel"
+                      defaultSize={isAiAssistantPanelOpen ? 70 : 100}
+                    >
+                      <PanelGroup
+                        className="maono-kepler-panel-group maono-kepler-panel-group--vertical"
+                        direction="vertical"
+                      >
+                        <Panel
+                          className="maono-kepler-map-panel"
+                          defaultSize={isSqlPanelOpen ? 60 : 100}
+                        >
+                          <AutoSizer className="maono-kepler-autosizer">
                             {({ height, width }) => (
                               <KeplerGl
                                 mapboxApiAccessToken={
@@ -415,6 +500,18 @@ const App = (props) => {
                                 onExportToCloudSuccess={onExportFileSuccess}
                                 onLoadCloudMapSuccess={onLoadCloudMapSuccess}
                                 featureFlags={DEFAULT_FEATURE_FLAGS}
+                                onKeplerGlInitialized={() =>
+                                  emitMaonoMapRuntimeEvent("kepler-initialized", {
+                                    width,
+                                    height,
+                                  })
+                                }
+                                onDeckInitialized={() =>
+                                  emitMaonoMapRuntimeEvent("deck-initialized")
+                                }
+                                getMapboxRef={(mapRef) =>
+                                  observeMaonoMapRef(mapRef)
+                                }
                                 onViewStateChange={onViewStateChange}
                               />
                             )}
@@ -424,7 +521,11 @@ const App = (props) => {
                         {isSqlPanelOpen && (
                           <>
                             <StyledResizeHandle />
-                            <Panel defaultSize={40} minSize={20}>
+                            <Panel
+                              className="maono-kepler-sql-panel"
+                              defaultSize={40}
+                              minSize={20}
+                            >
                               <SqlPanel initialSql={query.sql || ""} />
                             </Panel>
                           </>
@@ -434,7 +535,11 @@ const App = (props) => {
                     {isAiAssistantPanelOpen && (
                       <>
                         <StyledVerticalResizeHandle />
-                        <Panel defaultSize={30} minSize={20}>
+                        <Panel
+                          className="maono-kepler-ai-panel"
+                          defaultSize={30}
+                          minSize={20}
+                        >
                           <AiAssistantPanel />
                         </Panel>
                       </>
@@ -457,7 +562,11 @@ const ConnectedApp = connect(mapStateToProps, dispatchToProps)(App);
 const KeplerMapPanelRoot = () => (
   <MapPanelProvider>
     <MapPanelAccessGate>
-      <ConnectedApp />
+      <KeplerEngineAdapterProvider>
+        <MaonoMapRuntime>
+          <ConnectedApp />
+        </MaonoMapRuntime>
+      </KeplerEngineAdapterProvider>
     </MapPanelAccessGate>
   </MapPanelProvider>
 );

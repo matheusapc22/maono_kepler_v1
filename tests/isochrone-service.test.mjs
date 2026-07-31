@@ -8,6 +8,7 @@ import {
   normalizeIsochroneInput,
   sanitizeIsochroneGeoJson,
 } from "../functions/_lib/isochrone-service.js";
+import { onRequest as handleIsochroneRequest } from "../functions/api/maps/isochrones.js";
 
 const migration = await readFile(
   new URL(
@@ -93,6 +94,19 @@ test("normalização recusa coordenadas, modalidade e faixa inválidas", () => {
       }),
     (error) => error?.code === "ISOCHRONE_RANGES_INVALID",
   );
+
+  assert.throws(
+    () =>
+      normalizeIsochroneInput({
+        origin: { latitude: 0, longitude: 0 },
+        type: "time",
+        mode: "walk",
+        ranges: [0.5],
+      }),
+    (error) =>
+      error?.code === "ISOCHRONE_PARAMETER_INVALID" &&
+      error?.details?.minimum === 1,
+  );
 });
 
 test("sanitização mantém só polígonos e remove metadados do provedor", () => {
@@ -148,6 +162,89 @@ test("sanitização mantém só polígonos e remove metadados do provedor", () =
   );
 });
 
+test("sanitização recusa anéis abertos e coordenadas fora do globo", () => {
+  const input = normalizeIsochroneInput({
+    origin: { latitude: -23.55, longitude: -46.63 },
+    type: "distance",
+    mode: "walk",
+    ranges: [2],
+  });
+
+  for (const coordinates of [
+    [
+      [
+        [-46.64, -23.56],
+        [-46.62, -23.56],
+        [-46.62, -23.54],
+        [-46.61, -23.53],
+      ],
+    ],
+    [
+      [
+        [-46.64, -23.56],
+        [181, -23.56],
+        [-46.62, -23.54],
+        [-46.64, -23.56],
+      ],
+    ],
+  ]) {
+    assert.throws(
+      () =>
+        sanitizeIsochroneGeoJson(
+          {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Polygon", coordinates },
+                properties: { range: 2_000 },
+              },
+            ],
+          },
+          input,
+        ),
+      (error) => error?.code === "ISOCHRONE_EMPTY_RESULT",
+    );
+  }
+});
+
+test("sanitização limita a complexidade total da geometria", () => {
+  const input = normalizeIsochroneInput({
+    origin: { latitude: 0, longitude: 0 },
+    type: "time",
+    mode: "bicycle",
+    ranges: [10],
+  });
+  const ring = Array.from(
+    { length: 50_000 },
+    (_, index) => [((index % 360) - 180) / 2, 0],
+  );
+  ring.push(ring[0]);
+
+  assert.throws(
+    () =>
+      sanitizeIsochroneGeoJson(
+        {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: {
+                type: "Polygon",
+                coordinates: [ring],
+              },
+              properties: { range: 600 },
+            },
+          ],
+        },
+        input,
+      ),
+    (error) =>
+      error?.status === 502 &&
+      error?.code === "ISOCHRONE_PROVIDER_GEOMETRY_TOO_COMPLEX",
+  );
+});
+
 test("rate limit é atômico por usuário, organização e janela", async () => {
   const { binding } = d1Database();
   const env = {
@@ -187,5 +284,69 @@ test("rate limit é atômico por usuário, organização e janela", async () => 
       error?.status === 429 &&
       error?.code === "ISOCHRONE_RATE_LIMITED" &&
       error?.details?.retryAfterSeconds === 300,
+  );
+});
+
+test("endpoint recusa origem, mídia, JSON e corpo acima do limite", async () => {
+  async function call(body, headers = {}) {
+    const request = new Request(
+      "https://maps.maono.test/api/maps/isochrones",
+      {
+        method: "POST",
+        headers,
+        body,
+      },
+    );
+    const response = await handleIsochroneRequest({
+      request,
+      env: {},
+    });
+
+    return {
+      response,
+      data: await response.json(),
+    };
+  }
+
+  const unsupported = await call("{}", {
+    "Content-Type": "text/plain",
+  });
+  assert.equal(unsupported.response.status, 415);
+  assert.equal(
+    unsupported.data.error.code,
+    "ISOCHRONE_CONTENT_TYPE_INVALID",
+  );
+
+  const crossOrigin = await call(
+    "{}",
+    {
+      "Content-Type": "application/json",
+      Origin: "https://example.test",
+    },
+  );
+  assert.equal(crossOrigin.response.status, 403);
+  assert.equal(
+    crossOrigin.data.error.code,
+    "ISOCHRONE_CROSS_ORIGIN_FORBIDDEN",
+  );
+
+  const invalid = await call("{", {
+    "Content-Type": "application/json",
+  });
+  assert.equal(invalid.response.status, 400);
+  assert.equal(invalid.data.error.code, "INVALID_JSON_BODY");
+
+  const oversized = await call(
+    JSON.stringify({ value: "x".repeat(17_000) }),
+    { "Content-Type": "application/json" },
+  );
+  assert.equal(oversized.response.status, 413);
+  assert.equal(
+    oversized.data.error.code,
+    "ISOCHRONE_REQUEST_TOO_LARGE",
+  );
+  assert.equal(
+    oversized.response.headers.get("cache-control"),
+    "no-store",
   );
 });

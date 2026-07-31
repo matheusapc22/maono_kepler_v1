@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -36,28 +37,84 @@ export default function IsochroneDialog({
   const [type, setType] = useState<IsochroneType>("time");
   const [mode, setMode] =
     useState<IsochroneMode>("drive_traffic");
-  const [ranges, setRanges] = useState<string[]>(
-    DEFAULT_RANGES.time,
-  );
+  const [ranges, setRanges] = useState<string[]>([
+    ...DEFAULT_RANGES.time,
+  ]);
   const [validationError, setValidationError] =
     useState<string | null>(null);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const busyRef = useRef(busy);
+  const closeRef = useRef(onClose);
+
+  busyRef.current = busy;
+  closeRef.current = onClose;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
 
-    setType("time");
-    setMode("drive_traffic");
-    setRanges(DEFAULT_RANGES.time);
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     setValidationError(null);
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      dialogRef.current
+        ?.querySelector<HTMLElement>(
+          "button:not(:disabled), select:not(:disabled), input:not(:disabled)",
+        )
+        ?.focus();
+    });
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busyRef.current) {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), select:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex='-1'])",
+        ) || [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+
+      if (!first || !last) {
+        event.preventDefault();
+      } else if (
+        event.shiftKey &&
+        document.activeElement === first
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey &&
+        document.activeElement === last
+      ) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [open]);
 
   const unit = type === "time" ? "minutos" : "quilômetros";
   const maximum = type === "time" ? 240 : 100;
-  const normalizedRanges = useMemo(
-    () =>
-      ranges
-        .map((value) => Number(value))
-        .filter((value) => Number.isFinite(value) && value > 0),
+  const minimum = type === "time" ? 1 : 0.1;
+  const parsedRanges = useMemo(
+    () => ranges.map((value) => Number(value)),
     [ranges],
   );
 
@@ -65,12 +122,23 @@ export default function IsochroneDialog({
 
   function changeType(nextType: IsochroneType) {
     setType(nextType);
-    setRanges(DEFAULT_RANGES[nextType]);
+    setRanges([...DEFAULT_RANGES[nextType]]);
     setValidationError(null);
   }
 
   function submit() {
-    const unique = [...new Set(normalizedRanges)].sort(
+    if (
+      parsedRanges.some(
+        (value) => !Number.isFinite(value) || value < minimum,
+      )
+    ) {
+      setValidationError(
+        `Todos os intervalos devem ser números maiores ou iguais a ${minimum}.`,
+      );
+      return;
+    }
+
+    const unique = [...new Set(parsedRanges)].sort(
       (left, right) => left - right,
     );
 
@@ -92,6 +160,8 @@ export default function IsochroneDialog({
     onSubmit({ type, mode, ranges: unique });
   }
 
+  const errorMessage = validationError || error;
+
   return (
     <div
       className="maono-isochrone-dialog__backdrop"
@@ -103,10 +173,15 @@ export default function IsochroneDialog({
       }}
     >
       <section
+        ref={dialogRef}
         className="maono-isochrone-dialog"
         role="dialog"
         aria-modal="true"
+        aria-busy={busy}
         aria-labelledby="maono-isochrone-title"
+        aria-describedby={
+          errorMessage ? "maono-isochrone-error" : undefined
+        }
       >
         <header>
           <div>
@@ -124,12 +199,17 @@ export default function IsochroneDialog({
         </header>
 
         <div className="maono-isochrone-dialog__body">
-          <fieldset>
+          <p className="maono-isochrone-dialog__hint">
+            A prévia só será persistida depois da sua confirmação.
+          </p>
+
+          <fieldset disabled={busy}>
             <legend>Método de geração</legend>
             <div className="maono-isochrone-dialog__segmented">
               <button
                 type="button"
                 className={type === "time" ? "is-active" : ""}
+                aria-pressed={type === "time"}
                 onClick={() => changeType("time")}
               >
                 Tempo
@@ -139,6 +219,7 @@ export default function IsochroneDialog({
                 className={
                   type === "distance" ? "is-active" : ""
                 }
+                aria-pressed={type === "distance"}
                 onClick={() => changeType("distance")}
               >
                 Distância
@@ -150,6 +231,7 @@ export default function IsochroneDialog({
             <span>Modalidade</span>
             <select
               value={mode}
+              disabled={busy}
               onChange={(event) =>
                 setMode(event.target.value as IsochroneMode)
               }
@@ -163,14 +245,14 @@ export default function IsochroneDialog({
             </select>
           </label>
 
-          <fieldset>
+          <fieldset disabled={busy}>
             <legend>Intervalos em {unit}</legend>
             <div className="maono-isochrone-dialog__ranges">
               {ranges.map((value, index) => (
                 <div key={`${index}-${ranges.length}`}>
                   <input
                     type="number"
-                    min="1"
+                    min={minimum}
                     max={maximum}
                     step={type === "time" ? "1" : "0.1"}
                     value={value}
@@ -178,6 +260,7 @@ export default function IsochroneDialog({
                       const next = [...ranges];
                       next[index] = event.target.value;
                       setRanges(next);
+                      setValidationError(null);
                     }}
                     aria-label={`Intervalo ${index + 1} em ${unit}`}
                   />
@@ -212,9 +295,13 @@ export default function IsochroneDialog({
             ) : null}
           </fieldset>
 
-          {validationError || error ? (
-            <p className="maono-isochrone-dialog__error" role="alert">
-              {validationError || error}
+          {errorMessage ? (
+            <p
+              id="maono-isochrone-error"
+              className="maono-isochrone-dialog__error"
+              role="alert"
+            >
+              {errorMessage}
             </p>
           ) : null}
         </div>

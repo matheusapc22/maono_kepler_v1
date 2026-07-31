@@ -11,7 +11,8 @@
     "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs",
     "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs",
     "test:project-metadata": "node --test tests/project-metadata-migration.test.mjs tests/project-metadata-api.test.mjs tests/project-card-actions.test.mjs tests/project-creation-metadata.test.mjs",
-    "test:map-panels": "node --test tests/map-panel-navigation-api.test.mjs tests/project-creation-limits.test.mjs tests/maono-layer-panel-integration.test.mjs tests/map-shell-overlay-integration.test.mjs tests/isochrone-service.test.mjs",
+    "test:engine-adapter": "node --test tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
+    "test:map-panels": "node --test tests/map-panel-navigation-api.test.mjs tests/project-creation-limits.test.mjs tests/maono-layer-panel-integration.test.mjs tests/map-shell-overlay-integration.test.mjs tests/maono-map-shell-runtime.test.mjs tests/isochrone-service.test.mjs tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
     "test:projects": "npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview && npm run test:map-panels"
   },
   "dependencies": {

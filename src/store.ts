@@ -22,7 +22,7 @@ export const middlewares = enhanceReduxMiddleware([
   // routerMiddleware(browserHistory),
 ]);
 
-if (process.env.NODE_ENV === "local") {
+if (import.meta.env.DEV) {
   // Redux logger
   const logger = createLogger({
     collapsed: () => true, // Collapse all actions for more compact log
@@ -41,7 +41,7 @@ let composeEnhancers = compose;
  * comment out code below to enable Redux Devtools
  */
 
-if (Window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__) {
+if (import.meta.env.DEV && Window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__) {
   composeEnhancers = Window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__({
     actionsBlacklist: [
       "@@kepler.gl/MOUSE_MOVE",
@@ -53,8 +53,13 @@ if (Window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__) {
 
 export type RootState = ReturnType<typeof reducers>;
 
-export default createStore(
+const store = createStore(
   reducers,
   initialState,
   composeEnhancers(...enhancers)
 );
+
+export type AppStore = typeof store;
+export type AppDispatch = AppStore["dispatch"];
+
+export default store;

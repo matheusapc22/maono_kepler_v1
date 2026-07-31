@@ -1,4 +1,6 @@
-export type MapPanelMode = "manage" | "viewer" | "editor";
+export type MapRuntimeMode = "viewer" | "editor" | "create";
+export type MapNavigationMode = "manage" | MapRuntimeMode;
+export type MapPanelMode = MapNavigationMode;
 
 export type MapCapabilities = {
   viewMap: boolean;
@@ -23,6 +25,9 @@ export type MapCapabilities = {
   manageFilters: boolean;
   editFilters: boolean;
   saveMap: boolean;
+  openCreateWorkspace: boolean;
+  createProject: boolean;
+  initializeMap: boolean;
   editMetadata: boolean;
   editProjectMetadata: boolean;
   updateThumbnail: boolean;
@@ -33,6 +38,7 @@ export type MapPanelFeatures = {
   mapPanelModes: boolean;
   projectMapEditPermission: boolean;
   projectQuotaReservation: boolean;
+  mapCreateRoute: boolean;
   maonoLayerManager: boolean;
   maonoMapShell: boolean;
   maonoMapOverlay: boolean;
@@ -71,12 +77,13 @@ export type MapPanelAvailability = {
 
 export type MapPanelContextValue = {
   policyVersion: number;
-  mode: MapPanelMode;
-  requestedMode: MapPanelMode;
-  defaultPanel: MapPanelMode | null;
+  mode: MapRuntimeMode;
+  requestedMode: MapNavigationMode;
+  defaultPanel: MapRuntimeMode | null;
   availablePanels: {
     viewer: MapPanelAvailability;
     editor: MapPanelAvailability;
+    create: MapPanelAvailability;
   };
   allowed: boolean;
   reason: string | null;
@@ -110,11 +117,12 @@ export type MapPanelApiError = Error & {
   status?: number;
   code?: string;
   details?: {
-    requestedMode?: MapPanelMode;
-    fallbackPanel?: MapPanelMode | null;
+    requestedMode?: MapNavigationMode;
+    fallbackPanel?: MapRuntimeMode | null;
     availablePanels?: {
       viewer: boolean | MapPanelAvailability;
       editor: boolean | MapPanelAvailability;
+      create?: boolean | MapPanelAvailability;
     };
   } | null;
 };
@@ -142,6 +150,9 @@ export const EMPTY_MAP_CAPABILITIES: MapCapabilities = Object.freeze({
   manageFilters: false,
   editFilters: false,
   saveMap: false,
+  openCreateWorkspace: false,
+  createProject: false,
+  initializeMap: false,
   editMetadata: false,
   editProjectMetadata: false,
   updateThumbnail: false,
@@ -152,6 +163,7 @@ export const EMPTY_MAP_PANEL_FEATURES: MapPanelFeatures = Object.freeze({
   mapPanelModes: false,
   projectMapEditPermission: false,
   projectQuotaReservation: false,
+  mapCreateRoute: false,
   maonoLayerManager: false,
   maonoMapShell: false,
   maonoMapOverlay: false,

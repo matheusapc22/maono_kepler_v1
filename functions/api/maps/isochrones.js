@@ -1,14 +1,174 @@
-import {
-  errorResponse,
-  jsonResponse,
-  methodNotAllowed,
-  readJsonBody,
-} from "../../_lib/http.js";
-import {
-  generateIsochrone,
-} from "../../_lib/isochrone-service.js";
+import { methodNotAllowed } from "../../_lib/http.js";
+import { generateIsochrone } from "../../_lib/isochrone-service.js";
 
 const MAX_REQUEST_BYTES = 16 * 1024;
+
+function endpointError(message, status, code, details = null) {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  error.details = details;
+  return error;
+}
+
+function jsonResponse(payload, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      ...extraHeaders,
+    },
+  });
+}
+
+function apiErrorResponse(error) {
+  const status = Number(error?.status || 500);
+  const details = error?.details || null;
+  const retryAfterSeconds = Number(details?.retryAfterSeconds);
+  const headers =
+    status === 429 &&
+    Number.isFinite(retryAfterSeconds) &&
+    retryAfterSeconds > 0
+      ? { "Retry-After": String(Math.ceil(retryAfterSeconds)) }
+      : {};
+
+  return jsonResponse(
+    {
+      ok: false,
+      error: {
+        message:
+          error?.message || "Não foi possível gerar a isócrona.",
+        code:
+          error?.code || "ISOCHRONE_GENERATION_ERROR",
+        details,
+      },
+    },
+    status,
+    headers,
+  );
+}
+
+function validateRequestOrigin(request) {
+  const origin = request.headers.get("origin");
+
+  if (!origin) return;
+
+  let requestOrigin;
+
+  try {
+    requestOrigin = new URL(request.url).origin;
+  } catch {
+    throw endpointError(
+      "A origem da solicitação é inválida.",
+      400,
+      "ISOCHRONE_REQUEST_ORIGIN_INVALID",
+    );
+  }
+
+  if (origin !== requestOrigin) {
+    throw endpointError(
+      "A origem da solicitação não é permitida.",
+      403,
+      "ISOCHRONE_CROSS_ORIGIN_FORBIDDEN",
+    );
+  }
+}
+
+async function readBoundedJsonBody(request) {
+  const declaredLength = Number(
+    request.headers.get("content-length") || 0,
+  );
+
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > MAX_REQUEST_BYTES
+  ) {
+    throw endpointError(
+      "A solicitação excede o limite permitido.",
+      413,
+      "ISOCHRONE_REQUEST_TOO_LARGE",
+    );
+  }
+
+  const contentType = String(
+    request.headers.get("content-type") || "",
+  )
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+
+  if (contentType !== "application/json") {
+    throw endpointError(
+      "Envie a solicitação como application/json.",
+      415,
+      "ISOCHRONE_CONTENT_TYPE_INVALID",
+    );
+  }
+
+  const reader = request.body?.getReader();
+  const decoder = new TextDecoder();
+  let byteCount = 0;
+  let text = "";
+
+  if (!reader) {
+    throw endpointError(
+      "Envie uma solicitação JSON válida.",
+      400,
+      "INVALID_JSON_BODY",
+    );
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+
+      if (done) break;
+
+      byteCount += value.byteLength;
+
+      if (byteCount > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        throw endpointError(
+          "A solicitação excede o limite permitido.",
+          413,
+          "ISOCHRONE_REQUEST_TOO_LARGE",
+        );
+      }
+
+      text += decoder.decode(value, { stream: true });
+    }
+
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!text.trim()) {
+    throw endpointError(
+      "Envie uma solicitação JSON válida.",
+      400,
+      "INVALID_JSON_BODY",
+    );
+  }
+
+  try {
+    const body = JSON.parse(text);
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new TypeError("JSON body must be an object");
+    }
+
+    return body;
+  } catch {
+    throw endpointError(
+      "Envie uma solicitação JSON válida.",
+      400,
+      "INVALID_JSON_BODY",
+    );
+  }
+}
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -17,29 +177,9 @@ export async function onRequest(context) {
     return methodNotAllowed(["POST"]);
   }
 
-  const contentLength = Number(
-    request.headers.get("content-length") || 0,
-  );
-
-  if (contentLength > MAX_REQUEST_BYTES) {
-    return errorResponse(
-      "A solicitação excede o limite permitido.",
-      413,
-      "ISOCHRONE_REQUEST_TOO_LARGE",
-    );
-  }
-
   try {
-    const body = await readJsonBody(request);
-
-    if (!body) {
-      return errorResponse(
-        "Envie uma solicitação JSON válida.",
-        400,
-        "INVALID_JSON_BODY",
-      );
-    }
-
+    validateRequestOrigin(request);
+    const body = await readBoundedJsonBody(request);
     const result = await generateIsochrone(
       env,
       request,
@@ -51,11 +191,6 @@ export async function onRequest(context) {
       ...result,
     });
   } catch (error) {
-    return errorResponse(
-      error?.message || "Não foi possível gerar a isócrona.",
-      Number(error?.status || 500),
-      error?.code || "ISOCHRONE_GENERATION_ERROR",
-      error?.details || null,
-    );
+    return apiErrorResponse(error);
   }
 }
