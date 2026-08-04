@@ -103,12 +103,14 @@ ${sidebar}`,
   assert.doesNotMatch(sidebar, /localStorage/);
 });
 
-test("topbar substitui placeholders por dados reais", () => {
-  assert.match(topbar, /activeOrganization\?\.name/);
-  assert.match(topbar, /context\.project\?\.name/);
+test("topbar mantém status e conta sem seletor de projeto", () => {
   assert.match(topbar, /context\.mode/);
   assert.match(topbar, /user\?\.name/);
   assert.match(topbar, /hasUnsavedChanges/);
+  assert.match(topbar, /maono-map-topbar__account/);
+  assert.doesNotMatch(topbar, /maono-map-topbar__project/);
+  assert.doesNotMatch(topbar, /maono-map-topbar__back/);
+  assert.doesNotMatch(topbar, /activeOrganization\?\.name/);
   assert.doesNotMatch(topbar, />EN</);
   assert.doesNotMatch(topbar, />JD</);
   assert.doesNotMatch(topbar, /Bell/);
