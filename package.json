@@ -12,7 +12,7 @@
     "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs",
     "test:project-metadata": "node --test tests/project-metadata-migration.test.mjs tests/project-metadata-api.test.mjs tests/project-card-actions.test.mjs tests/project-creation-metadata.test.mjs",
     "test:engine-adapter": "node --test tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
-    "test:map-panels": "node --test tests/map-panel-navigation-api.test.mjs tests/project-creation-limits.test.mjs tests/maono-layer-panel-integration.test.mjs tests/map-shell-overlay-integration.test.mjs tests/maono-map-layout-hotfix.test.mjs tests/maono-map-shell-runtime.test.mjs tests/isochrone-service.test.mjs tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
+    "test:map-panels": "node --test tests/map-panel-navigation-api.test.mjs tests/project-creation-limits.test.mjs tests/maono-layer-panel-integration.test.mjs tests/maono-layer-accordion.test.mjs tests/map-shell-overlay-integration.test.mjs tests/maono-map-layout-hotfix.test.mjs tests/maono-map-shell-runtime.test.mjs tests/isochrone-service.test.mjs tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
     "test:projects": "npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview && npm run test:map-panels"
   },
   "dependencies": {
@@ -74,8 +74,6 @@
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@types/react-router": "^5.1.20",
-    "@vitejs/plugin-react": "^5.0.0",
-    "autoprefixer": "^10.4.21",
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
