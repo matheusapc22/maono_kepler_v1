@@ -155,6 +155,7 @@ function normalizeResourceLimit(value: unknown): ResourceLimit | null {
 function assertCapabilityContract(
   mode: MapRuntimeMode,
   capabilities: MapCapabilities,
+  project: SafeMapProject | null,
 ) {
   const valid =
     mode === "viewer"
@@ -163,10 +164,15 @@ function assertCapabilityContract(
         ? capabilities.viewMap &&
           capabilities.editLayers &&
           capabilities.saveMap
-        : capabilities.openCreateWorkspace &&
-          capabilities.createProject &&
-          capabilities.initializeMap &&
-          capabilities.saveMap;
+        : project
+          ? capabilities.viewMap &&
+            capabilities.editLayers &&
+            capabilities.openCreateWorkspace &&
+            capabilities.saveMap
+          : capabilities.openCreateWorkspace &&
+            capabilities.createProject &&
+            capabilities.initializeMap &&
+            capabilities.saveMap;
 
   if (!valid) {
     throw invalidContext(
@@ -257,7 +263,9 @@ async function requestMapContext(
     ),
     create: normalizeAvailability(
       context.availablePanels?.create,
-      "/maps/new/create",
+      projectSlug
+        ? `/projects/${encodeURIComponent(projectSlug)}/create`
+        : "/maps/new/create",
     ),
   };
   const selectedAvailability = availablePanels[context.mode];
@@ -279,7 +287,7 @@ async function requestMapContext(
   }
 
   if (allowed) {
-    assertCapabilityContract(context.mode, capabilities);
+    assertCapabilityContract(context.mode, capabilities, project);
 
     if (context.mode === "create" && !features.mapCreateRoute) {
       throw invalidContext(
