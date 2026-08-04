@@ -90,6 +90,9 @@ export default function LayerInspector({
   }
 
   const activeLayer = layer;
+  const nameErrorId = `maono-layer-name-error-${encodeURIComponent(
+    activeLayer.id,
+  )}`;
   const datasetId = activeLayer.dataIds[0] ?? null;
   const dataset =
     datasets.find((candidate) => candidate.id === datasetId) ?? null;
@@ -158,7 +161,7 @@ export default function LayerInspector({
   return (
     <section className="maono-layer-inspector">
       <div className="maono-layer-inspector__heading">
-        <span>Camada selecionada</span>
+        <span>Configurações da camada</span>
         <strong>{activeLayer.label}</strong>
       </div>
 
@@ -210,10 +213,10 @@ export default function LayerInspector({
                   }
                 }}
                 aria-invalid={nameError ? "true" : undefined}
-                aria-describedby={nameError ? "maono-layer-name-error" : undefined}
+                aria-describedby={nameError ? nameErrorId : undefined}
               />
               {nameError ? (
-                <small id="maono-layer-name-error" role="alert">
+                <small id={nameErrorId} role="alert">
                   {nameError}
                 </small>
               ) : null}
