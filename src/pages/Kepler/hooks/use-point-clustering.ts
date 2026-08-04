@@ -33,6 +33,12 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
+const POINT_SOURCE_LAYER_TYPES = new Set([
+  "point",
+  "cluster",
+  "heatmap",
+  "geojson",
+]);
 
 function datasetForLayer(datasets, layer) {
   const dataId = layer?.config?.dataId;
@@ -40,6 +46,12 @@ function datasetForLayer(datasets, layer) {
     return datasets?.[dataId[0]];
   }
   return datasets?.[dataId];
+}
+
+function pointEligibilityLayer(layer) {
+  return ["cluster", "heatmap"].includes(layer?.type)
+    ? { ...layer, type: "point" }
+    : layer;
 }
 
 export function usePointClustering() {
@@ -61,34 +73,48 @@ export function usePointClustering() {
   const previousModesRef = useRef(new Map());
   const handledClickRef = useRef(null);
 
-  const catalog = useMemo(
-    () =>
-      layers
-        .filter((layer) =>
-          ["point", "geojson"].includes(layer?.type),
-        )
-        .map((layer) => {
-          const dataset = datasetForLayer(datasets, layer);
-          const eligibility = getPointClusterEligibility(
-            layer,
-            dataset,
-          );
-          const policy =
-            storeSnapshot.extension.layers[layer.id] ?? null;
-          const defaults = getAdaptivePointClusterDefaults(
-            eligibility.pointCount,
-          );
+  const catalog = useMemo(() => {
+    const pairedClusterLayerIds = new Set(
+      storeSnapshot.pairs.map(({ clusterLayerId }) => clusterLayerId),
+    );
 
-          return {
-            pointLayerId: layer.id,
-            label: layer?.config?.label ?? "Camada de pontos",
-            policy,
-            defaults,
-            eligibility,
-          };
-        }),
-    [datasets, layers, storeSnapshot.extension],
-  );
+    return layers
+      .filter(
+        (layer) =>
+          POINT_SOURCE_LAYER_TYPES.has(layer?.type) &&
+          !String(layer?.id ?? "").startsWith("maono-cluster-") &&
+          !pairedClusterLayerIds.has(layer?.id),
+      )
+      .map((layer) => {
+        const dataset = datasetForLayer(datasets, layer);
+        const eligibility = getPointClusterEligibility(
+          pointEligibilityLayer(layer),
+          dataset,
+          { minimumPointCount: 1 },
+        );
+        const policy =
+          storeSnapshot.extension.layers[layer.id] ?? null;
+        const defaults = getAdaptivePointClusterDefaults(
+          eligibility.pointCount,
+        );
+
+        return {
+          pointLayerId: layer.id,
+          label: layer?.config?.label ?? "Camada de pontos",
+          policy,
+          defaults,
+          eligibility,
+        };
+      })
+      .filter(
+        ({ eligibility }) => eligibility.sourceKind !== "unsupported",
+      );
+  }, [
+    datasets,
+    layers,
+    storeSnapshot.extension,
+    storeSnapshot.pairs,
+  ]);
 
   useEffect(() => {
     if (!POINT_CLUSTERING_FEATURE_ENABLED) {
@@ -107,8 +133,9 @@ export function usePointClustering() {
 
       const dataset = datasetForLayer(datasets, pointLayer);
       const eligibility = getPointClusterEligibility(
-        pointLayer,
+        pointEligibilityLayer(pointLayer),
         dataset,
+        { minimumPointCount: 1 },
       );
       let clusterLayer = findCompatibleClusterLayer(
         pointLayer,
