@@ -141,6 +141,16 @@ export default function LayerListItem({
     }
   }
 
+  function toggleExpanded() {
+    if (!detailsMounted && !expanded) {
+      setDetailsMounted(true);
+      window.requestAnimationFrame(() => onToggleExpanded(layer));
+      return;
+    }
+
+    onToggleExpanded(layer);
+  }
+
   return (
     <li
       className={[
@@ -227,7 +237,7 @@ export default function LayerListItem({
           <button
             className="maono-layer-list__select"
             type="button"
-            onClick={() => onToggleExpanded(layer)}
+            onClick={toggleExpanded}
             aria-current={selected ? "true" : undefined}
             aria-expanded={expanded}
             aria-controls={detailsId}
