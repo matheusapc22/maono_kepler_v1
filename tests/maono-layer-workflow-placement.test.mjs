@@ -99,7 +99,8 @@ test("ações textuais duplicadas saem do inspetor e ícones seguros permanecem"
 
 test("salvamento visível fica no rodapé fixo do painel e reutiliza executor existente", () => {
   assert.match(source.panel, /<PanelSaveAction \/>/);
-  assert.match(source.saveAction, />Salvar mapa</);
+  assert.match(source.saveAction, /"Salvar mapa"/);
+  assert.match(source.saveAction, /"Salvando mapa…"/);
   assert.match(source.saveAction, /legacySaveButton\(\)\?\.click\(\)/);
   assert.match(source.saveAction, /capabilities\?\.saveMap/);
   assert.match(source.saveStyles, /\.maono-layer-panel__save-footer/);
