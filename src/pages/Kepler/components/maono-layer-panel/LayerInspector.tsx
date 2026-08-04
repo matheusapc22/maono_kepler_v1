@@ -1,62 +1,77 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 
+import {
+  fieldSupportsLayerColumn,
+  layerTypeLabel,
+  type MapLayerColumnKey,
+  type MapLayerColumns,
+} from "../../engine-adapter";
 import type {
+  MaonoDatasetSnapshot,
   MaonoLayerSnapshot,
 } from "../../integration/keplerBridge";
-import { MAONO_LAYER_PALETTES } from "./palettes";
-
-function componentToHex(value: number) {
-  return Math.min(255, Math.max(0, Math.round(value)))
-    .toString(16)
-    .padStart(2, "0");
-}
-
-function toHex(color: [number, number, number]) {
-  return `#${color.map(componentToHex).join("")}`;
-}
-
-function fromHex(value: string): [number, number, number] {
-  const normalized = value.replace("#", "");
-  return [
-    Number.parseInt(normalized.slice(0, 2), 16),
-    Number.parseInt(normalized.slice(2, 4), 16),
-    Number.parseInt(normalized.slice(4, 6), 16),
-  ];
-}
+import LayerStyleEditor, {
+  type LayerStyleChange,
+} from "./LayerStyleEditor";
+import PointSpatialGroupingSection from "./PointSpatialGroupingSection";
 
 type Props = {
   layer: MaonoLayerSnapshot | null;
-  editable: boolean;
-  canDuplicate: boolean;
-  canRemove: boolean;
-  onLabelChange: (layer: MaonoLayerSnapshot, label: string) => void;
-  onOpacityChange: (layer: MaonoLayerSnapshot, opacity: number) => void;
-  onColorChange: (
+  datasets: MaonoDatasetSnapshot[];
+  canRename: boolean;
+  canEditStructure: boolean;
+  canEditStyle: boolean;
+  layerBlending: string | null;
+  overlayBlending: string | null;
+  onLabelChange: (layer: MaonoLayerSnapshot, label: string) => boolean;
+  onDatasetChange: (layer: MaonoLayerSnapshot, datasetId: string) => boolean;
+  onColumnsChange: (
     layer: MaonoLayerSnapshot,
-    color: [number, number, number],
+    columns: Partial<MapLayerColumns>,
+  ) => boolean;
+  onStyleChange: (
+    layer: MaonoLayerSnapshot,
+    change: LayerStyleChange,
   ) => void;
-  onDuplicate: (layerId: string) => void;
-  onRemove: (layerId: string) => void;
+};
+
+const COLUMN_LABELS: Record<MapLayerColumnKey, string> = {
+  latitude: "Latitude",
+  longitude: "Longitude",
+  geojson: "Geometria GeoJSON",
+  altitude: "Altitude",
 };
 
 export default function LayerInspector({
   layer,
-  editable,
-  canDuplicate,
-  canRemove,
+  datasets,
+  canRename,
+  canEditStructure,
+  canEditStyle,
+  layerBlending,
+  overlayBlending,
   onLabelChange,
-  onOpacityChange,
-  onColorChange,
-  onDuplicate,
-  onRemove,
+  onDatasetChange,
+  onColumnsChange,
+  onStyleChange,
 }: Props) {
   const [label, setLabel] = useState(layer?.label || "");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [structureError, setStructureError] = useState<string | null>(null);
+  const ignoreNextNameBlurRef = useRef(false);
+  const nameCommitRef = useRef(false);
+
+  function guardImmediateNameBlur() {
+    ignoreNextNameBlurRef.current = true;
+    window.setTimeout(() => {
+      ignoreNextNameBlurRef.current = false;
+    }, 0);
+  }
 
   useEffect(() => {
     setLabel(layer?.label || "");
+    setNameError(null);
+    setStructureError(null);
   }, [layer?.id, layer?.label]);
 
   if (!layer) {
@@ -67,125 +82,254 @@ export default function LayerInspector({
     );
   }
 
+  const activeLayer = layer;
+  const nameErrorId = `maono-layer-name-error-${encodeURIComponent(
+    activeLayer.id,
+  )}`;
+  const datasetId = activeLayer.dataIds[0] ?? null;
+  const dataset =
+    datasets.find((candidate) => candidate.id === datasetId) ?? null;
+  const structure = activeLayer.structure;
+  const structuralColumns = [
+    ...structure.requiredColumns,
+    ...structure.optionalColumns,
+  ];
+
+  function commitName() {
+    if (nameCommitRef.current) return;
+    const normalized = label.trim();
+
+    if (!normalized) {
+      setNameError("Informe um nome para a camada.");
+      return;
+    }
+    if (normalized === activeLayer.label) {
+      setNameError(null);
+      setLabel(activeLayer.label);
+      return;
+    }
+
+    nameCommitRef.current = true;
+    const changed = onLabelChange(activeLayer, normalized);
+    window.setTimeout(() => {
+      nameCommitRef.current = false;
+    }, 0);
+
+    if (!changed) {
+      setNameError("O nome anterior foi preservado.");
+      setLabel(activeLayer.label);
+      return;
+    }
+
+    setNameError(null);
+  }
+
+  function changeDataset(nextDatasetId: string) {
+    if (!nextDatasetId || nextDatasetId === datasetId) return;
+
+    if (!onDatasetChange(activeLayer, nextDatasetId)) {
+      setStructureError(
+        "O dataset selecionado não possui uma geometria compatível com esta camada.",
+      );
+      return;
+    }
+
+    setStructureError(null);
+  }
+
+  function changeColumn(column: MapLayerColumnKey, fieldName: string) {
+    const nextValue = fieldName || null;
+    if (activeLayer.columns[column] === nextValue) return;
+
+    if (!onColumnsChange(activeLayer, { [column]: nextValue })) {
+      setStructureError(
+        `A combinação informada para ${COLUMN_LABELS[column]} é inválida.`,
+      );
+      return;
+    }
+
+    setStructureError(null);
+  }
+
   return (
     <section className="maono-layer-inspector">
       <div className="maono-layer-inspector__heading">
-        <span>Camada selecionada</span>
-        <strong>{layer.label}</strong>
+        <span>Configurações da camada</span>
+        <strong>{activeLayer.label}</strong>
       </div>
 
       <dl className="maono-layer-inspector__facts">
         <div>
           <dt>Tipo</dt>
-          <dd>{layer.type}</dd>
+          <dd>{layerTypeLabel(activeLayer.type)}</dd>
         </div>
         <div>
           <dt>Dataset</dt>
-          <dd>
-            {Array.isArray(layer.dataId)
-              ? layer.dataId.join(", ")
-              : layer.dataId || "Não informado"}
-          </dd>
+          <dd>{dataset?.label ?? datasetId ?? "Não informado"}</dd>
         </div>
         <div>
           <dt>Visibilidade</dt>
-          <dd>{layer.isVisible ? "Visível" : "Oculta"}</dd>
+          <dd>{activeLayer.isVisible ? "Visível" : "Oculta"}</dd>
         </div>
       </dl>
 
-      {editable ? (
+      <PointSpatialGroupingSection
+        layerId={activeLayer.id}
+        editable={canEditStructure || canEditStyle}
+      />
+
+      {canRename || canEditStructure || canEditStyle ? (
         <div className="maono-layer-inspector__editor">
-          <label>
-            Nome
-            <input
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
-              onBlur={() => onLabelChange(layer, label)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  onLabelChange(layer, label);
-                }
-              }}
-            />
-          </label>
+          {canRename ? (
+            <label className="maono-layer-inspector__name">
+              Nome
+              <input
+                value={label}
+                maxLength={160}
+                onChange={(event) => {
+                  setLabel(event.target.value);
+                  setNameError(null);
+                }}
+                onBlur={() => {
+                  if (ignoreNextNameBlurRef.current) {
+                    ignoreNextNameBlurRef.current = false;
+                    return;
+                  }
+                  commitName();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    guardImmediateNameBlur();
+                    commitName();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    guardImmediateNameBlur();
+                    setLabel(activeLayer.label);
+                    setNameError(null);
+                    event.currentTarget.blur();
+                  }
+                }}
+                aria-invalid={nameError ? "true" : undefined}
+                aria-describedby={nameError ? nameErrorId : undefined}
+              />
+              {nameError ? (
+                <small id={nameErrorId} role="alert">
+                  {nameError}
+                </small>
+              ) : null}
+            </label>
+          ) : null}
 
-          <label>
-            Opacidade: {Math.round(layer.opacity * 100)}%
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={layer.opacity}
-              onChange={(event) =>
-                onOpacityChange(layer, Number(event.target.value))
-              }
-            />
-          </label>
+          {structure.supported ? (
+            <section className="maono-layer-structure" aria-label="Estrutura da camada">
+              <header>
+                <div>
+                  <strong>Estrutura</strong>
+                  <small>Dataset e campos geográficos</small>
+                </div>
+              </header>
 
-          <label className="maono-layer-inspector__color">
-            Cor
-            <input
-              type="color"
-              value={toHex(layer.color)}
-              onChange={(event) =>
-                onColorChange(layer, fromHex(event.target.value))
-              }
-            />
-          </label>
+              <label className="maono-layer-structure__field">
+                <span>Dataset associado</span>
+                <select
+                  value={datasetId ?? ""}
+                  disabled={!canEditStructure}
+                  onChange={(event) => changeDataset(event.target.value)}
+                  aria-invalid={structureError ? "true" : undefined}
+                >
+                  <option value="" disabled>
+                    Selecione um dataset
+                  </option>
+                  {datasets.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <fieldset className="maono-layer-inspector__palettes">
-            <legend>Paletas rápidas</legend>
-            {MAONO_LAYER_PALETTES.map((palette) => (
-              <span key={palette.id}>
-                <small>{palette.label}</small>
-                {palette.colors.map((color) => (
-                  <button
-                    type="button"
-                    key={color.join("-")}
-                    style={{
-                      background: `rgb(${color.join(",")})`,
-                    }}
-                    onClick={() => onColorChange(layer, color)}
-                    aria-label={`Aplicar ${palette.label} ${color.join(", ")}`}
-                  />
-                ))}
-              </span>
-            ))}
-          </fieldset>
+              {dataset ? (
+                <div className="maono-layer-structure__columns">
+                  {structuralColumns.map((column) => {
+                    const required = structure.requiredColumns.includes(column);
+                    const compatibleFields = dataset.fields.filter((field) =>
+                      fieldSupportsLayerColumn(field, column),
+                    );
+                    const current = activeLayer.columns[column];
+                    const currentIncluded = compatibleFields.some(
+                      (field) => field.name === current,
+                    );
+
+                    return (
+                      <label key={column} className="maono-layer-structure__field">
+                        <span>
+                          {COLUMN_LABELS[column]}
+                          {required ? " *" : ""}
+                        </span>
+                        <select
+                          value={current ?? ""}
+                          disabled={!canEditStructure}
+                          onChange={(event) =>
+                            changeColumn(column, event.target.value)
+                          }
+                          aria-required={required}
+                          aria-invalid={
+                            required && !current ? "true" : undefined
+                          }
+                        >
+                          <option value="">
+                            {required ? "Selecione um campo" : "Não utilizar"}
+                          </option>
+                          {!currentIncluded && current ? (
+                            <option value={current} disabled>
+                              {current} (incompatível)
+                            </option>
+                          ) : null}
+                          {compatibleFields.map((field) => (
+                            <option key={field.name} value={field.name}>
+                              {field.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="maono-layer-inspector__notice">
+                  Associe um dataset para configurar os campos geográficos.
+                </p>
+              )}
+
+              {structureError ? (
+                <p className="maono-layer-structure__error" role="alert">
+                  {structureError}
+                </p>
+              ) : null}
+            </section>
+          ) : (
+            <p className="maono-layer-inspector__notice">
+              Este tipo de camada continua disponível no Kepler nativo, mas a
+              edição estrutural ainda não é segura no painel Maõno.
+            </p>
+          )}
+
+          {canEditStyle ? (
+            <LayerStyleEditor
+              layer={layer}
+              dataset={dataset}
+              layerBlending={layerBlending}
+              overlayBlending={overlayBlending}
+              onChange={(change) => onStyleChange(activeLayer, change)}
+            />
+          ) : null}
         </div>
       ) : (
         <p className="maono-layer-inspector__notice">
-          Modo de visualização: estilos e filtros permanecem somente leitura.
+          Modo de visualização: a estrutura e o estilo permanecem somente leitura.
         </p>
       )}
-
-      {canDuplicate || canRemove ? (
-        <div className="maono-layer-inspector__actions">
-          {canDuplicate ? (
-            <button type="button" onClick={() => onDuplicate(layer.id)}>
-              Duplicar
-            </button>
-          ) : null}
-          {canRemove ? (
-            <button
-              className="is-danger"
-              type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Remover a camada “${layer.label}”?`,
-                  )
-                ) {
-                  onRemove(layer.id);
-                }
-              }}
-            >
-              Remover
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }

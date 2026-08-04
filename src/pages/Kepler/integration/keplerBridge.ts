@@ -1,147 +1,127 @@
-export const KEPLER_MAP_ID = "map";
+import {
+  KEPLER_MAP_ID,
+  collectionToArray,
+  normalizeKeplerDatasets as normalizeEngineDatasets,
+  normalizeKeplerFilters as normalizeEngineFilters,
+  normalizeKeplerLayers as normalizeEngineLayers,
+  readValue,
+  selectKeplerMapState,
+  selectKeplerUiState,
+  selectKeplerViewportState,
+  selectKeplerVisState,
+} from "../engine-adapter/selectors.ts";
+import type {
+  MapDatasetSummary,
+  MapFilterSummary,
+  MapLayerSummary,
+} from "../engine-adapter/types.ts";
 
-function asArray<T = any>(value: unknown): T[] {
-  if (Array.isArray(value)) return value;
+/**
+ * Compatibilidade temporária para consumidores anteriores à Etapa 02.
+ * A normalização continua pertencendo exclusivamente ao Engine Adapter.
+ */
+export { KEPLER_MAP_ID };
+export const KEPLER_ID = KEPLER_MAP_ID;
 
-  if (
-    value &&
-    typeof value === "object" &&
-    typeof (value as any).toArray === "function"
-  ) {
-    return (value as any).toArray();
-  }
+/** @deprecated Acesso bruto permitido somente para integrações legadas. */
+export {
+  selectKeplerMapState,
+  selectKeplerUiState,
+  selectKeplerViewportState,
+  selectKeplerVisState,
+};
 
-  return [];
+/** @deprecated Use useKeplerState ou os seletores públicos do adapter. */
+export const selectVisState = selectKeplerVisState;
+/** @deprecated Use useKeplerState ou os seletores públicos do adapter. */
+export const selectUiState = selectKeplerUiState;
+/** @deprecated Use useKeplerState ou os seletores públicos do adapter. */
+export const selectMapState = selectKeplerViewportState;
+
+/** @deprecated Retorna coleção bruta apenas para código legado existente. */
+export function selectDatasets(state: unknown, keplerId = KEPLER_MAP_ID) {
+  void keplerId;
+  return readValue(selectKeplerVisState(state), "datasets") ?? null;
 }
 
-function asObject<T extends Record<string, any>>(
-  value: unknown,
-  fallback: T,
-): T {
-  if (!value || typeof value !== "object") return fallback;
-
-  if (typeof (value as any).toJS === "function") {
-    return (value as any).toJS();
-  }
-
-  return value as T;
+/** @deprecated Retorna coleção bruta apenas para código legado existente. */
+export function selectFilters(state: unknown, keplerId = KEPLER_MAP_ID) {
+  void keplerId;
+  return readValue(selectKeplerVisState(state), "filters") ?? null;
 }
 
-export function selectKeplerMapState(rootState: any) {
-  return (
-    rootState?.demo?.keplerGl?.[KEPLER_MAP_ID] ??
-    rootState?.keplerGl?.[KEPLER_MAP_ID] ??
-    null
-  );
+/** @deprecated Retorna coleção bruta apenas para código legado existente. */
+export function selectLayers(state: unknown, keplerId = KEPLER_MAP_ID) {
+  void keplerId;
+  return readValue(selectKeplerVisState(state), "layers") ?? null;
 }
 
-export function selectKeplerVisState(rootState: any) {
-  return selectKeplerMapState(rootState)?.visState ?? null;
-}
-
-export function selectKeplerUiState(rootState: any) {
-  return selectKeplerMapState(rootState)?.uiState ?? null;
-}
-
-export function selectKeplerViewportState(rootState: any) {
-  return selectKeplerMapState(rootState)?.mapState ?? null;
-}
-
-export type MaonoLayerSnapshot = {
-  id: string;
-  type: string;
-  label: string;
-  isVisible: boolean;
+export type MaonoLayerSnapshot = MapLayerSummary & {
   color: [number, number, number];
   opacity: number;
   dataId: string | string[] | null;
-  raw: any;
 };
 
-export type MaonoFilterSnapshot = {
-  id: string;
-  index: number;
+export type MaonoFilterSnapshot = Omit<MapFilterSummary, "dataId"> & {
   dataId: string | string[] | null;
   name: string | string[] | null;
-  type: string;
-  value: any;
-  enabled: boolean;
-  raw: any;
 };
 
-export type MaonoDatasetSnapshot = {
-  id: string;
-  label: string;
-  raw: any;
-};
+export type MaonoDatasetSnapshot = MapDatasetSummary;
 
-function normalizedColor(value: unknown): [number, number, number] {
-  const color = asArray<number>(value);
-  return [
-    Number(color[0] ?? 47),
-    Number(color[1] ?? 125),
-    Number(color[2] ?? 244),
-  ];
+export function toMaonoLayerSnapshot(
+  layer: MapLayerSummary,
+): MaonoLayerSnapshot {
+  return {
+    ...layer,
+    color: layer.style.color,
+    opacity: layer.style.opacity,
+    dataId:
+      layer.dataIds.length > 1 ? layer.dataIds : (layer.dataIds[0] ?? null),
+  };
+}
+
+export function toMaonoFilterSnapshot(
+  filter: MapFilterSummary,
+): MaonoFilterSnapshot {
+  return {
+    ...filter,
+    dataId:
+      filter.dataIds.length > 1
+        ? filter.dataIds
+        : (filter.dataIds[0] ?? null),
+    name:
+      filter.fieldNames.length > 1
+        ? filter.fieldNames
+        : (filter.fieldNames[0] ?? null),
+  };
 }
 
 export function normalizeKeplerLayers(
   value: unknown,
+  layerOrder?: unknown,
 ): MaonoLayerSnapshot[] {
-  return asArray<any>(value)
-    .filter((layer) => layer?.id)
-    .map((layer) => {
-      const config = asObject(layer.config, {} as any);
-      const visConfig = asObject(config.visConfig, {} as any);
-
-      return {
-        id: String(layer.id),
-        type: String(layer.type || "layer"),
-        label: String(config.label || layer.id),
-        isVisible: config.isVisible !== false,
-        color: normalizedColor(config.color),
-        opacity: Number.isFinite(Number(visConfig.opacity))
-          ? Number(visConfig.opacity)
-          : 0.8,
-        dataId: config.dataId ?? layer.dataId ?? null,
-        raw: layer,
-      };
-    });
+  return normalizeEngineLayers(value, layerOrder).map(toMaonoLayerSnapshot);
 }
 
-export function normalizeKeplerFilters(
-  value: unknown,
-): MaonoFilterSnapshot[] {
-  return asArray<any>(value).map((filter, index) => {
-    const normalized = asObject(filter, {} as any);
-
-    return {
-      id: String(normalized.id || `filter-${index}`),
-      index,
-      dataId: normalized.dataId ?? null,
-      name: normalized.name ?? null,
-      type: String(normalized.type || "range"),
-      value: normalized.value,
-      enabled: normalized.enabled !== false,
-      raw: filter,
-    };
-  });
+export function normalizeKeplerFilters(value: unknown): MaonoFilterSnapshot[] {
+  return normalizeEngineFilters(value).map(toMaonoFilterSnapshot);
 }
 
 export function normalizeKeplerDatasets(
   value: unknown,
 ): MaonoDatasetSnapshot[] {
-  if (!value || typeof value !== "object") return [];
+  return normalizeEngineDatasets(value);
+}
 
-  const entries =
-    typeof (value as any).entrySeq === "function"
-      ? (value as any).entrySeq().toArray()
-      : value instanceof Map
-        ? Array.from(value.entries())
-      : Object.entries(value as Record<string, any>);
+export function getFilterArray(filters: unknown) {
+  return collectionToArray(filters);
+}
 
-  return entries.map(([id, dataset]: [string, any]) => ({
-    id: String(dataset?.id ?? id),
-    label: String(dataset?.label ?? dataset?.info?.label ?? id),
-    raw: dataset,
-  }));
+export function findFirstValidDataId(datasets: unknown): string | null {
+  return (
+    normalizeEngineDatasets(datasets).find((dataset) =>
+      dataset.fields.some((field) => field.filterType !== null),
+    )?.id ?? null
+  );
 }

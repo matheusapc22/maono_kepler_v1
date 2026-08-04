@@ -1,0 +1,20 @@
+.maono-map-runtime {
+  --maono-map-gold: #c5a059;
+  --maono-map-gold-bright: #e2c275;
+  --maono-map-gold-soft: #f0dfbd;
+  --maono-map-ink: #04060a;
+  --maono-map-panel: #0a0f18;
+  --maono-map-panel-raised: #131c2a;
+  --maono-map-border: #1f2b3e;
+  --maono-map-text: #f7f2e8;
+  --maono-map-text-soft: #c8d1df;
+  --maono-map-muted: #758196;
+  --maono-map-danger: #fb7185;
+  --maono-map-success: #6ee7b7;
+  --maono-map-warning: #f4c46e;
+  --maono-map-rail-width: 80px;
+  --maono-map-panel-width: min(340px, calc(100vw - 112px));
+  --maono-map-radius: 14px;
+  --maono-map-shadow: 0 18px 42px rgba(0, 0, 0, 0.44);
+  --maono-map-transition: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}

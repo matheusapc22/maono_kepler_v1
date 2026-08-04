@@ -3,9 +3,7 @@ import {
   jsonResponse,
   methodNotAllowed,
 } from "../../../_lib/http.js";
-import {
-  resolveExistingProjectMapNavigation,
-} from "../../../_lib/map-panel-service.js";
+import { resolveExistingProjectMapNavigation } from "../../../_lib/map-panel-service.js";
 
 export async function onRequest(context) {
   const { request, env, params } = context;

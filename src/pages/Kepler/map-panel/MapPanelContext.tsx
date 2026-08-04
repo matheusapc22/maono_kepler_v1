@@ -1,9 +1,7 @@
-import React, {
-  createContext,
-  useContext,
-} from "react";
+import React, { createContext, useContext } from "react";
 
 import type {
+  MapCapabilities,
   MapPanelContextValue,
   MapPanelLoadState,
 } from "./types";
@@ -34,14 +32,25 @@ export function MapPanelContextProvider({
 }
 
 export function useMapPanel() {
-  const value = useContext(MapPanelContext);
+  const value = useOptionalMapPanel();
 
   if (!value) {
-    throw new Error(
-      "useMapPanel deve ser usado dentro de MapPanelProvider.",
-    );
+    throw new Error("useMapPanel deve ser usado dentro de MapPanelProvider.");
   }
 
   return value;
 }
 
+export function useOptionalMapPanel() {
+  return useContext(MapPanelContext);
+}
+
+export function useMapPanelCapability(capability: keyof MapCapabilities) {
+  const value = useOptionalMapPanel();
+
+  return Boolean(
+    value?.state.status === "ready" &&
+      value.context?.allowed === true &&
+      value.context.capabilities[capability] === true,
+  );
+}

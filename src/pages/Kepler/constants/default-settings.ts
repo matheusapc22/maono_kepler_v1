@@ -47,9 +47,17 @@ export const DEFAULT_FEATURE_FLAGS = {
 };
 
 export const CLOUD_PROVIDERS_CONFIGURATION = {
-  MAPBOX_TOKEN: import.meta.env.VITE_MapboxToken,
+  MAPBOX_TOKEN: String(
+    import.meta.env.VITE_MapboxToken ??
+      import.meta.env.VITE_MAPBOX_TOKEN ??
+      "",
+  ),
   DROPBOX_CLIENT_ID: import.meta.env.VITE_DropboxClientId,
-  EXPORT_MAPBOX_TOKEN: import.meta.env.VITE_MapboxExportToken,
+  EXPORT_MAPBOX_TOKEN: String(
+    import.meta.env.VITE_MapboxExportToken ??
+      import.meta.env.VITE_MAPBOX_EXPORT_TOKEN ??
+      "",
+  ),
   CARTO_CLIENT_ID: import.meta.env.VITE_CartoClientId,
   FOURSQUARE_CLIENT_ID: import.meta.env.VITE_FoursquareClientId,
   FOURSQUARE_DOMAIN: import.meta.env.VITE_FoursquareDomain,

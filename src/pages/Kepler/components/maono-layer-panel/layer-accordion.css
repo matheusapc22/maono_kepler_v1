@@ -1,0 +1,143 @@
+.maono-layer-list__item {
+  grid-template-rows: minmax(57px, auto) auto;
+}
+
+.maono-layer-list__accent {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: stretch;
+  height: auto;
+}
+
+.maono-layer-list__grip {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.maono-layer-list__main {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.maono-layer-list__controls {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.maono-layer-list__select {
+  justify-content: space-between;
+  gap: 9px;
+  width: 100%;
+}
+
+.maono-layer-list__label {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.maono-layer-list__chevron {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  color: #718097;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.maono-layer-list__chevron svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.maono-layer-list__select:hover .maono-layer-list__chevron,
+.maono-layer-list__select:focus-visible .maono-layer-list__chevron,
+.maono-layer-list__item.is-expanded .maono-layer-list__chevron {
+  color: var(--maono-layer-gold-bright);
+  background: rgba(197, 160, 89, 0.08);
+}
+
+.maono-layer-list__item.is-expanded .maono-layer-list__chevron svg {
+  transform: rotate(180deg);
+}
+
+.maono-layer-list__item.is-expanded {
+  border-color: rgba(197, 160, 89, 0.54);
+  background: linear-gradient(180deg, #172235, #0b1019);
+}
+
+.maono-layer-list__actions {
+  right: 80px;
+}
+
+.maono-layer-list__details-shell {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  grid-template-rows: 0fr;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 170ms ease,
+    visibility 0s linear 220ms;
+}
+
+.maono-layer-list__item.is-expanded .maono-layer-list__details-shell {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 190ms ease 35ms,
+    visibility 0s linear 0s;
+}
+
+.maono-layer-list__details-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.maono-layer-list__details {
+  min-width: 0;
+  border-top: 1px solid rgba(49, 67, 93, 0.78);
+  background:
+    linear-gradient(180deg, rgba(8, 13, 21, 0.92), rgba(4, 7, 12, 0.96));
+}
+
+.maono-layer-list__details > .maono-layer-inspector {
+  max-height: none;
+  padding: 12px 13px 14px;
+  overflow: visible;
+  border-top: 0;
+  background: transparent;
+}
+
+.maono-layer-list__item.is-collapsed .maono-layer-list__details :is(
+    button,
+    input,
+    select,
+    textarea
+  ) {
+  visibility: hidden;
+}
+
+@media (max-width: 420px) {
+  .maono-layer-list__actions {
+    right: 65px;
+  }
+
+  .maono-layer-list__chevron {
+    width: 22px;
+    height: 22px;
+  }
+}

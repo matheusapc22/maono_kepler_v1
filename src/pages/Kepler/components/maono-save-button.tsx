@@ -20,7 +20,15 @@ import ProjectCreatePanel, {
   type ProjectCreateInput,
   type ProjectCreationStage,
 } from "./project-create-panel";
+import { useKeplerEngineAdapter } from "../engine-adapter";
 import { useMapPanel } from "../map-panel/MapPanelContext";
+import {
+  emitMapSaveResult,
+  MAONO_MAP_SAVE_REQUEST_EVENT,
+  mapSaveRequestFromEvent,
+  type MapSaveRequestDetail,
+  type MapSaveResultStatus,
+} from "../map-panel/map-save-events";
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
 
 const CREATION_KEY_PREFIX = "maono.project-create.idempotency";
@@ -253,11 +261,21 @@ const MaonoSaveButton: React.FC = () => {
   const navigate = useNavigate();
   const { authenticated, user } = useSession();
   const { context, refresh } = useMapPanel();
+  const {
+    commands,
+    state: engineState,
+  } = useKeplerEngineAdapter();
   const mapState = useSelector(
     (state: any) => state?.demo?.keplerGl?.map,
   );
   const operationInFlightRef = useRef(false);
-  const primaryActionRef = useRef<() => void>(() => {});
+  const primaryActionRef = useRef<
+    (request?: MapSaveRequestDetail | null) => void
+  >(() => {});
+  const pendingSaveRequestRef =
+    useRef<MapSaveRequestDetail | null>(null);
+  const commandsRef = useRef(commands);
+  const transientDatasetIdsRef = useRef(new Set<string>());
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] =
@@ -274,6 +292,11 @@ const MaonoSaveButton: React.FC = () => {
     useState<string | null>(null);
   const [creationDraft, setCreationDraft] =
     useState<ProjectCreateInput | null>(null);
+
+  commandsRef.current = commands;
+  transientDatasetIdsRef.current = new Set(
+    engineState.transientDatasetIds,
+  );
 
   const activeOrganizationId = useMemo(
     () => getActiveOrganizationId(user as any),
@@ -312,22 +335,76 @@ const MaonoSaveButton: React.FC = () => {
   const allowed = projectSlug ? canSaveExisting : canCreateNew;
 
   useEffect(() => {
-    const handleExternalSaveRequest = () => {
-      primaryActionRef.current();
+    const handleExternalSaveRequest = (event: Event) => {
+      const request = mapSaveRequestFromEvent(event);
+
+      if (!request) {
+        return;
+      }
+
+      if (
+        operationInFlightRef.current ||
+        pendingSaveRequestRef.current
+      ) {
+        emitMapSaveResult(
+          request,
+          "error",
+          "Já existe um salvamento em andamento.",
+        );
+        return;
+      }
+
+      if (
+        !transientDatasetIdsRef.current.has(request.dataId)
+      ) {
+        emitMapSaveResult(
+          request,
+          "error",
+          "A prévia temporária não está mais disponível.",
+        );
+        return;
+      }
+
+      const promoted =
+        commandsRef.current.markLayerPersistent(request.dataId);
+
+      if (!promoted.ok) {
+        emitMapSaveResult(request, "error", promoted.reason);
+        return;
+      }
+
+      pendingSaveRequestRef.current = request;
+      primaryActionRef.current(request);
     };
 
     window.addEventListener(
-      "maono:save-map",
+      MAONO_MAP_SAVE_REQUEST_EVENT,
       handleExternalSaveRequest,
     );
 
     return () => {
       window.removeEventListener(
-        "maono:save-map",
+        MAONO_MAP_SAVE_REQUEST_EVENT,
         handleExternalSaveRequest,
       );
     };
   }, []);
+
+  function finishPendingMapSave(
+    status: MapSaveResultStatus,
+    failureMessage: string | null = null,
+  ) {
+    const request = pendingSaveRequestRef.current;
+
+    if (!request) return;
+
+    if (status !== "success") {
+      commandsRef.current.markLayerTransient(request.dataId);
+    }
+
+    pendingSaveRequestRef.current = null;
+    emitMapSaveResult(request, status, failureMessage);
+  }
 
   function handlePreviewState(state: ProjectThumbnailJobState) {
     if (state === "READY") {
@@ -375,14 +452,28 @@ const MaonoSaveButton: React.FC = () => {
 
   async function handleExistingProjectSave() {
     if (!canSaveExisting) {
+      const failure =
+        "Você não tem permissão para salvar alterações permanentes neste projeto.";
       setMessageType("error");
-      setMessage(
-        "Você não tem permissão para salvar alterações permanentes neste projeto.",
-      );
+      setMessage(failure);
+      finishPendingMapSave("error", failure);
       return;
     }
 
-    if (!projectSlug || !mapState || operationInFlightRef.current) {
+    if (!projectSlug || !mapState) {
+      const failure =
+        "O mapa ainda não está pronto para ser salvo.";
+      setMessageType("error");
+      setMessage(failure);
+      finishPendingMapSave("error", failure);
+      return;
+    }
+
+    if (operationInFlightRef.current) {
+      const failure = "Já existe um salvamento em andamento.";
+      setMessageType("error");
+      setMessage(failure);
+      finishPendingMapSave("error", failure);
       return;
     }
 
@@ -459,6 +550,7 @@ const MaonoSaveButton: React.FC = () => {
           ? "Projeto salvo no Dropbox. A visualização está sendo atualizada em segundo plano."
           : "Projeto e visualização salvos no Dropbox.",
       );
+      finishPendingMapSave("success");
       enqueuePreview(
         projectSlug,
         revision,
@@ -466,8 +558,10 @@ const MaonoSaveButton: React.FC = () => {
         handlePreviewState,
       );
     } catch (error) {
+      const failure = getSaveFailureMessage(error);
       setMessageType("error");
-      setMessage(getSaveFailureMessage(error));
+      setMessage(failure);
+      finishPendingMapSave("error", failure);
     } finally {
       operationInFlightRef.current = false;
       setSaving(false);
@@ -478,9 +572,21 @@ const MaonoSaveButton: React.FC = () => {
     if (
       !canCreateNew ||
       !mapState ||
-      !activeOrganizationId ||
-      operationInFlightRef.current
+      !activeOrganizationId
     ) {
+      const failure =
+        "O novo projeto ainda não está pronto para ser criado.";
+      setCreationStage("error");
+      setCreationError(failure);
+      finishPendingMapSave("error", failure);
+      return;
+    }
+
+    if (operationInFlightRef.current) {
+      const failure = "Já existe uma criação em andamento.";
+      setCreationStage("error");
+      setCreationError(failure);
+      finishPendingMapSave("error", failure);
       return;
     }
 
@@ -564,21 +670,37 @@ const MaonoSaveButton: React.FC = () => {
         policyVersion: context?.policyVersion ?? null,
         operation: "create",
       });
+      finishPendingMapSave("success");
       enqueuePreview(createdSlug, revision, config);
       navigate(
         `/projects/${encodeURIComponent(createdSlug)}/edit`,
         { replace: true },
       );
     } catch (error) {
+      const failure = getSaveFailureMessage(error);
       setCreationStage("error");
-      setCreationError(getSaveFailureMessage(error));
+      setCreationError(failure);
+      finishPendingMapSave("error", failure);
     } finally {
       operationInFlightRef.current = false;
       setSaving(false);
     }
   }
 
-  function handlePrimaryAction() {
+  function handlePrimaryAction(
+    request: MapSaveRequestDetail | null = null,
+  ) {
+    if (
+      !request &&
+      transientDatasetIdsRef.current.size > 0
+    ) {
+      setMessageType("error");
+      setMessage(
+        "Confirme ou descarte a prévia de isócrona antes de salvar o mapa.",
+      );
+      return;
+    }
+
     if (projectSlug) {
       void handleExistingProjectSave();
       return;
@@ -608,7 +730,7 @@ const MaonoSaveButton: React.FC = () => {
       >
         {message ? (
           <div
-            role="status"
+            role={messageType === "error" ? "alert" : "status"}
             aria-live="polite"
             className={
               messageType === "success"
@@ -622,7 +744,7 @@ const MaonoSaveButton: React.FC = () => {
 
         <button
           type="button"
-          onClick={handlePrimaryAction}
+          onClick={() => handlePrimaryAction(null)}
           disabled={saving || !mapState}
           className="rounded-2xl border border-emerald-300/50 bg-emerald-600 px-5 py-4 text-sm font-extrabold text-white shadow-2xl transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
           title={
@@ -653,6 +775,10 @@ const MaonoSaveButton: React.FC = () => {
         onClose={() => {
           if (!saving) {
             setCreatePanelOpen(false);
+            finishPendingMapSave(
+              "cancelled",
+              "A criação do projeto foi cancelada antes do salvamento da isócrona.",
+            );
           }
         }}
         onSubmit={handleCreateProject}

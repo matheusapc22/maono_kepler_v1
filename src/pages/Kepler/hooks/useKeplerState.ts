@@ -1,30 +1,25 @@
 import { useMemo } from "react";
-import { useSelector } from "react-redux";
 
+import { useKeplerEngineAdapter } from "../engine-adapter/index.ts";
 import {
-  normalizeKeplerDatasets,
-  normalizeKeplerFilters,
-  normalizeKeplerLayers,
-  selectKeplerVisState,
-} from "../integration/keplerBridge";
+  toMaonoFilterSnapshot,
+  toMaonoLayerSnapshot,
+} from "../integration/keplerBridge.ts";
 
+/**
+ * Facade de leitura compatível com o painel atual.
+ * Não acessa Redux e não expõe objetos mutáveis do Kepler.
+ */
 export function useKeplerState() {
-  const visState = useSelector(selectKeplerVisState);
+  const { state } = useKeplerEngineAdapter();
 
   return useMemo(
     () => ({
-      layers: normalizeKeplerLayers(visState?.layers),
-      filters: normalizeKeplerFilters(visState?.filters),
-      datasets: normalizeKeplerDatasets(visState?.datasets),
-      hasData: Boolean(
-        visState?.datasets &&
-          (
-            typeof visState.datasets.size === "number"
-              ? visState.datasets.size > 0
-              : Object.keys(visState.datasets).length > 0
-          ),
-      ),
+      ...state,
+      layers: state.layers.map(toMaonoLayerSnapshot),
+      filters: state.filters.map(toMaonoFilterSnapshot),
+      datasets: state.datasets,
     }),
-    [visState],
+    [state],
   );
 }

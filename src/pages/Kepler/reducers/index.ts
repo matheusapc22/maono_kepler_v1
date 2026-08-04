@@ -39,7 +39,6 @@ import {
 import { CLOUD_PROVIDERS_CONFIGURATION } from "../constants/default-settings";
 import MaonoClusterLayer from "../clustering/point-cluster-count-layer.ts";
 import { generateHashId } from "../utils/strings";
-import checkAdminUser from "../utils/is-admin-user";
 
 // initialize kepler demo-app with DuckDB plugin
 /*
@@ -60,8 +59,34 @@ initApplicationConfig({
   useArrowProgressiveLoading: false
 });
 */
-const isAdminUser = checkAdminUser();
 const { DEFAULT_MAP_CONTROLS } = uiStateUpdaters;
+
+function buildInitialMapControls() {
+  return {
+    ...DEFAULT_MAP_CONTROLS,
+    mapLegend: {
+      ...DEFAULT_MAP_CONTROLS.mapLegend,
+      show: true,
+      active: false,
+      disableClose: false,
+      activeMapIndex: 0,
+      disableEdit: false,
+    },
+    // TODO find a better way not to add extra controls optionally - from plugin?
+    ...((getApplicationConfig().plugins || []).some(
+      (plugin) => plugin.name === "duckdb",
+    )
+      ? {
+          sqlPanel: {
+            active: false,
+            activeMapIndex: 0,
+            disableClose: false,
+            show: true,
+          },
+        }
+      : {}),
+  };
+}
 
 // INITIAL_APP_STATE
 const initialAppState = {
@@ -92,7 +117,7 @@ export const appReducer = handleActions(
       isMapLoading: action.isMapLoading,
     }),
   },
-  initialAppState
+  initialAppState,
 );
 
 const { DEFAULT_EXPORT_MAP } = uiStateUpdaters;
@@ -115,33 +140,7 @@ const demoReducer = combineReducers({
             CLOUD_PROVIDERS_CONFIGURATION.EXPORT_MAPBOX_TOKEN,
         },
       },
-      mapControls: {
-        ...(!isAdminUser
-          ? {
-              mapLegend: {
-                show: true,
-                active: false,
-                disableClose: false,
-                activeMapIndex: 0,
-                disableEdit: false,
-              },
-            }
-          : DEFAULT_MAP_CONTROLS),
-
-        // TODO find a better way not to add extra controls optionally - from plugin?
-        ...((getApplicationConfig().plugins || []).some(
-          (p) => p.name === "duckdb"
-        )
-          ? {
-              sqlPanel: {
-                active: false,
-                activeMapIndex: 0,
-                disableClose: false,
-                show: true,
-              },
-            }
-          : {}),
-      },
+      mapControls: buildInitialMapControls(),
     },
     visState: {
       layerClasses: {
@@ -179,7 +178,7 @@ async function loadRemoteResourceSuccessTask({
 
 const LOAD_REMOTE_RESOURCE_SUCCESS_TASK = Task.fromPromise(
   loadRemoteResourceSuccessTask,
-  "LOAD_REMOTE_RESOURCE_SUCCESS_TASK"
+  "LOAD_REMOTE_RESOURCE_SUCCESS_TASK",
 );
 
 // this can be moved into a action and call kepler.gl action
@@ -236,7 +235,7 @@ export const loadRemoteResourceSuccess = (state, action) => {
       loadRemoteDatasetProcessedSuccessAction({ ...action, datasets }),
     () => {
       throw new Error("loadRemoteResource data processor failed");
-    }
+    },
   );
 
   return withTask(state, task);
@@ -267,7 +266,7 @@ const loadRemoteDatasetProcessedSuccess = (state, action) => {
           centerMap: Boolean(!config),
         },
       },
-    }
+    },
   );
 
   return {
@@ -306,7 +305,7 @@ export const loadRemoteResourceError = (state, action) => {
           state.keplerGl.map.uiState,
           {
             payload: errorNote,
-          }
+          },
         ),
       },
     },
