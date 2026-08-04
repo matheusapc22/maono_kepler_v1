@@ -2,6 +2,7 @@
 // Copyright contributors to the kepler.gl project
 // @ts-nocheck
 
+import React from "react";
 import { LoadDataModalFactory, withState } from "@kepler.gl/components";
 import { LOADING_METHODS } from "../constants/default-settings";
 
@@ -40,6 +41,14 @@ const CustomLoadDataModalFactory = (...deps) => {
     // additionalMethods.sample,
   ];
 
+  const HydrationSafeLoadDataModal = (props) => {
+    if (props.isMapLoading) {
+      return null;
+    }
+
+    return React.createElement(LoadDataModal, props);
+  };
+
   return withState(
     [],
     (state) => ({
@@ -52,7 +61,7 @@ const CustomLoadDataModalFactory = (...deps) => {
       onLoadRemoteMap: loadRemoteMap,
       loadSampleConfigurations,
     }
-  )(LoadDataModal);
+  )(HydrationSafeLoadDataModal);
 };
 
 CustomLoadDataModalFactory.deps = LoadDataModalFactory.deps;
