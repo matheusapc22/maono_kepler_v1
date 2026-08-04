@@ -113,13 +113,16 @@ test("sidebar usa capabilities e rotas do backend sem decisão por role", () => 
   assert.match(source.provider, /VITE_MAONO_MAP_OVERLAY_V1/);
 });
 
-test("topbar usa organização, projeto, modo e usuário reais", () => {
-  assert.match(source.topbar, /activeOrganization\?\.name/);
-  assert.match(source.topbar, /context\.organization\?\.name/);
-  assert.match(source.topbar, /context\.project\?\.name/);
+test("topbar mantém modo, status e usuário sem seletor de projeto", () => {
   assert.match(source.topbar, /modeLabel\(context\.mode\)/);
   assert.match(source.topbar, /user\?\.name/);
   assert.match(source.topbar, /hasUnsavedChanges/);
+  assert.match(source.topbar, /maono-map-topbar__account/);
+  assert.doesNotMatch(source.topbar, /activeOrganization\?\.name/);
+  assert.doesNotMatch(source.topbar, /context\.organization\?\.name/);
+  assert.doesNotMatch(source.topbar, /context\.project\?\.name/);
+  assert.doesNotMatch(source.topbar, /maono-map-topbar__project/);
+  assert.doesNotMatch(source.topbar, /maono-map-topbar__back/);
   assert.doesNotMatch(source.topbar, />EN</);
   assert.doesNotMatch(source.topbar, />JD</);
   assert.doesNotMatch(source.topbar, /Bell/);
