@@ -25,6 +25,7 @@ const [
   mapManagementCss,
   layoutDebug,
   backButton,
+  mapPanelProvider,
 ] = await Promise.all([
   source("index.tsx"),
   source("components/maono-map-shell/MaonoMapRuntime.tsx"),
@@ -42,7 +43,12 @@ const [
   source("map-panel/map-management-page.css"),
   source("components/maono-map-shell/map-layout-debug.ts"),
   source("components/back-to-projects-button.tsx"),
+  source("map-panel/MapPanelProvider.tsx"),
 ]);
+const appRoutes = await readFile(
+  new URL("../src/Routes.tsx", import.meta.url),
+  "utf8",
+);
 
 test("runtime Maõno é montado dentro dos providers seguros", () => {
   assert.match(index, /<MapPanelProvider>/);
@@ -83,8 +89,7 @@ test("painel funcional é hospedado pelo shell e não pela factory do Kepler", (
   assert.match(sidePanelFactory, /return null/);
   assert.match(sidePanelFactory, /return <DefaultSidePanel \{\.\.\.props\} \/>/);
   assert.equal(
-    `${runtime}
-${sidePanelFactory}`.match(/<MaonoLayerPanel \/>/g)?.length,
+    `${runtime}\n${sidePanelFactory}`.match(/<MaonoLayerPanel \/>/g)?.length,
     1,
   );
 });
@@ -97,10 +102,10 @@ test("modal nativo de dados não é renderizado durante a hidratação", () => {
   assert.match(loadDataModalFactory, /\)\(HydrationSafeLoadDataModal\)/);
 });
 
-test("rota manage redireciona sem exibir a antiga tela de escolha", () => {
+test("rota manage prioriza create sem exibir a antiga tela de escolha", () => {
   assert.match(
     mapManagementPage,
-    /const destination = context\.availablePanels\.editor\.allowed[\s\S]*\? "edit"[\s\S]*context\.availablePanels\.viewer\.allowed[\s\S]*\? "view"/,
+    /const destination = context\.availablePanels\.create\.allowed[\s\S]*\? "create"[\s\S]*context\.availablePanels\.editor\.allowed[\s\S]*\? "edit"[\s\S]*context\.availablePanels\.viewer\.allowed[\s\S]*\? "view"/,
   );
   assert.match(mapManagementPage, /return <MapRedirectLoader \/>/);
   assert.match(mapManagementPage, /\{ replace: true \}/);
@@ -114,6 +119,16 @@ test("rota manage redireciona sem exibir a antiga tela de escolha", () => {
   assert.match(mapManagementCss, /width:\s*76px/);
 });
 
+test("create de projeto existente é uma rota real e não o fluxo de projeto novo", () => {
+  assert.match(appRoutes, /path="\/projects\/:projectSlug\/create"/);
+  assert.match(mapPanelProvider, /pathname\.endsWith\("\/create"\)/);
+  assert.match(mapPanelProvider, /const isNewMap = location\.pathname === "\/maps\/new\/create"/);
+  assert.match(
+    mapPanelProvider,
+    /projectSlug[\s\S]*fetchProjectMapNavigation\(projectSlug, mode, controller\.signal\)/,
+  );
+});
+
 test("ações da sidebar são capability-aware e não consultam role", () => {
   for (const capability of [
     "openLayerPanel",
@@ -122,8 +137,7 @@ test("ações da sidebar são capability-aware e não consultam role", () => {
     "createLayer",
   ]) {
     assert.match(
-      `${runtime}
-${sidebar}`,
+      `${runtime}\n${sidebar}`,
       new RegExp(`capabilities\.${capability}`),
     );
   }
