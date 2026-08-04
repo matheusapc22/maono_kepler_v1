@@ -19,6 +19,7 @@ import FilterPanel from "./FilterPanel";
 import LayerInspector from "./LayerInspector";
 import LayerList from "./LayerList";
 import LayerPanelIcon from "./LayerPanelIcon";
+import PanelSaveAction from "./PanelSaveAction";
 import type { LayerStyleChange } from "./LayerStyleEditor";
 import "./maono-layer-panel.css";
 import "./layer-accordion.css";
@@ -361,24 +362,10 @@ export default function MaonoLayerPanel() {
         canEditStyle={Boolean(capabilities?.editLayerStyle)}
         layerBlending={basemap.blending.layers}
         overlayBlending={basemap.blending.overlays}
-        canDuplicate={Boolean(capabilities?.duplicateLayer)}
-        canRemove={Boolean(capabilities?.removeLayer)}
         onLabelChange={renameLayer}
         onDatasetChange={associateLayerDataset}
         onColumnsChange={updateLayerColumns}
         onStyleChange={updateLayerStyle}
-        onDuplicate={(layerId) => {
-          const targetLayer = layers.find(
-            (candidate) => candidate.id === layerId,
-          );
-          if (targetLayer) duplicateLayer(targetLayer);
-        }}
-        onRemove={(layerId) => {
-          const targetLayer = layers.find(
-            (candidate) => candidate.id === layerId,
-          );
-          if (targetLayer) removeLayer(targetLayer);
-        }}
       />
     );
   }
@@ -565,6 +552,8 @@ export default function MaonoLayerPanel() {
           />
         </div>
       ) : null}
+
+      <PanelSaveAction />
     </aside>
   );
 }
