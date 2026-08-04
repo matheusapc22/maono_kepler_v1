@@ -72,7 +72,10 @@ function mapStatus({
   }
 
   return {
-    label: context.mode === "create" ? "Novo mapa" : "Sem alterações",
+    label:
+      context.mode === "create" && !context.project
+        ? "Novo mapa"
+        : "Sem alterações",
     tone: "clean",
   };
 }
