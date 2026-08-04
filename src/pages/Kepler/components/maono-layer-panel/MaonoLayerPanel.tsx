@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { KeplerCommandResult, MapLayerColumns } from "../../engine-adapter";
 import { useKeplerController } from "../../hooks/useKeplerController";
@@ -21,6 +21,7 @@ import LayerList from "./LayerList";
 import LayerPanelIcon from "./LayerPanelIcon";
 import type { LayerStyleChange } from "./LayerStyleEditor";
 import "./maono-layer-panel.css";
+import "./layer-accordion.css";
 
 type PanelNotice = {
   kind: "error" | "success";
@@ -68,10 +69,6 @@ export default function MaonoLayerPanel() {
   const canInspect = capabilities?.inspectLayer === true;
   const canRename = capabilities?.editLayers === true;
   const canEditStructure = capabilities?.editLayers === true;
-  const selectedLayer = useMemo(
-    () => layers.find((layer) => layer.id === selectedLayerId) ?? null,
-    [layers, selectedLayerId],
-  );
   const copy = modeCopy(context?.mode);
 
   useEffect(() => {
@@ -112,7 +109,6 @@ export default function MaonoLayerPanel() {
       );
     };
   }, [canViewFilters, canViewLayers]);
-
 
   useEffect(() => {
     if (!canViewLayers || !canInspect || !layers.length) return;
@@ -355,6 +351,38 @@ export default function MaonoLayerPanel() {
     }
   }
 
+  function renderLayerDetails(layer: MaonoLayerSnapshot) {
+    return (
+      <LayerInspector
+        layer={layer}
+        datasets={datasets}
+        canRename={canRename}
+        canEditStructure={canEditStructure}
+        canEditStyle={Boolean(capabilities?.editLayerStyle)}
+        layerBlending={basemap.blending.layers}
+        overlayBlending={basemap.blending.overlays}
+        canDuplicate={Boolean(capabilities?.duplicateLayer)}
+        canRemove={Boolean(capabilities?.removeLayer)}
+        onLabelChange={renameLayer}
+        onDatasetChange={associateLayerDataset}
+        onColumnsChange={updateLayerColumns}
+        onStyleChange={updateLayerStyle}
+        onDuplicate={(layerId) => {
+          const targetLayer = layers.find(
+            (candidate) => candidate.id === layerId,
+          );
+          if (targetLayer) duplicateLayer(targetLayer);
+        }}
+        onRemove={(layerId) => {
+          const targetLayer = layers.find(
+            (candidate) => candidate.id === layerId,
+          );
+          if (targetLayer) removeLayer(targetLayer);
+        }}
+      />
+    );
+  }
+
   const tabCount = Number(canViewLayers) + Number(canViewFilters);
 
   return (
@@ -505,34 +533,7 @@ export default function MaonoLayerPanel() {
             onRemove={removeLayer}
             onMove={moveLayer}
             onReorder={reorderLayer}
-          />
-
-          <LayerInspector
-            layer={selectedLayer}
-            datasets={datasets}
-            canRename={canRename}
-            canEditStructure={canEditStructure}
-            canEditStyle={Boolean(capabilities?.editLayerStyle)}
-            layerBlending={basemap.blending.layers}
-            overlayBlending={basemap.blending.overlays}
-            canDuplicate={Boolean(capabilities?.duplicateLayer)}
-            canRemove={Boolean(capabilities?.removeLayer)}
-            onLabelChange={renameLayer}
-            onDatasetChange={associateLayerDataset}
-            onColumnsChange={updateLayerColumns}
-            onStyleChange={updateLayerStyle}
-            onDuplicate={(layerId) => {
-              const layer = layers.find(
-                (candidate) => candidate.id === layerId,
-              );
-              if (layer) duplicateLayer(layer);
-            }}
-            onRemove={(layerId) => {
-              const layer = layers.find(
-                (candidate) => candidate.id === layerId,
-              );
-              if (layer) removeLayer(layer);
-            }}
+            renderLayerDetails={renderLayerDetails}
           />
         </div>
       ) : canViewFilters ? (
