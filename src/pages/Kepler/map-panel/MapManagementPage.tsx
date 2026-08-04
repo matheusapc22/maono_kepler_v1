@@ -17,6 +17,20 @@ import type {
 } from "./types";
 import "./map-management-page.css";
 
+function MapRedirectLoader() {
+  return (
+    <main className="maono-map-management is-loading" aria-busy="true">
+      <span
+        className="maono-map-management__spinner"
+        aria-hidden="true"
+      />
+      <span className="maono-map-management__sr-only" role="status">
+        Abrindo mapa.
+      </span>
+    </main>
+  );
+}
+
 export default function MapManagementPage() {
   const { projectSlug = "" } = useParams();
   const navigate = useNavigate();
@@ -73,40 +87,28 @@ export default function MapManagementPage() {
   }, [authenticated, organizationKey, projectSlug]);
 
   useEffect(() => {
-    if (
-      !context ||
-      (
-        context.features.mapManagementHome &&
-        context.features.mapPanelModes
-      ) ||
-      redirectedRef.current
-    ) {
-      return;
-    }
+    if (!context || redirectedRef.current) return;
+
+    const destination = context.availablePanels.editor.allowed
+      ? "edit"
+      : context.availablePanels.viewer.allowed
+        ? "view"
+        : null;
+
+    if (!destination) return;
 
     redirectedRef.current = true;
-    const fallback = context.availablePanels.editor.allowed
-      ? "edit"
-      : "view";
     navigate(
-      `/projects/${encodeURIComponent(projectSlug)}/${fallback}`,
+      `/projects/${encodeURIComponent(projectSlug)}/${destination}`,
       { replace: true },
     );
   }, [context, navigate, projectSlug]);
-
-  if (loading || (!context && !error)) {
-    return (
-      <main className="maono-map-management is-loading" aria-busy="true">
-        <div role="status">Carregando opções do mapa…</div>
-      </main>
-    );
-  }
 
   if (error) {
     return (
       <main className="maono-map-management">
         <section className="maono-map-management__error" role="alert">
-          <h1>Não foi possível abrir o gerenciamento</h1>
+          <h1>Não foi possível abrir o mapa</h1>
           <p>{error.message}</p>
           <Link to="/projects">Voltar aos projetos</Link>
         </section>
@@ -114,76 +116,21 @@ export default function MapManagementPage() {
     );
   }
 
-  if (!context) return null;
+  if (
+    context &&
+    !context.availablePanels.editor.allowed &&
+    !context.availablePanels.viewer.allowed
+  ) {
+    return (
+      <main className="maono-map-management">
+        <section className="maono-map-management__error" role="alert">
+          <h1>Mapa indisponível</h1>
+          <p>Sua conta não recebeu acesso para abrir este projeto.</p>
+          <Link to="/projects">Voltar aos projetos</Link>
+        </section>
+      </main>
+    );
+  }
 
-  return (
-    <main className="maono-map-management">
-      <header className="maono-map-management__header">
-        <Link to="/projects">← Projetos</Link>
-        <span>{context.organization?.name}</span>
-      </header>
-
-      <section className="maono-map-management__intro">
-        <span>Gerenciar mapa</span>
-        <h1>{context.project?.name}</h1>
-        <p>
-          {context.project?.description ||
-            "Escolha como deseja abrir este projeto."}
-        </p>
-      </section>
-
-      <section
-        className="maono-map-management__options"
-        aria-label="Modos disponíveis"
-      >
-        {context.availablePanels.viewer.allowed ? (
-          <article>
-            <span className="maono-map-management__icon" aria-hidden="true">
-              ◉
-            </span>
-            <div>
-              <h2>Visualizar</h2>
-              <p>
-                Consulte camadas e filtros. A visibilidade alterada neste
-                modo é local e não pode ser salva.
-              </p>
-            </div>
-            <Link
-              to={`/projects/${encodeURIComponent(projectSlug)}/view`}
-            >
-              Abrir visualizador
-            </Link>
-          </article>
-        ) : null}
-
-        {context.availablePanels.editor.allowed ? (
-          <article>
-            <span className="maono-map-management__icon" aria-hidden="true">
-              ✎
-            </span>
-            <div>
-              <h2>Editar</h2>
-              <p>
-                Altere estilos, camadas e filtros e salve uma nova revisão
-                do projeto.
-              </p>
-            </div>
-            <Link
-              className="is-primary"
-              to={`/projects/${encodeURIComponent(projectSlug)}/edit`}
-            >
-              Abrir editor
-            </Link>
-          </article>
-        ) : null}
-      </section>
-
-      {!context.availablePanels.editor.allowed ? (
-        <p className="maono-map-management__permission-note">
-          Sua conta possui acesso de visualização, mas não recebeu as
-          capacidades necessárias para editar e salvar este mapa.
-        </p>
-      ) : null}
-    </main>
-  );
+  return <MapRedirectLoader />;
 }
