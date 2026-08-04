@@ -9,6 +9,7 @@ import { Link } from "react-router";
 import type { useSession } from "../../../../auth/session";
 import type { MapPanelContextValue } from "../../map-panel/types";
 import MapShellIcon from "./MapShellIcon";
+import "./map-topbar-cleanup.css";
 
 type SessionValue = ReturnType<typeof useSession>;
 
@@ -78,7 +79,6 @@ function mapStatus({
 
 export default function MapTopbar({
   context,
-  activeOrganization,
   user,
   mapReady,
   mapLoading,
@@ -98,13 +98,6 @@ export default function MapTopbar({
     mapLoading,
     hasUnsavedChanges,
   });
-  const organizationName =
-    activeOrganization?.name ||
-    context.organization?.name ||
-    "Maõno Maps";
-  const projectName =
-    context.project?.name ||
-    (context.mode === "create" ? "Novo mapa" : "Mapa do projeto");
 
   useEffect(() => {
     if (!accountMenuOpen) {
@@ -140,21 +133,6 @@ export default function MapTopbar({
       className="maono-map-topbar"
       data-maono-no-preview="true"
     >
-      <div className="maono-map-topbar__project">
-        <Link
-          to="/projects"
-          className="maono-map-topbar__back"
-          aria-label="Voltar aos projetos"
-          title="Voltar aos projetos"
-        >
-          <MapShellIcon name="chevron-left" />
-        </Link>
-        <div>
-          <span>{organizationName}</span>
-          <strong title={projectName}>{projectName}</strong>
-        </div>
-      </div>
-
       <div className="maono-map-topbar__account" ref={accountRef}>
         <span
           className={`maono-map-topbar__status is-${status.tone}`}
