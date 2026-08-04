@@ -63,6 +63,12 @@ function sameColumns(left: any, right: any) {
   );
 }
 
+function pointEligibilityLayer(layer: any) {
+  return ["cluster", "heatmap"].includes(layer?.type)
+    ? { ...layer, type: "point" }
+    : layer;
+}
+
 function findSavedDataset(savedConfig: any, dataId: unknown) {
   const resolvedDataId = Array.isArray(dataId)
     ? dataId[0]
@@ -98,6 +104,7 @@ export function findCompatibleClusterLayer(
 
   const compatible = layers.filter(
     (layer) =>
+      layer?.id !== pointLayer?.id &&
       layer?.type === "cluster" &&
       layer?.config?.dataId === pointLayer?.config?.dataId &&
       sameColumns(layer, pointLayer),
@@ -328,7 +335,10 @@ export function prepareSavedConfigForPointClustering(
       (layer: any) => layer?.id === pointLayerId,
     );
 
-    if (!pointLayer || !["point", "geojson"].includes(pointLayer.type)) {
+    if (
+      !pointLayer ||
+      !["point", "geojson", "cluster", "heatmap"].includes(pointLayer.type)
+    ) {
       continue;
     }
 
@@ -338,11 +348,12 @@ export function prepareSavedConfigForPointClustering(
       nextLayers,
     );
     const eligibility = getPointClusterEligibility(
-      pointLayer,
+      pointEligibilityLayer(pointLayer),
       findSavedDataset(
         savedConfig,
         pointLayer?.config?.dataId,
       ),
+      { minimumPointCount: 1 },
     );
 
     if (policy.enabled && !eligibility.eligible) {
