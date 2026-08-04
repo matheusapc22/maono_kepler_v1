@@ -13,6 +13,7 @@ import type {
 import LayerStyleEditor, {
   type LayerStyleChange,
 } from "./LayerStyleEditor";
+import PointSpatialGroupingSection from "./PointSpatialGroupingSection";
 
 type Props = {
   layer: MaonoLayerSnapshot | null;
@@ -20,8 +21,6 @@ type Props = {
   canRename: boolean;
   canEditStructure: boolean;
   canEditStyle: boolean;
-  canDuplicate: boolean;
-  canRemove: boolean;
   layerBlending: string | null;
   overlayBlending: string | null;
   onLabelChange: (layer: MaonoLayerSnapshot, label: string) => boolean;
@@ -34,8 +33,6 @@ type Props = {
     layer: MaonoLayerSnapshot,
     change: LayerStyleChange,
   ) => void;
-  onDuplicate: (layerId: string) => void;
-  onRemove: (layerId: string) => void;
 };
 
 const COLUMN_LABELS: Record<MapLayerColumnKey, string> = {
@@ -51,16 +48,12 @@ export default function LayerInspector({
   canRename,
   canEditStructure,
   canEditStyle,
-  canDuplicate,
-  canRemove,
   layerBlending,
   overlayBlending,
   onLabelChange,
   onDatasetChange,
   onColumnsChange,
   onStyleChange,
-  onDuplicate,
-  onRemove,
 }: Props) {
   const [label, setLabel] = useState(layer?.label || "");
   const [nameError, setNameError] = useState<string | null>(null);
@@ -179,6 +172,11 @@ export default function LayerInspector({
           <dd>{activeLayer.isVisible ? "Visível" : "Oculta"}</dd>
         </div>
       </dl>
+
+      <PointSpatialGroupingSection
+        layerId={activeLayer.id}
+        editable={canEditStructure || canEditStyle}
+      />
 
       {canRename || canEditStructure || canEditStyle ? (
         <div className="maono-layer-inspector__editor">
@@ -332,25 +330,6 @@ export default function LayerInspector({
           Modo de visualização: a estrutura e o estilo permanecem somente leitura.
         </p>
       )}
-
-      {canDuplicate || canRemove ? (
-        <div className="maono-layer-inspector__actions">
-          {canDuplicate ? (
-            <button type="button" onClick={() => onDuplicate(activeLayer.id)}>
-              Duplicar
-            </button>
-          ) : null}
-          {canRemove ? (
-            <button
-              className="is-danger"
-              type="button"
-              onClick={() => onRemove(activeLayer.id)}
-            >
-              Remover
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }
