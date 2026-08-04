@@ -1,0 +1,7 @@
+.maono-map-topbar {
+  justify-content: flex-end;
+}
+
+.maono-map-topbar__account {
+  margin-left: auto;
+}
