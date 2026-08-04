@@ -1,0 +1,67 @@
+.maono-layer-panel__save-footer {
+  position: relative;
+  z-index: 12;
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 11px 12px 12px;
+  border-top: 1px solid rgba(31, 43, 62, 0.9);
+  background:
+    linear-gradient(180deg, rgba(13, 21, 33, 0.98), rgba(4, 7, 12, 0.99));
+  box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.3);
+}
+
+.maono-layer-panel__save-message {
+  max-height: 76px;
+  padding: 8px 9px;
+  overflow-y: auto;
+  border: 1px solid rgba(110, 231, 183, 0.3);
+  border-radius: 8px;
+  color: #a7f3d0;
+  background: rgba(6, 78, 59, 0.23);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.maono-layer-panel__save-message.is-error {
+  border-color: rgba(251, 113, 133, 0.34);
+  color: #fecdd3;
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.maono-layer-panel__save-button {
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid rgba(226, 194, 117, 0.72);
+  border-radius: 10px;
+  color: #0b0d11;
+  background: linear-gradient(180deg, #e2c275, #c5a059);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.32),
+    0 8px 20px rgba(197, 160, 89, 0.18);
+  transition:
+    filter 150ms ease,
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+.maono-layer-panel__save-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.maono-layer-panel__save-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+/* O componente legado permanece montado como executor do fluxo seguro de save,
+   mas deixa de ocupar o mapa. A ação visível passa a existir somente no painel. */
+.maono-map-runtime
+  [data-maono-no-preview="true"].fixed.bottom-6.right-6 {
+  display: none !important;
+}
