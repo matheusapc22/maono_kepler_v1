@@ -21,6 +21,8 @@ const [
   layerPanelCss,
   sidePanelFactory,
   loadDataModalFactory,
+  mapManagementPage,
+  mapManagementCss,
   layoutDebug,
   backButton,
 ] = await Promise.all([
@@ -36,6 +38,8 @@ const [
   source("components/maono-layer-panel/maono-layer-panel.css"),
   source("factories/side-panel.tsx"),
   source("factories/load-data-modal.ts"),
+  source("map-panel/MapManagementPage.tsx"),
+  source("map-panel/map-management-page.css"),
   source("components/maono-map-shell/map-layout-debug.ts"),
   source("components/back-to-projects-button.tsx"),
 ]);
@@ -91,6 +95,23 @@ test("modal nativo de dados não é renderizado durante a hidratação", () => {
   assert.match(loadDataModalFactory, /React\.createElement\(LoadDataModal, props\)/);
   assert.match(loadDataModalFactory, /\.\.\.state\.demo\.app/);
   assert.match(loadDataModalFactory, /\)\(HydrationSafeLoadDataModal\)/);
+});
+
+test("rota manage redireciona sem exibir a antiga tela de escolha", () => {
+  assert.match(
+    mapManagementPage,
+    /const destination = context\.availablePanels\.editor\.allowed[\s\S]*\? "edit"[\s\S]*context\.availablePanels\.viewer\.allowed[\s\S]*\? "view"/,
+  );
+  assert.match(mapManagementPage, /return <MapRedirectLoader \/>/);
+  assert.match(mapManagementPage, /\{ replace: true \}/);
+  assert.doesNotMatch(mapManagementPage, /Abrir editor/);
+  assert.doesNotMatch(mapManagementPage, /Abrir visualizador/);
+  assert.doesNotMatch(mapManagementPage, /Gerenciar mapa/);
+  assert.doesNotMatch(mapManagementPage, /Escolha como deseja abrir este projeto/);
+  assert.match(mapManagementCss, /\.maono-map-management__spinner/);
+  assert.match(mapManagementCss, /border-top-color:\s*#c5a059/i);
+  assert.match(mapManagementCss, /height:\s*76px/);
+  assert.match(mapManagementCss, /width:\s*76px/);
 });
 
 test("ações da sidebar são capability-aware e não consultam role", () => {
