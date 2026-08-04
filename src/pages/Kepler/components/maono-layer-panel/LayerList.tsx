@@ -1,4 +1,11 @@
-import { useMemo, useState, type DragEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 
 import type { MaonoLayerSnapshot } from "../../integration/keplerBridge";
 import LayerListItem from "./LayerListItem";
@@ -21,6 +28,7 @@ type Props = {
   onRemove: (layer: MaonoLayerSnapshot) => void;
   onMove: (layerId: string, direction: -1 | 1) => void;
   onReorder: (draggedLayerId: string, targetLayerId: string) => void;
+  renderLayerDetails: (layer: MaonoLayerSnapshot) => ReactNode;
 };
 
 function normalizeSearch(value: string) {
@@ -29,6 +37,13 @@ function normalizeSearch(value: string) {
     .replace(/\p{Diacritic}/gu, "")
     .trim()
     .toLocaleLowerCase("pt-BR");
+}
+
+function sameLayerIds(left: Set<string>, right: Set<string>) {
+  return (
+    left.size === right.size &&
+    Array.from(left).every((layerId) => right.has(layerId))
+  );
 }
 
 export default function LayerList({
@@ -48,11 +63,16 @@ export default function LayerList({
   onRemove,
   onMove,
   onReorder,
+  renderLayerDetails,
 }: Props) {
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
   const [dragTargetLayerId, setDragTargetLayerId] = useState<string | null>(
     null,
   );
+  const [expandedLayerIds, setExpandedLayerIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const previousSelectedLayerIdRef = useRef<string | null>(null);
   const normalizedSearch = normalizeSearch(search);
   const visibleLayers = useMemo(
     () =>
@@ -66,6 +86,38 @@ export default function LayerList({
     [layers, normalizedSearch],
   );
   const reorderEnabled = canReorder && !normalizedSearch;
+
+  useEffect(() => {
+    const availableLayerIds = new Set(layers.map((layer) => layer.id));
+
+    setExpandedLayerIds((current) => {
+      const next = new Set(
+        Array.from(current).filter((layerId) => availableLayerIds.has(layerId)),
+      );
+
+      return sameLayerIds(current, next) ? current : next;
+    });
+  }, [layers]);
+
+  useEffect(() => {
+    const previousSelectedLayerId = previousSelectedLayerIdRef.current;
+
+    if (
+      canInspect &&
+      selectedLayerId &&
+      selectedLayerId !== previousSelectedLayerId
+    ) {
+      setExpandedLayerIds((current) => {
+        if (current.has(selectedLayerId)) return current;
+
+        const next = new Set(current);
+        next.add(selectedLayerId);
+        return next;
+      });
+    }
+
+    previousSelectedLayerIdRef.current = selectedLayerId;
+  }, [canInspect, selectedLayerId]);
 
   function resetDrag() {
     setDraggedLayerId(null);
@@ -93,6 +145,23 @@ export default function LayerList({
     }
 
     resetDrag();
+  }
+
+  function toggleLayerExpanded(layer: MaonoLayerSnapshot) {
+    if (!canInspect) return;
+
+    onSelect(layer);
+    setExpandedLayerIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(layer.id)) {
+        next.delete(layer.id);
+      } else {
+        next.add(layer.id);
+      }
+
+      return next;
+    });
   }
 
   if (!visibleLayers.length) {
@@ -138,6 +207,7 @@ export default function LayerList({
           const originalIndex = layers.findIndex(
             (candidate) => candidate.id === layer.id,
           );
+          const expanded = expandedLayerIds.has(layer.id);
 
           return (
             <LayerListItem
@@ -146,6 +216,8 @@ export default function LayerList({
               index={originalIndex}
               total={layers.length}
               selected={layer.id === selectedLayerId}
+              expanded={expanded}
+              details={renderLayerDetails(layer)}
               canInspect={canInspect}
               canToggle={canToggle}
               canRename={canRename}
@@ -158,7 +230,7 @@ export default function LayerList({
                 layer.id === dragTargetLayerId &&
                 layer.id !== draggedLayerId
               }
-              onSelect={onSelect}
+              onToggleExpanded={toggleLayerExpanded}
               onToggle={onToggle}
               onRename={onRename}
               onDuplicate={onDuplicate}
