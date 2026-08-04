@@ -5,6 +5,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from "react";
 
 import type { MaonoLayerSnapshot } from "../../integration/keplerBridge";
@@ -15,6 +16,8 @@ type Props = {
   index: number;
   total: number;
   selected: boolean;
+  expanded: boolean;
+  details: ReactNode;
   canInspect: boolean;
   canToggle: boolean;
   canRename: boolean;
@@ -23,7 +26,7 @@ type Props = {
   canReorder: boolean;
   dragging: boolean;
   dragTarget: boolean;
-  onSelect: (layer: MaonoLayerSnapshot) => void;
+  onToggleExpanded: (layer: MaonoLayerSnapshot) => void;
   onToggle: (layer: MaonoLayerSnapshot, visible: boolean) => void;
   onRename: (layer: MaonoLayerSnapshot, label: string) => boolean;
   onDuplicate: (layer: MaonoLayerSnapshot) => void;
@@ -44,6 +47,8 @@ export default function LayerListItem({
   index,
   total,
   selected,
+  expanded,
+  details,
   canInspect,
   canToggle,
   canRename,
@@ -52,7 +57,7 @@ export default function LayerListItem({
   canReorder,
   dragging,
   dragTarget,
-  onSelect,
+  onToggleExpanded,
   onToggle,
   onRename,
   onDuplicate,
@@ -64,11 +69,13 @@ export default function LayerListItem({
   onDragEnd,
 }: Props) {
   const [editing, setEditing] = useState(false);
+  const [detailsMounted, setDetailsMounted] = useState(expanded);
   const [draftLabel, setDraftLabel] = useState(layer.label);
   const [renameError, setRenameError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const ignoreNextBlurRef = useRef(false);
   const committingRef = useRef(false);
+  const detailsId = `maono-layer-details-${encodeURIComponent(layer.id)}`;
 
   function guardImmediateBlur() {
     ignoreNextBlurRef.current = true;
@@ -90,6 +97,12 @@ export default function LayerListItem({
       inputRef.current?.select();
     }
   }, [editing]);
+
+  useEffect(() => {
+    if (expanded) {
+      setDetailsMounted(true);
+    }
+  }, [expanded]);
 
   function cancelRename() {
     setDraftLabel(layer.label);
@@ -133,6 +146,7 @@ export default function LayerListItem({
       className={[
         "maono-layer-list__item",
         selected ? "is-selected" : "",
+        expanded ? "is-expanded" : "is-collapsed",
         layer.isVisible ? "is-visible" : "is-hidden",
         dragging ? "is-dragging" : "",
         dragTarget ? "is-drag-target" : "",
@@ -213,15 +227,25 @@ export default function LayerListItem({
           <button
             className="maono-layer-list__select"
             type="button"
-            onClick={() => onSelect(layer)}
+            onClick={() => onToggleExpanded(layer)}
             aria-current={selected ? "true" : undefined}
-            aria-pressed={selected}
+            aria-expanded={expanded}
+            aria-controls={detailsId}
             disabled={!canInspect}
-            title={canInspect ? "Inspecionar camada" : "Inspeção indisponível"}
+            title={
+              canInspect
+                ? expanded
+                  ? "Recolher configurações da camada"
+                  : "Expandir configurações da camada"
+                : "Inspeção indisponível"
+            }
           >
-            <span>
+            <span className="maono-layer-list__label">
               <strong>{layer.label}</strong>
               <small>{layer.type}</small>
+            </span>
+            <span className="maono-layer-list__chevron" aria-hidden="true">
+              <LayerPanelIcon name="chevron-down" />
             </span>
           </button>
         )}
@@ -319,6 +343,25 @@ export default function LayerListItem({
           </span>
         ) : null}
       </div>
+
+      {detailsMounted ? (
+        <div
+          className="maono-layer-list__details-shell"
+          data-expanded={expanded ? "true" : "false"}
+          aria-hidden={!expanded}
+        >
+          <div className="maono-layer-list__details-clip">
+            <div
+              id={detailsId}
+              className="maono-layer-list__details"
+              role="region"
+              aria-label={`Configurações de ${layer.label}`}
+            >
+              {details}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </li>
   );
 }
