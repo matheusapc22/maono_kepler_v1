@@ -26,28 +26,34 @@ const urls = {
     "../functions/_lib/permissions.js",
     import.meta.url,
   ),
+  clientApi: new URL(
+    "../src/pages/Kepler/map-panel/map-panel-api.ts",
+    import.meta.url,
+  ),
 };
 
-const [service, endpoint, newMap, permissions] = await Promise.all(
+const [service, endpoint, newMap, permissions, clientApi] = await Promise.all(
   Object.values(urls).map((url) => readFile(url, "utf8")),
 );
 
-test("política versionada resolve gerenciar, visualizar e editar", () => {
-  assert.equal(MAP_PANEL_POLICY_VERSION, 1);
+test("política versionada prioriza create, depois editor e viewer", () => {
+  assert.equal(MAP_PANEL_POLICY_VERSION, 2);
 
   assert.deepEqual(
     resolveMapPanelDecision({
       requestedMode: "manage",
       viewerAllowed: true,
       editorAllowed: true,
+      createAllowed: true,
     }),
     {
       requestedMode: "manage",
-      resolvedMode: "viewer",
-      defaultPanel: "viewer",
+      resolvedMode: "create",
+      defaultPanel: "create",
       availablePanels: {
         viewer: true,
         editor: true,
+        create: true,
       },
       allowed: true,
       reason: null,
@@ -56,9 +62,32 @@ test("política versionada resolve gerenciar, visualizar e editar", () => {
 
   assert.equal(
     resolveMapPanelDecision({
+      requestedMode: "manage",
+      viewerAllowed: true,
+      editorAllowed: true,
+      createAllowed: false,
+    }).resolvedMode,
+    "editor",
+  );
+
+  assert.equal(
+    resolveMapPanelDecision({
+      requestedMode: "manage",
+      viewerAllowed: true,
+      editorAllowed: false,
+      createAllowed: false,
+    }).resolvedMode,
+    "viewer",
+  );
+});
+
+test("modos explícitos continuam respeitados", () => {
+  assert.equal(
+    resolveMapPanelDecision({
       requestedMode: "viewer",
       viewerAllowed: true,
       editorAllowed: true,
+      createAllowed: true,
     }).resolvedMode,
     "viewer",
   );
@@ -68,9 +97,39 @@ test("política versionada resolve gerenciar, visualizar e editar", () => {
       requestedMode: "editor",
       viewerAllowed: true,
       editorAllowed: true,
+      createAllowed: true,
     }).resolvedMode,
     "editor",
   );
+
+  assert.equal(
+    resolveMapPanelDecision({
+      requestedMode: "create",
+      viewerAllowed: true,
+      editorAllowed: true,
+      createAllowed: true,
+    }).resolvedMode,
+    "create",
+  );
+});
+
+test("create negado mantém fallback explícito sem ampliar acesso", () => {
+  const decision = resolveMapPanelDecision({
+    requestedMode: "create",
+    viewerAllowed: true,
+    editorAllowed: true,
+    createAllowed: false,
+    createDeniedReason: "PROJECT_CREATE_FORBIDDEN",
+  });
+
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, "PROJECT_CREATE_FORBIDDEN");
+  assert.equal(decision.defaultPanel, "editor");
+  assert.deepEqual(decision.availablePanels, {
+    viewer: true,
+    editor: true,
+    create: false,
+  });
 });
 
 test("editor negado recebe fallback explícito para viewer", () => {
@@ -78,6 +137,7 @@ test("editor negado recebe fallback explícito para viewer", () => {
     requestedMode: "editor",
     viewerAllowed: true,
     editorAllowed: false,
+    createAllowed: false,
   });
 
   assert.equal(decision.allowed, false);
@@ -86,6 +146,7 @@ test("editor negado recebe fallback explícito para viewer", () => {
   assert.deepEqual(decision.availablePanels, {
     viewer: true,
     editor: false,
+    create: false,
   });
 });
 
@@ -94,6 +155,7 @@ test("viewer negado usa o código público padronizado", () => {
     requestedMode: "viewer",
     viewerAllowed: false,
     editorAllowed: false,
+    createAllowed: false,
   });
 
   assert.equal(decision.allowed, false);
@@ -133,7 +195,7 @@ test("capacidades do viewer não incluem mutações persistentes", () => {
   }
 });
 
-test("editor recebe todos os comandos previstos", () => {
+test("editor recebe comandos persistentes sem capacidades exclusivas de criação", () => {
   const capabilities = buildMapCapabilities({
     viewerAllowed: true,
     editorAllowed: true,
@@ -154,6 +216,25 @@ test("editor recebe todos os comandos previstos", () => {
       capability,
     );
   }
+});
+
+test("create de projeto existente não cria cópia nem reinicializa o mapa", () => {
+  const capabilities = buildMapCapabilities({
+    viewerAllowed: true,
+    editorAllowed: true,
+    editMetadataAllowed: true,
+    updateThumbnailAllowed: true,
+    openCreateWorkspaceAllowed: true,
+    createProjectAllowed: false,
+    initializeMapAllowed: false,
+  });
+
+  assert.equal(capabilities.viewMap, true);
+  assert.equal(capabilities.editLayers, true);
+  assert.equal(capabilities.saveMap, true);
+  assert.equal(capabilities.openCreateWorkspace, true);
+  assert.equal(capabilities.createProject, false);
+  assert.equal(capabilities.initializeMap, false);
 });
 
 test("feature flags têm rollback seguro e opt-in", () => {
@@ -210,7 +291,7 @@ test("modo desconhecido falha com código padronizado", () => {
   );
 });
 
-test("editor exige view, map.edit e save resolvidos no backend", () => {
+test("create existente exige editar, salvar e criar na organização", () => {
   assert.match(
     service,
     /viewerAllowed\s*&&\s*mapEditAllowed\s*&&\s*saveDecision\.allowed/,
@@ -218,7 +299,17 @@ test("editor exige view, map.edit e save resolvidos no backend", () => {
   assert.match(service, /can\(env, user, "project\.view"/);
   assert.match(service, /can\(env, user, "project\.map\.edit"/);
   assert.match(service, /can\(env, user, "project\.save"/);
+  assert.match(service, /can\(env, user, "project\.create", \{[\s\S]*scopeType: "organization"/);
+  assert.match(service, /const createAllowed = createDeniedReason === null/);
   assert.match(permissions, /"project\.map\.edit"/);
+});
+
+test("rota create existente preserva slug e contrato de atualização", () => {
+  assert.match(service, /`\/projects\/\$\{encodedSlug\}\/create`/);
+  assert.match(clientApi, /`\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/create`/);
+  assert.match(clientApi, /project\s*\?[\s\S]*capabilities\.viewMap[\s\S]*capabilities\.editLayers/);
+  assert.match(service, /createProjectAllowed:\s*false/);
+  assert.match(service, /initializeMapAllowed:\s*false/);
 });
 
 test("DTO usa publicProject e organização sanitizada", () => {
@@ -252,6 +343,8 @@ test("abertura e negação produzem auditoria sem conteúdo do mapa", () => {
   assert.match(service, /projects\.map\.viewer\.open/);
   assert.match(service, /projects\.map\.editor\.open/);
   assert.match(service, /projects\.map\.editor\.denied/);
+  assert.match(service, /projects\.map\.create_workspace\.open/);
+  assert.match(service, /projects\.map\.create_workspace\.denied/);
 
   assert.match(service, /projects\.create\.workspace\.open/);
   assert.match(service, /projects\.create\.workspace\.denied/);
