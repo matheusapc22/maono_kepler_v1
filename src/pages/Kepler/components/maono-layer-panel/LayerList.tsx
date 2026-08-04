@@ -73,6 +73,7 @@ export default function LayerList({
     () => new Set(),
   );
   const previousSelectedLayerIdRef = useRef<string | null>(null);
+  const accordionSelectionLayerIdRef = useRef<string | null>(null);
   const normalizedSearch = normalizeSearch(search);
   const visibleLayers = useMemo(
     () =>
@@ -101,11 +102,18 @@ export default function LayerList({
 
   useEffect(() => {
     const previousSelectedLayerId = previousSelectedLayerIdRef.current;
+    const selectionCameFromAccordion =
+      accordionSelectionLayerIdRef.current === selectedLayerId;
+
+    if (selectionCameFromAccordion) {
+      accordionSelectionLayerIdRef.current = null;
+    }
 
     if (
       canInspect &&
       selectedLayerId &&
-      selectedLayerId !== previousSelectedLayerId
+      selectedLayerId !== previousSelectedLayerId &&
+      !selectionCameFromAccordion
     ) {
       setExpandedLayerIds((current) => {
         if (current.has(selectedLayerId)) return current;
@@ -149,6 +157,10 @@ export default function LayerList({
 
   function toggleLayerExpanded(layer: MaonoLayerSnapshot) {
     if (!canInspect) return;
+
+    if (selectedLayerId !== layer.id) {
+      accordionSelectionLayerIdRef.current = layer.id;
+    }
 
     onSelect(layer);
     setExpandedLayerIds((current) => {
