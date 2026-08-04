@@ -33,7 +33,8 @@ export default function PointSpatialGroupingSection({
   const [open, setOpen] = useState(false);
   const contentId = useId();
   const item = controller?.layers.find(
-    (candidate) => candidate.pointLayerId === layerId,
+    (candidate: { pointLayerId: string }) =>
+      candidate.pointLayerId === layerId,
   );
 
   if (!controller?.featureEnabled || !item) {
