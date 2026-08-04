@@ -20,6 +20,7 @@ const [
   layerPanel,
   layerPanelCss,
   sidePanelFactory,
+  loadDataModalFactory,
   layoutDebug,
   backButton,
 ] = await Promise.all([
@@ -34,6 +35,7 @@ const [
   source("components/maono-layer-panel/MaonoLayerPanel.tsx"),
   source("components/maono-layer-panel/maono-layer-panel.css"),
   source("factories/side-panel.tsx"),
+  source("factories/load-data-modal.ts"),
   source("components/maono-map-shell/map-layout-debug.ts"),
   source("components/back-to-projects-button.tsx"),
 ]);
@@ -81,6 +83,14 @@ test("painel funcional é hospedado pelo shell e não pela factory do Kepler", (
 ${sidePanelFactory}`.match(/<MaonoLayerPanel \/>/g)?.length,
     1,
   );
+});
+
+test("modal nativo de dados não é renderizado durante a hidratação", () => {
+  assert.match(loadDataModalFactory, /HydrationSafeLoadDataModal/);
+  assert.match(loadDataModalFactory, /if \(props\.isMapLoading\)\s*\{\s*return null;/);
+  assert.match(loadDataModalFactory, /React\.createElement\(LoadDataModal, props\)/);
+  assert.match(loadDataModalFactory, /\.\.\.state\.demo\.app/);
+  assert.match(loadDataModalFactory, /\)\(HydrationSafeLoadDataModal\)/);
 });
 
 test("ações da sidebar são capability-aware e não consultam role", () => {
