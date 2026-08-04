@@ -11,7 +11,7 @@ import {
   isProjectQuotaReservationEnabled,
 } from "./organization-limit-service.js";
 
-export const MAP_PANEL_POLICY_VERSION = 1;
+export const MAP_PANEL_POLICY_VERSION = 2;
 export const MAP_PANEL_MODES = Object.freeze({
   MANAGE: "manage",
   VIEWER: "viewer",
@@ -74,7 +74,8 @@ function normalizeMode(value, fallback = MAP_PANEL_MODES.MANAGE) {
   if (
     mode === MAP_PANEL_MODES.MANAGE ||
     mode === MAP_PANEL_MODES.VIEWER ||
-    mode === MAP_PANEL_MODES.EDITOR
+    mode === MAP_PANEL_MODES.EDITOR ||
+    mode === MAP_PANEL_MODES.CREATE
   ) {
     return mode;
   }
@@ -85,6 +86,7 @@ function normalizeMode(value, fallback = MAP_PANEL_MODES.MANAGE) {
       MAP_PANEL_MODES.MANAGE,
       MAP_PANEL_MODES.VIEWER,
       MAP_PANEL_MODES.EDITOR,
+      MAP_PANEL_MODES.CREATE,
     ],
   });
 }
@@ -141,6 +143,9 @@ export function buildMapCapabilities({
   persistIsochroneAllowed = editorAllowed,
   removeIsochroneAllowed = editorAllowed,
   createAllowed = false,
+  openCreateWorkspaceAllowed = createAllowed,
+  createProjectAllowed = createAllowed,
+  initializeMapAllowed = createAllowed,
 } = {}) {
   const capabilities = emptyCapabilities();
 
@@ -172,10 +177,15 @@ export function buildMapCapabilities({
     capabilities.saveMap = true;
   }
 
-  if (createAllowed) {
-    capabilities.openCreateWorkspace = true;
-    capabilities.createProject = true;
-    capabilities.initializeMap = true;
+  capabilities.openCreateWorkspace = Boolean(openCreateWorkspaceAllowed);
+  capabilities.createProject = Boolean(createProjectAllowed);
+  capabilities.initializeMap = Boolean(initializeMapAllowed);
+
+  if (
+    capabilities.openCreateWorkspace ||
+    capabilities.createProject ||
+    capabilities.initializeMap
+  ) {
     capabilities.saveMap = true;
   }
 
@@ -190,17 +200,22 @@ export function resolveMapPanelDecision({
   requestedMode = MAP_PANEL_MODES.MANAGE,
   viewerAllowed = false,
   editorAllowed = false,
+  createAllowed = false,
+  createDeniedReason = "PROJECT_CREATE_FORBIDDEN",
 } = {}) {
   const requested = normalizeMode(requestedMode);
   const availablePanels = {
     viewer: Boolean(viewerAllowed),
     editor: Boolean(editorAllowed),
+    create: Boolean(createAllowed),
   };
-  const defaultPanel = viewerAllowed
-    ? MAP_PANEL_MODES.VIEWER
+  const defaultPanel = createAllowed
+    ? MAP_PANEL_MODES.CREATE
     : editorAllowed
       ? MAP_PANEL_MODES.EDITOR
-      : null;
+      : viewerAllowed
+        ? MAP_PANEL_MODES.VIEWER
+        : null;
   let resolvedMode = defaultPanel;
   let allowed = Boolean(defaultPanel);
   let reason = allowed ? null : "MAP_VIEW_FORBIDDEN";
@@ -213,6 +228,10 @@ export function resolveMapPanelDecision({
     allowed = availablePanels.editor;
     resolvedMode = allowed ? MAP_PANEL_MODES.EDITOR : defaultPanel;
     reason = allowed ? null : "MAP_EDITOR_FORBIDDEN";
+  } else if (requested === MAP_PANEL_MODES.CREATE) {
+    allowed = availablePanels.create;
+    resolvedMode = allowed ? MAP_PANEL_MODES.CREATE : defaultPanel;
+    reason = allowed ? null : createDeniedReason;
   }
 
   return {
@@ -225,7 +244,11 @@ export function resolveMapPanelDecision({
   };
 }
 
-function publicPanelAvailability(projectSlug, panel) {
+function publicPanelAvailability(
+  projectSlug,
+  panel,
+  createDeniedReason = "PROJECT_CREATE_FORBIDDEN",
+) {
   const encodedSlug = encodeURIComponent(projectSlug);
 
   return {
@@ -244,9 +267,11 @@ function publicPanelAvailability(projectSlug, panel) {
       reason: panel.availablePanels.editor ? null : "MAP_EDITOR_FORBIDDEN",
     },
     create: {
-      allowed: false,
-      route: null,
-      reason: "EXISTING_PROJECT",
+      allowed: panel.availablePanels.create,
+      route: panel.availablePanels.create
+        ? `/projects/${encodedSlug}/create`
+        : null,
+      reason: panel.availablePanels.create ? null : createDeniedReason,
     },
   };
 }
@@ -315,12 +340,17 @@ export async function resolveExistingProjectMapNavigation(
     mapEditDecision,
     metadataDecision,
     thumbnailDecision,
+    createDecision,
   ] = await Promise.all([
     can(env, user, "project.view", context),
     can(env, user, "project.save", context),
     can(env, user, "project.map.edit", context),
     can(env, user, "project.edit", context),
     can(env, user, "project.thumbnail.update", context),
+    can(env, user, "project.create", {
+      organizationId: project.organization_id,
+      scopeType: "organization",
+    }),
   ]);
   const features = getMapPanelFeatures(env);
   const viewerAllowed = viewDecision.allowed;
@@ -328,10 +358,20 @@ export async function resolveExistingProjectMapNavigation(
     ? mapEditDecision.allowed
     : saveDecision.allowed;
   const editorAllowed = viewerAllowed && mapEditAllowed && saveDecision.allowed;
+  const createDeniedReason = !features.mapCreateRoute
+    ? "MAP_CREATE_ROUTE_DISABLED"
+    : !createDecision.allowed
+      ? "PROJECT_CREATE_FORBIDDEN"
+      : !editorAllowed
+        ? "MAP_EDITOR_FORBIDDEN"
+        : null;
+  const createAllowed = createDeniedReason === null;
   const panel = resolveMapPanelDecision({
     requestedMode: options.requestedMode,
     viewerAllowed,
     editorAllowed,
+    createAllowed,
+    createDeniedReason: createDeniedReason || "PROJECT_CREATE_FORBIDDEN",
   });
   const auditBase = {
     actorUserId: user.id,
@@ -346,9 +386,11 @@ export async function resolveExistingProjectMapNavigation(
     await safeAudit(env, {
       ...auditBase,
       action:
-        panel.requestedMode === MAP_PANEL_MODES.EDITOR
-          ? "projects.map.editor.denied"
-          : "projects.map.viewer.denied",
+        panel.requestedMode === MAP_PANEL_MODES.CREATE
+          ? "projects.map.create_workspace.denied"
+          : panel.requestedMode === MAP_PANEL_MODES.EDITOR
+            ? "projects.map.editor.denied"
+            : "projects.map.viewer.denied",
       result: "denied",
       metadata: {
         requestedMode: panel.requestedMode,
@@ -358,15 +400,21 @@ export async function resolveExistingProjectMapNavigation(
     });
 
     throw createMapPanelError(
-      panel.requestedMode === MAP_PANEL_MODES.EDITOR
-        ? "Você não possui permissão para editar este mapa."
-        : "Você não possui permissão para visualizar este mapa.",
+      panel.requestedMode === MAP_PANEL_MODES.CREATE
+        ? "Você não possui permissão para abrir o modo de criação neste projeto."
+        : panel.requestedMode === MAP_PANEL_MODES.EDITOR
+          ? "Você não possui permissão para editar este mapa."
+          : "Você não possui permissão para visualizar este mapa.",
       403,
       panel.reason,
       {
         requestedMode: panel.requestedMode,
         fallbackPanel: panel.defaultPanel,
-        availablePanels: publicPanelAvailability(project.slug, panel),
+        availablePanels: publicPanelAvailability(
+          project.slug,
+          panel,
+          createDeniedReason || "PROJECT_CREATE_FORBIDDEN",
+        ),
       },
     );
   }
@@ -376,9 +424,11 @@ export async function resolveExistingProjectMapNavigation(
     action:
       panel.requestedMode === MAP_PANEL_MODES.MANAGE
         ? "projects.map.navigation.read"
-        : panel.resolvedMode === MAP_PANEL_MODES.EDITOR
-          ? "projects.map.editor.open"
-          : "projects.map.viewer.open",
+        : panel.resolvedMode === MAP_PANEL_MODES.CREATE
+          ? "projects.map.create_workspace.open"
+          : panel.resolvedMode === MAP_PANEL_MODES.EDITOR
+            ? "projects.map.editor.open"
+            : "projects.map.viewer.open",
     result: "success",
     metadata: {
       requestedMode: panel.requestedMode,
@@ -387,37 +437,41 @@ export async function resolveExistingProjectMapNavigation(
     },
   });
 
+  const editableWorkspace =
+    panel.resolvedMode === MAP_PANEL_MODES.EDITOR ||
+    panel.resolvedMode === MAP_PANEL_MODES.CREATE;
+  const createWorkspace =
+    createAllowed && panel.resolvedMode === MAP_PANEL_MODES.CREATE;
+
   return {
     policyVersion: MAP_PANEL_POLICY_VERSION,
     mode: panel.resolvedMode,
     requestedMode: panel.requestedMode,
     defaultPanel: panel.defaultPanel,
-    availablePanels: publicPanelAvailability(project.slug, panel),
+    availablePanels: publicPanelAvailability(
+      project.slug,
+      panel,
+      createDeniedReason || "PROJECT_CREATE_FORBIDDEN",
+    ),
+    allowed: panel.allowed,
+    reason: panel.reason,
     capabilities: buildMapCapabilities({
       viewerAllowed,
-      editorAllowed:
-        editorAllowed && panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
-      editMetadataAllowed:
-        metadataDecision.allowed &&
-        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
-      updateThumbnailAllowed:
-        thumbnailDecision.allowed &&
-        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
+      editorAllowed: editorAllowed && editableWorkspace,
+      editMetadataAllowed: metadataDecision.allowed && editableWorkspace,
+      updateThumbnailAllowed: thumbnailDecision.allowed && editableWorkspace,
       focusMapDataAllowed: features.maonoMapOverlay && viewerAllowed,
       configureTooltipsAllowed:
-        features.maonoMapOverlay &&
-        editorAllowed &&
-        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
+        features.maonoMapOverlay && editorAllowed && editableWorkspace,
       toggleLegendAllowed: features.maonoMapOverlay && viewerAllowed,
       previewIsochroneAllowed: features.maonoIsochrone && viewerAllowed,
       persistIsochroneAllowed:
-        features.maonoIsochrone &&
-        editorAllowed &&
-        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
+        features.maonoIsochrone && editorAllowed && editableWorkspace,
       removeIsochroneAllowed:
-        features.maonoIsochrone &&
-        editorAllowed &&
-        panel.resolvedMode === MAP_PANEL_MODES.EDITOR,
+        features.maonoIsochrone && editorAllowed && editableWorkspace,
+      openCreateWorkspaceAllowed: createWorkspace,
+      createProjectAllowed: false,
+      initializeMapAllowed: false,
     }),
     project: publicProject(project),
     organization: await getSafeOrganization(env, project.organization_id),
