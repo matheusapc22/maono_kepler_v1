@@ -192,6 +192,15 @@ const AppRoutes: React.FC = () => {
       />
 
       <Route
+        path="/projects/:projectSlug/create"
+        element={
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
+        }
+      />
+
+      <Route
         path="/projects/:projectSlug/map"
         element={<LegacyProjectMapRedirect />}
       />

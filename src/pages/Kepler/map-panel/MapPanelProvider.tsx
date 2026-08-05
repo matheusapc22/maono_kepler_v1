@@ -23,6 +23,7 @@ import type {
 
 function requestedMode(pathname: string): MapNavigationMode {
   if (pathname === "/maps/new/create") return "create";
+  if (pathname.endsWith("/create")) return "create";
   if (pathname.endsWith("/view")) return "viewer";
   if (pathname.endsWith("/edit")) return "editor";
   return "manage";
