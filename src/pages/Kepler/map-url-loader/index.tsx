@@ -84,10 +84,7 @@ export function loadSavedKeplerConfig(savedConfig: any) {
       featureEnabled: POINT_CLUSTERING_FEATURE_ENABLED,
     },
   );
-  loadPointClusterState(
-    savedConfig.maono,
-    prepared.pairs,
-  );
+  loadPointClusterState(prepared.savedConfig.maono);
 
   try {
     const loaded = KeplerGlSchema.load(
@@ -97,7 +94,7 @@ export function loadSavedKeplerConfig(savedConfig: any) {
     if (isRecord(loaded)) {
       const datasets = Array.isArray(loaded.datasets)
         ? loaded.datasets
-        : savedConfig.datasets.map(normalizeDatasetForKepler);
+        : prepared.savedConfig.datasets.map(normalizeDatasetForKepler);
 
       const config =
         loaded.config ?? prepared.savedConfig.config;
@@ -115,7 +112,7 @@ export function loadSavedKeplerConfig(savedConfig: any) {
   }
 
   return {
-    datasets: savedConfig.datasets.map(normalizeDatasetForKepler),
+    datasets: prepared.savedConfig.datasets.map(normalizeDatasetForKepler),
     config: prepared.savedConfig.config,
   };
 }
