@@ -1,18 +1,18 @@
 // @ts-nocheck
 
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { updateMap } from "@kepler.gl/actions";
+
 import {
-  addLayer,
-  layerToggleVisibility,
-  layerVisConfigChange,
-  updateMap,
-} from "@kepler.gl/actions";
-import {
-  buildPointClusterLayerConfig,
-  findCompatibleClusterLayer,
+  adaptiveClusterDeckLayerId,
   resolveClusterClick,
-  resolveVisibilityChanges,
 } from "../clustering/point-cluster-controller.ts";
 import {
   getPointClusterEligibility,
@@ -20,10 +20,11 @@ import {
 import {
   getAdaptivePointClusterDefaults,
   isPointClusteringFeatureEnabled,
+  resolvePointClusterMode,
 } from "../clustering/point-cluster-policy.ts";
 import {
   getPointClusterSnapshot,
-  registerPointClusterPair,
+  prunePointClusterLayerPolicies,
   subscribePointClusterStore,
   updatePointClusterLayerPolicy,
 } from "../clustering/point-cluster-store.ts";
@@ -33,10 +34,8 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
-const POINT_SOURCE_LAYER_TYPES = new Set([
+const LOGICAL_POINT_LAYER_TYPES = new Set([
   "point",
-  "cluster",
-  "heatmap",
   "geojson",
 ]);
 
@@ -48,10 +47,8 @@ function datasetForLayer(datasets, layer) {
   return datasets?.[dataId];
 }
 
-function pointEligibilityLayer(layer) {
-  return ["cluster", "heatmap"].includes(layer?.type)
-    ? { ...layer, type: "point" }
-    : layer;
+function clickedDeckLayerId(clicked) {
+  return clicked?.layer?.id ?? clicked?.sourceLayer?.id;
 }
 
 export function usePointClustering() {
@@ -67,28 +64,36 @@ export function usePointClustering() {
   const visState = useSelector(
     (state) => state?.demo?.keplerGl?.map?.visState ?? {},
   );
+  const isMapLoading = useSelector(
+    (state) => state?.demo?.app?.isMapLoading === true,
+  );
   const layers = visState.layers ?? [];
   const datasets = visState.datasets ?? {};
   const clicked = visState.clicked;
   const previousModesRef = useRef(new Map());
   const handledClickRef = useRef(null);
 
-  const catalog = useMemo(() => {
-    const pairedClusterLayerIds = new Set(
-      storeSnapshot.pairs.map(({ clusterLayerId }) => clusterLayerId),
-    );
+  useEffect(() => {
+    if (isMapLoading || layers.length === 0) {
+      return;
+    }
 
+    prunePointClusterLayerPolicies(
+      layers
+        .filter((layer) => LOGICAL_POINT_LAYER_TYPES.has(layer?.type))
+        .map((layer) => layer.id),
+    );
+  }, [isMapLoading, layers]);
+
+  const catalog = useMemo(() => {
     return layers
-      .filter(
-        (layer) =>
-          POINT_SOURCE_LAYER_TYPES.has(layer?.type) &&
-          !String(layer?.id ?? "").startsWith("maono-cluster-") &&
-          !pairedClusterLayerIds.has(layer?.id),
+      .filter((layer) =>
+        LOGICAL_POINT_LAYER_TYPES.has(layer?.type),
       )
       .map((layer) => {
         const dataset = datasetForLayer(datasets, layer);
         const eligibility = getPointClusterEligibility(
-          pointEligibilityLayer(layer),
+          layer,
           dataset,
           { minimumPointCount: 1 },
         );
@@ -113,141 +118,50 @@ export function usePointClustering() {
     datasets,
     layers,
     storeSnapshot.extension,
-    storeSnapshot.pairs,
   ]);
 
   useEffect(() => {
     if (!POINT_CLUSTERING_FEATURE_ENABLED) {
+      previousModesRef.current.clear();
       return;
     }
 
-    for (const [pointLayerId, policy] of Object.entries(
-      storeSnapshot.extension.layers,
-    )) {
-      const pointLayer = layers.find(
-        (layer) => layer.id === pointLayerId,
-      );
-      if (!pointLayer) {
-        continue;
+    const activeLayerIds = new Set(
+      catalog.map(({ pointLayerId }) => pointLayerId),
+    );
+    for (const pointLayerId of previousModesRef.current.keys()) {
+      if (!activeLayerIds.has(pointLayerId)) {
+        previousModesRef.current.delete(pointLayerId);
       }
+    }
 
-      const dataset = datasetForLayer(datasets, pointLayer);
-      const eligibility = getPointClusterEligibility(
-        pointEligibilityLayer(pointLayer),
-        dataset,
-        { minimumPointCount: 1 },
+    for (const item of catalog) {
+      const policy = item.policy;
+      const previousMode = previousModesRef.current.get(
+        item.pointLayerId,
       );
-      let clusterLayer = findCompatibleClusterLayer(
-        pointLayer,
-        layers,
-      );
-
-      if (policy.enabled && !eligibility.eligible) {
-        if (clusterLayer?.config?.isVisible) {
-          dispatch(
-            layerToggleVisibility(clusterLayer.id, false),
-          );
-        }
-        if (!pointLayer.config?.isVisible) {
-          dispatch(
-            layerToggleVisibility(pointLayer.id, true),
-          );
-        }
-        previousModesRef.current.set(
-          pointLayerId,
-          "points",
-        );
-        continue;
-      }
-
-      if (policy.enabled && !clusterLayer) {
-        const startedAt = performance.now();
-        dispatch(
-          addLayer(
-            buildPointClusterLayerConfig({
-              pointLayer,
+      const nextMode =
+        policy?.enabled && item.eligibility.eligible
+          ? resolvePointClusterMode({
+              zoom: mapState.zoom,
+              previousMode,
               policy,
-              isVisible: false,
-              latitudeColumn:
-                eligibility.latitudeColumn,
-              longitudeColumn:
-                eligibility.longitudeColumn,
-              geoJsonColumn:
-                eligibility.geoJsonColumn,
-            }),
-          ),
-        );
-        emitPointClusterTelemetry({
-          event: "pair_created",
-          pointCount: eligibility.pointCount,
-          durationMs: performance.now() - startedAt,
-        });
-        continue;
-      }
-
-      if (!clusterLayer) {
-        continue;
-      }
-
-      registerPointClusterPair({
-        pointLayerId,
-        clusterLayerId: clusterLayer.id,
-      });
-
-      if (
-        clusterLayer.config?.visConfig?.clusterRadius !==
-        policy.clusterSize
-      ) {
-        dispatch(
-          layerVisConfigChange(clusterLayer, {
-            clusterRadius: policy.clusterSize,
-            radiusRange: [
-              8,
-              Math.max(40, policy.clusterSize),
-            ],
-          }),
-        );
-      }
-
-      const previousMode =
-        previousModesRef.current.get(pointLayerId);
-      const { nextMode, changes } =
-        resolveVisibilityChanges({
-          pointLayer,
-          clusterLayer,
-          zoom: mapState.zoom,
-          previousMode,
-          policy,
-        });
+            })
+          : "points";
 
       if (previousMode !== nextMode) {
         previousModesRef.current.set(
-          pointLayerId,
+          item.pointLayerId,
           nextMode,
         );
         emitPointClusterTelemetry({
           event: "mode_changed",
-          pointCount: eligibility.pointCount,
+          pointCount: item.eligibility.pointCount,
           mode: nextMode,
         });
       }
-
-      for (const change of changes) {
-        dispatch(
-          layerToggleVisibility(
-            change.layerId,
-            change.isVisible,
-          ),
-        );
-      }
     }
-  }, [
-    datasets,
-    dispatch,
-    layers,
-    mapState.zoom,
-    storeSnapshot.extension,
-  ]);
+  }, [catalog, mapState.zoom]);
 
   useEffect(() => {
     if (
@@ -262,7 +176,6 @@ export function usePointClustering() {
     const viewport = resolveClusterClick({
       clicked,
       mapState,
-      pairs: storeSnapshot.pairs,
       extension: storeSnapshot.extension,
     });
 
@@ -271,16 +184,19 @@ export function usePointClustering() {
     }
 
     dispatch(updateMap(viewport));
-    const pair = storeSnapshot.pairs.find(
-      ({ clusterLayerId }) =>
-        clicked?.layer?.id === clusterLayerId ||
-        clicked?.layer?.id?.startsWith(
-          `${clusterLayerId}-`,
-        ),
-    );
+    const deckLayerId = clickedDeckLayerId(clicked);
     const catalogItem = catalog.find(
-      ({ pointLayerId }) =>
-        pointLayerId === pair?.pointLayerId,
+      ({ pointLayerId }) => {
+        const runtimeId = adaptiveClusterDeckLayerId(
+          pointLayerId,
+        );
+        return (
+          deckLayerId === runtimeId ||
+          String(deckLayerId ?? "").startsWith(
+            `${runtimeId}-`,
+          )
+        );
+      },
     );
     emitPointClusterTelemetry({
       event: "cluster_clicked",
@@ -293,12 +209,31 @@ export function usePointClustering() {
     dispatch,
     mapState,
     storeSnapshot.extension,
-    storeSnapshot.pairs,
   ]);
+
+  const updateLayerPolicy = useCallback(
+    (pointLayerId, patch, pointCount) => {
+      updatePointClusterLayerPolicy(
+        pointLayerId,
+        patch,
+        pointCount,
+      );
+
+      // A política vive fora do Redux. Reemitimos o mesmo zoom apenas para
+      // solicitar um novo frame do Kepler, sem mudar a câmera ou a revisão
+      // persistida do projeto.
+      dispatch(
+        updateMap({
+          zoom: Number(mapState.zoom ?? 0),
+        }),
+      );
+    },
+    [dispatch, mapState.zoom],
+  );
 
   return {
     featureEnabled: POINT_CLUSTERING_FEATURE_ENABLED,
     layers: catalog,
-    updateLayerPolicy: updatePointClusterLayerPolicy,
+    updateLayerPolicy,
   };
 }
