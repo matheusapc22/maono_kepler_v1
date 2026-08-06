@@ -1,4 +1,5 @@
-export const POINT_CLUSTERING_VERSION = 1 as const;
+export const POINT_CLUSTERING_VERSION = 2 as const;
+export const LEGACY_POINT_CLUSTERING_VERSION = 1 as const;
 export const DEFAULT_CLUSTER_MAX_ZOOM = 12;
 export const DEFAULT_CLUSTER_HYSTERESIS = 0.25;
 export const DEFAULT_CLUSTER_SIZE = 50;
@@ -124,10 +125,18 @@ export function normalizePointClusterLayerPolicy(
   };
 }
 
+function supportedExtensionVersion(value: unknown) {
+  const version = Number(value);
+  return (
+    version === POINT_CLUSTERING_VERSION ||
+    version === LEGACY_POINT_CLUSTERING_VERSION
+  );
+}
+
 export function normalizePointClusteringExtension(
   value: unknown,
 ): PointClusteringExtension {
-  if (!isRecord(value) || value.version !== POINT_CLUSTERING_VERSION) {
+  if (!isRecord(value) || !supportedExtensionVersion(value.version)) {
     return {
       version: POINT_CLUSTERING_VERSION,
       layers: {},
@@ -182,10 +191,6 @@ export function resolvePointClusterMode({
   return normalizedZoom <= policy.clusterMaxZoom
     ? "cluster"
     : "points";
-}
-
-export function pointClusterLayerId(pointLayerId: string) {
-  return `maono-cluster-${pointLayerId}`;
 }
 
 export function isPointClusteringFeatureEnabled(
