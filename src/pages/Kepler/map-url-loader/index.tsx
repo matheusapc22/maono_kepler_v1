@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { connect } from "react-redux";
 import { useParams } from "react-router";
-import { addDataToMap } from "@kepler.gl/actions";
+import { addDataToMap, toggleModal } from "@kepler.gl/actions";
 import KeplerGlSchema from "@kepler.gl/schemas";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
@@ -18,6 +18,8 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
 
 const mapStateToProps = (state: any) => ({
   isMapLoading: selectIsMapLoading(state),
+  currentModal:
+    state?.demo?.keplerGl?.map?.uiState?.currentModal ?? null,
 });
 
 const dispatchToProps = (dispatch: any) => ({ dispatch });
@@ -124,6 +126,7 @@ async function loadProjectConfig(
   signal: AbortSignal,
   readOnly: boolean,
 ) {
+  dispatch(toggleModal(null));
   dispatch(setLoadingMapStatus(true));
 
   try {
@@ -169,11 +172,27 @@ async function loadProjectConfig(
 }
 
 const MapUrlLoader = connectStore(
-  ({ isMapLoading, dispatch }: { isMapLoading: boolean; dispatch: any }) => {
+  ({
+    isMapLoading,
+    currentModal,
+    dispatch,
+  }: {
+    isMapLoading: boolean;
+    currentModal: unknown;
+    dispatch: any;
+  }) => {
     const { projectSlug } = useParams();
     const { context } = useMapPanel();
     const loadedProjectRef = useRef<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+      if (!isMapLoading || currentModal == null) {
+        return;
+      }
+
+      dispatch(toggleModal(null));
+    }, [currentModal, dispatch, isMapLoading]);
 
     useEffect(() => {
       if (!projectSlug) {
