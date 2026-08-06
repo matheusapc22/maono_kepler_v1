@@ -5,11 +5,9 @@ import {
   type PointClusterLayerPolicy,
   type PointClusteringExtension,
 } from "./point-cluster-policy.ts";
-import type { PointClusterPair } from "./point-cluster-controller.ts";
 
 type PointClusterStoreSnapshot = {
   extension: PointClusteringExtension;
-  pairs: PointClusterPair[];
   hasPointClustering: boolean;
 };
 
@@ -20,7 +18,6 @@ let snapshot: PointClusterStoreSnapshot = {
     version: POINT_CLUSTERING_VERSION,
     layers: {},
   },
-  pairs: [],
   hasPointClustering: false,
 };
 
@@ -43,23 +40,21 @@ export function getPointClusterSnapshot() {
   return snapshot;
 }
 
-export function loadPointClusterState(
-  rawMaono: unknown,
-  pairs: PointClusterPair[] = [],
-) {
+export function loadPointClusterState(rawMaono: unknown) {
   const maono = isRecord(rawMaono) ? rawMaono : {};
   const {
     pointClustering: rawPointClustering,
     ...passthrough
   } = maono;
+  const extension = normalizePointClusteringExtension(
+    rawPointClustering,
+  );
 
   maonoPassthrough = passthrough;
   snapshot = {
-    extension: normalizePointClusteringExtension(
-      rawPointClustering,
-    ),
-    pairs: [...pairs],
-    hasPointClustering: isRecord(rawPointClustering),
+    extension,
+    hasPointClustering:
+      Object.keys(extension.layers).length > 0,
   };
   emit();
 }
@@ -98,41 +93,35 @@ export function updatePointClusterLayerPolicy(
   emit();
 }
 
-export function registerPointClusterPair(pair: PointClusterPair) {
-  const existing = snapshot.pairs.find(
-    ({ pointLayerId }) =>
-      pointLayerId === pair.pointLayerId,
+export function prunePointClusterLayerPolicies(
+  validPointLayerIds: Iterable<string>,
+) {
+  const valid = new Set(
+    Array.from(validPointLayerIds, (value) =>
+      String(value).trim(),
+    ).filter(Boolean),
   );
+  const entries = Object.entries(snapshot.extension.layers);
+  const nextEntries = entries.filter(([layerId]) => valid.has(layerId));
 
-  if (
-    existing?.clusterLayerId === pair.clusterLayerId
-  ) {
-    return;
+  if (nextEntries.length === entries.length) {
+    return false;
   }
 
   snapshot = {
     ...snapshot,
-    pairs: [
-      ...snapshot.pairs.filter(
-        ({ pointLayerId }) =>
-          pointLayerId !== pair.pointLayerId,
-      ),
-      pair,
-    ],
+    hasPointClustering: nextEntries.length > 0,
+    extension: {
+      version: POINT_CLUSTERING_VERSION,
+      layers: Object.fromEntries(nextEntries),
+    },
   };
   emit();
+  return true;
 }
 
-export function getPointClusterPolicyForClusterLayer(
-  clusterLayerId: string,
-) {
-  const pair = snapshot.pairs.find(
-    (candidate) =>
-      candidate.clusterLayerId === clusterLayerId,
-  );
-  return pair
-    ? snapshot.extension.layers[pair.pointLayerId] ?? null
-    : null;
+export function getPointClusterPolicy(pointLayerId: string) {
+  return snapshot.extension.layers[pointLayerId] ?? null;
 }
 
 export function getMaonoConfigForSave() {
