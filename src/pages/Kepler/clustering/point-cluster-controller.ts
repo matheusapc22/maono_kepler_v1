@@ -49,6 +49,10 @@ export function adaptiveClusterDeckLayerId(pointLayerId: string) {
 }
 
 function originalLayerIdFromLegacyCluster(layer: any) {
+  if (layerType(layer) !== "cluster") {
+    return null;
+  }
+
   const id = layerId(layer);
   return id.startsWith(LEGACY_CLUSTER_LAYER_PREFIX)
     ? id.slice(LEGACY_CLUSTER_LAYER_PREFIX.length)
