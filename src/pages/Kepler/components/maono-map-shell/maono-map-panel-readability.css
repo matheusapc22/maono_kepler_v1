@@ -1,0 +1,137 @@
+/*
+ * Readability override for the expandable Kepler side panel.
+ * The values below are exactly 25% larger than the original 8–14 px scale.
+ * Keeping the override scoped to the panel prevents the map, top bar and rail
+ * navigation from being enlarged unintentionally.
+ */
+.maono-map-panel-host__panel {
+  --maono-panel-font-8: 10px;
+  --maono-panel-font-9: 11.25px;
+  --maono-panel-font-10: 12.5px;
+  --maono-panel-font-11: 13.75px;
+  --maono-panel-font-12: 15px;
+  --maono-panel-font-14: 17.5px;
+}
+
+/* 14 px -> 17.5 px */
+.maono-map-panel-host__panel .maono-layer-panel__header strong {
+  font-size: var(--maono-panel-font-14);
+}
+
+/* 12 px -> 15 px */
+.maono-map-panel-host__panel .maono-filter-panel > header strong,
+.maono-map-panel-host__panel .maono-filter-category__options strong {
+  font-size: var(--maono-panel-font-12);
+}
+
+/* 11 px -> 13.75 px */
+.maono-map-panel-host__panel .maono-layer-panel__tabs button,
+.maono-map-panel-host__panel .maono-layer-panel__search input,
+.maono-map-panel-host__panel .maono-add-layer__datasets strong,
+.maono-map-panel-host__panel .maono-layer-list__select strong,
+.maono-map-panel-host__panel .maono-layer-list__rename,
+.maono-map-panel-host__panel .maono-layer-panel__empty strong,
+.maono-map-panel-host__panel .maono-layer-panel__state strong,
+.maono-map-panel-host__panel .maono-layer-inspector__heading strong,
+.maono-map-panel-host__panel .maono-layer-panel__save-button,
+.maono-map-panel-host__panel .maono-filter-panel__heading > span,
+.maono-map-panel-host__panel .maono-filter-group__heading em,
+.maono-map-panel-host__panel .maono-filter-panel label > span,
+.maono-map-panel-host__panel .maono-filter-card__binding label > span,
+.maono-map-panel-host__panel .maono-filter-card__compatibility,
+.maono-map-panel-host__panel .maono-filter-editor__warning,
+.maono-map-panel-host__panel .maono-filter-editor__reset,
+.maono-map-panel-host__panel .maono-filter-category__summary,
+.maono-map-panel-host__panel .maono-filter-category__more,
+.maono-map-panel-host__panel .maono-filter-editor.is-boolean legend,
+.maono-map-panel-host__panel .maono-filter-list__readonly-value,
+.maono-map-panel-host__panel .maono-filter-card__readonly,
+.maono-map-panel-host__panel .maono-filter-editor__empty {
+  font-size: var(--maono-panel-font-11);
+}
+
+/* 10 px -> 12.5 px */
+.maono-map-panel-host__panel .maono-layer-panel__notice,
+.maono-map-panel-host__panel .maono-add-layer__trigger,
+.maono-map-panel-host__panel .maono-add-layer__datasets > p,
+.maono-map-panel-host__panel .maono-add-layer__import,
+.maono-map-panel-host__panel .maono-layer-panel__empty span,
+.maono-map-panel-host__panel .maono-layer-panel__state span,
+.maono-map-panel-host__panel .maono-layer-inspector.is-empty,
+.maono-map-panel-host__panel
+  .maono-layer-inspector__editor
+  input:not([type="color"]):not([type="range"]),
+.maono-map-panel-host__panel .maono-style-section > header strong,
+.maono-map-panel-host__panel .maono-filter-panel > header button,
+.maono-map-panel-host__panel .maono-filter-list__summary strong,
+.maono-map-panel-host__panel .maono-filter-list__value input,
+.maono-map-panel-host__panel .maono-layer-structure > header strong,
+.maono-map-panel-host__panel .maono-point-spatial-grouping__trigger strong,
+.maono-map-panel-host__panel .maono-filter-card__facts dt {
+  font-size: var(--maono-panel-font-10);
+}
+
+/* 9 px -> 11.25 px */
+.maono-map-panel-host__panel .maono-layer-panel__header > div > span,
+.maono-map-panel-host__panel .maono-layer-panel__mode,
+.maono-map-panel-host__panel .maono-layer-panel__tabs button > span,
+.maono-map-panel-host__panel .maono-add-layer__menu > header span,
+.maono-map-panel-host__panel .maono-add-layer__datasets small,
+.maono-map-panel-host__panel .maono-layer-list__select small,
+.maono-map-panel-host__panel .maono-layer-inspector__heading span,
+.maono-map-panel-host__panel .maono-layer-inspector__facts dt,
+.maono-map-panel-host__panel .maono-filter-panel small,
+.maono-map-panel-host__panel .maono-layer-inspector__facts dd,
+.maono-map-panel-host__panel .maono-layer-inspector__editor label,
+.maono-map-panel-host__panel .maono-style-range output,
+.maono-map-panel-host__panel .maono-style-channel > strong,
+.maono-map-panel-host__panel .maono-style-help,
+.maono-map-panel-host__panel .maono-layer-inspector__actions button,
+.maono-map-panel-host__panel .maono-filter-list__value span,
+.maono-map-panel-host__panel .maono-filter-list__readonly-value,
+.maono-map-panel-host__panel .maono-filter-list li > button,
+.maono-map-panel-host__panel .maono-layer-structure__field select,
+.maono-map-panel-host__panel .maono-style-palettes button em,
+.maono-map-panel-host__panel .maono-layer-panel__save-message,
+.maono-map-panel-host__panel
+  .maono-point-spatial-grouping__grid
+  input[type="number"] {
+  font-size: var(--maono-panel-font-9);
+}
+
+.maono-map-panel-host__panel .maono-point-spatial-grouping__toggle {
+  font-size: var(--maono-panel-font-9) !important;
+}
+
+/* 8 px -> 10 px */
+.maono-map-panel-host__panel .maono-style-section > header small,
+.maono-map-panel-host__panel .maono-style-field > span,
+.maono-map-panel-host__panel .maono-style-range > span,
+.maono-map-panel-host__panel .maono-style-label,
+.maono-map-panel-host__panel .maono-style-fixed-color label > span,
+.maono-map-panel-host__panel .maono-style-palettes > button small,
+.maono-map-panel-host__panel .maono-layer-structure > header small,
+.maono-map-panel-host__panel .maono-layer-structure__field > span,
+.maono-map-panel-host__panel .maono-point-spatial-grouping__trigger small,
+.maono-map-panel-host__panel
+  .maono-point-spatial-grouping__settings
+  > p:first-child,
+.maono-map-panel-host__panel
+  .maono-point-spatial-grouping__grid
+  label
+  > span,
+.maono-map-panel-host__panel .maono-point-spatial-grouping__notice {
+  font-size: var(--maono-panel-font-8);
+}
+
+/* Controls without an explicit local size receive the enlarged 11 px baseline. */
+.maono-map-panel-host__panel .maono-filter-panel select,
+.maono-map-panel-host__panel .maono-filter-panel input[type="number"],
+.maono-map-panel-host__panel .maono-filter-panel input[type="datetime-local"],
+.maono-map-panel-host__panel .maono-filter-panel input[type="search"] {
+  font-size: var(--maono-panel-font-11);
+}
+
+.maono-map-panel-host__label {
+  font-size: var(--maono-panel-font-10, 12.5px);
+}
