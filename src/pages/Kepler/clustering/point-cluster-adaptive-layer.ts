@@ -8,6 +8,7 @@ import {
   adaptiveClusterDeckLayerId,
 } from "./point-cluster-controller.ts";
 import {
+  MAX_CLIENT_POINT_COUNT,
   isPointClusteringFeatureEnabled,
   resolvePointClusterMode,
 } from "./point-cluster-policy.ts";
@@ -115,6 +116,10 @@ function pointFeatureData(value) {
   }
 
   const features = value.filter(Boolean);
+  if (features.length > MAX_CLIENT_POINT_COUNT) {
+    return null;
+  }
+
   const allPoints = features.every((feature) => {
     const geometry = featureGeometry(feature);
     return (
@@ -140,42 +145,37 @@ function pointLayerData(dataProps) {
   return Array.isArray(data) ? data : null;
 }
 
-function normalizedFilterRanges(value) {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  if (value && typeof value === "object") {
-    return Object.values(value);
-  }
-  return [];
+function layerAllowsAdaptiveClustering(layer) {
+  return (
+    layer?.config?.readOnly !== true &&
+    layer?.config?.technicalReadOnly !== true &&
+    layer?.config?.animation?.enabled !== true
+  );
 }
 
-function clusterFilterData(dataProps, gpuFilter) {
-  const ranges = normalizedFilterRanges(gpuFilter?.filterRange);
-  const getFilterValue = dataProps?.getFilterValue;
-  const hasActiveRange = ranges.some(
-    (range) =>
-      Array.isArray(range) &&
-      range.some((value) => Number(value) !== 0),
-  );
-
-  if (!hasActiveRange || typeof getFilterValue !== "function") {
-    return undefined;
+function clusterablePointData(data, getPosition) {
+  if (
+    !Array.isArray(data) ||
+    data.length > MAX_CLIENT_POINT_COUNT ||
+    typeof getPosition !== "function"
+  ) {
+    return null;
   }
 
-  return (point) => {
-    const values = getFilterValue(point);
-    return Array.isArray(values) && values.every((value, index) => {
-      const range = ranges[index];
-      const numeric = Number(value);
-      return (
-        Array.isArray(range) &&
-        Number.isFinite(numeric) &&
-        numeric >= Number(range[0]) &&
-        numeric <= Number(range[1])
-      );
-    });
-  };
+  const valid = data.filter((point) => {
+    const position = getPosition(point);
+    return (
+      Array.isArray(position) &&
+      Number.isFinite(Number(position[0])) &&
+      Number.isFinite(Number(position[1]))
+    );
+  });
+
+  if (data.length > 0 && valid.length / data.length < 0.9) {
+    return null;
+  }
+
+  return valid;
 }
 
 function runtimeMode(layer, mapState, policy) {
@@ -197,6 +197,7 @@ function clusterDeckProps({
 }) {
   const defaultLayerProps = layer.getDefaultDeckLayerProps(opts);
   const mapState = opts?.mapState ?? {};
+  const { _filterData: filterData, ...formattedData } = opts?.data ?? {};
   const minimumRadius = Math.max(
     8,
     Math.round(policy.clusterSize * 0.2),
@@ -206,9 +207,10 @@ function clusterDeckProps({
   return {
     ...defaultLayerProps,
     id: adaptiveClusterDeckLayerId(layer.id),
+    ...formattedData,
     data,
     getPosition,
-    filterData: clusterFilterData(opts?.data, opts?.gpuFilter),
+    filterData,
     radiusScale: 1,
     radiusRange: [minimumRadius, maximumRadius],
     clusterRadius: policy.clusterSize,
@@ -300,15 +302,17 @@ export class MaonoAdaptivePointLayer extends LayerClasses.point {
 
     if (
       !policy?.enabled ||
+      !layerAllowsAdaptiveClustering(this) ||
       runtimeMode(this, opts?.mapState, policy) !== "cluster"
     ) {
       this.__maonoPointClusterMode = "points";
       return super.renderLayer(opts);
     }
 
-    const data = pointLayerData(opts?.data);
+    const rawData = pointLayerData(opts?.data);
     const getPosition = opts?.data?.getPosition;
-    if (!data || typeof getPosition !== "function") {
+    const data = clusterablePointData(rawData, getPosition);
+    if (!data) {
       this.__maonoPointClusterMode = "points";
       return super.renderLayer(opts);
     }
@@ -338,6 +342,7 @@ export class MaonoAdaptiveGeoJsonLayer extends LayerClasses.geojson {
 
     if (
       !policy?.enabled ||
+      !layerAllowsAdaptiveClustering(this) ||
       runtimeMode(this, opts?.mapState, policy) !== "cluster"
     ) {
       this.__maonoPointClusterMode = "points";
