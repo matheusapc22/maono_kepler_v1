@@ -71,8 +71,83 @@
   background: linear-gradient(180deg, #172235, #0b1019);
 }
 
+/*
+ * Ações secundárias da camada ficam discretas até a interação.
+ * O hover é aplicado ao <li> inteiro, portanto continua ativo quando o cursor
+ * está sobre o conteúdo expandido da camada.
+ */
+.maono-layer-list__grip,
+.maono-layer-list__actions,
+.maono-layer-list__reorder {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
+}
+
 .maono-layer-list__actions {
   right: 80px;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.maono-layer-list__item:hover .maono-layer-list__grip,
+.maono-layer-list__item:hover .maono-layer-list__actions,
+.maono-layer-list__item:hover .maono-layer-list__reorder,
+.maono-layer-list__item:focus-within .maono-layer-list__grip,
+.maono-layer-list__item:focus-within .maono-layer-list__actions,
+.maono-layer-list__item:focus-within .maono-layer-list__reorder {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+/* Visibilidade e expansão permanecem sempre disponíveis. */
+.maono-layer-list__controls > button,
+.maono-layer-list__visibility-state,
+.maono-layer-list__chevron {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Remove o aspecto de barra dentro de um quadrado e integra os ícones ao card. */
+.maono-layer-list__actions button,
+.maono-layer-list__reorder button {
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.maono-layer-list__actions button:hover,
+.maono-layer-list__actions button:focus-visible,
+.maono-layer-list__reorder button:hover:not(:disabled),
+.maono-layer-list__reorder button:focus-visible:not(:disabled) {
+  color: var(--maono-layer-gold-bright);
+  background: rgba(197, 160, 89, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(197, 160, 89, 0.2);
+  transform: translateY(-1px);
+}
+
+.maono-layer-list__actions button.is-danger:hover,
+.maono-layer-list__actions button.is-danger:focus-visible {
+  color: var(--maono-layer-danger);
+  background: rgba(127, 29, 29, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.22);
 }
 
 .maono-layer-list__details-shell {
@@ -129,6 +204,18 @@
     textarea
   ) {
   visibility: hidden;
+}
+
+/* Em telas sem hover, os controles continuam acessíveis por toque. */
+@media (hover: none) {
+  .maono-layer-list__grip,
+  .maono-layer-list__actions,
+  .maono-layer-list__reorder {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+  }
 }
 
 @media (max-width: 420px) {
