@@ -56,3 +56,33 @@ test("abertura e fechamento usam animação suave com redução de movimento her
   assert.match(source.styles, /\.maono-layer-list__item\.is-expanded/);
   assert.match(source.styles, /transform: rotate\(180deg\)/);
 });
+
+test("ações secundárias só aparecem ao interagir com toda a área da camada", () => {
+  assert.match(
+    source.styles,
+    /\.maono-layer-list__grip,[\s\S]*\.maono-layer-list__actions,[\s\S]*\.maono-layer-list__reorder \{[\s\S]*opacity: 0;[\s\S]*visibility: hidden;/,
+  );
+  assert.match(
+    source.styles,
+    /\.maono-layer-list__item:hover \.maono-layer-list__actions/,
+  );
+  assert.match(
+    source.styles,
+    /\.maono-layer-list__item:focus-within \.maono-layer-list__actions/,
+  );
+  assert.match(
+    source.styles,
+    /\.maono-layer-list__controls > button,[\s\S]*\.maono-layer-list__chevron \{[\s\S]*opacity: 1;/,
+  );
+});
+
+test("barra de ações fica visualmente integrada ao card da camada", () => {
+  assert.match(
+    source.styles,
+    /\.maono-layer-list__actions \{[\s\S]*border: 0;[\s\S]*background: transparent;[\s\S]*box-shadow: none;/,
+  );
+  assert.match(
+    source.styles,
+    /\.maono-layer-list__actions button,[\s\S]*border-radius: 999px;/,
+  );
+});
