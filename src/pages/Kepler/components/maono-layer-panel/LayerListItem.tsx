@@ -5,19 +5,19 @@ import {
   type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
-  type ReactNode,
 } from "react";
 
 import type { MaonoLayerSnapshot } from "../../integration/keplerBridge";
 import LayerPanelIcon from "./LayerPanelIcon";
+import PanelActionMenu, {
+  type PanelActionMenuItem,
+} from "./PanelActionMenu";
 
 type Props = {
   layer: MaonoLayerSnapshot;
   index: number;
   total: number;
   selected: boolean;
-  expanded: boolean;
-  details: ReactNode;
   canInspect: boolean;
   canToggle: boolean;
   canRename: boolean;
@@ -26,12 +26,13 @@ type Props = {
   canReorder: boolean;
   dragging: boolean;
   dragTarget: boolean;
-  onToggleExpanded: (layer: MaonoLayerSnapshot) => void;
+  onOpen: (layer: MaonoLayerSnapshot) => void;
   onToggle: (layer: MaonoLayerSnapshot, visible: boolean) => void;
   onRename: (layer: MaonoLayerSnapshot, label: string) => boolean;
   onDuplicate: (layer: MaonoLayerSnapshot) => void;
   onRemove: (layer: MaonoLayerSnapshot) => void;
   onMove: (layerId: string, direction: -1 | 1) => void;
+  onMoveTo: (layerId: string, position: "start" | "end") => void;
   onDragStart: (layerId: string, event: DragEvent<HTMLLIElement>) => void;
   onDragEnter: (layerId: string) => void;
   onDrop: (layerId: string, event: DragEvent<HTMLLIElement>) => void;
@@ -47,8 +48,6 @@ export default function LayerListItem({
   index,
   total,
   selected,
-  expanded,
-  details,
   canInspect,
   canToggle,
   canRename,
@@ -57,32 +56,24 @@ export default function LayerListItem({
   canReorder,
   dragging,
   dragTarget,
-  onToggleExpanded,
+  onOpen,
   onToggle,
   onRename,
   onDuplicate,
   onRemove,
   onMove,
+  onMoveTo,
   onDragStart,
   onDragEnter,
   onDrop,
   onDragEnd,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  const [detailsMounted, setDetailsMounted] = useState(expanded);
   const [draftLabel, setDraftLabel] = useState(layer.label);
   const [renameError, setRenameError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const ignoreNextBlurRef = useRef(false);
   const committingRef = useRef(false);
-  const detailsId = `maono-layer-details-${encodeURIComponent(layer.id)}`;
-
-  function guardImmediateBlur() {
-    ignoreNextBlurRef.current = true;
-    window.setTimeout(() => {
-      ignoreNextBlurRef.current = false;
-    }, 0);
-  }
 
   useEffect(() => {
     if (!editing) {
@@ -98,11 +89,12 @@ export default function LayerListItem({
     }
   }, [editing]);
 
-  useEffect(() => {
-    if (expanded) {
-      setDetailsMounted(true);
-    }
-  }, [expanded]);
+  function guardImmediateBlur() {
+    ignoreNextBlurRef.current = true;
+    window.setTimeout(() => {
+      ignoreNextBlurRef.current = false;
+    }, 0);
+  }
 
   function cancelRename() {
     setDraftLabel(layer.label);
@@ -141,22 +133,66 @@ export default function LayerListItem({
     }
   }
 
-  function toggleExpanded() {
-    if (!detailsMounted && !expanded) {
-      setDetailsMounted(true);
-      window.requestAnimationFrame(() => onToggleExpanded(layer));
-      return;
-    }
+  const menuItems: PanelActionMenuItem[] = [];
 
-    onToggleExpanded(layer);
+  if (canRename) {
+    menuItems.push({
+      label: "Renomear",
+      icon: "edit",
+      onSelect: () => setEditing(true),
+    });
+  }
+  if (canDuplicate) {
+    menuItems.push({
+      label: "Duplicar",
+      icon: "copy",
+      onSelect: () => onDuplicate(layer),
+    });
+  }
+  if (canReorder) {
+    menuItems.push(
+      {
+        label: `Mover ${layer.label} para cima`,
+        icon: "chevron-up",
+        disabled: index === 0,
+        separatorBefore: menuItems.length > 0,
+        onSelect: () => onMove(layer.id, -1),
+      },
+      {
+        label: `Mover ${layer.label} para baixo`,
+        icon: "chevron-down",
+        disabled: index === total - 1,
+        onSelect: () => onMove(layer.id, 1),
+      },
+      {
+        label: "Mover para o início",
+        icon: "arrow-left",
+        disabled: index === 0,
+        onSelect: () => onMoveTo(layer.id, "start"),
+      },
+      {
+        label: "Mover para o fim",
+        icon: "arrow-left",
+        disabled: index === total - 1,
+        onSelect: () => onMoveTo(layer.id, "end"),
+      },
+    );
+  }
+  if (canRemove) {
+    menuItems.push({
+      label: "Remover",
+      icon: "trash",
+      danger: true,
+      separatorBefore: menuItems.length > 0,
+      onSelect: () => onRemove(layer),
+    });
   }
 
   return (
     <li
       className={[
-        "maono-layer-list__item",
+        "maono-layer-row",
         selected ? "is-selected" : "",
-        expanded ? "is-expanded" : "is-collapsed",
         layer.isVisible ? "is-visible" : "is-hidden",
         dragging ? "is-dragging" : "",
         dragTarget ? "is-drag-target" : "",
@@ -175,28 +211,28 @@ export default function LayerListItem({
       onDrop={(event) => onDrop(layer.id, event)}
       onDragEnd={onDragEnd}
     >
+      {canReorder ? (
+        <span
+          className="maono-layer-row__grip"
+          title="Arraste para reordenar"
+          aria-hidden="true"
+        >
+          <LayerPanelIcon name="grip" />
+        </span>
+      ) : null}
+
       <span
-        className="maono-layer-list__accent"
+        className="maono-layer-row__swatch"
         style={{ background: `rgb(${layer.color.join(",")})` }}
         aria-hidden="true"
       />
 
-      <span
-        className="maono-layer-list__grip"
-        title={
-          canReorder ? "Arraste para reordenar" : "Reordenação indisponível"
-        }
-        aria-hidden="true"
-      >
-        <LayerPanelIcon name="grip" />
-      </span>
-
-      <div className="maono-layer-list__main">
+      <div className="maono-layer-row__main">
         {editing ? (
-          <div className="maono-layer-list__rename-wrap">
+          <div className="maono-layer-row__rename-wrap">
             <input
               ref={inputRef}
-              className="maono-layer-list__rename"
+              className="maono-layer-list__rename maono-layer-row__rename"
               value={draftLabel}
               maxLength={160}
               onChange={(event) => {
@@ -235,82 +271,32 @@ export default function LayerListItem({
           </div>
         ) : (
           <button
-            className="maono-layer-list__select"
             type="button"
-            onClick={toggleExpanded}
-            aria-current={selected ? "true" : undefined}
-            aria-expanded={expanded}
-            aria-controls={detailsId}
+            className="maono-layer-row__open"
+            onClick={() => onOpen(layer)}
             disabled={!canInspect}
+            aria-current={selected ? "true" : undefined}
             title={
               canInspect
-                ? expanded
-                  ? "Recolher configurações da camada"
-                  : "Expandir configurações da camada"
+                ? `Configurar ${layer.label}`
                 : "Inspeção indisponível"
             }
           >
-            <span className="maono-layer-list__label">
-              <strong>{layer.label}</strong>
-              <small>{layer.type}</small>
-            </span>
-            <span className="maono-layer-list__chevron" aria-hidden="true">
-              <LayerPanelIcon name="chevron-down" />
-            </span>
+            <strong>{layer.label}</strong>
+            <small>{layer.type}</small>
           </button>
         )}
-
-        <div className="maono-layer-list__actions">
-          {canRename ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setEditing(true);
-              }}
-              aria-label={`Renomear ${layer.label}`}
-              title="Renomear"
-            >
-              <LayerPanelIcon name="edit" />
-            </button>
-          ) : null}
-
-          {canDuplicate ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDuplicate(layer);
-              }}
-              aria-label={`Duplicar ${layer.label}`}
-              title="Duplicar"
-            >
-              <LayerPanelIcon name="copy" />
-            </button>
-          ) : null}
-
-          {canRemove ? (
-            <button
-              type="button"
-              className="is-danger"
-              onClick={(event) => {
-                event.stopPropagation();
-                onRemove(layer);
-              }}
-              aria-label={`Remover ${layer.label}`}
-              title="Remover"
-            >
-              <LayerPanelIcon name="trash" />
-            </button>
-          ) : null}
-        </div>
       </div>
 
-      <div className="maono-layer-list__controls">
+      <div className="maono-layer-row__controls">
         {canToggle ? (
           <button
             type="button"
-            onClick={() => onToggle(layer, !layer.isVisible)}
+            className="maono-layer-row__visibility"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggle(layer, !layer.isVisible);
+            }}
             aria-label={
               layer.isVisible
                 ? `Ocultar ${layer.label}`
@@ -323,55 +309,20 @@ export default function LayerListItem({
           </button>
         ) : (
           <span
-            className="maono-layer-list__visibility-state"
+            className="maono-layer-row__visibility-state"
             title={layer.isVisible ? "Camada visível" : "Camada oculta"}
           >
             <LayerPanelIcon name={layer.isVisible ? "eye" : "eye-off"} />
           </span>
         )}
 
-        {canReorder ? (
-          <span className="maono-layer-list__reorder">
-            <button
-              type="button"
-              onClick={() => onMove(layer.id, -1)}
-              disabled={index === 0}
-              aria-label={`Mover ${layer.label} para cima`}
-              title="Mover para cima"
-            >
-              <LayerPanelIcon name="chevron-up" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onMove(layer.id, 1)}
-              disabled={index === total - 1}
-              aria-label={`Mover ${layer.label} para baixo`}
-              title="Mover para baixo"
-            >
-              <LayerPanelIcon name="chevron-down" />
-            </button>
-          </span>
+        {menuItems.length ? (
+          <PanelActionMenu
+            label={`Ações de ${layer.label}`}
+            items={menuItems}
+          />
         ) : null}
       </div>
-
-      {detailsMounted ? (
-        <div
-          className="maono-layer-list__details-shell"
-          data-expanded={expanded ? "true" : "false"}
-          aria-hidden={!expanded}
-        >
-          <div className="maono-layer-list__details-clip">
-            <div
-              id={detailsId}
-              className="maono-layer-list__details"
-              role="region"
-              aria-label={`Configurações de ${layer.label}`}
-            >
-              {details}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </li>
   );
 }
