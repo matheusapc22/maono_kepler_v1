@@ -2,7 +2,7 @@ export const POINT_CLUSTERING_VERSION = 2 as const;
 export const LEGACY_POINT_CLUSTERING_VERSION = 1 as const;
 export const DEFAULT_CLUSTER_MAX_ZOOM = 12;
 export const DEFAULT_CLUSTER_HYSTERESIS = 0.25;
-export const DEFAULT_CLUSTER_SIZE = 50;
+export const DEFAULT_CLUSTER_SIZE = 40;
 export const DEFAULT_SHOW_COUNT = true;
 export const DEFAULT_MINIMUM_POINT_COUNT = 250;
 export const MAX_CLIENT_POINT_COUNT = 300_000;
@@ -60,7 +60,7 @@ export function getAdaptivePointClusterDefaults(
   if (normalizedCount > MAX_CLIENT_POINT_COUNT) {
     return {
       clusterMaxZoom: 13,
-      clusterSize: 70,
+      clusterSize: DEFAULT_CLUSTER_SIZE,
       delivery: "tile_required",
     };
   }
@@ -68,7 +68,7 @@ export function getAdaptivePointClusterDefaults(
   if (normalizedCount > 100_000) {
     return {
       clusterMaxZoom: 13,
-      clusterSize: 70,
+      clusterSize: DEFAULT_CLUSTER_SIZE,
       delivery: "warn",
     };
   }
@@ -76,14 +76,14 @@ export function getAdaptivePointClusterDefaults(
   if (normalizedCount > 10_000) {
     return {
       clusterMaxZoom: 12,
-      clusterSize: 55,
+      clusterSize: DEFAULT_CLUSTER_SIZE,
       delivery: "warn",
     };
   }
 
   return {
     clusterMaxZoom: 11,
-    clusterSize: 40,
+    clusterSize: DEFAULT_CLUSTER_SIZE,
     delivery: "safe",
   };
 }
