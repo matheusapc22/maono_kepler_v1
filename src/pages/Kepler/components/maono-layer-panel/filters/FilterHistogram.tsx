@@ -22,7 +22,6 @@ type DragMode = "minimum" | "maximum" | "window";
 type DragState = {
   mode: DragMode;
   pointerId: number;
-  startX: number;
   startRange: Range;
   startPointerValue: number;
 };
@@ -145,7 +144,6 @@ export default function FilterHistogram({
     dragRef.current = {
       mode,
       pointerId: event.pointerId,
-      startX: event.clientX,
       startRange: [...range] as Range,
       startPointerValue: valueAt(event.clientX),
     };
