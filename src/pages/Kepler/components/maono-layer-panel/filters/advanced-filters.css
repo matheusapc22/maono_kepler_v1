@@ -27,13 +27,26 @@
 .maono-filter-compatibility, .maono-filter-editor__warning { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 8px 9px; border: 1px solid rgb(197 160 89 / 25%); border-radius: 8px; color: #e8c77b; background: rgb(197 160 89 / 8%); font-size: 9px; line-height: 1.45; }
 .maono-filter-compatibility svg { flex: 0 0 auto; width: 14px; height: 14px; }
 .maono-filter-editor { display: grid; gap: 10px; }
-.maono-filter-histogram { display: flex; height: 62px; align-items: end; gap: 2px; border-bottom: 1px solid rgb(255 255 255 / 12%); padding: 4px 2px 0; }
-.maono-filter-histogram span { flex: 1 1 0; min-width: 1px; border-radius: 2px 2px 0 0; background: rgb(255 255 255 / 14%); }
-.maono-filter-histogram span.is-selected { background: var(--maono-filter-accent, var(--maono-layer-gold, #c5a059)); }
+.maono-filter-histogram { display: grid; gap: 5px; padding: 6px 0 2px; }
+.maono-filter-histogram__meta, .maono-filter-histogram__axis { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #78869a; font-size: 8px; line-height: 1.2; }
+.maono-filter-histogram__meta span:first-child { color: #b9c4d4; }
+.maono-filter-histogram__plot { position: relative; height: 82px; overflow: visible; border-bottom: 1px solid rgb(197 160 89 / 48%); touch-action: none; user-select: none; }
+.maono-filter-histogram__bars { position: absolute; inset: 3px 2px 0; display: flex; align-items: end; gap: 2px; pointer-events: none; }
+.maono-filter-histogram__bars > span { flex: 1 1 0; min-width: 1px; border-radius: 2px 2px 0 0; background: rgb(64 77 97 / 52%); transition: height 140ms ease, background 140ms ease, opacity 140ms ease; }
+.maono-filter-histogram__bars > span.is-selected { background: linear-gradient(to top, #ad843d, var(--maono-filter-accent, var(--maono-layer-gold, #c5a059))); box-shadow: 0 0 7px rgb(197 160 89 / 18%); }
+.maono-filter-histogram__bars > em { align-self: center; width: 100%; color: #758399; font-size: 9px; font-style: normal; text-align: center; }
+.maono-filter-histogram__selection { position: absolute; z-index: 2; top: 2px; bottom: 0; min-width: 2px; border-top: 1px solid rgb(226 190 117 / 34%); border-bottom: 2px solid var(--maono-filter-accent, #c5a059); background: linear-gradient(to bottom, rgb(197 160 89 / 3%), rgb(197 160 89 / 10%)); cursor: grab; }
+.maono-filter-histogram__selection:active { cursor: grabbing; background: linear-gradient(to bottom, rgb(197 160 89 / 7%), rgb(197 160 89 / 17%)); }
+.maono-filter-histogram__handle { position: absolute; z-index: 4; bottom: -7px; width: 15px; height: 15px; margin: 0; padding: 0; transform: translateX(-50%); border: 2px solid var(--maono-filter-accent, #c5a059); border-radius: 50%; background: #0b111c; box-shadow: 0 0 0 2px rgb(6 10 17 / 72%); cursor: ew-resize; touch-action: none; }
+.maono-filter-histogram__handle::before { position: absolute; bottom: 12px; left: 50%; width: 1px; height: 69px; background: linear-gradient(to top, rgb(197 160 89 / 74%), rgb(197 160 89 / 8%)); content: ""; transform: translateX(-50%); pointer-events: none; }
+.maono-filter-histogram__handle:hover, .maono-filter-histogram__handle:focus-visible { border-color: #efd088; box-shadow: 0 0 0 2px rgb(6 10 17 / 72%), 0 0 10px rgb(197 160 89 / 45%); outline: none; }
+.maono-filter-histogram__handle:disabled { opacity: .45; cursor: default; }
+.maono-filter-histogram__axis { padding-top: 6px; }
+.maono-filter-histogram__fallback { color: #8f7f61; font-size: 8px; line-height: 1.35; }
+.maono-filter-histogram.is-empty { min-height: 48px; place-items: center; border: 1px dashed rgb(70 83 104 / 44%); border-radius: 8px; color: #78869a; font-size: 9px; }
 .maono-filter-range__numbers, .maono-filter-time__inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .maono-filter-editor label { display: grid; gap: 5px; color: #8d9bb0; font-size: 9px; }
 .maono-filter-editor input[type="number"], .maono-filter-editor input[type="datetime-local"], .maono-filter-editor input[type="search"] { width: 100%; min-height: 34px; padding: 7px 8px; border: 1px solid #2a3950; border-radius: 8px; color: #e7edf6; background: #101827; }
-.maono-filter-range__slider input { width: 100%; accent-color: var(--maono-filter-accent, #c5a059); }
 .maono-filter-editor__reset, .maono-filter-category__summary button { justify-self: start; padding: 6px 8px; border: 0; border-radius: 7px; color: var(--maono-layer-gold-bright); background: rgb(197 160 89 / 9%); cursor: pointer; font-size: 9px; }
 .maono-filter-category__summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #8b98aa; font-size: 9px; }
 .maono-filter-category__options { display: grid; max-height: 240px; overflow-y: auto; gap: 2px; padding: 5px; border: 1px solid #29384d; border-radius: 8px; }
