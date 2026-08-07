@@ -64,6 +64,7 @@ body[data-maono-native-overlays="active"] [data-maono-native-legend="true"] *::-
   background: rgba(197, 160, 89, 0.72);
 }
 
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"],
 body[data-maono-native-overlays="active"] .map-popover,
 body[data-maono-native-overlays="active"] .map-popover__inner,
 body[data-maono-native-overlays="active"] .layer-hover-info {
@@ -74,11 +75,14 @@ body[data-maono-native-overlays="active"] .layer-hover-info {
   backdrop-filter: blur(16px);
 }
 
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"],
 body[data-maono-native-overlays="active"] .map-popover,
 body[data-maono-native-overlays="active"] .map-popover__inner {
   border-radius: 14px !important;
 }
 
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] [class*="header"],
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] [class*="Header"],
 body[data-maono-native-overlays="active"] .layer-hover-info__header,
 body[data-maono-native-overlays="active"] .map-popover [class*="header"] {
   border-bottom-color: rgba(197, 160, 89, 0.18) !important;
@@ -86,24 +90,30 @@ body[data-maono-native-overlays="active"] .map-popover [class*="header"] {
   background: rgba(15, 22, 34, 0.98) !important;
 }
 
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] .row__name,
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] [class*="row__name"],
 body[data-maono-native-overlays="active"] .map-popover .row__name,
 body[data-maono-native-overlays="active"] .layer-hover-info .row__name {
   color: #8797ad !important;
   font-size: 11px !important;
 }
 
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] .row__value,
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] [class*="row__value"],
 body[data-maono-native-overlays="active"] .map-popover .row__value,
 body[data-maono-native-overlays="active"] .layer-hover-info .row__value {
   color: #f8fafc !important;
   font-weight: 700 !important;
 }
 
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] button,
 body[data-maono-native-overlays="active"] .map-popover button,
 body[data-maono-native-overlays="active"] .layer-hover-info button {
   border-color: rgba(197, 160, 89, 0.25) !important;
   color: #d9b96e !important;
 }
 
+body[data-maono-native-overlays="active"] [data-maono-native-popup="true"] button:hover,
 body[data-maono-native-overlays="active"] .map-popover button:hover,
 body[data-maono-native-overlays="active"] .layer-hover-info button:hover {
   border-color: rgba(197, 160, 89, 0.58) !important;
