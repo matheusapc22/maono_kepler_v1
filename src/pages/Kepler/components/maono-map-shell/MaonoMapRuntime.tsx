@@ -8,6 +8,7 @@ import { useNavigate } from "react-router";
 
 import { useSession } from "../../../../auth/session";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
+import "../../engine-adapter/map-flight.css";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
 import MaonoLayerPanelErrorBoundary from "../maono-layer-panel/ErrorBoundary";
 import MaonoLayerPanel from "../maono-layer-panel/MaonoLayerPanel";
