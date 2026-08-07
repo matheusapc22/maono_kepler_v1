@@ -1,18 +1,24 @@
 import type { ReactNode } from "react";
 
-type LayerPanelIconName =
+export type LayerPanelIconName =
+  | "arrow-left"
+  | "check"
   | "chevron-down"
   | "chevron-up"
   | "copy"
   | "database"
+  | "download"
   | "edit"
   | "eye"
   | "eye-off"
   | "filter"
   | "grip"
   | "layers"
+  | "lock"
+  | "more"
   | "plus"
   | "search"
+  | "settings"
   | "trash"
   | "upload"
   | "warning"
@@ -24,6 +30,13 @@ type Props = {
 };
 
 const paths: Record<LayerPanelIconName, ReactNode> = {
+  "arrow-left": (
+    <>
+      <path d="m15 18-6-6 6-6" />
+      <path d="M9 12h11" />
+    </>
+  ),
+  check: <path d="m5 12 4 4L19 6" />,
   "chevron-down": <path d="m6 9 6 6 6-6" />,
   "chevron-up": <path d="m18 15-6-6-6 6" />,
   copy: (
@@ -37,6 +50,14 @@ const paths: Record<LayerPanelIconName, ReactNode> = {
       <ellipse cx="12" cy="5" rx="8" ry="3" />
       <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
       <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14a2 2 0 0 0 2-2v-2" />
+      <path d="M3 17v2a2 2 0 0 0 2 2" />
     </>
   ),
   edit: (
@@ -77,6 +98,19 @@ const paths: Record<LayerPanelIconName, ReactNode> = {
       <path d="m3 17 9 5 9-5" />
     </>
   ),
+  lock: (
+    <>
+      <rect x="5" y="10" width="14" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
   plus: (
     <>
       <path d="M12 5v14" />
@@ -87,6 +121,12 @@ const paths: Record<LayerPanelIconName, ReactNode> = {
     <>
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-4-4" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.06.06-2.12 2.12-.06-.06a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1.1 1.65V20.5h-3v-.09a1.8 1.8 0 0 0-1.1-1.65 1.8 1.8 0 0 0-2 .36l-.06.06-2.12-2.12.06-.06a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 5 13.9h-.1v-3H5A1.8 1.8 0 0 0 6.65 9a1.8 1.8 0 0 0-.36-2l-.06-.06 2.12-2.12.06.06a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 11.5 3.6V3.5h3v.1a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 2-.36l.06-.06 2.12 2.12-.06.06a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 21 10.1h.1v3H21A1.8 1.8 0 0 0 19.4 15Z" />
     </>
   ),
   trash: (
