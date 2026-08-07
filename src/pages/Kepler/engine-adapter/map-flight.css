@@ -1,3 +1,9 @@
+html[data-maono-map-flight]
+  .maono-map-overlay__buttons
+  button[aria-label="Centralizar nos dados visíveis"] {
+  position: relative;
+}
+
 html[data-maono-map-flight="attention"]
   .maono-map-overlay__buttons
   button[aria-label="Centralizar nos dados visíveis"] {
