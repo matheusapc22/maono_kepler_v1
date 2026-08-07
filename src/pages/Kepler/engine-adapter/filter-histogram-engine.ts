@@ -5,7 +5,7 @@ import {
 import {
   compileOtherDatasetFilters,
   rowPassesHistogramRules,
-  toFiniteNumericValue,
+  toFiniteHistogramValue,
 } from "./filter-rule-evaluator.ts";
 import { buildAdaptiveHistogram } from "./histogram-strategies.ts";
 import type { MapSmartHistogram } from "./histogram-types.ts";
@@ -191,7 +191,10 @@ export function buildSmartFilterHistogram(
 
   for (const rowIndex of sample.indexes) {
     if (!rowPassesHistogramRules(reader, rowIndex, compiled.rules)) continue;
-    const numeric = toFiniteNumericValue(reader.valueAt(rowIndex, columnIndex));
+    const numeric = toFiniteHistogramValue(
+      reader.valueAt(rowIndex, columnIndex),
+      temporal,
+    );
     if (numeric !== null) histogramValues.push(numeric);
   }
 
