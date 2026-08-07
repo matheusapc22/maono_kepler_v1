@@ -15,6 +15,7 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
+const PROJECT_LOAD_RETRY_DELAYS_MS = [350, 900];
 
 const mapStateToProps = (state: any) => ({
   isMapLoading: selectIsMapLoading(state),
@@ -117,6 +118,90 @@ export function loadSavedKeplerConfig(savedConfig: any) {
   };
 }
 
+function retryableProjectStatus(status: number) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function waitForRetry(milliseconds: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    }, milliseconds);
+
+    function handleAbort() {
+      window.clearTimeout(timeoutId);
+      reject(new DOMException("Aborted", "AbortError"));
+    }
+
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
+async function requestProjectConfig(
+  projectSlug: string,
+  signal: AbortSignal,
+) {
+  const totalAttempts = PROJECT_LOAD_RETRY_DELAYS_MS.length + 1;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectSlug)}/config`,
+        {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+          signal,
+        },
+      );
+
+      let data: any;
+      try {
+        data = await parseJsonResponse(response);
+      } catch (error) {
+        lastError = error;
+        if (response.ok && attempt < PROJECT_LOAD_RETRY_DELAYS_MS.length) {
+          await waitForRetry(PROJECT_LOAD_RETRY_DELAYS_MS[attempt], signal);
+          continue;
+        }
+        throw error;
+      }
+
+      if (
+        retryableProjectStatus(response.status) &&
+        attempt < PROJECT_LOAD_RETRY_DELAYS_MS.length
+      ) {
+        await waitForRetry(PROJECT_LOAD_RETRY_DELAYS_MS[attempt], signal);
+        continue;
+      }
+
+      return { response, data };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      lastError = error;
+
+      if (attempt >= PROJECT_LOAD_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+
+      await waitForRetry(PROJECT_LOAD_RETRY_DELAYS_MS[attempt], signal);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Não foi possível carregar o projeto.");
+}
+
 async function loadProjectConfig(
   projectSlug: string,
   dispatch: any,
@@ -127,19 +212,7 @@ async function loadProjectConfig(
   dispatch(setLoadingMapStatus(true));
 
   try {
-    const response = await fetch(
-      `/api/projects/${encodeURIComponent(projectSlug)}/config`,
-      {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          Accept: "application/json",
-        },
-        signal,
-      },
-    );
-
-    const data = await parseJsonResponse(response);
+    const { response, data } = await requestProjectConfig(projectSlug, signal);
 
     if (!response.ok || !data?.ok) {
       const message = getApiErrorMessage(
@@ -182,6 +255,7 @@ const MapUrlLoader = connectStore(
     const { context } = useMapPanel();
     const loadedProjectRef = useRef<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [retryToken, setRetryToken] = useState(0);
 
     useEffect(() => {
       if (!isMapLoading || currentModal == null) {
@@ -203,6 +277,7 @@ const MapUrlLoader = connectStore(
         context?.organization?.id ?? "none",
         context?.version ?? 0,
         context?.mode ?? "unknown",
+        retryToken,
       ].join(":");
 
       if (loadedProjectRef.current === contextKey) {
@@ -242,6 +317,7 @@ const MapUrlLoader = connectStore(
       context?.version,
       dispatch,
       projectSlug,
+      retryToken,
     ]);
 
     if (error) {
@@ -253,7 +329,7 @@ const MapUrlLoader = connectStore(
             <button
               className="mt-5 rounded-lg bg-white px-4 py-2 font-semibold text-red-950"
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => setRetryToken((current) => current + 1)}
             >
               Tentar novamente
             </button>
