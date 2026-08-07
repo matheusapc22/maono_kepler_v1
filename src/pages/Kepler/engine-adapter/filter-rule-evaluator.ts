@@ -158,10 +158,6 @@ export function rowPassesHistogramRules(
   return true;
 }
 
-export function toFiniteNumericValue(value: unknown): number | null {
-  return finiteNumber(value);
-}
-
 export function toFiniteHistogramValue(value: unknown, temporal: boolean) {
   return temporal ? finiteTemporalValue(value) : finiteNumber(value);
 }
