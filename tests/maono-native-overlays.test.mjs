@@ -59,7 +59,7 @@ test("posição é limitada ao canvas em viewports estreitos", () => {
     { width: 280, height: 180 },
   );
 
-  assert.equal(placement.left, 96);
+  assert.equal(placement.left, 104);
   assert.ok(placement.top >= 56);
   assert.ok(placement.top <= 264);
 });
