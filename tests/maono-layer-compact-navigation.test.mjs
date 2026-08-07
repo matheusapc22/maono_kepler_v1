@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { buildFilteredDatasetCsv } from "../src/pages/Kepler/engine-adapter/dataset-csv-serializer.ts";
+
 const files = {
   panel: "../src/pages/Kepler/components/maono-layer-panel/MaonoLayerPanel.tsx",
   list: "../src/pages/Kepler/components/maono-layer-panel/LayerList.tsx",
@@ -13,7 +15,8 @@ const files = {
   filterDetail: "../src/pages/Kepler/components/maono-layer-panel/FilterDetailView.tsx",
   menu: "../src/pages/Kepler/components/maono-layer-panel/PanelActionMenu.tsx",
   css: "../src/pages/Kepler/components/maono-layer-panel/maono-layer-panel.css",
-  csv: "../src/pages/Kepler/engine-adapter/dataset-csv-export.ts",
+  csvHook: "../src/pages/Kepler/engine-adapter/dataset-csv-export.ts",
+  csvSerializer: "../src/pages/Kepler/engine-adapter/dataset-csv-serializer.ts",
 };
 
 const source = Object.fromEntries(
@@ -52,6 +55,7 @@ test("ações destrutivas e secundárias ficam em menu acessível por portal", (
   assert.match(source.menu, /role="menuitem"/);
   assert.match(source.menu, /aria-haspopup="menu"/);
   assert.match(source.menu, /event\.key === "Escape"/);
+  assert.match(source.menu, /Math\.max\([\s\S]*VIEWPORT_MARGIN/);
   assert.match(source.item, /label: "Duplicar"/);
   assert.match(source.item, /label: "Remover"/);
   assert.match(source.layerDetail, /Exportar dados filtrados \(CSV\)/);
@@ -78,11 +82,44 @@ test("filtros usam lista resumida e um editor focado por vez", () => {
 });
 
 test("exportação permanece no adapter e respeita filteredIndex", () => {
-  assert.match(source.csv, /findRawDataset/);
-  assert.match(source.csv, /filteredIndex/);
-  assert.match(source.csv, /MAX_EXPORT_ROWS/);
-  assert.match(source.csv, /viewLayers/);
-  assert.match(source.csv, /viewFilters/);
+  assert.match(source.csvSerializer, /findRawDataset/);
+  assert.match(source.csvSerializer, /filteredIndex/);
+  assert.match(source.csvSerializer, /MAX_DATASET_CSV_ROWS/);
+  assert.match(source.csvSerializer, /FORMULA_PREFIX/);
+  assert.match(source.csvHook, /viewLayers/);
+  assert.match(source.csvHook, /viewFilters/);
   assert.doesNotMatch(source.layerDetail, /useSelector|useStore|@kepler\.gl\/actions/);
   assert.doesNotMatch(source.filterDetail, /useSelector|useStore|@kepler\.gl\/actions/);
+});
+
+test("CSV usa somente índices filtrados e neutraliza fórmulas", () => {
+  const state = {
+    demo: {
+      keplerGl: {
+        map: {
+          visState: {
+            datasets: {
+              "data-1": {
+                id: "data-1",
+                fields: [{ name: "nome" }, { name: "formula" }],
+                allData: [
+                  ["Linha removida", "texto"],
+                  ["Linha filtrada", "=2+2"],
+                ],
+                allIndexes: [0, 1],
+                filteredIndex: [1],
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  const exported = buildFilteredDatasetCsv(state, "data-1", "Teste seguro");
+
+  assert.equal(exported.rowCount, 1);
+  assert.equal(exported.filename, "Teste-seguro-filtrado.csv");
+  assert.match(exported.content, /Linha filtrada,'=2\+2/);
+  assert.doesNotMatch(exported.content, /Linha removida/);
 });
