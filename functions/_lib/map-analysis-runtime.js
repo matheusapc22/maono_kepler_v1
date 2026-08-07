@@ -1,17 +1,23 @@
 let rateLimitSchemaReady = false;
 let rateLimitSchemaPromise = null;
 
+function isTrue(value) {
+  return String(value ?? "").trim().toLowerCase() === "true";
+}
+
 export function withMapAnalysisRuntimeDefaults(env) {
   if (!env || typeof env !== "object") return env;
 
-  if (env.MAONO_ISOCHRONE_V1 !== undefined) {
-    return env;
-  }
+  // MAONO_ISOCHRONE_V1 foi usado durante o rollout inicial e alguns ambientes
+  // podem ter permanecido com o valor "false" depois da estabilização. O runtime
+  // atual trata a análise como parte do overlay Maõno e mantém um kill switch
+  // explícito separado para emergências operacionais.
+  const disabled = isTrue(env.MAONO_ISOCHRONE_KILL_SWITCH);
 
   return new Proxy(env, {
     get(target, property, receiver) {
       if (property === "MAONO_ISOCHRONE_V1") {
-        return "true";
+        return disabled ? "false" : "true";
       }
       return Reflect.get(target, property, receiver);
     },
