@@ -37,14 +37,17 @@ import {
 } from "../actions";
 
 import { CLOUD_PROVIDERS_CONFIGURATION } from "../constants/default-settings";
-import MaonoClusterLayer from "../clustering/point-cluster-count-layer.ts";
+import {
+  MaonoAdaptiveGeoJsonLayer,
+  MaonoAdaptivePointLayer,
+} from "../clustering/point-cluster-adaptive-layer.ts";
 import { generateHashId } from "../utils/strings";
 
 // initialize kepler demo-app with DuckDB plugin
 /*
 initApplicationConfig({
   // Custom UI for DuckDB
-  plugins: [keplerGlDuckdbPlugin],
+  plugins: [keplerGlDuckDbPlugin],
   // async data ingestion to DuckDb
   table: KeplerGlDuckDbTable,
   // setup database for DuckDB plugin
@@ -123,7 +126,7 @@ export const appReducer = handleActions(
 const { DEFAULT_EXPORT_MAP } = uiStateUpdaters;
 
 // combine app reducer and keplerGl reducer
-// to mimic the reducer state of kepler.gl website
+// to mimic kepler.gl website
 const demoReducer = combineReducers({
   // mount keplerGl reducer
   keplerGl: keplerGlReducer.initialState({
@@ -145,7 +148,8 @@ const demoReducer = combineReducers({
     visState: {
       layerClasses: {
         ...LayerClasses,
-        cluster: MaonoClusterLayer,
+        point: MaonoAdaptivePointLayer,
+        geojson: MaonoAdaptiveGeoJsonLayer,
       },
       loaders: [], // Add additional loaders.gl loaders here
       loadOptions: {}, // Add additional loaders.gl loader options here
