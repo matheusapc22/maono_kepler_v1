@@ -88,18 +88,19 @@ export default function FilterHistogram({
     );
   }
 
+  const activeDomain: Range = domain;
   const safeRange: Range = [
-    clamp(selectedRange[0], domain[0], domain[1]),
-    clamp(selectedRange[1], domain[0], domain[1]),
+    clamp(selectedRange[0], activeDomain[0], activeDomain[1]),
+    clamp(selectedRange[1], activeDomain[0], activeDomain[1]),
   ];
   const minimumRatio = histogramValueToRatio(
     safeRange[0],
-    domain,
+    activeDomain,
     histogram.axisScale,
   );
   const maximumRatio = histogramValueToRatio(
     safeRange[1],
-    domain,
+    activeDomain,
     histogram.axisScale,
   );
   const selectionLeft = Math.min(minimumRatio, maximumRatio) * 100;
@@ -114,15 +115,22 @@ export default function FilterHistogram({
   function valueAt(clientX: number) {
     return histogramRatioToValue(
       ratioAt(clientX),
-      domain as Range,
+      activeDomain,
       histogram.axisScale,
     );
   }
 
   function snapped(value: number) {
-    const safeStep = Number.isFinite(step) && step > 0 ? step : (domain![1] - domain![0]) / 1000;
-    const steps = Math.round((value - domain![0]) / safeStep);
-    return clamp(domain![0] + steps * safeStep, domain![0], domain![1]);
+    const safeStep =
+      Number.isFinite(step) && step > 0
+        ? step
+        : (activeDomain[1] - activeDomain[0]) / 1000;
+    const steps = Math.round((value - activeDomain[0]) / safeStep);
+    return clamp(
+      activeDomain[0] + steps * safeStep,
+      activeDomain[0],
+      activeDomain[1],
+    );
   }
 
   function beginDrag(
@@ -163,12 +171,12 @@ export default function FilterHistogram({
       let minimum = drag.startRange[0] + delta;
       let maximumValue = drag.startRange[1] + delta;
 
-      if (minimum < domain[0]) {
-        minimum = domain[0];
+      if (minimum < activeDomain[0]) {
+        minimum = activeDomain[0];
         maximumValue = minimum + amplitude;
       }
-      if (maximumValue > domain[1]) {
-        maximumValue = domain[1];
+      if (maximumValue > activeDomain[1]) {
+        maximumValue = activeDomain[1];
         minimum = maximumValue - amplitude;
       }
       next = [minimum, maximumValue];
@@ -193,11 +201,28 @@ export default function FilterHistogram({
   function keyboardHandle(mode: "minimum" | "maximum", delta: number) {
     if (!editable) return;
     const range = currentRangeRef.current ?? safeRange;
-    const safeStep = Number.isFinite(step) && step > 0 ? step : (domain[1] - domain[0]) / 1000;
+    const safeStep =
+      Number.isFinite(step) && step > 0
+        ? step
+        : (activeDomain[1] - activeDomain[0]) / 1000;
     const next: Range =
       mode === "minimum"
-        ? [clamp(range[0] + delta * safeStep, domain[0], range[1]), range[1]]
-        : [range[0], clamp(range[1] + delta * safeStep, range[0], domain[1])];
+        ? [
+            clamp(
+              range[0] + delta * safeStep,
+              activeDomain[0],
+              range[1],
+            ),
+            range[1],
+          ]
+        : [
+            range[0],
+            clamp(
+              range[1] + delta * safeStep,
+              range[0],
+              activeDomain[1],
+            ),
+          ];
     currentRangeRef.current = next;
     onRangeChange(next);
     onRangeCommit(next);
@@ -224,12 +249,19 @@ export default function FilterHistogram({
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
       >
-        <div className="maono-filter-histogram__bars" role="img" aria-label={`Distribuição em ${histogram.bins.length} intervalos`}>
+        <div
+          className="maono-filter-histogram__bars"
+          role="img"
+          aria-label={`Distribuição em ${histogram.bins.length} intervalos`}
+        >
           {histogram.bins.length ? (
             histogram.bins.map((bin, index) => {
               const selected =
                 bin.end >= safeRange[0] && bin.start <= safeRange[1];
-              const height = bin.count <= 0 ? 0 : Math.max(3, (bin.count / maximum) * 100);
+              const height =
+                bin.count <= 0
+                  ? 0
+                  : Math.max(3, (bin.count / maximum) * 100);
 
               return (
                 <span
@@ -260,7 +292,7 @@ export default function FilterHistogram({
           disabled={!editable}
           role="slider"
           aria-label="Limite mínimo do filtro"
-          aria-valuemin={domain[0]}
+          aria-valuemin={activeDomain[0]}
           aria-valuemax={safeRange[1]}
           aria-valuenow={safeRange[0]}
           onPointerDown={(event) => beginDrag("minimum", event)}
@@ -277,7 +309,7 @@ export default function FilterHistogram({
           role="slider"
           aria-label="Limite máximo do filtro"
           aria-valuemin={safeRange[0]}
-          aria-valuemax={domain[1]}
+          aria-valuemax={activeDomain[1]}
           aria-valuenow={safeRange[1]}
           onPointerDown={(event) => beginDrag("maximum", event)}
           onKeyDown={(event) => {
@@ -288,8 +320,8 @@ export default function FilterHistogram({
       </div>
 
       <footer className="maono-filter-histogram__axis">
-        <span>{valueLabel(domain[0], temporal)}</span>
-        <span>{valueLabel(domain[1], temporal)}</span>
+        <span>{valueLabel(activeDomain[0], temporal)}</span>
+        <span>{valueLabel(activeDomain[1], temporal)}</span>
       </footer>
 
       {histogram.source === "kepler-native" && histogram.fallbackReason ? (
