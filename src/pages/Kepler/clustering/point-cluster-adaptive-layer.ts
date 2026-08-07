@@ -8,6 +8,10 @@ import {
   adaptiveClusterDeckLayerId,
 } from "./point-cluster-controller.ts";
 import {
+  buildNativePointClusterFilter,
+  NATIVE_CLUSTER_RADIUS_RANGE,
+} from "./point-cluster-native-data-adapter.ts";
+import {
   MAX_CLIENT_POINT_COUNT,
   isPointClusteringFeatureEnabled,
   resolvePointClusterMode,
@@ -122,12 +126,7 @@ function pointFeatureData(value) {
 
   const allPoints = features.every((feature) => {
     const geometry = featureGeometry(feature);
-    return (
-      geometry?.type === "Point" &&
-      Array.isArray(geometry.coordinates) &&
-      Number.isFinite(Number(geometry.coordinates[0])) &&
-      Number.isFinite(Number(geometry.coordinates[1]))
-    );
+    return geometry?.type === "Point";
   });
 
   return allPoints ? features : null;
@@ -135,7 +134,7 @@ function pointFeatureData(value) {
 
 function featurePosition(feature) {
   const geometry = featureGeometry(feature);
-  return geometry?.type === "Point"
+  return geometry?.type === "Point" && Array.isArray(geometry.coordinates)
     ? geometry.coordinates
     : [Number.NaN, Number.NaN];
 }
@@ -162,7 +161,10 @@ function clusterablePointData(data, getPosition) {
     return null;
   }
 
-  const valid = data.filter((point) => {
+  // O ClusterBuilder nativo elimina coordenadas inválidas individualmente.
+  // Não aplicamos uma segunda regra de razão mínima que mudaria o conjunto
+  // agregado em relação ao comportamento do Kepler.
+  return data.filter((point) => {
     const position = getPosition(point);
     return (
       Array.isArray(position) &&
@@ -170,12 +172,6 @@ function clusterablePointData(data, getPosition) {
       Number.isFinite(Number(position[1]))
     );
   });
-
-  if (data.length > 0 && valid.length / data.length < 0.9) {
-    return null;
-  }
-
-  return valid;
 }
 
 function runtimeMode(layer, mapState, policy) {
@@ -197,12 +193,11 @@ function clusterDeckProps({
 }) {
   const defaultLayerProps = layer.getDefaultDeckLayerProps(opts);
   const mapState = opts?.mapState ?? {};
-  const { _filterData: filterData, ...formattedData } = opts?.data ?? {};
-  const minimumRadius = Math.max(
-    8,
-    Math.round(policy.clusterSize * 0.2),
-  );
-  const maximumRadius = Math.max(40, policy.clusterSize);
+  const { _filterData: _nativeFilterData, ...formattedData } = opts?.data ?? {};
+  const filterData = buildNativePointClusterFilter({
+    dataProps: opts?.data,
+    gpuFilter: opts?.gpuFilter,
+  });
 
   return {
     ...defaultLayerProps,
@@ -212,7 +207,9 @@ function clusterDeckProps({
     getPosition,
     filterData,
     radiusScale: 1,
-    radiusRange: [minimumRadius, maximumRadius],
+    // clusterRadius define a topologia do agrupamento; radiusRange define apenas
+    // o tamanho visual. Mantemos os dois contratos independentes como no Kepler.
+    radiusRange: NATIVE_CLUSTER_RADIUS_RANGE,
     clusterRadius: policy.clusterSize,
     colorRange: clusterColorRange(layer),
     colorScaleType: "quantize",
@@ -231,6 +228,7 @@ function clusterDeckProps({
       filterData: {
         filterRange: opts?.gpuFilter?.filterRange,
         ...(opts?.gpuFilter?.filterValueUpdateTriggers ?? {}),
+        filteredIndex: opts?.data?.getFiltered,
       },
     },
     // O domínio é calculado somente pela subcamada transitória. Não o
