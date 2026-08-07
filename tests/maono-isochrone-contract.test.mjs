@@ -108,6 +108,17 @@ test("ciclo de preview sai do componente visual e usa o Engine Adapter", () => {
   assert.match(previewHook, /MAONO_MAP_SAVE_RESULT_EVENT/);
 });
 
+test("troca de projeto ou organização remove apenas preview transitório não salvo", () => {
+  assert.match(previewHook, /const scopeKey =/);
+  assert.match(previewHook, /previousScopeKeyRef/);
+  assert.match(previewHook, /requestRef\.current\?\.abort\(\)/);
+  assert.match(
+    previewHook,
+    /if \(current && !current\.saveRequestId\) \{[\s\S]*removeTransientLayer\(current\.dataId\)/,
+  );
+  assert.match(previewHook, /resetMarkerRef\.current\(\)/);
+});
+
 test("store não recria reducer paralelo de pin", () => {
   assert.doesNotMatch(store, /TOGGLE_PIN_MODE|MAP_CLICK|LAYER_CLICK/);
   assert.doesNotMatch(store, /isPinModeActive|clickedCoordinate/);
