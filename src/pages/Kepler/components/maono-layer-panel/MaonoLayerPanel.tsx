@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { KeplerCommandResult, MapLayerColumns } from "../../engine-adapter";
+import { useDatasetCsvExport } from "../../engine-adapter/dataset-csv-export.ts";
 import { useKeplerController } from "../../hooks/useKeplerController";
 import { useKeplerState } from "../../hooks/useKeplerState";
 import type {
@@ -16,37 +17,28 @@ import {
 } from "../maono-map-shell/map-shell-events";
 import AddLayerMenu from "./AddLayerMenu";
 import FilterPanel from "./FilterPanel";
-import LayerInspector from "./LayerInspector";
+import LayerDetailView from "./LayerDetailView";
 import LayerList from "./LayerList";
 import LayerPanelIcon from "./LayerPanelIcon";
 import PanelSaveAction from "./PanelSaveAction";
 import type { LayerStyleChange } from "./LayerStyleEditor";
 import "./maono-layer-panel.css";
-import "./layer-accordion.css";
 
 type PanelNotice = {
   kind: "error" | "success";
   message: string;
 };
 
-function modeCopy(mode: "viewer" | "editor" | "create" | undefined) {
-  if (mode === "editor") {
-    return {
-      title: "Editor de camadas",
-      badge: "Editando",
-    };
-  }
-  if (mode === "create") {
-    return {
-      title: "Configuração do novo mapa",
-      badge: "Criando",
-    };
-  }
+type PanelView =
+  | { kind: "list" }
+  | { kind: "layer"; layerId: string };
 
-  return {
-    title: "Visualizador de camadas",
-    badge: "Visualizando",
-  };
+function modeLabel(mode: "viewer" | "editor" | "create" | undefined) {
+  return mode === "viewer"
+    ? "Somente leitura"
+    : mode === "create"
+      ? "Novo mapa"
+      : "Edição";
 }
 
 export default function MaonoLayerPanel() {
@@ -61,7 +53,9 @@ export default function MaonoLayerPanel() {
     selectedLayerId,
   } = useKeplerState();
   const controller = useKeplerController();
+  const exportDatasetCsv = useDatasetCsvExport();
   const [tab, setTab] = useState<MaonoMapPanelTab>("layers");
+  const [view, setView] = useState<PanelView>({ kind: "list" });
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<PanelNotice | null>(null);
   const capabilities = context?.capabilities;
@@ -70,14 +64,21 @@ export default function MaonoLayerPanel() {
   const canInspect = capabilities?.inspectLayer === true;
   const canRename = capabilities?.editLayers === true;
   const canEditStructure = capabilities?.editLayers === true;
-  const copy = modeCopy(context?.mode);
+  const canEditStyle = capabilities?.editLayerStyle === true;
+  const activeLayer =
+    view.kind === "layer"
+      ? layers.find((layer) => layer.id === view.layerId) ?? null
+      : null;
+  const showSearch = layers.length >= 8 || Boolean(search);
 
   useEffect(() => {
     if (tab === "layers" && !canViewLayers && canViewFilters) {
       setTab("filters");
+      setView({ kind: "list" });
       notifyMaonoMapPanelTabChanged("filters");
     } else if (tab === "filters" && !canViewFilters && canViewLayers) {
       setTab("layers");
+      setView({ kind: "list" });
       notifyMaonoMapPanelTabChanged("layers");
     }
   }, [canViewFilters, canViewLayers, tab]);
@@ -94,6 +95,7 @@ export default function MaonoLayerPanel() {
 
       if (requestedTab && allowed) {
         setTab(requestedTab);
+        setView({ kind: "list" });
         notifyMaonoMapPanelTabChanged(requestedTab);
       }
     }
@@ -102,7 +104,6 @@ export default function MaonoLayerPanel() {
       MAONO_MAP_PANEL_TAB_REQUEST_EVENT,
       handleRequestedTab,
     );
-
     return () => {
       window.removeEventListener(
         MAONO_MAP_PANEL_TAB_REQUEST_EVENT,
@@ -113,7 +114,6 @@ export default function MaonoLayerPanel() {
 
   useEffect(() => {
     if (!canViewLayers || !canInspect || !layers.length) return;
-
     const selectedStillExists =
       selectedLayerId !== null &&
       layers.some((layer) => layer.id === selectedLayerId);
@@ -123,18 +123,23 @@ export default function MaonoLayerPanel() {
   }, [canInspect, canViewLayers, controller, layers, selectedLayerId]);
 
   useEffect(() => {
-    if (notice?.kind !== "success") return undefined;
+    if (view.kind === "layer" && !activeLayer) {
+      setView({ kind: "list" });
+    }
+  }, [activeLayer, view.kind]);
 
+  useEffect(() => {
+    if (notice?.kind !== "success") return undefined;
     const timeout = window.setTimeout(() => setNotice(null), 2_500);
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
   function selectTab(nextTab: MaonoMapPanelTab) {
     const allowed = nextTab === "layers" ? canViewLayers : canViewFilters;
-
     if (!allowed) return;
 
     setTab(nextTab);
+    setView({ kind: "list" });
     setNotice(null);
     notifyMaonoMapPanelTabChanged(nextTab);
   }
@@ -145,60 +150,54 @@ export default function MaonoLayerPanel() {
     onSuccess?: (value: T | undefined) => void,
   ) {
     if (!result.ok) {
-      setNotice({
-        kind: "error",
-        message: result.reason,
-      });
+      setNotice({ kind: "error", message: result.reason });
       return false;
     }
 
     onSuccess?.(result.value);
     setNotice(
       result.changed && successMessage
-        ? {
-            kind: "success",
-            message: successMessage,
-          }
+        ? { kind: "success", message: successMessage }
         : null,
     );
     return true;
   }
 
-  function selectLayer(layer: MaonoLayerSnapshot) {
-    applyCommand(controller.inspectLayer(layer.id));
+  function openLayer(layer: MaonoLayerSnapshot) {
+    if (applyCommand(controller.inspectLayer(layer.id))) {
+      setView({ kind: "layer", layerId: layer.id });
+    }
   }
 
   function moveLayer(layerId: string, direction: -1 | 1) {
     const index = layers.findIndex((layer) => layer.id === layerId);
     const nextIndex = index + direction;
-
-    if (index < 0 || nextIndex < 0 || nextIndex >= layers.length) {
-      return;
-    }
+    if (index < 0 || nextIndex < 0 || nextIndex >= layers.length) return;
 
     const order = layers.map((layer) => layer.id);
     [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
-    applyCommand(
-      controller.reorderLayers(order),
-      "Ordem das camadas atualizada.",
-    );
+    applyCommand(controller.reorderLayers(order), "Ordem das camadas atualizada.");
+  }
+
+  function moveLayerTo(layerId: string, position: "start" | "end") {
+    const order = layers.map((layer) => layer.id);
+    const index = order.indexOf(layerId);
+    if (index < 0) return;
+    order.splice(index, 1);
+    if (position === "start") order.unshift(layerId);
+    else order.push(layerId);
+    applyCommand(controller.reorderLayers(order), "Ordem das camadas atualizada.");
   }
 
   function reorderLayer(draggedLayerId: string, targetLayerId: string) {
     const order = layers.map((layer) => layer.id);
     const draggedIndex = order.indexOf(draggedLayerId);
     const targetIndex = order.indexOf(targetLayerId);
-
-    if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) {
-      return;
-    }
+    if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) return;
 
     const [movedLayerId] = order.splice(draggedIndex, 1);
     order.splice(targetIndex, 0, movedLayerId);
-    applyCommand(
-      controller.reorderLayers(order),
-      "Ordem das camadas atualizada.",
-    );
+    applyCommand(controller.reorderLayers(order), "Ordem das camadas atualizada.");
   }
 
   function renameLayer(layer: MaonoLayerSnapshot, label: string) {
@@ -209,7 +208,15 @@ export default function MaonoLayerPanel() {
   }
 
   function duplicateLayer(layer: MaonoLayerSnapshot) {
-    applyCommand(controller.duplicateLayer(layer.id), "Camada duplicada.");
+    applyCommand(
+      controller.duplicateLayer(layer.id),
+      "Camada duplicada.",
+      (value) => {
+        if (value?.layerId) {
+          setView({ kind: "layer", layerId: value.layerId });
+        }
+      },
+    );
   }
 
   function removeLayer(layer: MaonoLayerSnapshot) {
@@ -221,7 +228,11 @@ export default function MaonoLayerPanel() {
       return;
     }
 
-    applyCommand(controller.removeLayer(layer.id), "Camada removida.");
+    if (applyCommand(controller.removeLayer(layer.id), "Camada removida.")) {
+      if (view.kind === "layer" && view.layerId === layer.id) {
+        setView({ kind: "list" });
+      }
+    }
   }
 
   function createLayer(dataset: MaonoDatasetSnapshot) {
@@ -234,6 +245,7 @@ export default function MaonoLayerPanel() {
       (value) => {
         if (value?.layerId) {
           applyCommand(controller.inspectLayer(value.layerId));
+          setView({ kind: "layer", layerId: value.layerId });
         }
       },
     );
@@ -243,10 +255,7 @@ export default function MaonoLayerPanel() {
     return applyCommand(controller.openAddDataModal());
   }
 
-  function associateLayerDataset(
-    layer: MaonoLayerSnapshot,
-    datasetId: string,
-  ) {
+  function associateLayerDataset(layer: MaonoLayerSnapshot, datasetId: string) {
     return applyCommand(
       controller.associateLayerDataset(layer.id, datasetId),
       "Dataset da camada atualizado.",
@@ -263,10 +272,7 @@ export default function MaonoLayerPanel() {
     );
   }
 
-  function updateLayerStyle(
-    layer: MaonoLayerSnapshot,
-    change: LayerStyleChange,
-  ) {
+  function updateLayerStyle(layer: MaonoLayerSnapshot, change: LayerStyleChange) {
     switch (change.kind) {
       case "type":
         applyCommand(controller.setLayerType(layer.id, change.value));
@@ -296,19 +302,13 @@ export default function MaonoLayerPanel() {
         applyCommand(controller.setStrokeColor(layer.id, change.value));
         return;
       case "strokeField":
-        applyCommand(
-          controller.setStrokeColorField(layer.id, change.value),
-        );
+        applyCommand(controller.setStrokeColorField(layer.id, change.value));
         return;
       case "strokeScale":
-        applyCommand(
-          controller.setStrokeColorScale(layer.id, change.value),
-        );
+        applyCommand(controller.setStrokeColorScale(layer.id, change.value));
         return;
       case "strokePalette":
-        applyCommand(
-          controller.setStrokeColorPalette(layer.id, change.value),
-        );
+        applyCommand(controller.setStrokeColorPalette(layer.id, change.value));
         return;
       case "strokeOpacity":
         applyCommand(controller.setStrokeOpacity(layer.id, change.value));
@@ -320,18 +320,10 @@ export default function MaonoLayerPanel() {
         applyCommand(controller.setPointRadius(layer.id, change.value));
         return;
       case "clusterRadius":
-        applyCommand(
-          controller.setClusterOptions(layer.id, {
-            radius: change.value,
-          }),
-        );
+        applyCommand(controller.setClusterOptions(layer.id, { radius: change.value }));
         return;
       case "heatmapRadius":
-        applyCommand(
-          controller.setHeatmapOptions(layer.id, {
-            radius: change.value,
-          }),
-        );
+        applyCommand(controller.setHeatmapOptions(layer.id, { radius: change.value }));
         return;
       case "radiusField":
         applyCommand(controller.setRadiusField(layer.id, change.value));
@@ -352,25 +344,36 @@ export default function MaonoLayerPanel() {
     }
   }
 
-  function renderLayerDetails(layer: MaonoLayerSnapshot) {
-    return (
-      <LayerInspector
-        layer={layer}
-        datasets={datasets}
-        canRename={canRename}
-        canEditStructure={canEditStructure}
-        canEditStyle={Boolean(capabilities?.editLayerStyle)}
-        layerBlending={basemap.blending.layers}
-        overlayBlending={basemap.blending.overlays}
-        onLabelChange={renameLayer}
-        onDatasetChange={associateLayerDataset}
-        onColumnsChange={updateLayerColumns}
-        onStyleChange={updateLayerStyle}
-      />
+  function exportCsv(datasetId: string, label: string) {
+    const result = exportDatasetCsv(datasetId, label);
+    setNotice(
+      result.ok
+        ? {
+            kind: "success",
+            message: `${result.rowCount.toLocaleString("pt-BR")} registros exportados.`,
+          }
+        : { kind: "error", message: result.reason },
     );
   }
 
+  function addFilter(dataId: string, fieldName: string) {
+    const result = controller.addFilter(dataId);
+    if (!applyCommand(result, "Filtro adicionado.")) return null;
+    if (!result.ok || result.value?.index === undefined) return null;
+
+    const index = result.value.index;
+    if (result.value.fieldName !== fieldName) {
+      applyCommand(
+        controller.bindFilterField(index, dataId, fieldName),
+        "Propriedade do filtro atualizada.",
+      );
+    }
+    return index;
+  }
+
   const tabCount = Number(canViewLayers) + Number(canViewFilters);
+  const title = tab === "layers" ? "Camadas" : "Filtros";
+  const count = tab === "layers" ? layers.length : filters.length;
 
   return (
     <aside
@@ -378,15 +381,19 @@ export default function MaonoLayerPanel() {
       className="maono-layer-panel"
       data-panel-mode={context?.mode || "viewer"}
       data-active-tab={tab}
+      data-view={view.kind}
       data-read-only={context?.mode === "viewer" ? "true" : "false"}
       aria-label="Controlador de camadas Maõno"
     >
       <header className="maono-layer-panel__header">
         <div>
-          <span>Maõno Maps</span>
-          <strong>{copy.title}</strong>
+          <strong>{title}</strong>
+          <span>{count} {count === 1 ? "item" : "itens"}</span>
         </div>
-        <span className="maono-layer-panel__mode">{copy.badge}</span>
+        <span className="maono-layer-panel__mode">
+          {context?.mode === "viewer" ? <LayerPanelIcon name="lock" /> : null}
+          {modeLabel(context?.mode)}
+        </span>
       </header>
 
       {tabCount ? (
@@ -432,13 +439,9 @@ export default function MaonoLayerPanel() {
           className={`maono-layer-panel__notice is-${notice.kind}`}
           role={notice.kind === "error" ? "alert" : "status"}
         >
-          {notice.kind === "error" ? <LayerPanelIcon name="warning" /> : null}
+          <LayerPanelIcon name={notice.kind === "error" ? "warning" : "check"} />
           <span>{notice.message}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            aria-label="Fechar aviso"
-          >
+          <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso">
             <LayerPanelIcon name="x" />
           </button>
         </div>
@@ -448,9 +451,7 @@ export default function MaonoLayerPanel() {
         <div className="maono-layer-panel__state is-error" role="alert">
           <LayerPanelIcon name="warning" />
           <strong>Painel indisponível</strong>
-          <span>
-            O servidor não concedeu acesso às camadas ou aos filtros deste mapa.
-          </span>
+          <span>O servidor não concedeu acesso às camadas ou aos filtros deste mapa.</span>
         </div>
       ) : isLoading ? (
         <div className="maono-layer-panel__state is-loading" role="status">
@@ -471,57 +472,86 @@ export default function MaonoLayerPanel() {
           role="tabpanel"
           aria-labelledby="maono-layers-tab"
         >
-          <div className="maono-layer-panel__toolbar">
-            <label className="maono-layer-panel__search">
-              <LayerPanelIcon name="search" />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar por nome ou tipo"
-                aria-label="Buscar camada"
-              />
-              {search ? (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Limpar busca"
-                >
-                  <LayerPanelIcon name="x" />
-                </button>
-              ) : null}
-            </label>
+          {view.kind === "layer" && activeLayer ? (
+            <LayerDetailView
+              layer={activeLayer}
+              datasets={datasets}
+              canToggle={Boolean(capabilities?.toggleLayerVisibility)}
+              canRename={canRename}
+              canDuplicate={Boolean(capabilities?.duplicateLayer)}
+              canRemove={Boolean(capabilities?.removeLayer)}
+              canExport={activeLayer.dataIds.length === 1}
+              canEditStructure={canEditStructure}
+              canEditStyle={canEditStyle}
+              layerBlending={basemap.blending.layers}
+              overlayBlending={basemap.blending.overlays}
+              onBack={() => setView({ kind: "list" })}
+              onToggle={(layer, visible) =>
+                applyCommand(controller.toggleLayerVisibility(layer, visible))
+              }
+              onRename={renameLayer}
+              onDuplicate={duplicateLayer}
+              onRemove={removeLayer}
+              onExport={(layer) => {
+                const datasetId = layer.dataIds[0];
+                if (datasetId) exportCsv(datasetId, layer.label);
+              }}
+              onDatasetChange={associateLayerDataset}
+              onColumnsChange={updateLayerColumns}
+              onStyleChange={updateLayerStyle}
+            />
+          ) : (
+            <>
+              <div className="maono-layer-panel__toolbar">
+                {showSearch ? (
+                  <label className="maono-layer-panel__search">
+                    <LayerPanelIcon name="search" />
+                    <input
+                      type="search"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar camada"
+                      aria-label="Buscar camada"
+                    />
+                    {search ? (
+                      <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca">
+                        <LayerPanelIcon name="x" />
+                      </button>
+                    ) : null}
+                  </label>
+                ) : <span />}
+                {capabilities?.createLayer ? (
+                  <AddLayerMenu
+                    datasets={datasets}
+                    onCreate={createLayer}
+                    onImport={openDataImport}
+                  />
+                ) : null}
+              </div>
 
-            {capabilities?.createLayer ? (
-              <AddLayerMenu
-                datasets={datasets}
-                onCreate={createLayer}
-                onImport={openDataImport}
+              <LayerList
+                layers={layers}
+                selectedLayerId={selectedLayerId}
+                search={search}
+                canInspect={canInspect}
+                canToggle={Boolean(capabilities?.toggleLayerVisibility)}
+                canRename={canRename}
+                canDuplicate={Boolean(capabilities?.duplicateLayer)}
+                canRemove={Boolean(capabilities?.removeLayer)}
+                canReorder={Boolean(capabilities?.reorderLayers)}
+                onOpen={openLayer}
+                onToggle={(layer, visible) =>
+                  applyCommand(controller.toggleLayerVisibility(layer, visible))
+                }
+                onRename={renameLayer}
+                onDuplicate={duplicateLayer}
+                onRemove={removeLayer}
+                onMove={moveLayer}
+                onMoveTo={moveLayerTo}
+                onReorder={reorderLayer}
               />
-            ) : null}
-          </div>
-
-          <LayerList
-            layers={layers}
-            selectedLayerId={selectedLayerId}
-            search={search}
-            canInspect={canInspect}
-            canToggle={Boolean(capabilities?.toggleLayerVisibility)}
-            canRename={canRename}
-            canDuplicate={Boolean(capabilities?.duplicateLayer)}
-            canRemove={Boolean(capabilities?.removeLayer)}
-            canReorder={Boolean(capabilities?.reorderLayers)}
-            onSelect={selectLayer}
-            onToggle={(layer, visible) =>
-              applyCommand(controller.toggleLayerVisibility(layer, visible))
-            }
-            onRename={renameLayer}
-            onDuplicate={duplicateLayer}
-            onRemove={removeLayer}
-            onMove={moveLayer}
-            onReorder={reorderLayer}
-            renderLayerDetails={renderLayerDetails}
-          />
+            </>
+          )}
         </div>
       ) : canViewFilters ? (
         <div
@@ -534,9 +564,7 @@ export default function MaonoLayerPanel() {
             filters={filters}
             datasets={datasets}
             editable={Boolean(capabilities?.editFilters)}
-            onAdd={(dataId) =>
-              applyCommand(controller.addFilter(dataId), "Filtro adicionado.")
-            }
+            onAdd={addFilter}
             onBindField={(index, dataId, fieldName) =>
               applyCommand(
                 controller.bindFilterField(index, dataId, fieldName),
@@ -549,6 +577,11 @@ export default function MaonoLayerPanel() {
             onChangeValue={(index, value) =>
               applyCommand(controller.setFilterValue(index, value))
             }
+            onToggleEnabled={(index, enabled) =>
+              applyCommand(controller.setFilterEnabled(index, enabled))
+            }
+            onFocusResults={() => applyCommand(controller.fitFilteredData())}
+            onExportCsv={exportCsv}
           />
         </div>
       ) : null}
