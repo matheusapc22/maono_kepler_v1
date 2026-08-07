@@ -4,6 +4,7 @@ import {
   methodNotAllowed,
 } from "../../../_lib/http.js";
 import { resolveExistingProjectMapNavigation } from "../../../_lib/map-panel-service.js";
+import { withMapAnalysisRuntimeDefaults } from "../../../_lib/map-analysis-runtime.js";
 
 export async function onRequest(context) {
   const { request, env, params } = context;
@@ -14,8 +15,9 @@ export async function onRequest(context) {
 
   try {
     const url = new URL(request.url);
+    const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
     const navigation = await resolveExistingProjectMapNavigation(
-      env,
+      runtimeEnv,
       request,
       params?.slug,
       {
