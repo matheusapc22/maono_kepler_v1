@@ -33,6 +33,21 @@ function canvasRect(): MapCanvasRect | null {
   };
 }
 
+function sameCanvasRect(
+  current: MapCanvasRect | null,
+  next: MapCanvasRect | null,
+) {
+  if (current === next) return true;
+  if (!current || !next) return false;
+
+  return (
+    current.left === next.left &&
+    current.top === next.top &&
+    current.width === next.width &&
+    current.height === next.height
+  );
+}
+
 export function useMapMarker(viewport: MapViewportSummary | null) {
   const [placing, setPlacing] = useState(false);
   const [origin, setOrigin] = useState<MarkerOrigin | null>(null);
@@ -52,7 +67,10 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
       observedCanvasRef.current = canvas;
 
       if (canvas && typeof ResizeObserver !== "undefined") {
-        const observer = new ResizeObserver(() => setRect(canvasRect()));
+        const observer = new ResizeObserver(() => {
+          const next = canvasRect();
+          setRect((current) => (sameCanvasRect(current, next) ? current : next));
+        });
         observer.observe(canvas);
         resizeObserverRef.current = observer;
       } else {
@@ -60,28 +78,41 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
       }
     }
 
-    setRect(canvasRect());
+    const next = canvasRect();
+    setRect((current) => (sameCanvasRect(current, next) ? current : next));
   }, []);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
 
-    refreshCanvas();
-    const mutationObserver = new MutationObserver(refreshCanvas);
-    mutationObserver.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    let discoveryFrame = 0;
+    let discoveryAttempts = 0;
+
+    const discoverCanvas = () => {
+      refreshCanvas();
+      if (!mapCanvas() && discoveryAttempts < 90) {
+        discoveryAttempts += 1;
+        discoveryFrame = window.requestAnimationFrame(discoverCanvas);
+      }
+    };
+
+    const handleMapRuntime = () => {
+      discoveryAttempts = 0;
+      window.cancelAnimationFrame(discoveryFrame);
+      discoverCanvas();
+    };
+
+    discoverCanvas();
+    window.addEventListener("maono:map-runtime", handleMapRuntime);
     window.addEventListener("resize", refreshCanvas);
     window.addEventListener("scroll", refreshCanvas, true);
-    const animationFrame = window.requestAnimationFrame(refreshCanvas);
 
     return () => {
-      mutationObserver.disconnect();
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       observedCanvasRef.current = null;
-      window.cancelAnimationFrame(animationFrame);
+      window.cancelAnimationFrame(discoveryFrame);
+      window.removeEventListener("maono:map-runtime", handleMapRuntime);
       window.removeEventListener("resize", refreshCanvas);
       window.removeEventListener("scroll", refreshCanvas, true);
     };

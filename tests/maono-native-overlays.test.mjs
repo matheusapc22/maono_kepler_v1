@@ -64,20 +64,29 @@ test("posição é limitada ao canvas em viewports estreitos", () => {
   assert.ok(placement.top <= 264);
 });
 
-test("runtime posiciona somente ao abrir e preserva arraste posterior", () => {
+test("runtime reconhece a legenda real mesmo sem classname estável", () => {
+  assert.match(runtime, /LEGEND_TEXT/);
+  assert.match(runtime, /legenda\(\?:\\s\+da\\s\+camada\)/i);
+  assert.match(runtime, /aside, section, div/);
   assert.match(runtime, /positionedForCurrentOpenRef/);
-  assert.match(runtime, /legendVisible/);
-  assert.match(runtime, /MutationObserver/);
   assert.match(runtime, /translate3d\(0px, 0px, 0px\)/);
   assert.match(runtime, /data.*maonoNativeLegend/i);
-  assert.match(runtime, /\.react-draggable/);
   assert.match(runtime, /mapboxgl-canvas/);
   assert.match(shellRuntime, /<NativeMapOverlaysRuntime legendVisible=\{engineState\.legendVisible\} \/>/);
+});
+
+test("popup é marcado incrementalmente sem atualizar estado React", () => {
+  assert.match(runtime, /POPUP_SELECTORS/);
+  assert.match(runtime, /data.*maonoNativePopup/i);
+  assert.match(runtime, /mutation\.addedNodes/);
+  assert.doesNotMatch(runtime, /setState\(/);
+  assert.doesNotMatch(runtime, /useState\(/);
 });
 
 test("skin Maõno fica isolada e cobre legenda e popup nativos", () => {
   assert.match(css, /data-maono-native-overlays="active"/);
   assert.match(css, /data-maono-native-legend="true"/);
+  assert.match(css, /data-maono-native-popup="true"/);
   assert.match(css, /\.map-popover/);
   assert.match(css, /\.layer-hover-info/);
   assert.match(css, /#c5a059/i);

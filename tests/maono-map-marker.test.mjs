@@ -63,13 +63,19 @@ test("projeção do marcador faz round-trip entre mapa e tela", () => {
   assert.ok(Math.abs(restored.longitude - origin.longitude) < 1e-6);
 });
 
-test("overlay visual não conhece mais WebMercatorViewport nem pointer state interno", () => {
+test("marcador não observa mais todas as mutações do document.body", () => {
+  assert.doesNotMatch(markerHook, /new MutationObserver/);
+  assert.doesNotMatch(markerHook, /observe\(document\.body/);
+  assert.match(markerHook, /ResizeObserver/);
+  assert.match(markerHook, /maono:map-runtime/);
+  assert.match(markerHook, /sameCanvasRect/);
+});
+
+test("overlay visual mantém projeção e pointer state fora do componente", () => {
   assert.doesNotMatch(overlay, /WebMercatorViewport/);
   assert.doesNotMatch(overlay, /draggingPointerRef/);
   assert.doesNotMatch(overlay, /markerMovedRef/);
   assert.match(overlay, /useMapMarker/);
-  assert.match(markerHook, /ResizeObserver/);
-  assert.match(markerHook, /MutationObserver/);
   assert.match(markerHook, /Escape/);
   assert.match(markerHook, /ArrowLeft/);
   assert.match(markerHook, /setPointerCapture/);

@@ -4,6 +4,7 @@ import {
   methodNotAllowed,
 } from "../../../_lib/http.js";
 import { resolveNewMapCreateContext } from "../../../_lib/map-panel-service.js";
+import { withMapAnalysisRuntimeDefaults } from "../../../_lib/map-analysis-runtime.js";
 
 export async function onRequest({ request, env }) {
   if (request.method !== "GET") {
@@ -11,7 +12,8 @@ export async function onRequest({ request, env }) {
   }
 
   try {
-    const context = await resolveNewMapCreateContext(env, request);
+    const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
+    const context = await resolveNewMapCreateContext(runtimeEnv, request);
 
     return jsonResponse({
       ok: true,
