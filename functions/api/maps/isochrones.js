@@ -1,5 +1,9 @@
 import { methodNotAllowed } from "../../_lib/http.js";
 import { generateIsochrone } from "../../_lib/isochrone-service.js";
+import {
+  ensureMapAnalysisRateLimitSchema,
+  withMapAnalysisRuntimeDefaults,
+} from "../../_lib/map-analysis-runtime.js";
 
 const MAX_REQUEST_BYTES = 16 * 1024;
 
@@ -247,8 +251,10 @@ export async function onRequest(context) {
   try {
     validateRequestOrigin(request);
     const body = await readBoundedJsonBody(request);
+    const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
+    await ensureMapAnalysisRateLimitSchema(runtimeEnv);
     const result = enrichIsochroneResult(
-      await generateIsochrone(env, request, body),
+      await generateIsochrone(runtimeEnv, request, body),
     );
 
     return jsonResponse({
