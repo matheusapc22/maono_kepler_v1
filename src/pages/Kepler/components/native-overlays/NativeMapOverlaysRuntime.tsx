@@ -8,33 +8,77 @@ const LEGEND_SELECTORS = [
   ".map-legend-panel",
   "[class*='map-legend']",
   "[class*='MapLegend']",
+  "[class*='mapLegend']",
+];
+
+const POPUP_SELECTORS = [
+  ".map-popover",
+  ".map-popover__inner",
+  ".layer-hover-info",
+  "[class*='map-popover']",
+  "[class*='MapPopover']",
+  "[class*='layer-hover-info']",
+  "[class*='LayerHoverInfo']",
 ];
 
 const ORIGINAL_STYLE_DATASET_KEY = "maonoNativeLegendOriginalStyle";
+const LEGEND_TEXT = /legenda(?:\s+da\s+camada)?|layer\s+legend|\blegend\b/i;
+const POPUP_ACTION_TEXT = /select\s+geometry|selecionar\s+geometria/i;
+
+function isVisiblePanel(element: HTMLElement, minimumWidth = 120) {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+
+  return (
+    rect.width >= minimumWidth &&
+    rect.height >= 40 &&
+    rect.width <= 640 &&
+    rect.height <= 820 &&
+    style.display !== "none" &&
+    style.visibility !== "hidden"
+  );
+}
+
+function normalizedText(element: HTMLElement) {
+  return String(element.textContent || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function visibleLegendCandidates() {
   const unique = new Set<HTMLElement>();
 
   for (const selector of LEGEND_SELECTORS) {
     document.querySelectorAll<HTMLElement>(selector).forEach((element) => {
-      const rect = element.getBoundingClientRect();
-      if (rect.width >= 120 && rect.height >= 48) {
-        unique.add(element);
-      }
+      if (isVisiblePanel(element)) unique.add(element);
     });
   }
+
+  document
+    .querySelectorAll<HTMLElement>("aside, section, div")
+    .forEach((element) => {
+      if (!isVisiblePanel(element, 140)) return;
+      if (!LEGEND_TEXT.test(normalizedText(element))) return;
+      unique.add(element);
+    });
 
   return [...unique];
 }
 
 function findNativeLegend() {
-  const candidates = visibleLegendCandidates();
-
-  return (
-    candidates.find((element) =>
-      /legenda|legend/i.test(element.textContent || ""),
-    ) || candidates[0] || null
+  const candidates = visibleLegendCandidates().filter((element) =>
+    LEGEND_TEXT.test(normalizedText(element)),
   );
+
+  if (!candidates.length) {
+    return visibleLegendCandidates()[0] || null;
+  }
+
+  return candidates.sort((left, right) => {
+    const leftRect = left.getBoundingClientRect();
+    const rightRect = right.getBoundingClientRect();
+    return leftRect.width * leftRect.height - rightRect.width * rightRect.height;
+  })[0];
 }
 
 function findLegendHost(legend: HTMLElement) {
@@ -170,6 +214,53 @@ function restoreLegendRuntime() {
     });
 }
 
+function popupLooksNative(element: HTMLElement) {
+  if (!isVisiblePanel(element, 100)) return false;
+  if (element.closest(".maono-map-overlay, .maono-tooltip-editor")) return false;
+
+  const text = normalizedText(element);
+  if (POPUP_ACTION_TEXT.test(text)) return true;
+  if (
+    element.querySelector(
+      ".row__name, .row__value, [class*='row__name'], [class*='row__value']",
+    )
+  ) {
+    return true;
+  }
+
+  return POPUP_SELECTORS.some((selector) => element.matches(selector));
+}
+
+function markPopupElement(element: HTMLElement) {
+  if (!popupLooksNative(element)) return false;
+
+  element.dataset.maonoNativePopup = "true";
+  return true;
+}
+
+function markPopupsWithin(root: ParentNode | HTMLElement) {
+  if (root instanceof HTMLElement) {
+    markPopupElement(root);
+  }
+
+  for (const selector of POPUP_SELECTORS) {
+    root.querySelectorAll?.<HTMLElement>(selector).forEach(markPopupElement);
+  }
+
+  root.querySelectorAll?.<HTMLElement>("div, section, aside").forEach((element) => {
+    const text = normalizedText(element);
+    if (POPUP_ACTION_TEXT.test(text)) markPopupElement(element);
+  });
+}
+
+function restorePopupRuntime() {
+  document
+    .querySelectorAll<HTMLElement>("[data-maono-native-popup]")
+    .forEach((popup) => {
+      delete popup.dataset.maonoNativePopup;
+    });
+}
+
 export default function NativeMapOverlaysRuntime({
   legendVisible,
 }: {
@@ -179,12 +270,27 @@ export default function NativeMapOverlaysRuntime({
 
   useEffect(() => {
     document.body.dataset.maonoNativeOverlays = "active";
+    markPopupsWithin(document);
+
+    const popupObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) markPopupsWithin(node);
+        });
+      });
+    });
+    popupObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
 
     return () => {
+      popupObserver.disconnect();
       if (document.body.dataset.maonoNativeOverlays === "active") {
         delete document.body.dataset.maonoNativeOverlays;
       }
       restoreLegendRuntime();
+      restorePopupRuntime();
     };
   }, []);
 
@@ -219,7 +325,7 @@ export default function NativeMapOverlaysRuntime({
         childList: true,
         subtree: true,
       });
-      timeoutId = window.setTimeout(() => observer?.disconnect(), 2_500);
+      timeoutId = window.setTimeout(() => observer?.disconnect(), 3_500);
     });
 
     return () => {
