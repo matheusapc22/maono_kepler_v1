@@ -1,6 +1,4 @@
-import {
-  interpolateViewport,
-} from "./map-navigation.ts";
+import { interpolateViewport } from "./map-navigation.ts";
 import type { MapViewportSummary } from "./types.ts";
 
 export type MapFlightCancelReason =
@@ -10,7 +8,6 @@ export type MapFlightCancelReason =
   | "loading"
   | "save"
   | "unmount"
-  | "replaced"
   | "error";
 
 export type MapFlightSnapshot = {
@@ -80,7 +77,7 @@ export class MapFlightController {
     durationMs: number,
   ) {
     if (this.snapshot.active) {
-      this.cancel("replaced");
+      return false;
     }
 
     const duration = Math.max(0, Number(durationMs) || 0);
