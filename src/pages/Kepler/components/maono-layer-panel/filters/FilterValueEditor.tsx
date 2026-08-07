@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import type { MapFilterDomainValue } from "../../../engine-adapter/types.ts";
+import { useSmartFilterHistogram } from "../../../engine-adapter/useSmartFilterHistogram.ts";
 import type { MaonoFilterSnapshot } from "../../../integration/keplerBridge.ts";
 import FilterHistogram from "./FilterHistogram.tsx";
 import {
@@ -35,6 +36,7 @@ function NumericRangeEditor({
   filter: MaonoFilterSnapshot;
   onChange: (value: [number, number]) => void;
 }) {
+  const histogram = useSmartFilterHistogram(filter);
   const domain = numberPair(filter.domain, filter.domain);
   const value = numberPair(filter.value, filter.domain) ?? domain;
   const [draft, setDraft] = useState<[number, number] | null>(value);
@@ -54,7 +56,8 @@ function NumericRangeEditor({
   const currentDomain = domain;
   const currentDraft = draft;
   const span = Math.max(0, currentDomain[1] - currentDomain[0]);
-  const step = filter.step ?? Math.max(span / 100, 0.0001);
+  const inputStep = filter.step ?? Math.max(span / 100, 0.0001);
+  const brushStep = filter.step ?? Math.max(span / 1000, 0.0001);
 
   function commit(next: [number, number] = currentDraft) {
     if (!sameFilterValue(next, value)) onChange(next);
@@ -80,8 +83,12 @@ function NumericRangeEditor({
   return (
     <div className="maono-filter-editor is-range">
       <FilterHistogram
-        bins={filter.histogram}
+        histogram={histogram}
         selectedRange={currentDraft}
+        editable
+        step={brushStep}
+        onRangeChange={setDraft}
+        onRangeCommit={commit}
       />
 
       <div className="maono-filter-range__numbers">
@@ -91,7 +98,7 @@ function NumericRangeEditor({
             type="number"
             min={currentDomain[0]}
             max={currentDraft[1]}
-            step={step}
+            step={inputStep}
             value={currentDraft[0]}
             onChange={(event) => updateMinimum(Number(event.target.value))}
             onBlur={() => commit()}
@@ -106,7 +113,7 @@ function NumericRangeEditor({
             type="number"
             min={currentDraft[0]}
             max={currentDomain[1]}
-            step={step}
+            step={inputStep}
             value={currentDraft[1]}
             onChange={(event) => updateMaximum(Number(event.target.value))}
             onBlur={() => commit()}
@@ -116,37 +123,6 @@ function NumericRangeEditor({
           />
         </label>
       </div>
-
-      <label className="maono-filter-range__slider">
-        <span>Limite mínimo</span>
-        <input
-          type="range"
-          min={currentDomain[0]}
-          max={currentDraft[1]}
-          step={step}
-          value={currentDraft[0]}
-          onChange={(event) => updateMinimum(Number(event.target.value))}
-          onPointerUp={() => commit()}
-          onTouchEnd={() => commit()}
-          onKeyUp={() => commit()}
-          onBlur={() => commit()}
-        />
-      </label>
-      <label className="maono-filter-range__slider">
-        <span>Limite máximo</span>
-        <input
-          type="range"
-          min={currentDraft[0]}
-          max={currentDomain[1]}
-          step={step}
-          value={currentDraft[1]}
-          onChange={(event) => updateMaximum(Number(event.target.value))}
-          onPointerUp={() => commit()}
-          onTouchEnd={() => commit()}
-          onKeyUp={() => commit()}
-          onBlur={() => commit()}
-        />
-      </label>
 
       <button
         type="button"
@@ -170,6 +146,7 @@ function TimeRangeEditor({
   filter: MaonoFilterSnapshot;
   onChange: (value: [number, number]) => void;
 }) {
+  const histogram = useSmartFilterHistogram(filter);
   const domain = numberPair(filter.domain, filter.domain);
   const value = numberPair(filter.value, filter.domain) ?? domain;
   const [minimum, setMinimum] = useState(
@@ -196,6 +173,13 @@ function TimeRangeEditor({
   const currentValue = value;
   const minimumDomain = timestampToInputValue(currentDomain[0]);
   const maximumDomain = timestampToInputValue(currentDomain[1]);
+  const parsedMinimum = inputValueToTimestamp(minimum);
+  const parsedMaximum = inputValueToTimestamp(maximum);
+  const brushRange: [number, number] = [
+    parsedMinimum ?? currentValue[0],
+    parsedMaximum ?? currentValue[1],
+  ];
+  const brushStep = Math.max((currentDomain[1] - currentDomain[0]) / 1000, 1);
 
   function commit() {
     const nextMinimum = inputValueToTimestamp(minimum);
@@ -219,11 +203,25 @@ function TimeRangeEditor({
     if (!sameFilterValue(next, currentValue)) onChange(next);
   }
 
+  function previewBrush(next: [number, number]) {
+    setMinimum(timestampToInputValue(next[0]));
+    setMaximum(timestampToInputValue(next[1]));
+  }
+
+  function commitBrush(next: [number, number]) {
+    previewBrush(next);
+    if (!sameFilterValue(next, currentValue)) onChange(next);
+  }
+
   return (
     <div className="maono-filter-editor is-time">
       <FilterHistogram
-        bins={filter.histogram}
-        selectedRange={currentValue}
+        histogram={histogram}
+        selectedRange={brushRange}
+        editable
+        step={brushStep}
+        onRangeChange={previewBrush}
+        onRangeCommit={commitBrush}
       />
 
       <div className="maono-filter-time__inputs">
