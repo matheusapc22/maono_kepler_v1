@@ -244,7 +244,7 @@ test("normaliza camadas, estilos, datasets, filtros, tooltip e viewport sem raw"
   }
 });
 
-test("normaliza filtros avançados sem reexpor polígonos ou domínios ilimitados", () => {
+test("normaliza filtros avançados preservando o domínio categórico completo", () => {
   const largeDomain = Array.from({ length: 5_002 }, (_, index) => `C${index}`);
   const bins = Array.from({ length: 100 }, (_, index) => ({
     x0: index,
@@ -286,9 +286,10 @@ test("normaliza filtros avançados sem reexpor polígonos ou domínios ilimitado
   assert.equal(filters[0].histogram.length <= 80, true);
   assert.equal(filters[0].histogram.at(-1).end, 100);
 
-  assert.equal(filters[1].domain.length, 5_000);
+  assert.equal(filters[1].domain.length, 5_002);
   assert.equal(filters[1].domainSize, 5_002);
-  assert.equal(filters[1].domainTruncated, true);
+  assert.equal(filters[1].domainTruncated, false);
+  assert.equal(filters[1].domain.at(-1), "C5001");
 
   assert.equal(filters[2].compatible, false);
   assert.match(filters[2].compatibilityReason, /painel nativo/);

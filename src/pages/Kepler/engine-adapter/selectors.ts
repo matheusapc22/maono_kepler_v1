@@ -27,7 +27,6 @@ import type {
 
 export const KEPLER_MAP_ID = "map";
 const MAX_BOUNDS_ROWS = 50_000;
-const MAX_FILTER_DOMAIN_VALUES = 5_000;
 const MAX_FILTER_HISTOGRAM_BINS = 80;
 const DEFAULT_COLOR: MapRgbColor = [47, 125, 244];
 const DEFAULT_STROKE_COLOR: MapRgbColor = [47, 125, 244];
@@ -150,7 +149,6 @@ function normalizedColorScale(value: unknown): MapColorScale | null {
     ? value
     : null;
 }
-
 
 function normalizedColumn(value: unknown): string | null {
   if (typeof value === "string") return value.trim() || null;
@@ -530,9 +528,16 @@ function isFilterDomainValue(
 function normalizedFilterDomain(value: unknown, type: MapFilterType) {
   const values = collectionToArray<unknown>(value).filter(isFilterDomainValue);
   const domainSize = values.length;
-  const limit =
-    type === "multiSelect" ? MAX_FILTER_DOMAIN_VALUES : Math.min(2, domainSize);
 
+  if (type === "multiSelect") {
+    return {
+      domain: values,
+      domainSize,
+      domainTruncated: false,
+    };
+  }
+
+  const limit = Math.min(2, domainSize);
   return {
     domain: values.slice(0, limit),
     domainSize,
@@ -553,9 +558,7 @@ function normalizedFilterValue(
       : null;
   }
   if (type === "multiSelect") {
-    return collectionToArray<unknown>(value)
-      .filter(isFilterDomainValue)
-      .slice(0, MAX_FILTER_DOMAIN_VALUES);
+    return collectionToArray<unknown>(value).filter(isFilterDomainValue);
   }
   if (type === "select") {
     if (typeof value === "boolean") return value;
@@ -648,13 +651,13 @@ function filterCompatibility(
   domain: MapFilterDomainValue[],
 ) {
   if (dataIds.length !== 1) {
-    return "Filtros sincronizados entre bases devem ser editados no painel nativo do Kepler.";
+    return "Filtros sincronizados entre bases devem ser editados no painel nativo.";
   }
   if (fieldNames.length !== 1) {
     return "O filtro não possui uma única propriedade editável.";
   }
   if (type === "polygon") {
-    return "Filtros espaciais devem ser editados no painel nativo do Kepler.";
+    return "Filtros espaciais devem ser editados no painel nativo.";
   }
   if (type === "unknown") {
     return "Este tipo de filtro não é compatível com o painel Maõno.";
@@ -665,7 +668,7 @@ function filterCompatibility(
       type === "multiSelect") &&
     !domain.length
   ) {
-    return "O Kepler ainda não calculou o domínio deste filtro.";
+    return "O domínio deste filtro ainda não foi calculado.";
   }
 
   return null;
@@ -1317,7 +1320,6 @@ export function createKeplerEngineSelector() {
     return previousResult;
   };
 }
-
 
 const sharedEngineSelector = createKeplerEngineSelector();
 
