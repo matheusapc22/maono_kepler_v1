@@ -1,10 +1,7 @@
 import {
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type DragEvent,
-  type ReactNode,
 } from "react";
 
 import type { MaonoLayerSnapshot } from "../../integration/keplerBridge";
@@ -21,14 +18,14 @@ type Props = {
   canDuplicate: boolean;
   canRemove: boolean;
   canReorder: boolean;
-  onSelect: (layer: MaonoLayerSnapshot) => void;
+  onOpen: (layer: MaonoLayerSnapshot) => void;
   onToggle: (layer: MaonoLayerSnapshot, visible: boolean) => void;
   onRename: (layer: MaonoLayerSnapshot, label: string) => boolean;
   onDuplicate: (layer: MaonoLayerSnapshot) => void;
   onRemove: (layer: MaonoLayerSnapshot) => void;
   onMove: (layerId: string, direction: -1 | 1) => void;
+  onMoveTo: (layerId: string, position: "start" | "end") => void;
   onReorder: (draggedLayerId: string, targetLayerId: string) => void;
-  renderLayerDetails: (layer: MaonoLayerSnapshot) => ReactNode;
 };
 
 function normalizeSearch(value: string) {
@@ -37,13 +34,6 @@ function normalizeSearch(value: string) {
     .replace(/\p{Diacritic}/gu, "")
     .trim()
     .toLocaleLowerCase("pt-BR");
-}
-
-function sameLayerIds(left: Set<string>, right: Set<string>) {
-  return (
-    left.size === right.size &&
-    Array.from(left).every((layerId) => right.has(layerId))
-  );
 }
 
 export default function LayerList({
@@ -56,24 +46,19 @@ export default function LayerList({
   canDuplicate,
   canRemove,
   canReorder,
-  onSelect,
+  onOpen,
   onToggle,
   onRename,
   onDuplicate,
   onRemove,
   onMove,
+  onMoveTo,
   onReorder,
-  renderLayerDetails,
 }: Props) {
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
   const [dragTargetLayerId, setDragTargetLayerId] = useState<string | null>(
     null,
   );
-  const [expandedLayerIds, setExpandedLayerIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const previousSelectedLayerIdRef = useRef<string | null>(null);
-  const accordionSelectionLayerIdRef = useRef<string | null>(null);
   const normalizedSearch = normalizeSearch(search);
   const visibleLayers = useMemo(
     () =>
@@ -87,45 +72,6 @@ export default function LayerList({
     [layers, normalizedSearch],
   );
   const reorderEnabled = canReorder && !normalizedSearch;
-
-  useEffect(() => {
-    const availableLayerIds = new Set(layers.map((layer) => layer.id));
-
-    setExpandedLayerIds((current) => {
-      const next = new Set(
-        Array.from(current).filter((layerId) => availableLayerIds.has(layerId)),
-      );
-
-      return sameLayerIds(current, next) ? current : next;
-    });
-  }, [layers]);
-
-  useEffect(() => {
-    const previousSelectedLayerId = previousSelectedLayerIdRef.current;
-    const selectionCameFromAccordion =
-      accordionSelectionLayerIdRef.current === selectedLayerId;
-
-    if (selectionCameFromAccordion) {
-      accordionSelectionLayerIdRef.current = null;
-    }
-
-    if (
-      canInspect &&
-      selectedLayerId &&
-      selectedLayerId !== previousSelectedLayerId &&
-      !selectionCameFromAccordion
-    ) {
-      setExpandedLayerIds((current) => {
-        if (current.has(selectedLayerId)) return current;
-
-        const next = new Set(current);
-        next.add(selectedLayerId);
-        return next;
-      });
-    }
-
-    previousSelectedLayerIdRef.current = selectedLayerId;
-  }, [canInspect, selectedLayerId]);
 
   function resetDrag() {
     setDraggedLayerId(null);
@@ -155,27 +101,6 @@ export default function LayerList({
     resetDrag();
   }
 
-  function toggleLayerExpanded(layer: MaonoLayerSnapshot) {
-    if (!canInspect) return;
-
-    if (selectedLayerId !== layer.id) {
-      accordionSelectionLayerIdRef.current = layer.id;
-    }
-
-    onSelect(layer);
-    setExpandedLayerIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(layer.id)) {
-        next.delete(layer.id);
-      } else {
-        next.add(layer.id);
-      }
-
-      return next;
-    });
-  }
-
   if (!visibleLayers.length) {
     return (
       <div className="maono-layer-panel__empty">
@@ -199,27 +124,18 @@ export default function LayerList({
 
   return (
     <section className="maono-layer-list-region">
-      <div className="maono-layer-list__summary">
-        <span>
-          {normalizedSearch
-            ? `${visibleLayers.length} de ${layers.length}`
-            : `${layers.length} ${layers.length === 1 ? "camada" : "camadas"}`}
-        </span>
-        {canReorder ? (
-          <small>
-            {reorderEnabled
-              ? "Arraste ou use as setas para ordenar"
-              : "Limpe a busca para reordenar"}
-          </small>
-        ) : null}
-      </div>
+      {normalizedSearch ? (
+        <div className="maono-layer-list__summary">
+          <span>{visibleLayers.length} de {layers.length}</span>
+          {canReorder ? <small>Limpe a busca para reordenar.</small> : null}
+        </div>
+      ) : null}
 
       <ol className="maono-layer-list" aria-label="Camadas do mapa">
         {visibleLayers.map((layer) => {
           const originalIndex = layers.findIndex(
             (candidate) => candidate.id === layer.id,
           );
-          const expanded = expandedLayerIds.has(layer.id);
 
           return (
             <LayerListItem
@@ -228,8 +144,6 @@ export default function LayerList({
               index={originalIndex}
               total={layers.length}
               selected={layer.id === selectedLayerId}
-              expanded={expanded}
-              details={renderLayerDetails(layer)}
               canInspect={canInspect}
               canToggle={canToggle}
               canRename={canRename}
@@ -242,12 +156,13 @@ export default function LayerList({
                 layer.id === dragTargetLayerId &&
                 layer.id !== draggedLayerId
               }
-              onToggleExpanded={toggleLayerExpanded}
+              onOpen={onOpen}
               onToggle={onToggle}
               onRename={onRename}
               onDuplicate={onDuplicate}
               onRemove={onRemove}
               onMove={onMove}
+              onMoveTo={onMoveTo}
               onDragStart={handleDragStart}
               onDragEnter={(layerId) => {
                 if (reorderEnabled && layerId !== draggedLayerId) {
