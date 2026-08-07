@@ -13,8 +13,10 @@
     "test:project-metadata": "node --test tests/project-metadata-migration.test.mjs tests/project-metadata-api.test.mjs tests/project-card-actions.test.mjs tests/project-creation-metadata.test.mjs",
     "test:engine-adapter": "node --test tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
     "test:point-clustering": "node --experimental-strip-types --test tests/point-cluster-single-layer.test.mjs",
-    "test:map-panels": "npm run test:point-clustering && node --test tests/map-panel-navigation-api.test.mjs tests/project-creation-limits.test.mjs tests/maono-layer-panel-integration.test.mjs tests/maono-layer-accordion.test.mjs tests/maono-layer-workflow-placement.test.mjs tests/map-shell-overlay-integration.test.mjs tests/maono-map-layout-hotfix.test.mjs tests/maono-map-shell-runtime.test.mjs tests/isochrone-service.test.mjs tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
-    "test:projects": "npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview && npm run test:map-panels"
+    "test:map-flight": "node --experimental-strip-types --test tests/kepler-map-flight.test.mjs",
+    "test:login": "node --test tests/login-autofill-session.test.mjs",
+    "test:map-panels": "npm run test:point-clustering && npm run test:map-flight && node --test tests/map-panel-navigation-api.test.mjs tests/project-creation-limits.test.mjs tests/maono-layer-panel-integration.test.mjs tests/maono-layer-accordion.test.mjs tests/maono-layer-workflow-placement.test.mjs tests/map-shell-overlay-integration.test.mjs tests/maono-map-layout-hotfix.test.mjs tests/maono-map-shell-runtime.test.mjs tests/isochrone-service.test.mjs tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
+    "test:projects": "npm run test:login && npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview && npm run test:map-panels"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",
@@ -48,7 +50,7 @@
     "esbuild": "^0.25.0",
     "global": "^4.3.0",
     "html2canvas": "^1.4.1",
-    "keymirror": "^0.1.1",
+    "keymirror": "^1.1.1",
     "markdown-to-jsx": "^7.7.6",
     "prop-types": "^15.6.0",
     "ramda": "^0.32.0",
@@ -59,7 +61,6 @@
     "react-resizable-panels": "^2.1.7",
     "react-router": "^7.8.2",
     "react-router-redux": "^4.0.8",
-    "react-virtualized": "^9.21.0",
     "redux": "^4.2.1",
     "redux-actions": "^2.2.1",
     "redux-logger": "^3.0.6",
