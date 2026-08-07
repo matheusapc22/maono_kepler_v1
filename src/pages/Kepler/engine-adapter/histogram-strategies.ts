@@ -1,8 +1,8 @@
+import type { MapFilterHistogramBin } from "./types.ts";
 import type {
-  MapFilterHistogramBin,
   MapHistogramAxisScale,
   MapHistogramStrategy,
-} from "./types.ts";
+} from "./histogram-types.ts";
 
 const MIN_BINS = 6;
 const MAX_BINS = 60;
@@ -68,13 +68,9 @@ export function histogramValueToRatio(
   if (maximum <= minimum) return 0;
 
   if (scale === "log-shifted") {
-    const transformedMinimum = 0;
     const transformedMaximum = shiftedLogTransform(maximum, minimum);
     const transformed = shiftedLogTransform(clamp(value, minimum, maximum), minimum);
-    return transformedMaximum <= transformedMinimum
-      ? 0
-      : (transformed - transformedMinimum) /
-          (transformedMaximum - transformedMinimum);
+    return transformedMaximum <= 0 ? 0 : transformed / transformedMaximum;
   }
 
   return (clamp(value, minimum, maximum) - minimum) / (maximum - minimum);
