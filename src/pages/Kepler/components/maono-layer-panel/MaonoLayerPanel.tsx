@@ -457,7 +457,7 @@ export default function MaonoLayerPanel() {
         <div className="maono-layer-panel__state is-loading" role="status">
           <span className="maono-layer-panel__spinner" aria-hidden="true" />
           <strong>Carregando configuração</strong>
-          <span>Aguarde enquanto o Kepler prepara as camadas.</span>
+          <span>Aguarde enquanto o Maõno prepara as camadas.</span>
         </div>
       ) : error ? (
         <div className="maono-layer-panel__state is-error" role="alert">
