@@ -7,28 +7,37 @@ import {
   withMapAnalysisRuntimeDefaults,
 } from "../functions/_lib/map-analysis-runtime.js";
 
-const [navigationRoute, newMapRoute, isochroneRoute, loader] =
-  await Promise.all([
-    readFile(
-      new URL(
-        "../functions/api/projects/[slug]/map-navigation.js",
-        import.meta.url,
-      ),
-      "utf8",
+const [
+  navigationRoute,
+  newMapRoute,
+  isochroneRoute,
+  loader,
+  mapPanelApi,
+] = await Promise.all([
+  readFile(
+    new URL(
+      "../functions/api/projects/[slug]/map-navigation.js",
+      import.meta.url,
     ),
-    readFile(
-      new URL("../functions/api/maps/new/context.js", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../functions/api/maps/isochrones.js", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../src/pages/Kepler/map-url-loader/index.tsx", import.meta.url),
-      "utf8",
-    ),
-  ]);
+    "utf8",
+  ),
+  readFile(
+    new URL("../functions/api/maps/new/context.js", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL("../functions/api/maps/isochrones.js", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL("../src/pages/Kepler/map-url-loader/index.tsx", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL("../src/pages/Kepler/map-panel/map-panel-api.ts", import.meta.url),
+    "utf8",
+  ),
+]);
 
 test("flag de isócrona assume true somente quando não foi definida", () => {
   const original = { GEOAPIFY_API_KEY: "secret" };
@@ -79,4 +88,12 @@ test("loader tenta novamente apenas falhas transitórias e não reinicia a sess�
   assert.match(loader, /status === 429 \|\| status >= 500/);
   assert.match(loader, /setRetryToken\(\(current\) => current \+ 1\)/);
   assert.doesNotMatch(loader, /window\.location\.reload/);
+});
+
+test("contexto de navegação também possui retry seletivo", () => {
+  assert.match(mapPanelApi, /MAP_CONTEXT_RETRY_DELAYS_MS/);
+  assert.match(mapPanelApi, /retryableMapContextStatus/);
+  assert.match(mapPanelApi, /status === 408 \|\| status === 425 \|\| status === 429 \|\| status >= 500/);
+  assert.match(mapPanelApi, /requestMapContextResponse/);
+  assert.match(mapPanelApi, /credentials: "include"/);
 });
