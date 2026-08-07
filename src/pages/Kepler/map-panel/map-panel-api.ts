@@ -12,6 +12,8 @@ import type {
   SafeMapProject,
 } from "./types";
 
+const MAP_CONTEXT_RETRY_DELAYS_MS = [250, 700];
+
 function isRecord(value: unknown): value is Record<string, any> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -200,19 +202,107 @@ async function readJson(response: Response) {
   }
 }
 
+function retryableMapContextStatus(status: number) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function waitForMapContextRetry(
+  milliseconds: number,
+  signal?: AbortSignal,
+) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      signal?.removeEventListener("abort", handleAbort);
+      resolve();
+    }, milliseconds);
+
+    function handleAbort() {
+      globalThis.clearTimeout(timeoutId);
+      reject(new DOMException("Aborted", "AbortError"));
+    }
+
+    signal?.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
+async function requestMapContextResponse(
+  url: string,
+  signal?: AbortSignal,
+) {
+  const totalAttempts = MAP_CONTEXT_RETRY_DELAYS_MS.length + 1;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+        signal,
+      });
+
+      let data: any;
+      try {
+        data = await readJson(response);
+      } catch (error) {
+        lastError = error;
+        if (
+          retryableMapContextStatus(response.status) &&
+          attempt < MAP_CONTEXT_RETRY_DELAYS_MS.length
+        ) {
+          await waitForMapContextRetry(
+            MAP_CONTEXT_RETRY_DELAYS_MS[attempt],
+            signal,
+          );
+          continue;
+        }
+        throw error;
+      }
+
+      if (
+        retryableMapContextStatus(response.status) &&
+        attempt < MAP_CONTEXT_RETRY_DELAYS_MS.length
+      ) {
+        await waitForMapContextRetry(
+          MAP_CONTEXT_RETRY_DELAYS_MS[attempt],
+          signal,
+        );
+        continue;
+      }
+
+      return { response, data };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lastError = error;
+
+      if (attempt >= MAP_CONTEXT_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+
+      await waitForMapContextRetry(
+        MAP_CONTEXT_RETRY_DELAYS_MS[attempt],
+        signal,
+      );
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Não foi possível resolver o painel deste mapa.");
+}
+
 async function requestMapContext(
   url: string,
   signal?: AbortSignal,
 ): Promise<MapPanelContextValue> {
-  const response = await fetch(url, {
-    method: "GET",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-    signal,
-  });
-  const data = await readJson(response);
+  const { response, data } = await requestMapContextResponse(url, signal);
 
   if (!response.ok || !data?.ok) {
     const error = new Error(
