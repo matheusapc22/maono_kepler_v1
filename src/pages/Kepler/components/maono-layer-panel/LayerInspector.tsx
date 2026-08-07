@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import {
   fieldSupportsLayerColumn,
@@ -10,6 +10,7 @@ import type {
   MaonoDatasetSnapshot,
   MaonoLayerSnapshot,
 } from "../../integration/keplerBridge";
+import LayerPanelIcon from "./LayerPanelIcon";
 import LayerStyleEditor, {
   type LayerStyleChange,
 } from "./LayerStyleEditor";
@@ -18,12 +19,12 @@ import PointSpatialGroupingSection from "./PointSpatialGroupingSection";
 type Props = {
   layer: MaonoLayerSnapshot | null;
   datasets: MaonoDatasetSnapshot[];
-  canRename: boolean;
+  canToggle: boolean;
   canEditStructure: boolean;
   canEditStyle: boolean;
   layerBlending: string | null;
   overlayBlending: string | null;
-  onLabelChange: (layer: MaonoLayerSnapshot, label: string) => boolean;
+  onToggle: (layer: MaonoLayerSnapshot, visible: boolean) => void;
   onDatasetChange: (layer: MaonoLayerSnapshot, datasetId: string) => boolean;
   onColumnsChange: (
     layer: MaonoLayerSnapshot,
@@ -45,34 +46,17 @@ const COLUMN_LABELS: Record<MapLayerColumnKey, string> = {
 export default function LayerInspector({
   layer,
   datasets,
-  canRename,
+  canToggle,
   canEditStructure,
   canEditStyle,
   layerBlending,
   overlayBlending,
-  onLabelChange,
+  onToggle,
   onDatasetChange,
   onColumnsChange,
   onStyleChange,
 }: Props) {
-  const [label, setLabel] = useState(layer?.label || "");
-  const [nameError, setNameError] = useState<string | null>(null);
   const [structureError, setStructureError] = useState<string | null>(null);
-  const ignoreNextNameBlurRef = useRef(false);
-  const nameCommitRef = useRef(false);
-
-  function guardImmediateNameBlur() {
-    ignoreNextNameBlurRef.current = true;
-    window.setTimeout(() => {
-      ignoreNextNameBlurRef.current = false;
-    }, 0);
-  }
-
-  useEffect(() => {
-    setLabel(layer?.label || "");
-    setNameError(null);
-    setStructureError(null);
-  }, [layer?.id, layer?.label]);
 
   if (!layer) {
     return (
@@ -83,9 +67,6 @@ export default function LayerInspector({
   }
 
   const activeLayer = layer;
-  const nameErrorId = `maono-layer-name-error-${encodeURIComponent(
-    activeLayer.id,
-  )}`;
   const datasetId = activeLayer.dataIds[0] ?? null;
   const dataset =
     datasets.find((candidate) => candidate.id === datasetId) ?? null;
@@ -94,35 +75,12 @@ export default function LayerInspector({
     ...structure.requiredColumns,
     ...structure.optionalColumns,
   ];
-
-  function commitName() {
-    if (nameCommitRef.current) return;
-    const normalized = label.trim();
-
-    if (!normalized) {
-      setNameError("Informe um nome para a camada.");
-      return;
-    }
-    if (normalized === activeLayer.label) {
-      setNameError(null);
-      setLabel(activeLayer.label);
-      return;
-    }
-
-    nameCommitRef.current = true;
-    const changed = onLabelChange(activeLayer, normalized);
-    window.setTimeout(() => {
-      nameCommitRef.current = false;
-    }, 0);
-
-    if (!changed) {
-      setNameError("O nome anterior foi preservado.");
-      setLabel(activeLayer.label);
-      return;
-    }
-
-    setNameError(null);
-  }
+  const grouping = (
+    <PointSpatialGroupingSection
+      layerId={activeLayer.id}
+      editable={canEditStructure || canEditStyle}
+    />
+  );
 
   function changeDataset(nextDatasetId: string) {
     if (!nextDatasetId || nextDatasetId === datasetId) return;
@@ -153,84 +111,75 @@ export default function LayerInspector({
 
   return (
     <section className="maono-layer-inspector">
-      <div className="maono-layer-inspector__heading">
-        <span>Configurações da camada</span>
-        <strong>{activeLayer.label}</strong>
-      </div>
+      <section className="maono-layer-essential" aria-label="Configurações essenciais">
+        <header>
+          <div>
+            <span>Camada</span>
+            <strong>{layerTypeLabel(activeLayer.type)}</strong>
+          </div>
+          <button
+            type="button"
+            className="maono-layer-visibility-switch"
+            role="switch"
+            aria-checked={activeLayer.isVisible}
+            disabled={!canToggle}
+            onClick={() => onToggle(activeLayer, !activeLayer.isVisible)}
+          >
+            <LayerPanelIcon name={activeLayer.isVisible ? "eye" : "eye-off"} />
+            <span>{activeLayer.isVisible ? "Visível" : "Oculta"}</span>
+          </button>
+        </header>
+        <dl>
+          <div>
+            <dt>Dataset</dt>
+            <dd>{dataset?.label ?? datasetId ?? "Não informado"}</dd>
+          </div>
+          <div>
+            <dt>Registros</dt>
+            <dd>{dataset?.filteredRowCount ?? dataset?.rowCount ?? "—"}</dd>
+          </div>
+        </dl>
+      </section>
 
-      <dl className="maono-layer-inspector__facts">
-        <div>
-          <dt>Tipo</dt>
-          <dd>{layerTypeLabel(activeLayer.type)}</dd>
-        </div>
-        <div>
-          <dt>Dataset</dt>
-          <dd>{dataset?.label ?? datasetId ?? "Não informado"}</dd>
-        </div>
-        <div>
-          <dt>Visibilidade</dt>
-          <dd>{activeLayer.isVisible ? "Visível" : "Oculta"}</dd>
-        </div>
-      </dl>
+      {canEditStyle ? (
+        <LayerStyleEditor
+          layer={activeLayer}
+          dataset={dataset}
+          layerBlending={layerBlending}
+          overlayBlending={overlayBlending}
+          dimensionAddon={grouping}
+          onChange={(change) => onStyleChange(activeLayer, change)}
+        />
+      ) : (
+        <>
+          <p className="maono-layer-inspector__notice">
+            Modo de visualização: a aparência permanece somente leitura.
+          </p>
+          <details className="maono-progressive-section">
+            <summary>
+              <span>
+                <strong>Dimensão e agrupamento</strong>
+                <small>Configuração de pontos por zoom</small>
+              </span>
+              <LayerPanelIcon name="chevron-down" />
+            </summary>
+            <div className="maono-progressive-section__content">{grouping}</div>
+          </details>
+        </>
+      )}
 
-      <PointSpatialGroupingSection
-        layerId={activeLayer.id}
-        editable={canEditStructure || canEditStyle}
-      />
-
-      {canRename || canEditStructure || canEditStyle ? (
-        <div className="maono-layer-inspector__editor">
-          {canRename ? (
-            <label className="maono-layer-inspector__name">
-              Nome
-              <input
-                value={label}
-                maxLength={160}
-                onChange={(event) => {
-                  setLabel(event.target.value);
-                  setNameError(null);
-                }}
-                onBlur={() => {
-                  if (ignoreNextNameBlurRef.current) {
-                    ignoreNextNameBlurRef.current = false;
-                    return;
-                  }
-                  commitName();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    guardImmediateNameBlur();
-                    commitName();
-                  } else if (event.key === "Escape") {
-                    event.preventDefault();
-                    guardImmediateNameBlur();
-                    setLabel(activeLayer.label);
-                    setNameError(null);
-                    event.currentTarget.blur();
-                  }
-                }}
-                aria-invalid={nameError ? "true" : undefined}
-                aria-describedby={nameError ? nameErrorId : undefined}
-              />
-              {nameError ? (
-                <small id={nameErrorId} role="alert">
-                  {nameError}
-                </small>
-              ) : null}
-            </label>
-          ) : null}
-
+      <details className="maono-progressive-section maono-layer-data-section">
+        <summary>
+          <span>
+            <strong>Dados</strong>
+            <small>Dataset e campos geográficos</small>
+          </span>
+          <LayerPanelIcon name="chevron-down" />
+        </summary>
+        <div className="maono-progressive-section__content">
           {structure.supported ? (
             <section className="maono-layer-structure" aria-label="Estrutura da camada">
-              <header>
-                <div>
-                  <strong>Estrutura</strong>
-                  <small>Dataset e campos geográficos</small>
-                </div>
-              </header>
-
-              <label className="maono-layer-structure__field">
+              <label className="maono-style-field">
                 <span>Dataset associado</span>
                 <select
                   value={datasetId ?? ""}
@@ -262,7 +211,7 @@ export default function LayerInspector({
                     );
 
                     return (
-                      <label key={column} className="maono-layer-structure__field">
+                      <label key={column} className="maono-style-field">
                         <span>
                           {COLUMN_LABELS[column]}
                           {required ? " *" : ""}
@@ -274,9 +223,7 @@ export default function LayerInspector({
                             changeColumn(column, event.target.value)
                           }
                           aria-required={required}
-                          aria-invalid={
-                            required && !current ? "true" : undefined
-                          }
+                          aria-invalid={required && !current ? "true" : undefined}
                         >
                           <option value="">
                             {required ? "Selecione um campo" : "Não utilizar"}
@@ -310,26 +257,12 @@ export default function LayerInspector({
             </section>
           ) : (
             <p className="maono-layer-inspector__notice">
-              Este tipo de camada continua disponível no Kepler nativo, mas a
-              edição estrutural ainda não é segura no painel Maõno.
+              Este tipo continua disponível no Kepler nativo, mas sua estrutura
+              não pode ser alterada com segurança no painel Maõno.
             </p>
           )}
-
-          {canEditStyle ? (
-            <LayerStyleEditor
-              layer={layer}
-              dataset={dataset}
-              layerBlending={layerBlending}
-              overlayBlending={overlayBlending}
-              onChange={(change) => onStyleChange(activeLayer, change)}
-            />
-          ) : null}
         </div>
-      ) : (
-        <p className="maono-layer-inspector__notice">
-          Modo de visualização: a estrutura e o estilo permanecem somente leitura.
-        </p>
-      )}
+      </details>
     </section>
   );
 }

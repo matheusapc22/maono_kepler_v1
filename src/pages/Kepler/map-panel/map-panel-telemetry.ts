@@ -11,6 +11,7 @@ type MapPanelTelemetryDetails = {
   code?: string | null;
   component?: string | null;
   operation?: "create" | "update" | null;
+  rowCount?: number | null;
 };
 
 export function emitMapPanelTelemetry(

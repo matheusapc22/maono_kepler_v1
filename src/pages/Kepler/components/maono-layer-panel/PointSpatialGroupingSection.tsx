@@ -1,8 +1,5 @@
-import { useId, useState } from "react";
-
 import type { PointClusterLayerPolicy } from "../../clustering/point-cluster-policy";
 import { usePointClusterController } from "../../clustering/point-cluster-controller-bridge";
-import LayerPanelIcon from "./LayerPanelIcon";
 import "./point-spatial-grouping.css";
 
 const REASON_MESSAGES: Record<string, string> = {
@@ -30,8 +27,6 @@ export default function PointSpatialGroupingSection({
   editable,
 }: Props) {
   const controller = usePointClusterController();
-  const [open, setOpen] = useState(false);
-  const contentId = useId();
   const item = controller?.layers.find(
     (candidate: { pointLayerId: string }) =>
       candidate.pointLayerId === layerId,
@@ -64,124 +59,100 @@ export default function PointSpatialGroupingSection({
     <section
       className="maono-point-spatial-grouping"
       data-layer-id={layerId}
+      aria-label="Agrupamento espacial"
     >
-      <button
-        type="button"
-        className="maono-point-spatial-grouping__trigger"
-        aria-expanded={open}
-        aria-controls={contentId}
-        onClick={() => setOpen((current) => !current)}
-        title={open ? "Recolher agrupamento espacial" : "Configurar agrupamento espacial"}
-      >
-        <span>
+      <header>
+        <div>
           <strong>Agrupamento espacial</strong>
           <small>
-            {formatPointCount(item.eligibility.pointCount)} pontos · alternância por zoom
+            {formatPointCount(item.eligibility.pointCount)} pontos · alternância interna por zoom
           </small>
-        </span>
-        <LayerPanelIcon name="chevron-down" />
-      </button>
-
-      <div
-        id={contentId}
-        className="maono-point-spatial-grouping__content"
-        data-open={open ? "true" : "false"}
-        aria-hidden={!open}
-      >
-        <div className="maono-point-spatial-grouping__clip">
-          <div className="maono-point-spatial-grouping__settings">
-            <p>
-              Exibe agrupamentos em níveis de zoom mais baixos e preserva a
-              visualização configurada para a camada nos níveis mais altos.
-            </p>
-
-            <label className="maono-point-spatial-grouping__toggle">
-              <input
-                type="checkbox"
-                checked={policy.enabled}
-                disabled={settingsDisabled}
-                onChange={(event) =>
-                  update({ enabled: event.target.checked })
-                }
-              />
-              Ativar nesta camada
-            </label>
-
-            {!editable ? (
-              <p className="maono-point-spatial-grouping__notice">
-                Modo de visualização: as configurações permanecem somente leitura.
-              </p>
-            ) : !item.eligibility.eligible ? (
-              <p
-                className="maono-point-spatial-grouping__notice is-warning"
-                role="status"
-              >
-                {REASON_MESSAGES[item.eligibility.reason] ??
-                  "Esta camada não pode ser agrupada no momento."}
-              </p>
-            ) : (
-              <div className="maono-point-spatial-grouping__grid">
-                <label>
-                  <span>Trocar para a visualização da camada no zoom</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="24"
-                    step="0.25"
-                    value={policy.clusterMaxZoom}
-                    disabled={!policy.enabled}
-                    onChange={(event) =>
-                      update({ clusterMaxZoom: event.target.valueAsNumber })
-                    }
-                  />
-                </label>
-
-                <label>
-                  <span>Tamanho do agrupamento</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="500"
-                    step="1"
-                    value={policy.clusterSize}
-                    disabled={!policy.enabled}
-                    onChange={(event) =>
-                      update({ clusterSize: event.target.valueAsNumber })
-                    }
-                  />
-                </label>
-
-                <label>
-                  <span>Histerese do zoom</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="2"
-                    step="0.05"
-                    value={policy.hysteresis}
-                    disabled={!policy.enabled}
-                    onChange={(event) =>
-                      update({ hysteresis: event.target.valueAsNumber })
-                    }
-                  />
-                </label>
-
-                <label className="maono-point-spatial-grouping__toggle">
-                  <input
-                    type="checkbox"
-                    checked={policy.showCount}
-                    disabled={!policy.enabled}
-                    onChange={(event) =>
-                      update({ showCount: event.target.checked })
-                    }
-                  />
-                  Mostrar quantidade nos agrupamentos
-                </label>
-              </div>
-            )}
-          </div>
         </div>
-      </div>
+        <label className="maono-point-spatial-grouping__switch">
+          <input
+            type="checkbox"
+            checked={policy.enabled}
+            disabled={settingsDisabled}
+            onChange={(event) => update({ enabled: event.target.checked })}
+          />
+          <span aria-hidden="true" />
+          <em>{policy.enabled ? "Ativo" : "Inativo"}</em>
+        </label>
+      </header>
+
+      <p className="maono-point-spatial-grouping__description">
+        Os agrupamentos são uma representação interna da mesma camada. A
+        visibilidade, a ordem e o estilo lógico permanecem únicos no painel.
+      </p>
+
+      {!editable ? (
+        <p className="maono-point-spatial-grouping__notice">
+          Modo de visualização: as configurações permanecem somente leitura.
+        </p>
+      ) : !item.eligibility.eligible ? (
+        <p
+          className="maono-point-spatial-grouping__notice is-warning"
+          role="status"
+        >
+          {REASON_MESSAGES[item.eligibility.reason] ??
+            "Esta camada não pode ser agrupada no momento."}
+        </p>
+      ) : policy.enabled ? (
+        <div className="maono-point-spatial-grouping__grid">
+          <label>
+            <span>Exibir pontos a partir do zoom</span>
+            <input
+              type="number"
+              min="0"
+              max="24"
+              step="0.25"
+              value={policy.clusterMaxZoom}
+              onChange={(event) =>
+                update({ clusterMaxZoom: event.target.valueAsNumber })
+              }
+            />
+          </label>
+
+          <label>
+            <span>Tamanho do agrupamento</span>
+            <input
+              type="number"
+              min="1"
+              max="500"
+              step="1"
+              value={policy.clusterSize}
+              onChange={(event) =>
+                update({ clusterSize: event.target.valueAsNumber })
+              }
+            />
+          </label>
+
+          <label>
+            <span>Histerese do zoom</span>
+            <input
+              type="number"
+              min="0"
+              max="2"
+              step="0.05"
+              value={policy.hysteresis}
+              onChange={(event) =>
+                update({ hysteresis: event.target.valueAsNumber })
+              }
+            />
+          </label>
+
+          <label className="maono-point-spatial-grouping__checkbox">
+            <input
+              type="checkbox"
+              checked={policy.showCount}
+              onChange={(event) =>
+                update({ showCount: event.target.checked })
+              }
+            />
+            Mostrar quantidade nos agrupamentos
+          </label>
+        </div>
+      ) : null}
     </section>
   );
 }

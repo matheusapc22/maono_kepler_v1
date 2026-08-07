@@ -1,28 +1,20 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   MaonoDatasetSnapshot,
   MaonoFilterSnapshot,
 } from "../../integration/keplerBridge.ts";
+import FilterDetailView from "./FilterDetailView.tsx";
+import FilterRow from "./FilterRow.tsx";
 import LayerPanelIcon from "./LayerPanelIcon.tsx";
-import FilterValueEditor from "./filters/FilterValueEditor.tsx";
-import {
-  filterTypeLabel,
-  filterValueLabel,
-  filterableDatasetFields,
-} from "./filters/filter-utils.ts";
+import { filterableDatasetFields } from "./filters/filter-utils.ts";
 import "./filters/advanced-filters.css";
 
 type Props = {
   filters: MaonoFilterSnapshot[];
   datasets: MaonoDatasetSnapshot[];
   editable: boolean;
-  onAdd: (dataId: string) => void;
+  onAdd: (dataId: string, fieldName: string) => number | null;
   onBindField: (
     index: number,
     datasetId: string,
@@ -30,6 +22,9 @@ type Props = {
   ) => void;
   onRemove: (index: number) => void;
   onChangeValue: (index: number, value: unknown) => void;
+  onToggleEnabled: (index: number, enabled: boolean) => void;
+  onFocusResults: () => void;
+  onExportCsv: (datasetId: string, label: string) => void;
 };
 
 type FilterGroup = {
@@ -37,6 +32,7 @@ type FilterGroup = {
   label: string;
   dataset: MaonoDatasetSnapshot | null;
   filters: MaonoFilterSnapshot[];
+  accent: string;
 };
 
 const DATASET_ACCENTS = [
@@ -47,141 +43,10 @@ const DATASET_ACCENTS = [
   "#8DA399",
 ];
 
-function formatCount(value: number | null) {
-  return value === null ? "—" : value.toLocaleString("pt-BR");
-}
-
 function firstFilterableField(dataset: MaonoDatasetSnapshot | undefined) {
   return dataset
     ? filterableDatasetFields(dataset.fields)[0]?.name ?? null
     : null;
-}
-
-function FilterCard({
-  filter,
-  datasets,
-  editable,
-  accent,
-  onBindField,
-  onRemove,
-  onChangeValue,
-}: {
-  filter: MaonoFilterSnapshot;
-  datasets: MaonoDatasetSnapshot[];
-  editable: boolean;
-  accent: string;
-  onBindField: Props["onBindField"];
-  onRemove: Props["onRemove"];
-  onChangeValue: Props["onChangeValue"];
-}) {
-  const datasetId = filter.dataIds[0] ?? "";
-  const dataset =
-    datasets.find((candidate) => candidate.id === datasetId) ?? null;
-  const fieldName = filter.fieldNames[0] ?? "";
-  const filterableDatasets = datasets.filter(
-    (candidate) => firstFilterableField(candidate) !== null,
-  );
-  const fields = dataset ? filterableDatasetFields(dataset.fields) : [];
-  const canEditConfiguration = editable && filter.compatible;
-
-  function changeDataset(nextDatasetId: string) {
-    const nextDataset = datasets.find(
-      (candidate) => candidate.id === nextDatasetId,
-    );
-    const nextField = firstFilterableField(nextDataset);
-
-    if (nextField) onBindField(filter.index, nextDatasetId, nextField);
-  }
-
-  return (
-    <article
-      className={`maono-filter-card${filter.enabled ? "" : " is-disabled"}`}
-      style={{ "--maono-filter-accent": accent } as CSSProperties}
-    >
-      <header className="maono-filter-card__header">
-        <div>
-          <span>{filterTypeLabel(filter.type)}</span>
-          <strong>{fieldName || `Filtro ${filter.index + 1}`}</strong>
-        </div>
-        <div className="maono-filter-card__header-actions">
-          {!filter.enabled ? <small>Inativo</small> : null}
-          {editable ? (
-            <button
-              type="button"
-              onClick={() => onRemove(filter.index)}
-              aria-label={`Remover filtro ${fieldName || filter.index + 1}`}
-              title="Remover filtro"
-            >
-              <LayerPanelIcon name="trash" />
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      {canEditConfiguration ? (
-        <div className="maono-filter-card__binding">
-          <label>
-            <span>Base de dados</span>
-            <select
-              value={datasetId}
-              onChange={(event) => changeDataset(event.target.value)}
-            >
-              {filterableDatasets.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Propriedade</span>
-            <select
-              value={fieldName}
-              onChange={(event) =>
-                onBindField(filter.index, datasetId, event.target.value)
-              }
-            >
-              {fields.map((field) => (
-                <option key={field.name} value={field.name}>
-                  {field.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      ) : (
-        <dl className="maono-filter-card__facts">
-          <div>
-            <dt>Base</dt>
-            <dd>{dataset?.label ?? (datasetId || "Não encontrada")}</dd>
-          </div>
-          <div>
-            <dt>Propriedade</dt>
-            <dd>{fieldName || "Não encontrada"}</dd>
-          </div>
-        </dl>
-      )}
-
-      {filter.compatibilityReason ? (
-        <p className="maono-filter-card__compatibility" role="status">
-          <LayerPanelIcon name="warning" />
-          <span>{filter.compatibilityReason}</span>
-        </p>
-      ) : null}
-
-      <FilterValueEditor
-        filter={filter}
-        editable={editable}
-        onChange={(value) => onChangeValue(filter.index, value)}
-      />
-
-      {!editable ? (
-        <small className="maono-filter-card__readonly">
-          Somente leitura · {filterValueLabel(filter)}
-        </small>
-      ) : null}
-    </article>
-  );
 }
 
 export default function FilterPanel({
@@ -192,106 +57,144 @@ export default function FilterPanel({
   onBindField,
   onRemove,
   onChangeValue,
+  onToggleEnabled,
+  onFocusResults,
+  onExportCsv,
 }: Props) {
   const filterableDatasets = useMemo(
-    () =>
-      datasets.filter(
-        (dataset) => firstFilterableField(dataset) !== null,
-      ),
+    () => datasets.filter((dataset) => firstFilterableField(dataset) !== null),
     [datasets],
   );
-  const [addDatasetId, setAddDatasetId] = useState(
-    filterableDatasets[0]?.id ?? "",
+  const [selectedFilterId, setSelectedFilterId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDatasetId, setAddDatasetId] = useState(filterableDatasets[0]?.id ?? "");
+  const [addFieldName, setAddFieldName] = useState(
+    firstFilterableField(filterableDatasets[0]) ?? "",
   );
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [pendingFilterIndex, setPendingFilterIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    if (
-      !filterableDatasets.some((dataset) => dataset.id === addDatasetId)
-    ) {
-      setAddDatasetId(filterableDatasets[0]?.id ?? "");
+    if (!filterableDatasets.some((dataset) => dataset.id === addDatasetId)) {
+      const first = filterableDatasets[0];
+      setAddDatasetId(first?.id ?? "");
+      setAddFieldName(firstFilterableField(first) ?? "");
     }
   }, [addDatasetId, filterableDatasets]);
 
+  useEffect(() => {
+    if (selectedFilterId && !filters.some((filter) => filter.id === selectedFilterId)) {
+      setSelectedFilterId(null);
+    }
+  }, [filters, selectedFilterId]);
+
+  useEffect(() => {
+    if (pendingFilterIndex === null) return;
+    const created = filters.find((filter) => filter.index === pendingFilterIndex);
+    if (created) {
+      setSelectedFilterId(created.id);
+      setPendingFilterIndex(null);
+    }
+  }, [filters, pendingFilterIndex]);
+
   const groups = useMemo<FilterGroup[]>(() => {
     const byKey = new Map<string, MaonoFilterSnapshot[]>();
-
     for (const filter of filters) {
       const key =
         filter.dataIds.length === 1
           ? filter.dataIds[0] || "__orphan__"
           : "__incompatible__";
-      const current = byKey.get(key) ?? [];
-      current.push(filter);
-      byKey.set(key, current);
+      byKey.set(key, [...(byKey.get(key) ?? []), filter]);
     }
 
     const ordered: FilterGroup[] = [];
-    for (const dataset of datasets) {
+    datasets.forEach((dataset, index) => {
       const datasetFilters = byKey.get(dataset.id);
-      if (!datasetFilters?.length) continue;
-
+      if (!datasetFilters?.length) return;
       ordered.push({
         key: dataset.id,
         label: dataset.label,
         dataset,
         filters: datasetFilters,
+        accent: DATASET_ACCENTS[index % DATASET_ACCENTS.length] ?? DATASET_ACCENTS[0],
       });
       byKey.delete(dataset.id);
-    }
+    });
 
-    for (const [key, remainingFilters] of byKey) {
+    for (const [key, remaining] of byKey) {
       ordered.push({
         key,
-        label:
-          key === "__incompatible__"
-            ? "Filtros sincronizados"
-            : "Dataset indisponível",
+        label: key === "__incompatible__" ? "Filtros sincronizados" : "Dataset indisponível",
         dataset: null,
-        filters: remainingFilters,
+        filters: remaining,
+        accent: "#8C9FBA",
       });
     }
-
     return ordered;
   }, [datasets, filters]);
 
-  function toggleGroup(key: string) {
-    setCollapsedGroups((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const selectedFilter =
+    filters.find((filter) => filter.id === selectedFilterId) ?? null;
+  const selectedGroup = selectedFilter
+    ? groups.find((group) => group.filters.some((filter) => filter.id === selectedFilter.id))
+    : null;
+
+  if (selectedFilter) {
+    return (
+      <FilterDetailView
+        filter={selectedFilter}
+        datasets={datasets}
+        editable={editable}
+        accent={selectedGroup?.accent ?? DATASET_ACCENTS[0]}
+        onBack={() => setSelectedFilterId(null)}
+        onBindField={onBindField}
+        onChangeValue={onChangeValue}
+        onToggle={onToggleEnabled}
+        onRemove={(index) => {
+          onRemove(index);
+          setSelectedFilterId(null);
+        }}
+        onFocusResults={onFocusResults}
+        onExportCsv={onExportCsv}
+      />
+    );
   }
+
+  const addDataset = filterableDatasets.find((item) => item.id === addDatasetId);
+  const addFields = addDataset ? filterableDatasetFields(addDataset.fields) : [];
 
   return (
     <section className="maono-filter-panel">
-      <header className="maono-filter-panel__heading">
+      {!editable ? <span hidden>consulta em somente leitura</span> : null}
+      <header className="maono-collection-heading">
         <div>
           <strong>Filtros</strong>
-          <small>
-            {editable
-              ? "Combine condições; as alterações serão incluídas ao salvar."
-              : "Consulta em somente leitura."}
-          </small>
+          <small>{filters.length} {filters.length === 1 ? "condição" : "condições"}</small>
         </div>
-        <span>{filters.length}</span>
+        {editable ? (
+          <button type="button" onClick={() => setAddOpen((current) => !current)}>
+            <LayerPanelIcon name={addOpen ? "x" : "plus"} />
+            {addOpen ? "Fechar" : "Adicionar"}
+          </button>
+        ) : (
+          <span className="maono-readonly-badge">
+            <LayerPanelIcon name="lock" /> Somente leitura
+          </span>
+        )}
       </header>
 
-      {editable ? (
-        <div className="maono-filter-panel__add">
-          <label>
-            <span>Adicionar filtro à base</span>
+      {addOpen ? (
+        <div className="maono-filter-add-flow">
+          <label className="maono-style-field">
+            <span>1. Base de dados</span>
             <select
               value={addDatasetId}
-              disabled={!filterableDatasets.length}
-              onChange={(event) => setAddDatasetId(event.target.value)}
+              onChange={(event) => {
+                const nextId = event.target.value;
+                const next = filterableDatasets.find((item) => item.id === nextId);
+                setAddDatasetId(nextId);
+                setAddFieldName(firstFilterableField(next) ?? "");
+              }}
             >
-              {!filterableDatasets.length ? (
-                <option value="">Nenhuma base filtrável</option>
-              ) : null}
               {filterableDatasets.map((dataset) => (
                 <option key={dataset.id} value={dataset.id}>
                   {dataset.label}
@@ -299,87 +202,76 @@ export default function FilterPanel({
               ))}
             </select>
           </label>
+          <label className="maono-style-field">
+            <span>2. Propriedade</span>
+            <select
+              value={addFieldName}
+              onChange={(event) => setAddFieldName(event.target.value)}
+            >
+              {addFields.map((field) => (
+                <option key={field.name} value={field.name}>
+                  {field.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
-            disabled={!addDatasetId}
-            onClick={() => onAdd(addDatasetId)}
+            disabled={!addDatasetId || !addFieldName}
+            onClick={() => {
+              const index = onAdd(addDatasetId, addFieldName);
+              if (index !== null) {
+                setPendingFilterIndex(index);
+                setAddOpen(false);
+              }
+            }}
           >
-            <LayerPanelIcon name="plus" />
-            Adicionar
+            Criar filtro
           </button>
         </div>
       ) : null}
 
       {!groups.length ? (
-        <div className="maono-filter-panel__empty">
-          <LayerPanelIcon name="filter" />
+        <div className="maono-layer-panel__empty">
+          <LayerPanelIcon name="filter" className="maono-layer-panel__empty-icon" />
           <strong>Nenhum filtro configurado</strong>
           <span>
             {editable
-              ? "Escolha uma base de dados para criar a primeira condição."
+              ? "Adicione uma condição para restringir os dados exibidos."
               : "Este mapa não possui filtros salvos."}
           </span>
         </div>
       ) : (
         <div className="maono-filter-groups">
-          {groups.map((group, groupIndex) => {
-            const collapsed = collapsedGroups.has(group.key);
-            const accent =
-              DATASET_ACCENTS[groupIndex % DATASET_ACCENTS.length] ??
-              DATASET_ACCENTS[0];
-
-            return (
-              <section
-                key={group.key}
-                className="maono-filter-group"
-                style={
-                  {
-                    "--maono-filter-accent": accent,
-                  } as CSSProperties
-                }
-              >
-                <button
-                  type="button"
-                  className="maono-filter-group__heading"
-                  aria-expanded={!collapsed}
-                  onClick={() => toggleGroup(group.key)}
-                >
-                  <span className="maono-filter-group__accent" />
-                  <span>
-                    <strong>{group.label}</strong>
-                    <small>
-                      {group.dataset
-                        ? `${formatCount(group.dataset.filteredRowCount)} de ${formatCount(
-                            group.dataset.rowCount,
-                          )} registros`
-                        : "Configuração preservada em somente leitura"}
-                    </small>
-                  </span>
-                  <em>{group.filters.length}</em>
-                  <LayerPanelIcon
-                    name={collapsed ? "chevron-down" : "chevron-up"}
+          {groups.map((group) => (
+            <section key={group.key} className="maono-filter-group">
+              <header className="maono-filter-group__heading">
+                <span style={{ background: group.accent }} aria-hidden="true" />
+                <div>
+                  <strong>{group.label}</strong>
+                  <small>
+                    {group.dataset
+                      ? `${group.dataset.filteredRowCount ?? "—"} de ${group.dataset.rowCount ?? "—"} registros`
+                      : "Configuração preservada"}
+                  </small>
+                </div>
+                <em>{group.filters.length}</em>
+              </header>
+              <div className="maono-filter-group__rows">
+                {group.filters.map((filter) => (
+                  <FilterRow
+                    key={filter.id}
+                    filter={filter}
+                    accent={group.accent}
+                    editable={editable}
+                    onOpen={(item) => setSelectedFilterId(item.id)}
+                    onToggle={(item, enabled) => onToggleEnabled(item.index, enabled)}
+                    onRemove={(item) => onRemove(item.index)}
                   />
-                </button>
-
-                {!collapsed ? (
-                  <div className="maono-filter-group__content">
-                    {group.filters.map((filter) => (
-                      <FilterCard
-                        key={filter.id}
-                        filter={filter}
-                        datasets={datasets}
-                        editable={editable}
-                        accent={accent}
-                        onBindField={onBindField}
-                        onRemove={onRemove}
-                        onChangeValue={onChangeValue}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </section>
