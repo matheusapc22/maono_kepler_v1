@@ -92,6 +92,13 @@ function remember(
   return histogram;
 }
 
+function cacheIdentity(dataset: object) {
+  const dataContainer = readValue(dataset, "dataContainer");
+  return dataContainer && typeof dataContainer === "object"
+    ? (dataContainer as object)
+    : dataset;
+}
+
 export function buildSmartFilterHistogram(
   rootState: unknown,
   filterIndex: number,
@@ -172,7 +179,8 @@ export function buildSmartFilterHistogram(
     reader.allIndexes.length,
     compiled.signature,
   ].join("|");
-  const cached = cacheForDataset(dataset).get(cacheKey);
+  const owner = cacheIdentity(dataset);
+  const cached = cacheForDataset(owner).get(cacheKey);
   if (cached) return cached;
 
   const sample = deterministicSampleIndexes(
@@ -203,5 +211,5 @@ export function buildSmartFilterHistogram(
     fallbackReason: null,
   };
 
-  return remember(dataset, cacheKey, histogram);
+  return remember(owner, cacheKey, histogram);
 }
