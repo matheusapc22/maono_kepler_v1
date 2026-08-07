@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -39,21 +40,27 @@ export default function PanelActionMenu({ label, items, className }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  function positionMenu() {
+  const positionMenu = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger || typeof window === "undefined") return;
 
     const rect = trigger.getBoundingClientRect();
-    const menuHeight =
+    const maximumHeight = Math.max(0, window.innerHeight - VIEWPORT_MARGIN * 2);
+    const measuredHeight =
       menuRef.current?.offsetHeight ?? Math.min(360, items.length * 42 + 16);
+    const menuHeight = Math.min(measuredHeight, maximumHeight);
     const roomBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
     const openAbove = roomBelow < menuHeight && rect.top > roomBelow;
-    const top = openAbove
-      ? Math.max(VIEWPORT_MARGIN, rect.top - menuHeight - 6)
-      : Math.min(
-          window.innerHeight - menuHeight - VIEWPORT_MARGIN,
-          rect.bottom + 6,
-        );
+    const preferredTop = openAbove
+      ? rect.top - menuHeight - 6
+      : rect.bottom + 6;
+    const top = Math.max(
+      VIEWPORT_MARGIN,
+      Math.min(
+        window.innerHeight - menuHeight - VIEWPORT_MARGIN,
+        preferredTop,
+      ),
+    );
     const left = Math.max(
       VIEWPORT_MARGIN,
       Math.min(
@@ -63,12 +70,12 @@ export default function PanelActionMenu({ label, items, className }: Props) {
     );
 
     setPosition({ top, left });
-  }
+  }, [items.length]);
 
   useLayoutEffect(() => {
     if (!open) return;
     positionMenu();
-  }, [open, items.length]);
+  }, [open, positionMenu]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -91,22 +98,18 @@ export default function PanelActionMenu({ label, items, className }: Props) {
       }
     }
 
-    function handleViewportChange() {
-      positionMenu();
-    }
-
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("resize", handleViewportChange);
-    window.addEventListener("scroll", handleViewportChange, true);
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
 
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("resize", handleViewportChange);
-      window.removeEventListener("scroll", handleViewportChange, true);
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
     };
-  }, [open, items.length]);
+  }, [open, positionMenu]);
 
   return (
     <div className={`maono-panel-menu${className ? ` ${className}` : ""}`}>
