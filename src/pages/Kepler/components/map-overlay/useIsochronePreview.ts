@@ -75,6 +75,12 @@ export function useIsochronePreview({
   const previewRef = useRef<IsochronePreviewState | null>(null);
   const commandsRef = useRef(commands);
   const resetMarkerRef = useRef(onMarkerReset);
+  const scopeKey = [
+    context?.organization?.id ?? "none",
+    context?.project?.id ?? "none",
+    projectSlug ?? "none",
+  ].join(":");
+  const previousScopeKeyRef = useRef(scopeKey);
 
   previewRef.current = preview;
   commandsRef.current = commands;
@@ -92,6 +98,26 @@ export function useIsochronePreview({
     setDialogOpen(false);
     setError(null);
   }, [origin]);
+
+  useEffect(() => {
+    if (previousScopeKeyRef.current === scopeKey) return;
+    previousScopeKeyRef.current = scopeKey;
+
+    requestRef.current?.abort();
+    requestRef.current = null;
+    setBusy(false);
+
+    const current = previewRef.current;
+    if (current && !current.saveRequestId) {
+      commandsRef.current.removeTransientLayer(current.dataId);
+    }
+
+    setPreview(null);
+    setDialogOpen(false);
+    setError(null);
+    setMessage(null);
+    resetMarkerRef.current();
+  }, [scopeKey]);
 
   useEffect(() => {
     function handleSaveResult(event: Event) {
