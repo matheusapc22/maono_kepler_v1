@@ -13,6 +13,7 @@ import { useMapPanel } from "../../map-panel/MapPanelContext";
 import MaonoLayerPanelErrorBoundary from "../maono-layer-panel/ErrorBoundary";
 import MaonoLayerPanel from "../maono-layer-panel/MaonoLayerPanel";
 import MapOverlayControls from "../map-overlay/MapOverlayControls";
+import NativeMapOverlaysRuntime from "../native-overlays/NativeMapOverlaysRuntime";
 import MaonoMapShell from "./MaonoMapShell";
 import MapPanelHost from "./MapPanelHost";
 import MapSidebar from "./MapSidebar";
@@ -280,6 +281,7 @@ export default function MaonoMapRuntime({
       }
     >
       {children}
+      <NativeMapOverlaysRuntime legendVisible={engineState.legendVisible} />
       {customMapOverlayEnabled ? <MapOverlayControls /> : null}
     </MaonoMapShell>
   );
