@@ -18,7 +18,7 @@ function getDb(env) {
 
   if (!db || typeof db.prepare !== "function") {
     const error = new Error("Banco de dados D1 não configurado.");
-    error.status = 500;
+    error.status = 503;
     error.code = "DATABASE_NOT_CONFIGURED";
     throw error;
   }
@@ -45,8 +45,44 @@ function publicLoginUser(user) {
     email: user.email,
     name: user.name || undefined,
     role,
-    rawRole: user.role && String(user.role) !== role ? user.role : undefined,
+    rawRole:
+      user.role && String(user.role) !== role
+        ? user.role
+        : undefined,
   };
+}
+
+function loginFailureResponse(error) {
+  const code = String(error?.code || "LOGIN_ERROR");
+  const status = Number(error?.status || 500);
+
+  if (code === "DATABASE_NOT_CONFIGURED") {
+    return errorResponse(
+      "O serviço de autenticação está temporariamente indisponível.",
+      503,
+      code,
+    );
+  }
+
+  if (
+    code === "D1_ERROR" ||
+    code === "SQLITE_ERROR" ||
+    /(?:no such table|no such column|database)/i.test(
+      String(error?.message || ""),
+    )
+  ) {
+    return errorResponse(
+      "A autenticação está indisponível enquanto o banco é sincronizado.",
+      503,
+      "AUTH_DATABASE_UNAVAILABLE",
+    );
+  }
+
+  return errorResponse(
+    "Não foi possível fazer login.",
+    status >= 400 && status < 600 ? status : 500,
+    code,
+  );
 }
 
 export async function onRequest(context) {
@@ -70,7 +106,6 @@ export async function onRequest(context) {
     }
 
     const db = getDb(env);
-
     const user = await db
       .prepare(
         `SELECT
@@ -81,13 +116,13 @@ export async function onRequest(context) {
           password_hash,
           active
          FROM users
-         WHERE email = ?
+         WHERE lower(trim(email)) = ?
          LIMIT 1`,
       )
       .bind(email)
       .first();
 
-    if (!user || user.active !== 1) {
+    if (!user || Number(user.active) !== 1) {
       return errorResponse(
         "Credenciais inválidas.",
         401,
@@ -95,7 +130,8 @@ export async function onRequest(context) {
       );
     }
 
-    const validPassword = await verifyPassword(password, user.password_hash);
+    const storedHash = String(user.password_hash || "").trim();
+    const validPassword = await verifyPassword(password, storedHash);
 
     if (!validPassword) {
       return errorResponse(
@@ -106,14 +142,17 @@ export async function onRequest(context) {
     }
 
     const session = await createSession(env, user.id);
-
-    const cookie = buildCookie(SESSION_COOKIE_NAME, session.token, {
-      maxAge: session.maxAge,
-      path: "/",
-      httpOnly: true,
-      secure: isSecureRequest(request),
-      sameSite: "Lax",
-    });
+    const cookie = buildCookie(
+      SESSION_COOKIE_NAME,
+      session.token,
+      {
+        maxAge: session.maxAge,
+        path: "/",
+        httpOnly: true,
+        secure: isSecureRequest(request),
+        sameSite: "Lax",
+      },
+    );
 
     return jsonResponse(
       {
@@ -133,12 +172,11 @@ export async function onRequest(context) {
       },
     );
   } catch (error) {
-    console.error("[Maono login] Falha ao autenticar usuário:", error);
+    console.error("[Maono login] Falha ao autenticar usuário:", {
+      code: error?.code || "LOGIN_ERROR",
+      message: String(error?.message || "Falha desconhecida").slice(0, 240),
+    });
 
-    return errorResponse(
-      "Não foi possível fazer login.",
-      error.status || 500,
-      error.code || "LOGIN_ERROR",
-    );
+    return loginFailureResponse(error);
   }
 }

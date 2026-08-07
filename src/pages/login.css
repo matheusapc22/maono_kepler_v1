@@ -1,0 +1,502 @@
+.maono-login-page,
+.maono-login-page * {
+  box-sizing: border-box;
+}
+
+.maono-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 40px 20px;
+  color: #fff;
+  background: #202022;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.maono-login-page__loading {
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+
+.maono-login-page__spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #f2c766;
+  border-radius: 50%;
+  animation: maono-login-spin 800ms linear infinite;
+}
+
+.maono-login-page__loading p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.maono-login-page__card {
+  position: relative;
+  display: block;
+  width: min(100%, 1180px);
+  min-height: 620px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 1.65rem;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(5, 5, 7, 0.98) 0%,
+      rgba(5, 5, 7, 0.9) 22%,
+      rgba(5, 5, 7, 0.36) 48%,
+      rgba(5, 5, 7, 0.08) 100%
+    ),
+    var(--maono-login-background) center / cover no-repeat;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+}
+
+.maono-login-page__card::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  content: "";
+  background:
+    radial-gradient(
+      circle at 76% 28%,
+      rgba(33, 82, 141, 0.24),
+      transparent 24%
+    ),
+    linear-gradient(
+      0deg,
+      rgba(5, 5, 7, 0.9) 0%,
+      rgba(5, 5, 7, 0.18) 34%,
+      rgba(5, 5, 7, 0) 62%
+    );
+  pointer-events: none;
+}
+
+.maono-login-page__content {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  min-height: 620px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 56px;
+}
+
+.maono-login-page__content--floating {
+  min-height: 564px;
+  width: min(390px, calc(100% - 56px));
+  margin: 28px 0 28px 28px;
+  padding: 40px 34px 34px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 28px;
+  background: linear-gradient(
+    180deg,
+    rgba(18, 18, 22, 0.92) 0%,
+    rgba(8, 8, 12, 0.88) 100%
+  );
+  box-shadow:
+    0 34px 80px rgba(0, 0, 0, 0.54),
+    0 14px 30px rgba(0, 0, 0, 0.44),
+    0 0 0 1px rgba(255, 255, 255, 0.025) inset,
+    0 0 42px rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(8px);
+}
+
+.maono-login-page__content--floating::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  content: "";
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.055) 0%,
+    rgba(255, 255, 255, 0.018) 18%,
+    rgba(255, 255, 255, 0) 42%
+  );
+  pointer-events: none;
+}
+
+.maono-login-page__content--floating::after {
+  position: absolute;
+  right: 18px;
+  bottom: -22px;
+  left: 18px;
+  z-index: -1;
+  height: 42px;
+  border-radius: 999px;
+  content: "";
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.34) 0%,
+    rgba(0, 0, 0, 0.18) 48%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+.maono-login-page__brand {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 40px;
+}
+
+.maono-login-page__logo {
+  display: block;
+  width: auto;
+  height: 96px;
+  margin: 0 0 48px;
+  object-fit: contain;
+  opacity: 0.95;
+}
+
+.maono-login-page h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+}
+
+.maono-login-page__intro {
+  max-width: 320px;
+  margin: 16px 0 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.75;
+}
+
+.maono-login-page__form {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  max-width: 300px;
+  flex-direction: column;
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+}
+
+.maono-login-page__field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.maono-login-page__field-label {
+  display: block;
+  margin: 0 0 8px;
+  color: #f2c766;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  line-height: 20px;
+  text-transform: lowercase;
+}
+
+.maono-login-page__input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid rgba(214, 168, 79, 0.16);
+  border-radius: 8px;
+  outline: none;
+  color: #fff;
+  background: #28282b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  caret-color: #f2c766;
+  color-scheme: dark;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-text-fill-color: #fff;
+}
+
+.maono-login-page__input:focus {
+  border-color: rgba(242, 199, 102, 0.72);
+  background: #303034;
+  box-shadow:
+    0 0 0 4px rgba(214, 168, 79, 0.12),
+    0 0 22px rgba(214, 168, 79, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Chrome/Google Password Manager paints autofilled fields with a light
+   background unless both the inset fill and text fill are overridden. */
+.maono-login-page__input:-webkit-autofill,
+.maono-login-page__input:-webkit-autofill:hover,
+.maono-login-page__input:-webkit-autofill:active {
+  border-color: rgba(214, 168, 79, 0.28) !important;
+  background-color: #28282b !important;
+  box-shadow:
+    0 0 0 1000px #28282b inset,
+    inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+  caret-color: #f2c766 !important;
+  -webkit-text-fill-color: #fff !important;
+  transition: background-color 9999s ease-out 0s;
+}
+
+.maono-login-page__input:-webkit-autofill:focus {
+  border-color: rgba(242, 199, 102, 0.72) !important;
+  box-shadow:
+    0 0 0 1000px #303034 inset,
+    0 0 0 4px rgba(214, 168, 79, 0.12),
+    0 0 22px rgba(214, 168, 79, 0.18) !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.maono-login-page__password-control {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.maono-login-page__password-control .maono-login-page__input {
+  padding-right: 64px;
+}
+
+.maono-login-page__password-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(242, 199, 102, 0.86);
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-transform: lowercase;
+  transform: translateY(-50%);
+  -webkit-text-fill-color: rgba(242, 199, 102, 0.86);
+}
+
+.maono-login-page__password-toggle:hover {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+
+.maono-login-page__link-row {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.maono-login-page__link-center {
+  width: 100%;
+  padding-top: 4px;
+  text-align: center;
+}
+
+.maono-login-page__link-button {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #f2c766;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(214, 168, 79, 0.42);
+  text-transform: lowercase;
+  text-underline-offset: 2px;
+  -webkit-text-fill-color: #f2c766;
+}
+
+.maono-login-page__link-button:hover {
+  color: #fff;
+  text-decoration-color: rgba(242, 199, 102, 0.86);
+  -webkit-text-fill-color: #fff;
+}
+
+.maono-login-page__error {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 12px;
+  color: #fee2e2;
+  background: rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.08);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.maono-login-page__submit {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid rgba(242, 199, 102, 0.72);
+  border-radius: 8px;
+  color: #08090b;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.42) 0%,
+      rgba(255, 255, 255, 0.08) 16%,
+      transparent 32%
+    ),
+    linear-gradient(
+      90deg,
+      #8a6a2f 0%,
+      #d6a84f 28%,
+      #f2c766 52%,
+      #b8862e 75%,
+      #f2c766 100%
+    );
+  box-shadow:
+    0 18px 44px rgba(214, 168, 79, 0.22),
+    0 0 34px rgba(242, 199, 102, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.58),
+    inset 0 -1px 0 rgba(80, 52, 11, 0.42);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 24px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition:
+    filter 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+  -webkit-text-fill-color: #08090b;
+}
+
+.maono-login-page__submit::before {
+  position: absolute;
+  inset: -45% auto -45% -40%;
+  width: 38%;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 42%,
+    rgba(255, 255, 255, 0.68) 50%,
+    rgba(255, 255, 255, 0.18) 58%,
+    transparent 100%
+  );
+  transform: rotate(18deg);
+  transition: left 520ms ease;
+}
+
+.maono-login-page__submit:hover:not(:disabled) {
+  filter: brightness(1.08) saturate(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    0 22px 54px rgba(214, 168, 79, 0.3),
+    0 0 44px rgba(242, 199, 102, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    inset 0 -1px 0 rgba(80, 52, 11, 0.48);
+}
+
+.maono-login-page__submit:hover::before {
+  left: 110%;
+}
+
+.maono-login-page__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.maono-login-page button:focus-visible,
+.maono-login-page input:focus-visible {
+  outline: 2px solid #f1d28a;
+  outline-offset: 3px;
+}
+
+@keyframes maono-login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 767px) {
+  .maono-login-page {
+    padding: 0;
+  }
+
+  .maono-login-page__card {
+    max-width: 560px;
+    min-height: 100vh;
+    border-radius: 0;
+    background-position: center bottom;
+  }
+
+  .maono-login-page__content {
+    min-height: 100vh;
+    padding: 40px 32px;
+  }
+
+  .maono-login-page__content--floating {
+    width: auto;
+    min-height: auto;
+    margin: 0;
+    padding: 40px 32px;
+    border-radius: 0;
+  }
+
+  .maono-login-page__form {
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maono-login-page__spinner,
+  .maono-login-page__submit::before {
+    animation: none;
+    transition: none;
+  }
+}

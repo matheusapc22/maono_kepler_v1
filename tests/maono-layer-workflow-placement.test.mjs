@@ -69,20 +69,36 @@ test("agrupamento espacial pertence à camada acionada e mantém gatilho habilit
   assert.match(source.inspector, /layerId=\{activeLayer\.id\}/);
 });
 
-test("catálogo aceita ponto, cluster e heatmap sem expor camadas auxiliares", () => {
-  for (const type of ["point", "cluster", "heatmap", "geojson"]) {
-    assert.match(source.clusteringHook, new RegExp(`"${type}"`));
-  }
-  assert.match(source.clusteringHook, /startsWith\("maono-cluster-"\)/);
-  assert.match(source.clusteringHook, /pairedClusterLayerIds/);
+test("catálogo mantém apenas camadas lógicas e trata cluster como representação interna", () => {
+  assert.match(
+    source.clusteringHook,
+    /LOGICAL_POINT_LAYER_TYPES\s*=\s*new Set\(\[\s*"point",\s*"geojson",\s*\]\)/,
+  );
   assert.match(source.clusteringHook, /minimumPointCount: 1/);
+  assert.doesNotMatch(source.clusteringHook, /addLayer\(/);
+  assert.doesNotMatch(source.clusteringHook, /layerToggleVisibility/);
+  assert.doesNotMatch(source.clusteringHook, /pairedClusterLayerIds/);
+  assert.doesNotMatch(source.clusteringHook, /startsWith\("maono-cluster-"\)/);
+
   assert.match(
     source.clusteringController,
-    /\["point", "geojson", "cluster", "heatmap"\]/,
+    /LEGACY_CLUSTER_LAYER_PREFIX\s*=\s*"maono-cluster-"/,
   );
   assert.match(
     source.clusteringController,
-    /layer\?\.id !== pointLayer\?\.id/,
+    /type === "point" \|\| type === "geojson"/,
+  );
+  assert.match(
+    source.clusteringController,
+    /adaptiveClusterDeckLayerId/,
+  );
+  assert.match(
+    source.clusteringController,
+    /removedClusterLayerIds/,
+  );
+  assert.doesNotMatch(
+    source.clusteringController,
+    /\["point", "geojson", "cluster", "heatmap"\]/,
   );
 });
 
