@@ -48,7 +48,7 @@ function NumericRangeEditor({
   if (!domain || !draft) {
     return (
       <p className="maono-filter-editor__empty">
-        O Kepler não calculou um domínio numérico válido para este campo.
+        Não foi possível calcular um domínio numérico válido para este campo.
       </p>
     );
   }
@@ -164,7 +164,7 @@ function TimeRangeEditor({
   if (!domain || !value) {
     return (
       <p className="maono-filter-editor__empty">
-        O Kepler não calculou um período válido para este campo.
+        Não foi possível calcular um período válido para este campo.
       </p>
     );
   }
@@ -280,14 +280,9 @@ function CategoryEditor({
 }) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
-  const [visibleLimit, setVisibleLimit] = useState(100);
   const selected = selectedFilterValues(filter.value);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const normalizedSearch = deferredSearch.trim().toLocaleLowerCase();
-
-  useEffect(() => {
-    setVisibleLimit(100);
-  }, [normalizedSearch, filter.domainSize]);
 
   const matching = useMemo(() => {
     const values = normalizedSearch
@@ -311,8 +306,6 @@ function CategoryEditor({
       );
     });
   }, [filter.domain, normalizedSearch, selectedSet]);
-
-  const visible = matching.slice(0, visibleLimit);
 
   function toggle(value: MapFilterDomainValue) {
     const next = selectedSet.has(value)
@@ -349,15 +342,13 @@ function CategoryEditor({
 
       {filter.domainTruncated ? (
         <p className="maono-filter-editor__warning">
-          Exibindo os primeiros {filter.domain.length.toLocaleString("pt-BR")}{" "}
-          de {filter.domainSize.toLocaleString("pt-BR")} valores para proteger
-          o desempenho.
+          A lista de valores desta propriedade está incompleta na origem do filtro.
         </p>
       ) : null}
 
       <div className="maono-filter-category__options">
-        {visible.length ? (
-          visible.map((value, index) => {
+        {matching.length ? (
+          matching.map((value, index) => {
             const checked = selectedSet.has(value);
 
             return (
@@ -376,16 +367,6 @@ function CategoryEditor({
           <p>Nenhuma categoria encontrada.</p>
         )}
       </div>
-
-      {matching.length > visible.length ? (
-        <button
-          type="button"
-          className="maono-filter-category__more"
-          onClick={() => setVisibleLimit((current) => current + 100)}
-        >
-          Mostrar mais {Math.min(100, matching.length - visible.length)}
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -451,7 +432,7 @@ export default function FilterValueEditor({
 
   return (
     <p className="maono-filter-editor__empty">
-      A edição deste filtro permanece disponível no painel nativo do Kepler.
+      A edição deste filtro permanece disponível no painel nativo.
     </p>
   );
 }
