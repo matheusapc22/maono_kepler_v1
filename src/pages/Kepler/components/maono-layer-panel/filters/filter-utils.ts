@@ -112,7 +112,7 @@ export function filterValueLabel(filter: FilterValueLabelInput) {
       : "Sem valor";
   }
 
-  return "Edição disponível no Kepler nativo";
+  return "Edição disponível no painel nativo";
 }
 
 function padDatePart(value: number) {
