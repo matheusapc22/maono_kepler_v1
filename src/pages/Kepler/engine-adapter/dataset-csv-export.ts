@@ -10,12 +10,15 @@ import {
 } from "./selectors.ts";
 
 const MAX_EXPORT_ROWS = 250_000;
+const FORMULA_PREFIX = /^[=+\-@]/;
 
 type CsvExport = {
   filename: string;
   content: string;
   rowCount: number;
 };
+
+type RowReader = (index: number) => unknown[];
 
 function safeFilename(value: string) {
   const normalized = value
@@ -28,34 +31,45 @@ function safeFilename(value: string) {
   return normalized || "dados-maono";
 }
 
+function spreadsheetSafeText(text: string) {
+  return FORMULA_PREFIX.test(text.trimStart()) ? `'${text}` : text;
+}
+
 function csvCell(value: unknown) {
   if (value == null) return "";
-  const text =
+  const serialized =
     typeof value === "object" ? JSON.stringify(value) : String(value);
+  const text = spreadsheetSafeText(serialized);
   return /[",\r\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function fieldNames(dataset: unknown) {
   return collectionToArray(
-    readValue(dataset, "fields") ?? readValue(readValue(dataset, "data"), "fields"),
+    readValue(dataset, "fields") ??
+      readValue(readValue(dataset, "data"), "fields"),
   )
     .map((field) => String(readValue(field, "name") ?? "").trim())
     .filter(Boolean);
 }
 
-function containerRow(dataset: unknown, index: number, names: string[]) {
+function createRowReader(dataset: unknown, names: string[]): RowReader {
   const dataContainer = readValue(dataset, "dataContainer") as any;
   if (dataContainer && typeof dataContainer.valueAt === "function") {
-    return names.map((_, columnIndex) => dataContainer.valueAt(index, columnIndex));
+    return (index) =>
+      names.map((_, columnIndex) => dataContainer.valueAt(index, columnIndex));
   }
 
   const rows = collectionToArray<any>(readValue(dataset, "allData"));
-  const row = rows[index];
-  if (Array.isArray(row)) return names.map((_, columnIndex) => row[columnIndex]);
-  if (row && typeof row === "object") {
-    return names.map((name) => readValue(row, name));
-  }
-  return names.map(() => null);
+  return (index) => {
+    const row = rows[index];
+    if (Array.isArray(row)) {
+      return names.map((_, columnIndex) => row[columnIndex]);
+    }
+    if (row && typeof row === "object") {
+      return names.map((name) => readValue(row, name));
+    }
+    return names.map(() => null);
+  };
 }
 
 function rowIndexes(dataset: unknown) {
@@ -72,7 +86,8 @@ function rowIndexes(dataset: unknown) {
   const rawNumRows =
     dataContainer && typeof dataContainer.numRows === "function"
       ? dataContainer.numRows()
-      : readValue(dataContainer, "numRows") ?? readValue(dataContainer, "length");
+      : readValue(dataContainer, "numRows") ??
+        readValue(dataContainer, "length");
   const rawRows = collectionToArray(readValue(dataset, "allData"));
   const count = Number.isFinite(Number(rawNumRows))
     ? Number(rawNumRows)
@@ -103,9 +118,10 @@ export function buildFilteredDatasetCsv(
     );
   }
 
+  const readRow = createRowReader(dataset, names);
   const lines = [names.map(csvCell).join(",")];
   for (const rowIndex of indexes) {
-    lines.push(containerRow(dataset, rowIndex, names).map(csvCell).join(","));
+    lines.push(readRow(rowIndex).map(csvCell).join(","));
   }
 
   return {
@@ -132,7 +148,11 @@ export function useDatasetCsvExport() {
       }
 
       try {
-        const exported = buildFilteredDatasetCsv(store.getState(), datasetId, label);
+        const exported = buildFilteredDatasetCsv(
+          store.getState(),
+          datasetId,
+          label,
+        );
         const blob = new Blob([exported.content], {
           type: "text/csv;charset=utf-8",
         });
@@ -140,7 +160,10 @@ export function useDatasetCsvExport() {
         const anchor = document.createElement("a");
         anchor.href = url;
         anchor.download = exported.filename;
+        anchor.hidden = true;
+        document.body.appendChild(anchor);
         anchor.click();
+        anchor.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 0);
 
         emitMapPanelTelemetry("map_dataset_csv_exported", {
