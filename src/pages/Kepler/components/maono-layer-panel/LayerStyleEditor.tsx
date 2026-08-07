@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import {
   LAYER_BLENDING_MODES,
@@ -41,8 +46,8 @@ const POINT_LAYER_TYPES: Array<{
   label: string;
 }> = [
   { value: "point", label: "Pontos" },
-  { value: "cluster", label: "Agrupamentos (cluster)" },
-  { value: "heatmap", label: "Mapa de calor (heatmap)" },
+  { value: "cluster", label: "Agrupamentos" },
+  { value: "heatmap", label: "Mapa de calor" },
 ];
 
 const LAYER_BLENDING_LABELS: Record<MapLayerBlendingMode, string> = {
@@ -85,24 +90,8 @@ type Props = {
   dataset: MaonoDatasetSnapshot | null;
   layerBlending: string | null;
   overlayBlending: string | null;
+  dimensionAddon?: ReactNode;
   onChange: (change: LayerStyleChange) => void;
-};
-
-type ColorChannelProps = {
-  title: string;
-  color: MapRgbColor;
-  field: string | null;
-  scale: MapColorScale | null;
-  paletteId: string | null;
-  palette: string[];
-  fields: MaonoDatasetSnapshot["fields"];
-  fixedColorEnabled?: boolean;
-  paletteAlwaysVisible?: boolean;
-  emptyFieldLabel?: string;
-  onColorChange: (value: MapRgbColor) => void;
-  onFieldChange: (value: string | null) => void;
-  onScaleChange: (value: MapColorScale) => void;
-  onPaletteChange: (value: MapPaletteSelection) => void;
 };
 
 function componentToHex(value: number) {
@@ -121,6 +110,14 @@ function isPointLayerType(value: string): value is MapPointLayerType {
 
 function isColorScale(value: string): value is MapColorScale {
   return Object.prototype.hasOwnProperty.call(COLOR_SCALE_LABELS, value);
+}
+
+function isLayerBlendingMode(value: string): value is MapLayerBlendingMode {
+  return LAYER_BLENDING_MODES.some((mode) => mode === value);
+}
+
+function isOverlayBlendingMode(value: string): value is MapOverlayBlendingMode {
+  return OVERLAY_BLENDING_MODES.some((mode) => mode === value);
 }
 
 function Toggle({
@@ -164,7 +161,6 @@ function RangeControl({
   onCommit: (value: number) => void;
 }) {
   const [draft, setDraft] = useState(value);
-
   useEffect(() => setDraft(value), [value]);
 
   const displayed =
@@ -174,9 +170,9 @@ function RangeControl({
         ? Number(draft.toFixed(1))
         : Math.round(draft);
 
-  const commit = () => {
+  function commit() {
     if (!Object.is(draft, value)) onCommit(draft);
-  };
+  }
 
   return (
     <label className="maono-style-range">
@@ -195,6 +191,7 @@ function RangeControl({
         value={draft}
         onChange={(event) => setDraft(Number(event.target.value))}
         onPointerUp={commit}
+        onTouchEnd={commit}
         onKeyUp={commit}
         onBlur={commit}
       />
@@ -235,12 +232,14 @@ function PalettePicker({
             className={active ? "is-selected" : ""}
             aria-pressed={active}
             aria-label={`${palette.label}, ${paletteKindLabel(palette.kind)}`}
-            onClick={() => onChange({
-              id: palette.id,
-              label: palette.label,
-              kind: palette.kind,
-              colors: [...palette.colors],
-            })}
+            onClick={() =>
+              onChange({
+                id: palette.id,
+                label: palette.label,
+                kind: palette.kind,
+                colors: [...palette.colors],
+              })
+            }
           >
             <span
               aria-hidden="true"
@@ -249,7 +248,6 @@ function PalettePicker({
               }}
             />
             <small>{palette.label}</small>
-            <em>{paletteKindLabel(palette.kind)}</em>
           </button>
         );
       })}
@@ -257,84 +255,66 @@ function PalettePicker({
   );
 }
 
-function ColorChannel({
-  title,
-  color,
+function FieldSelect({
+  label,
+  field,
+  fields,
+  emptyLabel,
+  onChange,
+}: {
+  label: string;
+  field: string | null;
+  fields: MaonoDatasetSnapshot["fields"];
+  emptyLabel: string;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <label className="maono-style-field">
+      <span>{label}</span>
+      <select
+        value={field ?? ""}
+        onChange={(event) => onChange(event.target.value || null)}
+      >
+        <option value="">{emptyLabel}</option>
+        {fields.map((candidate) => (
+          <option key={candidate.name} value={candidate.name}>
+            {candidate.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ColorScaleControl({
   field,
   scale,
   paletteId,
   palette,
   fields,
-  fixedColorEnabled = true,
-  paletteAlwaysVisible = false,
-  emptyFieldLabel = "Fixo (sem coluna)",
-  onColorChange,
-  onFieldChange,
+  paletteOnly = false,
   onScaleChange,
   onPaletteChange,
-}: ColorChannelProps) {
+}: {
+  field: string | null;
+  scale: MapColorScale | null;
+  paletteId: string | null;
+  palette: string[];
+  fields: MaonoDatasetSnapshot["fields"];
+  paletteOnly?: boolean;
+  onScaleChange: (value: MapColorScale) => void;
+  onPaletteChange: (value: MapPaletteSelection) => void;
+}) {
   const selectedField = fields.find((candidate) => candidate.name === field) ?? null;
   const scales = scalesForField(selectedField);
-  const effectiveScale = scale && scales.includes(scale) ? scale : scales[0] ?? "quantile";
+  const effectiveScale =
+    scale && scales.includes(scale) ? scale : scales[0] ?? "quantile";
   const activePalette =
     palette.length >= 2 ? palette : (DEFAULT_MAONO_PALETTE?.colors ?? []);
-  const showPalette = paletteAlwaysVisible || Boolean(field);
 
   return (
-    <div className="maono-style-channel">
-      <strong>{title}</strong>
-
-      {fixedColorEnabled && !field ? (
-        <div className="maono-style-fixed-color">
-          <label>
-            <span>Cor fixa</span>
-            <input
-              type="color"
-              value={toHex(color)}
-              onChange={(event) => onColorChange(hexToRgb(event.target.value))}
-            />
-          </label>
-          <div aria-label="Cores rápidas">
-            {MAONO_LAYER_PALETTES.slice(0, 4).map((candidate) => {
-              const quickColor =
-                candidate.colors[Math.floor((candidate.colors.length - 1) / 2)] ??
-                "#C5A059";
-              return (
-                <button
-                  type="button"
-                  key={candidate.id}
-                  style={{ background: quickColor }}
-                  onClick={() => onColorChange(hexToRgb(quickColor))}
-                  aria-label={`Aplicar cor ${candidate.label}`}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {fields.length ? (
-        <label className="maono-style-field">
-          <span>Colorir por coluna</span>
-          <select
-            value={field ?? ""}
-            onChange={(event) => onFieldChange(event.target.value || null)}
-          >
-            <option value="">{emptyFieldLabel}</option>
-            {fields.map((candidate) => (
-              <option key={candidate.name} value={candidate.name}>
-                {candidate.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
-        <p className="maono-style-help">
-          O dataset não possui campos disponíveis para coloração.
-        </p>
-      )}
-
-      {field ? (
+    <div className="maono-style-channel-options">
+      {!paletteOnly && field ? (
         <label className="maono-style-field">
           <span>Escala da cor</span>
           <select
@@ -359,27 +339,14 @@ function ColorChannel({
         </label>
       ) : null}
 
-      {showPalette ? (
-        <>
-          <span className="maono-style-label">Paleta de cores</span>
-          <PalettePicker
-            paletteId={paletteId}
-            colors={activePalette}
-            scale={field ? effectiveScale : null}
-            onChange={onPaletteChange}
-          />
-        </>
-      ) : null}
+      <PalettePicker
+        paletteId={paletteId}
+        colors={activePalette}
+        scale={field ? effectiveScale : "quantile"}
+        onChange={onPaletteChange}
+      />
     </div>
   );
-}
-
-function isLayerBlendingMode(value: string): value is MapLayerBlendingMode {
-  return LAYER_BLENDING_MODES.some((mode) => mode === value);
-}
-
-function isOverlayBlendingMode(value: string): value is MapOverlayBlendingMode {
-  return OVERLAY_BLENDING_MODES.some((mode) => mode === value);
 }
 
 export default function LayerStyleEditor({
@@ -387,25 +354,28 @@ export default function LayerStyleEditor({
   dataset,
   layerBlending,
   overlayBlending,
+  dimensionAddon,
   onChange,
 }: Props) {
   const { style } = layer;
   const pointFamily = isPointLayerType(layer.type);
-  const datasetFields = dataset?.fields;
-  const fields = useMemo(() => datasetFields ?? [], [datasetFields]);
+  const fields = useMemo(() => dataset?.fields ?? [], [dataset?.fields]);
   const numericFields = useMemo(
     () => fields.filter((candidate) => fieldKind(candidate) === "numeric"),
     [fields],
   );
   const compatibility = style.compatibility;
-  const layerBlendingCandidate = layerBlending ?? "";
-  const normalizedLayerBlending = isLayerBlendingMode(layerBlendingCandidate)
-    ? layerBlendingCandidate
+  const normalizedLayerBlending = isLayerBlendingMode(layerBlending ?? "")
+    ? (layerBlending as MapLayerBlendingMode)
     : "normal";
-  const overlayBlendingCandidate = overlayBlending ?? "";
-  const normalizedOverlayBlending = isOverlayBlendingMode(overlayBlendingCandidate)
-    ? overlayBlendingCandidate
+  const normalizedOverlayBlending = isOverlayBlendingMode(overlayBlending ?? "")
+    ? (overlayBlending as MapOverlayBlendingMode)
     : "normal";
+  const dimensionAvailable =
+    compatibility.radius ||
+    compatibility.clusterRadius ||
+    compatibility.heatmapRadius ||
+    Boolean(dimensionAddon);
 
   if (!compatibility.supported) {
     return (
@@ -417,10 +387,12 @@ export default function LayerStyleEditor({
 
   return (
     <div className="maono-layer-style-editor">
-      <section className="maono-style-section">
+      <section className="maono-detail-card maono-detail-card--essential">
         <header>
-          <strong>Visualização</strong>
-          <small>Formato, opacidade e dimensão</small>
+          <div>
+            <strong>Essencial</strong>
+            <small>Formato, opacidade e cor principal</small>
+          </div>
         </header>
 
         {pointFamily ? (
@@ -455,291 +427,341 @@ export default function LayerStyleEditor({
           />
         ) : null}
 
-        {compatibility.radius ? (
-          <>
-            <label className="maono-style-field">
-              <span>Raio orientado por campo</span>
-              <select
-                value={style.radiusField ?? ""}
-                onChange={(event) =>
-                  onChange({kind: "radiusField", value: event.target.value || null})
-                }
-              >
-                <option value="">Raio fixo</option>
-                {numericFields.map((field) => (
-                  <option key={field.name} value={field.name}>{field.name}</option>
-                ))}
-              </select>
-            </label>
-            {style.radiusField && compatibility.radiusRange ? (
-              <div className="maono-style-range-pair">
-                <RangeControl
-                  label="Raio mínimo"
-                  value={style.radiusRange?.[0] ?? 0}
-                  minimum={0}
-                  maximum={500}
-                  step={1}
-                  suffix=" px"
-                  onCommit={(minimum) =>
-                    onChange({
-                      kind: "radiusRange",
-                      value: [minimum, Math.max(minimum, style.radiusRange?.[1] ?? 50)],
-                    })
-                  }
-                />
-                <RangeControl
-                  label="Raio máximo"
-                  value={style.radiusRange?.[1] ?? 50}
-                  minimum={0}
-                  maximum={500}
-                  step={1}
-                  suffix=" px"
-                  onCommit={(maximum) =>
-                    onChange({
-                      kind: "radiusRange",
-                      value: [Math.min(maximum, style.radiusRange?.[0] ?? 0), maximum],
-                    })
-                  }
-                />
-              </div>
-            ) : (
-              <RangeControl
-                label={layer.type === "geojson" ? "Raio de pontos GeoJSON" : "Raio do ponto"}
-                value={style.pointRadius ?? 10}
-                minimum={0}
-                maximum={100}
-                step={0.5}
-                suffix=" px"
-                onCommit={(value) => onChange({ kind: "pointRadius", value })}
+        {compatibility.fill ? (
+          <div className="maono-style-essential-color">
+            <div className="maono-style-inline-heading">
+              <span>Preenchimento</span>
+              <Toggle
+                checked={style.fillEnabled}
+                label="Ativar preenchimento"
+                onChange={(value) => onChange({ kind: "fillEnabled", value })}
               />
-            )}
-          </>
-        ) : null}
+            </div>
 
-        {compatibility.clusterRadius ? (
-          <>
-            <RangeControl
-              label="Raio de agregação"
-              value={style.clusterRadius ?? 40}
-              minimum={1}
-              maximum={500}
-              step={1}
-              suffix=" px"
-              onCommit={(value) => onChange({ kind: "clusterRadius", value })}
-            />
-            {compatibility.radiusRange ? (
-              <div className="maono-style-range-pair">
-                <RangeControl
-                  label="Símbolo mínimo"
-                  value={style.radiusRange?.[0] ?? 1}
-                  minimum={1}
-                  maximum={150}
-                  step={1}
-                  suffix=" px"
-                  onCommit={(minimum) =>
-                    onChange({
-                      kind: "radiusRange",
-                      value: [minimum, Math.max(minimum, style.radiusRange?.[1] ?? 40)],
-                    })
-                  }
-                />
-                <RangeControl
-                  label="Símbolo máximo"
-                  value={style.radiusRange?.[1] ?? 40}
-                  minimum={1}
-                  maximum={150}
-                  step={1}
-                  suffix=" px"
-                  onCommit={(maximum) =>
-                    onChange({
-                      kind: "radiusRange",
-                      value: [Math.min(maximum, style.radiusRange?.[0] ?? 1), maximum],
-                    })
-                  }
-                />
-              </div>
+            {style.fillEnabled ? (
+              <>
+                {!style.colorField && compatibility.fixedColor ? (
+                  <label className="maono-style-color-input">
+                    <span>Cor fixa</span>
+                    <input
+                      type="color"
+                      value={toHex(style.color)}
+                      onChange={(event) =>
+                        onChange({
+                          kind: "fillColor",
+                          value: hexToRgb(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                ) : null}
+
+                {compatibility.colorField && fields.length ? (
+                  <FieldSelect
+                    label="Colorir por coluna"
+                    field={style.colorField}
+                    fields={fields}
+                    emptyLabel="Cor fixa"
+                    onChange={(value) => onChange({ kind: "fillField", value })}
+                  />
+                ) : null}
+              </>
             ) : null}
-          </>
-        ) : null}
-
-        {compatibility.heatmapRadius ? (
-          <RangeControl
-            label="Raio do mapa de calor"
-            value={style.heatmapRadius ?? 20}
-            minimum={0}
-            maximum={100}
-            step={1}
-            suffix=" px"
-            onCommit={(value) => onChange({ kind: "heatmapRadius", value })}
-          />
+          </div>
         ) : null}
       </section>
 
-      {compatibility.fill ? (
-        <section className="maono-style-section">
-          <header>
-            <div>
-              <strong>Preenchimento</strong>
-              <small>Cor fixa ou orientada por atributo</small>
-            </div>
-            <Toggle
-              checked={style.fillEnabled}
-              label="Ativar preenchimento"
-              onChange={(value) => onChange({ kind: "fillEnabled", value })}
-            />
-          </header>
-
-          {style.fillEnabled ? (
-            <ColorChannel
-              title="Cor do preenchimento"
-              color={style.color}
-              field={style.colorField}
-              scale={style.colorScale}
-              paletteId={style.colorPaletteId}
-              palette={style.colorPalette}
-              fields={fields}
-              onColorChange={(value) => onChange({ kind: "fillColor", value })}
-              onFieldChange={(value) => onChange({ kind: "fillField", value })}
-              onScaleChange={(value) => onChange({ kind: "fillScale", value })}
-              onPaletteChange={(value) => onChange({ kind: "fillPalette", value })}
-            />
-          ) : null}
-        </section>
-      ) : null}
-
-      {layer.type === "cluster" ? (
-        <section className="maono-style-section">
-          <header>
-            <strong>Cores do agrupamento</strong>
-            <small>Contagem de pontos ou atributo agregado</small>
-          </header>
-          <ColorChannel
-            title="Cor dos clusters"
-            color={style.color}
-            field={style.colorField}
-            scale={style.colorScale}
-            paletteId={style.colorPaletteId}
-            palette={style.colorPalette}
-            fields={fields}
-            fixedColorEnabled={false}
-            paletteAlwaysVisible
-            emptyFieldLabel="Contagem de pontos"
-            onColorChange={() => undefined}
-            onFieldChange={(value) => onChange({kind: "fillField", value})}
-            onScaleChange={(value) => onChange({kind: "fillScale", value})}
-            onPaletteChange={(value) => onChange({kind: "fillPalette", value})}
-          />
-        </section>
-      ) : layer.type === "heatmap" ? (
-        <section className="maono-style-section">
-          <header>
-            <strong>Gradiente do mapa de calor</strong>
-            <small>Paleta aplicada à densidade</small>
-          </header>
-          <PalettePicker
-            paletteId={style.colorPaletteId}
-            colors={style.colorPalette.length >= 2 ? style.colorPalette : (DEFAULT_MAONO_PALETTE?.colors ?? [])}
-            scale="quantile"
-            onChange={(value) => onChange({ kind: "fillPalette", value })}
-          />
-        </section>
-      ) : null}
-
-      {compatibility.stroke ? (
-        <section className="maono-style-section">
-          <header>
-            <div>
-              <strong>Contorno</strong>
-              <small>Cor e espessura das bordas</small>
-            </div>
-            <Toggle
-              checked={style.strokeEnabled}
-              label="Ativar contorno"
-              onChange={(value) => onChange({ kind: "strokeEnabled", value })}
-            />
-          </header>
-
-          {style.strokeEnabled ? (
-            <>
-              <ColorChannel
-                title="Cor do contorno"
-                color={style.strokeColor}
-                field={style.strokeColorField}
-                scale={style.strokeColorScale}
-                paletteId={style.strokeColorPaletteId}
-                palette={style.strokeColorPalette}
+      <details className="maono-detail-section">
+        <summary>
+          <span>
+            <strong>Aparência</strong>
+            <small>Paletas, escalas e contorno</small>
+          </span>
+          <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div className="maono-detail-section__content">
+          {style.fillEnabled &&
+          (style.colorField || layer.type === "cluster" || layer.type === "heatmap") ? (
+            <section className="maono-style-subsection">
+              <header>
+                <strong>
+                  {layer.type === "heatmap"
+                    ? "Gradiente do mapa de calor"
+                    : layer.type === "cluster"
+                      ? "Cores do agrupamento"
+                      : "Escala do preenchimento"}
+                </strong>
+              </header>
+              <ColorScaleControl
+                field={style.colorField}
+                scale={style.colorScale}
+                paletteId={style.colorPaletteId}
+                palette={style.colorPalette}
                 fields={fields}
-                onColorChange={(value) => onChange({ kind: "strokeColor", value })}
-                onFieldChange={(value) => onChange({ kind: "strokeField", value })}
-                onScaleChange={(value) => onChange({ kind: "strokeScale", value })}
-                onPaletteChange={(value) => onChange({ kind: "strokePalette", value })}
+                paletteOnly={layer.type === "heatmap"}
+                onScaleChange={(value) => onChange({ kind: "fillScale", value })}
+                onPaletteChange={(value) => onChange({ kind: "fillPalette", value })}
               />
-
-              <RangeControl
-                label="Espessura"
-                value={style.strokeWidth}
-                minimum={0}
-                maximum={100}
-                step={0.1}
-                suffix=" px"
-                onCommit={(value) => onChange({ kind: "strokeWidth", value })}
-              />
-
-              {layer.type === "geojson" ? (
-                <RangeControl
-                  label="Opacidade do contorno"
-                  value={style.strokeOpacity}
-                  minimum={0}
-                  maximum={1}
-                  step={0.05}
-                  suffix="%"
-                  onCommit={(value) => onChange({ kind: "strokeOpacity", value })}
-                />
-              ) : null}
-            </>
+            </section>
           ) : null}
-        </section>
+
+          {compatibility.stroke ? (
+            <section className="maono-style-subsection">
+              <header className="maono-style-inline-heading">
+                <div>
+                  <strong>Contorno</strong>
+                  <small>Cor e espessura das bordas</small>
+                </div>
+                <Toggle
+                  checked={style.strokeEnabled}
+                  label="Ativar contorno"
+                  onChange={(value) => onChange({ kind: "strokeEnabled", value })}
+                />
+              </header>
+
+              {style.strokeEnabled ? (
+                <>
+                  {!style.strokeColorField ? (
+                    <label className="maono-style-color-input">
+                      <span>Cor fixa do contorno</span>
+                      <input
+                        type="color"
+                        value={toHex(style.strokeColor)}
+                        onChange={(event) =>
+                          onChange({
+                            kind: "strokeColor",
+                            value: hexToRgb(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  ) : null}
+
+                  {compatibility.strokeField && fields.length ? (
+                    <FieldSelect
+                      label="Contorno por coluna"
+                      field={style.strokeColorField}
+                      fields={fields}
+                      emptyLabel="Cor fixa"
+                      onChange={(value) => onChange({ kind: "strokeField", value })}
+                    />
+                  ) : null}
+
+                  {style.strokeColorField ? (
+                    <ColorScaleControl
+                      field={style.strokeColorField}
+                      scale={style.strokeColorScale}
+                      paletteId={style.strokeColorPaletteId}
+                      palette={style.strokeColorPalette}
+                      fields={fields}
+                      onScaleChange={(value) => onChange({ kind: "strokeScale", value })}
+                      onPaletteChange={(value) => onChange({ kind: "strokePalette", value })}
+                    />
+                  ) : null}
+
+                  <RangeControl
+                    label="Espessura"
+                    value={style.strokeWidth}
+                    minimum={0}
+                    maximum={100}
+                    step={0.1}
+                    suffix=" px"
+                    onCommit={(value) => onChange({ kind: "strokeWidth", value })}
+                  />
+
+                  {layer.type === "geojson" ? (
+                    <RangeControl
+                      label="Opacidade do contorno"
+                      value={style.strokeOpacity}
+                      minimum={0}
+                      maximum={1}
+                      step={0.05}
+                      suffix="%"
+                      onCommit={(value) =>
+                        onChange({ kind: "strokeOpacity", value })
+                      }
+                    />
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+      </details>
+
+      {dimensionAvailable ? (
+        <details className="maono-detail-section">
+          <summary>
+            <span>
+              <strong>Dimensão e agrupamento</strong>
+              <small>Tamanho dos símbolos e comportamento por zoom</small>
+            </span>
+            <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div className="maono-detail-section__content">
+            {compatibility.radius ? (
+              <section className="maono-style-subsection">
+                <header><strong>Tamanho dos pontos</strong></header>
+                <label className="maono-style-field">
+                  <span>Raio orientado por campo</span>
+                  <select
+                    value={style.radiusField ?? ""}
+                    onChange={(event) =>
+                      onChange({
+                        kind: "radiusField",
+                        value: event.target.value || null,
+                      })
+                    }
+                  >
+                    <option value="">Raio fixo</option>
+                    {numericFields.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {field.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {style.radiusField && compatibility.radiusRange ? (
+                  <div className="maono-style-range-pair">
+                    <RangeControl
+                      label="Raio mínimo"
+                      value={style.radiusRange?.[0] ?? 0}
+                      minimum={0}
+                      maximum={500}
+                      step={1}
+                      suffix=" px"
+                      onCommit={(minimum) =>
+                        onChange({
+                          kind: "radiusRange",
+                          value: [
+                            minimum,
+                            Math.max(minimum, style.radiusRange?.[1] ?? 50),
+                          ],
+                        })
+                      }
+                    />
+                    <RangeControl
+                      label="Raio máximo"
+                      value={style.radiusRange?.[1] ?? 50}
+                      minimum={0}
+                      maximum={500}
+                      step={1}
+                      suffix=" px"
+                      onCommit={(maximum) =>
+                        onChange({
+                          kind: "radiusRange",
+                          value: [
+                            Math.min(maximum, style.radiusRange?.[0] ?? 0),
+                            maximum,
+                          ],
+                        })
+                      }
+                    />
+                  </div>
+                ) : (
+                  <RangeControl
+                    label={layer.type === "geojson" ? "Raio de pontos GeoJSON" : "Raio do ponto"}
+                    value={style.pointRadius ?? 10}
+                    minimum={0}
+                    maximum={100}
+                    step={0.5}
+                    suffix=" px"
+                    onCommit={(value) => onChange({ kind: "pointRadius", value })}
+                  />
+                )}
+              </section>
+            ) : null}
+
+            {compatibility.clusterRadius ? (
+              <section className="maono-style-subsection">
+                <header><strong>Dimensão do cluster nativo</strong></header>
+                <RangeControl
+                  label="Raio de agregação"
+                  value={style.clusterRadius ?? 40}
+                  minimum={1}
+                  maximum={500}
+                  step={1}
+                  suffix=" px"
+                  onCommit={(value) => onChange({ kind: "clusterRadius", value })}
+                />
+              </section>
+            ) : null}
+
+            {compatibility.heatmapRadius ? (
+              <section className="maono-style-subsection">
+                <header><strong>Dimensão do mapa de calor</strong></header>
+                <RangeControl
+                  label="Raio do mapa de calor"
+                  value={style.heatmapRadius ?? 20}
+                  minimum={0}
+                  maximum={100}
+                  step={1}
+                  suffix=" px"
+                  onCommit={(value) => onChange({ kind: "heatmapRadius", value })}
+                />
+              </section>
+            ) : null}
+
+            {dimensionAddon}
+          </div>
+        </details>
       ) : null}
 
-      <section className="maono-style-section">
-        <header>
-          <strong>Composição do mapa</strong>
-          <small>Blending global confirmado pelo Kepler 3.2.0</small>
-        </header>
-        <label className="maono-style-field">
-          <span>Camadas de dados</span>
-          <select
-            value={normalizedLayerBlending}
-            onChange={(event) => {
-              if (isLayerBlendingMode(event.target.value)) {
-                onChange({kind: "layerBlending", value: event.target.value});
-              }
-            }}
-          >
-            {LAYER_BLENDING_MODES.map((mode) => (
-              <option key={mode} value={mode}>{LAYER_BLENDING_LABELS[mode]}</option>
-            ))}
-          </select>
-        </label>
-        <label className="maono-style-field">
-          <span>Overlays sobre o basemap</span>
-          <select
-            value={normalizedOverlayBlending}
-            onChange={(event) => {
-              if (isOverlayBlendingMode(event.target.value)) {
-                onChange({kind: "overlayBlending", value: event.target.value});
-              }
-            }}
-          >
-            {OVERLAY_BLENDING_MODES.map((mode) => (
-              <option key={mode} value={mode}>{OVERLAY_BLENDING_LABELS[mode]}</option>
-            ))}
-          </select>
-        </label>
-        <p className="maono-style-help">
-          Estes modos são globais. Eles não alteram a composição interna do mapa-base.
-        </p>
-      </section>
+      <details className="maono-detail-section">
+        <summary>
+          <span>
+            <strong>Avançado</strong>
+            <small>Composição global do mapa</small>
+          </span>
+          <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div className="maono-detail-section__content">
+          <label className="maono-style-field">
+            <span>Camadas de dados</span>
+            <select
+              value={normalizedLayerBlending}
+              onChange={(event) => {
+                if (isLayerBlendingMode(event.target.value)) {
+                  onChange({ kind: "layerBlending", value: event.target.value });
+                }
+              }}
+            >
+              {LAYER_BLENDING_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {LAYER_BLENDING_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="maono-style-field">
+            <span>Overlays sobre o mapa-base</span>
+            <select
+              value={normalizedOverlayBlending}
+              onChange={(event) => {
+                if (isOverlayBlendingMode(event.target.value)) {
+                  onChange({ kind: "overlayBlending", value: event.target.value });
+                }
+              }}
+            >
+              {OVERLAY_BLENDING_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {OVERLAY_BLENDING_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <p className="maono-style-help">
+            Estes modos são globais e afetam a composição de todas as camadas.
+          </p>
+        </div>
+      </details>
+
+      <span className="maono-style-palette-catalog" hidden>
+        {MAONO_LAYER_PALETTES.length} paletas Maõno disponíveis
+      </span>
     </div>
   );
 }
