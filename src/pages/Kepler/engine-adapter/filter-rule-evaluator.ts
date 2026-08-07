@@ -105,6 +105,23 @@ function finiteNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function finiteTemporalValue(value: unknown): number | null {
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+
+  const numeric = finiteNumber(value);
+  if (numeric !== null) return numeric;
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Date.parse(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
 function categoricalValues(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   const array = collectionToArray<unknown>(value);
@@ -125,9 +142,10 @@ export function rowPassesHistogramRules(
     const cell = reader.valueAt(rowIndex, rule.columnIndex);
 
     if (rule.type === "range" || rule.type === "timeRange") {
-      const pair = categoricalValues(rule.value).slice(0, 2).map(finiteNumber);
+      const converter = rule.type === "timeRange" ? finiteTemporalValue : finiteNumber;
+      const pair = categoricalValues(rule.value).slice(0, 2).map(converter);
       if (pair.length !== 2 || pair[0] === null || pair[1] === null) continue;
-      const numeric = finiteNumber(cell);
+      const numeric = converter(cell);
       if (numeric === null || numeric < pair[0] || numeric > pair[1]) return false;
       continue;
     }
@@ -142,4 +160,8 @@ export function rowPassesHistogramRules(
 
 export function toFiniteNumericValue(value: unknown): number | null {
   return finiteNumber(value);
+}
+
+export function toFiniteHistogramValue(value: unknown, temporal: boolean) {
+  return temporal ? finiteTemporalValue(value) : finiteNumber(value);
 }
