@@ -17,6 +17,7 @@ const files = {
   css: "../src/pages/Kepler/components/maono-layer-panel/maono-layer-panel.css",
   csvHook: "../src/pages/Kepler/engine-adapter/dataset-csv-export.ts",
   csvSerializer: "../src/pages/Kepler/engine-adapter/dataset-csv-serializer.ts",
+  datasetReader: "../src/pages/Kepler/engine-adapter/dataset-table-reader.ts",
 };
 
 const source = Object.fromEntries(
@@ -81,13 +82,16 @@ test("filtros usam lista resumida e um editor focado por vez", () => {
   assert.match(source.filters, /2\. Propriedade/);
 });
 
-test("exportação permanece no adapter e respeita filteredIndex", () => {
+test("exportação permanece no adapter e reutiliza o filteredIndex centralizado", () => {
   assert.match(source.csvSerializer, /findRawDataset/);
-  assert.match(source.csvSerializer, /filteredIndex/);
+  assert.match(source.csvSerializer, /createDatasetTableReader/);
+  assert.match(source.datasetReader, /filteredIndex/);
+  assert.match(source.datasetReader, /filteredIndexes/);
   assert.match(source.csvSerializer, /MAX_DATASET_CSV_ROWS/);
   assert.match(source.csvSerializer, /FORMULA_PREFIX/);
   assert.match(source.csvHook, /viewLayers/);
   assert.match(source.csvHook, /viewFilters/);
+  assert.doesNotMatch(source.csvSerializer, /dataContainer\.valueAt/);
   assert.doesNotMatch(source.layerDetail, /useSelector|useStore|@kepler\.gl\/actions/);
   assert.doesNotMatch(source.filterDetail, /useSelector|useStore|@kepler\.gl\/actions/);
 });
