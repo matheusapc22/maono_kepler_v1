@@ -22,22 +22,9 @@ const POPUP_SELECTORS = [
 ];
 
 const ORIGINAL_STYLE_DATASET_KEY = "maonoNativeLegendOriginalStyle";
+const LEGEND_TITLE_TEXT = /^(?:legenda(?:\s+da\s+camada)?|layer\s+legend|legend)$/i;
 const LEGEND_TEXT = /legenda(?:\s+da\s+camada)?|layer\s+legend|\blegend\b/i;
 const POPUP_ACTION_TEXT = /select\s+geometry|selecionar\s+geometria/i;
-
-function isVisiblePanel(element: HTMLElement, minimumWidth = 120) {
-  const rect = element.getBoundingClientRect();
-  const style = window.getComputedStyle(element);
-
-  return (
-    rect.width >= minimumWidth &&
-    rect.height >= 40 &&
-    rect.width <= 640 &&
-    rect.height <= 820 &&
-    style.display !== "none" &&
-    style.visibility !== "hidden"
-  );
-}
 
 function normalizedText(element: HTMLElement) {
   return String(element.textContent || "")
@@ -45,19 +32,89 @@ function normalizedText(element: HTMLElement) {
     .trim();
 }
 
+function isVisibleElement(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    style.display !== "none" &&
+    style.visibility !== "hidden"
+  );
+}
+
+function isLegendPanelGeometry(element: HTMLElement, minimumHeight = 96) {
+  if (!isVisibleElement(element)) return false;
+  const rect = element.getBoundingClientRect();
+  return (
+    rect.width >= 140 &&
+    rect.width <= 640 &&
+    rect.height >= minimumHeight &&
+    rect.height <= 820
+  );
+}
+
+function findLegendTitle() {
+  const candidates = document.querySelectorAll<HTMLElement>(
+    "div, span, strong, h1, h2, h3, header",
+  );
+
+  for (const element of candidates) {
+    if (!isVisibleElement(element)) continue;
+    const rect = element.getBoundingClientRect();
+    if (rect.height > 96 || rect.width > 520) continue;
+    if (LEGEND_TITLE_TEXT.test(normalizedText(element))) {
+      return element;
+    }
+  }
+
+  return null;
+}
+
+function panelFromLegendTitle(title: HTMLElement) {
+  const titleRect = title.getBoundingClientRect();
+  const candidates: HTMLElement[] = [];
+  let current = title.parentElement;
+
+  for (let depth = 0; current && depth < 9; depth += 1) {
+    const rect = current.getBoundingClientRect();
+    if (
+      isLegendPanelGeometry(current, Math.max(110, titleRect.height * 2)) &&
+      rect.width >= titleRect.width &&
+      LEGEND_TEXT.test(normalizedText(current))
+    ) {
+      candidates.push(current);
+    }
+    current = current.parentElement;
+  }
+
+  if (!candidates.length) return null;
+
+  return candidates.sort((left, right) => {
+    const a = left.getBoundingClientRect();
+    const b = right.getBoundingClientRect();
+    return a.width * a.height - b.width * b.height;
+  })[0];
+}
+
 function visibleLegendCandidates() {
   const unique = new Set<HTMLElement>();
 
   for (const selector of LEGEND_SELECTORS) {
     document.querySelectorAll<HTMLElement>(selector).forEach((element) => {
-      if (isVisiblePanel(element)) unique.add(element);
+      if (
+        isLegendPanelGeometry(element) &&
+        LEGEND_TEXT.test(normalizedText(element))
+      ) {
+        unique.add(element);
+      }
     });
   }
 
   document
     .querySelectorAll<HTMLElement>("aside, section, div")
     .forEach((element) => {
-      if (!isVisiblePanel(element, 140)) return;
+      if (!isLegendPanelGeometry(element, 110)) return;
       if (!LEGEND_TEXT.test(normalizedText(element))) return;
       unique.add(element);
     });
@@ -66,13 +123,12 @@ function visibleLegendCandidates() {
 }
 
 function findNativeLegend() {
-  const candidates = visibleLegendCandidates().filter((element) =>
-    LEGEND_TEXT.test(normalizedText(element)),
-  );
+  const title = findLegendTitle();
+  const titledPanel = title ? panelFromLegendTitle(title) : null;
+  if (titledPanel) return titledPanel;
 
-  if (!candidates.length) {
-    return visibleLegendCandidates()[0] || null;
-  }
+  const candidates = visibleLegendCandidates();
+  if (!candidates.length) return null;
 
   return candidates.sort((left, right) => {
     const leftRect = left.getBoundingClientRect();
@@ -98,7 +154,8 @@ function findLegendHost(legend: HTMLElement) {
         style.position === "absolute" ||
         style.position === "fixed")
     ) {
-      return current;
+      const rect = current.getBoundingClientRect();
+      if (rect.width <= 700 && rect.height <= 860) return current;
     }
     current = current.parentElement;
   }
@@ -215,7 +272,11 @@ function restoreLegendRuntime() {
 }
 
 function popupLooksNative(element: HTMLElement) {
-  if (!isVisiblePanel(element, 100)) return false;
+  if (!isVisibleElement(element)) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width < 100 || rect.height < 40 || rect.width > 720 || rect.height > 860) {
+    return false;
+  }
   if (element.closest(".maono-map-overlay, .maono-tooltip-editor")) return false;
 
   const text = normalizedText(element);
@@ -233,7 +294,6 @@ function popupLooksNative(element: HTMLElement) {
 
 function markPopupElement(element: HTMLElement) {
   if (!popupLooksNative(element)) return false;
-
   element.dataset.maonoNativePopup = "true";
   return true;
 }
@@ -248,8 +308,9 @@ function markPopupsWithin(root: ParentNode | HTMLElement) {
   }
 
   root.querySelectorAll?.<HTMLElement>("div, section, aside").forEach((element) => {
-    const text = normalizedText(element);
-    if (POPUP_ACTION_TEXT.test(text)) markPopupElement(element);
+    if (POPUP_ACTION_TEXT.test(normalizedText(element))) {
+      markPopupElement(element);
+    }
   });
 }
 
@@ -325,7 +386,7 @@ export default function NativeMapOverlaysRuntime({
         childList: true,
         subtree: true,
       });
-      timeoutId = window.setTimeout(() => observer?.disconnect(), 3_500);
+      timeoutId = window.setTimeout(() => observer?.disconnect(), 5_000);
     });
 
     return () => {
