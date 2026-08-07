@@ -39,16 +39,20 @@ const [
   ),
 ]);
 
-test("flag de isócrona assume true somente quando não foi definida", () => {
-  const original = { GEOAPIFY_API_KEY: "secret" };
+test("runtime de isócrona ignora flag antiga e usa kill switch explícito", () => {
+  const original = {
+    GEOAPIFY_API_KEY: "secret",
+    MAONO_ISOCHRONE_V1: "false",
+  };
   const runtime = withMapAnalysisRuntimeDefaults(original);
 
   assert.equal(runtime.MAONO_ISOCHRONE_V1, "true");
-  assert.equal(original.MAONO_ISOCHRONE_V1, undefined);
+  assert.equal(original.MAONO_ISOCHRONE_V1, "false");
 
   const explicitlyDisabled = withMapAnalysisRuntimeDefaults({
     GEOAPIFY_API_KEY: "secret",
-    MAONO_ISOCHRONE_V1: "false",
+    MAONO_ISOCHRONE_V1: "true",
+    MAONO_ISOCHRONE_KILL_SWITCH: "true",
   });
   assert.equal(explicitlyDisabled.MAONO_ISOCHRONE_V1, "false");
 });

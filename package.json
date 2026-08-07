@@ -12,7 +12,7 @@
     "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs",
     "test:project-metadata": "node --test tests/project-metadata-migration.test.mjs tests/project-metadata-api.test.mjs tests/project-card-actions.test.mjs tests/project-creation-metadata.test.mjs",
     "test:engine-adapter": "node --test tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
-    "test:point-clustering": "node --experimental-strip-types --test tests/point-cluster-single-layer.test.mjs",
+    "test:point-clustering": "node --experimental-strip-types --test tests/point-cluster-single-layer.test.mjs tests/point-cluster-fidelity.test.mjs",
     "test:map-flight": "node --experimental-strip-types --test tests/kepler-map-flight.test.mjs",
     "test:smart-histogram": "node --experimental-strip-types --test tests/smart-filter-histogram.test.mjs",
     "test:filter-accordion": "node --test tests/maono-filter-accordion-branding.test.mjs",
