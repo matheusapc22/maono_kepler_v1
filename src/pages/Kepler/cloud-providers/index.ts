@@ -16,7 +16,7 @@ const {
   FOURSQUARE_USER_MAPS_URL,
 } = CLOUD_PROVIDERS_CONFIGURATION;
 
-const DROPBOX_CLIENT_NAME = "Kepler.gl Demo App";
+const DROPBOX_CLIENT_NAME = "Maõno Demo App";
 
 export const DEFAULT_CLOUD_PROVIDER = "dropbox";
 

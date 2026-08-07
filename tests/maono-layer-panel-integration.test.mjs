@@ -234,7 +234,9 @@ test("filtros avançados cobrem tipos, domínio, histograma e troca de proprieda
     source.engineCommands,
     /setFilter\(index,\s*"dataId",\s*selected\.id,\s*0\)/,
   );
-  assert.match(source.filters, /filteredRowCount/);
+  assert.match(source.filters, /expandedGroupKey/);
+  assert.match(source.filters, /aria-expanded=\{expanded\}/);
+  assert.doesNotMatch(source.filters, /filteredRowCount/);
   assert.match(source.filterStyles, /\.maono-filter-histogram/);
 
   for (const key of [

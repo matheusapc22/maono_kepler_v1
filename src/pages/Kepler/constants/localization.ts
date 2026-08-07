@@ -10,7 +10,7 @@ const en = {
   "sampleDataViewer.rowCount": " {rowCount} rows",
   "loadRemoteMap.description": "Load your map using your custom URL",
   "loadRemoteMap.message":
-    "You can use the following formats: CSV | JSON | Kepler.gl config json. Make sure the url contains the file extension.",
+    "You can use the following formats: CSV | JSON | Maõno config json. Make sure the url contains the file extension.",
   "loadRemoteMap.examples": "Examples:",
   "loadRemoteMap.cors":
     "* CORS policy must be defined on your custom url domain in order to be accessible. For more info ",
@@ -29,7 +29,7 @@ export const messages = {
     "sampleDataViewer.rowCount": " {rowCount} riviä",
     "loadRemoteMap.description": "Lataa karttasi käyttämällä omaa urlia",
     "loadRemoteMap.message":
-      "Voit käyttää formaatteja: CSV | JSON | Kepler.gl asetus-json. Varmista, että url sisältää tiedostopäätteen nimen.",
+      "Voit käyttää formaatteja: CSV | JSON | Maõno asetus-json. Varmista, että url sisältää tiedostopäätteen nimen.",
     "loadRemoteMap.examples": "Esimerkkejä:",
     "loadRemoteMap.cors":
       "* CORS-käytäntö pitää olla määriteltynä urlin domainissa, jotta aineiston voi ladata.",
@@ -44,7 +44,7 @@ export const messages = {
     "loadRemoteMap.description":
       "Carrega el teu mapa amb la teva URL personalitzada",
     "loadRemoteMap.message":
-      "Pots emprar els següents formats: CSV | JSON | Kepler.gl config json. Assegura't que la URL contingui l'extensió de l'arxiu.",
+      "Pots emprar els següents formats: CSV | JSON | Maõno config json. Assegura't que la URL contingui l'extensió de l'arxiu.",
     "loadRemoteMap.examples": "Exemples:",
     "loadRemoteMap.cors":
       "* La política CORS s’ha de definir al teu domini per tal que sigui accessible. Per a més informació ",
@@ -58,7 +58,7 @@ export const messages = {
     "sampleDataViewer.rowCount": " {rowCount} files",
     "loadRemoteMap.description": "Carga tu mapa con tu enlace personalizado",
     "loadRemoteMap.message":
-      "Puedes usar los siguientes formatos: CSV | JSON | Kepler.gl config json. Asegurate que el enlace contenga la extensión del archivo.",
+      "Puedes usar los siguientes formatos: CSV | JSON | Maõno config json. Asegurate que el enlace contenga la extensión del archivo.",
     "loadRemoteMap.examples": "Ejemplos:",
     "loadRemoteMap.cors":
       "* La política CORS debe ser definida en tu dominio para que sea accessible. Para más información ",
@@ -72,7 +72,7 @@ export const messages = {
     "sampleDataViewer.rowCount": " {rowCount} 行",
     "loadRemoteMap.description": "使用自定义 URL 加载地图",
     "loadRemoteMap.message":
-      "您可以使用以下格式：CSV | JSON | Kepler.gl 配置 json。 确保 url 包含文件扩展名。",
+      "您可以使用以下格式：CSV | JSON | Maõno 配置 json。 确保 url 包含文件扩展名。",
     "loadRemoteMap.examples": "示例：",
     "loadRemoteMap.cors":
       "* 必须在您的自定义 url 域上定义 CORS 策略才能访问。欲了解更多信息",
