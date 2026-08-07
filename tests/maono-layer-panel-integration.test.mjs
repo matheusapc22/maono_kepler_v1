@@ -219,7 +219,10 @@ test("filtros avançados cobrem tipos, domínio, histograma e troca de proprieda
   assert.match(source.panel, /controller\.setFilterValue/);
   assert.match(source.filterValue, /useDeferredValue/);
   assert.match(source.filterValue, /type="datetime-local"/);
-  assert.match(source.filterValue, /type="range"/);
+  assert.match(source.filterValue, /useSmartFilterHistogram/);
+  assert.doesNotMatch(source.filterValue, /<input[^>]+type="range"/);
+  assert.match(source.filterHistogram, /role="slider"/);
+  assert.match(source.filterHistogram, /beginDrag\("window"/);
   assert.match(source.filterValue, /domainTruncated/);
   assert.match(source.filterValue, /FilterHistogram/);
   assert.match(source.filterUtils, /case "range"/);
