@@ -3,6 +3,13 @@ import { generateIsochrone } from "../../_lib/isochrone-service.js";
 
 const MAX_REQUEST_BYTES = 16 * 1024;
 
+const MODE_LABELS = {
+  drive_traffic: "Carro com trânsito",
+  drive: "Carro",
+  bicycle: "Bicicleta",
+  walk: "Caminhada",
+};
+
 function endpointError(message, status, code, details = null) {
   const error = new Error(message);
   error.status = status;
@@ -170,6 +177,66 @@ async function readBoundedJsonBody(request) {
   }
 }
 
+function formatRangeLabel(range, type) {
+  const numeric = Number(range);
+  if (!Number.isFinite(numeric)) return null;
+
+  const formatted = Number.isInteger(numeric)
+    ? String(numeric)
+    : String(Number(numeric.toFixed(2)));
+  return type === "distance"
+    ? `${formatted} km`
+    : `${formatted} min`;
+}
+
+export function enrichIsochroneResult(result) {
+  const features = result?.geojson?.features;
+  if (!Array.isArray(features)) return result;
+
+  const mode = result?.metadata?.mode;
+  const type = result?.metadata?.type;
+  const modeLabel = MODE_LABELS[mode] || String(mode || "");
+
+  return {
+    ...result,
+    geojson: {
+      ...result.geojson,
+      features: features.map((feature) => {
+        const properties =
+          feature?.properties && typeof feature.properties === "object"
+            ? feature.properties
+            : {};
+
+        if (properties.maono_analysis === "isochrone_origin") {
+          return {
+            ...feature,
+            properties: {
+              ...properties,
+              analysis_label: "Origem da análise",
+              mode_label: modeLabel,
+              range_label: "Origem",
+            },
+          };
+        }
+
+        if (properties.maono_analysis === "isochrone") {
+          return {
+            ...feature,
+            properties: {
+              ...properties,
+              analysis_label: "Área alcançável",
+              mode_label: modeLabel,
+              range_label: formatRangeLabel(properties.range, type),
+            },
+          };
+        }
+
+        return feature;
+      }),
+    },
+  };
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -180,10 +247,8 @@ export async function onRequest(context) {
   try {
     validateRequestOrigin(request);
     const body = await readBoundedJsonBody(request);
-    const result = await generateIsochrone(
-      env,
-      request,
-      body,
+    const result = enrichIsochroneResult(
+      await generateIsochrone(env, request, body),
     );
 
     return jsonResponse({
