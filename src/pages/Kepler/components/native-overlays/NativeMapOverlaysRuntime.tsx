@@ -10,6 +10,8 @@ const LEGEND_SELECTORS = [
   "[class*='MapLegend']",
 ];
 
+const ORIGINAL_STYLE_DATASET_KEY = "maonoNativeLegendOriginalStyle";
+
 function visibleLegendCandidates() {
   const unique = new Set<HTMLElement>();
 
@@ -66,6 +68,43 @@ function mapCanvasRect() {
     ?.getBoundingClientRect() ?? null;
 }
 
+function rememberOriginalHostStyle(host: HTMLElement) {
+  if (host.dataset[ORIGINAL_STYLE_DATASET_KEY]) return;
+
+  host.dataset[ORIGINAL_STYLE_DATASET_KEY] = JSON.stringify({
+    position: host.style.position,
+    left: host.style.left,
+    top: host.style.top,
+    right: host.style.right,
+    bottom: host.style.bottom,
+    transform: host.style.transform,
+  });
+}
+
+function restoreHostStyle(host: HTMLElement) {
+  const serialized = host.dataset[ORIGINAL_STYLE_DATASET_KEY];
+  if (!serialized) return;
+
+  try {
+    const original = JSON.parse(serialized) as Record<string, string>;
+    host.style.position = original.position || "";
+    host.style.left = original.left || "";
+    host.style.top = original.top || "";
+    host.style.right = original.right || "";
+    host.style.bottom = original.bottom || "";
+    host.style.transform = original.transform || "";
+  } catch {
+    host.style.removeProperty("position");
+    host.style.removeProperty("left");
+    host.style.removeProperty("top");
+    host.style.removeProperty("right");
+    host.style.removeProperty("bottom");
+    host.style.removeProperty("transform");
+  }
+
+  delete host.dataset[ORIGINAL_STYLE_DATASET_KEY];
+}
+
 function positionLegend() {
   const legend = findNativeLegend();
   const mapRect = mapCanvasRect();
@@ -98,6 +137,8 @@ function positionLegend() {
   );
   const computed = window.getComputedStyle(host);
 
+  rememberOriginalHostStyle(host);
+
   if (computed.position === "static") {
     host.style.position = "absolute";
   }
@@ -113,15 +154,19 @@ function positionLegend() {
   return true;
 }
 
-function clearLegendMarkers() {
+function restoreLegendRuntime() {
   document
-    .querySelectorAll<HTMLElement>(
-      "[data-maono-native-legend], [data-maono-native-legend-host]",
-    )
-    .forEach((element) => {
-      delete element.dataset.maonoNativeLegend;
-      delete element.dataset.maonoNativeLegendHost;
-      delete element.dataset.maonoNativeLegendPositioned;
+    .querySelectorAll<HTMLElement>("[data-maono-native-legend-host]")
+    .forEach((host) => {
+      restoreHostStyle(host);
+      delete host.dataset.maonoNativeLegendHost;
+      delete host.dataset.maonoNativeLegendPositioned;
+    });
+
+  document
+    .querySelectorAll<HTMLElement>("[data-maono-native-legend]")
+    .forEach((legend) => {
+      delete legend.dataset.maonoNativeLegend;
     });
 }
 
@@ -139,14 +184,14 @@ export default function NativeMapOverlaysRuntime({
       if (document.body.dataset.maonoNativeOverlays === "active") {
         delete document.body.dataset.maonoNativeOverlays;
       }
-      clearLegendMarkers();
+      restoreLegendRuntime();
     };
   }, []);
 
   useEffect(() => {
     if (!legendVisible) {
       positionedForCurrentOpenRef.current = false;
-      clearLegendMarkers();
+      restoreLegendRuntime();
       return undefined;
     }
 
