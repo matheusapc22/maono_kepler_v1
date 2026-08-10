@@ -32,9 +32,7 @@ function serviceError(message, status, code, details = null) {
 }
 
 function transitionId() {
-  if (typeof crypto?.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
+  if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
   return `transition-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
@@ -46,16 +44,8 @@ function decodeJsonBytes(bytes) {
 export async function readPublishedProjectConfig(env, project) {
   if (!isProjectLifecycleEnabled(env) || !isLifecycleManagedProject(project, env)) {
     const fileName = project.default_config_file || "config.kepler.json";
-    const text = await downloadDropboxTextFile(
-      env,
-      project.dropbox_root_path,
-      fileName,
-    );
-    return {
-      config: JSON.parse(text),
-      lifecycle: null,
-      legacy: true,
-    };
+    const text = await downloadDropboxTextFile(env, project.dropbox_root_path, fileName);
+    return { config: JSON.parse(text), lifecycle: null, legacy: true };
   }
 
   if (project.lifecycle_state !== PROJECT_LIFECYCLE_STATES.ACTIVE) {
@@ -146,6 +136,7 @@ export async function saveVersionedProjectConfig(
     actor,
     allowedLifecycleStates = [PROJECT_LIFECYCLE_STATES.ACTIVE],
     markPreviewPending = true,
+    updateOrganizationFile = true,
   },
 ) {
   const expected = Number(expectedConfigRevision);
@@ -217,7 +208,9 @@ export async function saveVersionedProjectConfig(
       actor,
       markPreviewPending,
     });
-    await updateLinkedOrganizationFile(env, updatedProject, artifact);
+    if (updateOrganizationFile) {
+      await updateLinkedOrganizationFile(env, updatedProject, artifact);
+    }
 
     return {
       project: updatedProject,
@@ -245,13 +238,7 @@ export async function saveVersionedProjectConfig(
 
 export async function saveProjectConfig(
   env,
-  {
-    project,
-    config,
-    expectedConfigRevision,
-    actor,
-    touchProjectAfterConfigSave,
-  },
+  { project, config, expectedConfigRevision, actor, touchProjectAfterConfigSave },
 ) {
   if (!isProjectLifecycleEnabled(env) || !isLifecycleManagedProject(project, env)) {
     return saveLegacyProjectConfig(env, {
@@ -278,5 +265,6 @@ export async function saveProjectConfig(
     actor,
     allowedLifecycleStates: [PROJECT_LIFECYCLE_STATES.ACTIVE],
     markPreviewPending: true,
+    updateOrganizationFile: true,
   });
 }
