@@ -1,6 +1,13 @@
+import { requireSession } from "./auth.js";
+import { can, recordAuditLog } from "./permissions.js";
 import {
+  getAuthorizedProject,
+  publicProject,
+} from "./projects.js";
+import {
+  buildMapCapabilities,
+  getMapPanelFeatures,
   MAP_PANEL_MODES,
-  resolveExistingProjectMapNavigation,
 } from "./map-panel-service.js";
 
 export const EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 3;
@@ -48,127 +55,127 @@ function normalizeRequestedMode(value) {
   );
 }
 
-function deprecatedCreateAvailability() {
+function createAvailability({ viewerAllowed, editorAllowed, projectSlug }) {
+  const encodedSlug = encodeURIComponent(projectSlug);
+
   return {
-    allowed: false,
-    route: null,
-    reason: PROJECT_CREATE_ROUTE_DEPRECATED,
+    viewer: {
+      allowed: Boolean(viewerAllowed),
+      route: viewerAllowed ? `/projects/${encodedSlug}/view` : null,
+      reason: viewerAllowed ? null : "MAP_VIEW_FORBIDDEN",
+    },
+    editor: {
+      allowed: Boolean(editorAllowed),
+      route: editorAllowed ? `/projects/${encodedSlug}/edit` : null,
+      reason: editorAllowed ? null : "MAP_EDITOR_FORBIDDEN",
+    },
+    create: {
+      allowed: false,
+      route: null,
+      reason: PROJECT_CREATE_ROUTE_DEPRECATED,
+    },
   };
 }
 
-function defaultExistingProjectPanel(availablePanels = {}) {
-  if (availablePanels?.editor?.allowed) {
+function defaultExistingProjectPanel({ viewerAllowed, editorAllowed }) {
+  if (editorAllowed) {
     return MAP_PANEL_MODES.EDITOR;
   }
 
-  if (availablePanels?.viewer?.allowed) {
+  if (viewerAllowed) {
     return MAP_PANEL_MODES.VIEWER;
   }
 
   return null;
 }
 
-export function sanitizeExistingProjectNavigation(
-  navigation,
-  requestedMode = MAP_PANEL_MODES.MANAGE,
-) {
-  const availablePanels = {
-    ...navigation.availablePanels,
-    create: deprecatedCreateAvailability(),
-  };
-  const defaultPanel = defaultExistingProjectPanel(availablePanels);
+function resolveExistingMode({
+  requestedMode,
+  viewerAllowed,
+  editorAllowed,
+}) {
+  const defaultPanel = defaultExistingProjectPanel({
+    viewerAllowed,
+    editorAllowed,
+  });
 
-  if (
-    navigation.mode !== MAP_PANEL_MODES.EDITOR &&
-    navigation.mode !== MAP_PANEL_MODES.VIEWER
-  ) {
-    throw createNavigationError(
-      "Projeto existente não pode ser aberto em modo de criação.",
-      502,
-      "EXISTING_PROJECT_CREATE_MODE_INVALID",
-      {
-        requestedMode,
-        fallbackPanel: defaultPanel,
-        availablePanels,
-      },
-    );
+  if (requestedMode === MAP_PANEL_MODES.CREATE) {
+    return {
+      allowed: false,
+      resolvedMode: defaultPanel,
+      defaultPanel,
+      reason: PROJECT_CREATE_ROUTE_DEPRECATED,
+      status: 410,
+    };
+  }
+
+  if (requestedMode === MAP_PANEL_MODES.EDITOR) {
+    return {
+      allowed: Boolean(editorAllowed),
+      resolvedMode: editorAllowed ? MAP_PANEL_MODES.EDITOR : defaultPanel,
+      defaultPanel,
+      reason: editorAllowed ? null : "MAP_EDITOR_FORBIDDEN",
+      status: editorAllowed ? 200 : 403,
+    };
+  }
+
+  if (requestedMode === MAP_PANEL_MODES.VIEWER) {
+    return {
+      allowed: Boolean(viewerAllowed),
+      resolvedMode: viewerAllowed ? MAP_PANEL_MODES.VIEWER : defaultPanel,
+      defaultPanel,
+      reason: viewerAllowed ? null : "MAP_VIEW_FORBIDDEN",
+      status: viewerAllowed ? 200 : 403,
+    };
   }
 
   return {
-    ...navigation,
-    policyVersion: Math.max(
-      EXISTING_PROJECT_NAVIGATION_POLICY_VERSION,
-      Number(navigation.policyVersion || 0),
-    ),
-    requestedMode,
+    allowed: Boolean(defaultPanel),
+    resolvedMode: defaultPanel,
     defaultPanel,
-    availablePanels,
-    capabilities: {
-      ...navigation.capabilities,
-      openCreateWorkspace: false,
-      createProject: false,
-      initializeMap: false,
-    },
+    reason: defaultPanel ? null : "MAP_VIEW_FORBIDDEN",
+    status: defaultPanel ? 200 : 403,
   };
 }
 
-function sanitizeNavigationError(error) {
-  if (!error || typeof error !== "object") {
-    return error;
-  }
-
-  const details = error.details;
-  if (!details || typeof details !== "object") {
-    return error;
-  }
-
-  const availablePanels = details.availablePanels
-    ? {
-        ...details.availablePanels,
-        create: deprecatedCreateAvailability(),
-      }
-    : undefined;
-  const fallbackPanel = defaultExistingProjectPanel(availablePanels);
-
-  error.details = {
-    ...details,
-    ...(availablePanels ? { availablePanels } : {}),
-    fallbackPanel,
-  };
-
-  return error;
-}
-
-async function openExplicitProjectMode(
-  env,
-  request,
-  slug,
-  mode,
-  requestedMode,
-  options,
-) {
+async function safeAudit(env, event) {
   try {
-    const navigation = await resolveExistingProjectMapNavigation(
-      env,
-      request,
-      slug,
-      {
-        ...options,
-        requestedMode: mode,
-      },
-    );
-
-    return sanitizeExistingProjectNavigation(navigation, requestedMode);
+    await recordAuditLog(env, event);
   } catch (error) {
-    throw sanitizeNavigationError(error);
+    console.error("[Maono project navigation] Falha de auditoria:", error);
   }
 }
 
-function isEditorDenied(error) {
-  return (
-    Number(error?.status || 0) === 403 &&
-    String(error?.code || "") === "MAP_EDITOR_FORBIDDEN"
-  );
+async function getSafeOrganization(env, organizationId) {
+  if (!organizationId) return null;
+
+  const organization = await env.DB.prepare(
+    `SELECT id, name, slug
+     FROM organizations
+     WHERE id = ?
+       AND active = 1
+     LIMIT 1`,
+  )
+    .bind(organizationId)
+    .first();
+
+  return organization
+    ? {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+      }
+    : null;
+}
+
+function decisionContext(project) {
+  return {
+    project,
+    projectId: project.id,
+    projectSlug: project.slug,
+    organizationId: project.organization_id,
+    scopeType: "project",
+  };
 }
 
 export async function resolveCanonicalExistingProjectMapNavigation(
@@ -178,65 +185,145 @@ export async function resolveCanonicalExistingProjectMapNavigation(
   options = {},
 ) {
   const requestedMode = normalizeRequestedMode(options.requestedMode);
+  const user = options.user || (await requireSession(env, request));
+  const project = await getAuthorizedProject(env, user, slug);
 
-  if (requestedMode === MAP_PANEL_MODES.CREATE) {
-    // Preserva autenticação/visibilidade antes de expor o redirect de legado.
-    await openExplicitProjectMode(
-      env,
-      request,
-      slug,
-      MAP_PANEL_MODES.VIEWER,
-      MAP_PANEL_MODES.VIEWER,
-      options,
+  if (!project) {
+    throw createNavigationError(
+      "Projeto não encontrado.",
+      404,
+      "PROJECT_NOT_FOUND",
     );
+  }
+
+  const context = decisionContext(project);
+  const [
+    viewDecision,
+    saveDecision,
+    mapEditDecision,
+    metadataDecision,
+    thumbnailDecision,
+  ] = await Promise.all([
+    can(env, user, "project.view", context),
+    can(env, user, "project.save", context),
+    can(env, user, "project.map.edit", context),
+    can(env, user, "project.edit", context),
+    can(env, user, "project.thumbnail.update", context),
+  ]);
+  const features = getMapPanelFeatures(env);
+  const viewerAllowed = viewDecision.allowed;
+  const mapEditAllowed = features.projectMapEditPermission
+    ? mapEditDecision.allowed
+    : saveDecision.allowed;
+  const editorAllowed = viewerAllowed && mapEditAllowed && saveDecision.allowed;
+  const modeDecision = resolveExistingMode({
+    requestedMode,
+    viewerAllowed,
+    editorAllowed,
+  });
+  const availablePanels = createAvailability({
+    viewerAllowed,
+    editorAllowed,
+    projectSlug: project.slug,
+  });
+  const auditBase = {
+    actorUserId: user.id,
+    organizationId: project.organization_id,
+    projectId: project.id,
+    resourceType: "project",
+    resourceId: project.id,
+    request,
+  };
+
+  if (!modeDecision.allowed) {
+    await safeAudit(env, {
+      ...auditBase,
+      action:
+        requestedMode === MAP_PANEL_MODES.CREATE
+          ? "projects.map.legacy_create_route.denied"
+          : requestedMode === MAP_PANEL_MODES.EDITOR
+            ? "projects.map.editor.denied"
+            : "projects.map.viewer.denied",
+      result: "denied",
+      metadata: {
+        requestedMode,
+        fallbackPanel: modeDecision.defaultPanel,
+        reason: modeDecision.reason,
+        policyVersion: EXISTING_PROJECT_NAVIGATION_POLICY_VERSION,
+      },
+    });
+
+    const message =
+      requestedMode === MAP_PANEL_MODES.CREATE
+        ? "A rota de criação para projeto existente foi descontinuada. Use gerenciamento, edição ou visualização."
+        : requestedMode === MAP_PANEL_MODES.EDITOR
+          ? "Você não possui permissão para editar este mapa."
+          : "Você não possui permissão para visualizar este mapa.";
 
     throw createNavigationError(
-      "A rota de criação para projeto existente foi descontinuada. Use a rota de gerenciamento, edição ou visualização.",
-      410,
-      PROJECT_CREATE_ROUTE_DEPRECATED,
+      message,
+      modeDecision.status,
+      modeDecision.reason,
       {
-        requestedMode: MAP_PANEL_MODES.CREATE,
-        fallbackPanel: null,
-        replacementRoute: `/projects/${encodeURIComponent(slug)}/manage`,
-        availablePanels: {
-          create: deprecatedCreateAvailability(),
-        },
+        requestedMode,
+        fallbackPanel: modeDecision.defaultPanel,
+        replacementRoute:
+          requestedMode === MAP_PANEL_MODES.CREATE
+            ? `/projects/${encodeURIComponent(project.slug)}/manage`
+            : null,
+        availablePanels,
       },
     );
   }
 
-  if (requestedMode === MAP_PANEL_MODES.MANAGE) {
-    try {
-      return await openExplicitProjectMode(
-        env,
-        request,
-        slug,
-        MAP_PANEL_MODES.EDITOR,
-        MAP_PANEL_MODES.MANAGE,
-        options,
-      );
-    } catch (error) {
-      if (!isEditorDenied(error)) {
-        throw error;
-      }
+  const editableWorkspace =
+    modeDecision.resolvedMode === MAP_PANEL_MODES.EDITOR;
 
-      return openExplicitProjectMode(
-        env,
-        request,
-        slug,
-        MAP_PANEL_MODES.VIEWER,
-        MAP_PANEL_MODES.MANAGE,
-        options,
-      );
-    }
-  }
+  await safeAudit(env, {
+    ...auditBase,
+    action:
+      requestedMode === MAP_PANEL_MODES.MANAGE
+        ? "projects.map.navigation.read"
+        : editableWorkspace
+          ? "projects.map.editor.open"
+          : "projects.map.viewer.open",
+    result: "success",
+    metadata: {
+      requestedMode,
+      resolvedMode: modeDecision.resolvedMode,
+      policyVersion: EXISTING_PROJECT_NAVIGATION_POLICY_VERSION,
+    },
+  });
 
-  return openExplicitProjectMode(
-    env,
-    request,
-    slug,
+  return {
+    policyVersion: EXISTING_PROJECT_NAVIGATION_POLICY_VERSION,
+    mode: modeDecision.resolvedMode,
     requestedMode,
-    requestedMode,
-    options,
-  );
+    defaultPanel: modeDecision.defaultPanel,
+    availablePanels,
+    allowed: true,
+    reason: null,
+    capabilities: buildMapCapabilities({
+      viewerAllowed,
+      editorAllowed: editorAllowed && editableWorkspace,
+      editMetadataAllowed: metadataDecision.allowed && editableWorkspace,
+      updateThumbnailAllowed: thumbnailDecision.allowed && editableWorkspace,
+      focusMapDataAllowed: features.maonoMapOverlay && viewerAllowed,
+      configureTooltipsAllowed:
+        features.maonoMapOverlay && editorAllowed && editableWorkspace,
+      toggleLegendAllowed: features.maonoMapOverlay && viewerAllowed,
+      previewIsochroneAllowed: features.maonoIsochrone && viewerAllowed,
+      persistIsochroneAllowed:
+        features.maonoIsochrone && editorAllowed && editableWorkspace,
+      removeIsochroneAllowed:
+        features.maonoIsochrone && editorAllowed && editableWorkspace,
+      openCreateWorkspaceAllowed: false,
+      createProjectAllowed: false,
+      initializeMapAllowed: false,
+    }),
+    project: publicProject(project),
+    organization: await getSafeOrganization(env, project.organization_id),
+    version: Number(project.config_revision || 0),
+    features,
+  };
 }
