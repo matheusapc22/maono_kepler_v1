@@ -495,6 +495,14 @@ const MaonoSaveButton: React.FC = () => {
         config.maono = maonoConfig;
       }
       const legacy = await legacyCapture(config);
+      const expectedConfigRevision = Math.max(
+        0,
+        Number(
+          context?.version ??
+            context?.project?.configRevision ??
+            0,
+        ) || 0,
+      );
       const response = await fetch(
         `/api/projects/${encodeURIComponent(projectSlug)}/config`,
         {
@@ -506,6 +514,7 @@ const MaonoSaveButton: React.FC = () => {
           },
           body: JSON.stringify({
             config,
+            expectedConfigRevision,
             ...(legacy
               ? {
                   thumbnailDataUrl: legacy.dataUrl,
@@ -537,6 +546,7 @@ const MaonoSaveButton: React.FC = () => {
       }
 
       const revision = resolveConfigRevision(data);
+      void refresh();
       emitMapPanelTelemetry("map_save_succeeded", {
         mode: context?.mode ?? null,
         projectId: context?.project?.id ?? null,
@@ -547,8 +557,8 @@ const MaonoSaveButton: React.FC = () => {
       setMessageType("success");
       setMessage(
         ASYNC_THUMBNAIL_ENABLED
-          ? "Projeto salvo no Dropbox. A visualização está sendo atualizada em segundo plano."
-          : "Projeto e visualização salvos no Dropbox.",
+          ? "Projeto salvo na Maõno. A visualização está sendo atualizada em segundo plano."
+          : "Projeto e visualização salvos na Maõno.",
       );
       finishPendingMapSave("success");
       enqueuePreview(
@@ -749,7 +759,7 @@ const MaonoSaveButton: React.FC = () => {
           className="rounded-2xl border border-emerald-300/50 bg-emerald-600 px-5 py-4 text-sm font-extrabold text-white shadow-2xl transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
           title={
             projectSlug
-              ? "Salvar alterações no arquivo JSON original do projeto no Dropbox"
+              ? "Salvar alterações do projeto na Maõno"
               : "Transformar este mapa em um novo projeto Maõno"
           }
         >
