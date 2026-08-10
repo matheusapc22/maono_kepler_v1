@@ -18,13 +18,39 @@ export function serializeProjectConfigBytes(config) {
 }
 
 export async function sha256Hex(bytes) {
-  const source = bytes instanceof Uint8Array
-    ? bytes
-    : new Uint8Array(bytes);
+  const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const digest = await crypto.subtle.digest("SHA-256", source);
   return Array.from(new Uint8Array(digest))
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export async function buildProjectConfigArtifactFromBytes(
+  input,
+  {
+    schemaName = PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER,
+    schemaVersion = PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER_VERSION,
+    contentType = PROJECT_CONFIG_CONTENT_TYPE,
+  } = {},
+) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  if (bytes.byteLength <= 0) {
+    throw integrityError(
+      "A configuração armazenada está vazia.",
+      409,
+      "PROJECT_CONFIG_EMPTY",
+    );
+  }
+  const checksum = await sha256Hex(bytes);
+  return {
+    bytes,
+    sizeBytes: bytes.byteLength,
+    checksum,
+    checksumAlgorithm: PROJECT_CONFIG_CHECKSUM_ALGORITHM,
+    schemaName,
+    schemaVersion,
+    contentType,
+  };
 }
 
 export async function buildProjectConfigArtifact(
@@ -36,18 +62,12 @@ export async function buildProjectConfigArtifact(
   } = {},
 ) {
   const { text, bytes } = serializeProjectConfigBytes(config);
-  const checksum = await sha256Hex(bytes);
-
-  return {
-    text,
-    bytes,
-    sizeBytes: bytes.byteLength,
-    checksum,
-    checksumAlgorithm: PROJECT_CONFIG_CHECKSUM_ALGORITHM,
+  const artifact = await buildProjectConfigArtifactFromBytes(bytes, {
     schemaName,
     schemaVersion,
     contentType,
-  };
+  });
+  return { text, ...artifact };
 }
 
 export async function verifyProjectConfigBytes(
