@@ -31,6 +31,19 @@ test("admin não pode alterar active de projeto gerenciado", () => {
   assert.match(adminProject, /requestedActive !== Number\(current\.active \|\| 0\)/);
 });
 
+test("storage físico de revisão gerenciada não muda por PATCH de metadata", () => {
+  assert.match(adminProject, /PROJECT_STORAGE_LOCATION_MANAGED_BY_LIFECYCLE/);
+  assert.match(adminProject, /PROJECT_CONFIG_FILE_MANAGED_BY_LIFECYCLE/);
+  assert.match(
+    adminProject,
+    /dropboxRootPath !== normalizeDropboxPath\(current\.dropbox_root_path\)/,
+  );
+  assert.match(
+    adminProject,
+    /defaultConfigFile !== current\.default_config_file/,
+  );
+});
+
 test("soft deactivate legado não cria estado implícito fora da máquina S03", () => {
   assert.match(adminProject, /PROJECT_LIFECYCLE_DEACTIVATION_UNSUPPORTED/);
   assert.match(adminProject, /!hardDelete && isLifecycleManagedProject\(current\)/);
