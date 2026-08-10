@@ -36,7 +36,12 @@ function createAbortError() {
 }
 
 export function isSessionRequestAbort(error: unknown) {
-  return error instanceof Error && error.name === "AbortError";
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "name" in error &&
+      (error as { name?: unknown }).name === "AbortError",
+  );
 }
 
 export function isRetryableSessionStatus(status: number) {
