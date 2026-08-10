@@ -14,7 +14,11 @@ function revisionError(message, status, code, details = null) {
 function getDb(env) {
   const db = env?.DB || env?.D1 || env?.MAONO_DB;
   if (!db || typeof db.prepare !== "function") {
-    throw revisionError("Banco de dados D1 não configurado.", 500, "DATABASE_NOT_CONFIGURED");
+    throw revisionError(
+      "Banco de dados D1 não configurado.",
+      500,
+      "DATABASE_NOT_CONFIGURED",
+    );
   }
   return db;
 }
@@ -36,22 +40,24 @@ function nonNegativeInteger(value, code) {
 }
 
 async function getProjectForRevision(db, projectId, organizationId) {
-  return db.prepare(
-    `SELECT * FROM projects
+  return db
+    .prepare(
+      `SELECT * FROM projects
       WHERE id = ? AND organization_id = ?
       LIMIT 1`,
-  )
+    )
     .bind(projectId, organizationId)
     .first();
 }
 
 export async function getProjectConfigRevision(env, projectId, revision) {
-  return getDb(env).prepare(
-    `SELECT *
+  return getDb(env)
+    .prepare(
+      `SELECT *
        FROM project_config_revisions
       WHERE project_id = ? AND revision = ?
       LIMIT 1`,
-  )
+    )
     .bind(projectId, revision)
     .first();
 }
@@ -77,7 +83,10 @@ export async function reserveProjectConfigRevision(
 ) {
   const db = getDb(env);
   const normalizedProjectId = positiveInteger(projectId, "PROJECT_ID_INVALID");
-  const normalizedOrganizationId = positiveInteger(organizationId, "PROJECT_ORGANIZATION_INVALID");
+  const normalizedOrganizationId = positiveInteger(
+    organizationId,
+    "PROJECT_ORGANIZATION_INVALID",
+  );
   const expected = nonNegativeInteger(
     expectedCurrentRevision,
     "PROJECT_CONFIG_EXPECTED_REVISION_INVALID",
@@ -93,26 +102,57 @@ export async function reserveProjectConfigRevision(
     throw revisionError("Projeto não encontrado.", 404, "PROJECT_NOT_FOUND");
   }
 
-  if (Number(project.config_revision || 0) !== expected) {
-    throw revisionError(
-      "O projeto foi alterado por outra operação.",
-      409,
-      "PROJECT_CONFIG_REVISION_CONFLICT",
-      {
-        expectedConfigRevision: expected,
-        currentConfigRevision: Number(project.config_revision || 0),
-      },
-    );
-  }
-
   const lifecycleState = normalizeLifecycleState(project.lifecycle_state);
-  const allowed = new Set(allowedLifecycleStates.map(normalizeLifecycleState).filter(Boolean));
+  const allowed = new Set(
+    allowedLifecycleStates.map(normalizeLifecycleState).filter(Boolean),
+  );
   if (lifecycleState && !allowed.has(lifecycleState)) {
     throw revisionError(
       "O projeto não está em estado compatível com publicação de configuração.",
       409,
       "PROJECT_CONFIG_LIFECYCLE_BLOCKED",
       { lifecycleState, allowedLifecycleStates: Array.from(allowed) },
+    );
+  }
+
+  const currentRevision = Number(project.config_revision || 0);
+  const normalizedChecksum = String(checksum).toLowerCase();
+
+  // Recupera com sucesso quando a publicação N+1 já ocorreu, mas a resposta
+  // anterior se perdeu depois do CAS. Conteúdo idêntico já publicado é o
+  // resultado desejado e não deve virar falso conflito.
+  if (
+    currentRevision === nextRevision &&
+    String(project.config_checksum || "").toLowerCase() === normalizedChecksum
+  ) {
+    const publishedLedger = await getProjectConfigRevision(
+      env,
+      normalizedProjectId,
+      nextRevision,
+    );
+    if (
+      publishedLedger?.status === "READY" &&
+      String(publishedLedger.checksum || "").toLowerCase() === normalizedChecksum
+    ) {
+      return {
+        revision: publishedLedger,
+        project,
+        idempotent: true,
+        retry: false,
+        alreadyPublished: true,
+      };
+    }
+  }
+
+  if (currentRevision !== expected) {
+    throw revisionError(
+      "O projeto foi alterado por outra operação.",
+      409,
+      "PROJECT_CONFIG_REVISION_CONFLICT",
+      {
+        expectedConfigRevision: expected,
+        currentConfigRevision: currentRevision,
+      },
     );
   }
 
@@ -124,8 +164,9 @@ export async function reserveProjectConfigRevision(
 
   if (existing) {
     if (
-      String(existing.checksum_algorithm).toLowerCase() !== String(checksumAlgorithm).toLowerCase() ||
-      String(existing.checksum).toLowerCase() !== String(checksum).toLowerCase()
+      String(existing.checksum_algorithm).toLowerCase() !==
+        String(checksumAlgorithm).toLowerCase() ||
+      String(existing.checksum).toLowerCase() !== normalizedChecksum
     ) {
       throw revisionError(
         "A próxima revisão já foi reservada por outro conteúdo.",
@@ -139,8 +180,9 @@ export async function reserveProjectConfigRevision(
     }
 
     if (existing.status === "FAILED") {
-      const retried = await db.prepare(
-        `UPDATE project_config_revisions
+      const retried = await db
+        .prepare(
+          `UPDATE project_config_revisions
             SET status = 'WRITING',
                 attempts = attempts + 1,
                 transition_id = ?,
@@ -150,22 +192,29 @@ export async function reserveProjectConfigRevision(
           WHERE id = ?
             AND status = 'FAILED'
           RETURNING *`,
-      )
+        )
         .bind(transitionId, existing.id)
         .first();
-      return { revision: retried || existing, idempotent: true, retry: true };
+      return {
+        revision: retried || existing,
+        idempotent: true,
+        retry: true,
+        alreadyPublished: false,
+      };
     }
 
     return {
       revision: existing,
       idempotent: true,
       retry: false,
+      alreadyPublished: false,
     };
   }
 
   try {
-    const created = await db.prepare(
-      `INSERT INTO project_config_revisions (
+    const created = await db
+      .prepare(
+        `INSERT INTO project_config_revisions (
          project_id,
          revision,
          status,
@@ -182,12 +231,12 @@ export async function reserveProjectConfigRevision(
        )
        VALUES (?, ?, 'WRITING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
-    )
+      )
       .bind(
         normalizedProjectId,
         nextRevision,
         String(checksumAlgorithm).toLowerCase(),
-        String(checksum).toLowerCase(),
+        normalizedChecksum,
         storageProvider,
         storageRef,
         schemaName,
@@ -199,7 +248,12 @@ export async function reserveProjectConfigRevision(
       )
       .first();
 
-    return { revision: created, idempotent: false, retry: false };
+    return {
+      revision: created,
+      idempotent: false,
+      retry: false,
+      alreadyPublished: false,
+    };
   } catch (error) {
     if (String(error?.message || "").toUpperCase().includes("UNIQUE")) {
       return reserveProjectConfigRevision(env, {
@@ -233,8 +287,9 @@ export async function markProjectConfigRevisionReady(
     storageProviderHash = null,
   },
 ) {
-  const updated = await getDb(env).prepare(
-    `UPDATE project_config_revisions
+  const updated = await getDb(env)
+    .prepare(
+      `UPDATE project_config_revisions
         SET status = 'READY',
             storage_provider_version = ?,
             storage_provider_hash = ?,
@@ -247,7 +302,7 @@ export async function markProjectConfigRevisionReady(
         AND checksum = ?
         AND status IN ('WRITING', 'READY')
       RETURNING *`,
-  )
+    )
     .bind(
       storageProviderVersion,
       storageProviderHash,
@@ -272,8 +327,9 @@ export async function markProjectConfigRevisionFailed(
   env,
   { projectId, revision, errorCode, errorStage },
 ) {
-  return getDb(env).prepare(
-    `UPDATE project_config_revisions
+  return getDb(env)
+    .prepare(
+      `UPDATE project_config_revisions
         SET status = 'FAILED',
             error_code = ?,
             error_stage = ?,
@@ -282,7 +338,7 @@ export async function markProjectConfigRevisionFailed(
         AND revision = ?
         AND status <> 'READY'
       RETURNING *`,
-  )
+    )
     .bind(
       String(errorCode || "PROJECT_CONFIG_REVISION_FAILED").slice(0, 160),
       String(errorStage || "UNKNOWN").slice(0, 120),
@@ -301,6 +357,7 @@ export async function publishProjectConfigRevision(
     revision,
     actor,
     markPreviewPending = true,
+    expectedLifecycleState = PROJECT_LIFECYCLE_STATES.ACTIVE,
   },
 ) {
   const db = getDb(env);
@@ -308,8 +365,24 @@ export async function publishProjectConfigRevision(
     expectedCurrentRevision,
     "PROJECT_CONFIG_EXPECTED_REVISION_INVALID",
   );
-  const normalizedRevision = positiveInteger(revision, "PROJECT_CONFIG_REVISION_INVALID");
-  const ledger = await getProjectConfigRevision(env, projectId, normalizedRevision);
+  const normalizedRevision = positiveInteger(
+    revision,
+    "PROJECT_CONFIG_REVISION_INVALID",
+  );
+  const lifecycleState = normalizeLifecycleState(expectedLifecycleState);
+  if (!lifecycleState) {
+    throw revisionError(
+      "Lifecycle esperado para publicação inválido.",
+      400,
+      "PROJECT_CONFIG_LIFECYCLE_EXPECTATION_INVALID",
+    );
+  }
+
+  const ledger = await getProjectConfigRevision(
+    env,
+    projectId,
+    normalizedRevision,
+  );
 
   if (!ledger || ledger.status !== "READY") {
     throw revisionError(
@@ -327,8 +400,9 @@ export async function publishProjectConfigRevision(
     );
   }
 
-  const updated = await db.prepare(
-    `UPDATE projects
+  const updated = await db
+    .prepare(
+      `UPDATE projects
         SET config_revision = ?,
             config_checksum = ?,
             config_checksum_algorithm = ?,
@@ -350,8 +424,9 @@ export async function publishProjectConfigRevision(
       WHERE id = ?
         AND organization_id = ?
         AND config_revision = ?
+        AND lifecycle_state = ?
       RETURNING *`,
-  )
+    )
     .bind(
       normalizedRevision,
       ledger.checksum,
@@ -373,30 +448,50 @@ export async function publishProjectConfigRevision(
       projectId,
       organizationId,
       expected,
+      lifecycleState,
     )
     .first();
 
   if (!updated) {
-    const current = await getProjectForRevision(db, projectId, organizationId);
+    const current = await getProjectForRevision(
+      db,
+      projectId,
+      organizationId,
+    );
     throw revisionError(
       "O projeto foi alterado por outra operação.",
       409,
-      "PROJECT_CONFIG_REVISION_CONFLICT",
+      current?.lifecycle_state !== lifecycleState
+        ? "PROJECT_CONFIG_LIFECYCLE_CONFLICT"
+        : "PROJECT_CONFIG_REVISION_CONFLICT",
       {
         expectedConfigRevision: expected,
         currentConfigRevision: Number(current?.config_revision || 0),
+        expectedLifecycleState: lifecycleState,
+        currentLifecycleState: current?.lifecycle_state ?? null,
       },
     );
   }
 
-  await db.prepare(
-    `UPDATE project_config_revisions
+  // published_at é lineage auxiliar. O ponteiro em projects já é a autoridade;
+  // uma indisponibilidade ao carimbar essa metadata não deve converter um save
+  // efetivamente publicado em falha. O reconciliador pode reparar o carimbo.
+  try {
+    await db
+      .prepare(
+        `UPDATE project_config_revisions
         SET published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
             updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`,
-  )
-    .bind(ledger.id)
-    .run();
+      )
+      .bind(ledger.id)
+      .run();
+  } catch (error) {
+    console.warn(
+      "[Maono lifecycle] Revisão publicada sem carimbo published_at:",
+      error?.message || error,
+    );
+  }
 
   return updated;
 }
