@@ -13,6 +13,13 @@ import {
   normalizePermissions,
   type Permission,
 } from "../access-control/permissions";
+import {
+  classifySessionResponse,
+  fetchSessionResponseWithRetry,
+  isRetryableSessionStatus,
+  isSessionRequestAbort,
+  type SessionHealth,
+} from "./session-resilience";
 
 type MaonoId = number | string;
 
@@ -128,6 +135,7 @@ declare global {
 type SessionState = {
   authenticated: boolean;
   loading: boolean;
+  health: SessionHealth;
   user: MaonoUser | null;
   projects: MaonoProject[];
   activeOrganization: MaonoOrganization | null;
@@ -153,6 +161,12 @@ const SessionContext = createContext<SessionState | null>(null);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function invalidSessionPayload(message: string) {
+  const error = new Error(message);
+  error.name = "SessionPayloadError";
+  return error;
 }
 
 function toId(value: unknown): MaonoId | null {
@@ -474,12 +488,28 @@ function enrichUserWithSessionContext({
 
 function normalizeSessionPayload(value: unknown): PublicSession {
   if (!isRecord(value)) {
+    throw invalidSessionPayload("A API retornou uma sessão em formato inválido.");
+  }
+
+  if (value.authenticated === false) {
     return EMPTY_SESSION;
   }
 
+  if (value.authenticated !== true) {
+    throw invalidSessionPayload(
+      "A resposta da sessão não informa um estado de autenticação válido.",
+    );
+  }
+
   const userFromPayload = normalizeUser(value.user);
-  const authenticated = Boolean(value.authenticated && userFromPayload);
-  const projects = authenticated ? normalizeProjects(value.projects) : [];
+
+  if (!userFromPayload) {
+    throw invalidSessionPayload(
+      "A resposta autenticada da sessão não contém um usuário válido.",
+    );
+  }
+
+  const projects = normalizeProjects(value.projects);
 
   const organizationsFromRoot = normalizeOrganizations(value.organizations);
   const activeOrganizationFromRoot =
@@ -495,33 +525,30 @@ function normalizeSessionPayload(value: unknown): PublicSession {
   const organizations =
     organizationsFromRoot.length > 0
       ? organizationsFromRoot
-      : userFromPayload?.organizations ?? [];
+      : userFromPayload.organizations ?? [];
 
   const activeOrganization =
     activeOrganizationFromRoot ??
-    userFromPayload?.activeOrganization ??
-    userFromPayload?.organization ??
+    userFromPayload.activeOrganization ??
+    userFromPayload.organization ??
     organizations[0] ??
     null;
 
-  const user =
-    authenticated && userFromPayload
-      ? enrichUserWithSessionContext({
-          user: userFromPayload,
-          activeOrganization,
-          organizations,
-          rootPermissions,
-          rootDeniedPermissions,
-          rootScopes,
-        })
-      : null;
+  const user = enrichUserWithSessionContext({
+    user: userFromPayload,
+    activeOrganization,
+    organizations,
+    rootPermissions,
+    rootDeniedPermissions,
+    rootScopes,
+  });
 
   return {
-    authenticated,
+    authenticated: true,
     user,
     projects,
-    activeOrganization: authenticated ? activeOrganization : null,
-    organizations: authenticated ? organizations : [],
+    activeOrganization,
+    organizations,
   };
 }
 
@@ -543,17 +570,25 @@ async function readJsonResponse(response: Response): Promise<unknown> {
   const text = await response.text();
 
   if (!text) {
+    if (response.ok) {
+      throw invalidSessionPayload("A API de sessão retornou uma resposta vazia.");
+    }
+
     return {};
   }
 
   try {
     return JSON.parse(text);
   } catch {
+    if (response.ok) {
+      throw invalidSessionPayload(
+        "A resposta da API de sessão não está em JSON válido.",
+      );
+    }
+
     return {
       error: {
-        message: response.ok
-          ? "A resposta da API não está em JSON válido."
-          : text.slice(0, 500),
+        message: text.slice(0, 500),
       },
     };
   }
@@ -567,13 +602,10 @@ function getResponseErrorMessage(data: unknown, fallback: string) {
     : fallback;
 }
 
-function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError";
-}
-
 export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState<SessionHealth>("loading");
   const [user, setUser] = useState<MaonoUser | null>(null);
   const [projects, setProjects] = useState<MaonoProject[]>([]);
   const [activeOrganization, setActiveOrganization] =
@@ -585,10 +617,12 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   >(null);
   const requestSequenceRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const authenticatedRef = useRef(false);
 
   const applySession = useCallback((rawData: unknown) => {
     const nextSession = normalizeSessionPayload(rawData);
 
+    authenticatedRef.current = nextSession.authenticated;
     setAuthenticated(nextSession.authenticated);
     setUser(nextSession.user);
     setProjects(nextSession.projects);
@@ -596,6 +630,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     setOrganizations(nextSession.organizations ?? []);
 
     publishSessionToWindow(nextSession);
+    return nextSession;
   }, []);
 
   const refreshSession = useCallback(async () => {
@@ -606,36 +641,60 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     requestControllerRef.current = controller;
     setLoading(true);
 
+    if (!authenticatedRef.current) {
+      setHealth("loading");
+    }
+
     try {
-      const response = await fetch("/api/session", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          Accept: "application/json",
-        },
+      const { response } = await fetchSessionResponseWithRetry({
         signal: controller.signal,
       });
-
-      const data = await readJsonResponse(response);
 
       if (requestId !== requestSequenceRef.current) {
         return;
       }
 
-      if (!response.ok) {
+      const policy = classifySessionResponse(
+        response.status,
+        authenticatedRef.current,
+      );
+
+      if (policy.disposition === "unauthenticated") {
         applySession(EMPTY_SESSION);
+        setHealth("unauthenticated");
         return;
       }
 
-      applySession(data);
+      if (policy.disposition === "preserve") {
+        setHealth(policy.health);
+
+        if (response.status === 403) {
+          console.warn(
+            "[Maono session] Sessão preservada após resposta 403; a ação não possui permissão.",
+          );
+        } else {
+          console.error(
+            `[Maono session] Sessão preservada após falha HTTP ${response.status}.`,
+          );
+        }
+        return;
+      }
+
+      const data = await readJsonResponse(response);
+      const nextSession = applySession(data);
+      setHealth(nextSession.authenticated ? "healthy" : "unauthenticated");
     } catch (error) {
-      if (isAbortError(error)) {
+      if (isSessionRequestAbort(error)) {
         return;
       }
 
-      console.error("[Maono] Falha ao atualizar sessão.", error);
+      console.error(
+        "[Maono session] Infraestrutura indisponível ao atualizar sessão; estado conhecido preservado.",
+        error,
+      );
+
       if (requestId === requestSequenceRef.current) {
-        applySession(EMPTY_SESSION);
+        setHealth("degraded");
       }
     } finally {
       if (requestId === requestSequenceRef.current) {
@@ -667,6 +726,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       requestControllerRef.current?.abort();
       const controller = new AbortController();
       requestControllerRef.current = controller;
+      let responseStatus: number | null = null;
 
       setLoading(false);
       setSwitchingOrganization(true);
@@ -683,6 +743,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
           body: JSON.stringify({ organizationId: normalizedId }),
           signal: controller.signal,
         });
+        responseStatus = response.status;
         const data = await readJsonResponse(response);
 
         if (requestId !== requestSequenceRef.current) {
@@ -690,6 +751,15 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         }
 
         if (!response.ok) {
+          if (response.status === 401) {
+            applySession(EMPTY_SESSION);
+            setHealth("unauthenticated");
+          } else if (response.status === 403) {
+            setHealth(authenticatedRef.current ? "healthy" : "degraded");
+          } else if (isRetryableSessionStatus(response.status)) {
+            setHealth("degraded");
+          }
+
           throw new Error(
             getResponseErrorMessage(
               data,
@@ -698,10 +768,11 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
           );
         }
 
-        applySession(data);
+        const nextSession = applySession(data);
+        setHealth(nextSession.authenticated ? "healthy" : "unauthenticated");
         setOrganizationSwitchError(null);
       } catch (error) {
-        if (isAbortError(error)) {
+        if (isSessionRequestAbort(error)) {
           return;
         }
 
@@ -711,6 +782,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
             : "Não foi possível trocar a organização.";
 
         if (requestId === requestSequenceRef.current) {
+          if (responseStatus === null) {
+            setHealth("degraded");
+          }
           setOrganizationSwitchError(message);
         }
 
@@ -771,6 +845,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       });
     } finally {
       applySession(EMPTY_SESSION);
+      setHealth("unauthenticated");
     }
   }, [applySession]);
 
@@ -787,6 +862,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     () => ({
       authenticated,
       loading,
+      health,
       user,
       projects,
       activeOrganization,
@@ -802,6 +878,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     [
       authenticated,
       loading,
+      health,
       user,
       projects,
       activeOrganization,
@@ -842,4 +919,5 @@ export type {
   MaonoUser,
   Permission,
   PublicSession,
+  SessionHealth,
 };
