@@ -3,7 +3,6 @@ import {
   PROJECT_LIFECYCLE_STATES,
   assertActiveProjectInvariant,
   isLifecycleManagedProject,
-  isProjectLifecycleEnabled,
   publicProjectLifecycle,
 } from "./project-lifecycle.js";
 import {
@@ -42,9 +41,15 @@ function decodeJsonBytes(bytes) {
 }
 
 export async function readPublishedProjectConfig(env, project) {
-  if (!isProjectLifecycleEnabled(env) || !isLifecycleManagedProject(project, env)) {
+  // lifecycle_state não nulo é uma fronteira irreversível do rollout: uma vez
+  // reconciliado/criado pela S03, o projeto nunca volta a ler o alias legado.
+  if (!isLifecycleManagedProject(project)) {
     const fileName = project.default_config_file || "config.kepler.json";
-    const text = await downloadDropboxTextFile(env, project.dropbox_root_path, fileName);
+    const text = await downloadDropboxTextFile(
+      env,
+      project.dropbox_root_path,
+      fileName,
+    );
     return { config: JSON.parse(text), lifecycle: null, legacy: true };
   }
 
@@ -89,7 +94,8 @@ export async function readPublishedProjectConfig(env, project) {
 
 async function updateLinkedOrganizationFile(env, project, artifact) {
   if (!project.organization_file_id) return;
-  const projectIsActive = project.lifecycle_state === PROJECT_LIFECYCLE_STATES.ACTIVE;
+  const projectIsActive =
+    project.lifecycle_state === PROJECT_LIFECYCLE_STATES.ACTIVE;
   await env.DB.prepare(
     `UPDATE organization_files
         SET size_bytes = ?,
@@ -241,9 +247,15 @@ export async function saveVersionedProjectConfig(
 
 export async function saveProjectConfig(
   env,
-  { project, config, expectedConfigRevision, actor, touchProjectAfterConfigSave },
+  {
+    project,
+    config,
+    expectedConfigRevision,
+    actor,
+    touchProjectAfterConfigSave,
+  },
 ) {
-  if (!isProjectLifecycleEnabled(env) || !isLifecycleManagedProject(project, env)) {
+  if (!isLifecycleManagedProject(project)) {
     return saveLegacyProjectConfig(env, {
       project,
       config,
