@@ -89,16 +89,22 @@ export async function readPublishedProjectConfig(env, project) {
 
 async function updateLinkedOrganizationFile(env, project, artifact) {
   if (!project.organization_file_id) return;
+  const projectIsActive = project.lifecycle_state === PROJECT_LIFECYCLE_STATES.ACTIVE;
   await env.DB.prepare(
     `UPDATE organization_files
         SET size_bytes = ?,
             sha256 = ?,
             is_project = 1,
-            active = 1,
+            active = CASE WHEN ? = 1 THEN 1 ELSE active END,
             updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`,
   )
-    .bind(artifact.sizeBytes, artifact.checksum, project.organization_file_id)
+    .bind(
+      artifact.sizeBytes,
+      artifact.checksum,
+      projectIsActive ? 1 : 0,
+      project.organization_file_id,
+    )
     .run();
 }
 
@@ -136,7 +142,6 @@ export async function saveVersionedProjectConfig(
     actor,
     allowedLifecycleStates = [PROJECT_LIFECYCLE_STATES.ACTIVE],
     markPreviewPending = true,
-    updateOrganizationFile = true,
   },
 ) {
   const expected = Number(expectedConfigRevision);
@@ -208,9 +213,7 @@ export async function saveVersionedProjectConfig(
       actor,
       markPreviewPending,
     });
-    if (updateOrganizationFile) {
-      await updateLinkedOrganizationFile(env, updatedProject, artifact);
-    }
+    await updateLinkedOrganizationFile(env, updatedProject, artifact);
 
     return {
       project: updatedProject,
@@ -265,6 +268,5 @@ export async function saveProjectConfig(
     actor,
     allowedLifecycleStates: [PROJECT_LIFECYCLE_STATES.ACTIVE],
     markPreviewPending: true,
-    updateOrganizationFile: true,
   });
 }
