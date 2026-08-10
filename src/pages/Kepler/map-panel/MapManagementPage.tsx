@@ -89,13 +89,11 @@ export default function MapManagementPage() {
   useEffect(() => {
     if (!context || redirectedRef.current) return;
 
-    const destination = context.availablePanels.create.allowed
-      ? "create"
-      : context.availablePanels.editor.allowed
-        ? "edit"
-        : context.availablePanels.viewer.allowed
-          ? "view"
-          : null;
+    const destination = context.availablePanels.editor.allowed
+      ? "edit"
+      : context.availablePanels.viewer.allowed
+        ? "view"
+        : null;
 
     if (!destination) return;
 
@@ -120,7 +118,6 @@ export default function MapManagementPage() {
 
   if (
     context &&
-    !context.availablePanels.create.allowed &&
     !context.availablePanels.editor.allowed &&
     !context.availablePanels.viewer.allowed
   ) {
