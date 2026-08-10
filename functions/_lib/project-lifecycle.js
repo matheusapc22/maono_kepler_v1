@@ -44,6 +44,12 @@ function nonNegativeInteger(value) {
   return Number.isInteger(number) && number >= 0 ? number : null;
 }
 
+/**
+ * Flag operacional de admissão/rollout.
+ * IMPORTANTE: ela jamais faz um projeto que já possui lifecycle voltar ao
+ * contrato legado. Uma linha com lifecycle_state válido continua sendo
+ * governada pelo lifecycle mesmo se a flag for desligada depois.
+ */
 export function isProjectLifecycleEnabled(env) {
   return String(env?.PROJECT_LIFECYCLE_V1 ?? "true").toLowerCase() !== "false";
 }
@@ -55,9 +61,22 @@ export function normalizeLifecycleState(value) {
     : null;
 }
 
-export function isLifecycleManagedProject(project, env = null) {
-  if (env && !isProjectLifecycleEnabled(env)) return false;
-  return Boolean(normalizeLifecycleState(project?.lifecycle_state ?? project?.lifecycleState));
+export function isLifecycleManagedProject(project) {
+  return Boolean(
+    normalizeLifecycleState(project?.lifecycle_state ?? project?.lifecycleState),
+  );
+}
+
+export function isProjectPublicable(project) {
+  const state = normalizeLifecycleState(
+    project?.lifecycle_state ?? project?.lifecycleState,
+  );
+
+  if (state) {
+    return state === PROJECT_LIFECYCLE_STATES.ACTIVE;
+  }
+
+  return project?.active === 1 || project?.active === true;
 }
 
 export function assertLifecycleTransition(fromState, toState) {
@@ -82,12 +101,16 @@ export function assertActiveProjectInvariant(project) {
   const checksumAlgorithm = String(
     project?.config_checksum_algorithm ?? project?.configChecksumAlgorithm ?? "",
   ).trim().toLowerCase();
-  const storageRef = String(project?.config_storage_ref ?? project?.configStorageRef ?? "").trim();
+  const storageRef = String(
+    project?.config_storage_ref ?? project?.configStorageRef ?? "",
+  ).trim();
   const schema = String(project?.config_schema ?? project?.configSchema ?? "").trim();
   const schemaVersion = positiveInteger(
     project?.config_schema_version ?? project?.configSchemaVersion,
   );
-  const sizeBytes = positiveInteger(project?.config_size_bytes ?? project?.configSizeBytes);
+  const sizeBytes = positiveInteger(
+    project?.config_size_bytes ?? project?.configSizeBytes,
+  );
 
   const missing = [];
   if (!revision) missing.push("config_revision");
@@ -119,25 +142,35 @@ export function publicProjectLifecycle(project) {
 
   return {
     state,
-    version: nonNegativeInteger(
-      project?.lifecycle_version ?? project?.lifecycleVersion,
-    ) ?? 0,
-    configRevision: nonNegativeInteger(
-      project?.config_revision ?? project?.configRevision,
-    ) ?? 0,
-    schema: project?.config_schema
-      ? {
-          name: project.config_schema,
-          version: positiveInteger(project.config_schema_version),
-        }
-      : null,
+    version:
+      nonNegativeInteger(
+        project?.lifecycle_version ?? project?.lifecycleVersion,
+      ) ?? 0,
+    configRevision:
+      nonNegativeInteger(project?.config_revision ?? project?.configRevision) ?? 0,
+    schema:
+      project?.config_schema ?? project?.configSchema
+        ? {
+            name: project?.config_schema ?? project?.configSchema,
+            version: positiveInteger(
+              project?.config_schema_version ?? project?.configSchemaVersion,
+            ),
+          }
+        : null,
     sizeBytes: nonNegativeInteger(
       project?.config_size_bytes ?? project?.configSizeBytes,
     ),
-    integrity: project?.config_checksum_algorithm
-      ? { algorithm: String(project.config_checksum_algorithm).toLowerCase() }
-      : null,
-    updatedAt: project?.lifecycle_updated_at ?? null,
+    integrity:
+      project?.config_checksum_algorithm ?? project?.configChecksumAlgorithm
+        ? {
+            algorithm: String(
+              project?.config_checksum_algorithm ??
+                project?.configChecksumAlgorithm,
+            ).toLowerCase(),
+          }
+        : null,
+    updatedAt:
+      project?.lifecycle_updated_at ?? project?.lifecycleUpdatedAt ?? null,
   };
 }
 
@@ -155,13 +188,14 @@ function getDb(env) {
 
 export async function getProjectLifecycleRow(env, { projectId, organizationId }) {
   const db = getDb(env);
-  return db.prepare(
-    `SELECT *
+  return db
+    .prepare(
+      `SELECT *
        FROM projects
       WHERE id = ?
         AND organization_id = ?
       LIMIT 1`,
-  )
+    )
     .bind(projectId, organizationId)
     .first();
 }
@@ -184,7 +218,11 @@ export async function transitionProjectLifecycle(
   const { from, to } = assertLifecycleTransition(fromState, toState);
   const version = nonNegativeInteger(expectedVersion);
 
-  if (!positiveInteger(projectId) || !positiveInteger(organizationId) || version === null) {
+  if (
+    !positiveInteger(projectId) ||
+    !positiveInteger(organizationId) ||
+    version === null
+  ) {
     throw lifecycleError(
       "Contexto de transição do lifecycle inválido.",
       400,
@@ -193,7 +231,10 @@ export async function transitionProjectLifecycle(
   }
 
   if (to === PROJECT_LIFECYCLE_STATES.ACTIVE) {
-    const current = await getProjectLifecycleRow(env, { projectId, organizationId });
+    const current = await getProjectLifecycleRow(env, {
+      projectId,
+      organizationId,
+    });
     if (!current) {
       throw lifecycleError("Projeto não encontrado.", 404, "PROJECT_NOT_FOUND");
     }
@@ -204,8 +245,9 @@ export async function transitionProjectLifecycle(
   const preparing = to === PROJECT_LIFECYCLE_STATES.PREPARING_STORAGE;
   const activated = to === PROJECT_LIFECYCLE_STATES.ACTIVE;
 
-  const updated = await db.prepare(
-    `UPDATE projects
+  const updated = await db
+    .prepare(
+      `UPDATE projects
         SET lifecycle_state = ?,
             lifecycle_version = lifecycle_version + 1,
             lifecycle_updated_at = CURRENT_TIMESTAMP,
@@ -225,13 +267,15 @@ export async function transitionProjectLifecycle(
         AND lifecycle_state = ?
         AND lifecycle_version = ?
       RETURNING *`,
-  )
+    )
     .bind(
       to,
       transitionId,
       preparing ? 1 : 0,
       failed ? String(failureStage || "UNKNOWN").slice(0, 120) : null,
-      failed ? String(failureCode || "PROJECT_LIFECYCLE_FAILED").slice(0, 160) : null,
+      failed
+        ? String(failureCode || "PROJECT_LIFECYCLE_FAILED").slice(0, 160)
+        : null,
       failed ? 1 : 0,
       failed ? (retryable === false ? 0 : 1) : null,
       activated ? 1 : 0,
@@ -243,7 +287,10 @@ export async function transitionProjectLifecycle(
     .first();
 
   if (!updated) {
-    const current = await getProjectLifecycleRow(env, { projectId, organizationId });
+    const current = await getProjectLifecycleRow(env, {
+      projectId,
+      organizationId,
+    });
     throw lifecycleError(
       "O lifecycle do projeto foi alterado por outra execução.",
       409,
