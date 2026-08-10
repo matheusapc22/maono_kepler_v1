@@ -8,6 +8,10 @@ import { requireSession } from "../../../_lib/auth.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import { serializeProjectActor } from "../../../_lib/project-service.js";
 import { logAudit } from "../../../_lib/projects.js";
+import {
+  isLifecycleManagedProject,
+  publicProjectLifecycle,
+} from "../../../_lib/project-lifecycle.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -23,13 +27,11 @@ function normalizeSlug(value) {
 
 function normalizePositiveInteger(value) {
   const numberValue = Number(value);
-
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
 function normalizeDropboxPath(value) {
   const clean = normalizeText(value).replace(/\/+$/g, "");
-
   return clean || "/";
 }
 
@@ -39,9 +41,7 @@ function isDropboxPathInsideOrganizationRoot(projectPath, organizationRootPath) 
     organizationRootPath,
   ).toLowerCase();
 
-  if (!normalizedProjectPath || !normalizedOrganizationRootPath) {
-    return false;
-  }
+  if (!normalizedProjectPath || !normalizedOrganizationRootPath) return false;
 
   return (
     normalizedProjectPath === normalizedOrganizationRootPath ||
@@ -60,15 +60,8 @@ async function requireAdminPanelAccessForProject(
   const projectId = normalizePositiveInteger(project.id);
 
   const permissionContext = organizationId
-    ? {
-        organizationId,
-        projectId,
-        scopeType: "organization",
-      }
-    : {
-        projectId,
-        scopeType: "global",
-      };
+    ? { organizationId, projectId, scopeType: "organization" }
+    : { projectId, scopeType: "global" };
 
   return requirePermission(
     env,
@@ -103,6 +96,7 @@ function publicAdminProject(project) {
       : null,
     organizationFileId: project.organization_file_id || null,
     active: Boolean(project.active),
+    lifecycle: publicProjectLifecycle(project),
     createdBy: serializeProjectActor(project, "created"),
     updatedBy: serializeProjectActor(project, "updated"),
     metadataVersion: Number(project.metadata_version || 1),
@@ -128,6 +122,14 @@ async function getProjectById(env, projectId) {
       projects.updated_by_name_snapshot,
       projects.metadata_version,
       projects.active,
+      projects.config_revision,
+      projects.config_checksum_algorithm,
+      projects.config_schema,
+      projects.config_schema_version,
+      projects.config_size_bytes,
+      projects.lifecycle_state,
+      projects.lifecycle_version,
+      projects.lifecycle_updated_at,
       projects.created_at,
       projects.updated_at,
       organizations.name AS organization_name,
@@ -138,12 +140,9 @@ async function getProjectById(env, projectId) {
       updater.id AS updater_user_id,
       updater.name AS updater_current_name
     FROM projects
-    LEFT JOIN organizations
-      ON organizations.id = projects.organization_id
-    LEFT JOIN users AS creator
-      ON creator.id = projects.created_by
-    LEFT JOIN users AS updater
-      ON updater.id = projects.updated_by
+    LEFT JOIN organizations ON organizations.id = projects.organization_id
+    LEFT JOIN users AS creator ON creator.id = projects.created_by
+    LEFT JOIN users AS updater ON updater.id = projects.updated_by
     WHERE projects.id = ?
     LIMIT 1`,
   )
@@ -152,26 +151,27 @@ async function getProjectById(env, projectId) {
 }
 
 async function syncOrganizationFileProjectFlag(env, organizationFileId) {
-  if (!organizationFileId) {
-    return;
-  }
+  if (!organizationFileId) return;
 
-  const activeProject = await env.DB.prepare(
+  const publicableProject = await env.DB.prepare(
     `SELECT id
-     FROM projects
-     WHERE organization_file_id = ?
-       AND active = 1
-     LIMIT 1`,
+       FROM projects
+      WHERE organization_file_id = ?
+        AND (
+          lifecycle_state = 'ACTIVE'
+          OR (lifecycle_state IS NULL AND active = 1)
+        )
+      LIMIT 1`,
   )
     .bind(organizationFileId)
     .first();
 
   await env.DB.prepare(
     `UPDATE organization_files
-     SET is_project = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
+        SET is_project = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
   )
-    .bind(activeProject ? 1 : 0, organizationFileId)
+    .bind(publicableProject ? 1 : 0, organizationFileId)
     .run();
 }
 
@@ -180,20 +180,22 @@ function changedProjectFields(current, next) {
 
   if (next.name !== current.name) fields.push("name");
   if (next.slug !== current.slug) fields.push("slug");
-  if (next.description !== normalizeText(current.description)) {
-    fields.push("description");
-  }
+  if (next.description !== normalizeText(current.description)) fields.push("description");
   if (next.dropboxRootPath !== normalizeDropboxPath(current.dropbox_root_path)) {
     fields.push("dropboxRootPath");
   }
   if (next.defaultConfigFile !== current.default_config_file) {
     fields.push("defaultConfigFile");
   }
-  if (Number(next.active) !== Number(current.active || 0)) {
-    fields.push("active");
-  }
+  if (Number(next.active) !== Number(current.active || 0)) fields.push("active");
 
   return fields;
+}
+
+function requestedActiveValue(body) {
+  if (body?.active === true) return 1;
+  if (body?.active === false) return 0;
+  return null;
 }
 
 async function updateProject(env, current, body, actor) {
@@ -211,23 +213,36 @@ async function updateProject(env, current, body, actor) {
       body?.default_config_file ??
       current.default_config_file,
   );
-  const active =
-    body?.active === false
-      ? 0
-      : body?.active === true
-        ? 1
-        : Number(current.active || 0);
+  const requestedActive = requestedActiveValue(body);
+  const managedLifecycle = isLifecycleManagedProject(current);
 
-  if (!name) {
+  if (
+    managedLifecycle &&
+    requestedActive !== null &&
+    requestedActive !== Number(current.active || 0)
+  ) {
     return {
       error: errorResponse(
-        "Informe o nome do projeto.",
-        400,
-        "PROJECT_NAME_REQUIRED",
+        "O campo active é controlado pelo lifecycle deste projeto.",
+        409,
+        "PROJECT_ACTIVE_MANAGED_BY_LIFECYCLE",
+        {
+          lifecycleState: current.lifecycle_state,
+          currentActive: Boolean(current.active),
+        },
       ),
     };
   }
 
+  const active = managedLifecycle
+    ? Number(current.active || 0)
+    : requestedActive ?? Number(current.active || 0);
+
+  if (!name) {
+    return {
+      error: errorResponse("Informe o nome do projeto.", 400, "PROJECT_NAME_REQUIRED"),
+    };
+  }
   if (!slug) {
     return {
       error: errorResponse(
@@ -237,7 +252,6 @@ async function updateProject(env, current, body, actor) {
       ),
     };
   }
-
   if (!dropboxRootPath.startsWith("/")) {
     return {
       error: errorResponse(
@@ -247,7 +261,6 @@ async function updateProject(env, current, body, actor) {
       ),
     };
   }
-
   if (
     current.organization_id &&
     !isDropboxPathInsideOrganizationRoot(
@@ -263,7 +276,6 @@ async function updateProject(env, current, body, actor) {
       ),
     };
   }
-
   if (!defaultConfigFile) {
     return {
       error: errorResponse(
@@ -284,8 +296,7 @@ async function updateProject(env, current, body, actor) {
   };
   const changedFields = changedProjectFields(current, next);
   const metadataChanged =
-    changedFields.includes("name") ||
-    changedFields.includes("description");
+    changedFields.includes("name") || changedFields.includes("description");
   const previousVersion = Number(current.metadata_version || 1);
 
   if (changedFields.length === 0) {
@@ -300,19 +311,18 @@ async function updateProject(env, current, body, actor) {
   try {
     const updated = await env.DB.prepare(
       `UPDATE projects
-       SET
-        name = ?,
-        slug = ?,
-        description = ?,
-        dropbox_root_path = ?,
-        default_config_file = ?,
-        active = ?,
-        updated_by = ?,
-        updated_by_name_snapshot = ?,
-        updated_at = CURRENT_TIMESTAMP,
-        metadata_version = metadata_version + ?
-       WHERE id = ?
-       RETURNING *`,
+          SET name = ?,
+              slug = ?,
+              description = ?,
+              dropbox_root_path = ?,
+              default_config_file = ?,
+              active = ?,
+              updated_by = ?,
+              updated_by_name_snapshot = ?,
+              updated_at = CURRENT_TIMESTAMP,
+              metadata_version = metadata_version + ?
+        WHERE id = ?
+        RETURNING *`,
     )
       .bind(
         name,
@@ -331,7 +341,6 @@ async function updateProject(env, current, body, actor) {
     await syncOrganizationFileProjectFlag(env, updated.organization_file_id);
 
     const newVersion = Number(updated.metadata_version || previousVersion);
-
     return {
       project: {
         ...updated,
@@ -357,51 +366,43 @@ async function updateProject(env, current, body, actor) {
         ),
       };
     }
-
     throw error;
   }
 }
 
-async function deleteProject(
-  env,
-  current,
-  {
-    hardDelete = true,
-    actor,
-  },
-) {
+async function deleteProject(env, current, { hardDelete = true, actor }) {
   const projectId = current.id;
+
+  if (!hardDelete && isLifecycleManagedProject(current)) {
+    const error = new Error(
+      "Projetos gerenciados pelo lifecycle ainda não suportam desativação pelo campo active.",
+    );
+    error.status = 409;
+    error.code = "PROJECT_LIFECYCLE_DEACTIVATION_UNSUPPORTED";
+    error.details = { lifecycleState: current.lifecycle_state };
+    throw error;
+  }
 
   if (hardDelete) {
     await env.DB.batch([
-      env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(
-        projectId,
-      ),
+      env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(projectId),
       env.DB.prepare(`DELETE FROM projects WHERE id = ?`).bind(projectId),
     ]);
   } else {
     await env.DB.batch([
-      env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(
-        projectId,
-      ),
+      env.DB.prepare(`DELETE FROM user_projects WHERE project_id = ?`).bind(projectId),
       env.DB.prepare(
         `UPDATE projects
-         SET
-          active = 0,
-          updated_by = ?,
-          updated_by_name_snapshot = ?,
-          updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-      ).bind(
-        actor.id,
-        actor.name || "Usuário",
-        projectId,
-      ),
+            SET active = 0,
+                updated_by = ?,
+                updated_by_name_snapshot = ?,
+                updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+      ).bind(actor.id, actor.name || "Usuário", projectId),
     ]);
   }
 
   await syncOrganizationFileProjectFlag(env, current.organization_file_id);
-
   return {
     project: current,
     changedFields: hardDelete ? ["deleted"] : ["active"],
@@ -425,21 +426,12 @@ export async function onRequest(context) {
     const projectId = normalizePositiveInteger(params.id);
 
     if (!projectId) {
-      return errorResponse(
-        "ID do projeto inválido.",
-        400,
-        "PROJECT_ID_INVALID",
-      );
+      return errorResponse("ID do projeto inválido.", 400, "PROJECT_ID_INVALID");
     }
 
     const currentProject = await getProjectById(env, projectId);
-
     if (!currentProject) {
-      return errorResponse(
-        "Projeto não encontrado.",
-        404,
-        "PROJECT_NOT_FOUND",
-      );
+      return errorResponse("Projeto não encontrado.", 404, "PROJECT_NOT_FOUND");
     }
 
     if (request.method === "GET") {
@@ -452,11 +444,7 @@ export async function onRequest(context) {
           ? "admin.projects.organization_view"
           : "admin.projects.global_view",
       );
-
-      return jsonResponse({
-        ok: true,
-        project: publicAdminProject(currentProject),
-      });
+      return jsonResponse({ ok: true, project: publicAdminProject(currentProject) });
     }
 
     if (request.method === "PUT" || request.method === "PATCH") {
@@ -467,27 +455,14 @@ export async function onRequest(context) {
         currentProject,
         "admin.projects.update",
       );
-
       const body = await readJsonBody(request);
-      const {
-        project,
-        error,
-        changedFields,
-        previousVersion,
-        newVersion,
-      } = await updateProject(
-        env,
-        currentProject,
-        body,
-        {
+      const { project, error, changedFields, previousVersion, newVersion } =
+        await updateProject(env, currentProject, body, {
           id: user.id,
           name: user.name,
-        },
-      );
+        });
 
-      if (error) {
-        return error;
-      }
+      if (error) return error;
 
       await logAudit(env, {
         userId: user.id,
@@ -498,16 +473,14 @@ export async function onRequest(context) {
           organizationId: project.organization_id || null,
           slug: project.slug,
           active: Boolean(project.active),
+          lifecycleState: project.lifecycle_state ?? null,
           changedFields,
           previousVersion,
           newVersion,
         },
       });
 
-      return jsonResponse({
-        ok: true,
-        project: publicAdminProject(project),
-      });
+      return jsonResponse({ ok: true, project: publicAdminProject(project) });
     }
 
     if (request.method === "DELETE") {
@@ -518,20 +491,12 @@ export async function onRequest(context) {
         currentProject,
         "admin.projects.delete",
       );
-
       const url = new URL(request.url);
       const hardDelete = url.searchParams.get("deactivate") !== "true";
-      const { project, changedFields } = await deleteProject(
-        env,
-        currentProject,
-        {
-          hardDelete,
-          actor: {
-            id: user.id,
-            name: user.name,
-          },
-        },
-      );
+      const { project, changedFields } = await deleteProject(env, currentProject, {
+        hardDelete,
+        actor: { id: user.id, name: user.name },
+      });
 
       await logAudit(env, {
         userId: user.id,
@@ -545,6 +510,7 @@ export async function onRequest(context) {
           slug: project.slug,
           name: project.name,
           hardDelete,
+          lifecycleState: project.lifecycle_state ?? null,
           changedFields,
           previousVersion: Number(project.metadata_version || 1),
           newVersion: Number(project.metadata_version || 1),
