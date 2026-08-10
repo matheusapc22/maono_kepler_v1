@@ -1,4 +1,8 @@
-import { getActiveOrganizationId, publicProject } from "./projects.js";
+import {
+  getActiveOrganizationId,
+  PROJECT_PUBLICATION_SQL,
+  publicProject,
+} from "./projects.js";
 import { publicProjectPreview } from "./project-preview.js";
 
 const ACCESS_LEVELS = new Set(["owner", "editor", "viewer"]);
@@ -18,6 +22,13 @@ const PUBLIC_PROJECT_COLUMNS = `
   projects.created_at,
   projects.updated_at,
   projects.config_revision,
+  projects.lifecycle_state,
+  projects.lifecycle_version,
+  projects.lifecycle_updated_at,
+  projects.config_checksum_algorithm,
+  projects.config_schema,
+  projects.config_schema_version,
+  projects.config_size_bytes,
   projects.preview_status,
   projects.preview_revision,
   projects.preview_updated_at,
@@ -88,6 +99,7 @@ function publicSafeProject(project, favoriteProjectIds = new Set()) {
       typeof base.active === "boolean"
         ? base.active
         : project?.active === 1 || project?.active === true,
+    lifecycle: base.lifecycle ?? null,
     thumbnailUrl: base.thumbnailUrl ?? base.thumbnail_url ?? undefined,
     createdAt:
       base.createdAt ??
@@ -173,7 +185,7 @@ export async function listProjectsForActiveOrganization(env, user) {
          ON organizations.id = projects.organization_id
         AND organizations.active = 1
        ${ACTOR_JOINS}
-       WHERE projects.active = 1
+       WHERE ${PROJECT_PUBLICATION_SQL}
          AND projects.organization_id = ?
        ORDER BY projects.updated_at DESC, projects.name ASC`,
     )
@@ -199,7 +211,7 @@ export async function listProjectsForActiveOrganization(env, user) {
       AND organization_users.user_id = user_projects.user_id
      ${ACTOR_JOINS}
      WHERE user_projects.user_id = ?
-       AND projects.active = 1
+       AND ${PROJECT_PUBLICATION_SQL}
        AND projects.organization_id = ?
      ORDER BY projects.updated_at DESC, projects.name ASC`,
   )
@@ -213,12 +225,16 @@ export async function listProjectsForActiveOrganization(env, user) {
 
 export async function listRecentProjectsForActiveOrganization(env, user) {
   const projects = await listProjectsForActiveOrganization(env, user);
-  return sortByUpdatedAtDesc(projects.filter((project) => isRecentProject(project)));
+  return sortByUpdatedAtDesc(
+    projects.filter((project) => isRecentProject(project)),
+  );
 }
 
 export async function listFavoriteProjectsForActiveOrganization(env, user) {
   const projects = await listProjectsForActiveOrganization(env, user);
-  return sortByUpdatedAtDesc(projects.filter((project) => project.favorite));
+  return sortByUpdatedAtDesc(
+    projects.filter((project) => project.favorite),
+  );
 }
 
 export async function getAccessibleProjectBySlug(env, user, slug) {
@@ -248,7 +264,7 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
         AND organizations.active = 1
        ${ACTOR_JOINS}
        WHERE projects.slug = ?
-         AND projects.active = 1
+         AND ${PROJECT_PUBLICATION_SQL}
          AND projects.organization_id = ?
        LIMIT 1`,
     )
@@ -273,7 +289,7 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
      ${ACTOR_JOINS}
      WHERE user_projects.user_id = ?
        AND projects.slug = ?
-       AND projects.active = 1
+       AND ${PROJECT_PUBLICATION_SQL}
        AND projects.organization_id = ?
      LIMIT 1`,
   )
