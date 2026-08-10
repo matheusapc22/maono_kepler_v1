@@ -31,6 +31,7 @@ ALTER TABLE projects ADD COLUMN config_checksum_algorithm TEXT;
 ALTER TABLE projects ADD COLUMN config_storage_provider TEXT;
 ALTER TABLE projects ADD COLUMN config_storage_ref TEXT;
 ALTER TABLE projects ADD COLUMN config_storage_provider_version TEXT;
+ALTER TABLE projects ADD COLUMN config_storage_provider_hash TEXT;
 ALTER TABLE projects ADD COLUMN config_schema TEXT;
 ALTER TABLE projects ADD COLUMN config_schema_version INTEGER
   CHECK (config_schema_version IS NULL OR config_schema_version > 0);
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS project_config_revisions (
   storage_provider TEXT NOT NULL,
   storage_ref TEXT NOT NULL,
   storage_provider_version TEXT,
+  storage_provider_hash TEXT,
   schema_name TEXT NOT NULL,
   schema_version INTEGER NOT NULL CHECK (schema_version > 0),
   size_bytes INTEGER NOT NULL CHECK (size_bytes > 0),
