@@ -2,6 +2,18 @@ import {
   serializePublicProjectMetadata,
 } from "./project-service.js";
 import { publicProjectPreview } from "./project-preview.js";
+import {
+  isProjectPublicable,
+  publicProjectLifecycle,
+} from "./project-lifecycle.js";
+
+// Durante EXPAND/BACKFILL, lifecycle NULL identifica exclusivamente legado.
+// Assim que lifecycle_state é preenchido, ACTIVE vira a autoridade e `active`
+// permanece apenas como projeção de compatibilidade.
+export const PROJECT_PUBLICATION_SQL = `(
+  projects.lifecycle_state = 'ACTIVE'
+  OR (projects.lifecycle_state IS NULL AND projects.active = 1)
+)`;
 
 const INTERNAL_PROJECT_COLUMNS = `
   projects.id,
@@ -21,6 +33,13 @@ const INTERNAL_PROJECT_COLUMNS = `
   projects.created_at,
   projects.updated_at,
   projects.config_revision,
+  projects.lifecycle_state,
+  projects.lifecycle_version,
+  projects.lifecycle_updated_at,
+  projects.config_checksum_algorithm,
+  projects.config_schema,
+  projects.config_schema_version,
+  projects.config_size_bytes,
   projects.preview_status,
   projects.preview_revision,
   projects.preview_updated_at,
@@ -57,7 +76,7 @@ export async function listProjectsForUser(env, user) {
         ON organizations.id = projects.organization_id
        AND organizations.active = 1
       ${ACTOR_JOINS}
-      WHERE projects.active = 1
+      WHERE ${PROJECT_PUBLICATION_SQL}
         AND projects.organization_id = ?
       ORDER BY projects.updated_at DESC, projects.name ASC`,
     )
@@ -81,7 +100,7 @@ export async function listProjectsForUser(env, user) {
      AND organization_users.user_id = user_projects.user_id
     ${ACTOR_JOINS}
     WHERE user_projects.user_id = ?
-      AND projects.active = 1
+      AND ${PROJECT_PUBLICATION_SQL}
       AND projects.organization_id = ?
     ORDER BY projects.updated_at DESC, projects.name ASC`,
   )
@@ -109,7 +128,7 @@ export async function getAuthorizedProject(env, user, slug) {
        AND organizations.active = 1
       ${ACTOR_JOINS}
       WHERE projects.slug = ?
-        AND projects.active = 1
+        AND ${PROJECT_PUBLICATION_SQL}
         AND projects.organization_id = ?
       LIMIT 1`,
     )
@@ -134,7 +153,7 @@ export async function getAuthorizedProject(env, user, slug) {
     ${ACTOR_JOINS}
     WHERE user_projects.user_id = ?
       AND projects.slug = ?
-      AND projects.active = 1
+      AND ${PROJECT_PUBLICATION_SQL}
       AND projects.organization_id = ?
     LIMIT 1`,
   )
@@ -156,7 +175,7 @@ export function getActiveOrganizationId(user) {
 
 /**
  * DTO público. Não expõe Dropbox, arquivo de configuração, hashes,
- * credenciais ou demais campos internos.
+ * credenciais, storage_ref ou demais campos internos.
  */
 export function publicProject(project) {
   if (!project) {
@@ -168,6 +187,8 @@ export function publicProject(project) {
 
   return {
     ...metadata,
+    active: isProjectPublicable(project),
+    lifecycle: publicProjectLifecycle(project),
     ...publicProjectPreview(project),
     accessLevel,
     access_level: accessLevel,
