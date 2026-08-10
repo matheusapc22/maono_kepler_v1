@@ -10,7 +10,10 @@ import {
   getActiveOrganizationId,
   publicProject,
 } from "../../_lib/projects.js";
-import { publicProjectLifecycle } from "../../_lib/project-lifecycle.js";
+import {
+  isProjectLifecycleEnabled,
+  publicProjectLifecycle,
+} from "../../_lib/project-lifecycle.js";
 import { createProjectFromKepler } from "../../_lib/project-creation-lifecycle-service.js";
 
 function publicCreatedProject(project) {
@@ -40,6 +43,16 @@ export async function onRequest(context) {
       return jsonResponse({ ok: true, projects });
     }
 
+    // A flag pode impedir novas admissões durante rollout, mas nunca muda o
+    // protocolo de leitura/save de projetos que já possuem lifecycle_state.
+    if (!isProjectLifecycleEnabled(env)) {
+      return errorResponse(
+        "A criação de novos projetos está temporariamente indisponível.",
+        503,
+        "PROJECT_LIFECYCLE_ROLLOUT_DISABLED",
+      );
+    }
+
     const body = await readJsonBody(request);
     const result = await createProjectFromKepler(
       env,
@@ -52,7 +65,8 @@ export async function onRequest(context) {
     return jsonResponse(
       {
         ok: true,
-        status: result.project?.lifecycle_state === "ACTIVE" ? "active" : "pending",
+        status:
+          result.project?.lifecycle_state === "ACTIVE" ? "active" : "pending",
         idempotent: result.idempotent,
         project: publicCreatedProject(result.project),
         fileName: result.fileName,
