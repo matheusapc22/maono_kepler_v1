@@ -1,0 +1,54 @@
+{
+  "schema": "maono-architecture-baseline-fixtures",
+  "version": 1,
+  "snapshotCommit": "aec5227d289fc8644cb22e9c083ff4ef44ef6e9e",
+  "status": "catalog_frozen",
+  "productionDataAllowed": false,
+  "fixtures": [
+    {
+      "id": "map-empty",
+      "purpose": "Mapa sem datasets/layers; baseline de criação e shell.",
+      "coverage": ["create", "empty-state", "save-initial"]
+    },
+    {
+      "id": "map-point-basic",
+      "purpose": "Camada Point sem agrupamento.",
+      "coverage": ["point", "visibility", "tooltip", "legend"]
+    },
+    {
+      "id": "map-point-cluster-v1-legacy",
+      "purpose": "Contrato legado de pointClustering version 1 para migração/regressão.",
+      "coverage": ["cluster-legacy", "migration", "single-layer"]
+    },
+    {
+      "id": "map-point-cluster-v2-current",
+      "purpose": "Contrato atual de agrupamento espacial version 2.",
+      "coverage": ["cluster", "filters", "zoom", "fidelity"]
+    },
+    {
+      "id": "map-filters-smart-histogram",
+      "purpose": "Filtros categóricos e range com histograma inteligente/brush.",
+      "coverage": ["filters", "histogram", "accordion", "csv"]
+    },
+    {
+      "id": "map-geojson-polygon",
+      "purpose": "GeoJSON Polygon/MultiPolygon para estilo, popup e legenda.",
+      "coverage": ["geojson", "polygon", "legend", "popup"]
+    },
+    {
+      "id": "map-heatmap-basic",
+      "purpose": "Heatmap para regressão de render e persistência.",
+      "coverage": ["heatmap", "style", "save-load"]
+    },
+    {
+      "id": "map-isochrone-persisted",
+      "purpose": "Análise de isócrona persistida como layer GeoJSON.",
+      "coverage": ["isochrone", "transient", "persist", "reload"]
+    },
+    {
+      "id": "map-large-risk-candidate",
+      "purpose": "Descriptor para futuro baseline de performance/Load Guard; sem payload pesado na S00.",
+      "coverage": ["performance", "load-guard", "large-data"]
+    }
+  ]
+}
