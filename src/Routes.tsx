@@ -125,6 +125,18 @@ const LegacyProjectMapRedirect: React.FC = () => {
   );
 };
 
+const DeprecatedProjectCreateRedirect: React.FC = () => {
+  const { projectSlug = "" } = useParams<{
+    projectSlug: string;
+  }>();
+  const location = useLocation();
+  const destination = `/projects/${encodeURIComponent(projectSlug)}/manage${
+    location.search || ""
+  }`;
+
+  return <Navigate to={destination} replace />;
+};
+
 const AppRoutes: React.FC = () => {
   return (
     <Routes>
@@ -193,11 +205,7 @@ const AppRoutes: React.FC = () => {
 
       <Route
         path="/projects/:projectSlug/create"
-        element={
-          <WithSuspense>
-            <KeplerApp />
-          </WithSuspense>
-        }
+        element={<DeprecatedProjectCreateRedirect />}
       />
 
       <Route

@@ -3,7 +3,7 @@ import {
   jsonResponse,
   methodNotAllowed,
 } from "../../../_lib/http.js";
-import { resolveExistingProjectMapNavigation } from "../../../_lib/map-panel-service.js";
+import { resolveCanonicalExistingProjectMapNavigation } from "../../../_lib/project-map-navigation-service.js";
 import { withMapAnalysisRuntimeDefaults } from "../../../_lib/map-analysis-runtime.js";
 
 export async function onRequest(context) {
@@ -16,7 +16,7 @@ export async function onRequest(context) {
   try {
     const url = new URL(request.url);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
-    const navigation = await resolveExistingProjectMapNavigation(
+    const navigation = await resolveCanonicalExistingProjectMapNavigation(
       runtimeEnv,
       request,
       params?.slug,

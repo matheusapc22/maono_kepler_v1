@@ -102,11 +102,12 @@ test("modal nativo de dados não é renderizado durante a hidratação", () => {
   assert.match(loadDataModalFactory, /\)\(HydrationSafeLoadDataModal\)/);
 });
 
-test("rota manage prioriza create sem exibir a antiga tela de escolha", () => {
+test("rota manage prioriza editor, cai para viewer e não considera create", () => {
   assert.match(
     mapManagementPage,
-    /const destination = context\.availablePanels\.create\.allowed[\s\S]*\? "create"[\s\S]*context\.availablePanels\.editor\.allowed[\s\S]*\? "edit"[\s\S]*context\.availablePanels\.viewer\.allowed[\s\S]*\? "view"/,
+    /const destination = context\.availablePanels\.editor\.allowed[\s\S]*\? "edit"[\s\S]*context\.availablePanels\.viewer\.allowed[\s\S]*\? "view"/,
   );
+  assert.doesNotMatch(mapManagementPage, /availablePanels\.create\.allowed/);
   assert.match(mapManagementPage, /return <MapRedirectLoader \/>/);
   assert.match(mapManagementPage, /\{ replace: true \}/);
   assert.doesNotMatch(mapManagementPage, /Abrir editor/);
@@ -119,14 +120,21 @@ test("rota manage prioriza create sem exibir a antiga tela de escolha", () => {
   assert.match(mapManagementCss, /width:\s*76px/);
 });
 
-test("create de projeto existente é uma rota real e não o fluxo de projeto novo", () => {
+test("create de projeto existente é somente redirect de compatibilidade", () => {
   assert.match(appRoutes, /path="\/projects\/:projectSlug\/create"/);
-  assert.match(mapPanelProvider, /pathname\.endsWith\("\/create"\)/);
-  assert.match(mapPanelProvider, /const isNewMap = location\.pathname === "\/maps\/new\/create"/);
+  assert.match(appRoutes, /DeprecatedProjectCreateRedirect/);
   assert.match(
-    mapPanelProvider,
-    /projectSlug[\s\S]*fetchProjectMapNavigation\(projectSlug, mode, controller\.signal\)/,
+    appRoutes,
+    /\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/manage/,
   );
+  assert.match(mapPanelProvider, /const isNewMap = location\.pathname === "\/maps\/new\/create"/);
+
+  const createRouteStart = appRoutes.indexOf(
+    'path="/projects/:projectSlug/create"',
+  );
+  const nextRouteStart = appRoutes.indexOf("<Route", createRouteStart + 10);
+  const createRouteBlock = appRoutes.slice(createRouteStart, nextRouteStart);
+  assert.doesNotMatch(createRouteBlock, /KeplerApp/);
 });
 
 test("ações da sidebar são capability-aware e não consultam role", () => {
