@@ -218,6 +218,34 @@ async function updateProject(env, current, body, actor) {
 
   if (
     managedLifecycle &&
+    dropboxRootPath !== normalizeDropboxPath(current.dropbox_root_path)
+  ) {
+    return {
+      error: errorResponse(
+        "A pasta física de storage não pode ser alterada por edição de metadata em um projeto gerenciado.",
+        409,
+        "PROJECT_STORAGE_LOCATION_MANAGED_BY_LIFECYCLE",
+        { lifecycleState: current.lifecycle_state },
+      ),
+    };
+  }
+
+  if (
+    managedLifecycle &&
+    defaultConfigFile !== current.default_config_file
+  ) {
+    return {
+      error: errorResponse(
+        "O arquivo base de configuração não pode ser alterado por edição de metadata em um projeto gerenciado.",
+        409,
+        "PROJECT_CONFIG_FILE_MANAGED_BY_LIFECYCLE",
+        { lifecycleState: current.lifecycle_state },
+      ),
+    };
+  }
+
+  if (
+    managedLifecycle &&
     requestedActive !== null &&
     requestedActive !== Number(current.active || 0)
   ) {
