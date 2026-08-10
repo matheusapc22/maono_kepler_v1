@@ -159,6 +159,15 @@ export async function saveVersionedProjectConfig(
     );
   }
 
+  const expectedLifecycleState = allowedLifecycleStates[0];
+  if (!expectedLifecycleState) {
+    throw serviceError(
+      "Lifecycle esperado para publicação não informado.",
+      500,
+      "PROJECT_CONFIG_LIFECYCLE_EXPECTATION_MISSING",
+    );
+  }
+
   const artifact = await buildProjectConfigArtifact(config);
   const nextRevision = expected + 1;
   const id = transitionId();
@@ -182,6 +191,20 @@ export async function saveVersionedProjectConfig(
   });
 
   try {
+    if (reservation.alreadyPublished) {
+      const recoveredProject = reservation.project;
+      await updateLinkedOrganizationFile(env, recoveredProject, artifact);
+      return {
+        project: recoveredProject,
+        revision: nextRevision,
+        artifact,
+        ledger: reservation.revision,
+        transitionId: id,
+        legacy: false,
+        idempotent: true,
+      };
+    }
+
     let ready = reservation.revision;
 
     if (ready.status !== "READY") {
@@ -218,6 +241,7 @@ export async function saveVersionedProjectConfig(
       revision: nextRevision,
       actor,
       markPreviewPending,
+      expectedLifecycleState,
     });
     await updateLinkedOrganizationFile(env, updatedProject, artifact);
 
@@ -228,10 +252,12 @@ export async function saveVersionedProjectConfig(
       ledger: ready,
       transitionId: id,
       legacy: false,
+      idempotent: Boolean(reservation.idempotent),
     };
   } catch (error) {
     if (
       error?.code !== "PROJECT_CONFIG_REVISION_CONFLICT" &&
+      error?.code !== "PROJECT_CONFIG_LIFECYCLE_CONFLICT" &&
       error?.code !== "PROJECT_CONFIG_INTEGRITY_MISMATCH"
     ) {
       await markProjectConfigRevisionFailed(env, {
