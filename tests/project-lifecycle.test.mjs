@@ -120,6 +120,7 @@ test("0018 adiciona lifecycle, integridade e ledger sem backfill destrutivo", ()
   assert.ok(ledgerColumns.includes("checksum"));
   assert.ok(ledgerColumns.includes("storage_provider_hash"));
   assert.ok(ledgerColumns.includes("published_at"));
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
   assert.match(schema, /project_config_revisions/);
   assert.match(schema, /lifecycle_state/);
 });
@@ -303,7 +304,7 @@ test("storage_ref é opaca e revisionada sem caminho Dropbox público", () => {
   assert.doesNotMatch(ref, /dropbox/i);
 });
 
-test("ledger impede dois conteúdos diferentes na mesma revisão e publica por CAS", async () => {
+test("ledger impede conteúdo concorrente, publica por CAS e recupera retry idempotente", async () => {
   const database = fixture();
   database.prepare(`
     INSERT INTO projects (
@@ -354,6 +355,7 @@ test("ledger impede dois conteúdos diferentes na mesma revisão e publica por C
     expectedCurrentRevision: 14,
     revision: 15,
     actor: { id: 10, name: "Editor" },
+    expectedLifecycleState: "ACTIVE",
   });
 
   assert.equal(published.config_revision, 15);
@@ -361,8 +363,16 @@ test("ledger impede dois conteúdos diferentes na mesma revisão e publica por C
   assert.equal(published.config_checksum, base.checksum);
   assert.equal(published.config_storage_ref, base.storageRef);
 
+  const recovered = await reserveProjectConfigRevision(env, base);
+  assert.equal(recovered.alreadyPublished, true);
+  assert.equal(recovered.idempotent, true);
+  assert.equal(recovered.project.config_revision, 15);
+
   await assert.rejects(
-    reserveProjectConfigRevision(env, base),
+    reserveProjectConfigRevision(env, {
+      ...base,
+      checksum: "c".repeat(64),
+    }),
     (error) =>
       error?.code === "PROJECT_CONFIG_REVISION_CONFLICT" &&
       error?.details?.currentConfigRevision === 15,
