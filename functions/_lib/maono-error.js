@@ -1,6 +1,12 @@
 import { getErrorDefinition } from "./error-catalog.js";
 import { isErrorCategory } from "./error-categories.js";
 
+const PUBLIC_DETAIL_BLOCKLIST =
+  /(token|secret|password|cookie|authorization|stack|cause|refresh[_-]?token|access[_-]?token)/i;
+const PUBLIC_DETAIL_MAX_DEPTH = 4;
+const PUBLIC_DETAIL_MAX_ARRAY = 25;
+const PUBLIC_DETAIL_MAX_STRING = 1000;
+
 function booleanOr(value, fallback) {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -29,6 +35,45 @@ function inferTechnicalCode(error) {
   }
 
   return null;
+}
+
+function sanitizePublicValue(value, depth = 0) {
+  if (value === null || value === undefined) return value;
+  if (depth >= PUBLIC_DETAIL_MAX_DEPTH) return "[redacted:depth]";
+
+  if (typeof value === "string") {
+    if (/^data:[^;]+;base64,/i.test(value)) return "[redacted:data-url]";
+    return value.length <= PUBLIC_DETAIL_MAX_STRING
+      ? value
+      : `${value.slice(0, PUBLIC_DETAIL_MAX_STRING)}…`;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") return value;
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, PUBLIC_DETAIL_MAX_ARRAY)
+      .map((item) => sanitizePublicValue(item, depth + 1));
+  }
+
+  if (typeof value === "object") {
+    const output = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (PUBLIC_DETAIL_BLOCKLIST.test(key)) {
+        output[key] = "[redacted]";
+        continue;
+      }
+      output[key] = sanitizePublicValue(item, depth + 1);
+    }
+    return output;
+  }
+
+  return String(value);
+}
+
+export function sanitizePublicErrorDetails(details) {
+  if (!details || typeof details !== "object") return details ?? null;
+  return sanitizePublicValue(details, 0);
 }
 
 export function createCorrelationId() {
@@ -113,7 +158,9 @@ export function toPublicError(error, { correlationId = null, includeMessage = tr
     retryable: Boolean(normalized.retryable),
     correlationId: normalized.correlationId || correlationId || createCorrelationId(),
     ...(includeMessage && normalized.message ? { message: normalized.message } : {}),
-    ...(normalized.details ? { details: normalized.details } : {}),
+    ...(normalized.details
+      ? { details: sanitizePublicErrorDetails(normalized.details) }
+      : {}),
   };
 }
 
