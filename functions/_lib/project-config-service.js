@@ -1,4 +1,3 @@
-import { downloadDropboxTextFile, uploadDropboxTextFile } from "./dropbox.js";
 import {
   PROJECT_LIFECYCLE_STATES,
   assertActiveProjectInvariant,
@@ -10,17 +9,14 @@ import {
   verifyProjectConfigBytes,
 } from "./project-config-integrity.js";
 import {
-  createProjectConfigStorageRef,
-  getProjectConfigStorageProvider,
-  putProjectConfigRevision,
-  readProjectConfigRevision,
-} from "./project-config-repository.js";
-import {
   markProjectConfigRevisionFailed,
   markProjectConfigRevisionReady,
   publishProjectConfigRevision,
   reserveProjectConfigRevision,
 } from "./project-config-revisions.js";
+import { MAP_CONFIG_SAVE_MODES } from "./map-config-repository.js";
+import { resolveMapConfigRepository } from "./map-config-repository-factory.js";
+import { createMapConfigStorageRef } from "./map-config-storage-ref.js";
 
 function serviceError(message, status, code, details = null) {
   const error = new Error(message);
@@ -40,17 +36,32 @@ function decodeJsonBytes(bytes) {
   return { text, config: JSON.parse(text) };
 }
 
-export async function readPublishedProjectConfig(env, project) {
+function decodeStoredConfig(stored, message = "A configuração armazenada não contém JSON UTF-8 válido.") {
+  try {
+    return decodeJsonBytes(stored.bytes);
+  } catch (error) {
+    throw serviceError(message, 500, "INVALID_PROJECT_CONFIG", {
+      cause: error?.name || "PARSE_ERROR",
+    });
+  }
+}
+
+export async function readPublishedProjectConfig(
+  env,
+  project,
+  { mapConfigRepository = null } = {},
+) {
+  const repository = resolveMapConfigRepository(env, mapConfigRepository);
+
   // lifecycle_state não nulo é uma fronteira irreversível do rollout: uma vez
   // reconciliado/criado pela S03, o projeto nunca volta a ler o alias legado.
   if (!isLifecycleManagedProject(project)) {
-    const fileName = project.default_config_file || "config.kepler.json";
-    const text = await downloadDropboxTextFile(
-      env,
-      project.dropbox_root_path,
-      fileName,
+    const stored = await repository.load({ project });
+    const decoded = decodeStoredConfig(
+      stored,
+      "O arquivo legado do projeto não contém JSON UTF-8 válido.",
     );
-    return { config: JSON.parse(text), lifecycle: null, legacy: true };
+    return { config: decoded.config, lifecycle: null, legacy: true };
   }
 
   if (project.lifecycle_state !== PROJECT_LIFECYCLE_STATES.ACTIVE) {
@@ -63,7 +74,7 @@ export async function readPublishedProjectConfig(env, project) {
   }
 
   assertActiveProjectInvariant(project);
-  const stored = await readProjectConfigRevision(env, {
+  const stored = await repository.getRevision({
     project,
     revision: project.config_revision,
     storageRef: project.config_storage_ref,
@@ -73,17 +84,10 @@ export async function readPublishedProjectConfig(env, project) {
     expectedAlgorithm: project.config_checksum_algorithm,
   });
 
-  let decoded;
-  try {
-    decoded = decodeJsonBytes(stored.bytes);
-  } catch (error) {
-    throw serviceError(
-      "A revisão publicada não contém JSON UTF-8 válido.",
-      500,
-      "INVALID_PROJECT_CONFIG",
-      { cause: error?.name || "PARSE_ERROR" },
-    );
-  }
+  const decoded = decodeStoredConfig(
+    stored,
+    "A revisão publicada não contém JSON UTF-8 válido.",
+  );
 
   return {
     config: decoded.config,
@@ -153,15 +157,23 @@ function legacyCommitNotConfirmed(error) {
 
 export async function saveLegacyProjectConfig(
   env,
-  { project, config, actor, touchProjectAfterConfigSave },
+  {
+    project,
+    config,
+    actor,
+    touchProjectAfterConfigSave,
+    mapConfigRepository = null,
+  },
 ) {
+  const repository = resolveMapConfigRepository(env, mapConfigRepository);
   const artifact = await buildProjectConfigArtifact(config);
-  await uploadDropboxTextFile(
-    env,
-    project.dropbox_root_path,
-    project.default_config_file || "config.kepler.json",
-    artifact.text,
-  );
+  await repository.saveRevision({
+    project,
+    revision: Math.max(1, Number(project.config_revision || 0) + 1),
+    bytes: artifact.bytes,
+    contentType: artifact.contentType,
+    mode: MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE,
+  });
   const organizationFileWarning = await updateLinkedOrganizationFile(
     env,
     project,
@@ -199,8 +211,10 @@ export async function saveVersionedProjectConfig(
     actor,
     allowedLifecycleStates = [PROJECT_LIFECYCLE_STATES.ACTIVE],
     markPreviewPending = true,
+    mapConfigRepository = null,
   },
 ) {
+  const repository = resolveMapConfigRepository(env, mapConfigRepository);
   const expected = Number(expectedConfigRevision);
   if (!Number.isInteger(expected) || expected < 0) {
     throw serviceError(
@@ -222,8 +236,8 @@ export async function saveVersionedProjectConfig(
   const artifact = await buildProjectConfigArtifact(config);
   const nextRevision = expected + 1;
   const id = transitionId();
-  const storageRef = createProjectConfigStorageRef(project.id, nextRevision);
-  const storageProvider = getProjectConfigStorageProvider(env);
+  const storageRef = createMapConfigStorageRef(project.id, nextRevision);
+  const storageProvider = repository.provider;
   const reservation = await reserveProjectConfigRevision(env, {
     projectId: project.id,
     organizationId: project.organization_id,
@@ -268,12 +282,13 @@ export async function saveVersionedProjectConfig(
     let ready = reservation.revision;
 
     if (ready.status !== "READY") {
-      const stored = await putProjectConfigRevision(env, {
+      const stored = await repository.saveRevision({
         project,
         revision: nextRevision,
         storageRef,
         bytes: artifact.bytes,
         contentType: artifact.contentType,
+        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
       });
       ready = await markProjectConfigRevisionReady(env, {
         projectId: project.id,
@@ -283,7 +298,7 @@ export async function saveVersionedProjectConfig(
         storageProviderHash: stored.providerHash,
       });
     } else {
-      const stored = await readProjectConfigRevision(env, {
+      const stored = await repository.getRevision({
         project,
         revision: nextRevision,
         storageRef,
@@ -348,6 +363,7 @@ export async function saveProjectConfig(
     expectedConfigRevision,
     actor,
     touchProjectAfterConfigSave,
+    mapConfigRepository = null,
   },
 ) {
   if (!isLifecycleManagedProject(project)) {
@@ -356,6 +372,7 @@ export async function saveProjectConfig(
       config,
       actor,
       touchProjectAfterConfigSave,
+      mapConfigRepository,
     });
   }
 
@@ -375,5 +392,6 @@ export async function saveProjectConfig(
     actor,
     allowedLifecycleStates: [PROJECT_LIFECYCLE_STATES.ACTIVE],
     markPreviewPending: true,
+    mapConfigRepository,
   });
 }
