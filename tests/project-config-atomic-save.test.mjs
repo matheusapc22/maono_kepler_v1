@@ -163,6 +163,7 @@ test("S05: mesma revisão aceita retry idempotente e rejeita conteúdo diferente
   });
   assert.equal(retried.createdNew, false);
   assert.equal(retried.idempotent, true);
+  assert.equal(retried.contentVerified, true);
 
   await assert.rejects(
     repository.saveRevision({
@@ -301,11 +302,62 @@ test("S05: checksum pós-write divergente marca FAILED e preserva o HEAD", async
   assert.equal(failed.error_code, "PROJECT_CONFIG_INTEGRITY_MISMATCH");
 });
 
-test("S05: pipeline mantém write/verify antes do publish CAS", async () => {
-  const source = await readFile(
-    new URL("../functions/_lib/project-config-service.js", import.meta.url),
-    "utf8",
-  );
+test("S05: atestação do repository confirma save sem segundo download", async () => {
+  const database = fixture();
+  await insertActiveProject(database);
+  const env = envFor(database);
+  let readbacks = 0;
+  const repository = {
+    provider: "dropbox",
+    async load() {
+      throw new Error("não usado");
+    },
+    async saveRevision({ bytes }) {
+      return {
+        provider: "dropbox",
+        providerVersion: "provider-rev-2",
+        providerHash: "provider-content-hash",
+        sizeBytes: bytes.byteLength,
+        contentVerified: true,
+        verificationMethod: "provider-content-hash",
+        idempotent: false,
+      };
+    },
+    async getRevision() {
+      readbacks += 1;
+      throw new Error("readback não deveria ser necessário");
+    },
+    async getMetadata() {
+      return {};
+    },
+  };
+
+  const saved = await saveVersionedProjectConfig(env, {
+    project: readProject(database),
+    config: config("provider-attested"),
+    expectedConfigRevision: 1,
+    actor: { id: 10, name: "Editor" },
+    mapConfigRepository: repository,
+  });
+
+  assert.equal(saved.revision, 2);
+  assert.equal(saved.revisionHead.currentRevision, 2);
+  assert.equal(readProject(database).config_revision, 2);
+  assert.equal(readbacks, 0);
+});
+
+test("S05: pipeline mantém write/verify antes do publish CAS e create-only no Dropbox", async () => {
+  const [source, dropboxSource, adapterSource] = await Promise.all([
+    readFile(
+      new URL("../functions/_lib/project-config-service.js", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../functions/_lib/dropbox.js", import.meta.url), "utf8"),
+    readFile(
+      new URL("../functions/_lib/dropbox-map-config-repository.js", import.meta.url),
+      "utf8",
+    ),
+  ]);
   const serialize = source.indexOf("serializeProjectConfigBytes(config)");
   const validate = source.indexOf("validateProjectConfig(config");
   const write = source.indexOf("repository.saveRevision({", validate);
@@ -315,4 +367,10 @@ test("S05: pipeline mantém write/verify antes do publish CAS", async () => {
   assert.ok(write > validate);
   assert.ok(verify > write);
   assert.ok(publish > verify);
+  assert.match(dropboxSource, /mode:\s*createOnly \? "add" : "overwrite"/);
+  assert.match(dropboxSource, /strict_conflict:\s*createOnly/);
+  assert.match(
+    adapterSource,
+    /mode === MAP_CONFIG_SAVE_MODES\.IMMUTABLE \? "create" : "overwrite"/,
+  );
 });
