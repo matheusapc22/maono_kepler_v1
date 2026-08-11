@@ -53,7 +53,7 @@ function pathName(path) {
 
 function notFoundError(path) {
   const error = new Error(`path/not_found: ${path}`);
-  error.status = 404;
+  error.status = 409;
   error.code = "DROPBOX_PATH_NOT_FOUND";
   return error;
 }
