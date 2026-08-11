@@ -3,6 +3,7 @@ import {
   getActiveMapLoadTrace,
   startMapLoadTrace,
   type MapLoadTrace,
+  type MapLoadTraceError,
 } from "./map-load-trace";
 
 const OBSERVABILITY_ENDPOINT = "/api/observability/map-load";
@@ -75,7 +76,10 @@ function scheduleSessionResolution(trace: MapLoadTrace, attempts = 0) {
   }, 25);
 }
 
-function safeErrorFromEnvelope(data: any, fallbackStage: any) {
+function safeErrorFromEnvelope(
+  data: any,
+  fallbackStage: MapLoadTraceError["stage"],
+): MapLoadTraceError {
   return {
     stage: fallbackStage,
     code: typeof data?.error?.code === "string" ? data.error.code : null,
