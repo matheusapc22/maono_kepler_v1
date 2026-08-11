@@ -8,6 +8,7 @@ import "./login.css";
 
 const LOGIN_BACKGROUND_URL =
   "https://pub-56c14c350e6c453c98cb6275d38db861.r2.dev/Piramides_Maono.png";
+const LOGIN_PAGE_BACKGROUND_URL = "/login-background-maono.webp";
 const ASSET_PRELOAD_TIMEOUT_MS = 4_000;
 
 function preloadImage(src: string): Promise<void> {
@@ -69,6 +70,7 @@ const LoginPage: React.FC = () => {
       Promise.all([
         preloadImage(Logo),
         preloadImage(LOGIN_BACKGROUND_URL),
+        preloadImage(LOGIN_PAGE_BACKGROUND_URL),
       ]).then(() => undefined),
       timeout,
     ]).finally(() => {
@@ -113,10 +115,20 @@ const LoginPage: React.FC = () => {
     }
   }
 
+  const pageStyle = {
+    "--maono-login-background": `url("${LOGIN_BACKGROUND_URL}")`,
+    backgroundColor: "#050505",
+    backgroundImage: `url("${LOGIN_PAGE_BACKGROUND_URL}")`,
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    backgroundSize: "cover",
+  } as CSSProperties;
+
   if (!assetsReady) {
     return (
       <main
         className="maono-login-page maono-login-page__loading"
+        style={pageStyle}
         aria-busy="true"
       >
         <div className="maono-login-page__spinner" aria-hidden="true" />
@@ -124,10 +136,6 @@ const LoginPage: React.FC = () => {
       </main>
     );
   }
-
-  const pageStyle = {
-    "--maono-login-background": `url("${LOGIN_BACKGROUND_URL}")`,
-  } as CSSProperties;
 
   return (
     <main className="maono-login-page" style={pageStyle}>
