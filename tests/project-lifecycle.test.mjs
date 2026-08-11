@@ -188,16 +188,25 @@ test("preview FAILED e disponibilidade transitória não mudam o lifecycle lógi
 });
 
 test("queries normais usam ACTIVE e fallback somente para lifecycle NULL", () => {
-  for (const source of [projectsSource, projectListSource]) {
-    assert.match(source, /projects\.lifecycle_state = 'ACTIVE'/);
-    assert.match(
-      source,
-      /projects\.lifecycle_state IS NULL AND projects\.active = 1/,
-    );
-  }
+  assert.match(projectsSource, /export const PROJECT_PUBLICATION_SQL/);
+  assert.match(projectsSource, /projects\.lifecycle_state = 'ACTIVE'/);
+  assert.match(
+    projectsSource,
+    /projects\.lifecycle_state IS NULL AND projects\.active = 1/,
+  );
+  assert.match(
+    projectListSource,
+    /PROJECT_PUBLICATION_SQL[\s\S]*from "\.\/projects\.js"/,
+  );
+  assert.match(projectListSource, /WHERE \$\{PROJECT_PUBLICATION_SQL\}/);
+  assert.match(projectListSource, /AND \$\{PROJECT_PUBLICATION_SQL\}/);
 
   assert.doesNotMatch(
     projectsSource,
+    /WHERE projects\.active = 1\s+AND projects\.organization_id/,
+  );
+  assert.doesNotMatch(
+    projectListSource,
     /WHERE projects\.active = 1\s+AND projects\.organization_id/,
   );
 });
