@@ -14,11 +14,13 @@ on:
       - "functions/_lib/maono-error.js"
       - "functions/_lib/result.js"
       - "functions/_lib/map-config-*.js"
+      - "functions/_lib/map-load-observability.js"
       - "functions/_lib/project-*.js"
       - "functions/_lib/projects.js"
       - "functions/api/admin/organizations/**"
       - "functions/api/admin/project-previews/**"
       - "functions/api/admin/project-lifecycle/**"
+      - "functions/api/observability/**"
       - "functions/api/organizations/**"
       - "functions/api/projects/**"
       - "migrations/0012_access_delegation_policy.sql"
@@ -28,6 +30,8 @@ on:
       - "docs/architecture/S04-map-config-repository.md"
       - "docs/architecture/S05-atomic-project-revisions.md"
       - "docs/architecture/S06-result-types-error-taxonomy.md"
+      - "docs/architecture/S07-map-load-observability.md"
+      - "docs/architecture/GATE-A-foundation-stable.md"
       - "schema.sql"
       - "package.json"
       - "vite.config.ts"
@@ -42,6 +46,7 @@ on:
       - "tests/admin-user-manager-delegation-map.test.mjs"
       - "tests/cloudflare-build-chunking.test.mjs"
       - "tests/map-config-*.test.mjs"
+      - "tests/map-load-*.test.mjs"
       - "tests/project-*.test.mjs"
       - "tests/error-*.test.mjs"
       - "tests/result-types.test.mjs"
@@ -90,5 +95,5 @@ jobs:
           tests/admin-user-manager-delegation-map.test.mjs
           tests/cloudflare-build-chunking.test.mjs
 
-      - name: Project preview and card tests
-        run: npm run test:projects
+      - name: GATE A — Foundation stability
+        run: npm run test:foundation-gate
