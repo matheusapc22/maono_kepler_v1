@@ -5,6 +5,10 @@ import {
   methodNotAllowed,
   readJsonBody,
 } from "../../../_lib/http.js";
+import {
+  getOrCreateCorrelationId,
+  normalizeMaonoError,
+} from "../../../_lib/maono-error.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject } from "../../../_lib/projects.js";
 import { uploadDropboxTextFile } from "../../../_lib/dropbox.js";
@@ -73,7 +77,12 @@ function sanitizeAuditText(value, maxLength = AUDIT_TEXT_LIMIT) {
 function logUnexpectedError(error) {
   const status = error?.status || 500;
   if (status >= 500) {
-    console.error("[Maono projects] Falha no endpoint legado de save:", error);
+    console.error("[Maono projects] Falha no endpoint legado de save:", {
+      correlationId: error?.correlationId ?? null,
+      code: error?.code ?? null,
+      category: error?.category ?? null,
+      retryable: error?.retryable ?? null,
+    });
   }
 }
 
@@ -119,7 +128,10 @@ async function auditUnexpectedLegacySaveError(
 
 export async function onRequest(context) {
   const { request, env, params } = context;
-  if (request.method !== "POST") return methodNotAllowed(["POST"]);
+  const correlationId = getOrCreateCorrelationId(request);
+  if (request.method !== "POST") {
+    return methodNotAllowed(["POST"], { correlationId });
+  }
 
   let user = null;
   let slug = null;
@@ -134,9 +146,16 @@ export async function onRequest(context) {
       await auditLegacySave(env, request, user, null, "denied", {
         slug: null,
         fileName: null,
+        correlationId,
         reason: "MISSING_PROJECT_SLUG",
       });
-      return errorResponse("Slug do projeto não informado.", 400, "PROJECT_SLUG_REQUIRED");
+      return errorResponse(
+        "Slug do projeto não informado.",
+        400,
+        "PROJECT_SLUG_REQUIRED",
+        null,
+        { correlationId },
+      );
     }
 
     project = await getAuthorizedProject(env, user, slug);
@@ -144,12 +163,15 @@ export async function onRequest(context) {
       await auditLegacySave(env, request, user, null, "denied", {
         slug,
         fileName: null,
+        correlationId,
         reason: "PROJECT_NOT_FOUND_OR_NOT_AUTHORIZED",
       });
       return errorResponse(
         "Projeto não encontrado ou sem permissão de acesso.",
         404,
         "PROJECT_NOT_FOUND",
+        null,
+        { correlationId },
       );
     }
 
@@ -174,12 +196,15 @@ export async function onRequest(context) {
       await auditLegacySave(env, request, user, project, "invalid", {
         slug,
         fileName,
+        correlationId,
         reason: "MISSING_CONFIG",
       });
       return errorResponse(
         "Envie o campo config em formato JSON no corpo da requisição.",
         400,
         "MISSING_CONFIG",
+        null,
+        { correlationId },
       );
     }
 
@@ -195,6 +220,7 @@ export async function onRequest(context) {
     await auditLegacySave(env, request, user, project, "success", {
       slug,
       fileName,
+      correlationId,
       sizeBytes,
       dropboxRev: dropboxResult?.rev ?? null,
     });
@@ -216,8 +242,12 @@ export async function onRequest(context) {
       },
     });
   } catch (error) {
-    logUnexpectedError(error);
-    const status = Number(error?.status || 500);
+    const normalized = normalizeMaonoError(error, {
+      defaultCode: "PROJECT_SAVE_ERROR",
+      correlationId,
+    });
+    const status = Number(normalized.status || 500);
+    logUnexpectedError(normalized);
 
     await auditUnexpectedLegacySaveError(
       env,
@@ -226,42 +256,37 @@ export async function onRequest(context) {
       project,
       slug,
       fileName,
-      error,
+      normalized,
       status < 500 ? "invalid" : "error",
     ).catch(() => null);
 
     if (status === 400) {
-      return errorResponseFromError(error, {
-        defaultCode: "PROJECT_SAVE_ERROR",
-        status: 400,
+      return errorResponseFromError(normalized, {
+        correlationId,
         publicMessage: error?.message || "Requisição inválida.",
       });
     }
     if (status === 401) {
-      return errorResponseFromError(error, {
-        defaultCode: "AUTH_SESSION_EXPIRED",
-        status: 401,
+      return errorResponseFromError(normalized, {
+        correlationId,
         publicMessage: "Sessão inválida ou expirada.",
       });
     }
     if (status === 403) {
-      return errorResponseFromError(error, {
-        defaultCode: "PERMISSION_PROJECT_SAVE_DENIED",
-        status: 403,
+      return errorResponseFromError(normalized, {
+        correlationId,
         publicMessage: "Você não tem permissão para salvar alterações permanentes neste projeto.",
       });
     }
     if (status === 404) {
-      return errorResponseFromError(error, {
-        defaultCode: "PROJECT_NOT_FOUND",
-        status: 404,
+      return errorResponseFromError(normalized, {
+        correlationId,
         publicMessage: "Projeto não encontrado ou sem permissão de acesso.",
       });
     }
 
-    return errorResponseFromError(error, {
-      defaultCode: "PROJECT_SAVE_ERROR",
-      status,
+    return errorResponseFromError(normalized, {
+      correlationId,
       publicMessage: "Não foi possível salvar o projeto.",
     });
   }
