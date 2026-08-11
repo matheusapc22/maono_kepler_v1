@@ -2,13 +2,13 @@ import React, { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
+import LoginPageBackground from "../assets/images/login-background-maono.webp";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
 import "./login.css";
 
 const LOGIN_BACKGROUND_URL =
   "https://pub-56c14c350e6c453c98cb6275d38db861.r2.dev/Piramides_Maono.png";
-const LOGIN_PAGE_BACKGROUND_URL = "/login-background-maono.webp";
 const ASSET_PRELOAD_TIMEOUT_MS = 4_000;
 
 function preloadImage(src: string): Promise<void> {
@@ -70,7 +70,7 @@ const LoginPage: React.FC = () => {
       Promise.all([
         preloadImage(Logo),
         preloadImage(LOGIN_BACKGROUND_URL),
-        preloadImage(LOGIN_PAGE_BACKGROUND_URL),
+        preloadImage(LoginPageBackground),
       ]).then(() => undefined),
       timeout,
     ]).finally(() => {
@@ -117,10 +117,9 @@ const LoginPage: React.FC = () => {
 
   const pageStyle = {
     "--maono-login-background": `url("${LOGIN_BACKGROUND_URL}")`,
-    // Usamos o shorthand inline para sobrescrever de forma inequívoca o
-    // fallback `background` legado do CSS. O asset externo fica exclusivo da
-    // viewport; a variável acima continua exclusiva do card com as pirâmides.
-    background: `#050505 url("${LOGIN_PAGE_BACKGROUND_URL}") center / cover no-repeat`,
+    // O asset externo é importado pelo Vite para que o build gere e resolva
+    // a URL final, evitando depender de uma rota absoluta do diretório public.
+    background: `#050505 url("${LoginPageBackground}") center / cover no-repeat`,
   } as CSSProperties;
 
   if (!assetsReady) {
