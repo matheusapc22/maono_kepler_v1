@@ -1,3 +1,4 @@
+import { dropboxContentHashHex } from "./dropbox-content-hash.js";
 import {
   downloadDropboxBinaryFile,
   ensureDropboxFolder,
@@ -114,6 +115,22 @@ function immutableViolation(project, revision, storageRef) {
   return error;
 }
 
+function providerIntegrityError(project, revision, storageRef) {
+  const error = new Error(
+    "O storage não confirmou a integridade da revisão persistida.",
+  );
+  error.status = 502;
+  error.code = "MAP_CONFIG_STORAGE_INTEGRITY_MISMATCH";
+  error.details = {
+    provider: "dropbox",
+    projectId: project?.id ?? null,
+    revision: Number(revision || 0),
+    storageRef,
+    retryable: true,
+  };
+  return error;
+}
+
 function normalizeProviderMetadata(provider, metadata, fallbackSize = 0) {
   return {
     provider,
@@ -181,13 +198,55 @@ export class DropboxMapConfigRepository {
     }
   }
 
+  async findExistingMetadata({ project, revision, storageRef }) {
+    try {
+      return await this.getMetadata({
+        project,
+        revision,
+        storageRef,
+        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+      });
+    } catch (error) {
+      if (error?.code === "MAP_CONFIG_NOT_FOUND") return null;
+      throw error;
+    }
+  }
+
   async existingRevisionResult({
     project,
     revision,
     storageRef,
     source,
     contentType,
+    expectedProviderHash = null,
   }) {
+    if (this.provider === "dropbox" && expectedProviderHash) {
+      const metadata = await this.findExistingMetadata({
+        project,
+        revision,
+        storageRef,
+      });
+      if (!metadata) return null;
+      if (metadata.providerHash) {
+        if (
+          String(metadata.providerHash).toLowerCase() !==
+          String(expectedProviderHash).toLowerCase()
+        ) {
+          throw immutableViolation(project, revision, storageRef);
+        }
+        return {
+          ...metadata,
+          storageRef,
+          contentType,
+          source: "revision",
+          idempotent: true,
+          createdNew: false,
+          contentVerified: true,
+          verificationMethod: "provider-content-hash",
+        };
+      }
+    }
+
     const existing = await this.findExistingRevision({
       project,
       revision,
@@ -210,6 +269,8 @@ export class DropboxMapConfigRepository {
       source: "revision",
       idempotent: true,
       createdNew: false,
+      contentVerified: true,
+      verificationMethod: "byte-compare",
     };
   }
 
@@ -225,6 +286,7 @@ export class DropboxMapConfigRepository {
     const source = normalizeBytes(bytes);
     let fileName;
     let normalizedStorageRef = storageRef;
+    let expectedProviderHash = null;
 
     if (mode === MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE) {
       fileName = project.default_config_file || "config.kepler.json";
@@ -237,6 +299,9 @@ export class DropboxMapConfigRepository {
         project.default_config_file || "config.kepler.json",
         revision,
       );
+      if (this.provider === "dropbox") {
+        expectedProviderHash = await dropboxContentHashHex(source);
+      }
 
       const existing = await this.existingRevisionResult({
         project,
@@ -244,6 +309,7 @@ export class DropboxMapConfigRepository {
         storageRef: normalizedStorageRef,
         source,
         contentType,
+        expectedProviderHash,
       });
       if (existing) return existing;
     } else {
@@ -254,7 +320,7 @@ export class DropboxMapConfigRepository {
     }
 
     try {
-      const metadata = await uploadDropboxBinaryFile(
+      const rawMetadata = await uploadDropboxBinaryFile(
         this.env,
         project.dropbox_root_path,
         fileName,
@@ -265,8 +331,28 @@ export class DropboxMapConfigRepository {
             mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE ? "create" : "overwrite",
         },
       );
+      const metadata = normalizeProviderMetadata(
+        this.provider,
+        rawMetadata,
+        source.byteLength,
+      );
+      let contentVerified = false;
+      let verificationMethod = null;
+
+      if (this.provider === "dropbox" && expectedProviderHash) {
+        if (
+          !metadata.providerHash ||
+          String(metadata.providerHash).toLowerCase() !==
+            String(expectedProviderHash).toLowerCase()
+        ) {
+          throw providerIntegrityError(project, revision, normalizedStorageRef);
+        }
+        contentVerified = true;
+        verificationMethod = "provider-content-hash";
+      }
+
       return {
-        ...normalizeProviderMetadata(this.provider, metadata, source.byteLength),
+        ...metadata,
         storageRef: normalizedStorageRef,
         contentType,
         source:
@@ -275,12 +361,10 @@ export class DropboxMapConfigRepository {
             : "revision",
         idempotent: false,
         createdNew: mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+        contentVerified,
+        verificationMethod,
       };
     } catch (error) {
-      // O check anterior é apenas uma otimização. A escrita create-only é a
-      // barreira física contra corrida. Se outro escritor venceu com os mesmos
-      // bytes, convertemos o conflito em retry idempotente; conteúdo diferente
-      // continua sendo violação de imutabilidade.
       if (mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE && isWriteConflict(error)) {
         const existing = await this.existingRevisionResult({
           project,
@@ -288,6 +372,7 @@ export class DropboxMapConfigRepository {
           storageRef: normalizedStorageRef,
           source,
           contentType,
+          expectedProviderHash,
         });
         if (existing) return existing;
       }
