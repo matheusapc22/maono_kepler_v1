@@ -16,6 +16,7 @@ const SAFE_CATEGORY_PATTERN = /^[A-Z0-9_:-]{2,80}$/;
 const MAX_TRACE_DURATION_MS = 3_600_000;
 
 function safeInteger(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isInteger(number) && number >= 0 ? number : null;
 }
