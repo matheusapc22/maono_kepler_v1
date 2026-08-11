@@ -19,6 +19,18 @@ export function jsonResponse(data, init = {}) {
   });
 }
 
+function logErrorEnvelope(error) {
+  const payload = {
+    correlationId: error.correlationId,
+    code: error.code,
+    category: error.category,
+    retryable: Boolean(error.retryable),
+    status: Number(error.status || 500),
+  };
+  const method = payload.status >= 500 ? "error" : "warn";
+  console[method]("[Maono HTTP error]", payload);
+}
+
 export function errorResponse(
   message,
   status = 400,
@@ -50,6 +62,11 @@ export function errorResponse(
   const publicError = toPublicError(normalized, {
     correlationId,
     includeMessage: options.includeMessage !== false,
+  });
+
+  logErrorEnvelope({
+    ...normalized,
+    correlationId: publicError.correlationId,
   });
 
   return jsonResponse(
