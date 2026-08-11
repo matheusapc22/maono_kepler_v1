@@ -4,7 +4,7 @@ import {
   type MapLoadEventName,
   type MapLoadEventRecord,
   type MapLoadScalarId,
-} from "./map-load-events";
+} from "./map-load-events.ts";
 
 export type MapLoadTraceError = {
   stage: MapLoadEventName | null;
@@ -50,6 +50,7 @@ function createCorrelationId() {
 }
 
 function nonNegativeInteger(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isInteger(number) && number >= 0 ? number : null;
 }
@@ -149,9 +150,10 @@ export class MapLoadTrace {
   fail(error: Partial<MapLoadTraceError> = {}) {
     if (this.flushed || this.terminalError || this.has("MAP_READY")) return false;
     this.terminalError = {
-      stage: error.stage && MAP_LOAD_EVENT_INDEX[error.stage] !== undefined
-        ? error.stage
-        : this.nextExpectedEvent(),
+      stage:
+        error.stage && MAP_LOAD_EVENT_INDEX[error.stage] !== undefined
+          ? error.stage
+          : this.nextExpectedEvent(),
       code: safeCode(error.code),
       category: safeCategory(error.category),
       retryable:
