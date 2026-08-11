@@ -1,5 +1,6 @@
 import {
   errorResponse,
+  errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
   readJsonBody,
@@ -54,49 +55,29 @@ function getErrorMessage(error) {
 }
 
 function sanitizeAuditText(value, maxLength = AUDIT_TEXT_LIMIT) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
+  if (value === null || value === undefined) return null;
   let text = "";
-
-  if (typeof value === "string") {
-    text = value;
-  } else {
+  if (typeof value === "string") text = value;
+  else {
     try {
       text = JSON.stringify(value);
     } catch {
       text = String(value);
     }
   }
-
-  if (/data:image\/[a-z]+;base64,/i.test(text)) {
-    return "[redacted:data-url]";
-  }
-
-  if (text.length <= maxLength) {
-    return text;
-  }
-
+  if (/data:image\/[a-z]+;base64,/i.test(text)) return "[redacted:data-url]";
+  if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}…`;
 }
 
 function logUnexpectedError(error) {
   const status = error?.status || 500;
-
   if (status >= 500) {
     console.error("[Maono projects] Falha no endpoint legado de save:", error);
   }
 }
 
-async function auditLegacySave(
-  env,
-  request,
-  user,
-  project,
-  result,
-  metadata = {},
-) {
+async function auditLegacySave(env, request, user, project, result, metadata = {}) {
   await recordAuditLog(env, {
     actorUserId: user?.id,
     organizationId: getProjectOrganizationId(project),
@@ -124,24 +105,21 @@ async function auditUnexpectedLegacySaveError(
   error,
   result = "error",
 ) {
-  if (!user || !project) {
-    return;
-  }
-
+  if (!user || !project) return;
   await auditLegacySave(env, request, user, project, result, {
     slug,
     fileName,
     reason: error?.code || "PROJECT_SAVE_ERROR",
     errorMessage: sanitizeAuditText(getErrorMessage(error)),
+    category: error?.category || null,
+    retryable: typeof error?.retryable === "boolean" ? error.retryable : null,
+    correlationId: error?.correlationId || null,
   });
 }
 
 export async function onRequest(context) {
   const { request, env, params } = context;
-
-  if (request.method !== "POST") {
-    return methodNotAllowed(["POST"]);
-  }
+  if (request.method !== "POST") return methodNotAllowed(["POST"]);
 
   let user = null;
   let slug = null;
@@ -158,23 +136,16 @@ export async function onRequest(context) {
         fileName: null,
         reason: "MISSING_PROJECT_SLUG",
       });
-
-      return errorResponse(
-        "Slug do projeto não informado.",
-        400,
-        "PROJECT_SLUG_REQUIRED",
-      );
+      return errorResponse("Slug do projeto não informado.", 400, "PROJECT_SLUG_REQUIRED");
     }
 
     project = await getAuthorizedProject(env, user, slug);
-
     if (!project) {
       await auditLegacySave(env, request, user, null, "denied", {
         slug,
         fileName: null,
         reason: "PROJECT_NOT_FOUND_OR_NOT_AUTHORIZED",
       });
-
       return errorResponse(
         "Projeto não encontrado ou sem permissão de acesso.",
         404,
@@ -183,7 +154,6 @@ export async function onRequest(context) {
     }
 
     fileName = project.default_config_file || DEFAULT_CONFIG_FILE;
-
     await requireProjectPermission(
       env,
       request,
@@ -200,14 +170,12 @@ export async function onRequest(context) {
 
     const body = await readJsonBody(request);
     const config = body?.config;
-
     if (!config || typeof config !== "object" || Array.isArray(config)) {
       await auditLegacySave(env, request, user, project, "invalid", {
         slug,
         fileName,
         reason: "MISSING_CONFIG",
       });
-
       return errorResponse(
         "Envie o campo config em formato JSON no corpo da requisição.",
         400,
@@ -217,7 +185,6 @@ export async function onRequest(context) {
 
     const content = JSON.stringify(config, null, 2);
     const sizeBytes = jsonSizeBytes(content);
-
     const dropboxResult = await uploadDropboxTextFile(
       env,
       project.dropbox_root_path,
@@ -250,52 +217,7 @@ export async function onRequest(context) {
     });
   } catch (error) {
     logUnexpectedError(error);
-
-    const status = error?.status || 500;
-    const code = error?.code || "PROJECT_SAVE_ERROR";
-
-    if (status === 400) {
-      await auditUnexpectedLegacySaveError(
-        env,
-        request,
-        user,
-        project,
-        slug,
-        fileName,
-        error,
-        "invalid",
-      );
-
-      return errorResponse(
-        error.message || "Requisição inválida.",
-        400,
-        code,
-      );
-    }
-
-    if (status === 401) {
-      return errorResponse(
-        "Sessão inválida ou expirada.",
-        401,
-        code,
-      );
-    }
-
-    if (status === 403) {
-      return errorResponse(
-        "Você não tem permissão para salvar alterações permanentes neste projeto.",
-        403,
-        code,
-      );
-    }
-
-    if (status === 404) {
-      return errorResponse(
-        "Projeto não encontrado ou sem permissão de acesso.",
-        404,
-        code,
-      );
-    }
+    const status = Number(error?.status || 500);
 
     await auditUnexpectedLegacySaveError(
       env,
@@ -305,13 +227,42 @@ export async function onRequest(context) {
       slug,
       fileName,
       error,
-      "error",
-    );
+      status < 500 ? "invalid" : "error",
+    ).catch(() => null);
 
-    return errorResponse(
-      "Não foi possível salvar o projeto.",
+    if (status === 400) {
+      return errorResponseFromError(error, {
+        defaultCode: "PROJECT_SAVE_ERROR",
+        status: 400,
+        publicMessage: error?.message || "Requisição inválida.",
+      });
+    }
+    if (status === 401) {
+      return errorResponseFromError(error, {
+        defaultCode: "AUTH_SESSION_EXPIRED",
+        status: 401,
+        publicMessage: "Sessão inválida ou expirada.",
+      });
+    }
+    if (status === 403) {
+      return errorResponseFromError(error, {
+        defaultCode: "PERMISSION_PROJECT_SAVE_DENIED",
+        status: 403,
+        publicMessage: "Você não tem permissão para salvar alterações permanentes neste projeto.",
+      });
+    }
+    if (status === 404) {
+      return errorResponseFromError(error, {
+        defaultCode: "PROJECT_NOT_FOUND",
+        status: 404,
+        publicMessage: "Projeto não encontrado ou sem permissão de acesso.",
+      });
+    }
+
+    return errorResponseFromError(error, {
+      defaultCode: "PROJECT_SAVE_ERROR",
       status,
-      code,
-    );
+      publicMessage: "Não foi possível salvar o projeto.",
+    });
   }
 }
