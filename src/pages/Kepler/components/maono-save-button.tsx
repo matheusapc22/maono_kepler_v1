@@ -37,8 +37,22 @@ const ASYNC_THUMBNAIL_ENABLED =
     import.meta.env.VITE_ASYNC_PROJECT_THUMBNAIL ?? "true",
   ).toLowerCase() !== "false";
 
+type ErrorCategory =
+  | "AUTH"
+  | "PERMISSION"
+  | "PROJECT"
+  | "MAP_CONFIG"
+  | "STORAGE"
+  | "PERFORMANCE"
+  | "SPATIAL"
+  | "ENGINE"
+  | "INFRASTRUCTURE";
+
 type ApiError = {
   code?: string;
+  category?: ErrorCategory;
+  retryable?: boolean;
+  correlationId?: string;
   message?: string;
   details?: {
     stage?: string;
@@ -79,6 +93,9 @@ async function readJsonResponse(response: Response): Promise<any> {
       error: {
         message: "A API retornou uma resposta inesperada.",
         code: "INVALID_JSON_RESPONSE",
+        category: "INFRASTRUCTURE",
+        retryable: true,
+        correlationId: response.headers.get("X-Correlation-Id") || undefined,
       },
     };
   }
@@ -89,28 +106,53 @@ function getBackendErrorMessage(data: any) {
   return typeof message === "string" ? message.trim() : "";
 }
 
+function getErrorReference(data: any) {
+  const code = typeof data?.error?.code === "string" ? data.error.code.trim() : "";
+  const category = typeof data?.error?.category === "string" ? data.error.category.trim() : "";
+  const correlationId =
+    typeof data?.error?.correlationId === "string"
+      ? data.error.correlationId.trim()
+      : "";
+  const parts = [category, code].filter(Boolean).join("/");
+  if (!parts && !correlationId) return "";
+  return ` (${parts || "ERRO"}${correlationId ? ` • ID ${correlationId}` : ""})`;
+}
+
 function getSaveErrorMessage(response: Response, data: any) {
+  const reference = getErrorReference(data);
+  const category = data?.error?.category as ErrorCategory | undefined;
+  const retryable = data?.error?.retryable === true;
+
   if (response.status === 401) {
-    return "Sua sessão expirou. Entre novamente para salvar o projeto.";
+    return `Sua sessão expirou. Entre novamente para salvar o projeto.${reference}`;
   }
 
   if (response.status === 403) {
-    return "Você não tem permissão para salvar alterações permanentes neste projeto.";
+    return `Você não tem permissão para salvar alterações permanentes neste projeto.${reference}`;
   }
 
   if (response.status === 409) {
-    return "O projeto foi alterado em outro lugar. Recarregue o mapa antes de salvar novamente.";
+    return `O projeto foi alterado em outro lugar. Recarregue o mapa antes de salvar novamente.${reference}`;
   }
 
   if (response.status === 404) {
-    return "Projeto não encontrado ou sem permissão de acesso.";
+    return `Projeto não encontrado ou sem permissão de acesso.${reference}`;
   }
 
   if (response.status >= 500) {
-    return "Não foi possível salvar agora. Tente novamente em alguns instantes.";
+    if (category === "STORAGE") {
+      return `${retryable ? "O armazenamento está temporariamente indisponível. Tente novamente em alguns instantes." : "O armazenamento recusou o salvamento e requer verificação."}${reference}`;
+    }
+    if (category === "INFRASTRUCTURE") {
+      return `${retryable ? "A infraestrutura está temporariamente indisponível. Tente novamente em alguns instantes." : "A infraestrutura não conseguiu concluir o salvamento."}${reference}`;
+    }
+    if (category === "MAP_CONFIG") {
+      return `${getBackendErrorMessage(data) || "A configuração do mapa não pôde ser salva."}${reference}`;
+    }
+    return `${getBackendErrorMessage(data) || "Não foi possível salvar agora."}${reference}`;
   }
 
-  return getBackendErrorMessage(data) || "Não foi possível salvar o projeto.";
+  return `${getBackendErrorMessage(data) || "Não foi possível salvar o projeto."}${reference}`;
 }
 
 function getSaveFailureMessage(error: unknown) {
@@ -121,7 +163,7 @@ function getSaveFailureMessage(error: unknown) {
   }
 
   if (/failed to fetch|networkerror|load failed/i.test(message)) {
-    return "Não foi possível conectar à API para salvar o projeto.";
+    return "Não foi possível conectar à API para salvar o projeto. (INFRASTRUCTURE/INFRASTRUCTURE_NETWORK_FAILURE)";
   }
 
   return message;
@@ -218,30 +260,25 @@ function getCreationResponseError(
   data: ProjectWriteResponse,
 ) {
   const backendMessage = data?.error?.message;
+  const reference = getErrorReference(data);
 
   if (response.status === 401) {
-    return "Sua sessão expirou. Entre novamente para criar o projeto.";
+    return `Sua sessão expirou. Entre novamente para criar o projeto.${reference}`;
   }
 
   if (response.status === 403) {
-    return "Você não tem permissão para criar projetos nesta organização.";
+    return `Você não tem permissão para criar projetos nesta organização.${reference}`;
   }
 
   if (response.status === 409) {
-    return (
-      backendMessage ||
-      "A criação já está em andamento ou entrou em conflito. Tente novamente."
-    );
+    return `${backendMessage || "A criação já está em andamento ou entrou em conflito. Tente novamente."}${reference}`;
   }
 
   if (response.status >= 500) {
-    return (
-      backendMessage ||
-      "A criação não foi concluída. O projeto permaneceu inativo e pode ser retomado."
-    );
+    return `${backendMessage || "A criação não foi concluída. O projeto permaneceu inativo e pode ser retomado."}${reference}`;
   }
 
-  return backendMessage || "Não foi possível criar o projeto.";
+  return `${backendMessage || "Não foi possível criar o projeto."}${reference}`;
 }
 
 function resolveConfigRevision(data: ProjectWriteResponse) {

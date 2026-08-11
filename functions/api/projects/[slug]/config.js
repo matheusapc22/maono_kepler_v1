@@ -1,9 +1,14 @@
 import {
   errorResponse,
+  errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
   readJsonBody,
 } from "../../../_lib/http.js";
+import {
+  getOrCreateCorrelationId,
+  normalizeMaonoError,
+} from "../../../_lib/maono-error.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, publicProject } from "../../../_lib/projects.js";
 import { touchProjectAfterConfigSave } from "../../../_lib/project-service.js";
@@ -137,7 +142,12 @@ function getErrorMessage(error) {
 
 function logUnexpectedError(error) {
   if (Number(error?.status || 500) >= 500) {
-    console.error("[Maono projects] Falha no endpoint de config:", error);
+    console.error("[Maono projects] Falha no endpoint de config:", {
+      correlationId: error?.correlationId ?? null,
+      code: error?.code ?? null,
+      category: error?.category ?? null,
+      retryable: error?.retryable ?? null,
+    });
   }
 }
 
@@ -173,20 +183,11 @@ function createForbiddenError(permission, reason) {
   return error;
 }
 
-async function saveProjectThumbnail(
-  env,
-  project,
-  fileName,
-  thumbnailDataUrl,
-  revision,
-) {
+async function saveProjectThumbnail(env, project, fileName, thumbnailDataUrl, revision) {
   const decoded = decodeDataUrl(thumbnailDataUrl);
   if (!decoded) return null;
 
-  const previewFileName = getRevisionedPreviewFileNameFromConfigFile(
-    fileName,
-    revision,
-  );
+  const previewFileName = getRevisionedPreviewFileNameFromConfigFile(fileName, revision);
   await uploadDropboxBinaryFile(
     env,
     project.dropbox_root_path,
@@ -263,6 +264,9 @@ async function auditUnexpectedProjectConfigError(
     fileName,
     permission,
     reason: error?.code || "PROJECT_CONFIG_ERROR",
+    category: error?.category || null,
+    retryable: typeof error?.retryable === "boolean" ? error.retryable : null,
+    correlationId: error?.correlationId || null,
     errorMessage: sanitizeAuditText(getErrorMessage(error), AUDIT_TEXT_LIMIT),
   });
 }
@@ -286,8 +290,9 @@ async function hydrateLifecycleProject(env, project) {
 
 export async function onRequest(context) {
   const { request, env, params } = context;
+  const correlationId = getOrCreateCorrelationId(request);
   if (!["GET", "PUT"].includes(request.method)) {
-    return methodNotAllowed(["GET", "PUT"]);
+    return methodNotAllowed(["GET", "PUT"], { correlationId });
   }
 
   const action = request.method === "GET" ? "projects.config.read" : "projects.config.save";
@@ -302,7 +307,13 @@ export async function onRequest(context) {
     slug = decodeProjectSlug(params?.slug);
 
     if (!slug) {
-      return errorResponse("Slug do projeto não informado.", 400, "PROJECT_SLUG_REQUIRED");
+      return errorResponse(
+        "Slug do projeto não informado.",
+        400,
+        "PROJECT_SLUG_REQUIRED",
+        null,
+        { correlationId },
+      );
     }
 
     project = await getAuthorizedProject(env, user, slug);
@@ -311,6 +322,8 @@ export async function onRequest(context) {
         "Projeto não encontrado ou sem permissão de acesso.",
         404,
         "PROJECT_NOT_FOUND",
+        null,
+        { correlationId },
       );
     }
     project = await hydrateLifecycleProject(env, project);
@@ -333,6 +346,7 @@ export async function onRequest(context) {
         slug,
         fileName,
         permission,
+        correlationId,
         configRevision: Number(project.config_revision || 0),
         lifecycleState: project.lifecycle_state ?? null,
         schemaName: project.config_schema ?? null,
@@ -357,10 +371,17 @@ export async function onRequest(context) {
         slug,
         fileName,
         permission,
+        correlationId,
         reason: "INVALID_KEPLER_CONFIG",
         validationError,
       });
-      return errorResponse(validationError, 400, "INVALID_KEPLER_CONFIG");
+      return errorResponse(
+        validationError,
+        400,
+        "INVALID_KEPLER_CONFIG",
+        null,
+        { correlationId },
+      );
     }
 
     const saveStartedAt = Date.now();
@@ -414,6 +435,7 @@ export async function onRequest(context) {
       slug,
       fileName,
       permission,
+      correlationId,
       sizeBytes,
       configRevision,
       lifecycleState: updatedProject.lifecycle_state ?? null,
@@ -452,9 +474,12 @@ export async function onRequest(context) {
       },
     );
   } catch (error) {
-    logUnexpectedError(error);
     const status = Number(error?.status || 500);
-    const code = error?.code || "PROJECT_CONFIG_ERROR";
+    const normalized = normalizeMaonoError(error, {
+      defaultCode: "PROJECT_CONFIG_ERROR",
+      correlationId,
+    });
+    logUnexpectedError(normalized);
 
     await auditUnexpectedProjectConfigError(
       env,
@@ -465,38 +490,38 @@ export async function onRequest(context) {
       slug,
       fileName,
       permission,
-      error,
+      normalized,
       status < 500 ? "invalid" : "error",
     ).catch(() => null);
 
     if (status === 401) {
-      return errorResponse("Sessão inválida ou expirada.", 401, code, error?.details || null);
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: "Sessão inválida ou expirada.",
+      });
     }
     if (status === 403) {
-      return errorResponse(
-        "Você não tem permissão para acessar ou alterar este projeto.",
-        403,
-        code,
-        error?.details || null,
-      );
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: "Você não tem permissão para acessar ou alterar este projeto.",
+      });
     }
     if (status === 404) {
-      return errorResponse(
-        "Projeto não encontrado ou sem permissão de acesso.",
-        404,
-        code,
-        error?.details || null,
-      );
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: "Projeto não encontrado ou sem permissão de acesso.",
+      });
     }
     if (status < 500) {
-      return errorResponse(error?.message || "Requisição inválida.", status, code, error?.details || null);
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: error?.message || "Requisição inválida.",
+      });
     }
 
-    return errorResponse(
-      "Não foi possível processar a configuração do projeto.",
-      status,
-      code,
-      error?.details || null,
-    );
+    return errorResponseFromError(normalized, {
+      correlationId,
+      publicMessage: "Não foi possível processar a configuração do projeto.",
+    });
   }
 }

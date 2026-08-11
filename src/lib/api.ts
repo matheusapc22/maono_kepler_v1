@@ -33,11 +33,7 @@ export type OrganizationFile = {
   size?: number;
   createdAt?: string;
   updatedAt?: string;
-  createdBy?: {
-    id: number;
-    name?: string;
-    email?: string;
-  };
+  createdBy?: { id: number; name?: string; email?: string };
 };
 
 export type OrganizationTicket = {
@@ -48,11 +44,7 @@ export type OrganizationTicket = {
   priority?: string;
   createdAt?: string;
   updatedAt?: string;
-  createdBy?: {
-    id: number;
-    name?: string;
-    email?: string;
-  };
+  createdBy?: { id: number; name?: string; email?: string };
 };
 
 export type OrganizationExport = {
@@ -135,10 +127,7 @@ export type OrganizationDetails = {
   metrics?: OrganizationMetrics;
 };
 
-export type OrganizationLimitCounter = {
-  used: number;
-  limit: number;
-};
+export type OrganizationLimitCounter = { used: number; limit: number };
 
 export type OrganizationLimits = {
   plan: string;
@@ -174,6 +163,26 @@ export type DownloadResponse = {
   contentType: string | null;
 };
 
+export type ErrorCategory =
+  | "AUTH"
+  | "PERMISSION"
+  | "PROJECT"
+  | "MAP_CONFIG"
+  | "STORAGE"
+  | "PERFORMANCE"
+  | "SPATIAL"
+  | "ENGINE"
+  | "INFRASTRUCTURE";
+
+export type ApiErrorContract = {
+  code: string;
+  category: ErrorCategory;
+  retryable: boolean;
+  correlationId: string;
+  message?: string;
+  details?: unknown;
+};
+
 type ApiErrorPayload = {
   error?: unknown;
   message?: unknown;
@@ -182,16 +191,42 @@ type ApiErrorPayload = {
 
 type JsonValue = unknown;
 
+function getErrorContract(payload: unknown): Partial<ApiErrorContract> {
+  if (!payload || typeof payload !== "object") return {};
+  const data = payload as { error?: unknown };
+  if (!data.error || typeof data.error !== "object") return {};
+  const error = data.error as Record<string, unknown>;
+  return {
+    code: typeof error.code === "string" ? error.code : undefined,
+    category: typeof error.category === "string" ? error.category as ErrorCategory : undefined,
+    retryable: typeof error.retryable === "boolean" ? error.retryable : undefined,
+    correlationId: typeof error.correlationId === "string" ? error.correlationId : undefined,
+    message: typeof error.message === "string" ? error.message : undefined,
+    details: error.details,
+  };
+}
+
 class ApiError extends Error {
   status: number;
   code?: string;
+  category?: ErrorCategory;
+  retryable: boolean;
+  correlationId?: string;
   payload: unknown;
 
-  constructor(message: string, status: number, payload: unknown, code?: string) {
+  constructor(
+    message: string,
+    status: number,
+    payload: unknown,
+    contract: Partial<ApiErrorContract> = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
-    this.code = code;
+    this.code = contract.code;
+    this.category = contract.category;
+    this.retryable = contract.retryable === true;
+    this.correlationId = contract.correlationId;
     this.payload = payload;
   }
 }
@@ -204,109 +239,64 @@ function organizationPath(organizationId: number | string): string {
   return `/api/organizations/${pathSegment(organizationId)}`;
 }
 
-function organizationUserPath(
-  organizationId: number | string,
-  userId: number | string,
-): string {
+function organizationUserPath(organizationId: number | string, userId: number | string): string {
   return `${organizationPath(organizationId)}/users/${pathSegment(userId)}`;
 }
 
 function parseJsonSafely(text: string): JsonValue {
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return text; }
 }
 
 function getErrorMessage(payload: unknown, status: number): string {
-  if (typeof payload === "string" && payload.trim()) {
-    return payload;
-  }
-
+  if (typeof payload === "string" && payload.trim()) return payload;
   if (payload && typeof payload === "object") {
     const data = payload as ApiErrorPayload;
-
-    if (typeof data.error === "string" && data.error.trim()) {
-      return data.error;
-    }
-
-    if (
-      data.error &&
-      typeof data.error === "object" &&
-      "message" in data.error &&
-      typeof (data.error as { message?: unknown }).message === "string"
-    ) {
+    if (typeof data.error === "string" && data.error.trim()) return data.error;
+    if (data.error && typeof data.error === "object" && "message" in data.error && typeof (data.error as { message?: unknown }).message === "string") {
       return (data.error as { message: string }).message;
     }
-
-    if (typeof data.message === "string" && data.message.trim()) {
-      return data.message;
-    }
+    if (typeof data.message === "string" && data.message.trim()) return data.message;
   }
-
   return `Erro HTTP ${status}`;
 }
 
 function getErrorCode(payload: unknown): string | undefined {
-  if (!payload || typeof payload !== "object") {
-    return undefined;
-  }
-
+  if (!payload || typeof payload !== "object") return undefined;
   const data = payload as ApiErrorPayload;
-
-  if (typeof data.code === "string" && data.code.trim()) {
-    return data.code;
-  }
-
-  if (
-    data.error &&
-    typeof data.error === "object" &&
-    "code" in data.error &&
-    typeof (data.error as { code?: unknown }).code === "string"
-  ) {
+  if (typeof data.code === "string" && data.code.trim()) return data.code;
+  if (data.error && typeof data.error === "object" && "code" in data.error && typeof (data.error as { code?: unknown }).code === "string") {
     return (data.error as { code: string }).code;
   }
-
   return undefined;
 }
 
-function buildHeaders(
-  initHeaders: HeadersInit | undefined,
-  options: {
-    json?: boolean;
-  } = {},
-): Headers {
+function buildHeaders(initHeaders: HeadersInit | undefined, options: { json?: boolean } = {}): Headers {
   const headers = new Headers(initHeaders);
-
-  if (!headers.has("Accept")) {
-    headers.set("Accept", "application/json");
-  }
-
-  if (options.json && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (options.json && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   return headers;
+}
+
+function buildApiError(response: Response, data: unknown): ApiError {
+  const contract = getErrorContract(data);
+  const headerCorrelationId = response.headers.get("X-Correlation-Id") || undefined;
+  return new ApiError(
+    getErrorMessage(data, response.status),
+    response.status,
+    data,
+    {
+      ...contract,
+      code: contract.code || getErrorCode(data),
+      correlationId: contract.correlationId || headerCorrelationId,
+    },
+  );
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   const data = parseJsonSafely(text);
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(data, response.status),
-      response.status,
-      data,
-      getErrorCode(data),
-    );
-  }
-
+  if (!response.ok) throw buildApiError(response, data);
   return data as T;
 }
 
@@ -314,19 +304,12 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...init,
     credentials: "include",
-    headers: buildHeaders(init.headers, {
-      json: true,
-    }),
+    headers: buildHeaders(init.headers, { json: true }),
   });
-
   return parseJsonResponse<T>(response);
 }
 
-async function requestFormDataJson<T>(
-  url: string,
-  formData: FormData,
-  init: Omit<RequestInit, "body" | "method"> = {},
-): Promise<T> {
+async function requestFormDataJson<T>(url: string, formData: FormData, init: Omit<RequestInit, "body" | "method"> = {}): Promise<T> {
   const response = await fetch(url, {
     ...init,
     method: "POST",
@@ -334,59 +317,33 @@ async function requestFormDataJson<T>(
     body: formData,
     headers: buildHeaders(init.headers),
   });
-
   return parseJsonResponse<T>(response);
 }
 
-async function requestDownload(
-  url: string,
-  init: RequestInit = {},
-): Promise<DownloadResponse> {
+async function requestDownload(url: string, init: RequestInit = {}): Promise<DownloadResponse> {
   const response = await fetch(url, {
     ...init,
     method: init.method || "GET",
     credentials: "include",
   });
-
   if (!response.ok) {
     const text = await response.text();
-    const data = parseJsonSafely(text);
-
-    throw new ApiError(
-      getErrorMessage(data, response.status),
-      response.status,
-      data,
-      getErrorCode(data),
-    );
+    throw buildApiError(response, parseJsonSafely(text));
   }
-
   const blob = await response.blob();
-
   return {
     blob,
-    fileName: getFileNameFromContentDisposition(
-      response.headers.get("Content-Disposition"),
-    ),
+    fileName: getFileNameFromContentDisposition(response.headers.get("Content-Disposition")),
     contentType: response.headers.get("Content-Type"),
   };
 }
 
 function getFileNameFromContentDisposition(header: string | null): string | null {
-  if (!header) {
-    return null;
-  }
-
+  if (!header) return null;
   const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) {
-    return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
-  }
-
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
   const simpleMatch = header.match(/filename="?([^"]+)"?/i);
-  if (simpleMatch?.[1]) {
-    return simpleMatch[1];
-  }
-
-  return null;
+  return simpleMatch?.[1] || null;
 }
 
 export function getSession() {
@@ -401,9 +358,7 @@ export function login(email: string, password: string) {
 }
 
 export function logout() {
-  return requestJson<{ ok: boolean; authenticated: false }>("/api/auth/logout", {
-    method: "POST",
-  });
+  return requestJson<{ ok: boolean; authenticated: false }>("/api/auth/logout", { method: "POST" });
 }
 
 export function listProjects() {
@@ -411,166 +366,82 @@ export function listProjects() {
 }
 
 export function getProjectConfig(projectSlug: string) {
-  return requestJson<{ ok: boolean; project: MaonoProject; config: unknown }>(
-    `/api/projects/${pathSegment(projectSlug)}/config`,
-  );
+  return requestJson<{ ok: boolean; project: MaonoProject; config: unknown }>(`/api/projects/${pathSegment(projectSlug)}/config`);
 }
 
-/**
- * Mantido por compatibilidade com chamadas existentes.
- * O endpoint central atual para config é /api/projects/:slug/config,
- * mas esta função só deve ser trocada para PUT quando os consumidores forem revisados.
- */
+/** Mantido por compatibilidade com chamadas existentes. */
 export function saveProjectConfig(projectSlug: string, config: unknown) {
-  return requestJson<{ ok: boolean; saved: boolean }>(
-    `/api/projects/${pathSegment(projectSlug)}/save`,
-    {
-      method: "POST",
-      body: JSON.stringify({ config }),
-    },
-  );
+  return requestJson<{ ok: boolean; saved: boolean }>(`/api/projects/${pathSegment(projectSlug)}/save`, {
+    method: "POST",
+    body: JSON.stringify({ config }),
+  });
 }
 
 export function listOrganizationFiles(organizationId: number | string) {
-  return requestJson<{ ok: boolean; files: OrganizationFile[] }>(
-    `${organizationPath(organizationId)}/files`,
-  );
+  return requestJson<{ ok: boolean; files: OrganizationFile[] }>(`${organizationPath(organizationId)}/files`);
 }
 
-export function uploadOrganizationFile(
-  organizationId: number | string,
-  formData: FormData,
-) {
-  return requestFormDataJson<{ ok: boolean; file: OrganizationFile }>(
-    `${organizationPath(organizationId)}/files`,
-    formData,
-  );
+export function uploadOrganizationFile(organizationId: number | string, formData: FormData) {
+  return requestFormDataJson<{ ok: boolean; file: OrganizationFile }>(`${organizationPath(organizationId)}/files`, formData);
 }
 
-export function downloadOrganizationFile(
-  organizationId: number | string,
-  fileId: number | string,
-) {
-  return requestDownload(
-    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}/download`,
-  );
+export function downloadOrganizationFile(organizationId: number | string, fileId: number | string) {
+  return requestDownload(`${organizationPath(organizationId)}/files/${pathSegment(fileId)}/download`);
 }
 
-export function deleteOrganizationFile(
-  organizationId: number | string,
-  fileId: number | string,
-) {
-  return requestJson<{ ok: boolean; deleted: boolean }>(
-    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}`,
-    {
-      method: "DELETE",
-    },
-  );
+export function deleteOrganizationFile(organizationId: number | string, fileId: number | string) {
+  return requestJson<{ ok: boolean; deleted: boolean }>(`${organizationPath(organizationId)}/files/${pathSegment(fileId)}`, { method: "DELETE" });
 }
 
 export function listOrganizationTickets(organizationId: number | string) {
-  return requestJson<{ ok: boolean; tickets: OrganizationTicket[] }>(
-    `${organizationPath(organizationId)}/tickets`,
-  );
+  return requestJson<{ ok: boolean; tickets: OrganizationTicket[] }>(`${organizationPath(organizationId)}/tickets`);
 }
 
-export function createOrganizationTicket(
-  organizationId: number | string,
-  payload: {
-    subject: string;
-    description: string;
-    priority?: "low" | "normal" | "high" | string;
-  },
-) {
-  return requestJson<{ ok: boolean; ticket: OrganizationTicket }>(
-    `${organizationPath(organizationId)}/tickets`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-  );
+export function createOrganizationTicket(organizationId: number | string, payload: { subject: string; description: string; priority?: "low" | "normal" | "high" | string }) {
+  return requestJson<{ ok: boolean; ticket: OrganizationTicket }>(`${organizationPath(organizationId)}/tickets`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function updateOrganizationTicket(
-  organizationId: number | string,
-  ticketId: number | string,
-  payload: {
-    status?: string;
-    priority?: "low" | "normal" | "high" | string;
-  },
-) {
-  return requestJson<{ ok: boolean; ticket: OrganizationTicket }>(
-    `${organizationPath(organizationId)}/tickets/${pathSegment(ticketId)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    },
-  );
+export function updateOrganizationTicket(organizationId: number | string, ticketId: number | string, payload: { status?: string; priority?: "low" | "normal" | "high" | string }) {
+  return requestJson<{ ok: boolean; ticket: OrganizationTicket }>(`${organizationPath(organizationId)}/tickets/${pathSegment(ticketId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listOrganizationExports(organizationId: number | string) {
-  return requestJson<{ ok: boolean; exports: OrganizationExport[] }>(
-    `${organizationPath(organizationId)}/exports`,
-  );
+  return requestJson<{ ok: boolean; exports: OrganizationExport[] }>(`${organizationPath(organizationId)}/exports`);
 }
 
-export function createOrganizationExport(
-  organizationId: number | string,
-  payload: {
-    type: string;
-    format: string;
-  },
-) {
-  return requestJson<{ ok: boolean; export: OrganizationExport }>(
-    `${organizationPath(organizationId)}/exports`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-  );
+export function createOrganizationExport(organizationId: number | string, payload: { type: string; format: string }) {
+  return requestJson<{ ok: boolean; export: OrganizationExport }>(`${organizationPath(organizationId)}/exports`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listOrganizationUsers(organizationId: number | string) {
-  return requestJson<{ ok: boolean; users: OrganizationUser[] }>(
-    `${organizationPath(organizationId)}/users`,
-  );
+  return requestJson<{ ok: boolean; users: OrganizationUser[] }>(`${organizationPath(organizationId)}/users`);
 }
 
-export function createOrganizationUser(
-  organizationId: number | string,
-  payload: CreateOrganizationUserPayload,
-) {
-  return requestJson<{ ok: boolean; user: OrganizationUser }>(
-    `${organizationPath(organizationId)}/users`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-  );
+export function createOrganizationUser(organizationId: number | string, payload: CreateOrganizationUserPayload) {
+  return requestJson<{ ok: boolean; user: OrganizationUser }>(`${organizationPath(organizationId)}/users`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function updateOrganizationUser(
-  organizationId: number | string,
-  userId: number | string,
-  payload: UpdateOrganizationUserPayload,
-) {
-  return requestJson<{ ok: boolean; user: OrganizationUser }>(
-    organizationUserPath(organizationId, userId),
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    },
-  );
+export function updateOrganizationUser(organizationId: number | string, userId: number | string, payload: UpdateOrganizationUserPayload) {
+  return requestJson<{ ok: boolean; user: OrganizationUser }>(organizationUserPath(organizationId, userId), {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function deleteOrganizationUserMembership(
-  organizationId: number | string,
-  userId: number | string,
-) {
-  return requestJson<{ ok: boolean; removed: boolean }>(
-    organizationUserPath(organizationId, userId),
-    { method: "DELETE" },
-  );
+export function deleteOrganizationUserMembership(organizationId: number | string, userId: number | string) {
+  return requestJson<{ ok: boolean; removed: boolean }>(organizationUserPath(organizationId, userId), { method: "DELETE" });
 }
 
 export function grantOrganizationUserPermission(
@@ -579,55 +450,28 @@ export function grantOrganizationUserPermission(
   permission: string,
   options?: { warningAcknowledged?: boolean; justification?: string },
 ) {
-  return requestJson<{ ok: boolean; grant: OrganizationUserPermissionGrant }>(
-    `${organizationUserPath(organizationId, userId)}/permissions`,
-    {
-      method: "POST",
-      body: JSON.stringify({ permission, ...options }),
-    },
-  );
+  return requestJson<{ ok: boolean; grant: OrganizationUserPermissionGrant }>(`${organizationUserPath(organizationId, userId)}/permissions`, {
+    method: "POST",
+    body: JSON.stringify({ permission, ...options }),
+  });
 }
 
-export function revokeOrganizationUserPermission(
-  organizationId: number | string,
-  userId: number | string,
-  permission: string,
-) {
-  return requestJson<{ ok: boolean; revoke: OrganizationUserPermissionRevoke }>(
-    `${organizationUserPath(organizationId, userId)}/permissions/${pathSegment(
-      permission,
-    )}`,
-    {
-      method: "DELETE",
-    },
-  );
+export function revokeOrganizationUserPermission(organizationId: number | string, userId: number | string, permission: string) {
+  return requestJson<{ ok: boolean; revoke: OrganizationUserPermissionRevoke }>(`${organizationUserPath(organizationId, userId)}/permissions/${pathSegment(permission)}`, {
+    method: "DELETE",
+  });
 }
 
 export function getOrganization(organizationId: number | string) {
-  return requestJson<{ ok: boolean; organization: OrganizationDetails }>(
-    organizationPath(organizationId),
-  );
+  return requestJson<{ ok: boolean; organization: OrganizationDetails }>(organizationPath(organizationId));
 }
 
 export function getOrganizationLimits(organizationId: number | string) {
-  return requestJson<{
-    ok: boolean;
-    limits: OrganizationLimits;
-    pendingRequests: OrganizationLimitRequest[];
-  }>(`${organizationPath(organizationId)}/limits`);
+  return requestJson<{ ok: boolean; limits: OrganizationLimits; pendingRequests: OrganizationLimitRequest[] }>(`${organizationPath(organizationId)}/limits`);
 }
 
-export function createOrganizationLimitRequest(
-  organizationId: number | string,
-  payload: CreateOrganizationLimitRequestPayload,
-) {
-  return requestJson<{
-    ok: boolean;
-    request: {
-      id: number | string;
-      status: string;
-    };
-  }>(`${organizationPath(organizationId)}/limits/requests`, {
+export function createOrganizationLimitRequest(organizationId: number | string, payload: CreateOrganizationLimitRequestPayload) {
+  return requestJson<{ ok: boolean; request: { id: number | string; status: string } }>(`${organizationPath(organizationId)}/limits/requests`, {
     method: "POST",
     body: JSON.stringify(payload),
   });

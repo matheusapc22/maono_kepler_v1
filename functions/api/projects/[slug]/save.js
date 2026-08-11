@@ -1,9 +1,14 @@
 import {
   errorResponse,
+  errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
   readJsonBody,
 } from "../../../_lib/http.js";
+import {
+  getOrCreateCorrelationId,
+  normalizeMaonoError,
+} from "../../../_lib/maono-error.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject } from "../../../_lib/projects.js";
 import { uploadDropboxTextFile } from "../../../_lib/dropbox.js";
@@ -54,49 +59,34 @@ function getErrorMessage(error) {
 }
 
 function sanitizeAuditText(value, maxLength = AUDIT_TEXT_LIMIT) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
+  if (value === null || value === undefined) return null;
   let text = "";
-
-  if (typeof value === "string") {
-    text = value;
-  } else {
+  if (typeof value === "string") text = value;
+  else {
     try {
       text = JSON.stringify(value);
     } catch {
       text = String(value);
     }
   }
-
-  if (/data:image\/[a-z]+;base64,/i.test(text)) {
-    return "[redacted:data-url]";
-  }
-
-  if (text.length <= maxLength) {
-    return text;
-  }
-
+  if (/data:image\/[a-z]+;base64,/i.test(text)) return "[redacted:data-url]";
+  if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}…`;
 }
 
 function logUnexpectedError(error) {
   const status = error?.status || 500;
-
   if (status >= 500) {
-    console.error("[Maono projects] Falha no endpoint legado de save:", error);
+    console.error("[Maono projects] Falha no endpoint legado de save:", {
+      correlationId: error?.correlationId ?? null,
+      code: error?.code ?? null,
+      category: error?.category ?? null,
+      retryable: error?.retryable ?? null,
+    });
   }
 }
 
-async function auditLegacySave(
-  env,
-  request,
-  user,
-  project,
-  result,
-  metadata = {},
-) {
+async function auditLegacySave(env, request, user, project, result, metadata = {}) {
   await recordAuditLog(env, {
     actorUserId: user?.id,
     organizationId: getProjectOrganizationId(project),
@@ -124,23 +114,23 @@ async function auditUnexpectedLegacySaveError(
   error,
   result = "error",
 ) {
-  if (!user || !project) {
-    return;
-  }
-
+  if (!user || !project) return;
   await auditLegacySave(env, request, user, project, result, {
     slug,
     fileName,
     reason: error?.code || "PROJECT_SAVE_ERROR",
     errorMessage: sanitizeAuditText(getErrorMessage(error)),
+    category: error?.category || null,
+    retryable: typeof error?.retryable === "boolean" ? error.retryable : null,
+    correlationId: error?.correlationId || null,
   });
 }
 
 export async function onRequest(context) {
   const { request, env, params } = context;
-
+  const correlationId = getOrCreateCorrelationId(request);
   if (request.method !== "POST") {
-    return methodNotAllowed(["POST"]);
+    return methodNotAllowed(["POST"], { correlationId });
   }
 
   let user = null;
@@ -156,34 +146,36 @@ export async function onRequest(context) {
       await auditLegacySave(env, request, user, null, "denied", {
         slug: null,
         fileName: null,
+        correlationId,
         reason: "MISSING_PROJECT_SLUG",
       });
-
       return errorResponse(
         "Slug do projeto não informado.",
         400,
         "PROJECT_SLUG_REQUIRED",
+        null,
+        { correlationId },
       );
     }
 
     project = await getAuthorizedProject(env, user, slug);
-
     if (!project) {
       await auditLegacySave(env, request, user, null, "denied", {
         slug,
         fileName: null,
+        correlationId,
         reason: "PROJECT_NOT_FOUND_OR_NOT_AUTHORIZED",
       });
-
       return errorResponse(
         "Projeto não encontrado ou sem permissão de acesso.",
         404,
         "PROJECT_NOT_FOUND",
+        null,
+        { correlationId },
       );
     }
 
     fileName = project.default_config_file || DEFAULT_CONFIG_FILE;
-
     await requireProjectPermission(
       env,
       request,
@@ -200,24 +192,24 @@ export async function onRequest(context) {
 
     const body = await readJsonBody(request);
     const config = body?.config;
-
     if (!config || typeof config !== "object" || Array.isArray(config)) {
       await auditLegacySave(env, request, user, project, "invalid", {
         slug,
         fileName,
+        correlationId,
         reason: "MISSING_CONFIG",
       });
-
       return errorResponse(
         "Envie o campo config em formato JSON no corpo da requisição.",
         400,
         "MISSING_CONFIG",
+        null,
+        { correlationId },
       );
     }
 
     const content = JSON.stringify(config, null, 2);
     const sizeBytes = jsonSizeBytes(content);
-
     const dropboxResult = await uploadDropboxTextFile(
       env,
       project.dropbox_root_path,
@@ -228,6 +220,7 @@ export async function onRequest(context) {
     await auditLegacySave(env, request, user, project, "success", {
       slug,
       fileName,
+      correlationId,
       sizeBytes,
       dropboxRev: dropboxResult?.rev ?? null,
     });
@@ -249,53 +242,12 @@ export async function onRequest(context) {
       },
     });
   } catch (error) {
-    logUnexpectedError(error);
-
-    const status = error?.status || 500;
-    const code = error?.code || "PROJECT_SAVE_ERROR";
-
-    if (status === 400) {
-      await auditUnexpectedLegacySaveError(
-        env,
-        request,
-        user,
-        project,
-        slug,
-        fileName,
-        error,
-        "invalid",
-      );
-
-      return errorResponse(
-        error.message || "Requisição inválida.",
-        400,
-        code,
-      );
-    }
-
-    if (status === 401) {
-      return errorResponse(
-        "Sessão inválida ou expirada.",
-        401,
-        code,
-      );
-    }
-
-    if (status === 403) {
-      return errorResponse(
-        "Você não tem permissão para salvar alterações permanentes neste projeto.",
-        403,
-        code,
-      );
-    }
-
-    if (status === 404) {
-      return errorResponse(
-        "Projeto não encontrado ou sem permissão de acesso.",
-        404,
-        code,
-      );
-    }
+    const normalized = normalizeMaonoError(error, {
+      defaultCode: "PROJECT_SAVE_ERROR",
+      correlationId,
+    });
+    const status = Number(normalized.status || 500);
+    logUnexpectedError(normalized);
 
     await auditUnexpectedLegacySaveError(
       env,
@@ -304,14 +256,38 @@ export async function onRequest(context) {
       project,
       slug,
       fileName,
-      error,
-      "error",
-    );
+      normalized,
+      status < 500 ? "invalid" : "error",
+    ).catch(() => null);
 
-    return errorResponse(
-      "Não foi possível salvar o projeto.",
-      status,
-      code,
-    );
+    if (status === 400) {
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: error?.message || "Requisição inválida.",
+      });
+    }
+    if (status === 401) {
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: "Sessão inválida ou expirada.",
+      });
+    }
+    if (status === 403) {
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: "Você não tem permissão para salvar alterações permanentes neste projeto.",
+      });
+    }
+    if (status === 404) {
+      return errorResponseFromError(normalized, {
+        correlationId,
+        publicMessage: "Projeto não encontrado ou sem permissão de acesso.",
+      });
+    }
+
+    return errorResponseFromError(normalized, {
+      correlationId,
+      publicMessage: "Não foi possível salvar o projeto.",
+    });
   }
 }
