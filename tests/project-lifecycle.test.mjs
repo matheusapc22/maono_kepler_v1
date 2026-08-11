@@ -1,0 +1,389 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+
+import {
+  PROJECT_LIFECYCLE_STATES,
+  assertActiveProjectInvariant,
+  assertLifecycleTransition,
+  isLifecycleManagedProject,
+  isProjectPublicable,
+  publicProjectLifecycle,
+} from "../functions/_lib/project-lifecycle.js";
+import {
+  buildProjectConfigArtifact,
+  verifyProjectConfigBytes,
+} from "../functions/_lib/project-config-integrity.js";
+import {
+  createProjectConfigStorageRef,
+  getProjectConfigRevisionFileName,
+  parseProjectConfigStorageRef,
+} from "../functions/_lib/project-config-repository.js";
+import {
+  markProjectConfigRevisionReady,
+  publishProjectConfigRevision,
+  reserveProjectConfigRevision,
+} from "../functions/_lib/project-config-revisions.js";
+
+const [migration, schema, projectsSource, projectListSource, configServiceSource] =
+  await Promise.all([
+    readFile(
+      new URL("../migrations/0018_project_lifecycle.sql", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../schema.sql", import.meta.url), "utf8"),
+    readFile(new URL("../functions/_lib/projects.js", import.meta.url), "utf8"),
+    readFile(new URL("../functions/_lib/project-list.js", import.meta.url), "utf8"),
+    readFile(
+      new URL("../functions/_lib/project-config-service.js", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+function fixture() {
+  const database = new DatabaseSync(":memory:");
+  database.exec(`
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY,
+      name TEXT
+    );
+    CREATE TABLE projects (
+      id INTEGER PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      active INTEGER NOT NULL DEFAULT 0,
+      config_revision INTEGER NOT NULL DEFAULT 0,
+      preview_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+      preview_attempts INTEGER NOT NULL DEFAULT 0,
+      preview_last_error TEXT,
+      preview_capture_method TEXT,
+      updated_by INTEGER,
+      updated_by_name_snapshot TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT INTO users (id, name) VALUES (10, 'Editor');
+  `);
+  database.exec(migration);
+  return database;
+}
+
+function envFor(database) {
+  return {
+    DB: {
+      prepare(sql) {
+        const statement = database.prepare(sql);
+        let parameters = [];
+        return {
+          bind(...values) {
+            parameters = values;
+            return this;
+          },
+          first() {
+            return statement.get(...parameters) ?? null;
+          },
+          run() {
+            return statement.run(...parameters);
+          },
+          all() {
+            return { results: statement.all(...parameters) };
+          },
+        };
+      },
+    },
+  };
+}
+
+test("0018 adiciona lifecycle, integridade e ledger sem backfill destrutivo", () => {
+  const database = fixture();
+  const projectColumns = database
+    .prepare("PRAGMA table_info(projects)")
+    .all()
+    .map((column) => column.name);
+
+  for (const column of [
+    "lifecycle_state",
+    "lifecycle_version",
+    "config_checksum",
+    "config_storage_ref",
+    "config_schema",
+    "config_schema_version",
+    "config_size_bytes",
+  ]) {
+    assert.ok(projectColumns.includes(column), column);
+  }
+
+  const ledgerColumns = database
+    .prepare("PRAGMA table_info(project_config_revisions)")
+    .all()
+    .map((column) => column.name);
+  assert.ok(ledgerColumns.includes("checksum"));
+  assert.ok(ledgerColumns.includes("storage_provider_hash"));
+  assert.ok(ledgerColumns.includes("published_at"));
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+  assert.match(schema, /project_config_revisions/);
+  assert.match(schema, /lifecycle_state/);
+});
+
+test("máquina de estados aceita somente o contrato S03", () => {
+  const S = PROJECT_LIFECYCLE_STATES;
+  for (const [from, to] of [
+    [S.DRAFT, S.PREPARING_STORAGE],
+    [S.PREPARING_STORAGE, S.CONFIG_READY],
+    [S.PREPARING_STORAGE, S.FAILED],
+    [S.CONFIG_READY, S.ACTIVE],
+    [S.CONFIG_READY, S.FAILED],
+    [S.FAILED, S.PREPARING_STORAGE],
+    [S.ACTIVE, S.ACTIVE],
+  ]) {
+    assert.deepEqual(assertLifecycleTransition(from, to), { from, to });
+  }
+
+  for (const [from, to] of [
+    [S.DRAFT, S.ACTIVE],
+    [S.DRAFT, S.CONFIG_READY],
+    [S.PREPARING_STORAGE, S.ACTIVE],
+    [S.FAILED, S.ACTIVE],
+    [S.ACTIVE, S.DRAFT],
+    [S.ACTIVE, S.PREPARING_STORAGE],
+  ]) {
+    assert.throws(
+      () => assertLifecycleTransition(from, to),
+      (error) => error?.code === "PROJECT_LIFECYCLE_TRANSITION_INVALID",
+    );
+  }
+});
+
+test("lifecycle preenchido é autoridade irreversível do rollout", () => {
+  const S = PROJECT_LIFECYCLE_STATES;
+
+  assert.equal(isLifecycleManagedProject({ lifecycle_state: S.ACTIVE }), true);
+  assert.equal(isLifecycleManagedProject({ lifecycle_state: S.FAILED }), true);
+  assert.equal(isLifecycleManagedProject({ lifecycle_state: null, active: 1 }), false);
+
+  assert.equal(isProjectPublicable({ lifecycle_state: S.ACTIVE, active: 0 }), true);
+  assert.equal(isProjectPublicable({ lifecycle_state: S.DRAFT, active: 1 }), false);
+  assert.equal(
+    isProjectPublicable({ lifecycle_state: S.PREPARING_STORAGE, active: 1 }),
+    false,
+  );
+  assert.equal(
+    isProjectPublicable({ lifecycle_state: S.CONFIG_READY, active: 1 }),
+    false,
+  );
+  assert.equal(isProjectPublicable({ lifecycle_state: S.FAILED, active: 1 }), false);
+  assert.equal(isProjectPublicable({ lifecycle_state: null, active: 1 }), true);
+  assert.equal(isProjectPublicable({ lifecycle_state: null, active: 0 }), false);
+});
+
+test("preview FAILED e disponibilidade transitória não mudam o lifecycle lógico", () => {
+  const project = {
+    lifecycle_state: "ACTIVE",
+    active: 1,
+    preview_status: "FAILED",
+  };
+
+  assert.equal(isProjectPublicable(project), true);
+  assert.equal(project.lifecycle_state, "ACTIVE");
+});
+
+test("queries normais usam ACTIVE e fallback somente para lifecycle NULL", () => {
+  assert.match(projectsSource, /export const PROJECT_PUBLICATION_SQL/);
+  assert.match(projectsSource, /projects\.lifecycle_state = 'ACTIVE'/);
+  assert.match(
+    projectsSource,
+    /projects\.lifecycle_state IS NULL AND projects\.active = 1/,
+  );
+  assert.match(
+    projectListSource,
+    /PROJECT_PUBLICATION_SQL[\s\S]*from "\.\/projects\.js"/,
+  );
+  assert.match(projectListSource, /WHERE \$\{PROJECT_PUBLICATION_SQL\}/);
+  assert.match(projectListSource, /AND \$\{PROJECT_PUBLICATION_SQL\}/);
+
+  assert.doesNotMatch(
+    projectsSource,
+    /WHERE projects\.active = 1\s+AND projects\.organization_id/,
+  );
+  assert.doesNotMatch(
+    projectListSource,
+    /WHERE projects\.active = 1\s+AND projects\.organization_id/,
+  );
+});
+
+test("projeto gerenciado nunca volta ao arquivo legado por feature flag", () => {
+  assert.match(configServiceSource, /if \(!isLifecycleManagedProject\(project\)\)/);
+  assert.doesNotMatch(configServiceSource, /!isProjectLifecycleEnabled\(env\)/);
+  assert.doesNotMatch(configServiceSource, /isLifecycleManagedProject\(project, env\)/);
+});
+
+test("ACTIVE exige revision checksum storage schema e size", () => {
+  const valid = {
+    config_revision: 3,
+    config_checksum: "a".repeat(64),
+    config_checksum_algorithm: "sha256",
+    config_storage_ref: "project-config://1/revisions/3",
+    config_schema: "legacy-kepler",
+    config_schema_version: 1,
+    config_size_bytes: 42,
+  };
+  assert.equal(assertActiveProjectInvariant(valid), true);
+
+  for (const field of [
+    "config_revision",
+    "config_checksum",
+    "config_storage_ref",
+    "config_schema_version",
+    "config_size_bytes",
+  ]) {
+    const broken = { ...valid, [field]: null };
+    assert.throws(
+      () => assertActiveProjectInvariant(broken),
+      (error) =>
+        error?.code === "PROJECT_ACTIVE_INVARIANT_VIOLATION" &&
+        error?.details?.missing?.includes(field),
+    );
+  }
+});
+
+test("DTO público de lifecycle não vaza checksum nem storage_ref", () => {
+  const dto = publicProjectLifecycle({
+    lifecycle_state: "ACTIVE",
+    lifecycle_version: 4,
+    config_revision: 18,
+    config_checksum: "a".repeat(64),
+    config_checksum_algorithm: "sha256",
+    config_storage_ref: "project-config://84/revisions/18",
+    config_schema: "legacy-kepler",
+    config_schema_version: 1,
+    config_size_bytes: 8273621,
+  });
+
+  assert.deepEqual(dto, {
+    state: "ACTIVE",
+    version: 4,
+    configRevision: 18,
+    schema: { name: "legacy-kepler", version: 1 },
+    sizeBytes: 8273621,
+    integrity: { algorithm: "sha256" },
+    updatedAt: null,
+  });
+  assert.equal("configStorageRef" in dto, false);
+  assert.equal("checksum" in dto, false);
+});
+
+test("checksum usa os mesmos bytes UTF-8 persistidos", async () => {
+  const config = { version: "v1", config: { visState: {} }, datasets: [] };
+  const first = await buildProjectConfigArtifact(config);
+  const second = await buildProjectConfigArtifact(config);
+  const changed = await buildProjectConfigArtifact({
+    ...config,
+    config: { visState: { layers: [] } },
+  });
+
+  assert.equal(first.checksum.length, 64);
+  assert.equal(first.checksum, second.checksum);
+  assert.notEqual(first.checksum, changed.checksum);
+  await assert.doesNotReject(
+    verifyProjectConfigBytes(first.bytes, {
+      expectedChecksum: first.checksum,
+      expectedAlgorithm: "sha256",
+    }),
+  );
+  await assert.rejects(
+    verifyProjectConfigBytes(changed.bytes, {
+      expectedChecksum: first.checksum,
+      expectedAlgorithm: "sha256",
+    }),
+    (error) => error?.code === "PROJECT_CONFIG_INTEGRITY_MISMATCH",
+  );
+});
+
+test("storage_ref é opaca e revisionada sem caminho Dropbox público", () => {
+  const ref = createProjectConfigStorageRef(84, 18);
+  assert.equal(ref, "project-config://84/revisions/18");
+  assert.deepEqual(parseProjectConfigStorageRef(ref), {
+    projectId: 84,
+    revision: 18,
+  });
+  assert.equal(
+    getProjectConfigRevisionFileName("config.kepler.json", 18),
+    "config.kepler.r000018.json",
+  );
+  assert.doesNotMatch(ref, /dropbox/i);
+});
+
+test("ledger impede conteúdo concorrente, publica por CAS e recupera retry idempotente", async () => {
+  const database = fixture();
+  database.prepare(`
+    INSERT INTO projects (
+      id, organization_id, active, config_revision,
+      lifecycle_state, lifecycle_version
+    ) VALUES (84, 7, 1, 14, 'ACTIVE', 4)
+  `).run();
+  const env = envFor(database);
+  const base = {
+    projectId: 84,
+    organizationId: 7,
+    expectedCurrentRevision: 14,
+    checksumAlgorithm: "sha256",
+    checksum: "a".repeat(64),
+    storageProvider: "dropbox",
+    storageRef: "project-config://84/revisions/15",
+    schemaName: "legacy-kepler",
+    schemaVersion: 1,
+    sizeBytes: 120,
+    contentType: "application/json; charset=utf-8",
+    actorUserId: 10,
+    transitionId: "transition-a",
+  };
+
+  const reserved = await reserveProjectConfigRevision(env, base);
+  assert.equal(reserved.revision.revision, 15);
+  assert.equal(reserved.revision.status, "WRITING");
+
+  await assert.rejects(
+    reserveProjectConfigRevision(env, {
+      ...base,
+      checksum: "b".repeat(64),
+      transitionId: "transition-b",
+    }),
+    (error) => error?.code === "PROJECT_CONFIG_REVISION_CONFLICT",
+  );
+
+  await markProjectConfigRevisionReady(env, {
+    projectId: 84,
+    revision: 15,
+    checksum: base.checksum,
+    storageProviderVersion: "rev-provider-15",
+    storageProviderHash: "provider-hash",
+  });
+  const published = await publishProjectConfigRevision(env, {
+    projectId: 84,
+    organizationId: 7,
+    expectedCurrentRevision: 14,
+    revision: 15,
+    actor: { id: 10, name: "Editor" },
+    expectedLifecycleState: "ACTIVE",
+  });
+
+  assert.equal(published.config_revision, 15);
+  assert.equal(published.lifecycle_state, "ACTIVE");
+  assert.equal(published.config_checksum, base.checksum);
+  assert.equal(published.config_storage_ref, base.storageRef);
+
+  const recovered = await reserveProjectConfigRevision(env, base);
+  assert.equal(recovered.alreadyPublished, true);
+  assert.equal(recovered.idempotent, true);
+  assert.equal(recovered.project.config_revision, 15);
+
+  await assert.rejects(
+    reserveProjectConfigRevision(env, {
+      ...base,
+      checksum: "c".repeat(64),
+    }),
+    (error) =>
+      error?.code === "PROJECT_CONFIG_REVISION_CONFLICT" &&
+      error?.details?.currentConfigRevision === 15,
+  );
+});

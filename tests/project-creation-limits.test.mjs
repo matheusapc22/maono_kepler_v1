@@ -18,7 +18,7 @@ const migrationUrl = new URL(
 );
 const schemaUrl = new URL("../schema.sql", import.meta.url);
 const createUrl = new URL(
-  "../functions/api/projects/index.js",
+  "../functions/_lib/project-creation-lifecycle-service.js",
   import.meta.url,
 );
 const [migration, schema, creation] = await Promise.all([
@@ -281,7 +281,7 @@ test("storage não pronto bloqueia o novo editor", async () => {
   assert.equal(result.reason, "ORGANIZATION_STORAGE_NOT_CONFIGURED");
 });
 
-test("schema canônico e criação usam a mesma máquina de estados", () => {
+test("schema canônico e criação usam a mesma máquina de estados de quota", () => {
   for (const source of [migration, schema]) {
     assert.match(
       source,
@@ -298,4 +298,5 @@ test("schema canônico e criação usam a mesma máquina de estados", () => {
   assert.match(creation, /commitProjectQuota/);
   assert.match(creation, /releaseProjectQuota/);
   assert.match(creation, /PROJECT_CREATION_IN_PROGRESS/);
+  assert.match(creation, /PROJECT_LIFECYCLE_STATES/);
 });

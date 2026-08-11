@@ -12,7 +12,15 @@ const urls = {
     "../functions/api/projects/[slug]/config.js",
     import.meta.url,
   ),
+  configService: new URL(
+    "../functions/_lib/project-config-service.js",
+    import.meta.url,
+  ),
   create: new URL("../functions/api/projects/index.js", import.meta.url),
+  creationService: new URL(
+    "../functions/_lib/project-creation-lifecycle-service.js",
+    import.meta.url,
+  ),
   thumbnail: new URL(
     "../functions/api/projects/[slug]/thumbnail/index.js",
     import.meta.url,
@@ -51,7 +59,9 @@ const urls = {
 const [
   migration,
   config,
+  configService,
   create,
+  creationService,
   thumbnail,
   status,
   previewHelper,
@@ -63,7 +73,9 @@ const [
 ] = await Promise.all([
   readFile(urls.migration, "utf8"),
   readFile(urls.config, "utf8"),
+  readFile(urls.configService, "utf8"),
   readFile(urls.create, "utf8"),
+  readFile(urls.creationService, "utf8"),
   readFile(urls.thumbnail, "utf8"),
   readFile(urls.status, "utf8"),
   readFile(urls.previewHelper, "utf8"),
@@ -136,15 +148,20 @@ test("migration 0015 adiciona ciclo completo, defaults e índices", () => {
     assert.ok(columns.includes(column), `coluna ${column} ausente`);
   }
 
-  const row = database.prepare(
-    `SELECT config_revision, preview_status, preview_attempts
+  const row = database
+    .prepare(
+      `SELECT config_revision, preview_status, preview_attempts
      FROM projects WHERE id = 1`,
-  ).get();
-  assert.deepEqual({ ...row }, {
-    config_revision: 0,
-    preview_status: "UNKNOWN",
-    preview_attempts: 0,
-  });
+    )
+    .get();
+  assert.deepEqual(
+    { ...row },
+    {
+      config_revision: 0,
+      preview_status: "UNKNOWN",
+      preview_attempts: 0,
+    },
+  );
 
   const indexes = database
     .prepare("PRAGMA index_list(projects)")
@@ -237,9 +254,11 @@ test("revisão obsoleta nunca altera o estado da revisão atual", async () => {
   );
 });
 
-test("config salva JSON antes de responder PENDING e não espera PNG por padrão", () => {
-  assert.match(config, /await uploadDropboxTextFile\(/);
-  assert.match(config, /touchProjectAfterConfigSave/);
+test("config publica JSON/revisão antes de responder PENDING e não espera PNG por padrão", () => {
+  assert.match(config, /const saved = await saveProjectConfig/);
+  assert.match(configService, /putProjectConfigRevision/);
+  assert.match(configService, /markProjectConfigRevisionReady/);
+  assert.match(configService, /publishProjectConfigRevision/);
   assert.match(config, /configRevision/);
   assert.match(config, /thumbnail:\s*\{\s*status:/);
   assert.match(
@@ -249,15 +268,20 @@ test("config salva JSON antes de responder PENDING e não espera PNG por padrão
   assert.match(config, /Server-Timing/);
 });
 
-test("criação também deixa o PNG fora do caminho crítico", () => {
+test("criação também deixa o PNG fora do caminho crítico do lifecycle", () => {
+  assert.match(create, /createProjectFromKepler/);
   assert.match(
-    create,
+    creationService,
     /const thumbnail = asyncThumbnailEnabled\(env\)\s*\?\s*null\s*:\s*decodeImageDataUrl/,
   );
-  assert.match(create, /let previewStatus = "PENDING"/);
-  assert.match(create, /config_revision = \?/);
-  assert.match(create, /preview_status = \?/);
-  assert.match(create, /configRevision,/);
+  assert.match(creationService, /previewStatus = "PENDING"/);
+  assert.match(creationService, /enterConfigReady/);
+  assert.match(creationService, /activateProject/);
+  assert.match(creationService, /saveLegacyCreationPreview/);
+  assert.ok(
+    creationService.indexOf("activateProject(") <
+      creationService.lastIndexOf("saveLegacyCreationPreview("),
+  );
 });
 
 test("endpoint binário valida permissão, revisão, tipo, tamanho e assinatura", () => {
@@ -278,10 +302,7 @@ test("arquivo versionado e atualização condicional impedem overwrite antigo", 
     /Number\(current\?\.config_revision\) !== Number\(revision\)/,
   );
   assert.match(thumbnail, /deleteDropboxPathIfExists/);
-  assert.match(
-    previewHelper,
-    /AND config_revision = \?/,
-  );
+  assert.match(previewHelper, /AND config_revision = \?/);
 });
 
 test("rota de thumbnail aceita status separado sem conflito de Pages Functions", async () => {
@@ -307,6 +328,7 @@ test("frontend confirma JSON antes de enfileirar captura", () => {
   );
   assert.match(saveButton, /ASYNC_THUMBNAIL_ENABLED/);
   assert.match(saveButton, /serializeProjectConfig\(mapState\)/);
+  assert.match(saveButton, /expectedConfigRevision/);
 });
 
 test("job possui cancelamento, retry limitado e storage só de metadados", () => {
@@ -336,13 +358,10 @@ test("listagem pública expõe somente metadados operacionais do preview", () =>
   assert.match(list, /publicProjectPreview\(project\)/);
   assert.match(list, /projects\.config_revision/);
   assert.match(list, /projects\.preview_status/);
-  assert.doesNotMatch(
-    list,
-    /preview_last_error|preview_capture_method/,
-  );
+  assert.doesNotMatch(list, /preview_last_error|preview_capture_method/);
 });
 
-test("reconciliador legado é em lote, por organização e exclusivo do Super Admin", () => {
+test("reconciliador legado de preview segue em lote, por organização e Super Admin", () => {
   assert.match(reconcile, /request\.method !== "POST"/);
   assert.match(reconcile, /user\?\.role[\s\S]*super_admin/);
   assert.match(reconcile, /Math\.min\(25/);

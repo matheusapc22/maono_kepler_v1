@@ -14,12 +14,23 @@ const serviceUrl = new URL(
   "../functions/_lib/project-service.js",
   import.meta.url,
 );
+const configServiceUrl = new URL(
+  "../functions/_lib/project-config-service.js",
+  import.meta.url,
+);
+const revisionsUrl = new URL(
+  "../functions/_lib/project-config-revisions.js",
+  import.meta.url,
+);
 
-const [metadataSource, configSource, serviceSource] = await Promise.all([
-  readFile(metadataUrl, "utf8"),
-  readFile(configUrl, "utf8"),
-  readFile(serviceUrl, "utf8"),
-]);
+const [metadataSource, configSource, serviceSource, configServiceSource, revisionsSource] =
+  await Promise.all([
+    readFile(metadataUrl, "utf8"),
+    readFile(configUrl, "utf8"),
+    readFile(serviceUrl, "utf8"),
+    readFile(configServiceUrl, "utf8"),
+    readFile(revisionsUrl, "utf8"),
+  ]);
 
 function compact(source) {
   return source.replace(/\s+/g, " ");
@@ -79,10 +90,7 @@ test("campos internos e imutáveis são rejeitados pelo serviço central", () =>
     );
   }
 
-  assert.match(
-    serviceSource,
-    /PROJECT_METADATA_FIELD_NOT_EDITABLE/,
-  );
+  assert.match(serviceSource, /PROJECT_METADATA_FIELD_NOT_EDITABLE/);
   assert.match(metadataSource, /patch:\s*body/);
 });
 
@@ -97,10 +105,7 @@ test("serviço valida limites, normaliza e exige metadataVersion", () => {
 });
 
 test("conflito usa 409, código padronizado e snapshot atual", () => {
-  assert.match(
-    serviceSource,
-    /PROJECT_METADATA_VERSION_CONFLICT/,
-  );
+  assert.match(serviceSource, /PROJECT_METADATA_VERSION_CONFLICT/);
   assert.match(
     serviceSource,
     /createProjectServiceError\([\s\S]*409[\s\S]*PROJECT_METADATA_VERSION_CONFLICT/,
@@ -135,17 +140,16 @@ test("payload público de metadados não expõe e-mail nem campos Dropbox", () =
   assert.doesNotMatch(metadataSource, /\bemail\s*:/i);
 });
 
-test("salvamento do mapa registra último editor pelo serviço central", () => {
+test("salvamento do mapa mantém último editor no Control Plane", () => {
+  assert.match(configSource, /saveProjectConfig/);
   assert.match(configSource, /touchProjectAfterConfigSave/);
-  assert.doesNotMatch(configSource, /markProjectConfigUpdated/);
   assert.match(
     configSource,
     /actor:\s*\{\s*id:\s*user\.id,\s*name:\s*user\.name/,
   );
-  assert.match(
-    configSource,
-    /organizationId:\s*getProjectOrganizationId\(project\)/,
-  );
+  assert.match(configServiceSource, /touchProjectAfterConfigSave\(env/);
+  assert.match(revisionsSource, /updated_by = \?/);
+  assert.match(revisionsSource, /updated_by_name_snapshot = \?/);
 });
 
 test("salvar mapa não incrementa metadata_version", () => {
@@ -157,25 +161,33 @@ test("salvar mapa não incrementa metadata_version", () => {
   assert.match(touchFunction[0], /updated_by\s*=/);
   assert.match(touchFunction[0], /updated_by_name_snapshot\s*=/);
   assert.match(touchFunction[0], /updated_at\s*=\s*CURRENT_TIMESTAMP/);
-  assert.doesNotMatch(touchFunction[0], /metadata_version\s*=\s*metadata_version\s*\+\s*1/);
+  assert.doesNotMatch(
+    touchFunction[0],
+    /metadata_version\s*=\s*metadata_version\s*\+\s*1/,
+  );
+  assert.doesNotMatch(revisionsSource, /metadata_version\s*=\s*metadata_version/);
 });
 
 test("política de preview continua independente do salvamento do JSON", () => {
-  assert.match(
-    configSource,
-    /O JSON é o arquivo crítico[\s\S]*uploadDropboxTextFile/,
-  );
+  assert.match(configSource, /const saved = await saveProjectConfig/);
   assert.match(configSource, /asyncThumbnailEnabled\(env\)/);
   assert.match(configSource, /configRevision/);
   assert.match(configSource, /preview_status = 'PENDING'|thumbnailState/);
   assert.match(configSource, /Server-Timing/);
+  assert.match(configServiceSource, /publishProjectConfigRevision/);
+
+  const saveIndex = configSource.indexOf("const saved = await saveProjectConfig");
+  const previewIndex = configSource.indexOf("!asyncThumbnailEnabled(env)");
+  assert.ok(saveIndex >= 0 && previewIndex > saveIndex);
 });
 
-test("resposta do config inclui último editor e versão", () => {
+test("resposta do config inclui último editor, versão e lifecycle seguro", () => {
   assert.match(configSource, /updatedBy:\s*base\.updatedBy\s*\?\?\s*null/);
   assert.match(configSource, /metadataVersion:\s*Number\(/);
-  assert.match(
-    configSource,
-    /publicProjectForConfigResponse\(\{\s*\.\.\.project,\s*\.\.\.updatedProject,\s*\}\)/,
+  assert.match(configSource, /publicProjectForConfigResponse\(updatedProject\)/);
+  assert.match(configSource, /lifecycle:\s*publicProjectLifecycle\(updatedProject\)/);
+  assert.doesNotMatch(
+    configSource.match(/function publicProjectForConfigResponse[\s\S]*?\n\}/)?.[0] || "",
+    /config_storage_ref|config_checksum\s*:/,
   );
 });
