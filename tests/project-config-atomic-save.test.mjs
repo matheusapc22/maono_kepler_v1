@@ -249,7 +249,7 @@ test("S05: checksum pós-write divergente marca FAILED e preserva o HEAD", async
   const database = fixture();
   await insertActiveProject(database);
   const env = envFor(database);
-  const tampered = await buildProjectConfigArtifact(config("tampered-storage"));
+  const tampered = await buildProjectConfigArtifact(config("candidate-B"));
   const repository = {
     provider: "fake",
     async load() {
@@ -278,7 +278,7 @@ test("S05: checksum pós-write divergente marca FAILED e preserva o HEAD", async
   await assert.rejects(
     saveVersionedProjectConfig(env, {
       project: readProject(database),
-      config: config("candidate"),
+      config: config("candidate-A"),
       expectedConfigRevision: 1,
       actor: { id: 10, name: "Editor" },
       mapConfigRepository: repository,
