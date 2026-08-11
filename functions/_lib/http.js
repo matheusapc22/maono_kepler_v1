@@ -1,3 +1,9 @@
+import {
+  createCorrelationId,
+  normalizeMaonoError,
+  toPublicError,
+} from "./maono-error.js";
+
 const DEFAULT_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store",
@@ -13,25 +19,88 @@ export function jsonResponse(data, init = {}) {
   });
 }
 
-export function errorResponse(message, status = 400, code = "BAD_REQUEST", details = null) {
+export function errorResponse(
+  message,
+  status = 400,
+  code = "BAD_REQUEST",
+  details = null,
+  options = {},
+) {
+  const correlationId = options.correlationId || createCorrelationId();
+  const normalized = normalizeMaonoError(
+    options.error || {
+      message,
+      status,
+      code,
+      details,
+      category: options.category,
+      retryable: options.retryable,
+      correlationId,
+    },
+    {
+      defaultCode: code,
+      status,
+      message,
+      details,
+      category: options.category,
+      retryable: options.retryable,
+      correlationId,
+    },
+  );
+  const publicError = toPublicError(normalized, {
+    correlationId,
+    includeMessage: options.includeMessage !== false,
+  });
+
   return jsonResponse(
     {
       ok: false,
-      error: {
-        code,
-        message,
-        ...(details ? { details } : {}),
+      error: publicError,
+    },
+    {
+      status: normalized.status || status,
+      headers: {
+        "X-Correlation-Id": publicError.correlationId,
+        ...(options.headers || {}),
       },
     },
-    { status }
   );
 }
 
-export function methodNotAllowed(allowedMethods = ["GET"]) {
+export function errorResponseFromError(error, options = {}) {
+  const correlationId = options.correlationId || error?.correlationId || createCorrelationId();
+  const normalized = normalizeMaonoError(error, {
+    defaultCode: options.defaultCode,
+    status: options.status,
+    category: options.category,
+    retryable: options.retryable,
+    message: options.message,
+    details: options.details,
+    correlationId,
+  });
+  return errorResponse(
+    options.publicMessage || normalized.message,
+    normalized.status,
+    normalized.code,
+    normalized.details || null,
+    {
+      correlationId,
+      category: normalized.category,
+      retryable: normalized.retryable,
+      error: normalized,
+      includeMessage: options.includeMessage !== false,
+      headers: options.headers,
+    },
+  );
+}
+
+export function methodNotAllowed(allowedMethods = ["GET"], options = {}) {
   return errorResponse(
     `Método não permitido. Use: ${allowedMethods.join(", ")}.`,
     405,
-    "METHOD_NOT_ALLOWED"
+    "METHOD_NOT_ALLOWED",
+    null,
+    options,
   );
 }
 
@@ -72,6 +141,10 @@ export async function readJsonBody(request) {
 export function requireEnv(env, names) {
   const missing = names.filter((name) => !env[name]);
   if (missing.length) {
-    throw new Error(`Variáveis/bindings ausentes: ${missing.join(", ")}`);
+    const error = new Error(`Variáveis/bindings ausentes: ${missing.join(", ")}`);
+    error.status = 500;
+    error.code = "INFRASTRUCTURE_ENV_NOT_CONFIGURED";
+    error.retryable = false;
+    throw error;
   }
 }
