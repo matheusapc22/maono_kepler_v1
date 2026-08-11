@@ -93,25 +93,62 @@ export async function readPublishedProjectConfig(env, project) {
 }
 
 async function updateLinkedOrganizationFile(env, project, artifact) {
-  if (!project.organization_file_id) return;
+  if (!project.organization_file_id) return null;
   const projectIsActive =
     project.lifecycle_state === PROJECT_LIFECYCLE_STATES.ACTIVE;
-  await env.DB.prepare(
-    `UPDATE organization_files
-        SET size_bytes = ?,
-            sha256 = ?,
-            is_project = 1,
-            active = CASE WHEN ? = 1 THEN 1 ELSE active END,
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
-  )
-    .bind(
-      artifact.sizeBytes,
-      artifact.checksum,
-      projectIsActive ? 1 : 0,
-      project.organization_file_id,
+
+  try {
+    await env.DB.prepare(
+      `UPDATE organization_files
+          SET size_bytes = ?,
+              sha256 = ?,
+              is_project = 1,
+              active = CASE WHEN ? = 1 THEN 1 ELSE active END,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`,
     )
-    .run();
+      .bind(
+        artifact.sizeBytes,
+        artifact.checksum,
+        projectIsActive ? 1 : 0,
+        project.organization_file_id,
+      )
+      .run();
+    return null;
+  } catch (error) {
+    // organization_files é projeção auxiliar. O config/revision pointer é a
+    // autoridade e um erro nesta sincronização não pode transformar um save
+    // já persistido/publicado em falso 500 para o usuário.
+    console.error(
+      "[Maono projects] Falha auxiliar ao sincronizar organization_file:",
+      {
+        projectId: project?.id ?? null,
+        organizationFileId: project?.organization_file_id ?? null,
+        code: error?.code || "PROJECT_ORGANIZATION_FILE_SYNC_FAILED",
+        message: error instanceof Error ? error.message : String(error || ""),
+      },
+    );
+    return {
+      stage: "organization_file_sync",
+      code: error?.code || "PROJECT_ORGANIZATION_FILE_SYNC_FAILED",
+      retryable: true,
+    };
+  }
+}
+
+function legacyCommitNotConfirmed(error) {
+  const wrapped = serviceError(
+    "O arquivo de configuração foi enviado ao storage, mas a confirmação do estado do projeto não foi concluída.",
+    503,
+    "PROJECT_CONFIG_COMMIT_NOT_CONFIRMED",
+    {
+      stage: "project_metadata_commit",
+      retryable: true,
+      storageWriteCompleted: true,
+    },
+  );
+  wrapped.cause = error;
+  return wrapped;
 }
 
 export async function saveLegacyProjectConfig(
@@ -125,17 +162,31 @@ export async function saveLegacyProjectConfig(
     project.default_config_file || "config.kepler.json",
     artifact.text,
   );
-  await updateLinkedOrganizationFile(env, project, artifact);
-  const updatedProject = await touchProjectAfterConfigSave(env, {
-    projectId: project.id,
-    organizationId: project.organization_id,
-    actor,
-  });
+  const organizationFileWarning = await updateLinkedOrganizationFile(
+    env,
+    project,
+    artifact,
+  );
+
+  let updatedProject;
+  try {
+    updatedProject = await touchProjectAfterConfigSave(env, {
+      projectId: project.id,
+      organizationId: project.organization_id,
+      actor,
+    });
+  } catch (error) {
+    throw legacyCommitNotConfirmed(error);
+  }
+
   return {
     project: updatedProject,
     revision: Number(updatedProject?.config_revision || 0),
     artifact,
     legacy: true,
+    auxiliaryWarnings: organizationFileWarning
+      ? [organizationFileWarning]
+      : [],
   };
 }
 
@@ -190,10 +241,16 @@ export async function saveVersionedProjectConfig(
     allowedLifecycleStates,
   });
 
+  let publicationCompleted = Boolean(reservation.alreadyPublished);
+
   try {
     if (reservation.alreadyPublished) {
       const recoveredProject = reservation.project;
-      await updateLinkedOrganizationFile(env, recoveredProject, artifact);
+      const organizationFileWarning = await updateLinkedOrganizationFile(
+        env,
+        recoveredProject,
+        artifact,
+      );
       return {
         project: recoveredProject,
         revision: nextRevision,
@@ -202,6 +259,9 @@ export async function saveVersionedProjectConfig(
         transitionId: id,
         legacy: false,
         idempotent: true,
+        auxiliaryWarnings: organizationFileWarning
+          ? [organizationFileWarning]
+          : [],
       };
     }
 
@@ -243,7 +303,12 @@ export async function saveVersionedProjectConfig(
       markPreviewPending,
       expectedLifecycleState,
     });
-    await updateLinkedOrganizationFile(env, updatedProject, artifact);
+    publicationCompleted = true;
+    const organizationFileWarning = await updateLinkedOrganizationFile(
+      env,
+      updatedProject,
+      artifact,
+    );
 
     return {
       project: updatedProject,
@@ -253,9 +318,13 @@ export async function saveVersionedProjectConfig(
       transitionId: id,
       legacy: false,
       idempotent: Boolean(reservation.idempotent),
+      auxiliaryWarnings: organizationFileWarning
+        ? [organizationFileWarning]
+        : [],
     };
   } catch (error) {
     if (
+      !publicationCompleted &&
       error?.code !== "PROJECT_CONFIG_REVISION_CONFLICT" &&
       error?.code !== "PROJECT_CONFIG_LIFECYCLE_CONFLICT" &&
       error?.code !== "PROJECT_CONFIG_INTEGRITY_MISMATCH"
