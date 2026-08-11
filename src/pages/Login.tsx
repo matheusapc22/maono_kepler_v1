@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
+import LoginPageBackground from "../assets/images/login-background-maono.webp";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
 import "./login.css";
@@ -69,6 +70,7 @@ const LoginPage: React.FC = () => {
       Promise.all([
         preloadImage(Logo),
         preloadImage(LOGIN_BACKGROUND_URL),
+        preloadImage(LoginPageBackground),
       ]).then(() => undefined),
       timeout,
     ]).finally(() => {
@@ -113,10 +115,18 @@ const LoginPage: React.FC = () => {
     }
   }
 
+  const pageStyle = {
+    "--maono-login-background": `url("${LOGIN_BACKGROUND_URL}")`,
+    // O asset externo é importado pelo Vite para que o build gere e resolva
+    // a URL final, evitando depender de uma rota absoluta do diretório public.
+    background: `#050505 url("${LoginPageBackground}") center / cover no-repeat`,
+  } as CSSProperties;
+
   if (!assetsReady) {
     return (
       <main
         className="maono-login-page maono-login-page__loading"
+        style={pageStyle}
         aria-busy="true"
       >
         <div className="maono-login-page__spinner" aria-hidden="true" />
@@ -124,10 +134,6 @@ const LoginPage: React.FC = () => {
       </main>
     );
   }
-
-  const pageStyle = {
-    "--maono-login-background": `url("${LOGIN_BACKGROUND_URL}")`,
-  } as CSSProperties;
 
   return (
     <main className="maono-login-page" style={pageStyle}>
