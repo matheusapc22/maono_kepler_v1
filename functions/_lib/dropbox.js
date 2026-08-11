@@ -9,7 +9,6 @@ import {
   uploadLocalStorageFile,
 } from "./local-storage.js";
 
-
 const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
 const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
@@ -184,10 +183,7 @@ async function createDropboxFolderWithToken(accessToken, path) {
 
 export async function ensureDropboxFolder(env, path) {
   if (isLocalStorageMode(env)) {
-    return await ensureLocalStorageFolder(
-      env,
-      path,
-    );
+    return await ensureLocalStorageFolder(env, path);
   }
 
   const accessToken = await getDropboxAccessToken(env);
@@ -210,10 +206,7 @@ export async function ensureDropboxFolder(env, path) {
 
 export async function listDropboxFolder(env, path = "") {
   if (isLocalStorageMode(env)) {
-    return await listLocalStorageFolder(
-      env,
-      path,
-    );
+    return await listLocalStorageFolder(env, path);
   }
 
   const accessToken = await getDropboxAccessToken(env);
@@ -248,11 +241,7 @@ export async function listDropboxFolder(env, path = "") {
 
 export async function getDropboxMetadata(env, rootPath, fileName) {
   if (isLocalStorageMode(env)) {
-    return await getLocalStorageMetadata(
-      env,
-      rootPath,
-      fileName,
-    );
+    return await getLocalStorageMetadata(env, rootPath, fileName);
   }
 
   const accessToken = await getDropboxAccessToken(env);
@@ -289,10 +278,7 @@ export async function getDropboxMetadata(env, rootPath, fileName) {
 
 export async function deleteDropboxPath(env, path) {
   if (isLocalStorageMode(env)) {
-    return await deleteLocalStoragePath(
-      env,
-      path,
-    );
+    return await deleteLocalStoragePath(env, path);
   }
 
   const accessToken = await getDropboxAccessToken(env);
@@ -338,17 +324,12 @@ export async function deleteDropboxPathIfExists(env, path) {
 
 export async function downloadDropboxTextFile(env, rootPath, fileName) {
   const response = await downloadDropboxBinaryFile(env, rootPath, fileName);
-
   return await response.text();
 }
 
 export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
   if (isLocalStorageMode(env)) {
-    return await downloadLocalStorageFile(
-      env,
-      rootPath,
-      fileName,
-    );
+    return await downloadLocalStorageFile(env, rootPath, fileName);
   }
 
   const accessToken = await getDropboxAccessToken(env);
@@ -369,6 +350,9 @@ export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
     );
 
     error.status = response.status;
+    error.code = text.includes("path/not_found")
+      ? "DROPBOX_PATH_NOT_FOUND"
+      : "DROPBOX_DOWNLOAD_FAILED";
     throw error;
   }
 
@@ -379,7 +363,21 @@ export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
   return await uploadDropboxBinaryFile(env, rootPath, fileName, content);
 }
 
-export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, contentType = "") {
+export async function uploadDropboxBinaryFile(
+  env,
+  rootPath,
+  fileName,
+  content,
+  contentType = "",
+  { writeMode = "overwrite" } = {},
+) {
+  if (!["overwrite", "create"].includes(writeMode)) {
+    const error = new Error("Modo de escrita Dropbox inválido.");
+    error.status = 400;
+    error.code = "DROPBOX_WRITE_MODE_INVALID";
+    throw error;
+  }
+
   if (isLocalStorageMode(env)) {
     return await uploadLocalStorageFile(
       env,
@@ -387,6 +385,7 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
       fileName,
       content,
       contentType,
+      { writeMode },
     );
   }
 
@@ -394,25 +393,20 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
   const path = joinDropboxPath(normalizedRootPath, fileName);
 
   await ensureDropboxFolder(env, normalizedRootPath);
-
   const accessToken = await getDropboxAccessToken(env);
+  const createOnly = writeMode === "create";
 
   const response = await fetch(DROPBOX_UPLOAD_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-
-      // A API /2/files/upload do Dropbox aceita application/octet-stream.
-      // Não envie application/json nem image/png aqui; o tipo real é inferido
-      // pelo nome/extensão do arquivo.
       "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
-
       "Dropbox-API-Arg": JSON.stringify({
         path,
-        mode: "overwrite",
+        mode: createOnly ? "add" : "overwrite",
         autorename: false,
         mute: false,
-        strict_conflict: false,
+        strict_conflict: createOnly,
       }),
     },
     body: content,
@@ -420,10 +414,15 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
 
   if (!response.ok) {
     const text = await response.text();
-
-    throw new Error(
+    const error = new Error(
       `Falha ao enviar arquivo Dropbox ${path}: ${response.status} ${text}`,
     );
+    error.status = response.status;
+    error.code = text.includes("path/conflict")
+      ? "DROPBOX_PATH_CONFLICT"
+      : "DROPBOX_UPLOAD_FAILED";
+    error.dropboxStatus = response.status;
+    throw error;
   }
 
   return await response.json();
