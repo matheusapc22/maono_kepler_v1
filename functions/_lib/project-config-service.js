@@ -69,11 +69,19 @@ function revisionHead(project, artifact, revision) {
   };
 }
 
-async function prepareProjectConfigCandidate(config) {
-  const serialized = serializeProjectConfigBytes(config);
-  validateProjectConfig(config, { bytes: serialized.bytes });
-  const artifact = await buildProjectConfigArtifactFromBytes(serialized.bytes);
-  return { text: serialized.text, ...artifact };
+function assertPersistedSize(stored, artifact) {
+  const actualSizeBytes = Number(stored?.sizeBytes ?? -1);
+  if (actualSizeBytes !== Number(artifact.sizeBytes)) {
+    throw serviceError(
+      "O tamanho da revisão persistida não corresponde ao conteúdo preparado.",
+      409,
+      "PROJECT_CONFIG_SIZE_MISMATCH",
+      {
+        expectedSizeBytes: Number(artifact.sizeBytes),
+        actualSizeBytes,
+      },
+    );
+  }
 }
 
 async function verifyPersistedRevision(
@@ -83,8 +91,23 @@ async function verifyPersistedRevision(
     revision,
     storageRef,
     artifact,
+    stored = null,
   },
 ) {
+  if (stored?.contentVerified === true) {
+    assertPersistedSize(stored, artifact);
+    return {
+      persisted: stored,
+      verified: {
+        checksum: artifact.checksum,
+        contentHash: artifact.checksum,
+        checksumAlgorithm: artifact.checksumAlgorithm,
+        sizeBytes: artifact.sizeBytes,
+      },
+      verificationMethod: stored.verificationMethod || "repository-attestation",
+    };
+  }
+
   const persisted = await repository.getRevision({
     project,
     revision,
@@ -95,7 +118,11 @@ async function verifyPersistedRevision(
     expectedAlgorithm: artifact.checksumAlgorithm,
     expectedSizeBytes: artifact.sizeBytes,
   });
-  return { persisted, verified };
+  return {
+    persisted,
+    verified,
+    verificationMethod: "readback-sha256",
+  };
 }
 
 export async function readPublishedProjectConfig(
@@ -320,11 +347,20 @@ export async function saveVersionedProjectConfig(
 
     if (reservation.alreadyPublished) {
       stage = "VERIFY";
+      const stored = await repository.saveRevision({
+        project: reservation.project,
+        revision: nextRevision,
+        storageRef,
+        bytes: artifact.bytes,
+        contentType: artifact.contentType,
+        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+      });
       await verifyPersistedRevision(repository, {
         project: reservation.project,
         revision: nextRevision,
         storageRef,
         artifact,
+        stored,
       });
       const recoveredProject = reservation.project;
       const organizationFileWarning = await updateLinkedOrganizationFile(
@@ -349,25 +385,26 @@ export async function saveVersionedProjectConfig(
 
     let ready = reservation.revision;
 
+    stage = "WRITE";
+    const stored = await repository.saveRevision({
+      project,
+      revision: nextRevision,
+      storageRef,
+      bytes: artifact.bytes,
+      contentType: artifact.contentType,
+      mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+    });
+
+    stage = "VERIFY";
+    await verifyPersistedRevision(repository, {
+      project,
+      revision: nextRevision,
+      storageRef,
+      artifact,
+      stored,
+    });
+
     if (ready.status !== "READY") {
-      stage = "WRITE";
-      const stored = await repository.saveRevision({
-        project,
-        revision: nextRevision,
-        storageRef,
-        bytes: artifact.bytes,
-        contentType: artifact.contentType,
-        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-      });
-
-      stage = "VERIFY";
-      await verifyPersistedRevision(repository, {
-        project,
-        revision: nextRevision,
-        storageRef,
-        artifact,
-      });
-
       let providerVersion = stored.providerVersion ?? null;
       let providerHash = stored.providerHash ?? null;
       if (!providerVersion && !providerHash) {
@@ -387,14 +424,6 @@ export async function saveVersionedProjectConfig(
         checksum: artifact.checksum,
         storageProviderVersion: providerVersion,
         storageProviderHash: providerHash,
-      });
-    } else {
-      stage = "VERIFY";
-      await verifyPersistedRevision(repository, {
-        project,
-        revision: nextRevision,
-        storageRef,
-        artifact,
       });
     }
 
@@ -424,7 +453,7 @@ export async function saveVersionedProjectConfig(
       ledger: ready,
       transitionId: id,
       legacy: false,
-      idempotent: Boolean(reservation.idempotent),
+      idempotent: Boolean(reservation.idempotent || stored.idempotent),
       auxiliaryWarnings: organizationFileWarning
         ? [organizationFileWarning]
         : [],
