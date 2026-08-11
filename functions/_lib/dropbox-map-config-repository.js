@@ -18,25 +18,40 @@ function mapConfigStorageError(error, operation) {
   if (String(error?.code || "").startsWith("MAP_CONFIG_")) return error;
 
   const status = Number(error?.status || 500);
+  const message = String(error?.message || "");
   let code = "MAP_CONFIG_STORAGE_FAILED";
-  if (status === 401 || status === 403) code = "MAP_CONFIG_STORAGE_AUTH_FAILED";
-  else if (status === 404) code = "MAP_CONFIG_NOT_FOUND";
-  else if (status === 429 || status >= 500) code = "MAP_CONFIG_STORAGE_UNAVAILABLE";
-  else if (operation === "read") code = "MAP_CONFIG_STORAGE_READ_FAILED";
-  else if (operation === "write") code = "MAP_CONFIG_STORAGE_WRITE_FAILED";
-  else if (operation === "metadata") code = "MAP_CONFIG_STORAGE_METADATA_FAILED";
-  else if (operation === "prepare") code = "MAP_CONFIG_STORAGE_PREPARE_FAILED";
+  if (
+    status === 404 ||
+    error?.code === "DROPBOX_PATH_NOT_FOUND" ||
+    /path\/not_found|path\/not_found|not_found/i.test(message)
+  ) {
+    code = "MAP_CONFIG_NOT_FOUND";
+  } else if (status === 401 || status === 403) {
+    code = "MAP_CONFIG_STORAGE_AUTH_FAILED";
+  } else if (status === 429 || status >= 500) {
+    code = "MAP_CONFIG_STORAGE_UNAVAILABLE";
+  } else if (operation === "read") {
+    code = "MAP_CONFIG_STORAGE_READ_FAILED";
+  } else if (operation === "write") {
+    code = "MAP_CONFIG_STORAGE_WRITE_FAILED";
+  } else if (operation === "metadata") {
+    code = "MAP_CONFIG_STORAGE_METADATA_FAILED";
+  } else if (operation === "prepare") {
+    code = "MAP_CONFIG_STORAGE_PREPARE_FAILED";
+  }
 
   const wrapped = new Error(
-    operation === "write"
-      ? "Não foi possível persistir a configuração do mapa."
-      : operation === "metadata"
-        ? "Não foi possível consultar os metadados da configuração do mapa."
-        : operation === "prepare"
-          ? "Não foi possível preparar o storage da configuração do mapa."
-          : "Não foi possível carregar a configuração do mapa.",
+    code === "MAP_CONFIG_NOT_FOUND"
+      ? "A revisão de configuração não foi encontrada no storage."
+      : operation === "write"
+        ? "Não foi possível persistir a configuração do mapa."
+        : operation === "metadata"
+          ? "Não foi possível consultar os metadados da configuração do mapa."
+          : operation === "prepare"
+            ? "Não foi possível preparar o storage da configuração do mapa."
+            : "Não foi possível carregar a configuração do mapa.",
   );
-  wrapped.status = status;
+  wrapped.status = code === "MAP_CONFIG_NOT_FOUND" ? 404 : status;
   wrapped.code = code;
   wrapped.details = {
     provider: "dropbox",
@@ -65,6 +80,30 @@ function normalizeBytes(bytes) {
   throw error;
 }
 
+function bytesEqual(left, right) {
+  const a = normalizeBytes(left);
+  const b = normalizeBytes(right);
+  if (a.byteLength !== b.byteLength) return false;
+  for (let index = 0; index < a.byteLength; index += 1) {
+    if (a[index] !== b[index]) return false;
+  }
+  return true;
+}
+
+function immutableViolation(project, revision, storageRef) {
+  const error = new Error(
+    "A revisão imutável já existe com conteúdo diferente.",
+  );
+  error.status = 409;
+  error.code = "MAP_CONFIG_REVISION_IMMUTABILITY_VIOLATION";
+  error.details = {
+    projectId: project?.id ?? null,
+    revision: Number(revision || 0),
+    storageRef,
+  };
+  return error;
+}
+
 function normalizeProviderMetadata(provider, metadata, fallbackSize = 0) {
   return {
     provider,
@@ -81,8 +120,6 @@ export class DropboxMapConfigRepository {
     this.provider = isLocalStorageMode(env) ? "local-d1" : "dropbox";
   }
 
-  // Compatibilidade de infraestrutura para fluxos antigos que preparavam a
-  // pasta explicitamente. Não faz parte da porta MapConfigRepository S04.
   async prepare({ project }) {
     assertProjectStorageContext(project);
     try {
@@ -111,8 +148,7 @@ export class DropboxMapConfigRepository {
       const bytes = new Uint8Array(await response.arrayBuffer());
       return {
         bytes,
-        contentType:
-          response.headers.get("content-type") || DEFAULT_CONTENT_TYPE,
+        contentType: response.headers.get("content-type") || DEFAULT_CONTENT_TYPE,
         sizeBytes: bytes.byteLength,
         provider: this.provider,
         storageRef: null,
@@ -123,6 +159,15 @@ export class DropboxMapConfigRepository {
       };
     } catch (error) {
       throw mapConfigStorageError(error, "read");
+    }
+  }
+
+  async findExistingRevision({ project, revision, storageRef }) {
+    try {
+      return await this.getRevision({ project, revision, storageRef });
+    } catch (error) {
+      if (error?.code === "MAP_CONFIG_NOT_FOUND") return null;
+      throw error;
     }
   }
 
@@ -150,6 +195,31 @@ export class DropboxMapConfigRepository {
         project.default_config_file || "config.kepler.json",
         revision,
       );
+
+      const existing = await this.findExistingRevision({
+        project,
+        revision,
+        storageRef: normalizedStorageRef,
+      });
+      if (existing) {
+        if (!bytesEqual(existing.bytes, source)) {
+          throw immutableViolation(project, revision, normalizedStorageRef);
+        }
+        const metadata = await this.getMetadata({
+          project,
+          revision,
+          storageRef: normalizedStorageRef,
+          mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+        });
+        return {
+          ...metadata,
+          storageRef: normalizedStorageRef,
+          contentType,
+          source: "revision",
+          idempotent: true,
+          createdNew: false,
+        };
+      }
     } else {
       const error = new Error("Modo de persistência de MapConfig inválido.");
       error.status = 400;
@@ -173,6 +243,8 @@ export class DropboxMapConfigRepository {
           mode === MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE
             ? "legacy"
             : "revision",
+        idempotent: false,
+        createdNew: mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE,
       };
     } catch (error) {
       throw mapConfigStorageError(error, "write");
@@ -195,8 +267,7 @@ export class DropboxMapConfigRepository {
       const bytes = new Uint8Array(await response.arrayBuffer());
       return {
         bytes,
-        contentType:
-          response.headers.get("content-type") || DEFAULT_CONTENT_TYPE,
+        contentType: response.headers.get("content-type") || DEFAULT_CONTENT_TYPE,
         sizeBytes: bytes.byteLength,
         provider: this.provider,
         storageRef,
