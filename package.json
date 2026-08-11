@@ -8,6 +8,7 @@
     "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:error-contract": "node --test tests/result-types.test.mjs tests/error-taxonomy.test.mjs tests/error-envelope-contract.test.mjs tests/api-error-client.test.mjs",
     "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs",
     "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs",
     "test:map-config-repository": "node --test tests/map-config-repository.test.mjs",
@@ -21,7 +22,7 @@
     "test:filter-accordion": "node --test tests/maono-filter-accordion-branding.test.mjs",
     "test:login": "node --experimental-strip-types --test tests/login-autofill-session.test.mjs tests/session-resilience.test.mjs",
     "test:map-panels": "npm run test:point-clustering && npm run test:map-flight && npm run test:smart-histogram && npm run test:filter-accordion && node --experimental-strip-types --test tests/map-panel-navigation-api.test.mjs tests/project-route-semantics.test.mjs tests/project-creation-limits.test.mjs tests/maono-layer-panel-integration.test.mjs tests/maono-layer-compact-navigation.test.mjs tests/maono-layer-workflow-placement.test.mjs tests/map-shell-overlay-integration.test.mjs tests/maono-map-layout-hotfix.test.mjs tests/maono-map-shell-runtime.test.mjs tests/isochrone-service.test.mjs tests/maono-isochrone-contract.test.mjs tests/maono-map-marker.test.mjs tests/maono-native-overlays.test.mjs tests/map-runtime-recovery.test.mjs tests/kepler-engine-adapter.test.mjs tests/maono-layer-management.test.mjs tests/maono-map-render-style.test.mjs",
-    "test:projects": "npm run test:login && npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview && npm run test:project-lifecycle && npm run test:map-panels"
+    "test:projects": "npm run test:error-contract && npm run test:login && npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview && npm run test:project-lifecycle && npm run test:map-panels"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",
