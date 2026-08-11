@@ -254,11 +254,16 @@ test("revisão obsoleta nunca altera o estado da revisão atual", async () => {
   );
 });
 
-test("config publica JSON/revisão antes de responder PENDING e não espera PNG por padrão", () => {
+test("config publica JSON/revisão via MapConfigRepository antes de responder PENDING e não espera PNG por padrão", () => {
   assert.match(config, /const saved = await saveProjectConfig/);
-  assert.match(configService, /putProjectConfigRevision/);
+  assert.match(configService, /repository\.saveRevision\(/);
+  assert.match(configService, /MAP_CONFIG_SAVE_MODES\.IMMUTABLE/);
   assert.match(configService, /markProjectConfigRevisionReady/);
   assert.match(configService, /publishProjectConfigRevision/);
+  assert.ok(
+    configService.indexOf("repository.saveRevision(") <
+      configService.indexOf("publishProjectConfigRevision("),
+  );
   assert.match(config, /configRevision/);
   assert.match(config, /thumbnail:\s*\{\s*status:/);
   assert.match(

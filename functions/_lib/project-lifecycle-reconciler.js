@@ -1,14 +1,10 @@
-import { downloadDropboxBinaryFile } from "./dropbox.js";
 import {
   buildProjectConfigArtifactFromBytes,
+  verifyProjectConfigBytes,
 } from "./project-config-integrity.js";
-import {
-  createProjectConfigStorageRef,
-  getProjectConfigStorageProvider,
-  putProjectConfigRevision,
-  readProjectConfigRevision,
-} from "./project-config-repository.js";
-import { verifyProjectConfigBytes } from "./project-config-integrity.js";
+import { MAP_CONFIG_SAVE_MODES } from "./map-config-repository.js";
+import { resolveMapConfigRepository } from "./map-config-repository-factory.js";
+import { createMapConfigStorageRef } from "./map-config-storage-ref.js";
 
 function reconcileError(message, status, code, details = null) {
   const error = new Error(message);
@@ -61,7 +57,11 @@ async function existingLedger(env, projectId, revision) {
 export async function reconcileLegacyProjectLifecycle(
   env,
   project,
-  { actorUserId = null, transitionId = null } = {},
+  {
+    actorUserId = null,
+    transitionId = null,
+    mapConfigRepository = null,
+  } = {},
 ) {
   if (!project?.id || !project?.organization_id) {
     throw reconcileError("Projeto legado inválido.", 400, "LEGACY_PROJECT_INVALID");
@@ -77,17 +77,14 @@ export async function reconcileLegacyProjectLifecycle(
     );
   }
 
-  const legacyResponse = await downloadDropboxBinaryFile(
-    env,
-    project.dropbox_root_path,
-    project.default_config_file || "config.kepler.json",
-  );
-  const bytes = new Uint8Array(await legacyResponse.arrayBuffer());
+  const repository = resolveMapConfigRepository(env, mapConfigRepository);
+  const legacyStored = await repository.load({ project });
+  const bytes = legacyStored.bytes;
   validateLegacyConfig(bytes);
   const artifact = await buildProjectConfigArtifactFromBytes(bytes);
   const revision = Math.max(1, Number(project.config_revision || 0));
-  const storageRef = createProjectConfigStorageRef(project.id, revision);
-  const provider = getProjectConfigStorageProvider(env);
+  const storageRef = createMapConfigStorageRef(project.id, revision);
+  const provider = repository.provider;
   const existing = await existingLedger(env, project.id, revision);
 
   if (existing) {
@@ -108,7 +105,7 @@ export async function reconcileLegacyProjectLifecycle(
   let providerMetadata;
   if (existing?.status === "READY") {
     try {
-      const stored = await readProjectConfigRevision(env, {
+      const stored = await repository.getRevision({
         project,
         revision,
         storageRef,
@@ -123,21 +120,23 @@ export async function reconcileLegacyProjectLifecycle(
         providerHash: existing.storage_provider_hash,
       };
     } catch {
-      providerMetadata = await putProjectConfigRevision(env, {
+      providerMetadata = await repository.saveRevision({
         project,
         revision,
         storageRef,
         bytes: artifact.bytes,
         contentType: artifact.contentType,
+        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
       });
     }
   } else {
-    providerMetadata = await putProjectConfigRevision(env, {
+    providerMetadata = await repository.saveRevision({
       project,
       revision,
       storageRef,
       bytes: artifact.bytes,
       contentType: artifact.contentType,
+      mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
     });
   }
 

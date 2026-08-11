@@ -1,102 +1,30 @@
+// Compatibilidade temporária da S03.
+//
+// Novos consumidores devem depender da porta `MapConfigRepository` e receber
+// uma implementação via `map-config-repository-factory.js`. Este módulo não
+// contém mais implementação de storage e não importa `dropbox.js`.
+import { createMapConfigRepository } from "./map-config-repository-factory.js";
+import { MAP_CONFIG_SAVE_MODES } from "./map-config-repository.js";
 import {
-  downloadDropboxBinaryFile,
-  ensureDropboxFolder,
-  getDropboxMetadata,
-  uploadDropboxBinaryFile,
-} from "./dropbox.js";
-import { isLocalStorageMode } from "./local-storage.js";
+  createMapConfigStorageRef,
+  getMapConfigRevisionFileName,
+  parseMapConfigStorageRef,
+} from "./map-config-storage-ref.js";
 
-const STORAGE_REF_PATTERN = /^project-config:\/\/([1-9][0-9]*)\/revisions\/([1-9][0-9]*)$/;
-
-function repositoryError(message, status, code, details = null) {
-  const error = new Error(message);
-  error.status = status;
-  error.code = code;
-  if (details) error.details = details;
-  return error;
-}
-
-function positiveInteger(value, code) {
-  const number = Number(value);
-  if (!Number.isInteger(number) || number <= 0) {
-    throw repositoryError("Identificador de revisão inválido.", 400, code);
-  }
-  return number;
-}
+export const createProjectConfigStorageRef = createMapConfigStorageRef;
+export const parseProjectConfigStorageRef = parseMapConfigStorageRef;
+export const getProjectConfigRevisionFileName = getMapConfigRevisionFileName;
 
 export function getProjectConfigStorageProvider(env) {
-  return isLocalStorageMode(env) ? "local-d1" : "dropbox";
-}
-
-export function createProjectConfigStorageRef(projectId, revision) {
-  const normalizedProjectId = positiveInteger(projectId, "PROJECT_CONFIG_PROJECT_ID_INVALID");
-  const normalizedRevision = positiveInteger(revision, "PROJECT_CONFIG_REVISION_INVALID");
-  return `project-config://${normalizedProjectId}/revisions/${normalizedRevision}`;
-}
-
-export function parseProjectConfigStorageRef(storageRef) {
-  const value = String(storageRef || "").trim();
-  const match = value.match(STORAGE_REF_PATTERN);
-
-  if (!match) {
-    throw repositoryError(
-      "Referência interna da configuração inválida.",
-      500,
-      "PROJECT_CONFIG_STORAGE_REF_INVALID",
-    );
-  }
-
-  return {
-    projectId: Number(match[1]),
-    revision: Number(match[2]),
-  };
-}
-
-export function getProjectConfigRevisionFileName(
-  defaultConfigFile = "config.kepler.json",
-  revision,
-) {
-  const normalizedRevision = positiveInteger(revision, "PROJECT_CONFIG_REVISION_INVALID");
-  const suffix = String(normalizedRevision).padStart(6, "0");
-  const name = String(defaultConfigFile || "config.kepler.json").trim();
-
-  if (/\.json$/i.test(name)) {
-    return name.replace(/\.json$/i, `.r${suffix}.json`);
-  }
-
-  return `${name}.r${suffix}.json`;
-}
-
-function assertProjectStorageContext(project) {
-  if (!project?.id || !project?.dropbox_root_path) {
-    throw repositoryError(
-      "Projeto sem contexto interno de storage.",
-      500,
-      "PROJECT_CONFIG_STORAGE_CONTEXT_INVALID",
-    );
-  }
-}
-
-function assertStorageRefMatchesProject(storageRef, project, revision) {
-  const parsed = parseProjectConfigStorageRef(storageRef);
-  if (
-    Number(parsed.projectId) !== Number(project.id) ||
-    Number(parsed.revision) !== Number(revision)
-  ) {
-    throw repositoryError(
-      "Referência de storage não corresponde ao projeto/revisão.",
-      409,
-      "PROJECT_CONFIG_STORAGE_REF_MISMATCH",
-    );
-  }
+  return createMapConfigRepository(env).provider;
 }
 
 export async function prepareProjectConfigStorage(env, project) {
-  assertProjectStorageContext(project);
-  await ensureDropboxFolder(env, project.dropbox_root_path);
-  return {
-    provider: getProjectConfigStorageProvider(env),
-  };
+  const repository = createMapConfigRepository(env);
+  if (typeof repository.prepare === "function") {
+    return repository.prepare({ project });
+  }
+  return { provider: repository.provider };
 }
 
 export async function putProjectConfigRevision(
@@ -104,84 +32,40 @@ export async function putProjectConfigRevision(
   {
     project,
     revision,
-    storageRef = createProjectConfigStorageRef(project?.id, revision),
+    storageRef = createMapConfigStorageRef(project?.id, revision),
     bytes,
     contentType = "application/json; charset=utf-8",
   },
 ) {
-  assertProjectStorageContext(project);
-  const normalizedRevision = positiveInteger(revision, "PROJECT_CONFIG_REVISION_INVALID");
-  assertStorageRefMatchesProject(storageRef, project, normalizedRevision);
-
-  const fileName = getProjectConfigRevisionFileName(
-    project.default_config_file || "config.kepler.json",
-    normalizedRevision,
-  );
-  const metadata = await uploadDropboxBinaryFile(
-    env,
-    project.dropbox_root_path,
-    fileName,
+  return createMapConfigRepository(env).saveRevision({
+    project,
+    revision,
+    storageRef,
     bytes,
     contentType,
-  );
-
-  return {
-    provider: getProjectConfigStorageProvider(env),
-    storageRef,
-    providerVersion: metadata?.rev ?? null,
-    providerHash: metadata?.content_hash ?? null,
-    providerObjectId: metadata?.id ?? null,
-    sizeBytes: Number(metadata?.size ?? bytes?.byteLength ?? 0),
-  };
+    mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+  });
 }
 
 export async function statProjectConfigRevision(
   env,
   { project, revision, storageRef },
 ) {
-  assertProjectStorageContext(project);
-  const normalizedRevision = positiveInteger(revision, "PROJECT_CONFIG_REVISION_INVALID");
-  assertStorageRefMatchesProject(storageRef, project, normalizedRevision);
-  const fileName = getProjectConfigRevisionFileName(
-    project.default_config_file || "config.kepler.json",
-    normalizedRevision,
-  );
-  const metadata = await getDropboxMetadata(
-    env,
-    project.dropbox_root_path,
-    fileName,
-  );
-
-  return {
-    provider: getProjectConfigStorageProvider(env),
+  return createMapConfigRepository(env).getMetadata({
+    project,
+    revision,
     storageRef,
-    providerVersion: metadata?.rev ?? null,
-    providerHash: metadata?.content_hash ?? null,
-    providerObjectId: metadata?.id ?? null,
-    sizeBytes: Number(metadata?.size ?? 0),
-  };
+    mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+  });
 }
 
 export async function readProjectConfigRevision(
   env,
   { project, revision, storageRef },
 ) {
-  assertProjectStorageContext(project);
-  const normalizedRevision = positiveInteger(revision, "PROJECT_CONFIG_REVISION_INVALID");
-  assertStorageRefMatchesProject(storageRef, project, normalizedRevision);
-  const fileName = getProjectConfigRevisionFileName(
-    project.default_config_file || "config.kepler.json",
-    normalizedRevision,
-  );
-  const response = await downloadDropboxBinaryFile(
-    env,
-    project.dropbox_root_path,
-    fileName,
-  );
-  const bytes = new Uint8Array(await response.arrayBuffer());
-
-  return {
-    bytes,
-    contentType: response.headers.get("content-type") || "application/json; charset=utf-8",
-  };
+  return createMapConfigRepository(env).getRevision({
+    project,
+    revision,
+    storageRef,
+  });
 }

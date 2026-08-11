@@ -7,6 +7,8 @@ on:
     paths:
       - "functions/_lib/access-governance.js"
       - "functions/_lib/dropbox.js"
+      - "functions/_lib/dropbox-map-config-repository.js"
+      - "functions/_lib/map-config-*.js"
       - "functions/_lib/project-*.js"
       - "functions/_lib/projects.js"
       - "functions/api/admin/organizations/**"
@@ -18,6 +20,7 @@ on:
       - "migrations/0015_project_preview_lifecycle.sql"
       - "migrations/0018_project_lifecycle.sql"
       - "docs/architecture/S03-project-lifecycle.md"
+      - "docs/architecture/S04-map-config-repository.md"
       - "schema.sql"
       - "package.json"
       - "vite.config.ts"
@@ -30,6 +33,7 @@ on:
       - "tests/access-delegation.test.mjs"
       - "tests/admin-user-manager-delegation-map.test.mjs"
       - "tests/cloudflare-build-chunking.test.mjs"
+      - "tests/map-config-*.test.mjs"
       - "tests/project-*.test.mjs"
       - ".github/workflows/access-governance-validation.yml"
   workflow_dispatch:
