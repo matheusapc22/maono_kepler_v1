@@ -1,5 +1,6 @@
 import {
   downloadDropboxBinaryFile,
+  ensureDropboxFolder,
   getDropboxMetadata,
   uploadDropboxBinaryFile,
 } from "./dropbox.js";
@@ -24,13 +25,16 @@ function mapConfigStorageError(error, operation) {
   else if (operation === "read") code = "MAP_CONFIG_STORAGE_READ_FAILED";
   else if (operation === "write") code = "MAP_CONFIG_STORAGE_WRITE_FAILED";
   else if (operation === "metadata") code = "MAP_CONFIG_STORAGE_METADATA_FAILED";
+  else if (operation === "prepare") code = "MAP_CONFIG_STORAGE_PREPARE_FAILED";
 
   const wrapped = new Error(
     operation === "write"
       ? "Não foi possível persistir a configuração do mapa."
       : operation === "metadata"
         ? "Não foi possível consultar os metadados da configuração do mapa."
-        : "Não foi possível carregar a configuração do mapa.",
+        : operation === "prepare"
+          ? "Não foi possível preparar o storage da configuração do mapa."
+          : "Não foi possível carregar a configuração do mapa.",
   );
   wrapped.status = status;
   wrapped.code = code;
@@ -75,6 +79,18 @@ export class DropboxMapConfigRepository {
   constructor(env) {
     this.env = env;
     this.provider = isLocalStorageMode(env) ? "local-d1" : "dropbox";
+  }
+
+  // Compatibilidade de infraestrutura para fluxos antigos que preparavam a
+  // pasta explicitamente. Não faz parte da porta MapConfigRepository S04.
+  async prepare({ project }) {
+    assertProjectStorageContext(project);
+    try {
+      await ensureDropboxFolder(this.env, project.dropbox_root_path);
+      return { provider: this.provider };
+    } catch (error) {
+      throw mapConfigStorageError(error, "prepare");
+    }
   }
 
   async load({ project }) {
