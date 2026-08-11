@@ -15,9 +15,7 @@ reserve N+1
   ↓
 write immutable revision
   ↓
-read back
-  ↓
-verify checksum + size
+verify persisted content
   ↓
 READY
   ↓
@@ -85,17 +83,24 @@ O pipeline serializa apenas uma vez. Os mesmos bytes são usados para:
 - persistência;
 - verificação pós-write.
 
-Após o write, a revisão é relida por `MapConfigRepository.getRevision()` e seu checksum/tamanho são comparados ao candidato antes de o ledger ser marcado `READY`.
+A verificação pós-write pode ocorrer de duas formas, sem alterar o contrato lógico:
 
-`storage_provider_hash` continua sendo metadata do provider e não substitui `config_checksum`.
+1. **Atestação do provider** — quando o provider consegue provar que o objeto remoto é exatamente o conteúdo enviado, `saveRevision()` retorna `contentVerified: true` e a Application valida também o tamanho persistido;
+2. **Read-back** — para providers sem atestação suficiente, a Application carrega a revisão exata e recalcula SHA-256 + tamanho antes de `READY`.
+
+No `DropboxMapConfigRepository`, o adapter calcula o algoritmo oficial `content_hash` do Dropbox sobre os bytes candidatos e compara com o `content_hash` retornado pelo próprio Dropbox. Isso confirma a cópia remota sem baixar novamente um MapConfig grande. O `config_checksum` da Maõno continua sendo SHA-256 normal e permanece separado do hash do provider.
+
+`storage_provider_hash` é metadata do provider e não substitui `config_checksum`.
 
 ## Imutabilidade
 
 Para `mode=immutable`, `(projectId, revision)` identifica um único conteúdo.
 
 - revisão inexistente: pode ser criada;
-- mesma revisão + mesmos bytes: retry idempotente;
-- mesma revisão + bytes diferentes: `MAP_CONFIG_REVISION_IMMUTABILITY_VIOLATION`.
+- mesma revisão + mesmos bytes/conteúdo atestado: retry idempotente;
+- mesma revisão + conteúdo diferente: `MAP_CONFIG_REVISION_IMMUTABILITY_VIOLATION`.
+
+A criação física de uma revisão Dropbox usa escrita `create-only` (`add` com conflito estrito), fechando a janela entre verificar existência e gravar. Se outro escritor vencer a corrida com o mesmo conteúdo, o conflito é recuperado como retry idempotente; conteúdo diferente continua bloqueado.
 
 O modo `legacy-overwrite` continua temporariamente disponível apenas para projetos com `lifecycle_state IS NULL`. Ele deve ser removido somente na fase CONTRACT, depois de `remainingLegacyActive = 0`.
 
@@ -146,7 +151,7 @@ revision 43 → FAILED
 HEAD permanece 42
 ```
 
-### Checksum pós-write divergente
+### Integridade pós-write divergente
 
 ```text
 revision 43 → FAILED / VERIFY
@@ -161,6 +166,12 @@ HEAD permanece 42
 ```
 
 A revisão READY pode ser retomada/revalidada por retry; ela não é pública até o CAS.
+
+## MapConfigs grandes
+
+A S05 evita tornar obrigatório um segundo download completo imediatamente após o upload. No provider Dropbox, a verificação usa o hash de conteúdo do próprio provider; o read-back fica como fallback. Essa decisão reduz pressão de memória e tráfego no Worker sem relaxar a regra de que uma revisão precisa estar verificada antes de `READY`.
+
+Chunked upload continua fora da S05 e permanece candidato a uma etapa específica de confiabilidade para arquivos grandes.
 
 ## Compatibilidade futura
 
@@ -195,9 +206,11 @@ A S05 deve falhar no CI se qualquer uma destas invariantes quebrar:
 1. N+1 não gerar objeto distinto;
 2. revisão anterior desaparecer ou mudar;
 3. mesma revisão aceitar conteúdo diferente;
-4. checksum pós-write não ser verificado antes do publish;
+4. integridade pós-write não ser confirmada antes do publish;
 5. mismatch mover o HEAD;
 6. FAILED virar HEAD;
 7. CAS permitir dois vencedores;
 8. retry idempotente criar revisão adicional;
-9. leitura ACTIVE deixar de verificar checksum/tamanho.
+9. leitura ACTIVE deixar de verificar checksum/tamanho;
+10. o adapter Dropbox deixar de usar create-only para revisão imutável;
+11. o caminho com atestação do provider voltar a exigir read-back completo.
