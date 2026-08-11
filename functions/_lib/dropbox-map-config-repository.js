@@ -23,7 +23,7 @@ function mapConfigStorageError(error, operation) {
   if (
     status === 404 ||
     error?.code === "DROPBOX_PATH_NOT_FOUND" ||
-    /path\/not_found|path\/not_found|not_found/i.test(message)
+    /path\/not_found|not_found/i.test(message)
   ) {
     code = "MAP_CONFIG_NOT_FOUND";
   } else if (status === 401 || status === 403) {
@@ -60,6 +60,16 @@ function mapConfigStorageError(error, operation) {
   };
   wrapped.cause = error;
   return wrapped;
+}
+
+function isWriteConflict(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  return (
+    code === "DROPBOX_PATH_CONFLICT" ||
+    code === "LOCAL_STORAGE_PATH_CONFLICT" ||
+    (Number(error?.status || 0) === 409 && /path\/conflict|constraint/i.test(message))
+  );
 }
 
 function assertProjectStorageContext(project) {
@@ -171,6 +181,38 @@ export class DropboxMapConfigRepository {
     }
   }
 
+  async existingRevisionResult({
+    project,
+    revision,
+    storageRef,
+    source,
+    contentType,
+  }) {
+    const existing = await this.findExistingRevision({
+      project,
+      revision,
+      storageRef,
+    });
+    if (!existing) return null;
+    if (!bytesEqual(existing.bytes, source)) {
+      throw immutableViolation(project, revision, storageRef);
+    }
+    const metadata = await this.getMetadata({
+      project,
+      revision,
+      storageRef,
+      mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+    });
+    return {
+      ...metadata,
+      storageRef,
+      contentType,
+      source: "revision",
+      idempotent: true,
+      createdNew: false,
+    };
+  }
+
   async saveRevision({
     project,
     revision,
@@ -196,30 +238,14 @@ export class DropboxMapConfigRepository {
         revision,
       );
 
-      const existing = await this.findExistingRevision({
+      const existing = await this.existingRevisionResult({
         project,
         revision,
         storageRef: normalizedStorageRef,
+        source,
+        contentType,
       });
-      if (existing) {
-        if (!bytesEqual(existing.bytes, source)) {
-          throw immutableViolation(project, revision, normalizedStorageRef);
-        }
-        const metadata = await this.getMetadata({
-          project,
-          revision,
-          storageRef: normalizedStorageRef,
-          mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-        });
-        return {
-          ...metadata,
-          storageRef: normalizedStorageRef,
-          contentType,
-          source: "revision",
-          idempotent: true,
-          createdNew: false,
-        };
-      }
+      if (existing) return existing;
     } else {
       const error = new Error("Modo de persistência de MapConfig inválido.");
       error.status = 400;
@@ -234,6 +260,10 @@ export class DropboxMapConfigRepository {
         fileName,
         source,
         contentType,
+        {
+          writeMode:
+            mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE ? "create" : "overwrite",
+        },
       );
       return {
         ...normalizeProviderMetadata(this.provider, metadata, source.byteLength),
@@ -247,6 +277,20 @@ export class DropboxMapConfigRepository {
         createdNew: mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE,
       };
     } catch (error) {
+      // O check anterior é apenas uma otimização. A escrita create-only é a
+      // barreira física contra corrida. Se outro escritor venceu com os mesmos
+      // bytes, convertemos o conflito em retry idempotente; conteúdo diferente
+      // continua sendo violação de imutabilidade.
+      if (mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE && isWriteConflict(error)) {
+        const existing = await this.existingRevisionResult({
+          project,
+          revision,
+          storageRef: normalizedStorageRef,
+          source,
+          contentType,
+        });
+        if (existing) return existing;
+      }
       throw mapConfigStorageError(error, "write");
     }
   }
