@@ -14,6 +14,10 @@ const projectsIndexUrl = new URL(
   "../functions/api/projects/index.js",
   import.meta.url,
 );
+const creationServiceUrl = new URL(
+  "../functions/_lib/project-creation-lifecycle-service.js",
+  import.meta.url,
+);
 const saveButtonUrl = new URL(
   "../src/pages/Kepler/components/maono-save-button.tsx",
   import.meta.url,
@@ -28,6 +32,7 @@ const [
   adminIndex,
   adminId,
   projectsIndex,
+  creationService,
   saveButton,
   createPanel,
   packageSource,
@@ -35,6 +40,7 @@ const [
   readFile(adminIndexUrl, "utf8"),
   readFile(adminIdUrl, "utf8"),
   readFile(projectsIndexUrl, "utf8"),
+  readFile(creationServiceUrl, "utf8"),
   readFile(saveButtonUrl, "utf8"),
   readFile(createPanelUrl, "utf8"),
   readFile(packageUrl, "utf8"),
@@ -96,62 +102,73 @@ test("metadataVersion administrativa continua condicional", () => {
   );
 });
 
-test("POST público exige project.create e organização ativa", () => {
-  assert.match(projectsIndex, /"project\.create"/);
-  assert.match(projectsIndex, /requirePermission\(/);
-  assert.match(projectsIndex, /getActiveOrganizationId\(user\)/);
-  assert.match(projectsIndex, /ORGANIZATION_CONTEXT_MISMATCH/);
+test("POST público delega ao lifecycle service com project.create e organização ativa", () => {
+  assert.match(projectsIndex, /createProjectFromKepler/);
+  assert.match(creationService, /"project\.create"/);
+  assert.match(creationService, /requirePermission\(/);
+  assert.match(creationService, /getActiveOrganizationId\(user\)/);
+  assert.match(creationService, /ORGANIZATION_CONTEXT_MISMATCH/);
 });
 
-test("criação completa começa inativa antes dos arquivos", () => {
+test("criação completa começa DRAFT e inativa antes da preparação", () => {
   const createPending = functionBlock(
-    projectsIndex,
+    creationService,
     "createOrLoadPendingProject",
   );
 
   assert.match(createPending, /createProjectRecord/);
   assert.match(createPending, /active:\s*false/);
-  assert.match(projectsIndex, /status = 'PROCESSING'/);
-  assert.match(projectsIndex, /status = 'ERROR'/);
+  assert.match(createPending, /initializeProjectDraft/);
+  assert.match(creationService, /lifecycle_state = 'DRAFT'/);
+  assert.match(creationService, /status = 'PROCESSING'/);
+  assert.match(creationService, /status = 'ERROR'/);
 });
 
-test("ativação depende do JSON e owner, sem bloquear no preview assíncrono", () => {
+test("ativação exige revision pronta e owner, sem depender do preview", () => {
   const finalize = functionBlock(
-    projectsIndex,
+    creationService,
     "finalizeProjectCreation",
   );
 
-  const folderIndex = finalize.indexOf("ensureDropboxFolder");
-  const configIndex = finalize.indexOf("uploadDropboxTextFile");
-  const ownerIndex = finalize.indexOf("INSERT INTO user_projects");
-  const activateIndex = finalize.indexOf("active = 1");
+  const preparingIndex = finalize.indexOf("enterPreparingStorage");
+  const configIndex = finalize.indexOf("ensureInitialConfigPublished");
+  const readyIndex = finalize.indexOf("enterConfigReady");
+  const ownerIndex = finalize.indexOf("linkProjectOwner");
+  const fileIndex = finalize.indexOf("markOrganizationFileActive");
+  const activateIndex = finalize.indexOf("activateProject");
+  const previewIndex = finalize.indexOf("saveLegacyCreationPreview");
 
-  assert.ok(folderIndex >= 0);
-  assert.ok(configIndex > folderIndex);
-  assert.ok(ownerIndex > configIndex);
-  assert.ok(activateIndex > ownerIndex);
-  assert.match(finalize, /let previewStatus = "PENDING"/);
-  assert.match(finalize, /if \(thumbnail\)/);
-  assert.match(finalize, /access_level\s*\)\s*VALUES \(\?, \?, 'owner'\)/);
+  assert.ok(preparingIndex >= 0);
+  assert.ok(configIndex > preparingIndex);
+  assert.ok(readyIndex > configIndex);
+  assert.ok(ownerIndex > readyIndex);
+  assert.ok(fileIndex > ownerIndex);
+  assert.ok(activateIndex > fileIndex);
+  assert.ok(previewIndex > activateIndex);
+  assert.match(creationService, /PREPARING_STORAGE/);
+  assert.match(creationService, /CONFIG_READY/);
+  assert.match(creationService, /access_level\s*\)\s*VALUES \(\?, \?, 'owner'\)/);
 });
 
-test("falha parcial mantém projeto invisível e auditado", () => {
-  assert.match(projectsIndex, /markCreationFailed/);
-  assert.match(projectsIndex, /SET active = 0/);
-  assert.match(projectsIndex, /action:\s*"project\.create\.failed"/);
-  assert.match(projectsIndex, /retryable:\s*true/);
+test("falha parcial mantém projeto fora de ACTIVE e auditado", () => {
+  assert.match(creationService, /markCreationFailed/);
+  assert.match(creationService, /markProjectLifecycleFailed/);
+  assert.match(creationService, /PROJECT_LIFECYCLE_STATES\.FAILED|toState:\s*PROJECT_LIFECYCLE_STATES\.FAILED/);
+  assert.match(creationService, /action:\s*"project\.create\.failed"/);
+  assert.match(creationService, /retryable:\s*true/);
   assert.match(
-    projectsIndex,
+    creationService,
     /O projeto permaneceu inativo e pode ser retomado/,
   );
 });
 
-test("idempotência usa chave persistida e reserva única", () => {
-  assert.match(projectsIndex, /idempotency_key/);
-  assert.match(projectsIndex, /getCreationReservation/);
-  assert.match(projectsIndex, /claimReservation/);
-  assert.match(projectsIndex, /PROJECT_CREATION_IN_PROGRESS/);
-  assert.match(projectsIndex, /project\.create\.idempotent/);
+test("idempotência usa chave persistida, reserva única e retry de lifecycle", () => {
+  assert.match(creationService, /idempotency_key/);
+  assert.match(creationService, /getCreationReservation/);
+  assert.match(creationService, /claimReservation/);
+  assert.match(creationService, /PROJECT_CREATION_IN_PROGRESS/);
+  assert.match(creationService, /project\.create\.idempotent/);
+  assert.match(creationService, /PROJECT_LIFECYCLE_STATES\.FAILED/);
 });
 
 test("Novo mapa exibe botão somente com capacidade backend sem projectSlug", () => {
@@ -171,17 +188,20 @@ test("Novo mapa exibe botão somente com capacidade backend sem projectSlug", ()
   assert.match(saveButton, /<ProjectCreatePanel/);
 });
 
-test("mapa existente mantém PUT de config", () => {
+test("mapa existente mantém PUT de config com optimistic concurrency", () => {
   assert.match(
     saveButton,
     /projectSlug\s*&&\s*context\?\.capabilities\?\.saveMap/,
   );
   assert.match(
     saveButton,
-    /`\/api\/projects\/\$\{encodeURIComponent\(\s*projectSlug/,
+    /`\/api\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/config`/,
   );
   assert.match(saveButton, /method:\s*"PUT"/);
   assert.match(saveButton, /handleExistingProjectSave/);
+  assert.match(saveButton, /expectedConfigRevision/);
+  assert.match(saveButton, /context\?\.version/);
+  assert.match(saveButton, /void refresh\(\)/);
 });
 
 test("criação serializa uma vez e não captura no caminho crítico", () => {
@@ -266,7 +286,7 @@ test("retry mantém título e descrição da tentativa idempotente", () => {
   assert.match(createPanel, /busy \|\| stage === "error"/);
 });
 
-test("package consolida os quatro testes de metadata", () => {
+test("package consolida metadata e lifecycle nos gates de projeto", () => {
   const script = packageJson.scripts["test:project-metadata"];
 
   assert.ok(script);
@@ -274,9 +294,10 @@ test("package consolida os quatro testes de metadata", () => {
   assert.match(script, /project-metadata-api\.test\.mjs/);
   assert.match(script, /project-card-actions\.test\.mjs/);
   assert.match(script, /project-creation-metadata\.test\.mjs/);
+  assert.match(packageJson.scripts["test:project-lifecycle"], /project-lifecycle\.test\.mjs/);
   assert.match(
     packageJson.scripts["test:projects"],
-    /test:project-cards.*test:project-metadata/,
+    /test:project-cards.*test:project-metadata.*test:project-lifecycle/,
   );
 });
 

@@ -11,6 +11,7 @@ import {
   serializeProjectActor,
 } from "../../../_lib/project-service.js";
 import { logAudit } from "../../../_lib/projects.js";
+import { publicProjectLifecycle } from "../../../_lib/project-lifecycle.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -26,12 +27,16 @@ function normalizeSlug(value) {
 
 function normalizePositiveInteger(value) {
   const numberValue = Number(value);
-
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
 function normalizeDropboxPath(value) {
   return normalizeText(value).replace(/\/+$/g, "");
+}
+
+function createTransitionId() {
+  if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
+  return `admin-draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function isDropboxPathInsideOrganizationRoot(projectPath, organizationRootPath) {
@@ -40,9 +45,7 @@ function isDropboxPathInsideOrganizationRoot(projectPath, organizationRootPath) 
     organizationRootPath,
   ).toLowerCase();
 
-  if (!normalizedProjectPath || !normalizedOrganizationRootPath) {
-    return false;
-  }
+  if (!normalizedProjectPath || !normalizedOrganizationRootPath) return false;
 
   return (
     normalizedProjectPath === normalizedOrganizationRootPath ||
@@ -56,21 +59,14 @@ function getRequestedOrganizationId(request) {
     url.searchParams.get("organizationId") ||
     url.searchParams.get("organization_id");
 
-  if (!rawValue) {
-    return null;
-  }
-
+  if (!rawValue) return null;
   return normalizePositiveInteger(rawValue);
 }
 
 async function requireAdminPanelAccess(
   env,
   request,
-  {
-    user,
-    organizationId = null,
-    action = "admin.projects.view",
-  } = {},
+  { user, organizationId = null, action = "admin.projects.view" } = {},
 ) {
   const scopedOrganizationId = normalizePositiveInteger(organizationId);
 
@@ -79,13 +75,8 @@ async function requireAdminPanelAccess(
     request,
     "admin.panel.access",
     scopedOrganizationId
-      ? {
-          organizationId: scopedOrganizationId,
-          scopeType: "organization",
-        }
-      : {
-          scopeType: "global",
-        },
+      ? { organizationId: scopedOrganizationId, scopeType: "organization" }
+      : { scopeType: "global" },
     {
       user,
       resourceType: scopedOrganizationId ? "organization" : "platform",
@@ -113,6 +104,7 @@ function publicAdminProject(project) {
     dropboxRootPath: project.dropbox_root_path,
     defaultConfigFile: project.default_config_file,
     active: Boolean(project.active),
+    lifecycle: publicProjectLifecycle(project),
     accessCount: project.access_count || 0,
     createdBy: serializeProjectActor(project, "created"),
     updatedBy: serializeProjectActor(project, "updated"),
@@ -124,15 +116,10 @@ function publicAdminProject(project) {
 
 async function getOrganization(env, organizationId) {
   return env.DB.prepare(
-    `SELECT
-      id,
-      name,
-      slug,
-      dropbox_root_path,
-      active
-     FROM organizations
-     WHERE id = ?
-     LIMIT 1`,
+    `SELECT id, name, slug, dropbox_root_path, active
+       FROM organizations
+      WHERE id = ?
+      LIMIT 1`,
   )
     .bind(organizationId)
     .first();
@@ -154,27 +141,31 @@ async function listAdminProjects(env, { organizationId = null } = {}) {
         projects.updated_by,
         projects.updated_by_name_snapshot,
         projects.metadata_version,
+        projects.active,
+        projects.config_revision,
+        projects.config_checksum_algorithm,
+        projects.config_schema,
+        projects.config_schema_version,
+        projects.config_size_bytes,
+        projects.lifecycle_state,
+        projects.lifecycle_version,
+        projects.lifecycle_updated_at,
         organizations.name AS organization_name,
         organizations.slug AS organization_slug,
         creator.id AS creator_user_id,
         creator.name AS creator_current_name,
         updater.id AS updater_user_id,
         updater.name AS updater_current_name,
-        projects.active,
         projects.created_at,
         projects.updated_at,
         COUNT(DISTINCT user_projects.id) AS access_count
   `;
 
   const joins = `
-      LEFT JOIN organizations
-        ON organizations.id = projects.organization_id
-      LEFT JOIN users AS creator
-        ON creator.id = projects.created_by
-      LEFT JOIN users AS updater
-        ON updater.id = projects.updated_by
-      LEFT JOIN user_projects
-        ON user_projects.project_id = projects.id
+      LEFT JOIN organizations ON organizations.id = projects.organization_id
+      LEFT JOIN users AS creator ON creator.id = projects.created_by
+      LEFT JOIN users AS updater ON updater.id = projects.updated_by
+      LEFT JOIN user_projects ON user_projects.project_id = projects.id
   `;
 
   const sql = scopedOrganizationId
@@ -198,6 +189,33 @@ async function listAdminProjects(env, { organizationId = null } = {}) {
   return result.results || [];
 }
 
+async function initializeAdminProjectDraft(env, projectId, transitionId) {
+  const draft = await env.DB.prepare(
+    `UPDATE projects
+        SET lifecycle_state = 'DRAFT',
+            lifecycle_version = 1,
+            lifecycle_updated_at = CURRENT_TIMESTAMP,
+            lifecycle_transition_id = ?,
+            lifecycle_attempts = 0,
+            active = 0,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND lifecycle_state IS NULL
+      RETURNING *`,
+  )
+    .bind(transitionId, projectId)
+    .first();
+
+  if (!draft) {
+    const error = new Error("Não foi possível inicializar o lifecycle DRAFT.");
+    error.status = 409;
+    error.code = "PROJECT_DRAFT_INITIALIZATION_FAILED";
+    throw error;
+  }
+
+  return draft;
+}
+
 async function createProject(env, body, organization, actor) {
   const organizationId = normalizePositiveInteger(organization?.id);
   const name = normalizeText(body?.name);
@@ -214,7 +232,6 @@ async function createProject(env, body, organization, actor) {
       body?.default_config_file ||
       "config.kepler.json",
   );
-  const active = body?.active === false ? false : true;
 
   if (!organizationId) {
     return {
@@ -225,17 +242,11 @@ async function createProject(env, body, organization, actor) {
       ),
     };
   }
-
   if (!name) {
     return {
-      error: errorResponse(
-        "Informe o nome do projeto.",
-        400,
-        "PROJECT_NAME_REQUIRED",
-      ),
+      error: errorResponse("Informe o nome do projeto.", 400, "PROJECT_NAME_REQUIRED"),
     };
   }
-
   if (!slug) {
     return {
       error: errorResponse(
@@ -245,7 +256,6 @@ async function createProject(env, body, organization, actor) {
       ),
     };
   }
-
   if (!dropboxRootPath.startsWith("/")) {
     return {
       error: errorResponse(
@@ -255,7 +265,6 @@ async function createProject(env, body, organization, actor) {
       ),
     };
   }
-
   if (
     !isDropboxPathInsideOrganizationRoot(
       dropboxRootPath,
@@ -270,7 +279,6 @@ async function createProject(env, body, organization, actor) {
       ),
     };
   }
-
   if (!defaultConfigFile) {
     return {
       error: errorResponse(
@@ -282,6 +290,8 @@ async function createProject(env, body, organization, actor) {
   }
 
   try {
+    // A rota administrativa pode criar a identidade, mas não pode fabricar
+    // ACTIVE sem config revision/checksum/storage/schema/size.
     const project = await createProjectRecord(env, {
       organizationId,
       name,
@@ -289,16 +299,19 @@ async function createProject(env, body, organization, actor) {
       description,
       dropboxRootPath,
       defaultConfigFile,
-      active,
-      actor: {
-        id: actor.id,
-        name: actor.name,
-      },
+      active: false,
+      actor: { id: actor.id, name: actor.name },
     });
+    const draft = await initializeAdminProjectDraft(
+      env,
+      project.id,
+      createTransitionId(),
+    );
 
     return {
       project: {
         ...project,
+        ...draft,
         organization_name: organization.name,
         organization_slug: organization.slug,
         creator_user_id: actor.id,
@@ -320,7 +333,6 @@ async function createProject(env, body, organization, actor) {
         ),
       };
     }
-
     throw error;
   }
 }
@@ -352,7 +364,6 @@ export async function onRequest(context) {
       });
 
       const projects = await listAdminProjects(env, { organizationId });
-
       return jsonResponse({
         ok: true,
         scope: organizationId ? "organization" : "global",
@@ -381,7 +392,6 @@ export async function onRequest(context) {
         organizationId,
         action: "admin.projects.create",
       });
-
       const organization = await getOrganization(env, organizationId);
 
       if (!organization) {
@@ -391,7 +401,6 @@ export async function onRequest(context) {
           "ORGANIZATION_NOT_FOUND",
         );
       }
-
       if (!organization.active) {
         return errorResponse(
           "Organização inativa.",
@@ -404,35 +413,28 @@ export async function onRequest(context) {
         env,
         body,
         organization,
-        {
-          id: user.id,
-          name: user.name,
-        },
+        { id: user.id, name: user.name },
       );
-
-      if (error) {
-        return error;
-      }
+      if (error) return error;
 
       await logAudit(env, {
         userId: user.id,
         projectId: project.id,
-        action: "admin.projects.create",
+        action: "project.lifecycle.draft_created",
         details: {
           organizationId,
           slug: project.slug,
-          active: Boolean(project.active),
+          lifecycleState: project.lifecycle_state,
+          lifecycleVersion: Number(project.lifecycle_version || 1),
           metadataVersion: Number(project.metadata_version || 1),
+          source: "admin.projects.create",
         },
       });
 
       return jsonResponse(
         {
           ok: true,
-          project: publicAdminProject({
-            ...project,
-            access_count: 0,
-          }),
+          project: publicAdminProject({ ...project, access_count: 0 }),
         },
         { status: 201 },
       );
