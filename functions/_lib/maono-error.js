@@ -5,6 +5,32 @@ function booleanOr(value, fallback) {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function inferTechnicalCode(error) {
+  const message = String(error?.message || "");
+  const status = Number(error?.status || error?.dropboxStatus || 0);
+
+  if (/dropbox/i.test(message)) {
+    if (status === 429) return "DROPBOX_RATE_LIMITED";
+    if (/token|oauth/i.test(message)) return "DROPBOX_TOKEN_REFRESH_FAILED";
+    if (/baixar|download/i.test(message)) return "DROPBOX_DOWNLOAD_FAILED";
+    if (/metadata|consultar arquivo/i.test(message)) return "DROPBOX_METADATA_FAILED";
+    if (/enviar|upload/i.test(message)) return "DROPBOX_UPLOAD_FAILED";
+    return "DROPBOX_UNAVAILABLE";
+  }
+
+  if (/\bD1\b|sqlite|database|banco de dados/i.test(message)) {
+    return /não configurad|not configured/i.test(message)
+      ? "INFRASTRUCTURE_D1_NOT_CONFIGURED"
+      : "INFRASTRUCTURE_D1_QUERY_FAILED";
+  }
+
+  if (/postgis|postgres/i.test(message)) {
+    return "INFRASTRUCTURE_POSTGIS_QUERY_FAILED";
+  }
+
+  return null;
+}
+
 export function createCorrelationId() {
   if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
   return `corr-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
@@ -51,7 +77,12 @@ export function normalizeMaonoError(error, options = {}) {
     return error;
   }
 
-  const fallbackCode = options.defaultCode || error?.code || "INFRASTRUCTURE_UNEXPECTED_ERROR";
+  const technicalCode = inferTechnicalCode(error);
+  const fallbackCode =
+    error?.code ||
+    technicalCode ||
+    options.defaultCode ||
+    "INFRASTRUCTURE_UNEXPECTED_ERROR";
   const definition = getErrorDefinition(fallbackCode, options.status || error?.status || 500);
   const retryable =
     typeof options.retryable === "boolean"
