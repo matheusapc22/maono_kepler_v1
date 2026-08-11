@@ -52,3 +52,32 @@ test("errorResponseFromError preserva origem técnica sob mensagem pública", as
   assert.equal(payload.error.retryable, true);
   assert.equal(payload.error.message, "Não foi possível salvar o projeto.");
 });
+
+test("details públicos removem segredos, stack e cause", async () => {
+  const response = errorResponse(
+    "Falha controlada.",
+    503,
+    "INFRASTRUCTURE_D1_QUERY_FAILED",
+    {
+      stage: "query",
+      token: "super-secret-token",
+      authorization: "Bearer secret",
+      nested: {
+        password: "secret-password",
+        stack: "private stack",
+        cause: "private cause",
+        safe: "visible",
+      },
+    },
+  );
+  const payload = await response.json();
+
+  assert.equal(payload.error.details.stage, "query");
+  assert.equal(payload.error.details.token, "[redacted]");
+  assert.equal(payload.error.details.authorization, "[redacted]");
+  assert.equal(payload.error.details.nested.password, "[redacted]");
+  assert.equal(payload.error.details.nested.stack, "[redacted]");
+  assert.equal(payload.error.details.nested.cause, "[redacted]");
+  assert.equal(payload.error.details.nested.safe, "visible");
+  assert.doesNotMatch(JSON.stringify(payload), /super-secret-token|secret-password|private stack|private cause/);
+});
