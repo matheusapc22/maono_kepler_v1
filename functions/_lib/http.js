@@ -95,6 +95,9 @@ export function errorResponseFromError(error, options = {}) {
     details: options.details,
     correlationId,
   });
+
+  // A causa técnica define code/category/status/retryable, mas nunca deve
+  // substituir uma mensagem pública deliberadamente sanitizada pelo endpoint.
   return errorResponse(
     options.publicMessage || normalized.message,
     normalized.status,
@@ -104,7 +107,6 @@ export function errorResponseFromError(error, options = {}) {
       correlationId,
       category: normalized.category,
       retryable: normalized.retryable,
-      error: normalized,
       includeMessage: options.includeMessage !== false,
       headers: options.headers,
     },
