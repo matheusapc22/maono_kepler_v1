@@ -117,11 +117,10 @@ const LoginPage: React.FC = () => {
 
   const pageStyle = {
     "--maono-login-background": `url("${LOGIN_BACKGROUND_URL}")`,
-    backgroundColor: "#050505",
-    backgroundImage: `url("${LOGIN_PAGE_BACKGROUND_URL}")`,
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
-    backgroundSize: "cover",
+    // Usamos o shorthand inline para sobrescrever de forma inequívoca o
+    // fallback `background` legado do CSS. O asset externo fica exclusivo da
+    // viewport; a variável acima continua exclusiva do card com as pirâmides.
+    background: `#050505 url("${LOGIN_PAGE_BACKGROUND_URL}") center / cover no-repeat`,
   } as CSSProperties;
 
   if (!assetsReady) {
