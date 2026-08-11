@@ -6,6 +6,9 @@ import {
 } from "./project-lifecycle.js";
 import {
   buildProjectConfigArtifact,
+  buildProjectConfigArtifactFromBytes,
+  serializeProjectConfigBytes,
+  validateProjectConfig,
   verifyProjectConfigBytes,
 } from "./project-config-integrity.js";
 import {
@@ -36,7 +39,10 @@ function decodeJsonBytes(bytes) {
   return { text, config: JSON.parse(text) };
 }
 
-function decodeStoredConfig(stored, message = "A configuração armazenada não contém JSON UTF-8 válido.") {
+function decodeStoredConfig(
+  stored,
+  message = "A configuração armazenada não contém JSON UTF-8 válido.",
+) {
   try {
     return decodeJsonBytes(stored.bytes);
   } catch (error) {
@@ -46,6 +52,79 @@ function decodeStoredConfig(stored, message = "A configuração armazenada não 
   }
 }
 
+function revisionHead(project, artifact, revision) {
+  return {
+    previousRevision: Math.max(0, Number(revision || 0) - 1),
+    currentRevision: Number(revision || 0),
+    contentHash: artifact?.checksum || project?.config_checksum || null,
+    checksumAlgorithm:
+      artifact?.checksumAlgorithm || project?.config_checksum_algorithm || null,
+    sizeBytes: Number(artifact?.sizeBytes ?? project?.config_size_bytes ?? 0),
+    schema: {
+      name: artifact?.schemaName || project?.config_schema || null,
+      version: Number(
+        artifact?.schemaVersion ?? project?.config_schema_version ?? 0,
+      ),
+    },
+  };
+}
+
+function assertPersistedSize(stored, artifact) {
+  const actualSizeBytes = Number(stored?.sizeBytes ?? -1);
+  if (actualSizeBytes !== Number(artifact.sizeBytes)) {
+    throw serviceError(
+      "O tamanho da revisão persistida não corresponde ao conteúdo preparado.",
+      409,
+      "PROJECT_CONFIG_SIZE_MISMATCH",
+      {
+        expectedSizeBytes: Number(artifact.sizeBytes),
+        actualSizeBytes,
+      },
+    );
+  }
+}
+
+async function verifyPersistedRevision(
+  repository,
+  {
+    project,
+    revision,
+    storageRef,
+    artifact,
+    stored = null,
+  },
+) {
+  if (stored?.contentVerified === true) {
+    assertPersistedSize(stored, artifact);
+    return {
+      persisted: stored,
+      verified: {
+        checksum: artifact.checksum,
+        contentHash: artifact.checksum,
+        checksumAlgorithm: artifact.checksumAlgorithm,
+        sizeBytes: artifact.sizeBytes,
+      },
+      verificationMethod: stored.verificationMethod || "repository-attestation",
+    };
+  }
+
+  const persisted = await repository.getRevision({
+    project,
+    revision,
+    storageRef,
+  });
+  const verified = await verifyProjectConfigBytes(persisted.bytes, {
+    expectedChecksum: artifact.checksum,
+    expectedAlgorithm: artifact.checksumAlgorithm,
+    expectedSizeBytes: artifact.sizeBytes,
+  });
+  return {
+    persisted,
+    verified,
+    verificationMethod: "readback-sha256",
+  };
+}
+
 export async function readPublishedProjectConfig(
   env,
   project,
@@ -53,8 +132,6 @@ export async function readPublishedProjectConfig(
 ) {
   const repository = resolveMapConfigRepository(env, mapConfigRepository);
 
-  // lifecycle_state não nulo é uma fronteira irreversível do rollout: uma vez
-  // reconciliado/criado pela S03, o projeto nunca volta a ler o alias legado.
   if (!isLifecycleManagedProject(project)) {
     const stored = await repository.load({ project });
     const decoded = decodeStoredConfig(
@@ -82,6 +159,7 @@ export async function readPublishedProjectConfig(
   await verifyProjectConfigBytes(stored.bytes, {
     expectedChecksum: project.config_checksum,
     expectedAlgorithm: project.config_checksum_algorithm,
+    expectedSizeBytes: project.config_size_bytes,
   });
 
   const decoded = decodeStoredConfig(
@@ -120,9 +198,6 @@ async function updateLinkedOrganizationFile(env, project, artifact) {
       .run();
     return null;
   } catch (error) {
-    // organization_files é projeção auxiliar. O config/revision pointer é a
-    // autoridade e um erro nesta sincronização não pode transformar um save
-    // já persistido/publicado em falso 500 para o usuário.
     console.error(
       "[Maono projects] Falha auxiliar ao sincronizar organization_file:",
       {
@@ -191,9 +266,11 @@ export async function saveLegacyProjectConfig(
     throw legacyCommitNotConfirmed(error);
   }
 
+  const revision = Number(updatedProject?.config_revision || 0);
   return {
     project: updatedProject,
-    revision: Number(updatedProject?.config_revision || 0),
+    revision,
+    revisionHead: revisionHead(updatedProject, artifact, revision),
     artifact,
     legacy: true,
     auxiliaryWarnings: organizationFileWarning
@@ -233,32 +310,58 @@ export async function saveVersionedProjectConfig(
     );
   }
 
-  const artifact = await buildProjectConfigArtifact(config);
+  let stage = "SERIALIZE";
+  const serialized = serializeProjectConfigBytes(config);
+  stage = "VALIDATE";
+  validateProjectConfig(config, { bytes: serialized.bytes });
+  stage = "CANDIDATE_CHECKSUM";
+  const artifact = await buildProjectConfigArtifactFromBytes(serialized.bytes);
+
   const nextRevision = expected + 1;
   const id = transitionId();
   const storageRef = createMapConfigStorageRef(project.id, nextRevision);
   const storageProvider = repository.provider;
-  const reservation = await reserveProjectConfigRevision(env, {
-    projectId: project.id,
-    organizationId: project.organization_id,
-    expectedCurrentRevision: expected,
-    checksumAlgorithm: artifact.checksumAlgorithm,
-    checksum: artifact.checksum,
-    storageProvider,
-    storageRef,
-    schemaName: artifact.schemaName,
-    schemaVersion: artifact.schemaVersion,
-    sizeBytes: artifact.sizeBytes,
-    contentType: artifact.contentType,
-    actorUserId: actor?.id ?? null,
-    transitionId: id,
-    allowedLifecycleStates,
-  });
-
-  let publicationCompleted = Boolean(reservation.alreadyPublished);
+  let reservation = null;
+  let publicationCompleted = false;
 
   try {
+    stage = "RESERVE";
+    reservation = await reserveProjectConfigRevision(env, {
+      projectId: project.id,
+      organizationId: project.organization_id,
+      expectedCurrentRevision: expected,
+      checksumAlgorithm: artifact.checksumAlgorithm,
+      checksum: artifact.checksum,
+      storageProvider,
+      storageRef,
+      schemaName: artifact.schemaName,
+      schemaVersion: artifact.schemaVersion,
+      sizeBytes: artifact.sizeBytes,
+      contentType: artifact.contentType,
+      actorUserId: actor?.id ?? null,
+      transitionId: id,
+      allowedLifecycleStates,
+    });
+
+    publicationCompleted = Boolean(reservation.alreadyPublished);
+
     if (reservation.alreadyPublished) {
+      stage = "VERIFY";
+      const stored = await repository.saveRevision({
+        project: reservation.project,
+        revision: nextRevision,
+        storageRef,
+        bytes: artifact.bytes,
+        contentType: artifact.contentType,
+        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+      });
+      await verifyPersistedRevision(repository, {
+        project: reservation.project,
+        revision: nextRevision,
+        storageRef,
+        artifact,
+        stored,
+      });
       const recoveredProject = reservation.project;
       const organizationFileWarning = await updateLinkedOrganizationFile(
         env,
@@ -268,6 +371,7 @@ export async function saveVersionedProjectConfig(
       return {
         project: recoveredProject,
         revision: nextRevision,
+        revisionHead: revisionHead(recoveredProject, artifact, nextRevision),
         artifact,
         ledger: reservation.revision,
         transitionId: id,
@@ -281,34 +385,49 @@ export async function saveVersionedProjectConfig(
 
     let ready = reservation.revision;
 
+    stage = "WRITE";
+    const stored = await repository.saveRevision({
+      project,
+      revision: nextRevision,
+      storageRef,
+      bytes: artifact.bytes,
+      contentType: artifact.contentType,
+      mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+    });
+
+    stage = "VERIFY";
+    await verifyPersistedRevision(repository, {
+      project,
+      revision: nextRevision,
+      storageRef,
+      artifact,
+      stored,
+    });
+
     if (ready.status !== "READY") {
-      const stored = await repository.saveRevision({
-        project,
-        revision: nextRevision,
-        storageRef,
-        bytes: artifact.bytes,
-        contentType: artifact.contentType,
-        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-      });
+      let providerVersion = stored.providerVersion ?? null;
+      let providerHash = stored.providerHash ?? null;
+      if (!providerVersion && !providerHash) {
+        const metadata = await repository.getMetadata({
+          project,
+          revision: nextRevision,
+          storageRef,
+          mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+        });
+        providerVersion = metadata?.providerVersion ?? null;
+        providerHash = metadata?.providerHash ?? null;
+      }
+
       ready = await markProjectConfigRevisionReady(env, {
         projectId: project.id,
         revision: nextRevision,
         checksum: artifact.checksum,
-        storageProviderVersion: stored.providerVersion,
-        storageProviderHash: stored.providerHash,
-      });
-    } else {
-      const stored = await repository.getRevision({
-        project,
-        revision: nextRevision,
-        storageRef,
-      });
-      await verifyProjectConfigBytes(stored.bytes, {
-        expectedChecksum: artifact.checksum,
-        expectedAlgorithm: artifact.checksumAlgorithm,
+        storageProviderVersion: providerVersion,
+        storageProviderHash: providerHash,
       });
     }
 
+    stage = "PUBLISH";
     const updatedProject = await publishProjectConfigRevision(env, {
       projectId: project.id,
       organizationId: project.organization_id,
@@ -319,6 +438,7 @@ export async function saveVersionedProjectConfig(
       expectedLifecycleState,
     });
     publicationCompleted = true;
+
     const organizationFileWarning = await updateLinkedOrganizationFile(
       env,
       updatedProject,
@@ -328,29 +448,32 @@ export async function saveVersionedProjectConfig(
     return {
       project: updatedProject,
       revision: nextRevision,
+      revisionHead: revisionHead(updatedProject, artifact, nextRevision),
       artifact,
       ledger: ready,
       transitionId: id,
       legacy: false,
-      idempotent: Boolean(reservation.idempotent),
+      idempotent: Boolean(reservation.idempotent || stored.idempotent),
       auxiliaryWarnings: organizationFileWarning
         ? [organizationFileWarning]
         : [],
     };
   } catch (error) {
     if (
+      reservation &&
       !publicationCompleted &&
       error?.code !== "PROJECT_CONFIG_REVISION_CONFLICT" &&
-      error?.code !== "PROJECT_CONFIG_LIFECYCLE_CONFLICT" &&
-      error?.code !== "PROJECT_CONFIG_INTEGRITY_MISMATCH"
+      error?.code !== "PROJECT_CONFIG_LIFECYCLE_CONFLICT"
     ) {
       await markProjectConfigRevisionFailed(env, {
         projectId: project.id,
         revision: nextRevision,
         errorCode: error?.code || "PROJECT_CONFIG_REVISION_FAILED",
-        errorStage: "STORAGE_OR_PUBLICATION",
+        errorStage: stage,
       }).catch(() => null);
     }
+    if (!error.details) error.details = {};
+    if (!error.details.stage) error.details.stage = stage;
     throw error;
   }
 }

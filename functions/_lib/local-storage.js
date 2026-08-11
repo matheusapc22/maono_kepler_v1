@@ -73,6 +73,13 @@ function notFoundError(path) {
   return error;
 }
 
+function conflictError(path) {
+  const error = new Error(`path/conflict/file: ${path}`);
+  error.status = 409;
+  error.code = "LOCAL_STORAGE_PATH_CONFLICT";
+  return error;
+}
+
 async function contentToBytes(content) {
   if (content instanceof Uint8Array) {
     return content;
@@ -256,6 +263,7 @@ export async function uploadLocalStorageFile(
   fileName,
   content,
   contentType = "",
+  { writeMode = "overwrite" } = {},
 ) {
   const db = getDb(env);
   const path = joinPath(rootPath, fileName);
@@ -271,31 +279,65 @@ export async function uploadLocalStorageFile(
     bytes.byteOffset + bytes.byteLength,
   );
 
-  await db
-    .prepare(
-      `INSERT INTO local_storage_objects (
-         path,
-         content,
-         content_type,
-         size_bytes,
-         created_at,
-         updated_at
-       )
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT(path)
-       DO UPDATE SET
-         content = excluded.content,
-         content_type = excluded.content_type,
-         size_bytes = excluded.size_bytes,
-         updated_at = CURRENT_TIMESTAMP`,
-    )
-    .bind(
-      path,
-      blob,
-      resolvedContentType,
-      bytes.byteLength,
-    )
-    .run();
+  if (writeMode === "create") {
+    try {
+      await db
+        .prepare(
+          `INSERT INTO local_storage_objects (
+             path,
+             content,
+             content_type,
+             size_bytes,
+             created_at,
+             updated_at
+           )
+           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        )
+        .bind(
+          path,
+          blob,
+          resolvedContentType,
+          bytes.byteLength,
+        )
+        .run();
+    } catch (error) {
+      if (/UNIQUE|PRIMARY KEY|constraint/i.test(String(error?.message || ""))) {
+        throw conflictError(path);
+      }
+      throw error;
+    }
+  } else if (writeMode === "overwrite") {
+    await db
+      .prepare(
+        `INSERT INTO local_storage_objects (
+           path,
+           content,
+           content_type,
+           size_bytes,
+           created_at,
+           updated_at
+         )
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT(path)
+         DO UPDATE SET
+           content = excluded.content,
+           content_type = excluded.content_type,
+           size_bytes = excluded.size_bytes,
+           updated_at = CURRENT_TIMESTAMP`,
+      )
+      .bind(
+        path,
+        blob,
+        resolvedContentType,
+        bytes.byteLength,
+      )
+      .run();
+  } else {
+    const error = new Error("Modo de escrita local inválido.");
+    error.status = 400;
+    error.code = "LOCAL_STORAGE_WRITE_MODE_INVALID";
+    throw error;
+  }
 
   const row = await db
     .prepare(

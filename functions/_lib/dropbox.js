@@ -379,7 +379,21 @@ export async function uploadDropboxTextFile(env, rootPath, fileName, content) {
   return await uploadDropboxBinaryFile(env, rootPath, fileName, content);
 }
 
-export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, contentType = "") {
+export async function uploadDropboxBinaryFile(
+  env,
+  rootPath,
+  fileName,
+  content,
+  contentType = "",
+  { writeMode = "overwrite" } = {},
+) {
+  if (!["overwrite", "create"].includes(writeMode)) {
+    const error = new Error("Modo de escrita Dropbox inválido.");
+    error.status = 400;
+    error.code = "DROPBOX_WRITE_MODE_INVALID";
+    throw error;
+  }
+
   if (isLocalStorageMode(env)) {
     return await uploadLocalStorageFile(
       env,
@@ -387,6 +401,7 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
       fileName,
       content,
       contentType,
+      { writeMode },
     );
   }
 
@@ -396,6 +411,7 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
   await ensureDropboxFolder(env, normalizedRootPath);
 
   const accessToken = await getDropboxAccessToken(env);
+  const createOnly = writeMode === "create";
 
   const response = await fetch(DROPBOX_UPLOAD_URL, {
     method: "POST",
@@ -409,10 +425,10 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
 
       "Dropbox-API-Arg": JSON.stringify({
         path,
-        mode: "overwrite",
+        mode: createOnly ? "add" : "overwrite",
         autorename: false,
         mute: false,
-        strict_conflict: false,
+        strict_conflict: createOnly,
       }),
     },
     body: content,
@@ -420,10 +436,15 @@ export async function uploadDropboxBinaryFile(env, rootPath, fileName, content, 
 
   if (!response.ok) {
     const text = await response.text();
-
-    throw new Error(
+    const error = new Error(
       `Falha ao enviar arquivo Dropbox ${path}: ${response.status} ${text}`,
     );
+    error.status = response.status;
+    error.code = text.includes("path/conflict")
+      ? "DROPBOX_PATH_CONFLICT"
+      : "DROPBOX_UPLOAD_FAILED";
+    error.dropboxStatus = response.status;
+    throw error;
   }
 
   return await response.json();

@@ -7,6 +7,7 @@ on:
     paths:
       - "functions/_lib/access-governance.js"
       - "functions/_lib/dropbox.js"
+      - "functions/_lib/dropbox-content-hash.js"
       - "functions/_lib/dropbox-map-config-repository.js"
       - "functions/_lib/map-config-*.js"
       - "functions/_lib/project-*.js"
@@ -21,6 +22,7 @@ on:
       - "migrations/0018_project_lifecycle.sql"
       - "docs/architecture/S03-project-lifecycle.md"
       - "docs/architecture/S04-map-config-repository.md"
+      - "docs/architecture/S05-atomic-project-revisions.md"
       - "schema.sql"
       - "package.json"
       - "vite.config.ts"

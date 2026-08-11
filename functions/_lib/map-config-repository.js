@@ -28,6 +28,19 @@ function repositoryContractError(message, details = null) {
  * - getRevision(input): carrega uma revisão exata;
  * - getMetadata(input): consulta metadata sem carregar o conteúdo completo.
  *
+ * Contrato S05 para mode=immutable:
+ * - (projectId, revision) identifica um conteúdo imutável;
+ * - repetir os mesmos bytes é idempotente;
+ * - conteúdo diferente para a mesma revisão deve falhar com
+ *   MAP_CONFIG_REVISION_IMMUTABILITY_VIOLATION;
+ * - persistir a revisão não a torna publicada: o HEAD é autoridade do D1.
+ *
+ * saveRevision() pode retornar `contentVerified: true` quando o provider
+ * consegue atestar que o objeto remoto corresponde ao conteúdo enviado.
+ * `verificationMethod` identifica o método da atestação. Quando essa garantia
+ * não existir, a Application deve executar getRevision() e verificar os bytes.
+ * A atestação do provider não substitui o contentHash SHA-256 lógico da Maõno.
+ *
  * A camada de Application não deve conhecer APIs ou erros específicos do provider.
  */
 export function assertMapConfigRepository(repository) {

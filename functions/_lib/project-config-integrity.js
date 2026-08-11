@@ -12,9 +12,94 @@ function integrityError(message, status, code, details = null) {
 }
 
 export function serializeProjectConfigBytes(config) {
-  const text = JSON.stringify(config, null, 2);
+  let text;
+  try {
+    text = JSON.stringify(config, null, 2);
+  } catch (error) {
+    throw integrityError(
+      "Não foi possível serializar a configuração do projeto.",
+      400,
+      "PROJECT_CONFIG_SERIALIZATION_FAILED",
+      { cause: error?.name || "SERIALIZATION_ERROR" },
+    );
+  }
+
+  if (typeof text !== "string" || !text.length) {
+    throw integrityError(
+      "A configuração serializada está vazia.",
+      400,
+      "PROJECT_CONFIG_EMPTY",
+    );
+  }
+
   const bytes = new TextEncoder().encode(text);
   return { text, bytes };
+}
+
+export function validateProjectConfig(
+  config,
+  {
+    bytes = null,
+    schemaName = PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER,
+    schemaVersion = PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER_VERSION,
+  } = {},
+) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    throw integrityError(
+      "Envie uma configuração Kepler em formato JSON.",
+      400,
+      "INVALID_KEPLER_CONFIG",
+      { field: "root" },
+    );
+  }
+  if (!config.version) {
+    throw integrityError(
+      "O JSON não possui campo version.",
+      400,
+      "INVALID_KEPLER_CONFIG",
+      { field: "version" },
+    );
+  }
+  if (!config.config || typeof config.config !== "object" || Array.isArray(config.config)) {
+    throw integrityError(
+      "O JSON não possui o objeto config.",
+      400,
+      "INVALID_KEPLER_CONFIG",
+      { field: "config" },
+    );
+  }
+  if (!Array.isArray(config.datasets)) {
+    throw integrityError(
+      "O JSON não possui datasets em formato de lista.",
+      400,
+      "INVALID_KEPLER_CONFIG",
+      { field: "datasets" },
+    );
+  }
+  if (String(schemaName || "") !== PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER) {
+    throw integrityError(
+      "Schema de configuração não suportado.",
+      400,
+      "PROJECT_CONFIG_SCHEMA_UNSUPPORTED",
+      { schemaName },
+    );
+  }
+  if (Number(schemaVersion) !== PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER_VERSION) {
+    throw integrityError(
+      "Versão de schema de configuração não suportada.",
+      400,
+      "PROJECT_CONFIG_SCHEMA_VERSION_UNSUPPORTED",
+      { schemaName, schemaVersion },
+    );
+  }
+  if (bytes && Number(bytes.byteLength || 0) <= 0) {
+    throw integrityError(
+      "A configuração serializada está vazia.",
+      400,
+      "PROJECT_CONFIG_EMPTY",
+    );
+  }
+  return true;
 }
 
 export async function sha256Hex(bytes) {
@@ -46,6 +131,7 @@ export async function buildProjectConfigArtifactFromBytes(
     bytes,
     sizeBytes: bytes.byteLength,
     checksum,
+    contentHash: checksum,
     checksumAlgorithm: PROJECT_CONFIG_CHECKSUM_ALGORITHM,
     schemaName,
     schemaVersion,
@@ -62,6 +148,7 @@ export async function buildProjectConfigArtifact(
   } = {},
 ) {
   const { text, bytes } = serializeProjectConfigBytes(config);
+  validateProjectConfig(config, { bytes, schemaName, schemaVersion });
   const artifact = await buildProjectConfigArtifactFromBytes(bytes, {
     schemaName,
     schemaVersion,
@@ -75,6 +162,7 @@ export async function verifyProjectConfigBytes(
   {
     expectedChecksum,
     expectedAlgorithm = PROJECT_CONFIG_CHECKSUM_ALGORITHM,
+    expectedSizeBytes = null,
   },
 ) {
   const algorithm = String(expectedAlgorithm || "").trim().toLowerCase();
@@ -88,8 +176,24 @@ export async function verifyProjectConfigBytes(
     );
   }
 
+  const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (
+    expectedSizeBytes !== null &&
+    Number(expectedSizeBytes) !== source.byteLength
+  ) {
+    throw integrityError(
+      "O tamanho da revisão persistida não corresponde ao conteúdo preparado.",
+      409,
+      "PROJECT_CONFIG_SIZE_MISMATCH",
+      {
+        expectedSizeBytes: Number(expectedSizeBytes),
+        actualSizeBytes: source.byteLength,
+      },
+    );
+  }
+
   const expected = String(expectedChecksum || "").trim().toLowerCase();
-  const actual = await sha256Hex(bytes);
+  const actual = await sha256Hex(source);
 
   if (!expected || actual !== expected) {
     throw integrityError(
@@ -104,5 +208,10 @@ export async function verifyProjectConfigBytes(
     );
   }
 
-  return true;
+  return {
+    checksum: actual,
+    contentHash: actual,
+    checksumAlgorithm: algorithm,
+    sizeBytes: source.byteLength,
+  };
 }

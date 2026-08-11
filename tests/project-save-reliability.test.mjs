@@ -25,7 +25,7 @@ test("sync de organization_files é auxiliar e não rebaixa save persistido", ()
 test("revisão já publicada nunca é marcada FAILED por etapa auxiliar posterior", () => {
   assert.match(
     serviceSource,
-    /let publicationCompleted = Boolean\(reservation\.alreadyPublished\)/,
+    /publicationCompleted = Boolean\(reservation\.alreadyPublished\)/,
   );
   assert.match(
     serviceSource,
@@ -33,7 +33,7 @@ test("revisão já publicada nunca é marcada FAILED por etapa auxiliar posterio
   );
   assert.match(
     serviceSource,
-    /if \(\s*!publicationCompleted &&[\s\S]*markProjectConfigRevisionFailed/,
+    /if \(\s*reservation &&\s*!publicationCompleted &&[\s\S]*markProjectConfigRevisionFailed/,
   );
 });
 
