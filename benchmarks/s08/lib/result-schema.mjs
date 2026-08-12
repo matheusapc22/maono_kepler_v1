@@ -10,7 +10,28 @@ export const S08_OUTCOMES = Object.freeze([
   "INCOMPLETE",
 ]);
 
-const FORBIDDEN_KEYS = /(?:dataset|geojson|feature|coordinates?|geometry|mapconfig|token|cookie|authorization|dropbox|sql|row|payload|rawdata)/i;
+const FORBIDDEN_KEYS = new Set([
+  "datasets",
+  "dataset",
+  "geojson",
+  "features",
+  "coordinates",
+  "geometry",
+  "mapconfig",
+  "config",
+  "token",
+  "access_token",
+  "refresh_token",
+  "cookie",
+  "authorization",
+  "dropboxpath",
+  "dropbox_path",
+  "sql",
+  "rows",
+  "rawdata",
+  "raw_data",
+  "payload",
+]);
 
 function finiteOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -28,10 +49,14 @@ function safeText(value, max = 160) {
   return value.trim().slice(0, max) || null;
 }
 
+function normalizeKey(value) {
+  return String(value || "").replace(/[-\s]/g, "_").toLowerCase();
+}
+
 function assertNoForbiddenKeys(value, path = "result") {
   if (!value || typeof value !== "object") return;
   for (const [key, nested] of Object.entries(value)) {
-    if (FORBIDDEN_KEYS.test(key)) {
+    if (FORBIDDEN_KEYS.has(normalizeKey(key))) {
       throw new Error(`Campo proibido no resultado S08: ${path}.${key}`);
     }
     if (nested && typeof nested === "object") {
