@@ -332,7 +332,10 @@ test("DTO usa publicProject e organização sanitizada", () => {
 test("endpoints aceitam somente GET e preservam erros estruturados", () => {
   for (const source of [endpoint, newMap]) {
     assert.match(source, /request\.method !== "GET"/);
-    assert.match(source, /methodNotAllowed\(\["GET"\]\)/);
+    assert.match(
+      source,
+      /methodNotAllowed\(\["GET"\](?:,\s*\{\s*correlationId\s*\})?\)/,
+    );
     assert.match(source, /error\?\.code/);
     assert.match(source, /error\?\.details/);
   }
