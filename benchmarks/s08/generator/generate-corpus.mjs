@@ -197,27 +197,24 @@ function configJson(spec, datasetId) {
     layerConfig(datasetId, index),
   );
   return JSON.stringify({
-    version: "v1",
-    config: {
-      visState: {
-        filters: [],
-        layers,
-        interactionConfig: {
-          tooltip: { fieldsToShow: { [datasetId]: ["id"] }, enabled: false },
-          brush: { enabled: false },
-          geocoder: { enabled: false },
-        },
-        layerBlending: "normal",
+    visState: {
+      filters: [],
+      layers,
+      interactionConfig: {
+        tooltip: { fieldsToShow: { [datasetId]: ["id"] }, enabled: false },
+        brush: { enabled: false },
+        geocoder: { enabled: false },
       },
-      mapState: {
-        latitude: 0,
-        longitude: 0,
-        zoom: 2,
-        bearing: 0,
-        pitch: 0,
-      },
-      mapStyle: { styleType: "dark" },
+      layerBlending: "normal",
     },
+    mapState: {
+      latitude: 0,
+      longitude: 0,
+      zoom: 2,
+      bearing: 0,
+      pitch: 0,
+    },
+    mapStyle: { styleType: "dark" },
   });
 }
 
@@ -263,7 +260,7 @@ export async function generateFixture(spec, outputRoot = OUTPUT_ROOT) {
   const plan = positionPlan(spec);
 
   try {
-    await writer.write(`{"datasets":[{"version":"v1","data":{"id":${JSON.stringify(datasetId)},"label":${JSON.stringify(spec.fixtureId)},"color":[202,164,74],"allData":[`);
+    await writer.write(`{"version":"v1","datasets":[{"version":"v1","data":{"id":${JSON.stringify(datasetId)},"label":${JSON.stringify(spec.fixtureId)},"color":[202,164,74],"allData":[`);
 
     for (let index = 0; index < spec.featureCount; index += 1) {
       if (index > 0) await writer.write(",");
