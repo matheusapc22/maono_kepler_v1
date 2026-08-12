@@ -39,3 +39,6 @@ playwright/auth.json
 /dev-seeds/
 .wrangler/
 !.env.example
+
+# S08 benchmark corpus/results are generated locally and must not enter Git.
+.benchmark-data/
