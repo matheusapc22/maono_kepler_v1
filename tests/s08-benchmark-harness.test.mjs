@@ -13,6 +13,7 @@ import {
   REQUIRED_MAX_FEATURE_POSITIONS,
   REQUIRED_POSITION_COUNTS,
   S08_CORPUS,
+  S08_GENERATOR_VERSION,
 } from "../benchmarks/s08/corpus-spec.mjs";
 import {
   generateFixture,
@@ -39,7 +40,29 @@ function countPositions(geometry) {
   return walk(geometry.coordinates);
 }
 
+function signedArea(ring) {
+  let area = 0;
+  for (let index = 0; index < ring.length - 1; index += 1) {
+    const [x1, y1] = ring[index];
+    const [x2, y2] = ring[index + 1];
+    area += x1 * y2 - x2 * y1;
+  }
+  return area / 2;
+}
+
+function ringBounds(ring) {
+  const xs = ring.map(([x]) => x);
+  const ys = ring.map(([, y]) => y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
 test("corpus S08 cobre dimensões exigidas sem threshold operacional", () => {
+  assert.equal(S08_GENERATOR_VERSION, "s08-generator-v2");
   assert.deepEqual(REQUIRED_BYTE_TARGETS_MIB, [2, 5, 10, 20, 40]);
   assert.deepEqual(REQUIRED_LAYER_COUNTS, [1, 3, 5, 10, 20]);
   assert.equal(REQUIRED_FEATURE_COUNTS.at(0), 10_000);
@@ -85,6 +108,31 @@ test("geometrias sintéticas preservam o número declarado de posições", () =>
     const geometry = JSON.parse(geometryJson(profile, positions, 3, 8017));
     assert.equal(countPositions(geometry), positions, profile);
   }
+});
+
+test("rings poligonais v2 são simples, não reciclam ciclo curto e mantêm hole contido", () => {
+  const geometry = JSON.parse(geometryJson("PolygonHoles", 10_000, 0, 8017));
+  const [outer, hole] = geometry.coordinates;
+
+  assert.equal(outer.length, 6_500);
+  assert.equal(hole.length, 3_500);
+  assert.deepEqual(outer[0], outer.at(-1));
+  assert.deepEqual(hole[0], hole.at(-1));
+
+  const uniqueOuter = new Set(outer.slice(0, -1).map((position) => position.join(",")));
+  const uniqueHole = new Set(hole.slice(0, -1).map((position) => position.join(",")));
+  assert.equal(uniqueOuter.size, outer.length - 1);
+  assert.equal(uniqueHole.size, hole.length - 1);
+
+  assert.ok(signedArea(outer) > 0, "anel externo deve ser anti-horário");
+  assert.ok(signedArea(hole) < 0, "hole deve ser horário");
+
+  const outerBounds = ringBounds(outer);
+  const holeBounds = ringBounds(hole);
+  assert.ok(holeBounds.minX > outerBounds.minX);
+  assert.ok(holeBounds.maxX < outerBounds.maxX);
+  assert.ok(holeBounds.minY > outerBounds.minY);
+  assert.ok(holeBounds.maxY < outerBounds.maxY);
 });
 
 test("gerador é determinístico, replica o shape do MapConfig e atinge target exato", async () => {
