@@ -3,10 +3,8 @@ import { appendFile, mkdir, stat } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
-import { build as viteBuild } from "vite";
 
 import { normalizeBenchmarkResult } from "../lib/result-schema.mjs";
-import benchmarkViteConfig from "../vite.config.mjs";
 
 const DATA_ROOT = path.resolve(process.cwd(), ".benchmark-data/s08");
 const BUILD_ROOT = path.resolve(process.cwd(), ".benchmark-data/s08-build");
@@ -150,10 +148,21 @@ async function handleRequest(req, res) {
   }
 }
 
+async function assertHarnessBuildExists() {
+  const entryPath = path.join(BUILD_ROOT, HARNESS_PATH.slice(1));
+  try {
+    const info = await stat(entryPath);
+    if (!info.isFile()) throw new Error("not-file");
+  } catch {
+    throw new Error(
+      "Bundle S08 ausente. Execute npm run benchmark:s08:build antes de iniciar o servidor.",
+    );
+  }
+}
+
 async function main() {
   const { host, port } = parseArgs(process.argv.slice(2));
-  console.log("[S08] Gerando bundle de produção do harness...");
-  await viteBuild(benchmarkViteConfig);
+  await assertHarnessBuildExists();
 
   const server = http.createServer((req, res) => {
     void handleRequest(req, res);
@@ -166,6 +175,7 @@ async function main() {
 
   console.log(`[S08] Harness: http://localhost:${port}${HARNESS_PATH}`);
   console.log(`[S08] Corpus local: ${DATA_ROOT}`);
+  console.log("[S08] Servidor leve: o processo Vite de build já foi encerrado antes da medição.");
 }
 
 main().catch((error) => {
