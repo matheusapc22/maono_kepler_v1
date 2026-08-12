@@ -1,5 +1,5 @@
 export const S08_BENCHMARK_VERSION = "s08-benchmark-v1";
-export const S08_GENERATOR_VERSION = "s08-generator-v1";
+export const S08_GENERATOR_VERSION = "s08-generator-v2";
 
 export const DEVICE_CLASSES = Object.freeze([
   "ENTRY_NOTEBOOK",
