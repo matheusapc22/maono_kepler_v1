@@ -44,6 +44,8 @@ export const REQUIRED_MAX_FEATURE_POSITIONS = Object.freeze([
 ]);
 
 const MIB = 1024 * 1024;
+const POLYGON_HOLES_MIN_POSITIONS = 8;
+const MAX_FEATURE_SWEEP_FEATURES = 10;
 
 function fixture({
   fixtureId,
@@ -127,8 +129,10 @@ const maxFeatureSweep = REQUIRED_MAX_FEATURE_POSITIONS.map((count) =>
     fixtureId: `max-feature-${String(count).padStart(6, "0")}`,
     family: "max-feature",
     geometryProfile: "PolygonHoles",
-    featureCount: 10,
-    coordinatePositionCount: count + 100_000,
+    featureCount: MAX_FEATURE_SWEEP_FEATURES,
+    coordinatePositionCount:
+      count +
+      (MAX_FEATURE_SWEEP_FEATURES - 1) * POLYGON_HOLES_MIN_POSITIONS,
     maxFeaturePositionCount: count,
   }),
 );
