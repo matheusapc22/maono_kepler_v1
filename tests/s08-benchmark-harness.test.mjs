@@ -187,3 +187,21 @@ test("harness mede os estágios exigidos e não contém política de bloqueio", 
   }
   assert.doesNotMatch(source, /SAFE_THRESHOLD|WARN_THRESHOLD|BLOCK_THRESHOLD|riskScore/);
 });
+
+test("serve S08 separa build Vite pesado do servidor que permanece durante a medição", async () => {
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const serverSource = await readFile(
+    new URL("../benchmarks/s08/runner/dev-server.mjs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    packageJson.scripts["benchmark:s08:serve"],
+    /benchmark:s08:build\s*&&\s*node benchmarks\/s08\/runner\/dev-server\.mjs/,
+  );
+  assert.doesNotMatch(serverSource, /from\s+["']vite["']/);
+  assert.doesNotMatch(serverSource, /viteBuild\s*\(/);
+  assert.match(serverSource, /assertHarnessBuildExists/);
+});
