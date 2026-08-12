@@ -76,7 +76,7 @@
     "react-router-redux": "^4.0.8",
     "react-virtualized": "^9.21.0",
     "redux": "^4.2.1",
-    "redux-actions": "^4.2.1",
+    "redux-actions": "^2.2.1",
     "redux-logger": "^3.0.6",
     "redux-thunk": "^1.0.0",
     "styled-components": "6.1.8",
