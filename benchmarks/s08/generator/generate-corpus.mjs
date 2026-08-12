@@ -4,6 +4,7 @@ import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { once } from "node:events";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 import {
   S08_GENERATOR_VERSION,
@@ -11,7 +12,6 @@ import {
 } from "../corpus-spec.mjs";
 
 const OUTPUT_ROOT = path.resolve(process.cwd(), ".benchmark-data/s08");
-const FIXTURES_DIR = path.join(OUTPUT_ROOT, "fixtures");
 
 function parseArgs(argv) {
   const options = { profile: "full", fixtureId: null, output: OUTPUT_ROOT };
@@ -130,7 +130,7 @@ function positionPlan(spec) {
     remaining -= extra;
   }
 
-  let cursor = spec.maxFeaturePositionCount != null ? 1 : 0;
+  const cursor = spec.maxFeaturePositionCount != null ? 1 : 0;
   const distributable = spec.featureCount - cursor;
   if (distributable > 0) {
     const each = Math.floor(remaining / distributable);
@@ -143,6 +143,12 @@ function positionPlan(spec) {
 
   if (remaining !== 0) throw new Error(`${spec.fixtureId}: falha ao distribuir posições.`);
   return plan;
+}
+
+function maxOfPlan(plan) {
+  let max = 0;
+  for (const value of plan) if (value > max) max = value;
+  return max;
 }
 
 function layerConfig(datasetId, layerIndex) {
@@ -292,7 +298,7 @@ export async function generateFixture(spec, outputRoot = OUTPUT_ROOT) {
       geometryProfile: spec.geometryProfile,
       featureCount: spec.featureCount,
       coordinatePositionCount: spec.coordinatePositionCount,
-      maxFeaturePositionCount: Math.max(...plan),
+      maxFeaturePositionCount: maxOfPlan(plan),
       layerCount: spec.layerCount,
       targetSizeBytes: spec.targetSizeBytes,
       sizeBytes: fileStat.size,
@@ -331,7 +337,8 @@ async function main() {
   process.stdout.write(`[S08] Manifesto: ${manifestPath}\n`);
 }
 
-if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+const entryUrl = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null;
+if (entryUrl && import.meta.url === entryUrl) {
   main().catch((error) => {
     console.error("[S08] Falha ao gerar corpus:", error);
     process.exitCode = 1;
