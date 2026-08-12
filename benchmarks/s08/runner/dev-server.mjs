@@ -65,7 +65,12 @@ function s08LocalPlugin() {
               res.statusCode = 200;
               res.setHeader("Content-Type", contentType(filePath));
               res.setHeader("Content-Length", String(bytes.byteLength));
-              res.setHeader("Cache-Control", "no-store");
+              res.setHeader(
+                "Cache-Control",
+                pathname.endsWith("manifest.json")
+                  ? "no-store"
+                  : "public, max-age=3600, immutable",
+              );
               res.end(bytes);
             } catch {
               res.statusCode = 404;
