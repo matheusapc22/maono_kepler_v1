@@ -50,14 +50,45 @@ function lineCoordinates(count, seedOffset) {
   return `[${values.join(",")}]`;
 }
 
-function ringCoordinates(count, seedOffset) {
+function formatCoordinate(value) {
+  const rounded = Number(value.toFixed(6));
+  return Object.is(rounded, -0) ? "0" : String(rounded);
+}
+
+function featureCenter(featureIndex, seed = 8017) {
+  return {
+    x: (((featureIndex * 37 + seed) % 700) - 350) / 100,
+    y: (((featureIndex * 53 + seed) % 500) - 250) / 100,
+  };
+}
+
+function ringCoordinates(
+  count,
+  seedOffset,
+  {
+    centerX = 0,
+    centerY = 0,
+    radius = 1,
+    clockwise = false,
+  } = {},
+) {
   if (count < 4) throw new Error("Ring requer ao menos 4 posições.");
-  const first = coordinate(seedOffset);
-  const values = [first];
-  for (let index = 1; index < count - 1; index += 1) {
-    values.push(coordinate(seedOffset + index));
+
+  // Um ring GeoJSON fecha repetindo a primeira posição. As demais posições
+  // percorrem uma circunferência simples e determinística, sem o ciclo curto
+  // de coordenadas que tornava os fixtures v1 degenerados/autointersectantes.
+  const vertexCount = count - 1;
+  const direction = clockwise ? -1 : 1;
+  const phase = ((seedOffset % 360) * Math.PI) / 180;
+  const values = new Array(count);
+
+  for (let index = 0; index < vertexCount; index += 1) {
+    const angle = phase + direction * ((Math.PI * 2 * index) / vertexCount);
+    const x = centerX + radius * Math.cos(angle);
+    const y = centerY + radius * Math.sin(angle);
+    values[index] = `[${formatCoordinate(x)},${formatCoordinate(y)}]`;
   }
-  values.push(first);
+  values[count - 1] = values[0];
   return `[${values.join(",")}]`;
 }
 
@@ -67,6 +98,7 @@ export function geometryJson(profile, positionCount, featureIndex = 0, seed = 80
     throw new Error(`${profile} requer ${min} posições; recebido ${positionCount}.`);
   }
   const offset = seed + featureIndex * 97;
+  const center = featureCenter(featureIndex, seed);
 
   switch (profile) {
     case "Point":
@@ -75,28 +107,66 @@ export function geometryJson(profile, positionCount, featureIndex = 0, seed = 80
     case "LineString":
       return `{"type":"LineString","coordinates":${lineCoordinates(positionCount, offset)}}`;
     case "Polygon":
-      return `{"type":"Polygon","coordinates":[${ringCoordinates(positionCount, offset)}]}`;
+      return `{"type":"Polygon","coordinates":[${ringCoordinates(positionCount, offset, {
+        centerX: center.x,
+        centerY: center.y,
+        radius: 1.4,
+      })}]}`;
     case "PolygonHoles": {
       const outerCount = Math.max(4, Math.floor(positionCount * 0.65));
       const holeCount = positionCount - outerCount;
       if (holeCount < 4) {
-        return `{"type":"Polygon","coordinates":[${ringCoordinates(positionCount, offset)}]}`;
+        return `{"type":"Polygon","coordinates":[${ringCoordinates(positionCount, offset, {
+          centerX: center.x,
+          centerY: center.y,
+          radius: 1.4,
+        })}]}`;
       }
-      return `{"type":"Polygon","coordinates":[${ringCoordinates(outerCount, offset)},${ringCoordinates(holeCount, offset + outerCount)}]}`;
+      const outer = ringCoordinates(outerCount, offset, {
+        centerX: center.x,
+        centerY: center.y,
+        radius: 1.6,
+      });
+      const hole = ringCoordinates(holeCount, offset + 31, {
+        centerX: center.x,
+        centerY: center.y,
+        radius: 0.55,
+        clockwise: true,
+      });
+      return `{"type":"Polygon","coordinates":[${outer},${hole}]}`;
     }
     case "MultiPolygon": {
       const firstCount = Math.max(4, Math.floor(positionCount / 2));
       const secondCount = positionCount - firstCount;
       if (secondCount < 4) {
-        return `{"type":"Polygon","coordinates":[${ringCoordinates(positionCount, offset)}]}`;
+        return `{"type":"Polygon","coordinates":[${ringCoordinates(positionCount, offset, {
+          centerX: center.x,
+          centerY: center.y,
+          radius: 1.4,
+        })}]}`;
       }
-      return `{"type":"MultiPolygon","coordinates":[[${ringCoordinates(firstCount, offset)}],[${ringCoordinates(secondCount, offset + firstCount)}]]}`;
+      const first = ringCoordinates(firstCount, offset, {
+        centerX: center.x - 1.1,
+        centerY: center.y,
+        radius: 0.7,
+      });
+      const second = ringCoordinates(secondCount, offset + 47, {
+        centerX: center.x + 1.1,
+        centerY: center.y,
+        radius: 0.7,
+      });
+      return `{"type":"MultiPolygon","coordinates":[[${first}],[${second}]]}`;
     }
     case "GeometryCollection": {
       const lineCount = Math.max(2, Math.floor((positionCount - 1) * 0.45));
       const polygonCount = positionCount - 1 - lineCount;
       if (polygonCount < 4) throw new Error("GeometryCollection não possui posições suficientes.");
-      return `{"type":"GeometryCollection","geometries":[{"type":"Point","coordinates":${coordinate(offset, seed)}},{"type":"LineString","coordinates":${lineCoordinates(lineCount, offset + 1)}},{"type":"Polygon","coordinates":[${ringCoordinates(polygonCount, offset + 1 + lineCount)}]}]}`;
+      const polygon = ringCoordinates(polygonCount, offset + 1 + lineCount, {
+        centerX: center.x,
+        centerY: center.y,
+        radius: 1.2,
+      });
+      return `{"type":"GeometryCollection","geometries":[{"type":"Point","coordinates":${coordinate(offset, seed)}},{"type":"LineString","coordinates":${lineCoordinates(lineCount, offset + 1)}},{"type":"Polygon","coordinates":[${polygon}]}]}`;
     }
     default:
       throw new Error(`Geometria S08 não suportada: ${profile}`);
