@@ -10,6 +10,11 @@ import { prepareSavedConfigForPointClustering } from "../clustering/point-cluste
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
 import { useMapPanel } from "../map-panel/MapPanelContext";
+import {
+  failActiveMapLoadTrace,
+  recordMapLoadEvent,
+  updateActiveMapLoadTraceContext,
+} from "../observability/map-load-trace";
 
 const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
@@ -100,6 +105,7 @@ export function loadSavedKeplerConfig(savedConfig: any) {
       const config =
         loaded.config ?? prepared.savedConfig.config;
 
+      recordMapLoadEvent("MIGRATED");
       return {
         datasets,
         config,
@@ -112,6 +118,7 @@ export function loadSavedKeplerConfig(savedConfig: any) {
     );
   }
 
+  recordMapLoadEvent("MIGRATED");
   return {
     datasets: prepared.savedConfig.datasets.map(normalizeDatasetForKepler),
     config: prepared.savedConfig.config,
@@ -215,6 +222,17 @@ async function loadProjectConfig(
     const { response, data } = await requestProjectConfig(projectSlug, signal);
 
     if (!response.ok || !data?.ok) {
+      failActiveMapLoadTrace({
+        stage: "CONFIG_VALIDATED",
+        code: data?.error?.code || "MAP_CONFIG_LOAD_FAILED",
+        category: data?.error?.category || "MAP_CONFIG",
+        retryable:
+          typeof data?.error?.retryable === "boolean"
+            ? data.error.retryable
+            : retryableProjectStatus(response.status),
+        status: response.status,
+      });
+
       const message = getApiErrorMessage(
         data,
         `Não foi possível carregar o projeto ${projectSlug}.`,
@@ -223,8 +241,36 @@ async function loadProjectConfig(
       throw new Error(message);
     }
 
+    const projectId = data?.project?.id ?? null;
+    const revisionValue =
+      data?.lifecycle?.configRevision ??
+      data?.project?.lifecycle?.configRevision ??
+      data?.project?.configRevision ??
+      null;
+    const schemaVersionValue =
+      data?.lifecycle?.schema?.version ??
+      data?.project?.lifecycle?.schema?.version ??
+      null;
+    const revision = Number.isFinite(Number(revisionValue))
+      ? Number(revisionValue)
+      : null;
+    const schemaVersion = Number.isFinite(Number(schemaVersionValue))
+      ? Number(schemaVersionValue)
+      : null;
+    const traceContext = {
+      projectId,
+      revision,
+      schemaVersion,
+    };
+
+    updateActiveMapLoadTraceContext(traceContext);
+
     const savedConfig = data.config;
+    validateSavedKeplerConfig(savedConfig);
+    recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
+
     const loadedConfig = loadSavedKeplerConfig(savedConfig);
+    recordMapLoadEvent("ENGINE_HYDRATION_STARTED", traceContext);
 
     dispatch(
       addDataToMap({
@@ -299,6 +345,13 @@ const MapUrlLoader = connectStore(
           return;
         }
 
+        failActiveMapLoadTrace({
+          stage: "CONFIG_VALIDATED",
+          code: "MAP_CONFIG_LOAD_FAILED",
+          category: "MAP_CONFIG",
+          retryable: true,
+          status: null,
+        });
         loadedProjectRef.current = null;
         setError(
           err instanceof Error

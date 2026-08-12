@@ -11,6 +11,7 @@ import { Provider } from "react-redux";
 import store from "./store";
 import { BrowserRouter } from "react-router";
 import { SessionProvider } from "./auth/session";
+import { installMapLoadObservability } from "./pages/Kepler/observability/map-load-runtime";
 
 function enableWebglScreenshotReadback() {
   if (typeof window === "undefined") return;
@@ -39,6 +40,7 @@ function enableWebglScreenshotReadback() {
 // Mapbox/deck.gl podem limpar o backbuffer após renderização; com preserveDrawingBuffer
 // o canvas fica legível para toDataURL/drawImage no momento do salvamento.
 enableWebglScreenshotReadback();
+installMapLoadObservability();
 
 if (typeof window !== "undefined" && window.__MAONO_BOOT_TIMEOUT__) {
   window.clearTimeout(window.__MAONO_BOOT_TIMEOUT__);
