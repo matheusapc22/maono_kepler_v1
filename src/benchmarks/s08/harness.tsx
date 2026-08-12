@@ -5,7 +5,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Provider, useDispatch } from "react-redux";
-import { addDataToMap, resetMapConfig, wrapTo } from "@kepler.gl/actions";
+import { addDataToMap, resetMapConfig, toggleModal, wrapTo } from "@kepler.gl/actions";
 import { injectComponents } from "@kepler.gl/components";
 import KeplerGlSchema from "@kepler.gl/schemas";
 import { theme } from "@kepler.gl/styles";
@@ -329,6 +329,15 @@ function BenchmarkApp() {
   }, [finalizeSuccessfulRun]);
 
   useEffect(() => {
+    const closeNativeModal = () => {
+      dispatch(wrapTo(MAP_ID, toggleModal(null)));
+    };
+    closeNativeModal();
+    const frameId = window.requestAnimationFrame(closeNativeModal);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [dispatch]);
+
+  useEffect(() => {
     fetch(MANIFEST_URL, { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -418,8 +427,11 @@ function BenchmarkApp() {
     }, 120_000);
 
     try {
+      dispatch(wrapTo(MAP_ID, toggleModal(null)));
       dispatch(wrapTo(MAP_ID, resetMapConfig()));
+      dispatch(wrapTo(MAP_ID, toggleModal(null)));
       await waitFrames(2);
+      dispatch(wrapTo(MAP_ID, toggleModal(null)));
 
       const baseUrl = `/__s08_fixture__/fixtures/${encodeURIComponent(selectedFixture.fileName)}`;
       const fixtureUrl = cacheMode === "COLD" ? `${baseUrl}?run=${encodeURIComponent(runId)}` : baseUrl;
