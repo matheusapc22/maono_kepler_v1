@@ -4,6 +4,7 @@ import process from "node:process";
 import { createServer as createViteServer } from "vite";
 
 import { normalizeBenchmarkResult } from "../lib/result-schema.mjs";
+import benchmarkViteConfig from "../vite.config.mjs";
 
 const DATA_ROOT = path.resolve(process.cwd(), ".benchmark-data/s08");
 const FIXTURE_PREFIX = "/__s08_fixture__/";
@@ -106,9 +107,10 @@ function s08LocalPlugin() {
 async function main() {
   const { host, port } = parseArgs(process.argv.slice(2));
   const server = await createViteServer({
+    ...benchmarkViteConfig,
     root: process.cwd(),
     server: { host, port },
-    plugins: [s08LocalPlugin()],
+    plugins: [...(benchmarkViteConfig.plugins || []), s08LocalPlugin()],
   });
   await server.listen();
   server.printUrls();
