@@ -32,6 +32,7 @@ const DEVICE_CLASSES = [
 type ActiveRun = {
   runId: string;
   startedAt: number;
+  measurementStartedAt: number | null;
   fixture: any;
   deviceClass: string;
   cacheMode: "COLD" | "WARM";
@@ -323,12 +324,24 @@ function BenchmarkApp() {
         observedWebglCanvases.add(canvas);
         canvas.addEventListener("webglcontextlost", () => {
           const run = activeRunRef.current;
-          if (!run || run.done) return;
+          const activeCanvas = mapRef.current?.getCanvas?.();
+          if (
+            !run ||
+            run.done ||
+            run.measurementStartedAt == null ||
+            activeCanvas !== canvas
+          ) return;
           run.webglContextLostCount += 1;
         });
         canvas.addEventListener("webglcontextrestored", () => {
           const run = activeRunRef.current;
-          if (!run || run.done) return;
+          const activeCanvas = mapRef.current?.getCanvas?.();
+          if (
+            !run ||
+            run.done ||
+            run.measurementStartedAt == null ||
+            activeCanvas !== canvas
+          ) return;
           run.webglContextRestoredCount += 1;
         });
       }
@@ -412,12 +425,13 @@ function BenchmarkApp() {
     const runId = crypto.randomUUID?.() || `s08-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const run: ActiveRun = {
       runId,
-      startedAt: now(),
+      startedAt: 0,
+      measurementStartedAt: null,
       fixture: selectedFixture,
       deviceClass,
       cacheMode,
       hydrationStartedAt: null,
-      metrics: { jsHeapBefore: heapSize() },
+      metrics: {},
       longTasks: [],
       observer: null,
       timeoutId: null,
@@ -425,29 +439,41 @@ function BenchmarkApp() {
       webglContextRestoredCount: 0,
       done: false,
     };
-    run.observer = createLongTaskObserver(run.longTasks);
     activeRunRef.current = run;
     finalizingRef.current = false;
-    sessionStorage.setItem(PENDING_KEY, JSON.stringify({
-      runId,
-      fixture: selectedFixture,
-      deviceClass,
-      cacheMode,
-      startedAt: Date.now(),
-    }));
     setLastResult(null);
-    setStatus(`Executando ${selectedFixture.fixtureId}...`);
-
-    run.timeoutId = window.setTimeout(() => {
-      if (activeRunRef.current === run && !run.done) void emitResult(run, "TIMEOUT", "BENCHMARK_TIMEOUT");
-    }, 120_000);
+    setStatus(`Preparando ${selectedFixture.fixtureId}...`);
 
     try {
+      // Higiene do harness: limpar o estado anterior não faz parte da pipeline
+      // medida e pode descartar canvases/WebGL antigos de forma intencional.
       dispatch(wrapTo(MAP_ID, toggleModal(null)));
       dispatch(wrapTo(MAP_ID, resetMapConfig()));
       dispatch(wrapTo(MAP_ID, toggleModal(null)));
-      await waitFrames(2);
+      await waitFrames(4);
       dispatch(wrapTo(MAP_ID, toggleModal(null)));
+      await waitFrames(2);
+
+      if (activeRunRef.current !== run || run.done) return;
+
+      run.startedAt = now();
+      run.measurementStartedAt = run.startedAt;
+      run.metrics.jsHeapBefore = heapSize();
+      run.observer = createLongTaskObserver(run.longTasks);
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify({
+        runId,
+        fixture: selectedFixture,
+        deviceClass,
+        cacheMode,
+        startedAt: Date.now(),
+      }));
+      setStatus(`Executando ${selectedFixture.fixtureId}...`);
+
+      run.timeoutId = window.setTimeout(() => {
+        if (activeRunRef.current === run && !run.done) {
+          void emitResult(run, "TIMEOUT", "BENCHMARK_TIMEOUT");
+        }
+      }, 120_000);
 
       const baseUrl = `/__s08_fixture__/fixtures/${encodeURIComponent(selectedFixture.fileName)}`;
       const fixtureUrl = cacheMode === "COLD" ? `${baseUrl}?run=${encodeURIComponent(runId)}` : baseUrl;
