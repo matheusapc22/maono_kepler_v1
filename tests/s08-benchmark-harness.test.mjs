@@ -185,6 +185,9 @@ test("harness mede os estágios exigidos e não contém política de bloqueio", 
   ]) {
     assert.match(source, new RegExp(token));
   }
+  assert.match(source, /loadSavedKeplerConfigForBenchmark/);
+  assert.match(source, /savedConfig\.datasets\.map\(normalizeDatasetForKepler\)/);
+  assert.doesNotMatch(source, /SCHEMA_LOAD_INVALID_RESULT/);
   assert.doesNotMatch(source, /SAFE_THRESHOLD|WARN_THRESHOLD|BLOCK_THRESHOLD|riskScore/);
 });
 
