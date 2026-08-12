@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "benchmark:s08:generate": "node --max-old-space-size=8192 benchmarks/s08/generator/generate-corpus.mjs --profile full",
     "benchmark:s08:generate:smoke": "node benchmarks/s08/generator/generate-corpus.mjs --profile smoke",
+    "benchmark:s08:build": "node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build --config benchmarks/s08/vite.config.mjs",
     "benchmark:s08:serve": "node benchmarks/s08/runner/dev-server.mjs",
     "benchmark:s08:report": "node benchmarks/s08/report/generate-report.mjs",
     "test:benchmark-harness": "node --test tests/s08-benchmark-harness.test.mjs",
