@@ -87,7 +87,7 @@ test("geometrias sintéticas preservam o número declarado de posições", () =>
   }
 });
 
-test("gerador é determinístico e pode atingir um target de bytes exato", async () => {
+test("gerador é determinístico, replica o shape do MapConfig e atinge target exato", async () => {
   const rootA = await mkdtemp(path.join(os.tmpdir(), "maono-s08-a-"));
   const rootB = await mkdtemp(path.join(os.tmpdir(), "maono-s08-b-"));
   const spec = {
@@ -114,9 +114,11 @@ test("gerador é determinístico e pode atingir um target de bytes exato", async
     const parsed = JSON.parse(
       await readFile(path.join(rootA, "fixtures", first.fileName), "utf8"),
     );
+    assert.equal(parsed.version, "v1");
     assert.equal(parsed.datasets.length, 1);
     assert.equal(parsed.datasets[0].data.allData.length, 10);
-    assert.equal(parsed.config.config.visState.layers.length, 3);
+    assert.equal(parsed.config.visState.layers.length, 3);
+    assert.equal(parsed.config.config, undefined);
   } finally {
     await rm(rootA, { recursive: true, force: true });
     await rm(rootB, { recursive: true, force: true });
