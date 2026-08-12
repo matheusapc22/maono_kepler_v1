@@ -99,6 +99,9 @@ jobs:
           tests/admin-user-manager-delegation-map.test.mjs
           tests/cloudflare-build-chunking.test.mjs
 
+      - name: Build S08 benchmark harness
+        run: npm run benchmark:s08:build
+
       - name: S08 benchmark harness gates
         run: npm run test:benchmark-harness
 
