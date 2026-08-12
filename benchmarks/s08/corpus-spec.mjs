@@ -128,7 +128,7 @@ const maxFeatureSweep = REQUIRED_MAX_FEATURE_POSITIONS.map((count) =>
     family: "max-feature",
     geometryProfile: "PolygonHoles",
     featureCount: 10,
-    coordinatePositionCount: Math.max(count, 100_000),
+    coordinatePositionCount: count + 100_000,
     maxFeaturePositionCount: count,
   }),
 );
