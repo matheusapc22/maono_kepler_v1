@@ -20,6 +20,7 @@ const RESULT_ENDPOINT = "/__s08_results__";
 const MANIFEST_URL = "/__s08_fixture__/manifest.json";
 const KeplerGl = injectComponents([]);
 const getKeplerState = (state: any) => state.demo.keplerGl;
+const observedWebglCanvases = new WeakSet<HTMLCanvasElement>();
 
 const DEVICE_CLASSES = [
   "ENTRY_NOTEBOOK",
@@ -39,6 +40,8 @@ type ActiveRun = {
   longTasks: number[];
   observer: PerformanceObserver | null;
   timeoutId: number | null;
+  webglContextLostCount: number;
+  webglContextRestoredCount: number;
   done: boolean;
 };
 
@@ -212,9 +215,9 @@ function BenchmarkApp() {
   const [cacheMode, setCacheMode] = useState<"COLD" | "WARM">("COLD");
   const [status, setStatus] = useState("Carregando manifesto local...");
   const [lastResult, setLastResult] = useState<any>(null);
-  const [webgl, setWebgl] = useState({ available: false, version: null as string | null, lost: 0, restored: 0 });
   const activeRunRef = useRef<ActiveRun | null>(null);
   const mapRef = useRef<any>(null);
+  const webglRef = useRef({ available: false, version: null as string | null });
   const finalizingRef = useRef(false);
 
   const selectedFixture = useMemo(
@@ -255,10 +258,10 @@ function BenchmarkApp() {
         longTaskCount: longTasks.length,
         longTaskTotalMs: longTasks.reduce((sum, value) => sum + value, 0),
         maxLongTaskMs: longTasks.length ? Math.max(...longTasks) : 0,
-        webglAvailable: webgl.available,
-        webglVersion: webgl.version,
-        webglContextLostCount: webgl.lost,
-        webglContextRestoredCount: webgl.restored,
+        webglAvailable: webglRef.current.available,
+        webglVersion: webglRef.current.version,
+        webglContextLostCount: run.webglContextLostCount,
+        webglContextRestoredCount: run.webglContextRestoredCount,
         jsHeapAfter: heapSize(),
       },
       outcome,
@@ -276,7 +279,7 @@ function BenchmarkApp() {
     } catch (error) {
       setStatus(`${outcome}; resultado não persistido: ${String(error?.message || error)}`);
     }
-  }, [webgl]);
+  }, []);
 
   const finalizeSuccessfulRun = useCallback(async () => {
     const run = activeRunRef.current;
@@ -291,6 +294,10 @@ function BenchmarkApp() {
     ) || null;
     const fps = await measureInteractionFps(mapRef.current);
     Object.assign(run.metrics, fps);
+    if (run.webglContextLostCount > 0) {
+      await emitResult(run, "WEBGL_CONTEXT_LOST", "WEBGL_CONTEXT_LOST_DURING_BENCHMARK");
+      return;
+    }
     await emitResult(run, "SUCCESS");
   }, [emitResult]);
 
@@ -307,17 +314,24 @@ function BenchmarkApp() {
       } catch {
         gl = null;
       }
-      setWebgl((current) => ({
-        ...current,
+      webglRef.current = {
         available: Boolean(gl),
         version: gl?.getParameter?.(gl.VERSION)?.toString?.().slice(0, 24) || null,
-      }));
-      canvas.addEventListener("webglcontextlost", () => {
-        setWebgl((current) => ({ ...current, lost: current.lost + 1 }));
-      });
-      canvas.addEventListener("webglcontextrestored", () => {
-        setWebgl((current) => ({ ...current, restored: current.restored + 1 }));
-      });
+      };
+
+      if (!observedWebglCanvases.has(canvas)) {
+        observedWebglCanvases.add(canvas);
+        canvas.addEventListener("webglcontextlost", () => {
+          const run = activeRunRef.current;
+          if (!run || run.done) return;
+          run.webglContextLostCount += 1;
+        });
+        canvas.addEventListener("webglcontextrestored", () => {
+          const run = activeRunRef.current;
+          if (!run || run.done) return;
+          run.webglContextRestoredCount += 1;
+        });
+      }
     }
 
     map.on?.("render", () => {
@@ -407,6 +421,8 @@ function BenchmarkApp() {
       longTasks: [],
       observer: null,
       timeoutId: null,
+      webglContextLostCount: 0,
+      webglContextRestoredCount: 0,
       done: false,
     };
     run.observer = createLongTaskObserver(run.longTasks);
