@@ -67,8 +67,12 @@ async function readResults() {
   return results;
 }
 
+function normalizeCommit(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "unknown";
+}
+
 function keyFor(result) {
-  return `${result.deviceClass}::${result.fixtureId}::${result.cacheMode}`;
+  return `${normalizeCommit(result.commit)}::${result.deviceClass}::${result.fixtureId}::${result.cacheMode}`;
 }
 
 function summarizeOutcomes(results) {
@@ -108,7 +112,14 @@ function summarizeGroup(results) {
 }
 
 function formatNumber(value, digits = 1) {
-  return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "—";
+  if (value === null || value === undefined) return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : "—";
+}
+
+function formatCommit(value) {
+  const commit = normalizeCommit(value);
+  return commit === "unknown" ? commit : commit.slice(0, 8);
 }
 
 function formatOutcomes(outcomes) {
@@ -129,19 +140,21 @@ function markdown(summary) {
     "",
     `Runs coletados: **${summary.totalRuns}**`,
     "",
-    "| Dispositivo | Fixture | Cache | Runs | Outcomes | MAP_READY mediana SUCCESS (ms) | Schema.load mediana SUCCESS (ms) | FPS mediana SUCCESS | Maior long task p95 TODOS (ms) |",
-    "|---|---|---:|---:|---|---:|---:|---:|---:|",
+    "| Commit | Dispositivo | Fixture | Cache | Runs | Outcomes | MAP_READY mediana SUCCESS (ms) | Schema.load mediana SUCCESS (ms) | FPS mediana SUCCESS | Maior long task p95 TODOS (ms) |",
+    "|---|---|---|---:|---:|---|---:|---:|---:|---:|",
   ];
   for (const group of summary.groups) {
     lines.push(
-      `| ${group.deviceClass} | ${group.fixtureId} | ${group.cacheMode} | ${group.summary.runs} | ${formatOutcomes(group.summary.outcomes)} | ${formatNumber(group.summary.successMetrics.mapReadyMs.median)} | ${formatNumber(group.summary.successMetrics.schemaLoadMs.median)} | ${formatNumber(group.summary.successMetrics.averageFps.median)} | ${formatNumber(group.summary.metrics.maxLongTaskMs.p95)} |`,
+      `| ${formatCommit(group.commit)} | ${group.deviceClass} | ${group.fixtureId} | ${group.cacheMode} | ${group.summary.runs} | ${formatOutcomes(group.summary.outcomes)} | ${formatNumber(group.summary.successMetrics.mapReadyMs.median)} | ${formatNumber(group.summary.successMetrics.schemaLoadMs.median)} | ${formatNumber(group.summary.successMetrics.averageFps.median)} | ${formatNumber(group.summary.metrics.maxLongTaskMs.p95)} |`,
     );
   }
   lines.push(
     "",
     "## Leitura das falhas",
     "",
-    "As medianas de MAP_READY, Schema.load e FPS usam somente runs SUCCESS. A coluna de outcomes preserva falhas por tipo; Long Task p95 considera todos os runs que registraram essa métrica, inclusive falhas parciais.",
+    "As medianas de MAP_READY, Schema.load e FPS usam somente runs SUCCESS. Ausência de runs SUCCESS é exibida como —, nunca como zero. A coluna de outcomes preserva falhas por tipo; Long Task p95 considera todos os runs que registraram essa métrica, inclusive falhas parciais.",
+    "",
+    "Os grupos também são separados pelo commit registrado no run, evitando misturar campanhas produzidas por instrumentações diferentes.",
     "",
     "## Próxima etapa",
     "",
@@ -165,8 +178,8 @@ async function main() {
     generatedAt: new Date().toISOString(),
     totalRuns: results.length,
     groups: [...groups.entries()].map(([key, groupResults]) => {
-      const [deviceClass, fixtureId, cacheMode] = key.split("::");
-      return { deviceClass, fixtureId, cacheMode, summary: summarizeGroup(groupResults) };
+      const [commit, deviceClass, fixtureId, cacheMode] = key.split("::");
+      return { commit, deviceClass, fixtureId, cacheMode, summary: summarizeGroup(groupResults) };
     }),
   };
 
