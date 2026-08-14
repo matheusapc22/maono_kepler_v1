@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import test from "node:test";
 
 import {
@@ -20,6 +22,8 @@ import {
   geometryJson,
 } from "../benchmarks/s08/generator/generate-corpus.mjs";
 import { normalizeBenchmarkResult } from "../benchmarks/s08/lib/result-schema.mjs";
+
+const execFileAsync = promisify(execFile);
 
 function countPositions(geometry) {
   if (!geometry || typeof geometry !== "object") return 0;
@@ -269,20 +273,100 @@ test("harness mede estágios, FPS consistente e WebGL sem fingerprint detalhado"
   assert.doesNotMatch(source, /SAFE_THRESHOLD|WARN_THRESHOLD|BLOCK_THRESHOLD|riskScore/);
 });
 
-test("relatório S08 separa commits, preserva outcomes e não converte ausência em zero", async () => {
+test("relatório S08 separa commits, preserva outcomes e expõe stalls de SUCCESS", async () => {
   const source = await readFile(
     new URL("../benchmarks/s08/report/generate-report.mjs", import.meta.url),
     "utf8",
   );
   assert.match(source, /summarizeOutcomes/);
   assert.match(source, /successResults/);
+  assert.match(source, /successWithDroppedFrames/);
+  assert.match(source, /finiteMetricValue/);
   assert.match(source, /formatOutcomes/);
+  assert.match(source, /formatRatio/);
   assert.match(source, /normalizeCommit\(result\.commit\)/);
   assert.match(source, /const \[commit, deviceClass, fixtureId, cacheMode\]/);
   assert.match(source, /\| Commit \| Dispositivo \|/);
-  assert.match(source, /value === null \|\| value === undefined/);
-  assert.match(source, /MAP_READY mediana SUCCESS/);
+  assert.match(source, /FPS mínimo SUCCESS/);
+  assert.match(source, /Pior frame máximo SUCCESS/);
+  assert.match(source, /SUCCESS c\/ dropped frames/);
   assert.match(source, /Maior long task p95 TODOS/);
+});
+
+test("relatório S08 ignora métricas ausentes e preserva stall sem mascarar pela mediana", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "maono-s08-report-"));
+  const resultsDir = path.join(root, ".benchmark-data", "s08", "results");
+  const reportScript = new URL("../benchmarks/s08/report/generate-report.mjs", import.meta.url);
+  const commit = "3a30b1942cd434e7ba69bc5aa12200d1f431c545";
+  const base = {
+    benchmarkVersion: "s08-benchmark-v1",
+    commit,
+    deviceClass: "ENTRY_NOTEBOOK",
+    browserClass: "Chrome/151",
+    viewport: { width: 1536, height: 730, devicePixelRatio: 1.25 },
+    cacheMode: "COLD",
+    input: {
+      sizeBytes: 1_783_978,
+      featureCount: 1_000,
+      coordinatePositionCount: 250_000,
+      maxFeaturePositionCount: 250,
+      geometryProfile: "LineString",
+      visibleLayerCount: 5,
+    },
+    errorCode: null,
+    recordedAt: "2026-08-14T18:00:00.000Z",
+  };
+  const rows = [
+    {
+      ...base,
+      runId: "success-fast",
+      fixtureId: "layers-05",
+      metrics: { mapReadyMs: 100, schemaLoadMs: 1, averageFps: 60, worstFrameMs: 17, droppedFrameCount: 0, maxLongTaskMs: 100 },
+      outcome: "SUCCESS",
+    },
+    {
+      ...base,
+      runId: "success-stall",
+      fixtureId: "layers-05",
+      metrics: { mapReadyMs: 200, schemaLoadMs: 2, averageFps: 28, worstFrameMs: 1184.5, droppedFrameCount: 1, maxLongTaskMs: 300 },
+      outcome: "SUCCESS",
+    },
+    {
+      ...base,
+      runId: "success-missing",
+      fixtureId: "layers-05",
+      metrics: { mapReadyMs: null, schemaLoadMs: undefined, averageFps: "", worstFrameMs: null, droppedFrameCount: null, maxLongTaskMs: null },
+      outcome: "SUCCESS",
+    },
+    {
+      ...base,
+      runId: "failure-only",
+      fixtureId: "layers-10",
+      metrics: { maxLongTaskMs: 4046 },
+      outcome: "WEBGL_CONTEXT_LOST",
+      errorCode: "WEBGL_CONTEXT_LOST_DURING_BENCHMARK",
+    },
+  ];
+
+  try {
+    await mkdir(resultsDir, { recursive: true });
+    await writeFile(
+      path.join(resultsDir, "ENTRY_NOTEBOOK.jsonl"),
+      `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`,
+      "utf8",
+    );
+    await execFileAsync(process.execPath, [reportScript.pathname], { cwd: root });
+    const report = await readFile(
+      path.join(root, ".benchmark-data", "s08", "reports", "S08-benchmark-report.md"),
+      "utf8",
+    );
+
+    assert.match(report, /\| 3a30b194 \| ENTRY_NOTEBOOK \| layers-05 \| COLD \| 3 \| SUCCESS=3 \| 150\.0 \| 1\.5 \| 44\.0 \| 28\.0 \| 1184\.5 \| 1\/3 \| 300\.0 \|/);
+    assert.match(report, /\| 3a30b194 \| ENTRY_NOTEBOOK \| layers-10 \| COLD \| 1 \| WEBGL_CONTEXT_LOST=1 \| — \| — \| — \| — \| — \| — \| 4046\.0 \|/);
+    assert.doesNotMatch(report, /layers-05[^\n]*\| 0\.0 \|/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("serve S08 separa build Vite pesado do servidor que permanece durante a medição", async () => {
