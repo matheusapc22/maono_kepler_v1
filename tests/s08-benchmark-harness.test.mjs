@@ -199,11 +199,19 @@ test("resultado S08 contém apenas métricas e metadados coarse permitidos", () 
       longTaskCount: 2,
       averageFps: 58,
       webglAvailable: true,
+      webglObservedCanvasCount: 2,
+      webglCanvasAddedDuringRunCount: 1,
+      webglPrimaryCanvasChangeCount: 1,
+      webglPrimaryContextLostAtEnd: false,
     },
     outcome: "SUCCESS",
   });
   assert.equal(normalized.input.coordinatePositionCount, 100_000);
   assert.equal(normalized.metrics.averageFps, 58);
+  assert.equal(normalized.metrics.webglObservedCanvasCount, 2);
+  assert.equal(normalized.metrics.webglCanvasAddedDuringRunCount, 1);
+  assert.equal(normalized.metrics.webglPrimaryCanvasChangeCount, 1);
+  assert.equal(normalized.metrics.webglPrimaryContextLostAtEnd, false);
   assert.equal(normalized.outcome, "SUCCESS");
 
   assert.throws(
@@ -215,7 +223,7 @@ test("resultado S08 contém apenas métricas e metadados coarse permitidos", () 
   );
 });
 
-test("harness mede os estágios exigidos e não contém política de bloqueio", async () => {
+test("harness mede estágios e amplia observabilidade WebGL sem fingerprint detalhado", async () => {
   const source = await readFile(
     new URL("../src/benchmarks/s08/harness.tsx", import.meta.url),
     "utf8",
@@ -229,6 +237,11 @@ test("harness mede os estágios exigidos e não contém política de bloqueio", 
     "longTaskCount",
     "averageFps",
     "webglAvailable",
+    "webglObservedCanvasCount",
+    "webglCanvasAddedDuringRunCount",
+    "webglPrimaryCanvasChangeCount",
+    "webglPrimaryContextLostAtEnd",
+    "BENCHMARK_TIMEOUT_AFTER_WEBGL_CONTEXT_LOSS",
     "RELOAD",
   ]) {
     assert.match(source, new RegExp(token));
@@ -238,12 +251,27 @@ test("harness mede os estágios exigidos e não contém política de bloqueio", 
   assert.match(source, /toggleModal/);
   assert.match(source, /wrapTo\(MAP_ID, toggleModal\(null\)\)/);
   assert.match(source, /measurementStartedAt/);
-  assert.match(source, /activeCanvas !== canvas/);
+  assert.match(source, /querySelectorAll\("canvas"\)/);
+  assert.match(source, /new MutationObserver/);
+  assert.match(source, /webglObservedCanvases\.has\(canvas\)/);
   assert.match(source, /Preparando \$\{selectedFixture\.fixtureId\}/);
   assert.match(source, /run\.metrics\.jsHeapBefore = heapSize\(\)/);
   assert.match(source, /run\.observer = createLongTaskObserver\(run\.longTasks\)/);
+  assert.doesNotMatch(source, /WEBGL_debug_renderer_info|UNMASKED_VENDOR|UNMASKED_RENDERER/);
   assert.doesNotMatch(source, /SCHEMA_LOAD_INVALID_RESULT/);
   assert.doesNotMatch(source, /SAFE_THRESHOLD|WARN_THRESHOLD|BLOCK_THRESHOLD|riskScore/);
+});
+
+test("relatório S08 explicita outcomes e não mascara falhas com mediana de sucesso", async () => {
+  const source = await readFile(
+    new URL("../benchmarks/s08/report/generate-report.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /summarizeOutcomes/);
+  assert.match(source, /successResults/);
+  assert.match(source, /formatOutcomes/);
+  assert.match(source, /MAP_READY mediana SUCCESS/);
+  assert.match(source, /Maior long task p95 TODOS/);
 });
 
 test("serve S08 separa build Vite pesado do servidor que permanece durante a medição", async () => {
