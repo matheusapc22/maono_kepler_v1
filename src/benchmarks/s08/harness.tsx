@@ -16,6 +16,7 @@ import { CLOUD_PROVIDERS_CONFIGURATION } from "../../pages/Kepler/constants/defa
 
 const MAP_ID = "s08-benchmark";
 const PENDING_KEY = "maono:s08:pending-run";
+const DEVICE_CLASS_KEY = "maono:s08:device-class";
 const RESULT_ENDPOINT = "/__s08_results__";
 const MANIFEST_URL = "/__s08_fixture__/manifest.json";
 const KeplerGl = injectComponents([]);
@@ -219,13 +220,15 @@ async function measureInteractionFps(map: any) {
 
   await animation;
   const elapsed = Math.max(1, now() - start);
-  const usefulFrames = frameTimes.filter((value) => value > 0 && value < 1000);
+  // Stalls longos continuam na distribuição: remover frames >1s fazia o
+  // averageFps cair enquanto p95/worst/dropped aparentavam 60 FPS estáveis.
+  const measuredFrames = frameTimes.filter((value) => Number.isFinite(value) && value > 0);
   return {
-    averageFps: (usefulFrames.length * 1000) / elapsed,
-    medianFrameMs: median(usefulFrames),
-    p95FrameMs: percentile(usefulFrames, 0.95),
-    worstFrameMs: usefulFrames.length ? Math.max(...usefulFrames) : null,
-    droppedFrameCount: usefulFrames.filter((value) => value > 33.34).length,
+    averageFps: (measuredFrames.length * 1000) / elapsed,
+    medianFrameMs: median(measuredFrames),
+    p95FrameMs: percentile(measuredFrames, 0.95),
+    worstFrameMs: measuredFrames.length ? Math.max(...measuredFrames) : null,
+    droppedFrameCount: measuredFrames.filter((value) => value > 33.34).length,
   };
 }
 
@@ -242,7 +245,10 @@ function BenchmarkApp() {
   const dispatch = useDispatch();
   const [manifest, setManifest] = useState<any>(null);
   const [fixtureId, setFixtureId] = useState("");
-  const [deviceClass, setDeviceClass] = useState("STANDARD_NOTEBOOK");
+  const [deviceClass, setDeviceClass] = useState(() => {
+    const stored = sessionStorage.getItem(DEVICE_CLASS_KEY);
+    return DEVICE_CLASSES.includes(stored || "") ? stored : "";
+  });
   const [cacheMode, setCacheMode] = useState<"COLD" | "WARM">("COLD");
   const [status, setStatus] = useState("Carregando manifesto local...");
   const [lastResult, setLastResult] = useState<any>(null);
@@ -256,6 +262,12 @@ function BenchmarkApp() {
     () => manifest?.fixtures?.find((entry: any) => entry.fixtureId === fixtureId) || null,
     [fixtureId, manifest],
   );
+
+  const handleDeviceClassChange = useCallback((value: string) => {
+    if (!DEVICE_CLASSES.includes(value)) return;
+    sessionStorage.setItem(DEVICE_CLASS_KEY, value);
+    setDeviceClass(value);
+  }, []);
 
   const canvasRemainsRelevant = useCallback((canvas: HTMLCanvasElement) => {
     const root = mapAreaRef.current;
@@ -500,7 +512,7 @@ function BenchmarkApp() {
       .then((data) => {
         setManifest(data);
         setFixtureId(data?.fixtures?.[0]?.fixtureId || "");
-        setStatus("Harness pronto. Selecione um fixture e execute.");
+        setStatus("Harness pronto. Selecione dispositivo, fixture e execute.");
       })
       .catch((error) => {
         setStatus(`Manifesto indisponível: ${String(error?.message || error)}. Execute benchmark:s08:generate.`);
@@ -548,7 +560,7 @@ function BenchmarkApp() {
   }, []);
 
   const runBenchmark = useCallback(async () => {
-    if (!selectedFixture || activeRunRef.current) return;
+    if (!selectedFixture || !deviceClass || activeRunRef.current) return;
     const runId = crypto.randomUUID?.() || `s08-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const run: ActiveRun = {
       runId,
@@ -668,7 +680,8 @@ function BenchmarkApp() {
           </p>
 
           <label style={{ display: "block", marginTop: 16 }}>Dispositivo</label>
-          <select value={deviceClass} onChange={(event) => setDeviceClass(event.target.value)} style={{ width: "100%", padding: 8, marginTop: 6 }}>
+          <select value={deviceClass} onChange={(event) => handleDeviceClassChange(event.target.value)} style={{ width: "100%", padding: 8, marginTop: 6 }}>
+            <option value="" disabled>Selecione o dispositivo</option>
             {DEVICE_CLASSES.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
 
@@ -685,7 +698,7 @@ function BenchmarkApp() {
             <option value="WARM">WARM</option>
           </select>
 
-          <button disabled={!selectedFixture || Boolean(activeRunRef.current)} onClick={runBenchmark} style={{ width: "100%", padding: 12, marginTop: 18, fontWeight: 700 }}>
+          <button disabled={!selectedFixture || !deviceClass || Boolean(activeRunRef.current)} onClick={runBenchmark} style={{ width: "100%", padding: 12, marginTop: 18, fontWeight: 700 }}>
             Executar benchmark
           </button>
 
