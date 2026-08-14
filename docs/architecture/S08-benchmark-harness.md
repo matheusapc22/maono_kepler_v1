@@ -126,14 +126,30 @@ O harness mede:
 - frames acima de 33,34 ms;
 - disponibilidade e versão coarse de WebGL;
 - context loss/context restored;
+- quantidade coarse de canvases observados no container do Kepler;
+- quantidade de canvases adicionados durante a janela medida;
+- mudanças do canvas primário retornado pelo mapa;
+- estado `isContextLost()` do contexto primário no fechamento do run, quando disponível;
 - heap JS quando a API do browser estiver disponível;
 - outcome `SUCCESS`, `ERROR`, `TIMEOUT`, `RELOAD`, `WEBGL_CONTEXT_LOST`, `PAGE_CRASH` ou `INCOMPLETE`.
+
+### Observabilidade WebGL
+
+A instrumentação não depende apenas do canvas inicialmente retornado por `map.getCanvas()`. No início de cada janela medida, o harness registra os canvases já presentes dentro da área do Kepler e mantém um `MutationObserver` para anexar observação aos canvases criados ou substituídos durante o run.
+
+Eventos `webglcontextlost` e `webglcontextrestored` são contabilizados apenas quando o canvas pertence ao conjunto observado pelo run ativo. A preparação anterior ao início da medição continua fora dessa janela, de forma que a destruição intencional de canvases antigos durante `resetMapConfig` não contamine o resultado.
+
+No fechamento do run, inclusive em `TIMEOUT`, o harness faz uma inspeção final do canvas primário. Um timeout ocorrido após perda de contexto WebGL usa código técnico distinto de um timeout sem perda observada. Mudanças de canvas primário também são registradas separadamente para não serem confundidas automaticamente com context loss.
+
+Nenhum detalhe de vendor, renderer, extensão `WEBGL_debug_renderer_info` ou outro identificador de fingerprint de GPU é coletado.
 
 ## Falha e reload
 
 Ao iniciar um run, o harness registra estado mínimo em `sessionStorage`. Se a página reaparecer antes do resultado terminal, a execução anterior é registrada como `RELOAD`.
 
 Esse mecanismo transforma travamentos/reloads em dado de benchmark em vez de simplesmente perder a execução.
+
+O relatório agregado mostra a distribuição explícita de outcomes por fixture, por exemplo `SUCCESS=1; WEBGL_CONTEXT_LOST=1; TIMEOUT=1`. As medianas de `MAP_READY`, `Schema.load` e FPS são calculadas somente sobre runs `SUCCESS`; Long Task p95 continua considerando todos os runs que efetivamente registraram a métrica, inclusive falhas parciais.
 
 ## Privacidade
 
@@ -148,6 +164,7 @@ Resultados podem conter somente metadados e métricas coarse:
 - timings;
 - FPS;
 - WebGL coarse;
+- contagens coarse de canvas/context events;
 - outcome e código técnico.
 
 Resultados não podem conter:
@@ -164,7 +181,8 @@ Resultados não podem conter:
 - headers de autorização;
 - paths Dropbox;
 - SQL;
-- payload bruto.
+- payload bruto;
+- vendor/renderer detalhado da GPU.
 
 ## CI
 
