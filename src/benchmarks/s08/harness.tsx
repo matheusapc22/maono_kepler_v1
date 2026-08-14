@@ -257,6 +257,12 @@ function BenchmarkApp() {
     [fixtureId, manifest],
   );
 
+  const canvasRemainsRelevant = useCallback((canvas: HTMLCanvasElement) => {
+    const root = mapAreaRef.current;
+    const primaryCanvas = mapRef.current?.getCanvas?.() || null;
+    return primaryCanvas === canvas || Boolean(root && canvas.isConnected && root.contains(canvas));
+  }, []);
+
   const observeCanvasForRun = useCallback((run: ActiveRun, canvas: HTMLCanvasElement, addedDuringRun: boolean) => {
     if (!canvas) return;
     const isNewToRun = !run.webglObservedCanvases.has(canvas);
@@ -278,7 +284,23 @@ function BenchmarkApp() {
         currentRun.measurementStartedAt == null ||
         !currentRun.webglObservedCanvases.has(canvas)
       ) return;
-      currentRun.webglContextLostCount += 1;
+
+      // Deck/Kepler pode destruir um canvas antigo durante a troca normal da
+      // instância de renderização. Alguns browsers disparam webglcontextlost ao
+      // liberar esse contexto. Isso não é equivalente a uma perda da GPU ativa.
+      // Esperamos um frame para distinguir descarte de lifecycle (canvas removido)
+      // de context loss em canvas que permaneceu ativo/conectado.
+      window.requestAnimationFrame(() => {
+        const pendingRun = activeRunRef.current;
+        if (
+          !pendingRun ||
+          pendingRun.done ||
+          pendingRun.measurementStartedAt == null ||
+          !pendingRun.webglObservedCanvases.has(canvas)
+        ) return;
+        if (!canvasRemainsRelevant(canvas)) return;
+        pendingRun.webglContextLostCount += 1;
+      });
     });
 
     canvas.addEventListener("webglcontextrestored", () => {
@@ -287,11 +309,12 @@ function BenchmarkApp() {
         !currentRun ||
         currentRun.done ||
         currentRun.measurementStartedAt == null ||
-        !currentRun.webglObservedCanvases.has(canvas)
+        !currentRun.webglObservedCanvases.has(canvas) ||
+        !canvasRemainsRelevant(canvas)
       ) return;
       currentRun.webglContextRestoredCount += 1;
     });
-  }, []);
+  }, [canvasRemainsRelevant]);
 
   const trackPrimaryCanvas = useCallback((run: ActiveRun, canvas: HTMLCanvasElement | null, addedDuringRun: boolean) => {
     if (!canvas) return;
