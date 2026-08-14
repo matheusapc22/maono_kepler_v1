@@ -21,6 +21,7 @@ const MANIFEST_URL = "/__s08_fixture__/manifest.json";
 const KeplerGl = injectComponents([]);
 const getKeplerState = (state: any) => state.demo.keplerGl;
 const observedWebglCanvases = new WeakSet<HTMLCanvasElement>();
+const observedMaps = new WeakSet<object>();
 
 const DEVICE_CLASSES = [
   "ENTRY_NOTEBOOK",
@@ -43,6 +44,13 @@ type ActiveRun = {
   timeoutId: number | null;
   webglContextLostCount: number;
   webglContextRestoredCount: number;
+  webglObservedCanvases: Set<HTMLCanvasElement>;
+  webglCanvasObserver: MutationObserver | null;
+  webglCanvasAddedDuringRunCount: number;
+  webglPrimaryCanvasChangeCount: number;
+  initialPrimaryCanvas: HTMLCanvasElement | null;
+  lastPrimaryCanvas: HTMLCanvasElement | null;
+  webglPrimaryContextLostAtEnd: boolean | null;
   done: boolean;
 };
 
@@ -87,15 +95,9 @@ function normalizeDatasetForKepler(dataset: any) {
 }
 
 function loadSavedKeplerConfigForBenchmark(savedConfig: any) {
-  if (!isRecord(savedConfig)) {
-    throw new Error("SAVED_CONFIG_INVALID_ROOT");
-  }
-  if (!Array.isArray(savedConfig.datasets)) {
-    throw new Error("SAVED_CONFIG_INVALID_DATASETS");
-  }
-  if (!isRecord(savedConfig.config)) {
-    throw new Error("SAVED_CONFIG_INVALID_CONFIG");
-  }
+  if (!isRecord(savedConfig)) throw new Error("SAVED_CONFIG_INVALID_ROOT");
+  if (!Array.isArray(savedConfig.datasets)) throw new Error("SAVED_CONFIG_INVALID_DATASETS");
+  if (!isRecord(savedConfig.config)) throw new Error("SAVED_CONFIG_INVALID_CONFIG");
 
   try {
     const loaded = KeplerGlSchema.load(savedConfig) as any;
@@ -148,6 +150,34 @@ function waitFrames(count = 2) {
     };
     requestAnimationFrame(step);
   });
+}
+
+function inspectMapWebgl(map: any) {
+  const canvas = map?.getCanvas?.() || null;
+  if (!canvas) {
+    return { canvas: null, available: false, version: null, contextLost: null };
+  }
+
+  let gl: any = null;
+  try {
+    gl = canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+  } catch {
+    gl = null;
+  }
+
+  let contextLost: boolean | null = null;
+  try {
+    contextLost = typeof gl?.isContextLost === "function" ? Boolean(gl.isContextLost()) : null;
+  } catch {
+    contextLost = null;
+  }
+
+  return {
+    canvas,
+    available: Boolean(gl),
+    version: gl?.getParameter?.(gl.VERSION)?.toString?.().slice(0, 24) || null,
+    contextLost,
+  };
 }
 
 async function measureInteractionFps(map: any) {
@@ -218,6 +248,7 @@ function BenchmarkApp() {
   const [lastResult, setLastResult] = useState<any>(null);
   const activeRunRef = useRef<ActiveRun | null>(null);
   const mapRef = useRef<any>(null);
+  const mapAreaRef = useRef<HTMLElement | null>(null);
   const webglRef = useRef({ available: false, version: null as string | null });
   const finalizingRef = useRef(false);
 
@@ -226,11 +257,100 @@ function BenchmarkApp() {
     [fixtureId, manifest],
   );
 
+  const observeCanvasForRun = useCallback((run: ActiveRun, canvas: HTMLCanvasElement, addedDuringRun: boolean) => {
+    if (!canvas) return;
+    const isNewToRun = !run.webglObservedCanvases.has(canvas);
+    if (isNewToRun) {
+      run.webglObservedCanvases.add(canvas);
+      if (addedDuringRun && run.measurementStartedAt != null) {
+        run.webglCanvasAddedDuringRunCount += 1;
+      }
+    }
+
+    if (observedWebglCanvases.has(canvas)) return;
+    observedWebglCanvases.add(canvas);
+
+    canvas.addEventListener("webglcontextlost", () => {
+      const currentRun = activeRunRef.current;
+      if (
+        !currentRun ||
+        currentRun.done ||
+        currentRun.measurementStartedAt == null ||
+        !currentRun.webglObservedCanvases.has(canvas)
+      ) return;
+      currentRun.webglContextLostCount += 1;
+    });
+
+    canvas.addEventListener("webglcontextrestored", () => {
+      const currentRun = activeRunRef.current;
+      if (
+        !currentRun ||
+        currentRun.done ||
+        currentRun.measurementStartedAt == null ||
+        !currentRun.webglObservedCanvases.has(canvas)
+      ) return;
+      currentRun.webglContextRestoredCount += 1;
+    });
+  }, []);
+
+  const trackPrimaryCanvas = useCallback((run: ActiveRun, canvas: HTMLCanvasElement | null, addedDuringRun: boolean) => {
+    if (!canvas) return;
+    observeCanvasForRun(run, canvas, addedDuringRun);
+    if (!run.initialPrimaryCanvas) run.initialPrimaryCanvas = canvas;
+    if (run.lastPrimaryCanvas && run.lastPrimaryCanvas !== canvas) {
+      run.webglPrimaryCanvasChangeCount += 1;
+    }
+    run.lastPrimaryCanvas = canvas;
+  }, [observeCanvasForRun]);
+
+  const scanWebglCanvases = useCallback((run: ActiveRun, addedDuringRun: boolean) => {
+    const root = mapAreaRef.current;
+    if (root) {
+      const canvases = Array.from(root.querySelectorAll("canvas"));
+      for (const canvas of canvases) observeCanvasForRun(run, canvas, addedDuringRun);
+    }
+    const primaryCanvas = mapRef.current?.getCanvas?.() || null;
+    trackPrimaryCanvas(run, primaryCanvas, addedDuringRun);
+  }, [observeCanvasForRun, trackPrimaryCanvas]);
+
+  const updateWebglSnapshot = useCallback((run: ActiveRun, addedDuringRun = true) => {
+    scanWebglCanvases(run, addedDuringRun);
+    const inspected = inspectMapWebgl(mapRef.current);
+    webglRef.current = {
+      available: inspected.available,
+      version: inspected.version,
+    };
+    trackPrimaryCanvas(run, inspected.canvas, addedDuringRun);
+    run.webglPrimaryContextLostAtEnd = inspected.contextLost;
+  }, [scanWebglCanvases, trackPrimaryCanvas]);
+
+  const startWebglObservation = useCallback((run: ActiveRun) => {
+    scanWebglCanvases(run, false);
+    const inspected = inspectMapWebgl(mapRef.current);
+    webglRef.current = {
+      available: inspected.available,
+      version: inspected.version,
+    };
+    trackPrimaryCanvas(run, inspected.canvas, false);
+    run.webglPrimaryContextLostAtEnd = inspected.contextLost;
+
+    const root = mapAreaRef.current;
+    if (!root || typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(() => {
+      if (run.done || activeRunRef.current !== run) return;
+      scanWebglCanvases(run, true);
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    run.webglCanvasObserver = observer;
+  }, [scanWebglCanvases, trackPrimaryCanvas]);
+
   const emitResult = useCallback(async (run: ActiveRun, outcome: string, errorCode: string | null = null) => {
     if (run.done) return;
+    updateWebglSnapshot(run, true);
     run.done = true;
     if (run.timeoutId !== null) window.clearTimeout(run.timeoutId);
     run.observer?.disconnect();
+    run.webglCanvasObserver?.disconnect();
 
     const longTasks = run.longTasks;
     const result = {
@@ -263,6 +383,10 @@ function BenchmarkApp() {
         webglVersion: webglRef.current.version,
         webglContextLostCount: run.webglContextLostCount,
         webglContextRestoredCount: run.webglContextRestoredCount,
+        webglObservedCanvasCount: run.webglObservedCanvases.size,
+        webglCanvasAddedDuringRunCount: run.webglCanvasAddedDuringRunCount,
+        webglPrimaryCanvasChangeCount: run.webglPrimaryCanvasChangeCount,
+        webglPrimaryContextLostAtEnd: run.webglPrimaryContextLostAtEnd,
         jsHeapAfter: heapSize(),
       },
       outcome,
@@ -280,80 +404,60 @@ function BenchmarkApp() {
     } catch (error) {
       setStatus(`${outcome}; resultado não persistido: ${String(error?.message || error)}`);
     }
-  }, []);
+  }, [updateWebglSnapshot]);
 
   const finalizeSuccessfulRun = useCallback(async () => {
     const run = activeRunRef.current;
     if (!run || run.done || finalizingRef.current || run.hydrationStartedAt == null) return;
     finalizingRef.current = true;
     await waitFrames(2);
+    if (run.done || activeRunRef.current !== run) return;
+
     run.metrics.engineHydrationToReadyMs = now() - run.hydrationStartedAt;
     run.metrics.mapReadyMs = now() - run.startedAt;
     run.metrics.jsHeapPeak = Math.max(
       Number(run.metrics.jsHeapBefore || 0),
       Number(heapSize() || 0),
     ) || null;
+
     const fps = await measureInteractionFps(mapRef.current);
+    if (run.done || activeRunRef.current !== run) return;
     Object.assign(run.metrics, fps);
-    if (run.webglContextLostCount > 0) {
+    updateWebglSnapshot(run, true);
+
+    if (run.webglContextLostCount > 0 || run.webglPrimaryContextLostAtEnd === true) {
       await emitResult(run, "WEBGL_CONTEXT_LOST", "WEBGL_CONTEXT_LOST_DURING_BENCHMARK");
       return;
     }
     await emitResult(run, "SUCCESS");
-  }, [emitResult]);
+  }, [emitResult, updateWebglSnapshot]);
 
   const attachMap = useCallback((ref: any) => {
     const map = ref?.getMap?.() || ref || null;
     mapRef.current = map;
     if (!map) return;
 
-    const canvas = map.getCanvas?.();
-    if (canvas) {
-      let gl: any = null;
-      try {
-        gl = canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-      } catch {
-        gl = null;
-      }
-      webglRef.current = {
-        available: Boolean(gl),
-        version: gl?.getParameter?.(gl.VERSION)?.toString?.().slice(0, 24) || null,
-      };
+    const inspected = inspectMapWebgl(map);
+    webglRef.current = {
+      available: inspected.available,
+      version: inspected.version,
+    };
 
-      if (!observedWebglCanvases.has(canvas)) {
-        observedWebglCanvases.add(canvas);
-        canvas.addEventListener("webglcontextlost", () => {
-          const run = activeRunRef.current;
-          const activeCanvas = mapRef.current?.getCanvas?.();
-          if (
-            !run ||
-            run.done ||
-            run.measurementStartedAt == null ||
-            activeCanvas !== canvas
-          ) return;
-          run.webglContextLostCount += 1;
-        });
-        canvas.addEventListener("webglcontextrestored", () => {
-          const run = activeRunRef.current;
-          const activeCanvas = mapRef.current?.getCanvas?.();
-          if (
-            !run ||
-            run.done ||
-            run.measurementStartedAt == null ||
-            activeCanvas !== canvas
-          ) return;
-          run.webglContextRestoredCount += 1;
-        });
-      }
+    const run = activeRunRef.current;
+    if (run && !run.done && run.measurementStartedAt != null) {
+      trackPrimaryCanvas(run, inspected.canvas, true);
+      run.webglPrimaryContextLostAtEnd = inspected.contextLost;
     }
 
+    if (typeof map === "object" && observedMaps.has(map)) return;
+    if (typeof map === "object") observedMaps.add(map);
     map.on?.("render", () => {
-      const run = activeRunRef.current;
-      if (!run || run.done || run.hydrationStartedAt == null) return;
+      const currentRun = activeRunRef.current;
+      if (!currentRun || currentRun.done || currentRun.hydrationStartedAt == null) return;
       if (map.isStyleLoaded?.() === false) return;
       void finalizeSuccessfulRun();
     });
-  }, [finalizeSuccessfulRun]);
+  }, [finalizeSuccessfulRun, trackPrimaryCanvas]);
 
   useEffect(() => {
     const closeNativeModal = () => {
@@ -437,6 +541,13 @@ function BenchmarkApp() {
       timeoutId: null,
       webglContextLostCount: 0,
       webglContextRestoredCount: 0,
+      webglObservedCanvases: new Set(),
+      webglCanvasObserver: null,
+      webglCanvasAddedDuringRunCount: 0,
+      webglPrimaryCanvasChangeCount: 0,
+      initialPrimaryCanvas: null,
+      lastPrimaryCanvas: null,
+      webglPrimaryContextLostAtEnd: null,
       done: false,
     };
     activeRunRef.current = run;
@@ -460,6 +571,7 @@ function BenchmarkApp() {
       run.measurementStartedAt = run.startedAt;
       run.metrics.jsHeapBefore = heapSize();
       run.observer = createLongTaskObserver(run.longTasks);
+      startWebglObservation(run);
       sessionStorage.setItem(PENDING_KEY, JSON.stringify({
         runId,
         fixture: selectedFixture,
@@ -470,9 +582,17 @@ function BenchmarkApp() {
       setStatus(`Executando ${selectedFixture.fixtureId}...`);
 
       run.timeoutId = window.setTimeout(() => {
-        if (activeRunRef.current === run && !run.done) {
-          void emitResult(run, "TIMEOUT", "BENCHMARK_TIMEOUT");
-        }
+        if (activeRunRef.current !== run || run.done) return;
+        updateWebglSnapshot(run, true);
+        const timeoutAfterContextLoss =
+          run.webglContextLostCount > 0 || run.webglPrimaryContextLostAtEnd === true;
+        const timeoutAfterCanvasChange = run.webglPrimaryCanvasChangeCount > 0;
+        const errorCode = timeoutAfterContextLoss
+          ? "BENCHMARK_TIMEOUT_AFTER_WEBGL_CONTEXT_LOSS"
+          : timeoutAfterCanvasChange
+            ? "BENCHMARK_TIMEOUT_AFTER_WEBGL_CANVAS_CHANGE"
+            : "BENCHMARK_TIMEOUT";
+        void emitResult(run, "TIMEOUT", errorCode);
       }, 120_000);
 
       const baseUrl = `/__s08_fixture__/fixtures/${encodeURIComponent(selectedFixture.fileName)}`;
@@ -513,7 +633,7 @@ function BenchmarkApp() {
     } catch (error) {
       await emitResult(run, "ERROR", String(error?.message || error).slice(0, 120));
     }
-  }, [cacheMode, deviceClass, dispatch, emitResult, selectedFixture]);
+  }, [cacheMode, deviceClass, dispatch, emitResult, selectedFixture, startWebglObservation, updateWebglSnapshot]);
 
   return (
     <ThemeProvider theme={theme}>
@@ -560,7 +680,7 @@ function BenchmarkApp() {
           {lastResult && <pre style={{ fontSize: 10, whiteSpace: "pre-wrap", color: "#d8d2c4" }}>{JSON.stringify(lastResult, null, 2)}</pre>}
         </aside>
 
-        <main style={{ minWidth: 0, minHeight: 0, position: "relative" }}>
+        <main ref={mapAreaRef} style={{ minWidth: 0, minHeight: 0, position: "relative" }}>
           <KeplerGl
             id={MAP_ID}
             getState={getKeplerState}
