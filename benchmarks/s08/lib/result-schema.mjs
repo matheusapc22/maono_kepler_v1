@@ -44,6 +44,10 @@ function integerOrNull(value) {
   return number !== null && Number.isInteger(number) ? number : null;
 }
 
+function booleanOrNull(value) {
+  return typeof value === "boolean" ? value : null;
+}
+
 function safeText(value, max = 160) {
   if (typeof value !== "string") return null;
   return value.trim().slice(0, max) || null;
@@ -119,10 +123,14 @@ export function normalizeBenchmarkResult(input) {
       p95FrameMs: finiteOrNull(metrics.p95FrameMs),
       worstFrameMs: finiteOrNull(metrics.worstFrameMs),
       droppedFrameCount: integerOrNull(metrics.droppedFrameCount),
-      webglAvailable: typeof metrics.webglAvailable === "boolean" ? metrics.webglAvailable : null,
+      webglAvailable: booleanOrNull(metrics.webglAvailable),
       webglVersion: safeText(metrics.webglVersion, 24),
       webglContextLostCount: integerOrNull(metrics.webglContextLostCount),
       webglContextRestoredCount: integerOrNull(metrics.webglContextRestoredCount),
+      webglObservedCanvasCount: integerOrNull(metrics.webglObservedCanvasCount),
+      webglCanvasAddedDuringRunCount: integerOrNull(metrics.webglCanvasAddedDuringRunCount),
+      webglPrimaryCanvasChangeCount: integerOrNull(metrics.webglPrimaryCanvasChangeCount),
+      webglPrimaryContextLostAtEnd: booleanOrNull(metrics.webglPrimaryContextLostAtEnd),
       jsHeapBefore: finiteOrNull(metrics.jsHeapBefore),
       jsHeapPeak: finiteOrNull(metrics.jsHeapPeak),
       jsHeapAfter: finiteOrNull(metrics.jsHeapAfter),
