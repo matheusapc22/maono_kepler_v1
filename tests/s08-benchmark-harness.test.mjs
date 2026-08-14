@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
 
@@ -296,7 +297,7 @@ test("relatório S08 separa commits, preserva outcomes e expõe stalls de SUCCES
 test("relatório S08 ignora métricas ausentes e preserva stall sem mascarar pela mediana", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "maono-s08-report-"));
   const resultsDir = path.join(root, ".benchmark-data", "s08", "results");
-  const reportScript = new URL("../benchmarks/s08/report/generate-report.mjs", import.meta.url);
+  const reportScript = fileURLToPath(new URL("../benchmarks/s08/report/generate-report.mjs", import.meta.url));
   const commit = "3a30b1942cd434e7ba69bc5aa12200d1f431c545";
   const base = {
     benchmarkVersion: "s08-benchmark-v1",
@@ -355,7 +356,7 @@ test("relatório S08 ignora métricas ausentes e preserva stall sem mascarar pel
       `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`,
       "utf8",
     );
-    await execFileAsync(process.execPath, [reportScript.pathname], { cwd: root });
+    await execFileAsync(process.execPath, [reportScript], { cwd: root });
     const report = await readFile(
       path.join(root, ".benchmark-data", "s08", "reports", "S08-benchmark-report.md"),
       "utf8",
