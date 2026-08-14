@@ -223,7 +223,7 @@ test("resultado S08 contém apenas métricas e metadados coarse permitidos", () 
   );
 });
 
-test("harness mede estágios e amplia observabilidade WebGL sem fingerprint detalhado", async () => {
+test("harness mede estágios, FPS consistente e WebGL sem fingerprint detalhado", async () => {
   const source = await readFile(
     new URL("../src/benchmarks/s08/harness.tsx", import.meta.url),
     "utf8",
@@ -242,6 +242,8 @@ test("harness mede estágios e amplia observabilidade WebGL sem fingerprint deta
     "webglPrimaryCanvasChangeCount",
     "webglPrimaryContextLostAtEnd",
     "BENCHMARK_TIMEOUT_AFTER_WEBGL_CONTEXT_LOSS",
+    "DEVICE_CLASS_KEY",
+    "measuredFrames",
     "RELOAD",
   ]) {
     assert.match(source, new RegExp(token));
@@ -254,15 +256,20 @@ test("harness mede estágios e amplia observabilidade WebGL sem fingerprint deta
   assert.match(source, /querySelectorAll\("canvas"\)/);
   assert.match(source, /new MutationObserver/);
   assert.match(source, /webglObservedCanvases\.has\(canvas\)/);
+  assert.match(source, /sessionStorage\.getItem\(DEVICE_CLASS_KEY\)/);
+  assert.match(source, /sessionStorage\.setItem\(DEVICE_CLASS_KEY, value\)/);
+  assert.match(source, /Selecione o dispositivo/);
+  assert.match(source, /!selectedFixture \|\| !deviceClass \|\| activeRunRef\.current/);
   assert.match(source, /Preparando \$\{selectedFixture\.fixtureId\}/);
   assert.match(source, /run\.metrics\.jsHeapBefore = heapSize\(\)/);
   assert.match(source, /run\.observer = createLongTaskObserver\(run\.longTasks\)/);
+  assert.doesNotMatch(source, /value < 1000/);
   assert.doesNotMatch(source, /WEBGL_debug_renderer_info|UNMASKED_VENDOR|UNMASKED_RENDERER/);
   assert.doesNotMatch(source, /SCHEMA_LOAD_INVALID_RESULT/);
   assert.doesNotMatch(source, /SAFE_THRESHOLD|WARN_THRESHOLD|BLOCK_THRESHOLD|riskScore/);
 });
 
-test("relatório S08 explicita outcomes e não mascara falhas com mediana de sucesso", async () => {
+test("relatório S08 separa commits, preserva outcomes e não converte ausência em zero", async () => {
   const source = await readFile(
     new URL("../benchmarks/s08/report/generate-report.mjs", import.meta.url),
     "utf8",
@@ -270,6 +277,10 @@ test("relatório S08 explicita outcomes e não mascara falhas com mediana de suc
   assert.match(source, /summarizeOutcomes/);
   assert.match(source, /successResults/);
   assert.match(source, /formatOutcomes/);
+  assert.match(source, /normalizeCommit\(result\.commit\)/);
+  assert.match(source, /const \[commit, deviceClass, fixtureId, cacheMode\]/);
+  assert.match(source, /\| Commit \| Dispositivo \|/);
+  assert.match(source, /value === null \|\| value === undefined/);
   assert.match(source, /MAP_READY mediana SUCCESS/);
   assert.match(source, /Maior long task p95 TODOS/);
 });
