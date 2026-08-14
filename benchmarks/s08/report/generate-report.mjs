@@ -5,6 +5,15 @@ import process from "node:process";
 const DATA_ROOT = path.resolve(process.cwd(), ".benchmark-data/s08");
 const RESULTS_DIR = path.join(DATA_ROOT, "results");
 const REPORT_DIR = path.join(DATA_ROOT, "reports");
+const OUTCOME_ORDER = [
+  "SUCCESS",
+  "WEBGL_CONTEXT_LOST",
+  "TIMEOUT",
+  "RELOAD",
+  "ERROR",
+  "PAGE_CRASH",
+  "INCOMPLETE",
+];
 
 function quantile(values, ratio) {
   if (!values.length) return null;
@@ -62,28 +71,54 @@ function keyFor(result) {
   return `${result.deviceClass}::${result.fixtureId}::${result.cacheMode}`;
 }
 
+function summarizeOutcomes(results) {
+  const counts = {};
+  for (const result of results) {
+    const outcome = result.outcome || "INCOMPLETE";
+    counts[outcome] = (counts[outcome] || 0) + 1;
+  }
+  return counts;
+}
+
+function summarizeMetrics(results) {
+  return {
+    downloadTotalMs: summarizeMetric(results, ["metrics", "downloadTotalMs"]),
+    browserJsonParseMs: summarizeMetric(results, ["metrics", "browserJsonParseMs"]),
+    schemaLoadMs: summarizeMetric(results, ["metrics", "schemaLoadMs"]),
+    addDataToMapDispatchMs: summarizeMetric(results, ["metrics", "addDataToMapDispatchMs"]),
+    engineHydrationToReadyMs: summarizeMetric(results, ["metrics", "engineHydrationToReadyMs"]),
+    mapReadyMs: summarizeMetric(results, ["metrics", "mapReadyMs"]),
+    maxLongTaskMs: summarizeMetric(results, ["metrics", "maxLongTaskMs"]),
+    averageFps: summarizeMetric(results, ["metrics", "averageFps"]),
+    p95FrameMs: summarizeMetric(results, ["metrics", "p95FrameMs"]),
+  };
+}
+
 function summarizeGroup(results) {
+  const successResults = results.filter((result) => result.outcome === "SUCCESS");
   return {
     runs: results.length,
-    success: results.filter((result) => result.outcome === "SUCCESS").length,
-    failures: results.filter((result) => result.outcome !== "SUCCESS").length,
+    success: successResults.length,
+    failures: results.length - successResults.length,
+    outcomes: summarizeOutcomes(results),
     input: results[0]?.input || null,
-    metrics: {
-      downloadTotalMs: summarizeMetric(results, ["metrics", "downloadTotalMs"]),
-      browserJsonParseMs: summarizeMetric(results, ["metrics", "browserJsonParseMs"]),
-      schemaLoadMs: summarizeMetric(results, ["metrics", "schemaLoadMs"]),
-      addDataToMapDispatchMs: summarizeMetric(results, ["metrics", "addDataToMapDispatchMs"]),
-      engineHydrationToReadyMs: summarizeMetric(results, ["metrics", "engineHydrationToReadyMs"]),
-      mapReadyMs: summarizeMetric(results, ["metrics", "mapReadyMs"]),
-      maxLongTaskMs: summarizeMetric(results, ["metrics", "maxLongTaskMs"]),
-      averageFps: summarizeMetric(results, ["metrics", "averageFps"]),
-      p95FrameMs: summarizeMetric(results, ["metrics", "p95FrameMs"]),
-    },
+    metrics: summarizeMetrics(results),
+    successMetrics: summarizeMetrics(successResults),
   };
 }
 
 function formatNumber(value, digits = 1) {
   return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "—";
+}
+
+function formatOutcomes(outcomes) {
+  const known = OUTCOME_ORDER
+    .filter((outcome) => Number(outcomes?.[outcome] || 0) > 0)
+    .map((outcome) => `${outcome}=${outcomes[outcome]}`);
+  const extras = Object.entries(outcomes || {})
+    .filter(([outcome, count]) => !OUTCOME_ORDER.includes(outcome) && Number(count) > 0)
+    .map(([outcome, count]) => `${outcome}=${count}`);
+  return [...known, ...extras].join("; ") || "—";
 }
 
 function markdown(summary) {
@@ -94,15 +129,19 @@ function markdown(summary) {
     "",
     `Runs coletados: **${summary.totalRuns}**`,
     "",
-    "| Dispositivo | Fixture | Cache | Runs | Sucesso | MAP_READY mediana (ms) | Schema.load mediana (ms) | FPS mediana | Maior long task p95 (ms) |",
-    "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+    "| Dispositivo | Fixture | Cache | Runs | Outcomes | MAP_READY mediana SUCCESS (ms) | Schema.load mediana SUCCESS (ms) | FPS mediana SUCCESS | Maior long task p95 TODOS (ms) |",
+    "|---|---|---:|---:|---|---:|---:|---:|---:|",
   ];
   for (const group of summary.groups) {
     lines.push(
-      `| ${group.deviceClass} | ${group.fixtureId} | ${group.cacheMode} | ${group.summary.runs} | ${group.summary.success} | ${formatNumber(group.summary.metrics.mapReadyMs.median)} | ${formatNumber(group.summary.metrics.schemaLoadMs.median)} | ${formatNumber(group.summary.metrics.averageFps.median)} | ${formatNumber(group.summary.metrics.maxLongTaskMs.p95)} |`,
+      `| ${group.deviceClass} | ${group.fixtureId} | ${group.cacheMode} | ${group.summary.runs} | ${formatOutcomes(group.summary.outcomes)} | ${formatNumber(group.summary.successMetrics.mapReadyMs.median)} | ${formatNumber(group.summary.successMetrics.schemaLoadMs.median)} | ${formatNumber(group.summary.successMetrics.averageFps.median)} | ${formatNumber(group.summary.metrics.maxLongTaskMs.p95)} |`,
     );
   }
   lines.push(
+    "",
+    "## Leitura das falhas",
+    "",
+    "As medianas de MAP_READY, Schema.load e FPS usam somente runs SUCCESS. A coluna de outcomes preserva falhas por tipo; Long Task p95 considera todos os runs que registraram essa métrica, inclusive falhas parciais.",
     "",
     "## Próxima etapa",
     "",
