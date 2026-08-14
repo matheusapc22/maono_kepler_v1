@@ -100,13 +100,15 @@ Para cada dispositivo:
 1. fechar workloads concorrentes não relacionados;
 2. registrar sistema operacional, browser e classe de hardware;
 3. gerar o corpus a partir do mesmo commit;
-4. abrir o harness;
+4. abrir o harness e selecionar explicitamente a classe de dispositivo físico correta;
 5. executar uma passagem de aquecimento quando aplicável;
 6. executar ao menos três runs medidos por fixture da rodada exploratória;
 7. registrar separadamente `COLD` e `WARM` quando a família exigir comparação de cache;
 8. repetir com maior amostragem nas regiões que exibirem inflexão, long tasks elevadas, queda de FPS, context loss, reload ou falha;
 9. gerar o relatório agregado;
 10. não transformar a observação em threshold dentro da S08.
+
+A classe de dispositivo não possui valor padrão silencioso. Uma sessão nova exige seleção explícita antes de habilitar a execução. Depois de selecionada, a classe válida é preservada apenas em `sessionStorage`, permitindo `F5` sem voltar acidentalmente para outra classe e sem transformar esse valor em configuração persistente de produto.
 
 ## Métricas
 
@@ -133,11 +135,17 @@ O harness mede:
 - heap JS quando a API do browser estiver disponível;
 - outcome `SUCCESS`, `ERROR`, `TIMEOUT`, `RELOAD`, `WEBGL_CONTEXT_LOST`, `PAGE_CRASH` ou `INCOMPLETE`.
 
+### Coerência das métricas de frame
+
+Todos os intervalos positivos e finitos observados por `requestAnimationFrame` permanecem na distribuição de frame time. Stalls superiores a 1 segundo não são descartados. Dessa forma, uma pausa longa que reduz `averageFps` também pode aparecer em `p95FrameMs`, `worstFrameMs` e `droppedFrameCount`, evitando combinações artificiais como FPS médio baixo acompanhado de pior frame próximo de 16 ms.
+
 ### Observabilidade WebGL
 
 A instrumentação não depende apenas do canvas inicialmente retornado por `map.getCanvas()`. No início de cada janela medida, o harness registra os canvases já presentes dentro da área do Kepler e mantém um `MutationObserver` para anexar observação aos canvases criados ou substituídos durante o run.
 
 Eventos `webglcontextlost` e `webglcontextrestored` são contabilizados apenas quando o canvas pertence ao conjunto observado pelo run ativo. A preparação anterior ao início da medição continua fora dessa janela, de forma que a destruição intencional de canvases antigos durante `resetMapConfig` não contamine o resultado.
+
+Como Deck/Kepler pode substituir canvases durante o lifecycle normal, um `webglcontextlost` recebido em um canvas observado é reavaliado no frame seguinte. Se o canvas já tiver sido removido e deixado de ser relevante para a área ativa do Kepler, o evento é tratado como descarte de lifecycle e não como perda de GPU da execução. Context loss em canvas que continua relevante permanece contabilizado.
 
 No fechamento do run, inclusive em `TIMEOUT`, o harness faz uma inspeção final do canvas primário. Um timeout ocorrido após perda de contexto WebGL usa código técnico distinto de um timeout sem perda observada. Mudanças de canvas primário também são registradas separadamente para não serem confundidas automaticamente com context loss.
 
@@ -150,6 +158,10 @@ Ao iniciar um run, o harness registra estado mínimo em `sessionStorage`. Se a p
 Esse mecanismo transforma travamentos/reloads em dado de benchmark em vez de simplesmente perder a execução.
 
 O relatório agregado mostra a distribuição explícita de outcomes por fixture, por exemplo `SUCCESS=1; WEBGL_CONTEXT_LOST=1; TIMEOUT=1`. As medianas de `MAP_READY`, `Schema.load` e FPS são calculadas somente sobre runs `SUCCESS`; Long Task p95 continua considerando todos os runs que efetivamente registraram a métrica, inclusive falhas parciais.
+
+Quando não existe nenhum run `SUCCESS` no grupo, as métricas exclusivas de sucesso são exibidas como `—`, nunca como `0.0`. Isso diferencia ausência de amostra válida de uma medição real igual a zero.
+
+A chave de agregação do relatório inclui `commit + deviceClass + fixtureId + cacheMode`. Assim, campanhas produzidas por commits ou versões diferentes da instrumentação não são combinadas silenciosamente no mesmo grupo. O `summary.json` preserva o commit completo e o Markdown usa uma forma curta para leitura.
 
 ## Privacidade
 
