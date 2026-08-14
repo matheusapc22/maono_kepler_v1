@@ -151,7 +151,7 @@ No fechamento do run, inclusive em `TIMEOUT`, o harness faz uma inspeção final
 
 Nenhum detalhe de vendor, renderer, extensão `WEBGL_debug_renderer_info` ou outro identificador de fingerprint de GPU é coletado.
 
-## Falha e reload
+## Falha, reload e leitura de stalls
 
 Ao iniciar um run, o harness registra estado mínimo em `sessionStorage`. Se a página reaparecer antes do resultado terminal, a execução anterior é registrada como `RELOAD`.
 
@@ -160,6 +160,16 @@ Esse mecanismo transforma travamentos/reloads em dado de benchmark em vez de sim
 O relatório agregado mostra a distribuição explícita de outcomes por fixture, por exemplo `SUCCESS=1; WEBGL_CONTEXT_LOST=1; TIMEOUT=1`. As medianas de `MAP_READY`, `Schema.load` e FPS são calculadas somente sobre runs `SUCCESS`; Long Task p95 continua considerando todos os runs que efetivamente registraram a métrica, inclusive falhas parciais.
 
 Quando não existe nenhum run `SUCCESS` no grupo, as métricas exclusivas de sucesso são exibidas como `—`, nunca como `0.0`. Isso diferencia ausência de amostra válida de uma medição real igual a zero.
+
+Além da mediana de FPS, o relatório expõe três sinais de degradação transitória dos runs `SUCCESS`:
+
+- menor `averageFps` observado no grupo;
+- maior `worstFrameMs` observado no grupo;
+- razão `runs SUCCESS com droppedFrameCount > 0 / total de runs SUCCESS`.
+
+Essas colunas existem para impedir que um stall severo em uma única execução desapareça atrás de uma mediana saudável. Elas continuam sendo evidência observada; não classificam automaticamente `safe`, `warn` ou `block`.
+
+Valores ausentes de métricas (`null`, `undefined` ou string vazia) são descartados antes da agregação numérica. O relatório não converte ausência de medição em zero por coerção de JavaScript.
 
 A chave de agregação do relatório inclui `commit + deviceClass + fixtureId + cacheMode`. Assim, campanhas produzidas por commits ou versões diferentes da instrumentação não são combinadas silenciosamente no mesmo grupo. O `summary.json` preserva o commit completo e o Markdown usa uma forma curta para leitura.
 
