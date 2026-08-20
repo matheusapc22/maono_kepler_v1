@@ -1,0 +1,70 @@
+{
+  "schema": "maono-semantic-snapshots",
+  "version": 1,
+  "deterministic": true,
+  "snapshots": [
+    {
+      "id": "map-empty",
+      "source": "golden/map-empty.kepler.json",
+      "viewport": {"latitude": -14.235, "longitude": -51.9253, "zoom": 3, "bearing": 0, "pitch": 0},
+      "layers": [],
+      "filters": [],
+      "style": {"basemap": "dark"},
+      "extensions": {}
+    },
+    {
+      "id": "map-point-basic",
+      "source": "golden/map-point-basic.kepler.json",
+      "viewport": {"latitude": -20.5, "longitude": -45, "zoom": 3.5, "bearing": 0, "pitch": 0},
+      "layers": [{"logicalId": "points", "dataset": "golden-points", "type": "point", "label": "Pontos", "visible": true, "geometryBinding": {"lat": "lat", "lng": "lng"}}],
+      "filters": [],
+      "style": {"basemap": "dark", "layerStyles": {"points": {"opacity": 0.8, "radius": 10}}},
+      "extensions": {}
+    },
+    {
+      "id": "map-point-cluster-v1-legacy",
+      "source": "golden/map-point-cluster-v1-legacy.kepler.json",
+      "viewport": {"latitude": -23.56, "longitude": -46.64, "zoom": 8, "bearing": 0, "pitch": 0},
+      "layers": [{"logicalId": "points", "dataset": "cluster-data", "type": "point", "label": "Pontos", "visible": true, "geometryBinding": {"lat": "lat", "lng": "lng"}}],
+      "filters": [],
+      "style": {"basemap": "dark", "layerStyles": {"points": {"opacity": 0.8}}},
+      "extensions": {"pointClustering": {"version": 1, "logicalLayerId": "points", "enabled": true, "clusterMaxZoom": 12, "hysteresis": 0.25, "clusterSize": 50, "showCount": true, "legacyDerivedLayerPresent": true}}
+    },
+    {
+      "id": "map-point-cluster-v2-current",
+      "source": "golden/map-point-cluster-v2-current.kepler.json",
+      "viewport": {"latitude": -23.56, "longitude": -46.64, "zoom": 8, "bearing": 0, "pitch": 0},
+      "layers": [{"logicalId": "points", "dataset": "cluster-data", "type": "point", "label": "Pontos", "visible": true, "geometryBinding": {"lat": "lat", "lng": "lng"}}],
+      "filters": [],
+      "style": {"basemap": "dark", "layerStyles": {"points": {"opacity": 0.8, "radius": 8}}},
+      "extensions": {"pointClustering": {"version": 2, "logicalLayerId": "points", "enabled": true, "clusterMaxZoom": 12, "hysteresis": 0.25, "clusterSize": 64, "showCount": true, "legacyDerivedLayerPresent": false}}
+    },
+    {
+      "id": "map-filters-smart-histogram",
+      "source": "golden/map-filters-smart-histogram.kepler.json",
+      "viewport": {"latitude": -23.565, "longitude": -46.645, "zoom": 9, "bearing": 0, "pitch": 0},
+      "layers": [{"logicalId": "filtered-points", "dataset": "filter-data", "type": "point", "label": "Pontos filtrados", "visible": true, "geometryBinding": {"lat": "lat", "lng": "lng"}}],
+      "filters": [{"logicalId": "filter-category", "dataset": "filter-data", "field": "category", "operator": "in", "value": ["A", "B"]}, {"logicalId": "filter-value", "dataset": "filter-data", "field": "value", "operator": "between", "value": [10, 35]}],
+      "style": {"basemap": "dark", "layerStyles": {"filtered-points": {"opacity": 0.8, "radius": 8}}},
+      "extensions": {"smartHistogram": {"enabled": true, "filterIds": ["filter-category", "filter-value"]}}
+    },
+    {
+      "id": "map-geojson-polygon",
+      "source": "golden/map-geojson-polygon.kepler.json",
+      "viewport": {"latitude": -23.55, "longitude": -46.65, "zoom": 10, "bearing": 0, "pitch": 0},
+      "layers": [{"logicalId": "polygon", "dataset": "polygon-data", "type": "polygon", "label": "Área sintética", "visible": true, "geometryBinding": {"geometry": "geometry"}}],
+      "filters": [],
+      "style": {"basemap": "dark", "layerStyles": {"polygon": {"opacity": 0.45, "strokeOpacity": 0.9, "filled": true}}},
+      "extensions": {}
+    },
+    {
+      "id": "map-isochrone-persisted",
+      "source": "golden/map-isochrone-persisted.kepler.json",
+      "viewport": {"latitude": -23.55, "longitude": -46.65, "zoom": 10, "bearing": 0, "pitch": 0},
+      "layers": [{"logicalId": "isochrone", "dataset": "isochrone-data", "type": "polygon", "label": "Isócrona 15 min", "visible": true, "geometryBinding": {"geometry": "geometry"}}],
+      "filters": [],
+      "style": {"basemap": "dark", "layerStyles": {"isochrone": {"opacity": 0.35, "strokeOpacity": 0.9, "filled": true}}},
+      "extensions": {"analyses": [{"logicalId": "analysis-iso-1", "type": "isochrone", "status": "persisted", "mode": "drive", "minutes": 15, "outputDataset": "isochrone-data"}]}
+    }
+  ]
+}
