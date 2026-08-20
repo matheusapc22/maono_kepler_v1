@@ -1,54 +1,80 @@
 {
   "schema": "maono-architecture-baseline-fixtures",
   "version": 1,
-  "snapshotCommit": "aec5227d289fc8644cb22e9c083ff4ef44ef6e9e",
-  "status": "catalog_frozen",
+  "snapshotCommit": "46fbf2ec434be9d22e51d1575eb608e83f9d5cdb",
+  "status": "c0_materialized_partial",
   "productionDataAllowed": false,
+  "semanticSnapshotFile": "semantic-snapshots.json",
   "fixtures": [
     {
       "id": "map-empty",
       "purpose": "Mapa sem datasets/layers; baseline de criação e shell.",
-      "coverage": ["create", "empty-state", "save-initial"]
+      "coverage": ["create", "empty-state", "save-initial"],
+      "goldenFile": "golden/map-empty.kepler.json",
+      "materialized": true,
+      "synthetic": true
     },
     {
       "id": "map-point-basic",
       "purpose": "Camada Point sem agrupamento.",
-      "coverage": ["point", "visibility", "tooltip", "legend"]
+      "coverage": ["point", "visibility", "tooltip", "legend"],
+      "goldenFile": "golden/map-point-basic.kepler.json",
+      "materialized": true,
+      "synthetic": true
     },
     {
       "id": "map-point-cluster-v1-legacy",
       "purpose": "Contrato legado de pointClustering version 1 para migração/regressão.",
-      "coverage": ["cluster-legacy", "migration", "single-layer"]
+      "coverage": ["cluster-legacy", "migration", "single-layer"],
+      "goldenFile": "golden/map-point-cluster-v1-legacy.kepler.json",
+      "materialized": true,
+      "synthetic": true
     },
     {
       "id": "map-point-cluster-v2-current",
       "purpose": "Contrato atual de agrupamento espacial version 2.",
-      "coverage": ["cluster", "filters", "zoom", "fidelity"]
+      "coverage": ["cluster", "filters", "zoom", "fidelity"],
+      "goldenFile": "golden/map-point-cluster-v2-current.kepler.json",
+      "materialized": true,
+      "synthetic": true
     },
     {
       "id": "map-filters-smart-histogram",
       "purpose": "Filtros categóricos e range com histograma inteligente/brush.",
-      "coverage": ["filters", "histogram", "accordion", "csv"]
+      "coverage": ["filters", "histogram", "accordion", "csv"],
+      "goldenFile": "golden/map-filters-smart-histogram.kepler.json",
+      "materialized": true,
+      "synthetic": true
     },
     {
       "id": "map-geojson-polygon",
       "purpose": "GeoJSON Polygon/MultiPolygon para estilo, popup e legenda.",
-      "coverage": ["geojson", "polygon", "legend", "popup"]
+      "coverage": ["geojson", "polygon", "legend", "popup"],
+      "goldenFile": "golden/map-geojson-polygon.kepler.json",
+      "materialized": true,
+      "synthetic": true
     },
     {
       "id": "map-heatmap-basic",
       "purpose": "Heatmap para regressão de render e persistência.",
-      "coverage": ["heatmap", "style", "save-load"]
+      "coverage": ["heatmap", "style", "save-load"],
+      "materialized": false,
+      "synthetic": true
     },
     {
       "id": "map-isochrone-persisted",
       "purpose": "Análise de isócrona persistida como layer GeoJSON.",
-      "coverage": ["isochrone", "transient", "persist", "reload"]
+      "coverage": ["isochrone", "transient", "persist", "reload"],
+      "goldenFile": "golden/map-isochrone-persisted.kepler.json",
+      "materialized": true,
+      "synthetic": true
     },
     {
       "id": "map-large-risk-candidate",
-      "purpose": "Descriptor para futuro baseline de performance/Load Guard; sem payload pesado na S00.",
-      "coverage": ["performance", "load-guard", "large-data"]
+      "purpose": "Descriptor para futuro baseline de performance/Load Guard; sem payload pesado no C0.",
+      "coverage": ["performance", "load-guard", "large-data"],
+      "materialized": false,
+      "synthetic": true
     }
   ]
 }

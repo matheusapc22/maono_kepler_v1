@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "datasets": [{"version": "v1", "data": {"id": "polygon-data", "label": "Polígono sintético", "color": [247, 231, 178], "allData": [["area-1", "{\"type\":\"Polygon\",\"coordinates\":[[[-46.70,-23.60],[-46.60,-23.60],[-46.60,-23.50],[-46.70,-23.50],[-46.70,-23.60]]]}", 100]], "fields": [{"name": "id", "type": "string", "format": "", "analyzerType": "STRING"}, {"name": "geometry", "type": "geojson", "format": "", "analyzerType": "GEOMETRY"}, {"name": "value", "type": "integer", "format": "", "analyzerType": "INT"}]}}],
+  "config": {
+    "visState": {
+      "filters": [],
+      "layers": [{"id": "polygon", "type": "geojson", "config": {"dataId": "polygon-data", "label": "Área sintética", "color": [247, 231, 178], "columns": {"geojson": "geometry"}, "isVisible": true, "visConfig": {"opacity": 0.45, "strokeOpacity": 0.9, "thickness": 1, "stroked": true, "filled": true, "enable3d": false}}}],
+      "interactionConfig": {"tooltip": {"fieldsToShow": {"polygon-data": [{"name": "id", "format": null}, {"name": "value", "format": null}]}, "enabled": true}},
+      "layerBlending": "normal",
+      "splitMaps": []
+    },
+    "mapState": {"bearing": 0, "dragRotate": false, "latitude": -23.55, "longitude": -46.65, "pitch": 0, "zoom": 10},
+    "mapStyle": {"styleType": "dark", "topLayerGroups": {}, "visibleLayerGroups": {"label": true, "road": true, "border": false, "building": true, "water": true, "land": true, "3d building": false}, "threeDBuildingColor": [9, 20, 26.2], "mapStyles": {}}
+  }
+}

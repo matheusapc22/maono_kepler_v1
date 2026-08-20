@@ -1,0 +1,33 @@
+{
+  "version": "v1",
+  "datasets": [],
+  "config": {
+    "visState": {
+      "filters": [],
+      "layers": [],
+      "interactionConfig": {
+        "tooltip": {"fieldsToShow": {}, "enabled": true},
+        "brush": {"enabled": false},
+        "geocoder": {"enabled": false},
+        "coordinate": {"enabled": false}
+      },
+      "layerBlending": "normal",
+      "splitMaps": []
+    },
+    "mapState": {
+      "bearing": 0,
+      "dragRotate": false,
+      "latitude": -14.235,
+      "longitude": -51.9253,
+      "pitch": 0,
+      "zoom": 3
+    },
+    "mapStyle": {
+      "styleType": "dark",
+      "topLayerGroups": {},
+      "visibleLayerGroups": {"label": true, "road": true, "border": false, "building": true, "water": true, "land": true, "3d building": false},
+      "threeDBuildingColor": [9, 20, 26.2],
+      "mapStyles": {}
+    }
+  }
+}

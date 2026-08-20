@@ -1,0 +1,18 @@
+{
+  "version": "v1",
+  "datasets": [{"version": "v1", "data": {"id": "filter-data", "label": "Filtro sintético", "color": [241, 210, 138], "allData": [[-46.63, -23.55, "A", 10], [-46.64, -23.56, "A", 20], [-46.65, -23.57, "B", 30], [-46.66, -23.58, "C", 40]], "fields": [{"name": "lng", "type": "real", "format": "", "analyzerType": "FLOAT"}, {"name": "lat", "type": "real", "format": "", "analyzerType": "FLOAT"}, {"name": "category", "type": "string", "format": "", "analyzerType": "STRING"}, {"name": "value", "type": "integer", "format": "", "analyzerType": "INT"}]}}],
+  "config": {
+    "visState": {
+      "filters": [
+        {"id": "filter-category", "dataId": ["filter-data"], "name": ["category"], "type": "multiSelect", "value": ["A", "B"], "enlarged": false, "plotType": "histogram", "animationWindow": "free", "yAxis": null, "speed": 1},
+        {"id": "filter-value", "dataId": ["filter-data"], "name": ["value"], "type": "range", "value": [10, 35], "enlarged": false, "plotType": "histogram", "animationWindow": "free", "yAxis": null, "speed": 1}
+      ],
+      "layers": [{"id": "filtered-points", "type": "point", "config": {"dataId": "filter-data", "label": "Pontos filtrados", "color": [241, 210, 138], "columns": {"lat": "lat", "lng": "lng"}, "isVisible": true, "visConfig": {"radius": 8, "opacity": 0.8}}}],
+      "interactionConfig": {"tooltip": {"fieldsToShow": {"filter-data": [{"name": "category", "format": null}, {"name": "value", "format": null}]}, "enabled": true}},
+      "layerBlending": "normal",
+      "splitMaps": []
+    },
+    "mapState": {"bearing": 0, "dragRotate": false, "latitude": -23.565, "longitude": -46.645, "pitch": 0, "zoom": 9},
+    "mapStyle": {"styleType": "dark", "topLayerGroups": {}, "visibleLayerGroups": {"label": true, "road": true, "border": false, "building": true, "water": true, "land": true, "3d building": false}, "threeDBuildingColor": [9, 20, 26.2], "mapStyles": {}}
+  }
+}

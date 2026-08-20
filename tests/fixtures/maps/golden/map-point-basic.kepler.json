@@ -1,0 +1,48 @@
+{
+  "version": "v1",
+  "datasets": [
+    {
+      "version": "v1",
+      "data": {
+        "id": "golden-points",
+        "label": "Pontos sintéticos",
+        "color": [232, 184, 74],
+        "allData": [
+          [-46.6333, -23.5505, "A"],
+          [-43.1729, -22.9068, "B"],
+          [-47.8825, -15.7942, "C"]
+        ],
+        "fields": [
+          {"name": "lng", "type": "real", "format": "", "analyzerType": "FLOAT"},
+          {"name": "lat", "type": "real", "format": "", "analyzerType": "FLOAT"},
+          {"name": "name", "type": "string", "format": "", "analyzerType": "STRING"}
+        ]
+      }
+    }
+  ],
+  "config": {
+    "visState": {
+      "filters": [],
+      "layers": [
+        {
+          "id": "points",
+          "type": "point",
+          "config": {
+            "dataId": "golden-points",
+            "label": "Pontos",
+            "color": [232, 184, 74],
+            "columns": {"lat": "lat", "lng": "lng", "altitude": null},
+            "isVisible": true,
+            "visConfig": {"radius": 10, "opacity": 0.8, "outline": false}
+          },
+          "visualChannels": {"colorField": null, "colorScale": "quantile", "sizeField": null, "sizeScale": "linear"}
+        }
+      ],
+      "interactionConfig": {"tooltip": {"fieldsToShow": {"golden-points": [{"name": "name", "format": null}]}, "enabled": true}},
+      "layerBlending": "normal",
+      "splitMaps": []
+    },
+    "mapState": {"bearing": 0, "dragRotate": false, "latitude": -20.5, "longitude": -45.0, "pitch": 0, "zoom": 3.5},
+    "mapStyle": {"styleType": "dark", "topLayerGroups": {}, "visibleLayerGroups": {"label": true, "road": true, "border": false, "building": true, "water": true, "land": true, "3d building": false}, "threeDBuildingColor": [9, 20, 26.2], "mapStyles": {}}
+  }
+}
