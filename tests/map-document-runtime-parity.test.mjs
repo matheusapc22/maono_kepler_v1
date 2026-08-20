@@ -28,6 +28,23 @@ test("browser bridge e Functions usam o mesmo core ESM compartilhado", async () 
   assert.doesNotMatch(loaderSource, /function\s+detectSchema\s*\(/);
 });
 
+test("loader valida documento antes do bridge e da hidratação Kepler", async () => {
+  const loaderSource = await readFile(
+    new URL("../src/pages/Kepler/map-url-loader/index.tsx", import.meta.url),
+    "utf8",
+  );
+  const validate = loaderSource.indexOf("validateDocument(savedConfig)");
+  const load = loaderSource.indexOf("loadSavedKeplerConfig(savedConfig)");
+  const hydration = loaderSource.indexOf('recordMapLoadEvent("ENGINE_HYDRATION_STARTED"');
+  assert.ok(validate >= 0);
+  assert.ok(load > validate);
+  assert.ok(hydration > load);
+  assert.match(
+    loaderSource,
+    /resolveSavedMapDocumentForKepler[\s\S]*validateDocument\(value\)[\s\S]*toLegacyKeplerDocument\(value\)/,
+  );
+});
+
 test("validator do core e boundary backend concordam com maono-map@1", async () => {
   const valid = await fixture("maono-map-v1.valid.json");
   assert.equal(detectSchema(valid).kind, MAP_DOCUMENT_KIND.MAONO_MAP_V1);

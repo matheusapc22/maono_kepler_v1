@@ -7,6 +7,7 @@ const suites = [
   { path: "tests/map-document-runtime-parity.test.mjs", required: true },
   { path: "tests/map-document-roundtrip.test.mjs", required: true },
   { path: "tests/project-config-maono-map.test.mjs", required: true },
+  { path: "tests/project-config-maono-map-ledger.test.mjs", required: true },
   { path: "tests/map-migration-registry.test.mjs", required: false },
   { path: "tests/map-domain-kernel.test.mjs", required: false },
   { path: "tests/dataset-version-model.test.mjs", required: false },

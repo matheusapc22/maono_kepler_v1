@@ -348,12 +348,12 @@ export async function saveVersionedProjectConfig(
   }
 
   let stage = "SERIALIZE";
-  const document = prepareProjectConfigDocumentForWrite(config, {
+  config = prepareProjectConfigDocumentForWrite(config, {
     writeMaonoMapV1: isMaonoMapSchemaWriteV1Enabled(env),
   });
-  const serialized = serializeProjectConfigBytes(document);
+  const serialized = serializeProjectConfigBytes(config);
   stage = "VALIDATE";
-  const schema = validateProjectConfig(document, { bytes: serialized.bytes });
+  const schema = validateProjectConfig(config, { bytes: serialized.bytes });
   stage = "CANDIDATE_CHECKSUM";
   const artifact = await buildProjectConfigArtifactFromBytes(serialized.bytes, {
     schemaName: schema.schemaName,
