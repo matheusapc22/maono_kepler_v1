@@ -15,6 +15,10 @@ import {
   recordMapLoadEvent,
   updateActiveMapLoadTraceContext,
 } from "../observability/map-load-trace";
+import {
+  toLegacyKeplerDocument,
+  validateDocument,
+} from "../../../../shared/map-document/index.js";
 
 const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
@@ -68,6 +72,13 @@ function validateSavedKeplerConfig(value: unknown) {
   }
 }
 
+export function resolveSavedMapDocumentForKepler(value: unknown) {
+  validateDocument(value);
+  const engineDocument = toLegacyKeplerDocument(value);
+  validateSavedKeplerConfig(engineDocument);
+  return engineDocument;
+}
+
 function normalizeDatasetForKepler(dataset: any) {
   const data = dataset?.data ?? dataset;
 
@@ -82,10 +93,10 @@ function normalizeDatasetForKepler(dataset: any) {
 }
 
 export function loadSavedKeplerConfig(savedConfig: any) {
-  validateSavedKeplerConfig(savedConfig);
+  const engineDocument = resolveSavedMapDocumentForKepler(savedConfig);
 
   const prepared = prepareSavedConfigForPointClustering(
-    savedConfig,
+    engineDocument,
     {
       featureEnabled: POINT_CLUSTERING_FEATURE_ENABLED,
     },
@@ -266,7 +277,7 @@ async function loadProjectConfig(
     updateActiveMapLoadTraceContext(traceContext);
 
     const savedConfig = data.config;
-    validateSavedKeplerConfig(savedConfig);
+    validateDocument(savedConfig);
     recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
 
     const loadedConfig = loadSavedKeplerConfig(savedConfig);

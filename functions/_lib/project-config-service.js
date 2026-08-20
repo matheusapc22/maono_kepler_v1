@@ -20,6 +20,12 @@ import {
 import { MAP_CONFIG_SAVE_MODES } from "./map-config-repository.js";
 import { resolveMapConfigRepository } from "./map-config-repository-factory.js";
 import { createMapConfigStorageRef } from "./map-config-storage-ref.js";
+import {
+  MAP_DOCUMENT_KIND,
+  detectSchema,
+  legacyKeplerToMaonoMapV1,
+  toLegacyKeplerDocument,
+} from "../../shared/map-document/index.js";
 
 function serviceError(message, status, code, details = null) {
   const error = new Error(message);
@@ -32,6 +38,28 @@ function serviceError(message, status, code, details = null) {
 function transitionId() {
   if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
   return `transition-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function isMaonoMapSchemaWriteV1Enabled(env) {
+  const value = String(env?.MAONO_MAP_SCHEMA_WRITE_V1 ?? "").trim().toLowerCase();
+  return ["1", "true", "on", "yes", "enabled"].includes(value);
+}
+
+export function prepareProjectConfigDocumentForWrite(
+  config,
+  { writeMaonoMapV1 = false } = {},
+) {
+  const detection = detectSchema(config);
+  let document = config;
+
+  if (writeMaonoMapV1 && detection.kind === MAP_DOCUMENT_KIND.LEGACY_KEPLER_V1) {
+    document = legacyKeplerToMaonoMapV1(config);
+  } else if (!writeMaonoMapV1 && detection.kind === MAP_DOCUMENT_KIND.MAONO_MAP_V1) {
+    document = toLegacyKeplerDocument(config);
+  }
+
+  validateProjectConfig(document);
+  return document;
 }
 
 function decodeJsonBytes(bytes) {
@@ -138,6 +166,7 @@ export async function readPublishedProjectConfig(
       stored,
       "O arquivo legado do projeto não contém JSON UTF-8 válido.",
     );
+    validateProjectConfig(decoded.config);
     return { config: decoded.config, lifecycle: null, legacy: true };
   }
 
@@ -166,6 +195,11 @@ export async function readPublishedProjectConfig(
     stored,
     "A revisão publicada não contém JSON UTF-8 válido.",
   );
+  validateProjectConfig(decoded.config, {
+    bytes: stored.bytes,
+    schemaName: project.config_schema,
+    schemaVersion: project.config_schema_version,
+  });
 
   return {
     config: decoded.config,
@@ -241,7 +275,10 @@ export async function saveLegacyProjectConfig(
   },
 ) {
   const repository = resolveMapConfigRepository(env, mapConfigRepository);
-  const artifact = await buildProjectConfigArtifact(config);
+  const document = prepareProjectConfigDocumentForWrite(config, {
+    writeMaonoMapV1: false,
+  });
+  const artifact = await buildProjectConfigArtifact(document);
   await repository.saveRevision({
     project,
     revision: Math.max(1, Number(project.config_revision || 0) + 1),
@@ -311,11 +348,17 @@ export async function saveVersionedProjectConfig(
   }
 
   let stage = "SERIALIZE";
+  config = prepareProjectConfigDocumentForWrite(config, {
+    writeMaonoMapV1: isMaonoMapSchemaWriteV1Enabled(env),
+  });
   const serialized = serializeProjectConfigBytes(config);
   stage = "VALIDATE";
-  validateProjectConfig(config, { bytes: serialized.bytes });
+  const schema = validateProjectConfig(config, { bytes: serialized.bytes });
   stage = "CANDIDATE_CHECKSUM";
-  const artifact = await buildProjectConfigArtifactFromBytes(serialized.bytes);
+  const artifact = await buildProjectConfigArtifactFromBytes(serialized.bytes, {
+    schemaName: schema.schemaName,
+    schemaVersion: schema.schemaVersion,
+  });
 
   const nextRevision = expected + 1;
   const id = transitionId();
