@@ -29,6 +29,16 @@ test("detectSchema cobre legacy, maono-map, future e invalid", () => {
   assert.equal(detectSchema({ nope: true }).kind, MAP_DOCUMENT_KIND.INVALID);
 });
 
+test("maono-map@1 exige versão numérica literal e não aceita string permissiva", () => {
+  const maono = legacyKeplerToMaonoMapV1(legacy());
+  const invalid = { ...maono, version: "1" };
+  assert.equal(detectSchema(invalid).kind, MAP_DOCUMENT_KIND.INVALID);
+  assert.throws(
+    () => validateDocument(invalid),
+    (error) => error instanceof MapDocumentValidationError && error.code === "MAP_DOCUMENT_VERSION_INVALID" && error.path === "$.version",
+  );
+});
+
 test("maono-map@1 exige envelope canônico e payload Kepler válido", () => {
   const maono = legacyKeplerToMaonoMapV1(legacy());
   assert.deepEqual(validateDocument(maono), { kind: MAP_DOCUMENT_KIND.MAONO_MAP_V1, schemaName: "maono-map", schemaVersion: 1 });

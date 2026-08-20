@@ -83,10 +83,10 @@ export function validateMaonoMapV1(document) {
       "$.schema",
     );
   }
-  if (Number(document.version) !== MAP_DOCUMENT_SCHEMA_MAONO_VERSION) {
+  if (document.version !== MAP_DOCUMENT_SCHEMA_MAONO_VERSION) {
     fail(
       "Versão maono-map não suportada.",
-      Number(document.version) > MAP_DOCUMENT_SCHEMA_MAONO_VERSION
+      Number.isInteger(document.version) && document.version > MAP_DOCUMENT_SCHEMA_MAONO_VERSION
         ? "MAP_DOCUMENT_FUTURE_VERSION"
         : "MAONO_MAP_VERSION_UNSUPPORTED",
       "$.version",
@@ -153,7 +153,11 @@ export function validateDocument(
     fail(
       "Não foi possível reconhecer o schema do documento de mapa.",
       detection.reasonCode || "MAP_DOCUMENT_INVALID",
-      "$",
+      detection.reasonCode === "MAP_DOCUMENT_VERSION_INVALID" ? "$.version" : "$",
+      {
+        schemaName: detection.schemaName,
+        schemaVersion: detection.schemaVersion,
+      },
     );
   }
 

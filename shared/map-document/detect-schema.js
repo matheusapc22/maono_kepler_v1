@@ -31,8 +31,8 @@ export function detectSchema(document) {
   }
 
   if (document.schema === MAP_DOCUMENT_SCHEMA_MAONO) {
-    const version = Number(document.version);
-    if (Number.isInteger(version) && version === MAP_DOCUMENT_SCHEMA_MAONO_VERSION) {
+    const version = document.version;
+    if (version === MAP_DOCUMENT_SCHEMA_MAONO_VERSION) {
       return {
         kind: MAP_DOCUMENT_KIND.MAONO_MAP_V1,
         schemaName: MAP_DOCUMENT_SCHEMA_MAONO,
@@ -53,7 +53,7 @@ export function detectSchema(document) {
     return {
       kind: MAP_DOCUMENT_KIND.INVALID,
       schemaName: MAP_DOCUMENT_SCHEMA_MAONO,
-      schemaVersion: Number.isFinite(version) ? version : null,
+      schemaVersion: Number.isInteger(version) ? version : null,
       supported: false,
       reasonCode: "MAP_DOCUMENT_VERSION_INVALID",
     };
@@ -63,8 +63,8 @@ export function detectSchema(document) {
     return {
       kind: MAP_DOCUMENT_KIND.FUTURE,
       schemaName: document.schema.trim(),
-      schemaVersion: Number.isInteger(Number(document.version))
-        ? Number(document.version)
+      schemaVersion: Number.isInteger(document.version)
+        ? document.version
         : null,
       supported: false,
       reasonCode: "MAP_DOCUMENT_SCHEMA_UNKNOWN",

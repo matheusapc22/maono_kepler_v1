@@ -37,6 +37,18 @@ test("legacy -> maono -> legacy preserva payload e extensão desconhecida", () =
   assert.deepEqual(maono.extensions.customUnknownExtension, { enabled: true, mode: "keep-me" });
 });
 
+test("adapter não clona dataset volumoso ao criar engine.payload ou bridge", () => {
+  const source = legacy();
+  const maono = legacyKeplerToMaonoMapV1(source);
+  assert.equal(maono.engine.payload, source);
+  assert.equal(maono.engine.payload.datasets, source.datasets);
+
+  const restored = toLegacyKeplerDocument(maono);
+  assert.equal(restored.datasets, source.datasets);
+  assert.equal(restored.config, source.config);
+  assert.equal(toLegacyKeplerDocument(source), source);
+});
+
 test("dataset volumoso existe uma única vez no documento maono-map", () => {
   const maono = legacyKeplerToMaonoMapV1(legacy());
   assert.equal(Object.prototype.hasOwnProperty.call(maono.datasets[0], "allData"), false);

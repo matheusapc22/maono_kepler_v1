@@ -4,9 +4,9 @@ function canonicalError(message, code, path) {
   throw new MapDocumentValidationError(message, code, path);
 }
 
-function canonicalize(value, path, ancestors) {
+function assertCanonicalJson(value, path, ancestors) {
   if (value === null || typeof value === "string" || typeof value === "boolean") {
-    return value;
+    return;
   }
 
   if (typeof value === "number") {
@@ -17,13 +17,15 @@ function canonicalize(value, path, ancestors) {
         path,
       );
     }
-    return Object.is(value, -0) ? 0 : value;
+    return;
   }
 
   if (typeof value !== "object") {
     canonicalError(
       "Valor não representável em JSON canônico.",
-      "MAP_DOCUMENT_CANONICAL_VALUE_INVALID",
+      value === undefined
+        ? "MAP_DOCUMENT_CANONICAL_UNDEFINED"
+        : "MAP_DOCUMENT_CANONICAL_VALUE_INVALID",
       path,
     );
   }
@@ -36,45 +38,55 @@ function canonicalize(value, path, ancestors) {
     );
   }
 
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+    canonicalError(
+      "Documento contém objeto fora do modelo JSON.",
+      "MAP_DOCUMENT_CANONICAL_OBJECT_INVALID",
+      path,
+    );
+  }
+
   ancestors.add(value);
   try {
     if (Array.isArray(value)) {
-      return value.map((entry, index) => {
-        if (entry === undefined) {
-          canonicalError(
-            "Array contém valor undefined.",
-            "MAP_DOCUMENT_CANONICAL_UNDEFINED",
-            `${path}[${index}]`,
-          );
-        }
-        return canonicalize(entry, `${path}[${index}]`, ancestors);
-      });
+      for (let index = 0; index < value.length; index += 1) {
+        assertCanonicalJson(value[index], `${path}[${index}]`, ancestors);
+      }
+      return;
     }
 
-    const output = {};
-    for (const key of Object.keys(value).sort()) {
-      const entry = value[key];
-      if (entry === undefined) {
-        canonicalError(
-          "Objeto contém valor undefined.",
-          "MAP_DOCUMENT_CANONICAL_UNDEFINED",
-          `${path}.${key}`,
-        );
-      }
-      output[key] = canonicalize(entry, `${path}.${key}`, ancestors);
+    for (const key of Object.keys(value)) {
+      assertCanonicalJson(value[key], `${path}.${key}`, ancestors);
     }
-    return output;
   } finally {
     ancestors.delete(value);
   }
 }
 
+function canonicalReplacer(_key, value) {
+  if (typeof value === "number" && Object.is(value, -0)) {
+    return 0;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const ordered = {};
+  for (const key of Object.keys(value).sort()) {
+    ordered[key] = value[key];
+  }
+  return ordered;
+}
+
 export function canonicalizeDocument(document) {
-  return canonicalize(document, "$", new WeakSet());
+  assertCanonicalJson(document, "$", new WeakSet());
+  return JSON.parse(JSON.stringify(document, canonicalReplacer));
 }
 
 export function canonicalSerialize(document) {
-  return JSON.stringify(canonicalizeDocument(document));
+  assertCanonicalJson(document, "$", new WeakSet());
+  return JSON.stringify(document, canonicalReplacer);
 }
 
 export function canonicalSerializeBytes(document) {
