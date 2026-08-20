@@ -33,10 +33,13 @@ on:
       - "docs/architecture/S07-map-load-observability.md"
       - "docs/architecture/GATE-A-foundation-stable.md"
       - "docs/architecture/macro-c/**"
+      - "shared/map-document/**"
       - "scripts/macro-c-gate.mjs"
       - "tests/fixtures/maps/**"
       - "tests/macro-c-*.test.mjs"
       - "tests/maono-map-*.test.mjs"
+      - "tests/map-document-*.test.mjs"
+      - "tests/project-config-maono-map.test.mjs"
       - "tests/map-migration-registry.test.mjs"
       - "tests/map-domain-kernel.test.mjs"
       - "tests/dataset-*.test.mjs"
@@ -107,6 +110,9 @@ jobs:
 
       - name: GATE A — Foundation stability
         run: npm run test:foundation-gate
+
+      - name: S17 — Map document contract
+        run: npm run test:map-document
 
       - name: MACRO C — Progressive gate
         run: npm run test:macro-c-gate

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
 
 import {
   canonicalSerialize,
@@ -50,4 +51,17 @@ test("canonicalSerialize produz bytes determinísticos para mesma semântica", (
   const second = canonicalSerialize(b);
   assert.equal(first, second);
   assert.equal(sha(first), sha(second));
+});
+
+test("todos os Golden Maps C0 preservam o documento Kepler no round-trip", async () => {
+  const directory = new URL("./fixtures/maps/golden/", import.meta.url);
+  const names = (await readdir(directory)).filter((name) => name.endsWith(".kepler.json")).sort();
+  assert.ok(names.length >= 7);
+
+  for (const name of names) {
+    const source = JSON.parse(await readFile(new URL(name, directory), "utf8"));
+    const maono = legacyKeplerToMaonoMapV1(source);
+    const restored = toLegacyKeplerDocument(maono);
+    assert.deepEqual(restored, source, `round-trip semântico divergente: ${name}`);
+  }
 });
