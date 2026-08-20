@@ -1,0 +1,23 @@
+{
+  "version": "v1",
+  "datasets": [{"version": "v1", "data": {"id": "cluster-data", "label": "Cluster atual sintético", "color": [183, 121, 31], "allData": [[-46.63, -23.55, "A"], [-46.64, -23.56, "B"], [-46.65, -23.57, "C"]], "fields": [{"name": "lng", "type": "real", "format": "", "analyzerType": "FLOAT"}, {"name": "lat", "type": "real", "format": "", "analyzerType": "FLOAT"}, {"name": "name", "type": "string", "format": "", "analyzerType": "STRING"}]}}],
+  "maono": {
+    "audit": {"source": "golden-c0-synthetic"},
+    "pointClustering": {
+      "version": 2,
+      "layers": {"points": {"enabled": true, "clusterMaxZoom": 12, "hysteresis": 0.25, "clusterSize": 64, "showCount": true}}
+    }
+  },
+  "config": {
+    "visState": {
+      "filters": [],
+      "layerOrder": ["points"],
+      "layers": [{"id": "points", "type": "point", "config": {"label": "Pontos", "isVisible": true, "dataId": "cluster-data", "columns": {"lat": "lat", "lng": "lng"}, "visConfig": {"radius": 8, "opacity": 0.8}}}],
+      "interactionConfig": {"tooltip": {"fieldsToShow": {"cluster-data": [{"name": "name", "format": null}]}, "enabled": true}},
+      "layerBlending": "normal",
+      "splitMaps": []
+    },
+    "mapState": {"bearing": 0, "dragRotate": false, "latitude": -23.56, "longitude": -46.64, "pitch": 0, "zoom": 8},
+    "mapStyle": {"styleType": "dark", "topLayerGroups": {}, "visibleLayerGroups": {"label": true, "road": true, "border": false, "building": true, "water": true, "land": true, "3d building": false}, "threeDBuildingColor": [9, 20, 26.2], "mapStyles": {}}
+  }
+}
