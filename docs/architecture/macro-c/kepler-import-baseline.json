@@ -1,0 +1,57 @@
+{
+  "schema": "maono-kepler-import-baseline",
+  "version": 1,
+  "capturedAt": "2026-08-20",
+  "capturedFrom": {
+    "branch": "mano_kepler_v1",
+    "commit": "46fbf2ec434be9d22e51d1575eb608e83f9d5cdb"
+  },
+  "mode": "snapshot-only",
+  "purpose": "Baseline para dependency audit da Macro C. Não autoriza crescimento do acoplamento; registra superfícies legadas e a ACL oficial existentes antes da S17.",
+  "keplerPackages": [
+    "@kepler.gl/actions",
+    "@kepler.gl/ai-assistant",
+    "@kepler.gl/cloud-providers",
+    "@kepler.gl/components",
+    "@kepler.gl/constants",
+    "@kepler.gl/duckdb",
+    "@kepler.gl/processors",
+    "@kepler.gl/reducers",
+    "@kepler.gl/schemas",
+    "@kepler.gl/styles",
+    "@kepler.gl/utils"
+  ],
+  "officialBoundary": {
+    "allowedPrefix": "src/pages/Kepler/engine-adapter/",
+    "reason": "Anti-Corruption Layer existente; será substituída/evoluída pelo MapEnginePort na S23."
+  },
+  "legacyAllowedPrefixes": [
+    {"path": "src/pages/Kepler/reducers/", "reason": "integração direta da engine já existente"},
+    {"path": "src/pages/Kepler/factories/", "reason": "custom factories herdadas do Kepler"},
+    {"path": "src/pages/Kepler/cloud-providers/", "reason": "providers herdados/integrados à engine"}
+  ],
+  "legacyAllowedExactPaths": [
+    "src/store.ts",
+    "src/pages/Kepler/index.tsx",
+    "src/pages/Kepler/actions.ts",
+    "src/pages/Kepler/components/banner.tsx",
+    "src/pages/Kepler/components/map-control/sql-panel-control.tsx",
+    "src/pages/Kepler/components/map-control/map-control.tsx",
+    "src/pages/Kepler/components/load-data-modal/load-remote-map.tsx",
+    "src/pages/Kepler/components/load-data-modal/sample-maps-tab.tsx",
+    "src/pages/Kepler/components/load-data-modal/sample-data-viewer.tsx",
+    "src/pages/Kepler/map-url-loader/index.tsx"
+  ],
+  "futureForbiddenZones": [
+    "src/domain/",
+    "src/application/"
+  ],
+  "rulesForFutureAudit": [
+    "Novos arquivos fora da ACL oficial não podem introduzir imports @kepler.gl/* sem atualizar ADR e baseline de forma explícita.",
+    "src/domain/** nunca pode importar React, Redux, react-redux, @kepler.gl/* ou deck.gl.",
+    "src/application/** nunca pode importar React, Redux, react-redux ou @kepler.gl/*.",
+    "A allowlist legada só pode permanecer igual ou diminuir ao longo da Macro C.",
+    "Adicionar um novo path à allowlist é mudança arquitetural e deve falhar em review se não houver justificativa explícita."
+  ],
+  "captureNote": "C0 é snapshot documental, não enforcement. A S23 transforma este baseline em fitness function de CI e deverá recalcular os paths reais no head então vigente."
+}
