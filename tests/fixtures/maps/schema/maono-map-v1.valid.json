@@ -1,0 +1,11 @@
+{
+  "schema": "maono-map",
+  "version": 1,
+  "map": {"viewport": {"latitude": -23.55, "longitude": -46.63, "zoom": 8}, "basemap": {"styleType": "dark"}},
+  "datasets": [{"id": "legacy-dataset:points", "engineDataId": "points", "label": "Pontos"}],
+  "layers": [{"id": "legacy-layer:points", "engineLayerId": "points", "engineDataId": "points", "type": "point", "label": "Pontos", "visible": true}],
+  "filters": [],
+  "analyses": [],
+  "engine": {"type": "kepler", "payload": {"version": "v1", "datasets": [{"data": {"id": "points", "label": "Pontos", "fields": [], "allData": []}}], "config": {"visState": {"layers": [], "filters": []}, "mapState": {}, "mapStyle": {}}}},
+  "extensions": {"exampleUnknown": {"preserve": true}}
+}

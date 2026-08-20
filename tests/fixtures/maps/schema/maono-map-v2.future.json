@@ -1,0 +1,11 @@
+{
+  "schema": "maono-map",
+  "version": 2,
+  "map": {},
+  "datasets": [],
+  "layers": [],
+  "filters": [],
+  "analyses": [],
+  "engine": {"type": "kepler", "payload": {"version": "v1", "datasets": [], "config": {}}},
+  "extensions": {}
+}
