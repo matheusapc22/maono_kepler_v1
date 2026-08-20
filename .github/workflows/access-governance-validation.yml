@@ -32,6 +32,16 @@ on:
       - "docs/architecture/S06-result-types-error-taxonomy.md"
       - "docs/architecture/S07-map-load-observability.md"
       - "docs/architecture/GATE-A-foundation-stable.md"
+      - "docs/architecture/macro-c/**"
+      - "scripts/macro-c-gate.mjs"
+      - "tests/fixtures/maps/**"
+      - "tests/macro-c-*.test.mjs"
+      - "tests/maono-map-*.test.mjs"
+      - "tests/map-migration-registry.test.mjs"
+      - "tests/map-domain-kernel.test.mjs"
+      - "tests/dataset-*.test.mjs"
+      - "tests/map-application-services.test.mjs"
+      - "tests/map-engine-port-contract.test.mjs"
       - "schema.sql"
       - "package.json"
       - "vite.config.ts"
@@ -97,3 +107,6 @@ jobs:
 
       - name: GATE A — Foundation stability
         run: npm run test:foundation-gate
+
+      - name: MACRO C — Progressive gate
+        run: npm run test:macro-c-gate
