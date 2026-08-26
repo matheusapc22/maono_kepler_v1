@@ -13,6 +13,7 @@ const [
   isochroneRoute,
   loader,
   mapPanelApi,
+  configStreamRoute,
 ] = await Promise.all([
   readFile(
     new URL(
@@ -35,6 +36,13 @@ const [
   ),
   readFile(
     new URL("../src/pages/Kepler/map-panel/map-panel-api.ts", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../functions/api/projects/[slug]/config-stream.js",
+      import.meta.url,
+    ),
     "utf8",
   ),
 ]);
@@ -92,6 +100,32 @@ test("loader tenta novamente apenas falhas transitórias e não reinicia a sess�
   assert.match(loader, /status === 429 \|\| status >= 500/);
   assert.match(loader, /setRetryToken\(\(current\) => current \+ 1\)/);
   assert.doesNotMatch(loader, /window\.location\.reload/);
+});
+
+test("loader de projeto pesado usa transporte bruto e evita trabalho redundante", () => {
+  assert.match(loader, /\/config-stream/);
+  assert.match(loader, /X-Maono-Config-Transport/);
+  assert.match(loader, /LARGE_CONFIG_FAST_PATH_BYTES/);
+  assert.match(loader, /isCurrentKeplerDocument/);
+  assert.match(loader, /directKeplerPayload/);
+  assert.match(loader, /await response\.json\(\)/);
+  assert.match(loader, /centerMap: false/);
+  assert.match(loader, /yieldToBrowser/);
+  assert.doesNotMatch(loader, /response\.ok && attempt < PROJECT_LOAD_RETRY_DELAYS_MS\.length/);
+});
+
+test("config-stream mantém autorização e entrega bytes sem parse server-side", () => {
+  assert.match(configStreamRoute, /requireSession/);
+  assert.match(configStreamRoute, /getAuthorizedProject/);
+  assert.match(configStreamRoute, /can\(env, user, "project\.view"/);
+  assert.match(configStreamRoute, /assertActiveProjectInvariant/);
+  assert.match(configStreamRoute, /assertMapConfigStorageRef/);
+  assert.match(configStreamRoute, /downloadDropboxBinaryFile/);
+  assert.match(configStreamRoute, /upstream\.body/);
+  assert.match(configStreamRoute, /X-Maono-Config-Transport/);
+  assert.match(configStreamRoute, /PROJECT_CONFIG_SIZE_MISMATCH/);
+  assert.doesNotMatch(configStreamRoute, /JSON\.parse/);
+  assert.doesNotMatch(configStreamRoute, /readPublishedProjectConfig/);
 });
 
 test("contexto de navegação também possui retry seletivo", () => {

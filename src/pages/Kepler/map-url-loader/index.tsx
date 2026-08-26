@@ -22,6 +22,11 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
   );
 const PROJECT_LOAD_RETRY_DELAYS_MS = [350, 900];
 
+// Operational fast path only. This is not a final Safety Plane threshold and
+// does not block datasets. It merely avoids redundant schema work for already
+// current Kepler documents when the persisted MapConfig is large.
+const LARGE_CONFIG_FAST_PATH_BYTES = 10 * 1024 * 1024;
+
 const mapStateToProps = (state: any) => ({
   isMapLoading: selectIsMapLoading(state),
   currentModal:
@@ -33,14 +38,8 @@ const dispatchToProps = (dispatch: any) => ({ dispatch });
 const connectStore = connect(mapStateToProps, dispatchToProps);
 
 async function parseJsonResponse(response: Response) {
-  const text = await response.text();
-
-  if (!text.trim()) {
-    throw new Error("A resposta do servidor veio vazia.");
-  }
-
   try {
-    return JSON.parse(text);
+    return await response.json();
   } catch {
     throw new Error("A resposta do servidor não está em JSON válido.");
   }
@@ -81,7 +80,21 @@ function normalizeDatasetForKepler(dataset: any) {
   };
 }
 
-export function loadSavedKeplerConfig(savedConfig: any) {
+function isCurrentKeplerDocument(savedConfig: any) {
+  return String(savedConfig?.version ?? "").trim().toLowerCase() === "v1";
+}
+
+function directKeplerPayload(savedConfig: any) {
+  return {
+    datasets: savedConfig.datasets.map(normalizeDatasetForKepler),
+    config: savedConfig.config,
+  };
+}
+
+export function loadSavedKeplerConfig(
+  savedConfig: any,
+  { sizeBytes = 0 }: { sizeBytes?: number } = {},
+) {
   validateSavedKeplerConfig(savedConfig);
 
   const prepared = prepareSavedConfigForPointClustering(
@@ -91,6 +104,18 @@ export function loadSavedKeplerConfig(savedConfig: any) {
     },
   );
   loadPointClusterState(prepared.savedConfig.maono);
+
+  const useLargeConfigFastPath =
+    Number(sizeBytes || 0) >= LARGE_CONFIG_FAST_PATH_BYTES &&
+    isCurrentKeplerDocument(prepared.savedConfig);
+
+  if (useLargeConfigFastPath) {
+    // KeplerGlSchema.load may materialize another large representation of the
+    // same datasets. Saved v1 documents can use the same fallback contract we
+    // already use when schema loading fails, but proactively and deterministically.
+    recordMapLoadEvent("MIGRATED");
+    return directKeplerPayload(prepared.savedConfig);
+  }
 
   try {
     const loaded = KeplerGlSchema.load(
@@ -119,10 +144,7 @@ export function loadSavedKeplerConfig(savedConfig: any) {
   }
 
   recordMapLoadEvent("MIGRATED");
-  return {
-    datasets: prepared.savedConfig.datasets.map(normalizeDatasetForKepler),
-    config: prepared.savedConfig.config,
-  };
+  return directKeplerPayload(prepared.savedConfig);
 }
 
 function retryableProjectStatus(status: number) {
@@ -150,7 +172,33 @@ function waitForRetry(milliseconds: number, signal: AbortSignal) {
   });
 }
 
-async function requestProjectConfig(
+function yieldToBrowser(signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    });
+
+    function handleAbort() {
+      window.cancelAnimationFrame(frameId);
+      reject(new DOMException("Aborted", "AbortError"));
+    }
+
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
+function numericHeader(response: Response, name: string) {
+  const value = Number(response.headers.get(name));
+  return Number.isFinite(value) ? value : null;
+}
+
+async function requestProjectConfigResponse(
   projectSlug: string,
   signal: AbortSignal,
 ) {
@@ -160,7 +208,7 @@ async function requestProjectConfig(
   for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
     try {
       const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectSlug)}/config`,
+        `/api/projects/${encodeURIComponent(projectSlug)}/config-stream`,
         {
           method: "GET",
           credentials: "include",
@@ -171,27 +219,16 @@ async function requestProjectConfig(
         },
       );
 
-      let data: any;
-      try {
-        data = await parseJsonResponse(response);
-      } catch (error) {
-        lastError = error;
-        if (response.ok && attempt < PROJECT_LOAD_RETRY_DELAYS_MS.length) {
-          await waitForRetry(PROJECT_LOAD_RETRY_DELAYS_MS[attempt], signal);
-          continue;
-        }
-        throw error;
-      }
-
       if (
         retryableProjectStatus(response.status) &&
         attempt < PROJECT_LOAD_RETRY_DELAYS_MS.length
       ) {
+        response.body?.cancel().catch(() => undefined);
         await waitForRetry(PROJECT_LOAD_RETRY_DELAYS_MS[attempt], signal);
         continue;
       }
 
-      return { response, data };
+      return response;
     } catch (error) {
       if (signal.aborted) throw error;
       lastError = error;
@@ -209,6 +246,64 @@ async function requestProjectConfig(
     : new Error("Não foi possível carregar o projeto.");
 }
 
+async function requestProjectConfig(
+  projectSlug: string,
+  signal: AbortSignal,
+) {
+  const response = await requestProjectConfigResponse(projectSlug, signal);
+
+  if (!response.ok) {
+    return {
+      response,
+      data: await parseJsonResponse(response),
+      sizeBytes: 0,
+    };
+  }
+
+  if (response.headers.get("X-Maono-Config-Transport") !== "stream") {
+    throw new Error("O servidor não confirmou o transporte otimizado do projeto.");
+  }
+
+  let config: any;
+  try {
+    // Do not retry a successful HTTP response that contains invalid JSON. A
+    // second parse of the same huge immutable revision only multiplies memory
+    // pressure and cannot repair corrupted content.
+    config = await response.json();
+  } catch {
+    throw new Error("A configuração armazenada não está em JSON válido.");
+  }
+
+  const projectId = numericHeader(response, "X-Maono-Project-Id");
+  const revision = numericHeader(response, "X-Maono-Config-Revision");
+  const schemaVersion = numericHeader(
+    response,
+    "X-Maono-Config-Schema-Version",
+  );
+  const sizeBytes =
+    numericHeader(response, "X-Maono-Config-Size") ?? 0;
+
+  return {
+    response,
+    sizeBytes,
+    data: {
+      ok: true,
+      project: {
+        id: projectId,
+        configRevision: revision,
+      },
+      lifecycle: {
+        configRevision: revision,
+        schema: {
+          name: response.headers.get("X-Maono-Config-Schema"),
+          version: schemaVersion,
+        },
+      },
+      config,
+    },
+  };
+}
+
 async function loadProjectConfig(
   projectSlug: string,
   dispatch: any,
@@ -219,7 +314,10 @@ async function loadProjectConfig(
   dispatch(setLoadingMapStatus(true));
 
   try {
-    const { response, data } = await requestProjectConfig(projectSlug, signal);
+    const { response, data, sizeBytes } = await requestProjectConfig(
+      projectSlug,
+      signal,
+    );
 
     if (!response.ok || !data?.ok) {
       failActiveMapLoadTrace({
@@ -269,7 +367,13 @@ async function loadProjectConfig(
     validateSavedKeplerConfig(savedConfig);
     recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
 
-    const loadedConfig = loadSavedKeplerConfig(savedConfig);
+    if (sizeBytes >= LARGE_CONFIG_FAST_PATH_BYTES) {
+      // Give the loading overlay one paint opportunity before the synchronous
+      // Kepler hydration work begins. This does not change data semantics.
+      await yieldToBrowser(signal);
+    }
+
+    const loadedConfig = loadSavedKeplerConfig(savedConfig, { sizeBytes });
     recordMapLoadEvent("ENGINE_HYDRATION_STARTED", traceContext);
 
     dispatch(
@@ -277,7 +381,9 @@ async function loadProjectConfig(
         datasets: loadedConfig.datasets,
         config: loadedConfig.config,
         options: {
-          centerMap: true,
+          // A saved project already carries its mapState. Recomputing bounds
+          // over every feature is expensive for large GeoJSONs and redundant.
+          centerMap: false,
           readOnly: readOnly,
         },
       }),
