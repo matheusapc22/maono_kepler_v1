@@ -10,7 +10,10 @@ import {
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject } from "../../../_lib/projects.js";
 import { can, recordAuditLog } from "../../../_lib/permissions.js";
-import { downloadDropboxBinaryFile } from "../../../_lib/dropbox.js";
+import {
+  downloadDropboxBinaryFile,
+  getDropboxMetadata,
+} from "../../../_lib/dropbox.js";
 import {
   PROJECT_LIFECYCLE_STATES,
   assertActiveProjectInvariant,
@@ -68,6 +71,7 @@ function resolvePublishedFile(project) {
       fileName: defaultFile,
       revision: Number(project?.config_revision || 0),
       sizeBytes: Number(project?.config_size_bytes || 0),
+      providerHash: project?.config_storage_provider_hash || null,
       schemaName: project?.config_schema || "legacy-kepler",
       schemaVersion: Number(project?.config_schema_version || 1),
       legacy: true,
@@ -92,9 +96,52 @@ function resolvePublishedFile(project) {
     fileName: getMapConfigRevisionFileName(defaultFile, revision),
     revision,
     sizeBytes: Number(project.config_size_bytes || 0),
+    providerHash: project.config_storage_provider_hash || null,
     schemaName: project.config_schema || "legacy-kepler",
     schemaVersion: Number(project.config_schema_version || 1),
     legacy: false,
+  };
+}
+
+function assertPublishedMetadata(published, metadata) {
+  const metadataSize = Number(metadata?.size || 0);
+  const metadataHash = String(
+    metadata?.content_hash ?? metadata?.contentHash ?? "",
+  ).trim().toLowerCase();
+  const expectedHash = String(published.providerHash || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    published.sizeBytes > 0 &&
+    metadataSize > 0 &&
+    published.sizeBytes !== metadataSize
+  ) {
+    throw streamError(
+      "O tamanho da configuração publicada não corresponde ao storage.",
+      409,
+      "PROJECT_CONFIG_SIZE_MISMATCH",
+      {
+        expectedSizeBytes: published.sizeBytes,
+        actualSizeBytes: metadataSize,
+      },
+    );
+  }
+
+  if (expectedHash && metadataHash && expectedHash !== metadataHash) {
+    throw streamError(
+      "O storage não confirmou a revisão publicada do projeto.",
+      409,
+      "PROJECT_CONFIG_STORAGE_INTEGRITY_MISMATCH",
+      {
+        verificationMethod: "provider-content-hash",
+      },
+    );
+  }
+
+  return {
+    sizeBytes: metadataSize || published.sizeBytes || 0,
+    providerHashVerified: Boolean(expectedHash && metadataHash),
   };
 }
 
@@ -171,6 +218,21 @@ export async function onRequest(context) {
     }
 
     const published = resolvePublishedFile(project);
+
+    // Save S05/S03 already verifies the immutable object before publication.
+    // On every read we re-check cheap provider metadata (size/content hash when
+    // available) instead of downloading the whole object into Worker memory to
+    // recompute SHA-256. The actual bytes are then proxied as a stream.
+    const storageMetadata = await getDropboxMetadata(
+      env,
+      project.dropbox_root_path,
+      published.fileName,
+    );
+    const verifiedMetadata = assertPublishedMetadata(
+      published,
+      storageMetadata,
+    );
+
     const upstream = await downloadDropboxBinaryFile(
       env,
       project.dropbox_root_path,
@@ -179,22 +241,22 @@ export async function onRequest(context) {
 
     const upstreamSize = Number(upstream.headers.get("content-length") || 0);
     if (
-      published.sizeBytes > 0 &&
+      verifiedMetadata.sizeBytes > 0 &&
       upstreamSize > 0 &&
-      published.sizeBytes !== upstreamSize
+      verifiedMetadata.sizeBytes !== upstreamSize
     ) {
       throw streamError(
-        "O tamanho da configuração publicada não corresponde ao storage.",
+        "O tamanho recebido do storage mudou durante o carregamento.",
         409,
         "PROJECT_CONFIG_SIZE_MISMATCH",
         {
-          expectedSizeBytes: published.sizeBytes,
+          expectedSizeBytes: verifiedMetadata.sizeBytes,
           actualSizeBytes: upstreamSize,
         },
       );
     }
 
-    const sizeBytes = upstreamSize || published.sizeBytes || 0;
+    const sizeBytes = upstreamSize || verifiedMetadata.sizeBytes || 0;
 
     await auditStream(env, request, user, project, slug, "success", {
       permission: "project.view",
@@ -205,6 +267,10 @@ export async function onRequest(context) {
       schemaVersion: published.schemaVersion,
       sizeBytes,
       transport: "stream",
+      integrity:
+        verifiedMetadata.providerHashVerified
+          ? "provider-content-hash"
+          : "size-metadata",
       legacy: published.legacy,
     });
 
