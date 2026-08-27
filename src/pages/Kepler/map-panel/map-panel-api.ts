@@ -1,4 +1,5 @@
 import { EMPTY_MAP_CAPABILITIES, EMPTY_MAP_PANEL_FEATURES } from "./types";
+import { normalizeIsochroneFeatureState } from "./isochrone-feature-diagnostic";
 import type {
   MapCapabilities,
   MapNavigationMode,
@@ -369,6 +370,10 @@ async function requestMapContext(
     EMPTY_MAP_PANEL_FEATURES,
     context.features,
   ) as MapPanelFeatures;
+  const isochroneFeatureState = normalizeIsochroneFeatureState(
+    context.features?.maonoIsochroneState,
+    features.maonoIsochrone,
+  );
 
   if (!explicitlyBlocked && !selectedAvailability.allowed) {
     throw invalidContext(
@@ -462,6 +467,7 @@ async function requestMapContext(
           }
         : undefined,
     features,
+    isochroneFeatureState,
   };
 }
 

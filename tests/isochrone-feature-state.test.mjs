@@ -8,6 +8,11 @@ import {
   withMapAnalysisRuntimeDefaults,
 } from "../functions/_lib/map-analysis-runtime.js";
 import { onRequest as handleIsochroneRequest } from "../functions/api/maps/isochrones.js";
+import {
+  ISOCHRONE_FEATURE_REASON,
+  describeIsochroneAvailability,
+  normalizeIsochroneFeatureState,
+} from "../src/pages/Kepler/map-panel/isochrone-feature-diagnostic.ts";
 
 function enabledEnv(overrides = {}) {
   return {
@@ -139,5 +144,106 @@ test("navegação, create e endpoint usam o mesmo diagnóstico seguro", async ()
   assert.doesNotMatch(
     navigationRoute + createRoute + isochroneRoute,
     /GEOAPIFY_API_KEY\s*[:=]\s*["'][^"']+["']/,
+  );
+});
+
+test("cliente preserva o motivo seguro em vez de reduzi-lo a booleano", () => {
+  assert.deepEqual(
+    normalizeIsochroneFeatureState({
+      enabled: false,
+      reason: "PROVIDER_NOT_CONFIGURED",
+    }),
+    {
+      enabled: false,
+      reason: ISOCHRONE_FEATURE_REASON.PROVIDER_NOT_CONFIGURED,
+    },
+  );
+
+  assert.deepEqual(normalizeIsochroneFeatureState(undefined, true), {
+    enabled: true,
+    reason: ISOCHRONE_FEATURE_REASON.ENABLED,
+  });
+
+  assert.deepEqual(normalizeIsochroneFeatureState(undefined, false), {
+    enabled: false,
+    reason: ISOCHRONE_FEATURE_REASON.UNKNOWN,
+  });
+});
+
+test("mensagem da UI distingue configuração, kill switch e permissão", () => {
+  assert.match(
+    describeIsochroneAvailability(
+      { enabled: false, reason: ISOCHRONE_FEATURE_REASON.PROVIDER_NOT_CONFIGURED },
+      false,
+    ),
+    /provedor não configurado/i,
+  );
+  assert.match(
+    describeIsochroneAvailability(
+      { enabled: false, reason: ISOCHRONE_FEATURE_REASON.KILL_SWITCH_ACTIVE },
+      false,
+    ),
+    /temporariamente desativadas/i,
+  );
+  assert.match(
+    describeIsochroneAvailability(
+      { enabled: true, reason: ISOCHRONE_FEATURE_REASON.ENABLED },
+      false,
+    ),
+    /modo ou permissão/i,
+  );
+});
+
+test("Pin permanece visível, mas fail-closed quando previewIsochrone é negado", async () => {
+  const [apiClient, overlay, types] = await Promise.all([
+    readFile(
+      new URL("../src/pages/Kepler/map-panel/map-panel-api.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("../src/pages/Kepler/map-panel/types.ts", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(apiClient, /normalizeIsochroneFeatureState/);
+  assert.match(apiClient, /context\.features\?\.maonoIsochroneState/);
+  assert.match(apiClient, /isochroneFeatureState,/);
+  assert.match(types, /isochroneFeatureState:\s*IsochroneFeatureState/);
+
+  assert.match(overlay, /disabled=\{!isochroneCapabilityEnabled\}/);
+  assert.match(overlay, /if \(!isochroneCapabilityEnabled\) return/);
+  assert.match(overlay, /data-isochrone-state/);
+  assert.match(overlay, /describeIsochroneAvailability/);
+  assert.doesNotMatch(
+    overlay,
+    /capabilities\?\.previewIsochrone && !isochrone\.preview \? \(/,
+  );
+});
+
+test("fallback legado também satisfaz o contrato de diagnóstico da isócrona", async () => {
+  const provider = await readFile(
+    new URL(
+      "../src/pages/Kepler/map-panel/MapPanelProvider.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    provider,
+    /import\s+\{\s*normalizeIsochroneFeatureState\s*\}\s+from\s+["']\.\/isochrone-feature-diagnostic["']/,
+  );
+
+  assert.match(
+    provider,
+    /isochroneFeatureState:\s*normalizeIsochroneFeatureState\(\s*undefined\s*,\s*false\s*\)/,
   );
 });

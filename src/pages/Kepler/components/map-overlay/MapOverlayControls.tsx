@@ -6,6 +6,7 @@ import {
   type KeplerCommandResult,
 } from "../../engine-adapter";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { describeIsochroneAvailability } from "../../map-panel/isochrone-feature-diagnostic";
 import IsochroneDialog from "./IsochroneDialog";
 import { useIsochronePreview } from "./useIsochronePreview";
 import { useMapMarker } from "./useMapMarker";
@@ -99,6 +100,11 @@ export default function MapOverlayControls() {
     ? Boolean(state.filteredBounds)
     : Boolean(state.bounds);
   const message = commandMessage || isochrone.message;
+  const isochroneCapabilityEnabled = capabilities?.previewIsochrone === true;
+  const isochroneAvailabilityLabel = describeIsochroneAvailability(
+    context?.isochroneFeatureState,
+    isochroneCapabilityEnabled,
+  );
 
   if (!customMapOverlayEnabled || typeof document === "undefined") {
     return null;
@@ -178,10 +184,7 @@ export default function MapOverlayControls() {
 
   return createPortal(
     <>
-      <div
-        className="maono-map-attribution"
-        data-maono-no-preview="true"
-      >
+      <div className="maono-map-attribution" data-maono-no-preview="true">
         <span>© maõno</span>
         <span aria-hidden="true">|</span>
         <span>Mapa interativo</span>
@@ -228,7 +231,7 @@ export default function MapOverlayControls() {
 
           {marker.menuOpen ? (
             <div className="maono-map-marker__menu">
-              {capabilities?.previewIsochrone ? (
+              {isochroneCapabilityEnabled ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -249,31 +252,21 @@ export default function MapOverlayControls() {
         </div>
       ) : null}
 
-      <div
-        className="maono-map-overlay"
-        data-maono-no-preview="true"
-      >
+      <div className="maono-map-overlay" data-maono-no-preview="true">
         {message ? (
           <div
             className={`maono-map-overlay__message is-${message.tone}`}
             role={message.tone === "error" ? "alert" : "status"}
           >
             <span>{message.text}</span>
-            <button
-              type="button"
-              onClick={clearMessage}
-              aria-label="Fechar mensagem"
-            >
+            <button type="button" onClick={clearMessage} aria-label="Fechar mensagem">
               ×
             </button>
           </div>
         ) : null}
 
         {tooltipsOpen ? (
-          <section
-            className="maono-tooltip-editor"
-            aria-label="Configuração de tooltips"
-          >
+          <section className="maono-tooltip-editor" aria-label="Configuração de tooltips">
             <header>
               <div>
                 <span>Interação do mapa</span>
@@ -296,12 +289,8 @@ export default function MapOverlayControls() {
                       <label key={field.name}>
                         <input
                           type="checkbox"
-                          checked={Boolean(
-                            tooltipDraft[dataset.id]?.includes(field.name),
-                          )}
-                          onChange={() =>
-                            toggleTooltipField(dataset.id, field.name)
-                          }
+                          checked={Boolean(tooltipDraft[dataset.id]?.includes(field.name))}
+                          onChange={() => toggleTooltipField(dataset.id, field.name)}
                         />
                         <span>{field.name}</span>
                       </label>
@@ -313,17 +302,10 @@ export default function MapOverlayControls() {
               )}
             </div>
             <footer>
-              <button
-                type="button"
-                onClick={() => setTooltipsOpen(false)}
-              >
+              <button type="button" onClick={() => setTooltipsOpen(false)}>
                 Cancelar
               </button>
-              <button
-                type="button"
-                className="is-primary"
-                onClick={saveTooltipConfiguration}
-              >
+              <button type="button" className="is-primary" onClick={saveTooltipConfiguration}>
                 Aplicar
               </button>
             </footer>
@@ -336,31 +318,23 @@ export default function MapOverlayControls() {
               <OverlayIcon name="isochrone" />
               <span>
                 <small>
-                  {isochrone.preview.saveRequestId
-                    ? "Salvamento em andamento"
-                    : "Prévia temporária"}
+                  {isochrone.preview.saveRequestId ? "Salvamento em andamento" : "Prévia temporária"}
                 </small>
                 <strong>{isochrone.preview.label}</strong>
                 {!isochrone.preview.canPersist ? (
-                  <em>
-                    Este modo permite consultar e descartar, mas não salvar a
-                    análise.
-                  </em>
+                  <em>Este modo permite consultar e descartar, mas não salvar a análise.</em>
                 ) : null}
               </span>
             </div>
             <div>
-              {isochrone.preview.canPersist &&
-              capabilities?.persistIsochrone ? (
+              {isochrone.preview.canPersist && capabilities?.persistIsochrone ? (
                 <button
                   type="button"
                   className="is-primary"
                   onClick={isochrone.persist}
                   disabled={Boolean(isochrone.preview.saveRequestId)}
                 >
-                  {isochrone.preview.saveRequestId
-                    ? "Salvando…"
-                    : "Salvar no projeto"}
+                  {isochrone.preview.saveRequestId ? "Salvando…" : "Salvar no projeto"}
                 </button>
               ) : null}
               <button
@@ -391,11 +365,7 @@ export default function MapOverlayControls() {
             <button
               type="button"
               className={tooltipsOpen ? "is-active" : ""}
-              onClick={
-                tooltipsOpen
-                  ? () => setTooltipsOpen(false)
-                  : openTooltipEditor
-              }
+              onClick={tooltipsOpen ? () => setTooltipsOpen(false) : openTooltipEditor}
               title="Configurar tooltips"
               aria-label="Configurar tooltips"
               aria-expanded={tooltipsOpen}
@@ -409,10 +379,7 @@ export default function MapOverlayControls() {
               type="button"
               className={state.legendVisible ? "is-active" : ""}
               onClick={() =>
-                reportCommand(
-                  commands.toggleLegend(),
-                  "Não foi possível alterar a legenda.",
-                )
+                reportCommand(commands.toggleLegend(), "Não foi possível alterar a legenda.")
               }
               title="Mostrar ou ocultar legenda"
               aria-label="Mostrar ou ocultar legenda"
@@ -422,11 +389,13 @@ export default function MapOverlayControls() {
             </button>
           ) : null}
 
-          {capabilities?.previewIsochrone && !isochrone.preview ? (
+          {!isochrone.preview ? (
             <button
               type="button"
               className={marker.placing ? "is-active" : ""}
+              disabled={!isochroneCapabilityEnabled}
               onClick={() => {
+                if (!isochroneCapabilityEnabled) return;
                 if (marker.placing) {
                   marker.reset();
                 } else {
@@ -436,14 +405,15 @@ export default function MapOverlayControls() {
               title={
                 marker.placing
                   ? "Cancelar inserção de marcador"
-                  : "Inserir marcador para análise"
+                  : isochroneAvailabilityLabel
               }
               aria-label={
                 marker.placing
                   ? "Cancelar inserção de marcador"
-                  : "Inserir marcador para análise"
+                  : isochroneAvailabilityLabel
               }
               aria-pressed={marker.placing}
+              data-isochrone-state={context?.isochroneFeatureState?.reason || "UNKNOWN"}
             >
               <OverlayIcon name="marker" />
             </button>
