@@ -35,14 +35,22 @@ Esse passo é deliberadamente manual e temporário. Não será levado para a arq
 - Manter o CRS em EPSG:4326 antes da ingestão.
 - Para GeoJSON pesado, testar a abertura e o save/reload no projeto de homologação antes de promover para uso diário.
 
-## O que este hotfix muda
+## O que o hotfix operacional mantém
 
-- adiciona endpoint autenticado de streaming do MapConfig publicado;
-- evita que o Worker faça download → ArrayBuffer → JSON.parse → JSON.stringify do projeto inteiro em cada abertura;
+- endpoint autenticado de streaming do MapConfig publicado;
+- o Worker não executa download → ArrayBuffer → JSON.parse → JSON.stringify do projeto inteiro em cada abertura;
 - o navegador consome diretamente os bytes do MapConfig publicado;
-- projetos Kepler v1 grandes usam hidratação leve, evitando `KeplerGlSchema.load` redundante;
-- projetos salvos deixam de pedir `centerMap: true`, evitando recalcular bounds sobre todas as features quando o viewport já está persistido;
+- projetos grandes recebem uma oportunidade de paint antes da hidratação síncrona;
+- projetos salvos usam `centerMap: false`, evitando recalcular bounds sobre todas as features quando o viewport já está persistido;
 - retries continuam apenas para falhas HTTP/rede transitórias; JSON inválido não é reprocessado repetidamente.
+
+## Contrato de hidratação corrigido
+
+O tamanho do MapConfig não escolhe mais um parser alternativo. Todos os projetos salvos passam pelo `KeplerGlSchema.load`, que converte o formato persistido do Kepler (`allData`) para o contrato de runtime (`fields` + `rows`) antes de `addDataToMap`.
+
+O antigo fast path de arquivos grandes foi removido porque pulava essa transformação semântica obrigatória. Se o schema oficial não conseguir converter todos os datasets, a abertura falha de forma controlada com `KEPLER_SCHEMA_LOAD_FAILED` em vez de enviar um payload incompatível ao runtime.
+
+O threshold de 10 MiB permanece apenas como otimização de UX para executar `requestAnimationFrame` antes da hidratação; ele não bloqueia datasets e não altera semântica.
 
 ## O que este hotfix não muda
 
@@ -66,4 +74,5 @@ Validar pelo menos:
 6. save → fechar → reabrir;
 7. Viewer e Editor;
 8. retry após falha de rede transitória;
-9. projeto com JSON inválido deve falhar uma vez, sem loop de retry de parse.
+9. projeto com JSON inválido deve falhar uma vez, sem loop de retry de parse;
+10. confirmar que nenhum dataset persistido com `allData` chega ao `addDataToMap` sem ser convertido para `rows`.
