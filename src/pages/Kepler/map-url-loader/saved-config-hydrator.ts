@@ -1,4 +1,4 @@
-import KeplerGlSchema from "@kepler.gl/schemas";
+import * as KeplerSchemas from "@kepler.gl/schemas";
 
 import { prepareSavedConfigForPointClustering } from "../clustering/point-cluster-controller.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
@@ -41,6 +41,41 @@ function hydrationError(cause: unknown): SavedConfigHydrationError {
   error.category = "MAP_CONFIG";
   error.retryable = false;
   return error;
+}
+
+function resolveKeplerSchemaManager() {
+  const moduleValue = KeplerSchemas as Record<string, any>;
+  const defaultExport = moduleValue.default;
+  const candidates = [
+    moduleValue,
+    moduleValue.KeplerGlSchema,
+    defaultExport,
+    defaultExport?.KeplerGlSchema,
+    defaultExport?.default,
+  ];
+
+  const schemaManager = candidates.find(
+    (candidate) => candidate && typeof candidate.load === "function",
+  );
+
+  if (schemaManager) {
+    return schemaManager;
+  }
+
+  const SchemaManagerClass =
+    moduleValue.KeplerGLSchemaClass ?? defaultExport?.KeplerGLSchemaClass;
+  if (typeof SchemaManagerClass === "function") {
+    const instance = new SchemaManagerClass();
+    if (typeof instance?.load === "function") {
+      return instance;
+    }
+  }
+
+  throw hydrationError(
+    new Error(
+      "O módulo @kepler.gl/schemas não expôs um schema manager compatível.",
+    ),
+  );
 }
 
 function validateRuntimeDatasets(datasets: unknown, expectedCount: number) {
@@ -94,8 +129,12 @@ export function hydrateSavedKeplerConfig(
 
   let loaded: any;
   try {
-    loaded = KeplerGlSchema.load(prepared.savedConfig) as any;
+    const schemaManager = resolveKeplerSchemaManager();
+    loaded = schemaManager.load(prepared.savedConfig) as any;
   } catch (error) {
+    if (isSavedConfigHydrationError(error)) {
+      throw error;
+    }
     throw hydrationError(error);
   }
 
