@@ -57,7 +57,7 @@ test("middleware extrai slug de projeto sem confundir subrotas", () => {
   assert.equal(extractProjectSlugFromPath("/api/maps/isochrones"), null);
 });
 
-test("fallback reconhece URL de deployment Pages como Preview", () => {
+test("fallback reconhece URL de deployment Pages como Preview quando runtime está ausente", () => {
   assert.equal(
     isLikelyCloudflarePreviewUrl(
       "https://23c6a3b0.maono-kepler-v1.pages.dev/api/projects",
@@ -82,6 +82,27 @@ test("fallback reconhece URL de deployment Pages como Preview", () => {
     ),
     false,
   );
+});
+
+test("runtime Production explícito prevalece sobre URL única com hash do Pages", async () => {
+  let nextCalls = 0;
+  const response = await onRequest({
+    request: new Request(
+      "https://23c6a3b0.maono-kepler-v1.pages.dev/api/admin/users/1",
+      { method: "DELETE" },
+    ),
+    env: { MAONO_RUNTIME_ENV: "production" },
+    async next() {
+      nextCalls += 1;
+      return new Response("production-ok", { status: 200 });
+    },
+  });
+
+  assert.equal(nextCalls, 1);
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "production-ok");
+  assert.equal(response.headers.get("X-Maono-Runtime-Env"), null);
+  assert.equal(response.headers.get("X-Maono-Preview-Write"), null);
 });
 
 test("middleware resolve organização do projeto diretamente no D1", async () => {
