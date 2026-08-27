@@ -1,4 +1,5 @@
 import { jsonResponse, errorResponse, methodNotAllowed } from "../_lib/http.js";
+import { publicRuntimeDiagnostics } from "../_lib/runtime-environment.js";
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -26,6 +27,7 @@ export async function onRequest(context) {
     return jsonResponse({
       ok,
       service: "maono-kepler-v1",
+      runtime: publicRuntimeDiagnostics(env),
       checks,
     });
   } catch (error) {
