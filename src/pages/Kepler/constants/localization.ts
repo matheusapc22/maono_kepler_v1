@@ -18,6 +18,7 @@ const en = {
   "loadRemoteMap.fetch": "Fetch",
   "tooltip.hideSQLPanel": "Hide SQL Panel",
   "tooltip.showSQLPanel": "Show SQL Panel",
+  "maono.legend.title": "Maõno",
 };
 
 export const messages = {
