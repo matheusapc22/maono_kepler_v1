@@ -24,8 +24,8 @@ const files = {
   markerHook: "../src/pages/Kepler/components/map-overlay/useMapMarker.ts",
   markerProjection: "../src/pages/Kepler/components/map-overlay/marker-projection.ts",
   previewHook: "../src/pages/Kepler/components/map-overlay/useIsochronePreview.ts",
-  nativeRuntime: "../src/pages/Kepler/components/native-overlays/NativeMapOverlaysRuntime.tsx",
-  nativeCss: "../src/pages/Kepler/components/native-overlays/maono-native-overlays.css",
+  legendFactory: "../src/pages/Kepler/factories/maono-map-legend-panel.tsx",
+  popoverFactory: "../src/pages/Kepler/factories/maono-map-popover.tsx",
   dialog: "../src/pages/Kepler/components/map-overlay/IsochroneDialog.tsx",
   api: "../src/pages/Kepler/map-panel/isochrone-api.ts",
   saveEvents: "../src/pages/Kepler/map-panel/map-save-events.ts",
@@ -46,6 +46,8 @@ const source = Object.fromEntries(
 
 test("runtime monta o shell sob flags e preserva o baseline", () => {
   assert.match(source.index, /replaceSidePanel/);
+  assert.match(source.index, /replaceMapLegendPanel/);
+  assert.match(source.index, /replaceMapPopover/);
   assert.match(source.index, /<MaonoMapRuntime>/);
   assert.match(source.runtime, /if \(!customMapShellEnabled \|\| !context\)/);
   assert.match(source.runtime, /return <>\{children\}<\/>/);
@@ -62,7 +64,7 @@ test("runtime monta o shell sob flags e preserva o baseline", () => {
   assert.match(source.shell, /maono-map-runtime/);
   assert.match(source.overlay, /customMapOverlayEnabled/);
   assert.match(source.runtime, /<MapOverlayControls \/>/);
-  assert.match(source.runtime, /<NativeMapOverlaysRuntime/);
+  assert.doesNotMatch(source.runtime, /NativeMapOverlaysRuntime/);
 });
 
 test("flags frontend customizadas são opt-in e desligadas por padrão", () => {
@@ -264,14 +266,16 @@ test("instrumentação cobre a cadeia geométrica e só ativa por opt-in", () =>
   assert.match(source.layoutDebug, /getBoundingClientRect/);
 });
 
-test("tema visual usa dourado Maõno e possui fallback responsivo", () => {
+test("tema visual usa dourado Maõno e os overlays oficiais", () => {
   assert.match(source.shellTokens, /#c5a059/i);
   assert.match(source.overlayCss, /#c5a059/i);
-  assert.match(source.nativeCss, /#c5a059/i);
-  assert.match(source.nativeCss, /data-maono-native-legend/);
-  assert.match(source.nativeCss, /\.map-popover/);
+  assert.match(source.legendFactory, /#c5a059/i);
+  assert.match(source.legendFactory, /MapLegendPanelFactory/);
+  assert.match(source.legendFactory, /MapLegend/);
+  assert.match(source.popoverFactory, /#c5a059/i);
+  assert.match(source.popoverFactory, /MapPopoverFactory/);
+  assert.match(source.popoverFactory, /\.map-popover/);
   assert.match(source.shellCss, /@media \(max-width: 820px\)/);
   assert.match(source.overlayCss, /@media \(max-width: 820px\)/);
-  assert.match(source.nativeCss, /@media \(max-width: 820px\)/);
   assert.match(source.shellCss, /prefers-reduced-motion/);
 });
