@@ -270,8 +270,8 @@ export async function onRequest(context) {
 
   try {
     validateRequestOrigin(request);
-    assertIsochroneFeatureEnabled(env);
     const body = await readBoundedJsonBody(request);
+    assertIsochroneFeatureEnabled(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
     await ensureMapAnalysisRateLimitSchema(runtimeEnv);
     const result = enrichIsochroneResult(
