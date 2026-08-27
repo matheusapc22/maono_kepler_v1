@@ -81,12 +81,16 @@ test("flags frontend customizadas são opt-in e desligadas por padrão", () => {
   assert.match(source.provider, /\.toLowerCase\(\) === "true"/);
 });
 
-test("sidebar usa capabilities e rotas do backend sem decisão por role", () => {
+test("sidebar usa capabilities sem replicar modos ou a subfunção Filtros", () => {
   assert.match(source.runtime, /context\?\.capabilities\.openLayerPanel/);
   assert.match(source.sidebar, /capabilities\.viewLayers/);
-  assert.match(source.sidebar, /capabilities\.viewFilters/);
   assert.match(source.sidebar, /capabilities\.createLayer/);
-  assert.match(source.sidebar, /context\.availablePanels/);
+  assert.match(source.runtime, /context\.capabilities\.viewFilters/);
+  assert.doesNotMatch(source.sidebar, /capabilities\.viewFilters/);
+  assert.doesNotMatch(source.sidebar, /context\.availablePanels/);
+  assert.doesNotMatch(source.sidebar, /ModeNavigationItem|availableModeItems/);
+  assert.doesNotMatch(source.sidebar, /name="filters"/);
+  assert.doesNotMatch(source.sidebar, /name="viewer"|name="editor"|name="create"/);
   assert.doesNotMatch(source.sidebar, /user\?\.role/);
   assert.doesNotMatch(source.sidebar, /checkAdminUser/);
   assert.doesNotMatch(source.runtime, /checkAdminUser/);
@@ -109,12 +113,16 @@ test("topbar mantém modo, status e usuário sem seletor de projeto", () => {
   assert.doesNotMatch(source.topbar, /Bell/);
 });
 
-test("sidebar e painel sincronizam Camadas e Filtros", () => {
+test("sidebar abre Camadas e Filtros permanece na navegação interna do painel", () => {
   assert.match(source.panelEvents, /maono:map-panel-tab-request/);
   assert.match(source.panelEvents, /maono:map-panel-tab-changed/);
   assert.match(source.runtime, /requestMaonoMapPanelTab/);
   assert.match(source.layerPanel, /MAONO_MAP_PANEL_TAB_REQUEST_EVENT/);
   assert.match(source.layerPanel, /notifyMaonoMapPanelTabChanged/);
+  assert.match(source.layerPanel, /id="maono-layers-tab"/);
+  assert.match(source.layerPanel, /id="maono-filters-tab"/);
+  assert.match(source.sidebar, /onPanelTabSelect\("layers"\)/);
+  assert.doesNotMatch(source.sidebar, /onPanelTabSelect\("filters"\)/);
   assert.match(source.panelHost, /aria-controls="maono-map-engine-panel"/);
   assert.match(source.layerPanel, /id="maono-map-engine-panel"/);
 });
