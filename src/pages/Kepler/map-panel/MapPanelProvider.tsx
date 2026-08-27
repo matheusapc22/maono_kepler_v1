@@ -13,6 +13,7 @@ import {
   fetchProjectMapNavigation,
 } from "./map-panel-api";
 import { MapPanelContextProvider, useMapPanel } from "./MapPanelContext";
+import { normalizeIsochroneFeatureState } from "./isochrone-feature-diagnostic";
 import { emitMapPanelTelemetry } from "./map-panel-telemetry";
 import type {
   MapPanelApiError,
@@ -158,6 +159,8 @@ function legacyReadOnlyContext(): MapPanelContextValue {
       maonoMapOverlay: false,
       maonoIsochrone: false,
     },
+    // Fail-closed: o fallback legado não recebeu diagnóstico do backend.
+    isochroneFeatureState: normalizeIsochroneFeatureState(undefined, false),
   };
 }
 
