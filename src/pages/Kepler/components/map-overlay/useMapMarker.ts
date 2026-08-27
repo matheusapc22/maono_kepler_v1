@@ -17,12 +17,31 @@ import {
   type MarkerOrigin,
 } from "./marker-projection";
 
-function mapCanvas() {
-  return document.querySelector(".mapboxgl-canvas") as HTMLElement | null;
+const MAP_SURFACE_SELECTORS = [
+  ".maplibregl-canvas",
+  ".mapboxgl-canvas",
+  ".maono-kepler-viewport canvas",
+  ".maono-kepler-viewport",
+] as const;
+
+const PLACEMENT_PIN_CURSOR =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M12 24c0 0 9-7.4 9-14.5C21 4.25 16.97 0 12 0 7.03 0 3 4.25 3 9.5 3 16.6 12 24 12 24z' fill='%23C5A059' stroke='%230a0f18' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='9' r='3' fill='%230a0f18'/%3E%3C/svg%3E\") 16 31, crosshair";
+
+function mapSurface() {
+  for (const selector of MAP_SURFACE_SELECTORS) {
+    const candidates = document.querySelectorAll<HTMLElement>(selector);
+
+    for (const candidate of candidates) {
+      const rect = candidate.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return candidate;
+    }
+  }
+
+  return null;
 }
 
 function canvasRect(): MapCanvasRect | null {
-  const rect = mapCanvas()?.getBoundingClientRect();
+  const rect = mapSurface()?.getBoundingClientRect();
   if (!rect || rect.width <= 0 || rect.height <= 0) return null;
 
   return {
@@ -56,22 +75,22 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
   const [rect, setRect] = useState<MapCanvasRect | null>(null);
   const draggingPointerRef = useRef<number | null>(null);
   const movedRef = useRef(false);
-  const observedCanvasRef = useRef<HTMLElement | null>(null);
+  const observedSurfaceRef = useRef<HTMLElement | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const refreshCanvas = useCallback(() => {
-    const canvas = mapCanvas();
+    const surface = mapSurface();
 
-    if (canvas !== observedCanvasRef.current) {
+    if (surface !== observedSurfaceRef.current) {
       resizeObserverRef.current?.disconnect();
-      observedCanvasRef.current = canvas;
+      observedSurfaceRef.current = surface;
 
-      if (canvas && typeof ResizeObserver !== "undefined") {
+      if (surface && typeof ResizeObserver !== "undefined") {
         const observer = new ResizeObserver(() => {
           const next = canvasRect();
           setRect((current) => (sameCanvasRect(current, next) ? current : next));
         });
-        observer.observe(canvas);
+        observer.observe(surface);
         resizeObserverRef.current = observer;
       } else {
         resizeObserverRef.current = null;
@@ -90,7 +109,7 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
 
     const discoverCanvas = () => {
       refreshCanvas();
-      if (!mapCanvas() && discoveryAttempts < 90) {
+      if (!mapSurface() && discoveryAttempts < 90) {
         discoveryAttempts += 1;
         discoveryFrame = window.requestAnimationFrame(discoverCanvas);
       }
@@ -110,7 +129,7 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
     return () => {
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
-      observedCanvasRef.current = null;
+      observedSurfaceRef.current = null;
       window.cancelAnimationFrame(discoveryFrame);
       window.removeEventListener("maono:map-runtime", handleMapRuntime);
       window.removeEventListener("resize", refreshCanvas);
@@ -149,11 +168,28 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [cancelPlacement, placing]);
 
+  useEffect(() => {
+    if (!placing || !rect || typeof document === "undefined") return undefined;
+
+    const placementSurface = document.querySelector<HTMLElement>(
+      ".maono-marker-placement",
+    );
+    if (!placementSurface) return undefined;
+
+    const previousCursor = placementSurface.style.cursor;
+    placementSurface.style.cursor = PLACEMENT_PIN_CURSOR;
+
+    return () => {
+      placementSurface.style.cursor = previousCursor;
+    };
+  }, [placing, rect]);
+
   const startPlacement = useCallback(() => {
+    refreshCanvas();
     setOrigin(null);
     setMenuOpen(false);
     setPlacing(true);
-  }, []);
+  }, [refreshCanvas]);
 
   const placeAt = useCallback(
     (clientX: number, clientY: number) => {
