@@ -33,17 +33,6 @@ export type MapCapabilities = {
   updateThumbnail: boolean;
 };
 
-export type IsochroneFeatureReason =
-  | "ENABLED"
-  | "OVERLAY_DISABLED"
-  | "KILL_SWITCH_ACTIVE"
-  | "PROVIDER_NOT_CONFIGURED";
-
-export type IsochroneFeatureState = {
-  enabled: boolean;
-  reason: IsochroneFeatureReason;
-};
-
 export type MapPanelFeatures = {
   mapManagementHome: boolean;
   mapPanelModes: boolean;
@@ -54,7 +43,6 @@ export type MapPanelFeatures = {
   maonoMapShell: boolean;
   maonoMapOverlay: boolean;
   maonoIsochrone: boolean;
-  maonoIsochroneState?: IsochroneFeatureState;
 };
 
 export type SafeMapProject = {
