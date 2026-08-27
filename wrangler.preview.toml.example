@@ -1,0 +1,22 @@
+# EXEMPLO DOCUMENTAL — Cloudflare Pages Preview usando o MESMO D1 de produção.
+# Não copie este arquivo para produção sem revisar os IDs e variáveis.
+# O binding real do Pages deve ser configurado no Dashboard para o ambiente Preview.
+
+name = "maono-kepler-v1-preview"
+compatibility_date = "2026-05-21"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "maono_maps"
+database_id = "COLE_AQUI_O_DATABASE_ID_DE_PRODUCAO"
+migrations_dir = "migrations"
+
+# Variáveis obrigatórias no ambiente Preview do Pages:
+# MAONO_RUNTIME_ENV=preview
+# MAONO_PREVIEW_MUTATIONS_ENABLED=false   # manter false até criar a organização QA
+# MAONO_PREVIEW_QA_ORG_ID=<id da organização maono-preview-qa>
+# MAONO_PREVIEW_QA_ORG_SLUG=maono-preview-qa
+#
+# O Preview NUNCA deve executar `wrangler d1 migrations apply ... --remote`.
+# A política do runtime permite leitura real e restringe escrita à organização QA.
