@@ -7,6 +7,7 @@ import {
   resolveIsochroneFeatureState,
   withMapAnalysisRuntimeDefaults,
 } from "../functions/_lib/map-analysis-runtime.js";
+import { onRequest as handleIsochroneRequest } from "../functions/api/maps/isochrones.js";
 
 function enabledEnv(overrides = {}) {
   return {
@@ -15,6 +16,19 @@ function enabledEnv(overrides = {}) {
     GEOAPIFY_API_KEY: "test-secret-not-exposed",
     ...overrides,
   };
+}
+
+function validIsochroneRequest() {
+  return new Request("https://maps.maono.test/api/maps/isochrones", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      origin: { latitude: -23.55, longitude: -46.63 },
+      type: "time",
+      mode: "drive",
+      ranges: [15],
+    }),
+  });
 }
 
 test("estado da isócrona tem uma única ordem de decisão", () => {
@@ -68,6 +82,31 @@ test("compatibilidade legada deriva do mesmo resolver", () => {
 
   assert.equal(enabled.MAONO_ISOCHRONE_V1, "true");
   assert.equal(killed.MAONO_ISOCHRONE_V1, "false");
+});
+
+test("endpoint retorna motivo seguro quando a feature está indisponível", async () => {
+  const providerMissing = await handleIsochroneRequest({
+    request: validIsochroneRequest(),
+    env: enabledEnv({ GEOAPIFY_API_KEY: "" }),
+  });
+  const providerMissingBody = await providerMissing.json();
+
+  assert.equal(providerMissing.status, 503);
+  assert.equal(providerMissingBody.error.code, "ISOCHRONE_FEATURE_DISABLED");
+  assert.deepEqual(providerMissingBody.error.details, {
+    reason: ISOCHRONE_FEATURE_REASONS.PROVIDER_NOT_CONFIGURED,
+  });
+
+  const killed = await handleIsochroneRequest({
+    request: validIsochroneRequest(),
+    env: enabledEnv({ MAONO_ISOCHRONE_KILL_SWITCH: "true" }),
+  });
+  const killedBody = await killed.json();
+
+  assert.equal(killed.status, 503);
+  assert.deepEqual(killedBody.error.details, {
+    reason: ISOCHRONE_FEATURE_REASONS.KILL_SWITCH_ACTIVE,
+  });
 });
 
 test("navegação, create e endpoint usam o mesmo diagnóstico seguro", async () => {
