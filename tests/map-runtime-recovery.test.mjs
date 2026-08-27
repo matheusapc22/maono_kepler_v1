@@ -126,7 +126,9 @@ test("loader de projeto pesado mantém streaming e hidratação canônica", () =
 });
 
 test("hydrator usa schema oficial e exige contrato fields/rows", () => {
-  assert.match(savedConfigHydrator, /KeplerGlSchema\.load/);
+  assert.match(savedConfigHydrator, /@kepler\.gl\/schemas/);
+  assert.match(savedConfigHydrator, /resolveKeplerSchemaManager/);
+  assert.match(savedConfigHydrator, /schemaManager\.load\(prepared\.savedConfig\)/);
   assert.match(savedConfigHydrator, /dataset\.data\.fields/);
   assert.match(savedConfigHydrator, /dataset\.data\.rows/);
   assert.match(savedConfigHydrator, /KEPLER_SCHEMA_LOAD_FAILED/);
