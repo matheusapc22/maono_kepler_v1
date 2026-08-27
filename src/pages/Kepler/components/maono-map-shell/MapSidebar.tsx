@@ -2,14 +2,11 @@ import { Link } from "react-router";
 
 import maonoSymbol from "../../../../assets/images/Logo_Simbolo.png";
 import type { MapPanelContextValue } from "../../map-panel/types";
-import MapShellIcon, {
-  type MapShellIconName,
-} from "./MapShellIcon";
+import MapShellIcon from "./MapShellIcon";
 import type { MaonoMapPanelTab } from "./map-shell-events";
 
 type MapSidebarProps = {
   context: MapPanelContextValue;
-  activePanelTab: MaonoMapPanelTab;
   panelOpen: boolean;
   layerPanelAvailable: boolean;
   loggingOut: boolean;
@@ -17,35 +14,6 @@ type MapSidebarProps = {
   onOpenData: () => void;
   onLogout: () => Promise<void>;
 };
-
-type ModeNavigationItem = {
-  key: "viewer" | "editor" | "create";
-  label: string;
-  icon: MapShellIconName;
-  route: string;
-};
-
-function availableModeItems(
-  context: MapPanelContextValue,
-): ModeNavigationItem[] {
-  const definitions: Array<
-    Omit<ModeNavigationItem, "route">
-  > = [
-    { key: "viewer", label: "Visualizar", icon: "viewer" },
-    { key: "editor", label: "Editar", icon: "editor" },
-    { key: "create", label: "Criar", icon: "create" },
-  ];
-
-  return definitions.flatMap((definition) => {
-    const availability = context.availablePanels[definition.key];
-
-    if (!availability?.allowed || !availability.route) {
-      return [];
-    }
-
-    return [{ ...definition, route: availability.route }];
-  });
-}
 
 function SidebarLabel({ children }: { children: string }) {
   return (
@@ -57,7 +25,6 @@ function SidebarLabel({ children }: { children: string }) {
 
 export default function MapSidebar({
   context,
-  activePanelTab,
   panelOpen,
   layerPanelAvailable,
   loggingOut,
@@ -66,16 +33,10 @@ export default function MapSidebar({
   onLogout,
 }: MapSidebarProps) {
   const capabilities = context.capabilities;
-  const modeItems = availableModeItems(context);
   const canOpenLayers = Boolean(
     layerPanelAvailable &&
       capabilities.openLayerPanel &&
       capabilities.viewLayers,
-  );
-  const canOpenFilters = Boolean(
-    layerPanelAvailable &&
-      capabilities.openLayerPanel &&
-      capabilities.viewFilters,
   );
   const canImportData = capabilities.createLayer === true;
 
@@ -101,34 +62,15 @@ export default function MapSidebar({
         {canOpenLayers ? (
           <button
             type="button"
-            className={
-              panelOpen && activePanelTab === "layers" ? "is-active" : ""
-            }
+            className={panelOpen ? "is-active" : ""}
             onClick={() => onPanelTabSelect("layers")}
-            aria-pressed={panelOpen && activePanelTab === "layers"}
+            aria-pressed={panelOpen}
             aria-controls="maono-map-engine-panel"
             aria-label="Camadas"
             title="Camadas"
           >
             <MapShellIcon name="layers" />
             <SidebarLabel>Camadas</SidebarLabel>
-          </button>
-        ) : null}
-
-        {canOpenFilters ? (
-          <button
-            type="button"
-            className={
-              panelOpen && activePanelTab === "filters" ? "is-active" : ""
-            }
-            onClick={() => onPanelTabSelect("filters")}
-            aria-pressed={panelOpen && activePanelTab === "filters"}
-            aria-controls="maono-map-engine-panel"
-            aria-label="Filtros"
-            title="Filtros"
-          >
-            <MapShellIcon name="filters" />
-            <SidebarLabel>Filtros</SidebarLabel>
           </button>
         ) : null}
 
@@ -143,27 +85,6 @@ export default function MapSidebar({
             <SidebarLabel>Adicionar dados</SidebarLabel>
           </button>
         ) : null}
-
-        {modeItems.length > 0 ? (
-          <span
-            className="maono-map-sidebar__divider"
-            aria-hidden="true"
-          />
-        ) : null}
-
-        {modeItems.map((item) => (
-          <Link
-            key={item.key}
-            to={item.route}
-            className={context.mode === item.key ? "is-active" : ""}
-            aria-current={context.mode === item.key ? "page" : undefined}
-            aria-label={item.label}
-            title={item.label}
-          >
-            <MapShellIcon name={item.icon} />
-            <SidebarLabel>{item.label}</SidebarLabel>
-          </Link>
-        ))}
 
         <Link
           to="/projects"
