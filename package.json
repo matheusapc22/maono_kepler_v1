@@ -8,7 +8,7 @@
     "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:preview-safety": "node --test tests/preview-write-policy.test.mjs tests/preview-middleware.test.mjs && node scripts/preview/assert-preview-safety.mjs",
+    "test:preview-safety": "node --test tests/preview-write-policy.test.mjs tests/preview-middleware.test.mjs tests/preview-golden-builder.test.mjs && node scripts/preview/assert-preview-safety.mjs",
     "test:error-contract": "node --test tests/result-types.test.mjs tests/error-taxonomy.test.mjs tests/error-envelope-contract.test.mjs tests/api-error-client.test.mjs",
     "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs",
     "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs",
