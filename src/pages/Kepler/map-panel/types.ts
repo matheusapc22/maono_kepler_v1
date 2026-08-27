@@ -1,3 +1,5 @@
+import type { IsochroneFeatureState } from "./isochrone-feature-diagnostic";
+
 export type MapRuntimeMode = "viewer" | "editor" | "create";
 export type MapNavigationMode = "manage" | MapRuntimeMode;
 export type MapPanelMode = MapNavigationMode;
@@ -102,6 +104,7 @@ export type MapPanelContextValue = {
     acceptedThumbnailContentTypes?: string[];
   };
   features: MapPanelFeatures;
+  isochroneFeatureState: IsochroneFeatureState;
 };
 
 export type MapPanelLoadState =
