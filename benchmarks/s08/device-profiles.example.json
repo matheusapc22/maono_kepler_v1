@@ -1,0 +1,45 @@
+{
+  "benchmarkVersion": "s08-benchmark-v1",
+  "devices": [
+    {
+      "deviceClass": "ENTRY_NOTEBOOK",
+      "label": "Preencher com notebook de entrada real",
+      "os": "",
+      "browser": "",
+      "cpuClass": "",
+      "memoryClass": "",
+      "viewport": "",
+      "notes": "Não substituir por emulação para calibração final."
+    },
+    {
+      "deviceClass": "STANDARD_NOTEBOOK",
+      "label": "Preencher com notebook padrão real",
+      "os": "",
+      "browser": "",
+      "cpuClass": "",
+      "memoryClass": "",
+      "viewport": "",
+      "notes": ""
+    },
+    {
+      "deviceClass": "HIGH_END_DESKTOP",
+      "label": "Preencher com desktop forte real",
+      "os": "",
+      "browser": "",
+      "cpuClass": "",
+      "memoryClass": "",
+      "viewport": "",
+      "notes": ""
+    },
+    {
+      "deviceClass": "SUPPORTED_MOBILE",
+      "label": "Preencher com mobile suportado real",
+      "os": "",
+      "browser": "",
+      "cpuClass": "",
+      "memoryClass": "",
+      "viewport": "",
+      "notes": "Emulação de mobile não conta como evidência para thresholds."
+    }
+  ]
+}

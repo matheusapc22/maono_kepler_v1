@@ -26,11 +26,13 @@ on:
       - "migrations/0012_access_delegation_policy.sql"
       - "migrations/0015_project_preview_lifecycle.sql"
       - "migrations/0018_project_lifecycle.sql"
+      - "benchmarks/s08/**"
       - "docs/architecture/S03-project-lifecycle.md"
       - "docs/architecture/S04-map-config-repository.md"
       - "docs/architecture/S05-atomic-project-revisions.md"
       - "docs/architecture/S06-result-types-error-taxonomy.md"
       - "docs/architecture/S07-map-load-observability.md"
+      - "docs/architecture/S08-benchmark-harness.md"
       - "docs/architecture/GATE-A-foundation-stable.md"
       - "docs/architecture/macro-c/**"
       - "scripts/macro-c-gate.mjs"
@@ -49,6 +51,7 @@ on:
       - "src/main.tsx"
       - "src/lib/api.ts"
       - "src/access-control/permissions.ts"
+      - "src/benchmarks/s08/**"
       - "src/pages/Admin/**"
       - "src/pages/Kepler/**"
       - "src/pages/Projects/**"
@@ -61,6 +64,7 @@ on:
       - "tests/error-*.test.mjs"
       - "tests/result-types.test.mjs"
       - "tests/api-error-client.test.mjs"
+      - "tests/s08-benchmark-harness.test.mjs"
       - ".github/workflows/access-governance-validation.yml"
   workflow_dispatch:
 
@@ -104,6 +108,12 @@ jobs:
           tests/access-delegation.test.mjs
           tests/admin-user-manager-delegation-map.test.mjs
           tests/cloudflare-build-chunking.test.mjs
+
+      - name: Build S08 benchmark harness
+        run: npm run benchmark:s08:build
+
+      - name: S08 benchmark harness gates
+        run: npm run test:benchmark-harness
 
       - name: GATE A — Foundation stability
         run: npm run test:foundation-gate
