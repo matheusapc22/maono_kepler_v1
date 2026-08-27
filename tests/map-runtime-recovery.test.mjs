@@ -14,6 +14,7 @@ const [
   loader,
   mapPanelApi,
   configStreamRoute,
+  savedConfigHydrator,
 ] = await Promise.all([
   readFile(
     new URL(
@@ -41,6 +42,13 @@ const [
   readFile(
     new URL(
       "../functions/api/projects/[slug]/config-stream.js",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/map-url-loader/saved-config-hydrator.ts",
       import.meta.url,
     ),
     "utf8",
@@ -102,16 +110,28 @@ test("loader tenta novamente apenas falhas transitórias e não reinicia a sess�
   assert.doesNotMatch(loader, /window\.location\.reload/);
 });
 
-test("loader de projeto pesado usa transporte bruto e evita trabalho redundante", () => {
+test("loader de projeto pesado mantém streaming e hidratação canônica", () => {
   assert.match(loader, /\/config-stream/);
   assert.match(loader, /X-Maono-Config-Transport/);
-  assert.match(loader, /LARGE_CONFIG_FAST_PATH_BYTES/);
-  assert.match(loader, /isCurrentKeplerDocument/);
-  assert.match(loader, /directKeplerPayload/);
+  assert.match(loader, /LARGE_CONFIG_UI_YIELD_BYTES/);
+  assert.match(loader, /hydrateSavedKeplerConfig/);
   assert.match(loader, /await response\.json\(\)/);
   assert.match(loader, /centerMap: false/);
   assert.match(loader, /yieldToBrowser/);
+  assert.match(loader, /recordMapLoadEvent\("MIGRATED"/);
+  assert.doesNotMatch(loader, /LARGE_CONFIG_FAST_PATH_BYTES/);
+  assert.doesNotMatch(loader, /isCurrentKeplerDocument/);
+  assert.doesNotMatch(loader, /directKeplerPayload/);
   assert.doesNotMatch(loader, /response\.ok && attempt < PROJECT_LOAD_RETRY_DELAYS_MS\.length/);
+});
+
+test("hydrator usa schema oficial e exige contrato fields/rows", () => {
+  assert.match(savedConfigHydrator, /KeplerGlSchema\.load/);
+  assert.match(savedConfigHydrator, /dataset\.data\.fields/);
+  assert.match(savedConfigHydrator, /dataset\.data\.rows/);
+  assert.match(savedConfigHydrator, /KEPLER_SCHEMA_LOAD_FAILED/);
+  assert.match(savedConfigHydrator, /retryable = false/);
+  assert.doesNotMatch(savedConfigHydrator, /directKeplerPayload/);
 });
 
 test("config-stream mantém autorização e entrega bytes sem parse server-side", () => {

@@ -2,11 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { connect } from "react-redux";
 import { useParams } from "react-router";
 import { addDataToMap, toggleModal } from "@kepler.gl/actions";
-import KeplerGlSchema from "@kepler.gl/schemas";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
-import { prepareSavedConfigForPointClustering } from "../clustering/point-cluster-controller.ts";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
 import { useMapPanel } from "../map-panel/MapPanelContext";
@@ -15,6 +13,11 @@ import {
   recordMapLoadEvent,
   updateActiveMapLoadTraceContext,
 } from "../observability/map-load-trace";
+import {
+  hydrateSavedKeplerConfig,
+  isSavedConfigHydrationError,
+  validateSavedKeplerConfig,
+} from "./saved-config-hydrator.ts";
 
 const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
@@ -22,10 +25,10 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
   );
 const PROJECT_LOAD_RETRY_DELAYS_MS = [350, 900];
 
-// Operational fast path only. This is not a final Safety Plane threshold and
-// does not block datasets. It merely avoids redundant schema work for already
-// current Kepler documents when the persisted MapConfig is large.
-const LARGE_CONFIG_FAST_PATH_BYTES = 10 * 1024 * 1024;
+// UI-only threshold. Large configs get one paint opportunity before canonical
+// Kepler schema hydration. File size must never select a different parser or
+// change SavedDataset -> RuntimeDataset semantics.
+const LARGE_CONFIG_UI_YIELD_BYTES = 10 * 1024 * 1024;
 
 const mapStateToProps = (state: any) => ({
   isMapLoading: selectIsMapLoading(state),
@@ -47,104 +50,6 @@ async function parseJsonResponse(response: Response) {
 
 function getApiErrorMessage(data: any, fallback: string) {
   return data?.error?.message || data?.message || fallback;
-}
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function validateSavedKeplerConfig(value: unknown) {
-  if (!isRecord(value)) {
-    throw new Error("Configuração do projeto inválida.");
-  }
-
-  if (!Array.isArray(value.datasets)) {
-    throw new Error("A configuração do projeto não possui datasets válidos.");
-  }
-
-  if (!isRecord(value.config)) {
-    throw new Error("A configuração do projeto não possui objeto config válido.");
-  }
-}
-
-function normalizeDatasetForKepler(dataset: any) {
-  const data = dataset?.data ?? dataset;
-
-  return {
-    info: {
-      id: data?.id ?? dataset?.id,
-      label: data?.label ?? dataset?.label ?? data?.id ?? dataset?.id,
-      color: data?.color ?? dataset?.color,
-    },
-    data,
-  };
-}
-
-function isCurrentKeplerDocument(savedConfig: any) {
-  return String(savedConfig?.version ?? "").trim().toLowerCase() === "v1";
-}
-
-function directKeplerPayload(savedConfig: any) {
-  return {
-    datasets: savedConfig.datasets.map(normalizeDatasetForKepler),
-    config: savedConfig.config,
-  };
-}
-
-export function loadSavedKeplerConfig(
-  savedConfig: any,
-  { sizeBytes = 0 }: { sizeBytes?: number } = {},
-) {
-  validateSavedKeplerConfig(savedConfig);
-
-  const prepared = prepareSavedConfigForPointClustering(
-    savedConfig,
-    {
-      featureEnabled: POINT_CLUSTERING_FEATURE_ENABLED,
-    },
-  );
-  loadPointClusterState(prepared.savedConfig.maono);
-
-  const useLargeConfigFastPath =
-    Number(sizeBytes || 0) >= LARGE_CONFIG_FAST_PATH_BYTES &&
-    isCurrentKeplerDocument(prepared.savedConfig);
-
-  if (useLargeConfigFastPath) {
-    // KeplerGlSchema.load may materialize another large representation of the
-    // same datasets. Saved v1 documents can use the same fallback contract we
-    // already use when schema loading fails, but proactively and deterministically.
-    recordMapLoadEvent("MIGRATED");
-    return directKeplerPayload(prepared.savedConfig);
-  }
-
-  try {
-    const loaded = KeplerGlSchema.load(
-      prepared.savedConfig,
-    ) as any;
-
-    if (isRecord(loaded)) {
-      const datasets = Array.isArray(loaded.datasets)
-        ? loaded.datasets
-        : prepared.savedConfig.datasets.map(normalizeDatasetForKepler);
-
-      const config =
-        loaded.config ?? prepared.savedConfig.config;
-
-      recordMapLoadEvent("MIGRATED");
-      return {
-        datasets,
-        config,
-      };
-    }
-  } catch (error) {
-    console.warn(
-      "[Maono map loader] KeplerGlSchema.load falhou, usando fallback seguro:",
-      error,
-    );
-  }
-
-  recordMapLoadEvent("MIGRATED");
-  return directKeplerPayload(prepared.savedConfig);
 }
 
 function retryableProjectStatus(status: number) {
@@ -367,13 +272,16 @@ async function loadProjectConfig(
     validateSavedKeplerConfig(savedConfig);
     recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
 
-    if (sizeBytes >= LARGE_CONFIG_FAST_PATH_BYTES) {
+    if (sizeBytes >= LARGE_CONFIG_UI_YIELD_BYTES) {
       // Give the loading overlay one paint opportunity before the synchronous
-      // Kepler hydration work begins. This does not change data semantics.
+      // canonical Kepler hydration work begins. This does not change data semantics.
       await yieldToBrowser(signal);
     }
 
-    const loadedConfig = loadSavedKeplerConfig(savedConfig, { sizeBytes });
+    const loadedConfig = hydrateSavedKeplerConfig(savedConfig, {
+      featureEnabled: POINT_CLUSTERING_FEATURE_ENABLED,
+    });
+    recordMapLoadEvent("MIGRATED", traceContext);
     recordMapLoadEvent("ENGINE_HYDRATION_STARTED", traceContext);
 
     dispatch(
@@ -451,11 +359,12 @@ const MapUrlLoader = connectStore(
           return;
         }
 
+        const hydrationFailure = isSavedConfigHydrationError(err);
         failActiveMapLoadTrace({
           stage: "CONFIG_VALIDATED",
-          code: "MAP_CONFIG_LOAD_FAILED",
-          category: "MAP_CONFIG",
-          retryable: true,
+          code: hydrationFailure ? err.code : "MAP_CONFIG_LOAD_FAILED",
+          category: hydrationFailure ? err.category : "MAP_CONFIG",
+          retryable: hydrationFailure ? err.retryable : true,
           status: null,
         });
         loadedProjectRef.current = null;
