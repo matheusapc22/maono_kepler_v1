@@ -4,7 +4,10 @@ import {
   methodNotAllowed,
 } from "../../../_lib/http.js";
 import { resolveNewMapCreateContext } from "../../../_lib/map-panel-service.js";
-import { withMapAnalysisRuntimeDefaults } from "../../../_lib/map-analysis-runtime.js";
+import {
+  resolveIsochroneFeatureState,
+  withMapAnalysisRuntimeDefaults,
+} from "../../../_lib/map-analysis-runtime.js";
 
 export async function onRequest({ request, env }) {
   if (request.method !== "GET") {
@@ -12,12 +15,17 @@ export async function onRequest({ request, env }) {
   }
 
   try {
+    const isochroneFeatureState = resolveIsochroneFeatureState(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
     const context = await resolveNewMapCreateContext(runtimeEnv, request);
 
     return jsonResponse({
       ok: true,
       ...context,
+      features: {
+        ...context.features,
+        maonoIsochroneState: isochroneFeatureState,
+      },
     });
   } catch (error) {
     return errorResponse(
