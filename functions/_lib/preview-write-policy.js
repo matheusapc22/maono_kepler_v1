@@ -23,47 +23,6 @@ const QA_SCOPED_MUTATION_PATHS = [
   /^\/api\/maps\/new(?:\/|$)/,
 ];
 
-const QA_SCOPED_MUTATING_PERMISSIONS = new Set([
-  "project.create",
-  "project.edit",
-  "project.map.edit",
-  "project.save",
-  "project.favorite",
-  "project.thumbnail.update",
-]);
-
-const ALWAYS_DENIED_PREVIEW_MUTATING_PERMISSIONS = new Set([
-  "document.upload",
-  "document.edit",
-  "document.delete",
-  "document.manage",
-  "ticket.create",
-  "ticket.comment",
-  "ticket.manage",
-  "ticket.close",
-  "ticket.assign",
-  "export.create",
-  "export.manage",
-  "roadmap.comment.create",
-  "roadmap.comment.edit_own",
-  "roadmap.comment.moderate",
-  "roadmap.manage",
-  "roadmap.task.manage",
-  "roadmap.dependency.manage",
-  "users.create",
-  "users.edit",
-  "users.disable",
-  "users.delete",
-  "users.invite",
-  "users.manage_access",
-  "permission.grant",
-  "permission.revoke",
-  "role.assign",
-  "organization.edit",
-  "plan.change_request",
-  "limits.increase_request",
-]);
-
 export const PREVIEW_WRITE_REASONS = Object.freeze({
   NOT_PREVIEW: "NOT_PREVIEW",
   READ_ONLY_REQUEST: "READ_ONLY_REQUEST",
@@ -77,35 +36,6 @@ export const PREVIEW_WRITE_REASONS = Object.freeze({
 
 function pathMatches(pathname, patterns) {
   return patterns.some((pattern) => pattern.test(pathname));
-}
-
-function normalizeOrganizationId(value) {
-  if (value === undefined || value === null || value === "") return null;
-  return String(value).trim() || null;
-}
-
-function evaluateQaOrganizationBoundary(env, organizationId) {
-  const qaOrganizationId = previewQaOrganizationId(env);
-  const targetOrganizationId = normalizeOrganizationId(organizationId);
-
-  if (!qaOrganizationId || !targetOrganizationId) {
-    return {
-      allowed: false,
-      reason: PREVIEW_WRITE_REASONS.PREVIEW_MUTATION_SCOPE_UNRESOLVED,
-    };
-  }
-
-  if (String(qaOrganizationId) !== String(targetOrganizationId)) {
-    return {
-      allowed: false,
-      reason: PREVIEW_WRITE_REASONS.PREVIEW_WRITE_OUTSIDE_QA_ORG,
-    };
-  }
-
-  return {
-    allowed: true,
-    reason: PREVIEW_WRITE_REASONS.PREVIEW_QA_WRITE_ALLOWED,
-  };
 }
 
 export function isMutatingMethod(method) {
@@ -169,41 +99,30 @@ export function evaluatePreviewWritePolicy(
     };
   }
 
-  return evaluateQaOrganizationBoundary(env, organizationId);
-}
+  const qaOrganizationId = previewQaOrganizationId(env);
+  const targetOrganizationId =
+    organizationId === undefined || organizationId === null
+      ? null
+      : String(organizationId).trim() || null;
 
-export function evaluatePreviewPermissionPolicy(
-  env,
-  { permission, organizationId = null } = {},
-) {
-  if (!isPreviewRuntime(env)) {
-    return { allowed: true, reason: PREVIEW_WRITE_REASONS.NOT_PREVIEW };
-  }
-
-  const normalizedPermission = String(permission || "").trim();
-
-  if (ALWAYS_DENIED_PREVIEW_MUTATING_PERMISSIONS.has(normalizedPermission)) {
+  if (!qaOrganizationId || !targetOrganizationId) {
     return {
       allowed: false,
-      reason: PREVIEW_WRITE_REASONS.PREVIEW_GLOBAL_MUTATION_DENIED,
+      reason: PREVIEW_WRITE_REASONS.PREVIEW_MUTATION_SCOPE_UNRESOLVED,
     };
   }
 
-  if (!QA_SCOPED_MUTATING_PERMISSIONS.has(normalizedPermission)) {
-    return {
-      allowed: true,
-      reason: PREVIEW_WRITE_REASONS.READ_ONLY_REQUEST,
-    };
-  }
-
-  if (!arePreviewMutationsEnabled(env)) {
+  if (String(qaOrganizationId) !== String(targetOrganizationId)) {
     return {
       allowed: false,
-      reason: PREVIEW_WRITE_REASONS.PREVIEW_MUTATIONS_DISABLED,
+      reason: PREVIEW_WRITE_REASONS.PREVIEW_WRITE_OUTSIDE_QA_ORG,
     };
   }
 
-  return evaluateQaOrganizationBoundary(env, organizationId);
+  return {
+    allowed: true,
+    reason: PREVIEW_WRITE_REASONS.PREVIEW_QA_WRITE_ALLOWED,
+  };
 }
 
 export function previewWriteDeniedResponse(reason) {
