@@ -5,7 +5,10 @@ import {
 } from "../../../_lib/http.js";
 import { getOrCreateCorrelationId } from "../../../_lib/maono-error.js";
 import { resolveCanonicalExistingProjectMapNavigation } from "../../../_lib/project-map-navigation-service.js";
-import { withMapAnalysisRuntimeDefaults } from "../../../_lib/map-analysis-runtime.js";
+import {
+  resolveIsochroneFeatureState,
+  withMapAnalysisRuntimeDefaults,
+} from "../../../_lib/map-analysis-runtime.js";
 
 export async function onRequest(context) {
   const { request, env, params } = context;
@@ -17,6 +20,7 @@ export async function onRequest(context) {
 
   try {
     const url = new URL(request.url);
+    const isochroneFeatureState = resolveIsochroneFeatureState(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
     const navigation = await resolveCanonicalExistingProjectMapNavigation(
       runtimeEnv,
@@ -34,6 +38,10 @@ export async function onRequest(context) {
       {
         ok: true,
         ...navigation,
+        features: {
+          ...navigation.features,
+          maonoIsochroneState: isochroneFeatureState,
+        },
       },
       {
         headers: {

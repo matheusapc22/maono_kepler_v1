@@ -1,23 +1,79 @@
+import { isFeatureFlagEnabled } from "./organization-limit-service.js";
+
 let rateLimitSchemaReady = false;
 let rateLimitSchemaPromise = null;
+
+export const ISOCHRONE_FEATURE_REASONS = Object.freeze({
+  ENABLED: "ENABLED",
+  OVERLAY_DISABLED: "OVERLAY_DISABLED",
+  KILL_SWITCH_ACTIVE: "KILL_SWITCH_ACTIVE",
+  PROVIDER_NOT_CONFIGURED: "PROVIDER_NOT_CONFIGURED",
+});
 
 function isTrue(value) {
   return String(value ?? "").trim().toLowerCase() === "true";
 }
 
+/**
+ * Resolve o estado operacional da isócrona a partir de uma única fonte de verdade.
+ *
+ * A flag legada MAONO_ISOCHRONE_V1 não participa mais da decisão operacional.
+ * A feature acompanha o overlay Maõno, exige o provedor configurado e só pode ser
+ * desligada explicitamente pelo kill switch dedicado.
+ *
+ * O retorno é seguro para exposição no contexto público: nunca contém segredo,
+ * chave, valor de variável ou detalhe do provedor além do motivo normalizado.
+ */
+export function resolveIsochroneFeatureState(env) {
+  const layerManagerEnabled = isFeatureFlagEnabled(
+    env?.MAONO_LAYER_MANAGER_V1,
+    false,
+  );
+  const overlayEnabled = isFeatureFlagEnabled(
+    env?.MAONO_MAP_OVERLAY_V1,
+    layerManagerEnabled,
+  );
+
+  if (!overlayEnabled) {
+    return {
+      enabled: false,
+      reason: ISOCHRONE_FEATURE_REASONS.OVERLAY_DISABLED,
+    };
+  }
+
+  if (isTrue(env?.MAONO_ISOCHRONE_KILL_SWITCH)) {
+    return {
+      enabled: false,
+      reason: ISOCHRONE_FEATURE_REASONS.KILL_SWITCH_ACTIVE,
+    };
+  }
+
+  if (!String(env?.GEOAPIFY_API_KEY || "").trim()) {
+    return {
+      enabled: false,
+      reason: ISOCHRONE_FEATURE_REASONS.PROVIDER_NOT_CONFIGURED,
+    };
+  }
+
+  return {
+    enabled: true,
+    reason: ISOCHRONE_FEATURE_REASONS.ENABLED,
+  };
+}
+
+/**
+ * Compatibilidade transitória para consumidores antigos que ainda leem
+ * MAONO_ISOCHRONE_V1. Novos consumidores devem usar resolveIsochroneFeatureState.
+ */
 export function withMapAnalysisRuntimeDefaults(env) {
   if (!env || typeof env !== "object") return env;
 
-  // MAONO_ISOCHRONE_V1 foi usado durante o rollout inicial e alguns ambientes
-  // podem ter permanecido com o valor "false" depois da estabilização. O runtime
-  // atual trata a análise como parte do overlay Maõno e mantém um kill switch
-  // explícito separado para emergências operacionais.
-  const disabled = isTrue(env.MAONO_ISOCHRONE_KILL_SWITCH);
+  const state = resolveIsochroneFeatureState(env);
 
   return new Proxy(env, {
     get(target, property, receiver) {
       if (property === "MAONO_ISOCHRONE_V1") {
-        return disabled ? "false" : "true";
+        return state.enabled ? "true" : "false";
       }
       return Reflect.get(target, property, receiver);
     },

@@ -58,6 +58,8 @@ const [
 test("runtime de isócrona ignora flag antiga e usa kill switch explícito", () => {
   const original = {
     GEOAPIFY_API_KEY: "secret",
+    MAONO_LAYER_MANAGER_V1: "true",
+    MAONO_MAP_OVERLAY_V1: "true",
     MAONO_ISOCHRONE_V1: "false",
   };
   const runtime = withMapAnalysisRuntimeDefaults(original);
@@ -67,6 +69,8 @@ test("runtime de isócrona ignora flag antiga e usa kill switch explícito", () 
 
   const explicitlyDisabled = withMapAnalysisRuntimeDefaults({
     GEOAPIFY_API_KEY: "secret",
+    MAONO_LAYER_MANAGER_V1: "true",
+    MAONO_MAP_OVERLAY_V1: "true",
     MAONO_ISOCHRONE_V1: "true",
     MAONO_ISOCHRONE_KILL_SWITCH: "true",
   });
@@ -126,7 +130,8 @@ test("loader de projeto pesado mantém streaming e hidratação canônica", () =
 });
 
 test("hydrator usa schema oficial e exige contrato fields/rows", () => {
-  assert.match(savedConfigHydrator, /KeplerGlSchema\.load/);
+  assert.match(savedConfigHydrator, /resolveKeplerSchemaManager/);
+  assert.match(savedConfigHydrator, /schemaManager\.load/);
   assert.match(savedConfigHydrator, /dataset\.data\.fields/);
   assert.match(savedConfigHydrator, /dataset\.data\.rows/);
   assert.match(savedConfigHydrator, /KEPLER_SCHEMA_LOAD_FAILED/);
