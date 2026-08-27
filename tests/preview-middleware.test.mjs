@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   extractProjectSlugFromPath,
+  isLikelyCloudflarePreviewUrl,
   onRequest,
   resolvePreviewMutationOrganizationId,
 } from "../functions/_middleware.js";
@@ -54,6 +55,33 @@ test("middleware extrai slug de projeto sem confundir subrotas", () => {
     "projeto qa",
   );
   assert.equal(extractProjectSlugFromPath("/api/maps/isochrones"), null);
+});
+
+test("fallback reconhece URL de deployment Pages como Preview", () => {
+  assert.equal(
+    isLikelyCloudflarePreviewUrl(
+      "https://23c6a3b0.maono-kepler-v1.pages.dev/api/projects",
+    ),
+    true,
+  );
+  assert.equal(
+    isLikelyCloudflarePreviewUrl(
+      "https://feature-x.maono-kepler-v1.pages.dev/api/projects",
+    ),
+    true,
+  );
+  assert.equal(
+    isLikelyCloudflarePreviewUrl(
+      "https://maono-kepler-v1.pages.dev/api/projects",
+    ),
+    false,
+  );
+  assert.equal(
+    isLikelyCloudflarePreviewUrl(
+      "https://maps.maono.com.br/api/projects",
+    ),
+    false,
+  );
 });
 
 test("middleware resolve organização do projeto diretamente no D1", async () => {
@@ -187,4 +215,27 @@ test("kill switch bloqueia escrita QA sem impedir login/session", async () => {
   assert.equal(projectResponse.status, 403);
   assert.equal(sessionNext, 1);
   assert.equal(sessionResponse.status, 200);
+});
+
+test("URL Pages Preview sem MAONO_RUNTIME_ENV continua fail-closed", async () => {
+  let nextCalls = 0;
+  const env = {
+    DB: projectDb({ "qa-geojson-golden": 9001 }),
+  };
+  const response = await onRequest({
+    request: new Request(
+      "https://abc123.maono-kepler-v1.pages.dev/api/projects/qa-geojson-golden/config",
+      { method: "PUT", body: "{}" },
+    ),
+    env,
+    async next() {
+      nextCalls += 1;
+      return new Response("should-not-run");
+    },
+  });
+  const body = await response.json();
+
+  assert.equal(nextCalls, 0);
+  assert.equal(response.status, 403);
+  assert.equal(body.error.code, "PREVIEW_MUTATIONS_DISABLED");
 });
