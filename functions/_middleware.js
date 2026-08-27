@@ -16,6 +16,34 @@ function decodePathPart(value) {
   }
 }
 
+export function isLikelyCloudflarePreviewUrl(value) {
+  let hostname = "";
+  try {
+    hostname = new URL(String(value || "")).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  if (!hostname.endsWith(".pages.dev")) return false;
+
+  // Production padrão: maono-kepler-v1.pages.dev (3 labels).
+  // Deployment/branch Preview: <hash|branch>.maono-kepler-v1.pages.dev (4+ labels).
+  return hostname.split(".").length >= 4;
+}
+
+function previewPolicyEnv(env, requestUrl) {
+  if (isPreviewRuntime(env)) return env;
+  if (!isLikelyCloudflarePreviewUrl(requestUrl)) return null;
+
+  // Fallback fail-closed: se o binding Preview for configurado antes da variável
+  // MAONO_RUNTIME_ENV, URLs de deployment continuam protegidas. A cópia é usada
+  // apenas pela política; DB/session continuam usando o `env` original.
+  return {
+    ...env,
+    MAONO_RUNTIME_ENV: "preview",
+  };
+}
+
 export function extractProjectSlugFromPath(pathname) {
   const match = String(pathname || "").match(/^\/api\/projects\/([^/]+)(?:\/|$)/);
   return match ? decodePathPart(match[1]) || null : null;
@@ -111,12 +139,13 @@ function withPreviewHeaders(response, decision) {
 
 export async function onRequest(context) {
   const { request, env } = context;
+  const url = new URL(request.url);
+  const policyEnv = previewPolicyEnv(env, request.url);
 
-  if (!isPreviewRuntime(env)) {
+  if (!policyEnv) {
     return context.next();
   }
 
-  const url = new URL(request.url);
   const pathname = url.pathname;
   const method = request.method;
 
@@ -126,7 +155,7 @@ export async function onRequest(context) {
   }
 
   if (isPreviewRuntimeMutationPath(pathname)) {
-    const decision = evaluatePreviewWritePolicy(env, {
+    const decision = evaluatePreviewWritePolicy(policyEnv, {
       method,
       pathname,
       organizationId: null,
@@ -144,7 +173,7 @@ export async function onRequest(context) {
     );
   }
 
-  const decision = evaluatePreviewWritePolicy(env, {
+  const decision = evaluatePreviewWritePolicy(policyEnv, {
     method,
     pathname,
     organizationId,
