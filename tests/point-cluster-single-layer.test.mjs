@@ -216,7 +216,7 @@ test("clique em subcamada interna de cluster aproxima a camada lógica original"
 });
 
 test("runtime adaptativo não cria nem alterna camadas no Redux", async () => {
-  const [hook, adaptive, reducer, loader, store] = await Promise.all([
+  const [hook, adaptive, reducer, loader, hydrator, store] = await Promise.all([
     readFile(
       new URL("../src/pages/Kepler/hooks/use-point-clustering.ts", import.meta.url),
       "utf8",
@@ -234,6 +234,13 @@ test("runtime adaptativo não cria nem alterna camadas no Redux", async () => {
       "utf8",
     ),
     readFile(
+      new URL(
+        "../src/pages/Kepler/map-url-loader/saved-config-hydrator.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
       new URL("../src/pages/Kepler/clustering/point-cluster-store.ts", import.meta.url),
       "utf8",
     ),
@@ -248,7 +255,9 @@ test("runtime adaptativo não cria nem alterna camadas no Redux", async () => {
   assert.match(reducer, /point:\s*MaonoAdaptivePointLayer/);
   assert.match(reducer, /geojson:\s*MaonoAdaptiveGeoJsonLayer/);
   assert.doesNotMatch(reducer, /cluster:\s*MaonoClusterLayer/);
-  assert.match(loader, /loadPointClusterState\(prepared\.savedConfig\.maono\)/);
+  assert.match(loader, /hydrateSavedKeplerConfig/);
+  assert.match(hydrator, /loadPointClusterState\(prepared\.savedConfig\.maono\)/);
   assert.doesNotMatch(loader, /prepared\.pairs/);
+  assert.doesNotMatch(hydrator, /prepared\.pairs/);
   assert.doesNotMatch(store, /PointClusterPair|clusterLayerId|pairs:/);
 });
