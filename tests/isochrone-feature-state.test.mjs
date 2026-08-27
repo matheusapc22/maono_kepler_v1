@@ -227,3 +227,23 @@ test("Pin permanece visível, mas fail-closed quando previewIsochrone é negado"
     /capabilities\?\.previewIsochrone && !isochrone\.preview \? \(/,
   );
 });
+
+test("fallback legado também satisfaz o contrato de diagnóstico da isócrona", async () => {
+  const provider = await readFile(
+    new URL(
+      "../src/pages/Kepler/map-panel/MapPanelProvider.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    provider,
+    /import\s+\{\s*normalizeIsochroneFeatureState\s*\}\s+from\s+["']\.\/isochrone-feature-diagnostic["']/,
+  );
+
+  assert.match(
+    provider,
+    /isochroneFeatureState:\s*normalizeIsochroneFeatureState\(\s*undefined\s*,\s*false\s*\)/,
+  );
+});
