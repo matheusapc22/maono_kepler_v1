@@ -2,6 +2,7 @@ import { methodNotAllowed } from "../../_lib/http.js";
 import { generateIsochrone } from "../../_lib/isochrone-service.js";
 import {
   ensureMapAnalysisRateLimitSchema,
+  resolveIsochroneFeatureState,
   withMapAnalysisRuntimeDefaults,
 } from "../../_lib/map-analysis-runtime.js";
 
@@ -13,6 +14,12 @@ const MODE_LABELS = {
   bicycle: "Bicicleta",
   walk: "Caminhada",
 };
+
+const FEATURE_DISABLED_MESSAGES = Object.freeze({
+  OVERLAY_DISABLED: "A ferramenta de isócronas não está disponível porque os controles de análise do mapa estão desabilitados.",
+  KILL_SWITCH_ACTIVE: "A ferramenta de isócronas está temporariamente desabilitada.",
+  PROVIDER_NOT_CONFIGURED: "O provedor de isócronas não está configurado neste ambiente.",
+});
 
 function endpointError(message, status, code, details = null) {
   const error = new Error(message);
@@ -85,6 +92,19 @@ function validateRequestOrigin(request) {
       "ISOCHRONE_CROSS_ORIGIN_FORBIDDEN",
     );
   }
+}
+
+function assertIsochroneFeatureEnabled(env) {
+  const state = resolveIsochroneFeatureState(env);
+  if (state.enabled) return state;
+
+  throw endpointError(
+    FEATURE_DISABLED_MESSAGES[state.reason] ||
+      "A ferramenta de isócronas não está disponível neste ambiente.",
+    503,
+    "ISOCHRONE_FEATURE_DISABLED",
+    { reason: state.reason },
+  );
 }
 
 async function readBoundedJsonBody(request) {
@@ -250,6 +270,7 @@ export async function onRequest(context) {
 
   try {
     validateRequestOrigin(request);
+    assertIsochroneFeatureEnabled(env);
     const body = await readBoundedJsonBody(request);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
     await ensureMapAnalysisRateLimitSchema(runtimeEnv);
