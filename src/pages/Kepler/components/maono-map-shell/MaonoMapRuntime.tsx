@@ -231,7 +231,6 @@ export default function MaonoMapRuntime({
       sidebar={
         <MapSidebar
           context={context}
-          activePanelTab={activePanelTab}
           panelOpen={effectivePanelOpen}
           layerPanelAvailable={layerPanelAvailable}
           loggingOut={loggingOut}
