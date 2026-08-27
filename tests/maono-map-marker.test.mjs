@@ -71,6 +71,24 @@ test("marcador não observa mais todas as mutações do document.body", () => {
   assert.match(markerHook, /sameCanvasRect/);
 });
 
+test("descoberta da superfície aceita MapLibre, Mapbox e fallback do shell Maõno", () => {
+  assert.match(markerHook, /\.maplibregl-canvas/);
+  assert.match(markerHook, /\.mapboxgl-canvas/);
+  assert.match(markerHook, /\.maono-kepler-viewport canvas/);
+  assert.match(markerHook, /\.maono-kepler-viewport/);
+  assert.match(markerHook, /getBoundingClientRect/);
+});
+
+test("modo de colocação atualiza a superfície e usa cursor visual de Pin", () => {
+  assert.match(markerHook, /PLACEMENT_PIN_CURSOR/);
+  assert.match(markerHook, /fill='%23C5A059'/);
+  assert.match(markerHook, /\.maono-marker-placement/);
+  assert.match(markerHook, /placementSurface\.style\.cursor = PLACEMENT_PIN_CURSOR/);
+  assert.match(markerHook, /const startPlacement = useCallback\(\(\) => \{\s*refreshCanvas\(\)/);
+  assert.match(overlay, /marker\.placing && marker\.canvasRect/);
+  assert.match(overlay, /marker\.placeAt\(event\.clientX, event\.clientY\)/);
+});
+
 test("overlay visual mantém projeção e pointer state fora do componente", () => {
   assert.doesNotMatch(overlay, /WebMercatorViewport/);
   assert.doesNotMatch(overlay, /draggingPointerRef/);
