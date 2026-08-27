@@ -137,30 +137,32 @@ test("create de projeto existente é somente redirect de compatibilidade", () =>
   assert.doesNotMatch(createRouteBlock, /KeplerApp/);
 });
 
-test("ações da sidebar são capability-aware e não consultam role", () => {
-  for (const capability of [
-    "openLayerPanel",
-    "viewLayers",
-    "viewFilters",
-    "createLayer",
-  ]) {
-    assert.match(
-      `${runtime}\n${sidebar}`,
-      new RegExp(`capabilities\.${capability}`),
-    );
+test("sidebar contém somente ferramentas capability-aware, sem decidir modo", () => {
+  for (const capability of ["openLayerPanel", "viewLayers", "createLayer"]) {
+    assert.match(sidebar, new RegExp(`capabilities\.${capability}`));
   }
 
-  assert.match(sidebar, /context\.availablePanels/);
+  assert.match(runtime, /context\.capabilities\.viewFilters/);
+  assert.doesNotMatch(sidebar, /capabilities\.viewFilters/);
+  assert.doesNotMatch(sidebar, /context\.availablePanels/);
+  assert.doesNotMatch(sidebar, /ModeNavigationItem|availableModeItems/);
+  assert.doesNotMatch(sidebar, /name="filters"/);
+  assert.doesNotMatch(sidebar, /name="viewer"|name="editor"|name="create"/);
+  assert.doesNotMatch(sidebar, />Visualizar</);
+  assert.doesNotMatch(sidebar, />Editar</);
+  assert.doesNotMatch(sidebar, />Criar</);
   assert.doesNotMatch(sidebar, /user\?\.role/);
   assert.doesNotMatch(sidebar, /checkAdminUser/);
   assert.doesNotMatch(sidebar, /localStorage/);
 });
 
-test("topbar mantém status e conta sem seletor de projeto", () => {
-  assert.match(topbar, /context\.mode/);
+test("topbar informa o modo atual sem transformá-lo em seletor", () => {
+  assert.match(topbar, /modeLabel\(context\.mode\)/);
   assert.match(topbar, /user\?\.name/);
   assert.match(topbar, /hasUnsavedChanges/);
   assert.match(topbar, /maono-map-topbar__account/);
+  assert.doesNotMatch(topbar, /availablePanels/);
+  assert.doesNotMatch(topbar, /viewerRoute|editorRoute/);
   assert.doesNotMatch(topbar, /maono-map-topbar__project/);
   assert.doesNotMatch(topbar, /maono-map-topbar__back/);
   assert.doesNotMatch(topbar, /activeOrganization\?\.name/);
@@ -169,10 +171,14 @@ test("topbar mantém status e conta sem seletor de projeto", () => {
   assert.doesNotMatch(topbar, /Bell/);
 });
 
-test("Camadas e Filtros sincronizam sidebar e painel", () => {
+test("Filtros permanecem exclusivamente como subfunção do painel de Camadas", () => {
   assert.match(runtime, /requestMaonoMapPanelTab/);
   assert.match(layerPanel, /MAONO_MAP_PANEL_TAB_REQUEST_EVENT/);
   assert.match(layerPanel, /notifyMaonoMapPanelTabChanged/);
+  assert.match(layerPanel, /id="maono-layers-tab"/);
+  assert.match(layerPanel, /id="maono-filters-tab"/);
+  assert.match(sidebar, /onPanelTabSelect\("layers"\)/);
+  assert.doesNotMatch(sidebar, /onPanelTabSelect\("filters"\)/);
   assert.match(panelHost, /aria-controls="maono-map-engine-panel"/);
   assert.match(layerPanel, /id="maono-map-engine-panel"/);
 });
