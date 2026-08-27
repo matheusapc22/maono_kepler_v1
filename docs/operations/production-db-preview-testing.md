@@ -16,6 +16,10 @@ A geometria continua fora do D1. Projetos de teste usam a mesma arquitetura de p
 - `MAONO_PREVIEW_MUTATIONS_ENABLED=false` bloqueia imediatamente todas as mutações de domínio do Preview.
 - nenhuma migration remota deve ser executada por workflow de Preview.
 
+### Efeitos operacionais permitidos
+
+O isolamento é de **dados de domínio**, não uma promessa de D1 fisicamente read-only. Como Preview usa o banco real, login/logout, troca de organização ativa e auditorias já existentes podem criar/atualizar linhas operacionais como `sessions` e `audit_logs`. Esses efeitos são esperados e não devem modificar projetos, permissões ou organizações reais. Rate limits de análises só devem ser exercitados dentro da organização QA.
+
 ## Ordem segura de implantação
 
 1. Fazer merge da PR que introduz `functions/_middleware.js` e a política de Preview.
@@ -62,7 +66,25 @@ qa-geojson-golden       # permanente, leitura/render/performance
 qa-smoke-<commit>       # descartável, create/save/reload/delete
 ```
 
-O GeoJSON Golden deve ter manifesto com SHA-256, tamanho, feature count, bbox e tipos geométricos. Esse manifesto será adicionado quando o arquivo de referência for fornecido.
+O GeoJSON Golden deve ter manifesto com SHA-256, tamanho, feature count, bbox e tipos geométricos.
+
+O builder já está preparado:
+
+```bash
+node scripts/preview/build-golden-project.mjs arquivo.geojson \
+  --slug=qa-geojson-golden \
+  --label="QA — GeoJSON Golden" \
+  --out-dir=/tmp/maono-golden
+```
+
+Ele gera:
+
+```text
+/tmp/maono-golden/config.kepler.r000001.json
+/tmp/maono-golden/manifest.json
+```
+
+O manifesto registra checksum, tamanho, feature count, tipos geométricos, quantidade de coordenadas, bbox e propriedades. O MapConfig produzido segue o contrato persistido `v1` do Kepler e mantém a geometria fora do D1.
 
 ## Respostas de bloqueio
 
@@ -82,6 +104,18 @@ X-Maono-Preview-Write: <reason>
 
 Nenhum segredo ou ID da organização QA é devolvido nesses headers.
 
+## Smoke remoto
+
+Depois que o binding e o projeto Golden existirem:
+
+```bash
+MAONO_PREVIEW_BASE_URL=https://<deployment>.maono-kepler-v1.pages.dev \
+MAONO_PREVIEW_SESSION_COOKIE='<cookie de sessão QA>' \
+node scripts/preview/smoke-preview.mjs
+```
+
+Sem cookie, o script valida `/api/health`, runtime Preview e conexão D1. Com cookie, também exige que o Golden esteja listado e que seu `config-stream` retorne bytes via streaming.
+
 ## Migrations
 
 Preview compartilhando o D1 de produção **não pode aplicar migrations**. Mudanças de schema continuam seguindo o fluxo controlado de produção depois do merge. O gate `scripts/preview/assert-preview-safety.mjs` falha se um workflow identificado como Preview contiver `wrangler d1 migrations apply ... --remote` ou `wrangler d1 execute ... --remote`.
@@ -90,10 +124,11 @@ Preview compartilhando o D1 de produção **não pode aplicar migrations**. Muda
 
 Depois que o GeoJSON for fornecido:
 
-1. analisar integridade e complexidade;
-2. montar o MapConfig Kepler de referência;
+1. analisar integridade e complexidade com o builder;
+2. revisar o MapConfig e o manifesto gerados;
 3. publicar o arquivo revisionado na raiz QA do storage;
 4. inserir `projects`, `project_config_revisions` e `user_projects` de forma idempotente;
 5. registrar manifesto da fixture;
-6. adicionar smoke test browser/Preview;
-7. transformar o Preview smoke em gate obrigatório antes de merge.
+6. executar smoke remoto no deployment Preview;
+7. adicionar smoke browser/Playwright;
+8. transformar o Preview smoke em gate obrigatório antes de merge.
