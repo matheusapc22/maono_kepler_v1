@@ -1,24 +1,24 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  calculateNativeLegendPlacement,
+  calculateMaonoLegendInitialPosition,
   MAONO_LEGEND_HORIZONTAL_RATIO,
   MAONO_LEGEND_VERTICAL_RATIO,
-} from "../src/pages/Kepler/components/native-overlays/native-overlay-placement.ts";
+} from "../src/pages/Kepler/factories/maono-map-legend-position.ts";
 
-const [runtime, css, shellRuntime] = await Promise.all([
+const [legendFactory, popoverFactory, shellRuntime, keplerIndex] = await Promise.all([
   readFile(
     new URL(
-      "../src/pages/Kepler/components/native-overlays/NativeMapOverlaysRuntime.tsx",
+      "../src/pages/Kepler/factories/maono-map-legend-panel.tsx",
       import.meta.url,
     ),
     "utf8",
   ),
   readFile(
     new URL(
-      "../src/pages/Kepler/components/native-overlays/maono-native-overlays.css",
+      "../src/pages/Kepler/factories/maono-map-popover.tsx",
       import.meta.url,
     ),
     "utf8",
@@ -30,66 +30,91 @@ const [runtime, css, shellRuntime] = await Promise.all([
     ),
     "utf8",
   ),
+  readFile(
+    new URL("../src/pages/Kepler/index.tsx", import.meta.url),
+    "utf8",
+  ),
 ]);
 
-test("legenda nasce na posição Maõno da referência visual", () => {
+const legacyOverlayFiles = [
+  "../src/pages/Kepler/components/native-overlays/NativeMapOverlaysRuntime.tsx",
+  "../src/pages/Kepler/components/native-overlays/maono-native-overlays.css",
+  "../src/pages/Kepler/components/native-overlays/native-overlay-placement.ts",
+];
+
+test("legenda nasce em 60% / 12% usando somente o viewport React", () => {
   assert.equal(MAONO_LEGEND_HORIZONTAL_RATIO, 0.6);
   assert.equal(MAONO_LEGEND_VERTICAL_RATIO, 0.12);
 
-  const placement = calculateNativeLegendPlacement(
-    {
-      left: 574,
-      top: 16,
-      width: 1343,
-      height: 915,
-    },
-    {
-      width: 300,
-      height: 170,
-    },
-  );
+  const position = calculateMaonoLegendInitialPosition({
+    width: 1343,
+    height: 915,
+  });
 
-  assert.ok(Math.abs(placement.left - 1379.8) < 0.1);
-  assert.ok(Math.abs(placement.top - 125.8) < 0.1);
+  assert.ok(position);
+  assert.ok(Math.abs(position.x - 805.8) < 0.1);
+  assert.ok(Math.abs(position.y - 109.8) < 0.1);
+  assert.equal(position.anchorX, "left");
+  assert.equal(position.anchorY, "top");
 });
 
-test("posição é limitada ao canvas em viewports estreitos", () => {
-  const placement = calculateNativeLegendPlacement(
-    { left: 80, top: 40, width: 320, height: 420 },
-    { width: 280, height: 180 },
-  );
+test("posição inicial é limitada ao canvas sem medir pixels no DOM", () => {
+  const position = calculateMaonoLegendInitialPosition({
+    width: 320,
+    height: 420,
+  });
 
-  assert.equal(placement.left, 104);
-  assert.ok(placement.top >= 56);
-  assert.ok(placement.top <= 264);
+  assert.ok(position);
+  assert.equal(position.x, 16);
+  assert.ok(position.y >= 16);
+  assert.ok(position.y <= 272);
 });
 
-test("runtime reconhece a legenda real mesmo sem classname estável", () => {
-  assert.match(runtime, /LEGEND_TEXT/);
-  assert.match(runtime, /legenda\(\?:\\s\+da\\s\+camada\)/i);
-  assert.match(runtime, /aside, section, div/);
-  assert.match(runtime, /positionedForCurrentOpenRef/);
-  assert.match(runtime, /translate3d\(0px, 0px, 0px\)/);
-  assert.match(runtime, /data.*maonoNativeLegend/i);
-  assert.match(runtime, /mapboxgl-canvas/);
-  assert.match(shellRuntime, /<NativeMapOverlaysRuntime legendVisible=\{engineState\.legendVisible\} \/>/);
+test("legenda Maono substitui o factory oficial e preserva estado nativo", () => {
+  assert.match(legendFactory, /MapLegendPanelFactory/);
+  assert.match(legendFactory, /MapLegendPanelFactory\.deps/);
+  assert.match(legendFactory, /MapLegendPanelFactory\(/);
+  assert.match(legendFactory, /MapLegend/);
+  assert.match(legendFactory, /setMapControlSettings/);
+  assert.match(legendFactory, /uiState\?\.mapControls\?\.mapLegend\?\.active/);
+  assert.match(legendFactory, /header="maono\.legend\.title"/);
+  assert.match(legendFactory, /data-maono-kepler-factory="map-legend-panel"/);
+  assert.match(legendFactory, /replaceMapLegendPanel/);
 });
 
-test("popup é marcado incrementalmente sem atualizar estado React", () => {
-  assert.match(runtime, /POPUP_SELECTORS/);
-  assert.match(runtime, /data.*maonoNativePopup/i);
-  assert.match(runtime, /mutation\.addedNodes/);
-  assert.doesNotMatch(runtime, /setState\(/);
-  assert.doesNotMatch(runtime, /useState\(/);
+test("popup Maono mantém o MapPopover oficial e seus props reais", () => {
+  assert.match(popoverFactory, /MapPopoverFactory/);
+  assert.match(popoverFactory, /MapPopoverFactory\.deps/);
+  assert.match(popoverFactory, /MapPopoverFactory\(MapPopoverContent\)/);
+  assert.match(popoverFactory, /<NativeMapPopover \{\.\.\.props\} \/>/);
+  assert.match(popoverFactory, /ThemeProvider/);
+  assert.match(popoverFactory, /\.map-popover/);
+  assert.match(popoverFactory, /replaceMapPopover/);
 });
 
-test("skin Maõno fica isolada e cobre legenda e popup nativos", () => {
-  assert.match(css, /data-maono-native-overlays="active"/);
-  assert.match(css, /data-maono-native-legend="true"/);
-  assert.match(css, /data-maono-native-popup="true"/);
-  assert.match(css, /\.map-popover/);
-  assert.match(css, /\.layer-hover-info/);
-  assert.match(css, /#c5a059/i);
-  assert.match(css, /backdrop-filter/);
-  assert.match(css, /@media \(max-width: 820px\)/);
+test("injeção oficial registra legenda e popup no Kepler", () => {
+  assert.match(keplerIndex, /replaceMapLegendPanel/);
+  assert.match(keplerIndex, /replaceMapPopover/);
+  assert.match(keplerIndex, /replaceMapLegendPanel\(\)/);
+  assert.match(keplerIndex, /replaceMapPopover\(\)/);
+});
+
+test("novo fluxo não depende de MutationObserver, matching de texto ou seletores frágeis", () => {
+  const implementation = `${legendFactory}\n${popoverFactory}`;
+
+  assert.doesNotMatch(implementation, /MutationObserver/);
+  assert.doesNotMatch(implementation, /querySelector/);
+  assert.doesNotMatch(implementation, /textContent/);
+  assert.doesNotMatch(implementation, /\[class\*=/);
+  assert.doesNotMatch(implementation, /!important/);
+  assert.doesNotMatch(shellRuntime, /NativeMapOverlaysRuntime/);
+});
+
+test("runtime e CSS legados de overlays foram removidos", async () => {
+  for (const relativePath of legacyOverlayFiles) {
+    await assert.rejects(
+      access(new URL(relativePath, import.meta.url)),
+      /ENOENT/,
+    );
+  }
 });
