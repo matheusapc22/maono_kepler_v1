@@ -43,9 +43,17 @@ function hydrationError(cause: unknown): SavedConfigHydrationError {
   return error;
 }
 
-function validateRuntimeDatasets(datasets: unknown) {
+function validateRuntimeDatasets(datasets: unknown, expectedCount: number) {
   if (!Array.isArray(datasets)) {
     throw hydrationError(new Error("O Kepler não retornou uma lista de datasets de runtime."));
+  }
+
+  if (datasets.length !== expectedCount) {
+    throw hydrationError(
+      new Error(
+        `O Kepler converteu ${datasets.length} de ${expectedCount} datasets persistidos.`,
+      ),
+    );
   }
 
   datasets.forEach((dataset, index) => {
@@ -96,7 +104,7 @@ export function hydrateSavedKeplerConfig(
   }
 
   const datasets = loaded.datasets;
-  validateRuntimeDatasets(datasets);
+  validateRuntimeDatasets(datasets, prepared.savedConfig.datasets.length);
 
   const config = loaded.config ?? prepared.savedConfig.config;
   if (!isRecord(config)) {
