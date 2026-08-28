@@ -1,6 +1,6 @@
 export type MapAnalysisTool = "marker" | "buffer" | "isochrone";
 
-export type BufferInsertionMode = "single" | "multi";
+export type BufferInsertionMode = "multi";
 
 export type MapToolPoint = {
   longitude: number;
@@ -128,7 +128,7 @@ function isValidBufferOptions(
   return Boolean(
     options &&
       options.kind === "buffer" &&
-      (options.insertionMode === "single" || options.insertionMode === "multi"),
+      options.insertionMode === "multi",
   );
 }
 
@@ -161,7 +161,6 @@ function sessionIsCompatible(
 ) {
   if (tool !== "buffer") return session === null;
   if (!isValidBufferOptions(options)) return false;
-  if (options.insertionMode === "single") return session === null;
   return isValidMultiBufferSession(session);
 }
 
@@ -195,8 +194,7 @@ export function isMapToolStateValid(state: MapToolState): boolean {
       if (state.tool === "buffer") {
         return (
           state.menu === "buffer" &&
-          (state.preliminaryOptions === null ||
-            isValidBufferOptions(state.preliminaryOptions))
+          isValidBufferOptions(state.preliminaryOptions)
         );
       }
       if (state.tool === "isochrone") {
@@ -262,7 +260,6 @@ function isMultiBufferState(state: MapToolState) {
   return Boolean(
     state.tool === "buffer" &&
       isValidBufferOptions(state.preliminaryOptions) &&
-      state.preliminaryOptions.insertionMode === "multi" &&
       isValidMultiBufferSession(state.session),
   );
 }
@@ -296,7 +293,10 @@ export function mapToolReducer(
             : action.tool === "isochrone"
               ? "isochrone"
               : "root",
-        preliminaryOptions: null,
+        preliminaryOptions:
+          action.tool === "buffer"
+            ? { kind: "buffer", insertionMode: "multi" }
+            : null,
         pendingPoint: null,
         session: null,
       });
@@ -318,9 +318,7 @@ export function mapToolReducer(
       }
 
       const session =
-        state.tool === "buffer" &&
-        isValidBufferOptions(state.preliminaryOptions) &&
-        state.preliminaryOptions.insertionMode === "multi"
+        state.tool === "buffer" && isValidBufferOptions(state.preliminaryOptions)
           ? action.session ?? null
           : null;
 
