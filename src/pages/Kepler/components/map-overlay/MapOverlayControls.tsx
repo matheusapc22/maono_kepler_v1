@@ -387,17 +387,31 @@ export default function MapOverlayControls() {
             <div>
               <OverlayIcon name="buffer" />
               <span>
-                <small>Prévia temporária</small>
+                <small>
+                  {buffer.preview.saveRequestId ? "Salvamento em andamento" : "Prévia temporária"}
+                </small>
                 <strong>{buffer.preview.label}</strong>
-                {buffer.preview.canPersist ? (
-                  <em>O salvamento do Buffer será habilitado em uma etapa posterior.</em>
-                ) : (
+                {!buffer.preview.canPersist ? (
                   <em>Este modo permite consultar e descartar, mas não salvar a análise.</em>
-                )}
+                ) : null}
               </span>
             </div>
             <div>
-              <button type="button" onClick={buffer.discard}>
+              {buffer.preview.canPersist && capabilities?.persistBuffer ? (
+                <button
+                  type="button"
+                  className="is-primary"
+                  onClick={buffer.persist}
+                  disabled={Boolean(buffer.preview.saveRequestId)}
+                >
+                  {buffer.preview.saveRequestId ? "Salvando…" : "Salvar no projeto"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={buffer.discard}
+                disabled={Boolean(buffer.preview.saveRequestId)}
+              >
                 Descartar
               </button>
             </div>

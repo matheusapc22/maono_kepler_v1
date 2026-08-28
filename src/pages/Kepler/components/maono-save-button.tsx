@@ -26,6 +26,7 @@ import {
   emitMapSaveResult,
   MAONO_MAP_SAVE_REQUEST_EVENT,
   mapSaveRequestFromEvent,
+  mapSaveSourceAnalysisKind,
   type MapSaveRequestDetail,
   type MapSaveResultStatus,
 } from "../map-panel/map-save-events";
@@ -402,8 +403,11 @@ const MaonoSaveButton: React.FC = () => {
         return;
       }
 
-      const promoted =
-        commandsRef.current.markLayerPersistent(request.dataId);
+      const analysisKind = mapSaveSourceAnalysisKind(request.source);
+      const promoted = commandsRef.current.markLayerPersistent(
+        request.dataId,
+        analysisKind,
+      );
 
       if (!promoted.ok) {
         emitMapSaveResult(request, "error", promoted.reason);
@@ -436,7 +440,14 @@ const MaonoSaveButton: React.FC = () => {
     if (!request) return;
 
     if (status !== "success") {
-      commandsRef.current.markLayerTransient(request.dataId);
+      const analysisKind = mapSaveSourceAnalysisKind(request.source);
+      const rolledBack = commandsRef.current.markLayerTransient(
+        request.dataId,
+        analysisKind,
+      );
+      if (!rolledBack.ok && !failureMessage) {
+        failureMessage = rolledBack.reason;
+      }
     }
 
     pendingSaveRequestRef.current = null;
@@ -743,7 +754,7 @@ const MaonoSaveButton: React.FC = () => {
     ) {
       setMessageType("error");
       setMessage(
-        "Confirme ou descarte a prévia de isócrona antes de salvar o mapa.",
+        "Confirme ou descarte a prévia de análise antes de salvar o mapa.",
       );
       return;
     }
@@ -824,7 +835,7 @@ const MaonoSaveButton: React.FC = () => {
             setCreatePanelOpen(false);
             finishPendingMapSave(
               "cancelled",
-              "A criação do projeto foi cancelada antes do salvamento da isócrona.",
+              "A criação do projeto foi cancelada antes do salvamento da análise.",
             );
           }
         }}

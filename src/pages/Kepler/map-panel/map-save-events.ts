@@ -1,7 +1,11 @@
+import type { MapAnalysisKind } from "../engine-adapter/types.ts";
+
 export const MAONO_MAP_SAVE_REQUEST_EVENT = "maono:save-map";
 export const MAONO_MAP_SAVE_RESULT_EVENT = "maono:map-save-result";
 
-export type MapSaveRequestSource = "isochrone-preview";
+export type MapSaveRequestSource =
+  | "isochrone-preview"
+  | "buffer-preview";
 export type MapSaveResultStatus = "success" | "error" | "cancelled";
 
 export type MapSaveRequestDetail = {
@@ -19,6 +23,18 @@ function normalizedText(value: unknown, maximumLength = 200) {
   const text = typeof value === "string" ? value.trim() : "";
 
   return text && text.length <= maximumLength ? text : null;
+}
+
+function normalizedSource(value: unknown): MapSaveRequestSource | null {
+  return value === "isochrone-preview" || value === "buffer-preview"
+    ? value
+    : null;
+}
+
+export function mapSaveSourceAnalysisKind(
+  source: MapSaveRequestSource,
+): MapAnalysisKind {
+  return source === "buffer-preview" ? "buffer" : "isochrone";
 }
 
 function requestId() {
@@ -63,18 +79,15 @@ export function mapSaveRequestFromEvent(
   const request = detail as Partial<MapSaveRequestDetail>;
   const normalizedRequestId = normalizedText(request.requestId);
   const dataId = normalizedText(request.dataId);
+  const source = normalizedSource(request.source);
 
-  if (
-    !normalizedRequestId ||
-    !dataId ||
-    request.source !== "isochrone-preview"
-  ) {
+  if (!normalizedRequestId || !dataId || !source) {
     return null;
   }
 
   return {
     requestId: normalizedRequestId,
-    source: request.source,
+    source,
     dataId,
   };
 }
@@ -108,6 +121,7 @@ export function mapSaveResultFromEvent(
   const result = detail as Partial<MapSaveResultDetail>;
   const normalizedRequestId = normalizedText(result.requestId);
   const dataId = normalizedText(result.dataId);
+  const source = normalizedSource(result.source);
   const status =
     result.status === "success" ||
     result.status === "error" ||
@@ -115,18 +129,13 @@ export function mapSaveResultFromEvent(
       ? result.status
       : null;
 
-  if (
-    !normalizedRequestId ||
-    !dataId ||
-    !status ||
-    result.source !== "isochrone-preview"
-  ) {
+  if (!normalizedRequestId || !dataId || !source || !status) {
     return null;
   }
 
   return {
     requestId: normalizedRequestId,
-    source: result.source,
+    source,
     dataId,
     status,
     message: normalizedText(result.message, 500),

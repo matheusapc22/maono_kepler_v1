@@ -17,6 +17,7 @@ import {
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry.ts";
 import { useMapPanel } from "../map-panel/MapPanelContext.tsx";
 import { EMPTY_MAP_CAPABILITIES } from "../map-panel/types.ts";
+import { createAnalysisLayerCommands } from "./analysis-layer-commands.ts";
 import { createKeplerEngineCommands } from "./commands.ts";
 import { installKeplerEngineStateDebug } from "./engine-state-debug.ts";
 import {
@@ -532,13 +533,42 @@ export function KeplerEngineAdapterProvider({
     ],
   );
 
+  const analysisCommands = useMemo(
+    () =>
+      createAnalysisLayerCommands({
+        dispatch,
+        getState: () => store.getState(),
+        capabilities,
+        context,
+        isTransientDataset,
+        markTransientDataset,
+        markPersistentDataset,
+      }),
+    [
+      capabilities,
+      context,
+      dispatch,
+      isTransientDataset,
+      markPersistentDataset,
+      markTransientDataset,
+      store,
+    ],
+  );
+
   const commands = useMemo(
     () => ({
       ...baseCommands,
       fitVisibleData: startFlight,
       fitFilteredData: startFlight,
+      addGeoJsonLayer: (input: Parameters<typeof baseCommands.addGeoJsonLayer>[0]) =>
+        input.transient
+          ? analysisCommands.addGeoJsonLayer(input)
+          : baseCommands.addGeoJsonLayer(input),
+      removeTransientLayer: analysisCommands.removeTransientLayer,
+      markLayerPersistent: analysisCommands.markLayerPersistent,
+      markLayerTransient: analysisCommands.markLayerTransient,
     }),
-    [baseCommands, startFlight],
+    [analysisCommands, baseCommands, startFlight],
   );
 
   const state = useMemo((): KeplerEngineState => {

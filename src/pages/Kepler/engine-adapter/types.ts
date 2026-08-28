@@ -4,6 +4,7 @@ import type {
 } from "../map-panel/types.ts";
 
 export type MapRgbColor = [number, number, number];
+export type MapAnalysisKind = "isochrone" | "buffer";
 
 export type MapPointLayerType = "point" | "cluster" | "heatmap";
 
@@ -361,6 +362,12 @@ export type HeatmapStyleOptions = {
   colorPalette?: string[];
 };
 
+export type AnalysisLayerPresentation = {
+  tooltipFields?: string[];
+  legendField?: string | null;
+  legendPalette?: string[];
+};
+
 export type AddGeoJsonLayerInput = {
   dataId?: string;
   label: string;
@@ -369,6 +376,8 @@ export type AddGeoJsonLayerInput = {
   strokeColor?: MapRgbColor;
   opacity?: number;
   transient?: boolean;
+  analysisKind?: MapAnalysisKind;
+  presentation?: AnalysisLayerPresentation;
   centerMap?: boolean;
 };
 
@@ -503,9 +512,18 @@ export type KeplerEngineCommands = {
   addGeoJsonLayer(
     input: AddGeoJsonLayerInput,
   ): KeplerCommandResult<{ dataId: string }>;
-  removeTransientLayer(dataId: string): KeplerCommandResult;
-  markLayerPersistent(dataId: string): KeplerCommandResult;
-  markLayerTransient(dataId: string): KeplerCommandResult;
+  removeTransientLayer(
+    dataId: string,
+    analysisKind: MapAnalysisKind,
+  ): KeplerCommandResult;
+  markLayerPersistent(
+    dataId: string,
+    analysisKind: MapAnalysisKind,
+  ): KeplerCommandResult;
+  markLayerTransient(
+    dataId: string,
+    analysisKind: MapAnalysisKind,
+  ): KeplerCommandResult;
 };
 
 export type KeplerEngineAdapterValue = {

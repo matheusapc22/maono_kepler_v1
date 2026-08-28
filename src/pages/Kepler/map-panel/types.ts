@@ -14,10 +14,11 @@ export type MapCapabilities = {
   focusMapData: boolean;
   configureTooltips: boolean;
   toggleLegend: boolean;
-  placeAnalysisMarker?: boolean;
+  placeAnalysisMarker: boolean;
   previewIsochrone: boolean;
-  previewBuffer?: boolean;
+  previewBuffer: boolean;
   persistIsochrone: boolean;
+  persistBuffer: boolean;
   removeIsochrone: boolean;
   editLayers: boolean;
   editStyle: boolean;
@@ -47,7 +48,7 @@ export type MapPanelFeatures = {
   maonoMapShell: boolean;
   maonoMapOverlay: boolean;
   maonoIsochrone: boolean;
-  maonoBuffer?: boolean;
+  maonoBuffer: boolean;
 };
 
 export type SafeMapProject = {
@@ -61,8 +62,8 @@ export type SafeMapProject = {
 
 export type SafeMapOrganization = {
   id: number | string;
-  name?: string;
-  slug?: string;
+  name?: string | null;
+  slug?: string | null;
 };
 
 export type ResourceLimit = {
@@ -147,6 +148,7 @@ export const EMPTY_MAP_CAPABILITIES = Object.freeze({
   previewIsochrone: false,
   previewBuffer: false,
   persistIsochrone: false,
+  persistBuffer: false,
   removeIsochrone: false,
   editLayers: false,
   editStyle: false,

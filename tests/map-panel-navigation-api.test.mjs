@@ -37,7 +37,7 @@ const [service, endpoint, newMap, permissions, clientApi] = await Promise.all(
 );
 
 test("política versionada prioriza create, depois editor e viewer", () => {
-  assert.equal(MAP_PANEL_POLICY_VERSION, 2);
+  assert.equal(MAP_PANEL_POLICY_VERSION, 3);
 
   assert.deepEqual(
     resolveMapPanelDecision({
@@ -173,6 +173,7 @@ test("capacidades do viewer não incluem mutações persistentes", () => {
   assert.equal(capabilities.viewMap, true);
   assert.equal(capabilities.inspectLayer, true);
   assert.equal(capabilities.toggleLayerVisibility, true);
+  assert.equal(capabilities.persistBuffer, false);
 
   for (const capability of [
     "editLayers",
@@ -185,6 +186,7 @@ test("capacidades do viewer não incluem mutações persistentes", () => {
     "manageFilters",
     "editFilters",
     "saveMap",
+    "persistBuffer",
     "openCreateWorkspace",
     "createProject",
     "initializeMap",
@@ -248,6 +250,7 @@ test("feature flags têm rollback seguro e opt-in", () => {
     maonoMapShell: false,
     maonoMapOverlay: false,
     maonoIsochrone: false,
+    maonoBuffer: false,
   });
 
   assert.deepEqual(
@@ -261,6 +264,7 @@ test("feature flags têm rollback seguro e opt-in", () => {
       MAONO_MAP_SHELL_V1: "true",
       MAONO_MAP_OVERLAY_V1: "true",
       MAONO_ISOCHRONE_V1: "true",
+      GEOPROCESSING_BUFFER_V1: "true",
       GEOAPIFY_API_KEY: "configured-in-secret-store",
     }),
     {
@@ -273,6 +277,7 @@ test("feature flags têm rollback seguro e opt-in", () => {
       maonoMapShell: true,
       maonoMapOverlay: true,
       maonoIsochrone: true,
+      maonoBuffer: true,
     },
   );
 });

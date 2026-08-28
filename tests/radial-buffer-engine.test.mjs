@@ -31,6 +31,31 @@ function normalized(ranges = [500], overrides = {}) {
   });
 }
 
+function geometryRings(geometry) {
+  if (geometry.type === "Polygon") return geometry.coordinates;
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.flatMap((polygon) => polygon);
+  }
+  return [];
+}
+
+function assertValidDatelineRings(geometry) {
+  for (const ring of geometryRings(geometry)) {
+    assert.ok(ring.length >= 4);
+    assert.deepEqual(ring[0], ring.at(-1));
+    for (const [longitude, latitude] of ring) {
+      assert.ok(longitude >= -180 && longitude <= 180);
+      assert.ok(latitude >= -90 && latitude <= 90);
+    }
+    for (let index = 1; index < ring.length; index += 1) {
+      assert.ok(
+        Math.abs(ring[index][0] - ring[index - 1][0]) <= 180,
+        `salto longitudinal inválido: ${ring[index - 1][0]} -> ${ring[index][0]}`,
+      );
+    }
+  }
+}
+
 test("engine gera um Polygon fechado com 64 segmentos", () => {
   const input = normalized([500]);
   const result = executeRadialBuffer(input);
@@ -43,6 +68,7 @@ test("engine gera um Polygon fechado com 64 segmentos", () => {
   assert.equal(ring.length, DEFAULT_SEGMENTS_PER_QUADRANT * 4 + 1);
   assert.deepEqual(ring[0], ring.at(-1));
   assert.equal(result.engineMetadata.totalSegments, 64);
+  assert.equal(result.engineMetadata.antimeridianSplitCount, 0);
 });
 
 test("engine produz raio geodésico compatível com a distância solicitada", () => {
@@ -86,17 +112,65 @@ test("engine é determinístico para a mesma entrada", () => {
   assert.deepEqual(executeRadialBuffer(input), executeRadialBuffer(input));
 });
 
-test("engine rejeita buffers que cruzam o antimeridiano", () => {
+test("engine divide cruzamento do +180 em MultiPolygon válido", () => {
   const input = normalizeBufferInput({
     origin: { latitude: 0, longitude: 179.9 },
     unit: "km",
     ranges: [20],
+  });
+  const result = executeRadialBuffer(input);
+  const geometry = result.geojson.features[0].geometry;
+  const positions = geometryRings(geometry).flat();
+
+  assert.equal(geometry.type, "MultiPolygon");
+  assert.equal(geometry.coordinates.length, 2);
+  assert.equal(result.engineMetadata.antimeridianSplitCount, 1);
+  assertValidDatelineRings(geometry);
+  assert.ok(positions.some((position) => position[0] === 180));
+  assert.ok(positions.some((position) => position[0] === -180));
+});
+
+test("engine divide cruzamento do -180 em MultiPolygon válido", () => {
+  const input = normalizeBufferInput({
+    origin: { latitude: -12, longitude: -179.9 },
+    unit: "km",
+    ranges: [30],
+  });
+  const result = executeRadialBuffer(input);
+  const geometry = result.geojson.features[0].geometry;
+
+  assert.equal(geometry.type, "MultiPolygon");
+  assert.equal(result.engineMetadata.antimeridianSplitCount, 1);
+  assertValidDatelineRings(geometry);
+});
+
+test("engine conta somente os raios que realmente cruzam o antimeridiano", () => {
+  const input = normalizeBufferInput({
+    origin: { latitude: 0, longitude: 179 },
+    unit: "km",
+    ranges: [20, 150],
+  });
+  const result = executeRadialBuffer(input);
+
+  assert.equal(result.geojson.features[0].geometry.type, "MultiPolygon");
+  assert.equal(result.geojson.features[1].geometry.type, "Polygon");
+  assert.equal(result.engineMetadata.antimeridianSplitCount, 1);
+  result.geojson.features.forEach((feature) =>
+    assertValidDatelineRings(feature.geometry),
+  );
+});
+
+test("engine falha de forma controlada para buffer que envolve polo", () => {
+  const input = normalizeBufferInput({
+    origin: { latitude: 89, longitude: 30 },
+    unit: "km",
+    ranges: [200],
   });
 
   assert.throws(
     () => executeRadialBuffer(input),
     (error) =>
       error?.status === 422 &&
-      error?.code === "BUFFER_ANTIMERIDIAN_UNSUPPORTED",
+      error?.code === "BUFFER_POLAR_CAP_UNSUPPORTED",
   );
 });
