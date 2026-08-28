@@ -7,7 +7,9 @@ import {
 } from "../../engine-adapter";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
 import { describeIsochroneAvailability } from "../../map-panel/isochrone-feature-diagnostic";
+import BufferDialog from "./BufferDialog";
 import IsochroneDialog from "./IsochroneDialog";
+import { useBufferPreview } from "./useBufferPreview";
 import { useIsochronePreview } from "./useIsochronePreview";
 import { useMapMarker } from "./useMapMarker";
 import "./map-overlay-controls.css";
@@ -23,6 +25,7 @@ type OverlayIconName =
   | "legend"
   | "marker"
   | "isochrone"
+  | "buffer"
   | "trash";
 
 function OverlayIcon({ name }: { name: OverlayIconName }) {
@@ -55,6 +58,13 @@ function OverlayIcon({ name }: { name: OverlayIconName }) {
         <circle cx="12" cy="12" r="9" />
         <circle cx="12" cy="12" r="5" />
         <circle cx="12" cy="12" r="1.5" />
+      </>
+    ),
+    buffer: (
+      <>
+        <circle cx="12" cy="12" r="8" />
+        <circle cx="12" cy="12" r="1.6" />
+        <path d="M12 12l5.5-5.5" />
       </>
     ),
     trash: (
@@ -95,16 +105,27 @@ export default function MapOverlayControls() {
     origin: marker.origin,
     onMarkerReset: marker.reset,
   });
+  const buffer = useBufferPreview({
+    origin: marker.origin,
+    onMarkerReset: marker.reset,
+  });
   const filtersActive = state.filters.some((filter) => filter.enabled);
   const focusAvailable = filtersActive
     ? Boolean(state.filteredBounds)
     : Boolean(state.bounds);
-  const message = commandMessage || isochrone.message;
+  const message = commandMessage || buffer.message || isochrone.message;
   const isochroneCapabilityEnabled = capabilities?.previewIsochrone === true;
+  const bufferCapabilityEnabled = capabilities?.previewBuffer === true;
+  const analysisMarkerCapabilityEnabled =
+    capabilities?.placeAnalysisMarker === true;
+  const analysisPreviewActive = Boolean(isochrone.preview || buffer.preview);
   const isochroneAvailabilityLabel = describeIsochroneAvailability(
     context?.isochroneFeatureState,
     isochroneCapabilityEnabled,
   );
+  const analysisMarkerAvailabilityLabel = analysisMarkerCapabilityEnabled
+    ? "Posicionar origem da análise"
+    : isochroneAvailabilityLabel;
 
   if (!customMapOverlayEnabled || typeof document === "undefined") {
     return null;
@@ -112,6 +133,7 @@ export default function MapOverlayControls() {
 
   function clearMessage() {
     setCommandMessage(null);
+    buffer.setMessage(null);
     isochrone.setMessage(null);
   }
 
@@ -206,7 +228,7 @@ export default function MapOverlayControls() {
         />
       ) : null}
 
-      {marker.origin && marker.position && !isochrone.preview ? (
+      {marker.origin && marker.position && !analysisPreviewActive ? (
         <div
           className="maono-map-marker"
           style={marker.position}
@@ -221,8 +243,8 @@ export default function MapOverlayControls() {
             onPointerCancel={marker.cancelDrag}
             onClick={marker.toggleMenuFromClick}
             onKeyDown={marker.handleMarkerKeyDown}
-            title="Arraste ou use as setas para mover a origem"
-            aria-label="Origem da isócrona; arraste ou use as setas para mover"
+            title="Arraste ou use as setas para mover a origem da análise"
+            aria-label="Origem da análise; arraste ou use as setas para mover"
             aria-expanded={marker.menuOpen}
           >
             <OverlayIcon name="marker" />
@@ -241,6 +263,18 @@ export default function MapOverlayControls() {
                 >
                   <OverlayIcon name="isochrone" />
                   Criar isócronas
+                </button>
+              ) : null}
+              {bufferCapabilityEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    buffer.openDialog();
+                    marker.setMenuOpen(false);
+                  }}
+                >
+                  <OverlayIcon name="buffer" />
+                  Criar buffers
                 </button>
               ) : null}
               <button type="button" onClick={marker.reset}>
@@ -348,6 +382,28 @@ export default function MapOverlayControls() {
           </section>
         ) : null}
 
+        {buffer.preview ? (
+          <section className="maono-isochrone-preview maono-buffer-preview">
+            <div>
+              <OverlayIcon name="buffer" />
+              <span>
+                <small>Prévia temporária</small>
+                <strong>{buffer.preview.label}</strong>
+                {buffer.preview.canPersist ? (
+                  <em>O salvamento do Buffer será habilitado em uma etapa posterior.</em>
+                ) : (
+                  <em>Este modo permite consultar e descartar, mas não salvar a análise.</em>
+                )}
+              </span>
+            </div>
+            <div>
+              <button type="button" onClick={buffer.discard}>
+                Descartar
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         <div className="maono-map-overlay__buttons">
           {capabilities?.focusMapData ? (
             <button
@@ -389,13 +445,13 @@ export default function MapOverlayControls() {
             </button>
           ) : null}
 
-          {!isochrone.preview ? (
+          {!analysisPreviewActive ? (
             <button
               type="button"
               className={marker.placing ? "is-active" : ""}
-              disabled={!isochroneCapabilityEnabled}
+              disabled={!analysisMarkerCapabilityEnabled}
               onClick={() => {
-                if (!isochroneCapabilityEnabled) return;
+                if (!analysisMarkerCapabilityEnabled) return;
                 if (marker.placing) {
                   marker.reset();
                 } else {
@@ -405,14 +461,17 @@ export default function MapOverlayControls() {
               title={
                 marker.placing
                   ? "Cancelar inserção de marcador"
-                  : isochroneAvailabilityLabel
+                  : analysisMarkerAvailabilityLabel
               }
               aria-label={
                 marker.placing
                   ? "Cancelar inserção de marcador"
-                  : isochroneAvailabilityLabel
+                  : analysisMarkerAvailabilityLabel
               }
               aria-pressed={marker.placing}
+              data-analysis-marker-state={
+                analysisMarkerCapabilityEnabled ? "ENABLED" : "DISABLED"
+              }
               data-isochrone-state={context?.isochroneFeatureState?.reason || "UNKNOWN"}
             >
               <OverlayIcon name="marker" />
@@ -427,6 +486,14 @@ export default function MapOverlayControls() {
         error={isochrone.error}
         onClose={isochrone.closeDialog}
         onSubmit={(input) => void isochrone.generate(input)}
+      />
+
+      <BufferDialog
+        open={buffer.dialogOpen}
+        busy={buffer.busy}
+        error={buffer.error}
+        onClose={buffer.closeDialog}
+        onSubmit={(input) => void buffer.generate(input)}
       />
     </>,
     document.body,
