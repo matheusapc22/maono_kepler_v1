@@ -1,11 +1,15 @@
-import { useCallback, useReducer } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 
 import {
   createInitialMapToolState,
+  isMapToolStateValid,
   mapToolReducer,
   type BufferInsertionMode,
   type BufferToolSession,
   type MapAnalysisTool,
+  type MapToolPoint,
+  type MapToolPreview,
+  type MapToolState,
 } from "./map-tool-state";
 
 function createMultiBufferSession(): BufferToolSession {
@@ -23,12 +27,28 @@ function createMultiBufferSession(): BufferToolSession {
   };
 }
 
+export function mapToolConfigurationTarget(
+  state: MapToolState,
+): "buffer" | "isochrone" | null {
+  if (!isMapToolStateValid(state) || state.mode !== "configuring") {
+    return null;
+  }
+
+  if (state.tool === "buffer" || state.tool === "isochrone") {
+    return state.tool;
+  }
+
+  return null;
+}
+
 export function useMapToolController({
   startPlacement,
   cancelPlacement,
+  resetMarker,
 }: {
-  startPlacement: () => void;
+  startPlacement: (tool: MapAnalysisTool) => void;
   cancelPlacement: () => void;
+  resetMarker: () => void;
 }) {
   const [state, dispatch] = useReducer(
     mapToolReducer,
@@ -84,7 +104,7 @@ export function useMapToolController({
     }
 
     dispatch(action);
-    startPlacement();
+    startPlacement(nextState.tool);
     return true;
   }, [startPlacement, state]);
 
@@ -102,24 +122,117 @@ export function useMapToolController({
 
     dispatch({ type: "SELECT_TOOL", tool: "marker" });
     dispatch(placementAction);
-    startPlacement();
+    startPlacement("marker");
     return true;
   }, [startPlacement, state]);
 
-  const completeLegacyPlacement = useCallback(() => {
-    dispatch({ type: "CANCEL_TOOL" });
-  }, []);
+  const pointPlaced = useCallback(
+    (point: MapToolPoint): MapAnalysisTool | null => {
+      if (state.mode !== "placingPoint") return null;
+
+      const action = { type: "POINT_PLACED" as const, point };
+      const nextState = mapToolReducer(state, action);
+      if (
+        nextState === state ||
+        nextState.mode !== "configuring" ||
+        !isMapToolStateValid(nextState)
+      ) {
+        return null;
+      }
+
+      dispatch(action);
+
+      if (nextState.tool === "marker") {
+        dispatch({ type: "ANALYSIS_CREATED" });
+      }
+
+      return nextState.tool;
+    },
+    [state],
+  );
+
+  const cancelPendingPoint = useCallback(() => {
+    if (state.mode !== "configuring") return false;
+
+    const action = { type: "CANCEL_PENDING_POINT" as const };
+    const nextState = mapToolReducer(state, action);
+    if (nextState === state) return false;
+
+    dispatch(action);
+    resetMarker();
+
+    if (nextState.mode === "placingPoint") {
+      startPlacement(nextState.tool);
+    } else {
+      cancelPlacement();
+    }
+
+    return true;
+  }, [cancelPlacement, resetMarker, startPlacement, state]);
+
+  const submitConfiguration = useCallback(() => {
+    if (state.mode !== "configuring") return false;
+    dispatch({ type: "SUBMIT_CONFIGURATION" });
+    return true;
+  }, [state.mode]);
+
+  const analysisCreated = useCallback(
+    (preview: MapToolPreview) => {
+      if (state.mode !== "configuring") return false;
+      const action = { type: "ANALYSIS_CREATED" as const, preview };
+      const nextState = mapToolReducer(state, action);
+      if (nextState === state || nextState.mode !== "reviewing") return false;
+      dispatch(action);
+      return true;
+    },
+    [state],
+  );
+
+  const finishAnalysis = useCallback(() => {
+    cancelPlacement();
+    resetMarker();
+    dispatch({ type: "RESET" });
+  }, [cancelPlacement, resetMarker]);
+
+  const handlePlacementEscape = useCallback(() => {
+    if (state.mode !== "placingPoint") return false;
+    cancelTool();
+    return true;
+  }, [cancelTool, state.mode]);
+
+  useEffect(() => {
+    if (state.mode !== "placingPoint") return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      handlePlacementEscape();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handlePlacementEscape, state.mode]);
 
   return {
     state,
     active: state.mode !== "idle",
     menuOpen: state.mode === "selectingTool",
+    configurationTarget: mapToolConfigurationTarget(state),
+    pendingPoint:
+      state.mode === "configuring" || state.mode === "reviewing"
+        ? state.pendingPoint
+        : null,
     toggleToolMenu,
     cancelTool,
     selectTool,
     selectBufferMode,
     startSelectedPlacement,
     startMarkerPlacement,
-    completeLegacyPlacement,
+    pointPlaced,
+    cancelPendingPoint,
+    submitConfiguration,
+    analysisCreated,
+    finishAnalysis,
+    handlePlacementEscape,
   };
 }
