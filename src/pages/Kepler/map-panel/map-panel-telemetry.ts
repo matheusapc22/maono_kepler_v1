@@ -11,12 +11,14 @@ type MapPanelTelemetryDetails = {
   code?: string | null;
   component?: string | null;
   operation?: "create" | "update" | null;
+  status?: string | null;
   rowCount?: number | null;
   analysisType?: string | null;
   travelMode?: string | null;
   unit?: string | null;
   rangeCount?: number | null;
   featureCount?: number | null;
+  antimeridianSplitCount?: number | null;
 };
 
 export function emitMapPanelTelemetry(
