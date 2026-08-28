@@ -1,0 +1,199 @@
+.maono-analysis-tool-menu {
+  width: min(292px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid #26344a;
+  border-radius: 17px;
+  color: #f1f5f9;
+  background: rgba(8, 12, 19, 0.98);
+  box-shadow: 0 24px 52px rgba(0, 0, 0, 0.62);
+  pointer-events: auto;
+  backdrop-filter: blur(16px);
+}
+
+.maono-analysis-tool-menu > header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 15px 12px;
+  border-bottom: 1px solid #1f2b3e;
+  background: #0f1522;
+}
+
+.maono-analysis-tool-menu > header span {
+  color: #c5a059;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.maono-analysis-tool-menu > header strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.maono-analysis-tool-menu__items {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px;
+}
+
+.maono-analysis-tool-menu__items > button {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 56px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #dce4ef;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.maono-analysis-tool-menu__items > button:hover,
+.maono-analysis-tool-menu__items > button:focus-visible {
+  color: #f8fafc;
+  border-color: rgba(197, 160, 89, 0.3);
+  background: #131c2a;
+}
+
+.maono-analysis-tool-menu__items svg {
+  width: 22px;
+  height: 22px;
+  color: #c5a059;
+  stroke-width: 1.8;
+}
+
+.maono-analysis-tool-menu__items button > span,
+.maono-analysis-tool-menu__body label > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.maono-analysis-tool-menu__items strong,
+.maono-analysis-tool-menu__body strong {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.maono-analysis-tool-menu__items small,
+.maono-analysis-tool-menu__body small {
+  color: #8391a5;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.maono-analysis-tool-menu__items b {
+  color: #75849a;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.maono-analysis-tool-menu__body {
+  padding: 12px 13px;
+}
+
+.maono-analysis-tool-menu__body fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.maono-analysis-tool-menu__body legend {
+  margin-bottom: 6px;
+  color: #7f8ea4;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.maono-analysis-tool-menu__body label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #1f2b3e;
+  border-radius: 10px;
+  color: #dce4ef;
+  background: rgba(19, 28, 42, 0.45);
+  cursor: pointer;
+}
+
+.maono-analysis-tool-menu__body label:has(input:checked) {
+  border-color: rgba(197, 160, 89, 0.7);
+  background: rgba(197, 160, 89, 0.08);
+}
+
+.maono-analysis-tool-menu__body input {
+  accent-color: #c5a059;
+}
+
+.maono-analysis-tool-menu__body p {
+  margin: 0;
+  color: #aab6c8;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.maono-analysis-tool-menu > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 11px 13px;
+  border-top: 1px solid #1f2b3e;
+  background: #0f1522;
+}
+
+.maono-analysis-tool-menu > footer button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid #2a3a54;
+  border-radius: 9px;
+  color: #c5d0de;
+  background: #131c2a;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.maono-analysis-tool-menu > footer button.is-primary {
+  color: #090d14;
+  border-color: #c5a059;
+  background: #c5a059;
+}
+
+.maono-analysis-tool-menu > footer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.maono-marker-placement[data-analysis-tool="buffer"]::after {
+  content: "Clique no mapa para definir a origem do buffer";
+}
+
+.maono-marker-placement[data-analysis-tool="isochrone"]::after {
+  content: "Clique no mapa para definir a origem da isócrona";
+}
+
+.maono-marker-placement[data-analysis-tool="marker"]::after {
+  content: "Clique no mapa para adicionar o marcador";
+}
+
+@media (max-width: 820px) {
+  .maono-analysis-tool-menu {
+    width: min(292px, calc(100vw - 24px));
+  }
+}
