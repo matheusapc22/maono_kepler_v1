@@ -14,7 +14,9 @@ export type MapCapabilities = {
   focusMapData: boolean;
   configureTooltips: boolean;
   toggleLegend: boolean;
+  placeAnalysisMarker?: boolean;
   previewIsochrone: boolean;
+  previewBuffer?: boolean;
   persistIsochrone: boolean;
   removeIsochrone: boolean;
   editLayers: boolean;
@@ -45,6 +47,7 @@ export type MapPanelFeatures = {
   maonoMapShell: boolean;
   maonoMapOverlay: boolean;
   maonoIsochrone: boolean;
+  maonoBuffer?: boolean;
 };
 
 export type SafeMapProject = {
@@ -140,7 +143,9 @@ export const EMPTY_MAP_CAPABILITIES: MapCapabilities = Object.freeze({
   focusMapData: false,
   configureTooltips: false,
   toggleLegend: false,
+  placeAnalysisMarker: false,
   previewIsochrone: false,
+  previewBuffer: false,
   persistIsochrone: false,
   removeIsochrone: false,
   editLayers: false,
@@ -171,4 +176,5 @@ export const EMPTY_MAP_PANEL_FEATURES: MapPanelFeatures = Object.freeze({
   maonoMapShell: false,
   maonoMapOverlay: false,
   maonoIsochrone: false,
+  maonoBuffer: false,
 });
