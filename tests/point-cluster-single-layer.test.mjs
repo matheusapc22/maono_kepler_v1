@@ -256,7 +256,18 @@ test("runtime adaptativo não cria nem alterna camadas no Redux", async () => {
   assert.match(reducer, /geojson:\s*MaonoAdaptiveGeoJsonLayer/);
   assert.doesNotMatch(reducer, /cluster:\s*MaonoClusterLayer/);
   assert.match(loader, /hydrateSavedKeplerConfig/);
-  assert.match(hydrator, /loadPointClusterState\(prepared\.savedConfig\.maono\)/);
+  assert.match(
+    hydrator,
+    /recoverOrphanedMaonoAnalysisReferences\(\s*prepared\.savedConfig,?\s*\)/,
+  );
+  assert.match(hydrator, /loadPointClusterState\(recovered\.savedConfig\.maono\)/);
+  const recoveryIndex = hydrator.indexOf(
+    "const recovered = recoverOrphanedMaonoAnalysisReferences",
+  );
+  const clusterStateIndex = hydrator.indexOf(
+    "loadPointClusterState(recovered.savedConfig.maono)",
+  );
+  assert.ok(recoveryIndex >= 0 && clusterStateIndex > recoveryIndex);
   assert.doesNotMatch(loader, /prepared\.pairs/);
   assert.doesNotMatch(hydrator, /prepared\.pairs/);
   assert.doesNotMatch(store, /PointClusterPair|clusterLayerId|pairs:/);
