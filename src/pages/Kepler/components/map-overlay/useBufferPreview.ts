@@ -268,7 +268,7 @@ export function useBufferPreview({
                 legendField: "radius_label",
                 legendPalette: BUFFER_LEGEND_PALETTE,
               },
-              centerMap: true,
+              centerMap: false,
             });
 
             if (!added.ok || !added.value?.dataId) {
