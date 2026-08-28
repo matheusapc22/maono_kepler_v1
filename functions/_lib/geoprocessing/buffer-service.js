@@ -160,6 +160,7 @@ export async function generateRadialBuffer(
       featureCount: geojson.features.length,
       engine: engineMetadata.engine,
       segmentsPerQuadrant: engineMetadata.segmentsPerQuadrant,
+      antimeridianSplitCount: engineMetadata.antimeridianSplitCount || 0,
       crs: input.crs,
       canPersist: access.canPersist,
     };
@@ -177,6 +178,7 @@ export async function generateRadialBuffer(
           featureCount: geojson.features.length,
           durationMs: Date.now() - startedAt,
           engine: engineMetadata.engine,
+          antimeridianSplitCount: engineMetadata.antimeridianSplitCount || 0,
         },
       },
       auditImpl,
