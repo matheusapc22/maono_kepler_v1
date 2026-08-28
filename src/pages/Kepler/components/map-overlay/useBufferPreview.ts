@@ -7,6 +7,7 @@ import {
 import { useParams } from "react-router";
 
 import { useKeplerEngineAdapter } from "../../engine-adapter";
+import { useMultiBufferDatasetUpdater } from "../../engine-adapter/multibuffer-dataset-updater";
 import {
   bufferErrorMessage,
   formatBufferEditableNumber,
@@ -16,14 +17,26 @@ import {
 } from "../../map-panel/buffer-api";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
-import type { MarkerOrigin } from "./marker-projection";
+import {
+  appendBufferSessionResult,
+  bufferSessionFeatureCount,
+  createBufferSession,
+  type BufferSession,
+} from "./analysis-tools/buffer-session";
+import type {
+  BufferToolSession,
+  MapToolPoint,
+} from "./analysis-tools/map-tool-state";
 
 export type BufferPreviewState = {
   dataId: string;
   label: string;
   ranges: number[];
-  inputUnit: BufferUnit;
+  inputUnit: BufferUnit | "mixed";
   rangesMeters: number[];
+  isMulti: boolean;
+  itemCount: number;
+  featureCount: number;
 };
 
 export type BufferOverlayMessage = {
@@ -56,16 +69,38 @@ function previewLabel(input: {
     .join(", ")}`;
 }
 
+function multiPreview(session: BufferSession): BufferPreviewState {
+  const units = new Set(session.items.map((item) => item.inputUnit));
+  const ranges = session.items.flatMap((item) => item.ranges);
+  const rangesMeters = session.items.flatMap((item) => item.rangesMeters);
+  const featureCount = bufferSessionFeatureCount(session);
+  const itemCount = session.items.length;
+
+  return {
+    dataId: session.dataId,
+    label: `Multibuffers · ${itemCount} ${itemCount === 1 ? "origem" : "origens"} · ${featureCount} ${featureCount === 1 ? "buffer" : "buffers"}`,
+    ranges,
+    inputUnit: units.size === 1 ? session.items[0].inputUnit : "mixed",
+    rangesMeters,
+    isMulti: true,
+    itemCount,
+    featureCount,
+  };
+}
+
 export function useBufferPreview({
-  origin,
+  pendingPoint,
+  session,
   onMarkerReset,
 }: {
-  origin: MarkerOrigin | null;
+  pendingPoint: MapToolPoint | null;
+  session: BufferToolSession | null;
   onMarkerReset: () => void;
 }) {
   const { projectSlug } = useParams();
   const { context } = useMapPanel();
   const { commands } = useKeplerEngineAdapter();
+  const updateMultiBufferDataset = useMultiBufferDatasetUpdater();
   const capabilities = context?.capabilities;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,6 +109,7 @@ export function useBufferPreview({
   const [message, setMessage] = useState<BufferOverlayMessage | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const previewRef = useRef<BufferPreviewState | null>(null);
+  const multiSessionRef = useRef<BufferSession | null>(null);
   const commandsRef = useRef(commands);
   const resetMarkerRef = useRef(onMarkerReset);
   const scopeKey = [
@@ -82,6 +118,7 @@ export function useBufferPreview({
     projectSlug ?? "none",
   ].join(":");
   const previousScopeKeyRef = useRef(scopeKey);
+  const multiMode = session?.insertionMode === "multi";
 
   previewRef.current = preview;
   commandsRef.current = commands;
@@ -95,10 +132,20 @@ export function useBufferPreview({
   }, [message]);
 
   useEffect(() => {
-    if (origin) return;
+    if (pendingPoint) return;
     setDialogOpen(false);
     setError(null);
-  }, [origin]);
+  }, [pendingPoint]);
+
+  useEffect(() => {
+    if (!session) return;
+    if (multiSessionRef.current?.id === session.id) return;
+
+    multiSessionRef.current = createBufferSession(
+      session.id,
+      session.dataId || undefined,
+    );
+  }, [session]);
 
   useEffect(() => {
     if (previousScopeKeyRef.current === scopeKey) return;
@@ -113,6 +160,7 @@ export function useBufferPreview({
       commandsRef.current.removeTransientLayer(current.dataId, "buffer");
     }
 
+    multiSessionRef.current = null;
     setPreview(null);
     setDialogOpen(false);
     setError(null);
@@ -133,10 +181,16 @@ export function useBufferPreview({
   );
 
   const openDialog = useCallback(() => {
-    if (!origin || !capabilities?.previewBuffer || preview) return;
+    if (
+      !pendingPoint ||
+      !capabilities?.previewBuffer ||
+      (!multiMode && preview)
+    ) {
+      return;
+    }
     setError(null);
     setDialogOpen(true);
-  }, [capabilities?.previewBuffer, origin, preview]);
+  }, [capabilities?.previewBuffer, multiMode, pendingPoint, preview]);
 
   const closeDialog = useCallback(() => {
     if (busy) return;
@@ -148,9 +202,9 @@ export function useBufferPreview({
     async (input: BufferInput) => {
       if (
         busy ||
-        !origin ||
+        !pendingPoint ||
         !capabilities?.previewBuffer ||
-        preview
+        (!multiMode && preview)
       ) {
         return;
       }
@@ -166,7 +220,7 @@ export function useBufferPreview({
         projectId: context?.project?.id ?? null,
         organizationId: context?.organization?.id ?? null,
         source: "map-overlay",
-        analysisType: "radial_buffer",
+        analysisType: multiMode ? "multi_radial_buffer" : "radial_buffer",
         rangeCount: input.ranges.length,
         unit: input.unit,
       });
@@ -175,12 +229,86 @@ export function useBufferPreview({
         const result = await requestBuffer(
           {
             projectSlug: projectSlug || null,
-            origin,
+            origin: pendingPoint,
             unit: input.unit,
             ranges: input.ranges,
           },
           controller.signal,
         );
+
+        if (multiMode && session) {
+          const baseSession =
+            multiSessionRef.current?.id === session.id
+              ? multiSessionRef.current
+              : createBufferSession(session.id, session.dataId || undefined);
+          const nextSession = appendBufferSessionResult(baseSession, {
+            origin: pendingPoint,
+            result,
+          });
+          const firstItem = baseSession.items.length === 0;
+
+          if (firstItem) {
+            const added = commands.addGeoJsonLayer({
+              dataId: nextSession.dataId,
+              label: "Multibuffers",
+              geoJson: nextSession.geojson,
+              color: [197, 160, 89],
+              strokeColor: [183, 121, 31],
+              opacity: 0.2,
+              transient: true,
+              analysisKind: "buffer",
+              presentation: {
+                tooltipFields: [
+                  "analysis_label",
+                  "radius_label",
+                  "origin_latitude",
+                  "origin_longitude",
+                  "maono_buffer_item_id",
+                ],
+                legendField: "radius_label",
+                legendPalette: BUFFER_LEGEND_PALETTE,
+              },
+              centerMap: true,
+            });
+
+            if (!added.ok || !added.value?.dataId) {
+              throw new Error(
+                added.ok
+                  ? "O adaptador não retornou a camada da sessão Multibuffer."
+                  : added.reason,
+              );
+            }
+          } else {
+            const updated = updateMultiBufferDataset({
+              dataId: nextSession.dataId,
+              label: "Multibuffers",
+              geoJson: nextSession.geojson,
+            });
+            if (!updated.ok) {
+              throw new Error(updated.reason);
+            }
+          }
+
+          multiSessionRef.current = nextSession;
+          const nextPreview = multiPreview(nextSession);
+          setPreview(nextPreview);
+          setDialogOpen(false);
+
+          emitMapPanelTelemetry("map_multibuffer_item_confirmed", {
+            mode: context?.mode ?? null,
+            projectId: context?.project?.id ?? null,
+            organizationId: context?.organization?.id ?? null,
+            source: "map-overlay",
+            sessionId: nextSession.id,
+            dataId: nextSession.dataId,
+            itemCount: nextPreview.itemCount,
+            featureCount: nextPreview.featureCount,
+            rangeCount: result.metadata.ranges.length,
+            unit: result.metadata.inputUnit,
+          });
+          return;
+        }
+
         const label = previewLabel(result.metadata);
         const added = commands.addGeoJsonLayer({
           label,
@@ -212,6 +340,9 @@ export function useBufferPreview({
           ranges: result.metadata.ranges,
           inputUnit: result.metadata.inputUnit,
           rangesMeters: result.metadata.rangesMeters,
+          isMulti: false,
+          itemCount: 1,
+          featureCount: result.metadata.featureCount,
         });
         setDialogOpen(false);
         emitMapPanelTelemetry("map_buffer_previewed", {
@@ -236,7 +367,7 @@ export function useBufferPreview({
           projectId: context?.project?.id ?? null,
           organizationId: context?.organization?.id ?? null,
           source: "map-overlay",
-          analysisType: "radial_buffer",
+          analysisType: multiMode ? "multi_radial_buffer" : "radial_buffer",
           code:
             requestError &&
             typeof requestError === "object" &&
@@ -258,9 +389,12 @@ export function useBufferPreview({
       context?.mode,
       context?.organization?.id,
       context?.project?.id,
-      origin,
+      multiMode,
+      pendingPoint,
       preview,
       projectSlug,
+      session,
+      updateMultiBufferDataset,
     ],
   );
 
@@ -281,10 +415,13 @@ export function useBufferPreview({
       projectId: context?.project?.id ?? null,
       organizationId: context?.organization?.id ?? null,
       source: "map-overlay",
-      analysisType: "radial_buffer",
-      rangeCount: preview.ranges.length,
+      analysisType: preview.isMulti ? "multi_radial_buffer" : "radial_buffer",
+      rangeCount: preview.rangesMeters.length,
       unit: preview.inputUnit,
+      itemCount: preview.itemCount,
+      featureCount: preview.featureCount,
     });
+    multiSessionRef.current = null;
     setPreview(null);
     return true;
   }, [
@@ -314,15 +451,20 @@ export function useBufferPreview({
       projectId: context?.project?.id ?? null,
       organizationId: context?.organization?.id ?? null,
       source: "map-overlay",
-      analysisType: "radial_buffer",
-      rangeCount: preview.ranges.length,
+      analysisType: preview.isMulti ? "multi_radial_buffer" : "radial_buffer",
+      rangeCount: preview.rangesMeters.length,
+      itemCount: preview.itemCount,
+      featureCount: preview.featureCount,
       unit: preview.inputUnit,
     });
+    multiSessionRef.current = null;
     setPreview(null);
     resetMarkerRef.current();
     setMessage({
       tone: "success",
-      text: "Buffer mantido no mapa. Salve o projeto para gravar as alterações.",
+      text: preview.isMulti
+        ? "Multibuffers mantidos no mapa. Salve o projeto para gravar as alterações."
+        : "Buffer mantido no mapa. Salve o projeto para gravar as alterações.",
     });
     return true;
   }, [
