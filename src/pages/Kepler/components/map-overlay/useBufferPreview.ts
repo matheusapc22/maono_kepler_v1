@@ -14,6 +14,11 @@ import {
   requestBuffer,
   type BufferUnit,
 } from "../../map-panel/buffer-api";
+import {
+  dispatchMapSaveRequest,
+  MAONO_MAP_SAVE_RESULT_EVENT,
+  mapSaveResultFromEvent,
+} from "../../map-panel/map-save-events";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
 import type { MarkerOrigin } from "./marker-projection";
@@ -25,6 +30,7 @@ export type BufferPreviewState = {
   inputUnit: BufferUnit;
   rangesMeters: number[];
   canPersist: boolean;
+  saveRequestId: string | null;
 };
 
 export type BufferOverlayMessage = {
@@ -36,6 +42,13 @@ export type BufferInput = {
   unit: BufferUnit;
   ranges: number[];
 };
+
+const BUFFER_LEGEND_PALETTE = [
+  "#FFF8E7",
+  "#F1D28A",
+  "#D69E2E",
+  "#B7791F",
+];
 
 function rangeLabel(value: number, unit: BufferUnit) {
   return `${formatBufferEditableNumber(value)} ${unit}`;
@@ -103,8 +116,8 @@ export function useBufferPreview({
     setBusy(false);
 
     const current = previewRef.current;
-    if (current) {
-      commandsRef.current.removeTransientLayer(current.dataId);
+    if (current && !current.saveRequestId) {
+      commandsRef.current.removeTransientLayer(current.dataId, "buffer");
     }
 
     setPreview(null);
@@ -114,13 +127,81 @@ export function useBufferPreview({
     resetMarkerRef.current();
   }, [scopeKey]);
 
+  useEffect(() => {
+    function handleSaveResult(event: Event) {
+      const result = mapSaveResultFromEvent(event);
+      const current = previewRef.current;
+
+      if (
+        !result ||
+        result.source !== "buffer-preview" ||
+        !current ||
+        result.requestId !== current.saveRequestId ||
+        result.dataId !== current.dataId
+      ) {
+        return;
+      }
+
+      if (result.status === "success") {
+        setPreview(null);
+        resetMarkerRef.current();
+        setMessage({
+          tone: "success",
+          text: "O Buffer foi salvo no projeto.",
+        });
+        emitMapPanelTelemetry("map_buffer_persisted", {
+          mode: context?.mode ?? null,
+          projectId: context?.project?.id ?? null,
+          organizationId: context?.organization?.id ?? null,
+          source: "map-overlay",
+          analysisType: "radial_buffer",
+          rangeCount: current.ranges.length,
+          unit: current.inputUnit,
+        });
+        return;
+      }
+
+      setPreview((value) =>
+        value?.dataId === result.dataId
+          ? { ...value, saveRequestId: null }
+          : value,
+      );
+      setMessage({
+        tone: "error",
+        text:
+          result.message ||
+          (result.status === "cancelled"
+            ? "O salvamento do Buffer foi cancelado. A prévia foi preservada."
+            : "Não foi possível salvar o Buffer. A prévia foi preservada."),
+      });
+      emitMapPanelTelemetry("map_buffer_persist_failed", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        source: "map-overlay",
+        analysisType: "radial_buffer",
+        rangeCount: current.ranges.length,
+        unit: current.inputUnit,
+        status: result.status,
+      });
+    }
+
+    window.addEventListener(MAONO_MAP_SAVE_RESULT_EVENT, handleSaveResult);
+    return () =>
+      window.removeEventListener(MAONO_MAP_SAVE_RESULT_EVENT, handleSaveResult);
+  }, [
+    context?.mode,
+    context?.organization?.id,
+    context?.project?.id,
+  ]);
+
   useEffect(
     () => () => {
       requestRef.current?.abort();
       const current = previewRef.current;
 
-      if (current) {
-        commandsRef.current.removeTransientLayer(current.dataId);
+      if (current && !current.saveRequestId) {
+        commandsRef.current.removeTransientLayer(current.dataId, "buffer");
       }
     },
     [],
@@ -183,6 +264,12 @@ export function useBufferPreview({
           strokeColor: [183, 121, 31],
           opacity: 0.2,
           transient: true,
+          analysisKind: "buffer",
+          presentation: {
+            tooltipFields: ["analysis_label", "radius_label"],
+            legendField: "radius_label",
+            legendPalette: BUFFER_LEGEND_PALETTE,
+          },
           centerMap: true,
         });
 
@@ -201,6 +288,7 @@ export function useBufferPreview({
           inputUnit: result.metadata.inputUnit,
           rangesMeters: result.metadata.rangesMeters,
           canPersist: result.metadata.canPersist,
+          saveRequestId: null,
         });
         setDialogOpen(false);
         emitMapPanelTelemetry("map_buffer_previewed", {
@@ -212,6 +300,8 @@ export function useBufferPreview({
           rangeCount: result.metadata.ranges.length,
           featureCount: result.metadata.featureCount,
           unit: result.metadata.inputUnit,
+          antimeridianSplitCount:
+            result.metadata.antimeridianSplitCount ?? 0,
         });
       } catch (requestError) {
         if (isBufferAbortError(requestError)) return;
@@ -252,9 +342,9 @@ export function useBufferPreview({
   );
 
   const discard = useCallback(() => {
-    if (!preview) return false;
+    if (!preview || preview.saveRequestId) return false;
 
-    const result = commands.removeTransientLayer(preview.dataId);
+    const result = commands.removeTransientLayer(preview.dataId, "buffer");
     if (!result.ok) {
       setMessage({
         tone: "error",
@@ -269,11 +359,57 @@ export function useBufferPreview({
       organizationId: context?.organization?.id ?? null,
       source: "map-overlay",
       analysisType: "radial_buffer",
+      rangeCount: preview.ranges.length,
+      unit: preview.inputUnit,
     });
     setPreview(null);
     return true;
   }, [
     commands,
+    context?.mode,
+    context?.organization?.id,
+    context?.project?.id,
+    preview,
+  ]);
+
+  const persist = useCallback(() => {
+    if (
+      !preview ||
+      preview.saveRequestId ||
+      !preview.canPersist ||
+      !capabilities?.persistBuffer
+    ) {
+      return false;
+    }
+
+    emitMapPanelTelemetry("map_buffer_persist_requested", {
+      mode: context?.mode ?? null,
+      projectId: context?.project?.id ?? null,
+      organizationId: context?.organization?.id ?? null,
+      source: "map-overlay",
+      analysisType: "radial_buffer",
+      rangeCount: preview.ranges.length,
+      unit: preview.inputUnit,
+    });
+    const request = dispatchMapSaveRequest({
+      source: "buffer-preview",
+      dataId: preview.dataId,
+    });
+
+    setPreview({
+      ...preview,
+      saveRequestId: request.requestId,
+    });
+    setMessage({
+      tone: "success",
+      text:
+        context?.mode === "create"
+          ? "Conclua os dados do novo projeto para salvar o Buffer."
+          : "Salvando o Buffer no projeto…",
+    });
+    return true;
+  }, [
+    capabilities?.persistBuffer,
     context?.mode,
     context?.organization?.id,
     context?.project?.id,
@@ -291,5 +427,6 @@ export function useBufferPreview({
     closeDialog,
     generate,
     discard,
+    persist,
   };
 }
