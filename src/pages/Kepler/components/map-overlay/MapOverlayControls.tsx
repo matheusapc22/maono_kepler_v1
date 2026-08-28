@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -98,53 +98,114 @@ function activeAnalysisToolLabel(tool: "marker" | "buffer" | "isochrone" | null)
   return "análise";
 }
 
+function placementPrompt(tool: "marker" | "buffer" | "isochrone") {
+  if (tool === "buffer") return "Clique no mapa para definir a origem do buffer";
+  if (tool === "isochrone") return "Clique no mapa para definir a origem da isócrona";
+  return "Clique no mapa para adicionar o marcador";
+}
+
 export default function MapOverlayControls() {
   const { context, customMapOverlayEnabled } = useMapPanel();
   const { commands, state } = useKeplerEngineAdapter();
   const capabilities = context?.capabilities;
   const [tooltipsOpen, setTooltipsOpen] = useState(false);
-  const [tooltipDraft, setTooltipDraft] = useState<
-    Record<string, string[]>
-  >({});
-  const [commandMessage, setCommandMessage] =
-    useState<OverlayMessage | null>(null);
+  const [tooltipDraft, setTooltipDraft] = useState<Record<string, string[]>>({});
+  const [commandMessage, setCommandMessage] = useState<OverlayMessage | null>(null);
   const marker = useMapMarker(state.viewport);
   const toolController = useMapToolController({
     startPlacement: marker.startPlacement,
     cancelPlacement: marker.cancelPlacement,
+    resetMarker: marker.reset,
   });
+  const analysisOrigin = toolController.pendingPoint;
   const isochrone = useIsochronePreview({
-    origin: marker.origin,
+    origin: analysisOrigin,
     onMarkerReset: marker.reset,
   });
   const buffer = useBufferPreview({
-    origin: marker.origin,
+    origin: analysisOrigin,
     onMarkerReset: marker.reset,
   });
   const filtersActive = state.filters.some((filter) => filter.enabled);
-  const focusAvailable = filtersActive
-    ? Boolean(state.filteredBounds)
-    : Boolean(state.bounds);
+  const focusAvailable = filtersActive ? Boolean(state.filteredBounds) : Boolean(state.bounds);
   const message = commandMessage || buffer.message || isochrone.message;
   const isochroneCapabilityEnabled = capabilities?.previewIsochrone === true;
   const bufferCapabilityEnabled = capabilities?.previewBuffer === true;
-  const analysisMarkerCapabilityEnabled =
-    capabilities?.placeAnalysisMarker === true;
+  const analysisMarkerCapabilityEnabled = capabilities?.placeAnalysisMarker === true;
   const analysisPreviewActive = Boolean(isochrone.preview || buffer.preview);
   const selectingToolState =
-    toolController.state.mode === "selectingTool"
-      ? toolController.state
-      : null;
+    toolController.state.mode === "selectingTool" ? toolController.state : null;
   const placementTool =
     toolController.state.mode === "placingPoint"
       ? toolController.state.tool
-      : "marker";
+      : marker.placementKind ?? "marker";
   const activeToolLabel = activeAnalysisToolLabel(toolController.state.tool);
+  const placementLabel = placementPrompt(placementTool);
   const analysisButtonLabel = toolController.menuOpen
     ? "Fechar menu de análise"
     : toolController.state.mode === "placingPoint"
       ? `Cancelar posicionamento de ${activeToolLabel}`
       : "Adicionar análise";
+  const launcherVisible =
+    !analysisPreviewActive &&
+    toolController.state.mode !== "configuring" &&
+    toolController.state.mode !== "reviewing";
+
+  useEffect(() => {
+    if (!toolController.pendingPoint) return;
+
+    if (
+      toolController.configurationTarget === "buffer" &&
+      !buffer.dialogOpen &&
+      !buffer.preview
+    ) {
+      buffer.openDialog();
+      return;
+    }
+
+    if (
+      toolController.configurationTarget === "isochrone" &&
+      !isochrone.dialogOpen &&
+      !isochrone.preview
+    ) {
+      isochrone.openDialog();
+    }
+  }, [
+    buffer.dialogOpen,
+    buffer.openDialog,
+    buffer.preview,
+    isochrone.dialogOpen,
+    isochrone.openDialog,
+    isochrone.preview,
+    toolController.configurationTarget,
+    toolController.pendingPoint,
+  ]);
+
+  useEffect(() => {
+    if (
+      buffer.preview &&
+      toolController.state.mode === "configuring" &&
+      toolController.state.tool === "buffer"
+    ) {
+      toolController.analysisCreated({
+        kind: "buffer",
+        dataId: buffer.preview.dataId,
+      });
+    }
+  }, [buffer.preview, toolController]);
+
+  useEffect(() => {
+    if (
+      isochrone.preview &&
+      toolController.state.mode === "configuring" &&
+      toolController.state.tool === "isochrone"
+    ) {
+      toolController.analysisCreated({
+        kind: "isochrone",
+        dataId: isochrone.preview.dataId,
+      });
+    }
+  }, [isochrone.preview, toolController]);
 
   if (!customMapOverlayEnabled || typeof document === "undefined") {
     return null;
@@ -156,10 +217,7 @@ export default function MapOverlayControls() {
     isochrone.setMessage(null);
   }
 
-  function reportCommand(
-    result: KeplerCommandResult<unknown>,
-    fallback: string,
-  ) {
+  function reportCommand(result: KeplerCommandResult<unknown>, fallback: string) {
     if (result.ok) {
       setCommandMessage(null);
       return true;
@@ -173,25 +231,18 @@ export default function MapOverlayControls() {
   }
 
   function focusVisibleData() {
-    const result = filtersActive
-      ? commands.fitFilteredData()
-      : commands.fitVisibleData();
-
-    reportCommand(
-      result,
-      "Não foi possível enquadrar os dados visíveis.",
-    );
+    const result = filtersActive ? commands.fitFilteredData() : commands.fitVisibleData();
+    reportCommand(result, "Não foi possível enquadrar os dados visíveis.");
   }
 
   function openTooltipEditor() {
     if (!capabilities?.configureTooltips) return;
 
     const nextDraft: Record<string, string[]> = {};
-
     state.datasets.forEach((dataset) => {
-      nextDraft[dataset.id] = (
-        state.tooltip.fieldsByDataset[dataset.id] || []
-      ).map((field) => field.name);
+      nextDraft[dataset.id] = (state.tooltip.fieldsByDataset[dataset.id] || []).map(
+        (field) => field.name,
+      );
     });
 
     setTooltipDraft(nextDraft);
@@ -223,6 +274,44 @@ export default function MapOverlayControls() {
     }
   }
 
+  function closeBufferConfiguration() {
+    if (buffer.busy) return;
+    buffer.closeDialog();
+    toolController.cancelPendingPoint();
+  }
+
+  function closeIsochroneConfiguration() {
+    if (isochrone.busy) return;
+    isochrone.closeDialog();
+    toolController.cancelPendingPoint();
+  }
+
+  function submitBufferConfiguration(input: Parameters<typeof buffer.generate>[0]) {
+    if (!toolController.submitConfiguration()) return;
+    void buffer.generate(input);
+  }
+
+  function submitIsochroneConfiguration(input: Parameters<typeof isochrone.generate>[0]) {
+    if (!toolController.submitConfiguration()) return;
+    void isochrone.generate(input);
+  }
+
+  function keepBuffer() {
+    if (buffer.keep()) toolController.finishAnalysis();
+  }
+
+  function discardBuffer() {
+    if (buffer.discard()) toolController.finishAnalysis();
+  }
+
+  function keepIsochrone() {
+    if (isochrone.keep()) toolController.finishAnalysis();
+  }
+
+  function discardIsochrone() {
+    if (isochrone.discard()) toolController.finishAnalysis();
+  }
+
   return createPortal(
     <>
       <div className="maono-map-attribution" data-maono-no-preview="true">
@@ -242,10 +331,11 @@ export default function MapOverlayControls() {
             height: marker.canvasRect.height,
           }}
           onClick={(event) => {
-            const placed = marker.placeAt(event.clientX, event.clientY);
-            if (placed) toolController.completeLegacyPlacement();
+            const point = marker.placeAt(event.clientX, event.clientY);
+            if (point) toolController.pointPlaced(point);
           }}
-          aria-label={`Clique no mapa para posicionar ${activeToolLabel}`}
+          aria-label={placementLabel}
+          data-placement-label={placementLabel}
           data-analysis-tool={placementTool}
           data-maono-no-preview="true"
         />
@@ -266,8 +356,8 @@ export default function MapOverlayControls() {
             onPointerCancel={marker.cancelDrag}
             onClick={marker.toggleMenuFromClick}
             onKeyDown={marker.handleMarkerKeyDown}
-            title="Arraste ou use as setas para mover a origem da análise"
-            aria-label="Origem da análise; arraste ou use as setas para mover"
+            title="Arraste ou use as setas para mover o marcador"
+            aria-label="Marcador; arraste ou use as setas para mover"
             aria-expanded={marker.menuOpen}
           >
             <OverlayIcon name="marker" />
@@ -276,30 +366,6 @@ export default function MapOverlayControls() {
 
           {marker.menuOpen ? (
             <div className="maono-map-marker__menu">
-              {isochroneCapabilityEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    isochrone.openDialog();
-                    marker.setMenuOpen(false);
-                  }}
-                >
-                  <OverlayIcon name="isochrone" />
-                  Criar isócronas
-                </button>
-              ) : null}
-              {bufferCapabilityEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    buffer.openDialog();
-                    marker.setMenuOpen(false);
-                  }}
-                >
-                  <OverlayIcon name="buffer" />
-                  Criar buffers
-                </button>
-              ) : null}
               <button type="button" onClick={marker.reset}>
                 <OverlayIcon name="trash" />
                 Remover marcador
@@ -397,15 +463,11 @@ export default function MapOverlayControls() {
             </div>
             <div>
               {capabilities?.persistIsochrone ? (
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={isochrone.keep}
-                >
+                <button type="button" className="is-primary" onClick={keepIsochrone}>
                   Manter
                 </button>
               ) : null}
-              <button type="button" onClick={isochrone.discard}>
+              <button type="button" onClick={discardIsochrone}>
                 Descartar
               </button>
             </div>
@@ -426,15 +488,11 @@ export default function MapOverlayControls() {
             </div>
             <div>
               {capabilities?.persistBuffer ? (
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={buffer.keep}
-                >
+                <button type="button" className="is-primary" onClick={keepBuffer}>
                   Manter
                 </button>
               ) : null}
-              <button type="button" onClick={buffer.discard}>
+              <button type="button" onClick={discardBuffer}>
                 Descartar
               </button>
             </div>
@@ -482,7 +540,7 @@ export default function MapOverlayControls() {
             </button>
           ) : null}
 
-          {!analysisPreviewActive ? (
+          {launcherVisible ? (
             <button
               type="button"
               className={toolController.active ? "is-active" : ""}
@@ -509,16 +567,16 @@ export default function MapOverlayControls() {
         open={isochrone.dialogOpen}
         busy={isochrone.busy}
         error={isochrone.error}
-        onClose={isochrone.closeDialog}
-        onSubmit={(input) => void isochrone.generate(input)}
+        onClose={closeIsochroneConfiguration}
+        onSubmit={submitIsochroneConfiguration}
       />
 
       <BufferDialog
         open={buffer.dialogOpen}
         busy={buffer.busy}
         error={buffer.error}
-        onClose={buffer.closeDialog}
-        onSubmit={(input) => void buffer.generate(input)}
+        onClose={closeBufferConfiguration}
+        onSubmit={submitBufferConfiguration}
       />
     </>,
     document.body,
