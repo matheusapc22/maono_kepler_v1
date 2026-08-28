@@ -107,15 +107,16 @@ test("projeto existente nunca recebe capacidades exclusivas de criação", () =>
   assert.match(sources.canonicalService, /initializeMapAllowed:\s*false/);
 });
 
-test("policy v4 mantém a separação e incorpora capabilities de análise", () => {
+test("policy v5 mantém separação e fecha capabilities de análise", () => {
   assert.match(
     sources.canonicalService,
-    /EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 4/,
+    /EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 5/,
   );
   assert.match(
     sources.canonicalService,
     /defaultExistingProjectPanel[\s\S]*editorAllowed[\s\S]*MAP_PANEL_MODES\.EDITOR[\s\S]*viewerAllowed[\s\S]*MAP_PANEL_MODES\.VIEWER/,
   );
-  assert.match(sources.canonicalService, /previewBuffer/);
+  assert.match(sources.canonicalService, /previewBufferAllowed/);
+  assert.match(sources.canonicalService, /persistBufferAllowed/);
   assert.match(sources.canonicalService, /placeAnalysisMarker/);
 });
