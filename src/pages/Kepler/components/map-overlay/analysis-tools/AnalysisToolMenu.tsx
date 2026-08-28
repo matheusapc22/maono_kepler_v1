@@ -48,7 +48,6 @@ export default function AnalysisToolMenu({
   canBuffer,
   canIsochrone,
   onSelectTool,
-  onSelectBufferMode,
   onStartPlacement,
   onCancel,
 }: AnalysisToolMenuProps) {
@@ -130,11 +129,6 @@ export default function AnalysisToolMenu({
     focusable[nextIndex]?.focus();
   }
 
-  const selectedBufferMode =
-    state.tool === "buffer" && state.preliminaryOptions?.kind === "buffer"
-      ? state.preliminaryOptions.insertionMode
-      : null;
-
   return (
     <section
       ref={menuRef}
@@ -175,7 +169,7 @@ export default function AnalysisToolMenu({
                 <ToolGlyph kind="buffer" />
                 <span>
                   <strong>Criar buffer</strong>
-                  <small>Único ou múltiplas origens</small>
+                  <small>Uma ou mais origens na mesma sessão</small>
                 </span>
                 <b aria-hidden="true">›</b>
               </button>
@@ -190,34 +184,14 @@ export default function AnalysisToolMenu({
             <span>Adicionar análise</span>
             <strong>Criar buffer</strong>
           </header>
-          <div className="maono-analysis-tool-menu__body">
-            <fieldset>
-              <legend>Modo</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="maono-buffer-insertion-mode"
-                  checked={selectedBufferMode === "single"}
-                  onChange={() => onSelectBufferMode("single")}
-                />
-                <span>
-                  <strong>Buffer único</strong>
-                  <small>Uma origem por operação</small>
-                </span>
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="maono-buffer-insertion-mode"
-                  checked={selectedBufferMode === "multi"}
-                  onChange={() => onSelectBufferMode("multi")}
-                />
-                <span>
-                  <strong>Multibuffers</strong>
-                  <small>Várias origens na mesma sessão</small>
-                </span>
-              </label>
-            </fieldset>
+          <div
+            className="maono-analysis-tool-menu__body"
+            data-analysis-submenu="buffer"
+          >
+            <p>
+              Escolha a primeira origem no mapa. Depois de gerar o buffer,
+              você poderá adicionar novas origens na mesma sessão.
+            </p>
           </div>
           <footer>
             <button type="button" onClick={onCancel}>
@@ -226,7 +200,6 @@ export default function AnalysisToolMenu({
             <button
               type="button"
               className="is-primary"
-              disabled={!selectedBufferMode}
               onClick={onStartPlacement}
             >
               Posicionar
