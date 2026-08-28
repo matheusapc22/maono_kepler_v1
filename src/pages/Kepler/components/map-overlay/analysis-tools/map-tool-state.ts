@@ -106,6 +106,10 @@ export function createInitialMapToolState(): IdleMapToolState {
   return { ...INITIAL_MAP_TOOL_STATE };
 }
 
+function isMapAnalysisTool(tool: unknown): tool is MapAnalysisTool {
+  return tool === "marker" || tool === "buffer" || tool === "isochrone";
+}
+
 function isValidPoint(point: MapToolPoint | null): point is MapToolPoint {
   return Boolean(
     point &&
@@ -187,6 +191,7 @@ export function isMapToolStateValid(state: MapToolState): boolean {
       if (state.tool === null) {
         return state.menu === "root" && state.preliminaryOptions === null;
       }
+      if (!isMapAnalysisTool(state.tool)) return false;
       if (state.tool === "buffer") {
         return (
           state.menu === "buffer" &&
@@ -202,6 +207,7 @@ export function isMapToolStateValid(state: MapToolState): boolean {
 
     case "placingPoint":
       return (
+        isMapAnalysisTool(state.tool) &&
         state.pendingPoint === null &&
         toolOptionsAreCompatible(state.tool, state.preliminaryOptions) &&
         sessionIsCompatible(
@@ -213,6 +219,7 @@ export function isMapToolStateValid(state: MapToolState): boolean {
 
     case "configuring":
       return (
+        isMapAnalysisTool(state.tool) &&
         isValidPoint(state.pendingPoint) &&
         (state.configurationStatus === "editing" ||
           state.configurationStatus === "submitting") &&
@@ -226,6 +233,7 @@ export function isMapToolStateValid(state: MapToolState): boolean {
 
     case "reviewing":
       return (
+        (state.tool === "buffer" || state.tool === "isochrone") &&
         isValidPoint(state.pendingPoint) &&
         previewIsCompatible(state.tool, state.preview) &&
         toolOptionsAreCompatible(state.tool, state.preliminaryOptions) &&
@@ -250,9 +258,7 @@ function nextState<T extends MapToolState>(state: T): T {
   return state;
 }
 
-function isMultiBufferState(
-  state: MapToolState,
-): state is PlacingPointMapToolState | ConfiguringMapToolState | ReviewingMapToolState {
+function isMultiBufferState(state: MapToolState) {
   return Boolean(
     state.tool === "buffer" &&
       isValidBufferOptions(state.preliminaryOptions) &&
