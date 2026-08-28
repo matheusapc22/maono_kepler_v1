@@ -163,7 +163,7 @@ test("S04.01 useBufferPreview recebe pendingPoint explicitamente e não depende 
   assert.match(hook, /pendingPoint:\s*MapToolPoint \| null/);
   assert.match(hook, /origin:\s*pendingPoint/);
   assert.doesNotMatch(hook, /marker\.origin/);
-  assert.match(overlay, /pendingPoint:\s*analysisOrigin/);
+  assert.match(overlay, /pendingPoint:\s*analysisPendingPoint/);
 });
 
 test("S04.04/S04.05 primeiro item cria layer e seguintes atualizam o mesmo dataset", () => {

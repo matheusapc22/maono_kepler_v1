@@ -8,7 +8,7 @@ import {
   mapToolReducer,
 } from "../src/pages/Kepler/components/map-overlay/analysis-tools/map-tool-state.ts";
 
-const [overlay, markerHook, controller, styles] = await Promise.all([
+const [overlay, markerHook, controller, styles, markerContextMenu] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
@@ -33,6 +33,13 @@ const [overlay, markerHook, controller, styles] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/analysis-tools/analysis-tool-menu.css",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx",
       import.meta.url,
     ),
     "utf8",
@@ -91,14 +98,14 @@ test("S03.03 Buffer e Isócrona só abrem pelo target do controller", () => {
   assert.match(overlay, /buffer\.openDialog\(\)/);
   assert.match(overlay, /toolController\.configurationTarget === "isochrone"/);
   assert.match(overlay, /isochrone\.openDialog\(\)/);
-  assert.match(overlay, /const analysisOrigin = toolController\.pendingPoint/);
+  assert.match(overlay, /const analysisPendingPoint = toolController\.pendingPoint/);
   assert.match(controller, /nextState\.tool === "marker"/);
   assert.match(controller, /dispatch\(\{ type: "ANALYSIS_CREATED" \}\)/);
 
-  const markerMenu =
-    overlay.match(/marker\.menuOpen \? \([\s\S]*?\) : null/)?.[0] || "";
-  assert.doesNotMatch(markerMenu, /buffer\.openDialog|isochrone\.openDialog/);
-  assert.doesNotMatch(markerMenu, /Criar buffers|Criar isócronas/);
+  assert.match(overlay, /<MarkerContextMenu/);
+  assert.doesNotMatch(markerContextMenu, /buffer\.openDialog|isochrone\.openDialog/);
+  assert.doesNotMatch(markerContextMenu, /Criar buffers|Criar isócronas/);
+  assert.doesNotMatch(markerContextMenu, /Buffer|Isócrona|isochrone/);
 });
 
 test("Gate S03: configuração impossível não passa pelas invariantes", () => {
