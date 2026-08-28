@@ -67,15 +67,19 @@ test("S02.02 botão inferior abre a máquina em vez de iniciar placement diretam
   assert.doesNotMatch(buttonBlock, /marker\.startPlacement/);
 });
 
-test("S02.03 submenu Buffer oferece somente Single ou Multi antes do ponto", () => {
+test("S02.03 submenu Buffer possui somente Cancelar/Posicionar e uma sessão multiorigem", () => {
   const bufferBlock =
     menu.match(/state\.menu === "buffer"[\s\S]*?state\.menu === "isochrone"/)?.[0] || "";
 
-  assert.match(bufferBlock, /Buffer único/);
-  assert.match(bufferBlock, /Multibuffers/);
-  assert.match(bufferBlock, /onSelectBufferMode\("single"\)/);
-  assert.match(bufferBlock, /onSelectBufferMode\("multi"\)/);
+  assert.match(bufferBlock, /data-analysis-submenu="buffer"/);
+  assert.match(bufferBlock, /primeira origem/);
+  assert.match(bufferBlock, /novas origens na mesma sessão/);
+  assert.match(bufferBlock, />\s*Cancelar\s*</);
   assert.match(bufferBlock, />\s*Posicionar\s*</);
+  assert.doesNotMatch(bufferBlock, /Buffer único/);
+  assert.doesNotMatch(bufferBlock, /Multibuffers/);
+  assert.doesNotMatch(bufferBlock, /type="radio"/);
+  assert.doesNotMatch(bufferBlock, /onSelectBufferMode/);
   assert.doesNotMatch(bufferBlock, /raio|ranges?|quilômetro|metros?\b/i);
 });
 
@@ -112,35 +116,11 @@ test("S02.05 feedback mantém botão ativo e identifica ferramenta selecionada",
   assert.match(overlay, /origem da isócrona/);
 });
 
-test("Gate S02 Single: menu -> Buffer -> Single -> placement sem ponto prévio", () => {
+test("Gate S02 Buffer: seleção assume multi automaticamente e sessão nasce antes do placement", () => {
   const selecting = reduce(
     createInitialMapToolState(),
     { type: "OPEN_TOOL_MENU" },
     { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "single" },
-    },
-  );
-
-  assert.equal(selecting.mode, "selectingTool");
-  assert.equal(selecting.pendingPoint, null);
-
-  const placing = mapToolReducer(selecting, { type: "START_PLACEMENT" });
-  assert.equal(placing.mode, "placingPoint");
-  assert.equal(placing.tool, "buffer");
-  assert.equal(placing.pendingPoint, null);
-});
-
-test("Gate S02 Multi: sessão nasce antes do placement e nenhum ponto é criado pelo menu", () => {
-  const selecting = reduce(
-    createInitialMapToolState(),
-    { type: "OPEN_TOOL_MENU" },
-    { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "multi" },
-    },
   );
   const session = {
     kind: "buffer",
@@ -153,6 +133,11 @@ test("Gate S02 Multi: sessão nasce antes do placement e nenhum ponto é criado 
     session,
   });
 
+  assert.equal(selecting.mode, "selectingTool");
+  assert.deepEqual(selecting.preliminaryOptions, {
+    kind: "buffer",
+    insertionMode: "multi",
+  });
   assert.equal(selecting.pendingPoint, null);
   assert.equal(placing.mode, "placingPoint");
   assert.equal(placing.pendingPoint, null);
