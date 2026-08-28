@@ -16,7 +16,7 @@ import {
   type IsochroneMode,
   type IsochroneType,
 } from "../../map-panel/isochrone-api";
-import type { MarkerOrigin } from "./marker-projection";
+import type { MapToolPoint } from "./analysis-tools/map-tool-state";
 
 export type IsochronePreviewState = {
   dataId: string;
@@ -49,10 +49,10 @@ function previewLabel(input: IsochroneInput) {
 }
 
 export function useIsochronePreview({
-  origin,
+  pendingPoint,
   onMarkerReset,
 }: {
-  origin: MarkerOrigin | null;
+  pendingPoint: MapToolPoint | null;
   onMarkerReset: () => void;
 }) {
   const { projectSlug } = useParams();
@@ -87,10 +87,10 @@ export function useIsochronePreview({
   }, [message]);
 
   useEffect(() => {
-    if (origin) return;
+    if (pendingPoint) return;
     setDialogOpen(false);
     setError(null);
-  }, [origin]);
+  }, [pendingPoint]);
 
   useEffect(() => {
     if (previousScopeKeyRef.current === scopeKey) return;
@@ -125,10 +125,10 @@ export function useIsochronePreview({
   );
 
   const openDialog = useCallback(() => {
-    if (!origin || !capabilities?.previewIsochrone || preview) return;
+    if (!pendingPoint || !capabilities?.previewIsochrone || preview) return;
     setError(null);
     setDialogOpen(true);
-  }, [capabilities?.previewIsochrone, origin, preview]);
+  }, [capabilities?.previewIsochrone, pendingPoint, preview]);
 
   const closeDialog = useCallback(() => {
     if (busy) return;
@@ -140,7 +140,7 @@ export function useIsochronePreview({
     async (input: IsochroneInput) => {
       if (
         busy ||
-        !origin ||
+        !pendingPoint ||
         !capabilities?.previewIsochrone ||
         preview
       ) {
@@ -167,7 +167,7 @@ export function useIsochronePreview({
         const result = await requestIsochrone(
           {
             projectSlug: projectSlug || null,
-            origin,
+            origin: pendingPoint,
             type: input.type,
             mode: input.mode,
             ranges: input.ranges,
@@ -240,7 +240,7 @@ export function useIsochronePreview({
       context?.mode,
       context?.organization?.id,
       context?.project?.id,
-      origin,
+      pendingPoint,
       preview,
       projectSlug,
     ],
