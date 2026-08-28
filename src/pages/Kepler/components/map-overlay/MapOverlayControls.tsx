@@ -6,7 +6,8 @@ import {
   type KeplerCommandResult,
 } from "../../engine-adapter";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
-import { describeIsochroneAvailability } from "../../map-panel/isochrone-feature-diagnostic";
+import AnalysisToolMenu from "./analysis-tools/AnalysisToolMenu";
+import { useMapToolController } from "./analysis-tools/useMapToolController";
 import BufferDialog from "./BufferDialog";
 import IsochroneDialog from "./IsochroneDialog";
 import { useBufferPreview } from "./useBufferPreview";
@@ -90,6 +91,13 @@ function OverlayIcon({ name }: { name: OverlayIconName }) {
   );
 }
 
+function activeAnalysisToolLabel(tool: "marker" | "buffer" | "isochrone" | null) {
+  if (tool === "buffer") return "buffer";
+  if (tool === "isochrone") return "isócrona";
+  if (tool === "marker") return "marcador";
+  return "análise";
+}
+
 export default function MapOverlayControls() {
   const { context, customMapOverlayEnabled } = useMapPanel();
   const { commands, state } = useKeplerEngineAdapter();
@@ -101,6 +109,10 @@ export default function MapOverlayControls() {
   const [commandMessage, setCommandMessage] =
     useState<OverlayMessage | null>(null);
   const marker = useMapMarker(state.viewport);
+  const toolController = useMapToolController({
+    startPlacement: marker.startPlacement,
+    cancelPlacement: marker.cancelPlacement,
+  });
   const isochrone = useIsochronePreview({
     origin: marker.origin,
     onMarkerReset: marker.reset,
@@ -119,13 +131,20 @@ export default function MapOverlayControls() {
   const analysisMarkerCapabilityEnabled =
     capabilities?.placeAnalysisMarker === true;
   const analysisPreviewActive = Boolean(isochrone.preview || buffer.preview);
-  const isochroneAvailabilityLabel = describeIsochroneAvailability(
-    context?.isochroneFeatureState,
-    isochroneCapabilityEnabled,
-  );
-  const analysisMarkerAvailabilityLabel = analysisMarkerCapabilityEnabled
-    ? "Posicionar origem da análise"
-    : isochroneAvailabilityLabel;
+  const selectingToolState =
+    toolController.state.mode === "selectingTool"
+      ? toolController.state
+      : null;
+  const placementTool =
+    toolController.state.mode === "placingPoint"
+      ? toolController.state.tool
+      : "marker";
+  const activeToolLabel = activeAnalysisToolLabel(toolController.state.tool);
+  const analysisButtonLabel = toolController.menuOpen
+    ? "Fechar menu de análise"
+    : toolController.state.mode === "placingPoint"
+      ? `Cancelar posicionamento de ${activeToolLabel}`
+      : "Adicionar análise";
 
   if (!customMapOverlayEnabled || typeof document === "undefined") {
     return null;
@@ -222,8 +241,12 @@ export default function MapOverlayControls() {
             width: marker.canvasRect.width,
             height: marker.canvasRect.height,
           }}
-          onClick={(event) => marker.placeAt(event.clientX, event.clientY)}
-          aria-label="Clique no mapa para definir a origem da análise"
+          onClick={(event) => {
+            const placed = marker.placeAt(event.clientX, event.clientY);
+            if (placed) toolController.completeLegacyPlacement();
+          }}
+          aria-label={`Clique no mapa para posicionar ${activeToolLabel}`}
+          data-analysis-tool={placementTool}
           data-maono-no-preview="true"
         />
       ) : null}
@@ -297,6 +320,20 @@ export default function MapOverlayControls() {
               ×
             </button>
           </div>
+        ) : null}
+
+        {selectingToolState ? (
+          <AnalysisToolMenu
+            state={selectingToolState}
+            canBuffer={bufferCapabilityEnabled}
+            canIsochrone={isochroneCapabilityEnabled}
+            canPlaceMarker={analysisMarkerCapabilityEnabled}
+            onSelectTool={toolController.selectTool}
+            onSelectBufferMode={toolController.selectBufferMode}
+            onStartPlacement={toolController.startSelectedPlacement}
+            onStartMarkerPlacement={toolController.startMarkerPlacement}
+            onCancel={toolController.cancelTool}
+          />
         ) : null}
 
         {tooltipsOpen ? (
@@ -448,27 +485,15 @@ export default function MapOverlayControls() {
           {!analysisPreviewActive ? (
             <button
               type="button"
-              className={marker.placing ? "is-active" : ""}
+              className={toolController.active ? "is-active" : ""}
               disabled={!analysisMarkerCapabilityEnabled}
-              onClick={() => {
-                if (!analysisMarkerCapabilityEnabled) return;
-                if (marker.placing) {
-                  marker.reset();
-                } else {
-                  marker.startPlacement();
-                }
-              }}
-              title={
-                marker.placing
-                  ? "Cancelar inserção de marcador"
-                  : analysisMarkerAvailabilityLabel
-              }
-              aria-label={
-                marker.placing
-                  ? "Cancelar inserção de marcador"
-                  : analysisMarkerAvailabilityLabel
-              }
-              aria-pressed={marker.placing}
+              onClick={toolController.toggleToolMenu}
+              title={analysisButtonLabel}
+              aria-label={analysisButtonLabel}
+              aria-haspopup="menu"
+              aria-expanded={toolController.menuOpen}
+              aria-pressed={toolController.active}
+              data-active-analysis-tool={toolController.state.tool ?? "none"}
               data-analysis-marker-state={
                 analysisMarkerCapabilityEnabled ? "ENABLED" : "DISABLED"
               }
