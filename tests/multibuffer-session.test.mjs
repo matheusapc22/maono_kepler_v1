@@ -14,7 +14,7 @@ import {
   mapToolReducer,
 } from "../src/pages/Kepler/components/map-overlay/analysis-tools/map-tool-state.ts";
 
-const [hook, controller, overlay, updater] = await Promise.all([
+const [hook, controller, overlay, updater, sessionSource] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/useBufferPreview.ts",
@@ -39,6 +39,13 @@ const [hook, controller, overlay, updater] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/engine-adapter/multibuffer-dataset-updater.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/analysis-tools/buffer-session.ts",
       import.meta.url,
     ),
     "utf8",
@@ -170,14 +177,6 @@ test("S04.04/S04.05 primeiro item cria layer e seguintes atualizam o mesmo datas
 });
 
 test("S04.06 features recebem IDs, origem e raio individual", () => {
-  const sessionSource = await readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/analysis-tools/buffer-session.ts",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-
   for (const field of [
     "maono_buffer_session_id",
     "maono_buffer_item_id",
