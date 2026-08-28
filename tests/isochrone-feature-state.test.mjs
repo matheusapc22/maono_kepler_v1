@@ -194,8 +194,8 @@ test("mensagem da UI distingue configuração, kill switch e permissão", () => 
   );
 });
 
-test("Pin permanece visível e fail-closed pela capability genérica de análise", async () => {
-  const [apiClient, overlay, types] = await Promise.all([
+test("launcher de análise permanece visível e fail-closed pelas capabilities", async () => {
+  const [apiClient, overlay, toolMenu, types] = await Promise.all([
     readFile(
       new URL("../src/pages/Kepler/map-panel/map-panel-api.ts", import.meta.url),
       "utf8",
@@ -203,6 +203,13 @@ test("Pin permanece visível e fail-closed pela capability genérica de análise
     readFile(
       new URL(
         "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../src/pages/Kepler/components/map-overlay/analysis-tools/AnalysisToolMenu.tsx",
         import.meta.url,
       ),
       "utf8",
@@ -219,10 +226,14 @@ test("Pin permanece visível e fail-closed pela capability genérica de análise
   assert.match(types, /isochroneFeatureState:\s*IsochroneFeatureState/);
 
   assert.match(overlay, /disabled=\{!analysisMarkerCapabilityEnabled\}/);
-  assert.match(overlay, /if \(!analysisMarkerCapabilityEnabled\) return/);
+  assert.match(overlay, /canPlaceMarker=\{analysisMarkerCapabilityEnabled\}/);
+  assert.match(overlay, /canBuffer=\{bufferCapabilityEnabled\}/);
+  assert.match(overlay, /canIsochrone=\{isochroneCapabilityEnabled\}/);
   assert.match(overlay, /data-analysis-marker-state/);
   assert.match(overlay, /data-isochrone-state/);
-  assert.match(overlay, /describeIsochroneAvailability/);
+  assert.match(toolMenu, /canPlaceMarker \?/);
+  assert.match(toolMenu, /canBuffer \?/);
+  assert.match(toolMenu, /canIsochrone \?/);
   assert.doesNotMatch(
     overlay,
     /capabilities\?\.previewIsochrone && !isochrone\.preview \? \(/,
