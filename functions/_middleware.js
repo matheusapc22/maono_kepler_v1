@@ -6,7 +6,10 @@ import {
   isPreviewRuntimeMutationPath,
   previewWriteDeniedResponse,
 } from "./_lib/preview-write-policy.js";
-import { isPreviewRuntime } from "./_lib/runtime-environment.js";
+import {
+  RUNTIME_ENVIRONMENTS,
+  resolveRuntimeEnvironment,
+} from "./_lib/runtime-environment.js";
 
 function decodePathPart(value) {
   try {
@@ -26,18 +29,31 @@ export function isLikelyCloudflarePreviewUrl(value) {
 
   if (!hostname.endsWith(".pages.dev")) return false;
 
-  // Production padrão: maono-kepler-v1.pages.dev (3 labels).
-  // Deployment/branch Preview: <hash|branch>.maono-kepler-v1.pages.dev (4+ labels).
+  // Heurística usada apenas quando MAONO_RUNTIME_ENV estiver ausente.
+  // URLs únicas de Production também podem conter um prefixo/hash; por isso
+  // um runtime explícito sempre tem precedência sobre o hostname.
   return hostname.split(".").length >= 4;
 }
 
 function previewPolicyEnv(env, requestUrl) {
-  if (isPreviewRuntime(env)) return env;
+  const runtime = resolveRuntimeEnvironment(env);
+
+  if (runtime === RUNTIME_ENVIRONMENTS.PREVIEW) return env;
+
+  // Production/local explícitos são autoridade. Isso evita classificar a URL
+  // única de um deployment de Production como Preview apenas pelo hostname.
+  if (
+    runtime === RUNTIME_ENVIRONMENTS.PRODUCTION ||
+    runtime === RUNTIME_ENVIRONMENTS.LOCAL
+  ) {
+    return null;
+  }
+
   if (!isLikelyCloudflarePreviewUrl(requestUrl)) return null;
 
-  // Fallback fail-closed: se o binding Preview for configurado antes da variável
-  // MAONO_RUNTIME_ENV, URLs de deployment continuam protegidas. A cópia é usada
-  // apenas pela política; DB/session continuam usando o `env` original.
+  // Fallback fail-closed somente para runtime UNKNOWN: se o binding Preview
+  // for configurado antes de MAONO_RUNTIME_ENV, deployments de branch ainda
+  // recebem proteção. DB/session continuam usando o `env` original.
   return {
     ...env,
     MAONO_RUNTIME_ENV: "preview",
