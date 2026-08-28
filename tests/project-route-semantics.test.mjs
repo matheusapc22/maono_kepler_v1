@@ -116,7 +116,12 @@ test("policy v5 mantém separação e fecha capabilities de análise", () => {
     sources.canonicalService,
     /defaultExistingProjectPanel[\s\S]*editorAllowed[\s\S]*MAP_PANEL_MODES\.EDITOR[\s\S]*viewerAllowed[\s\S]*MAP_PANEL_MODES\.VIEWER/,
   );
+  assert.match(sources.canonicalService, /buildMapCapabilities/);
   assert.match(sources.canonicalService, /previewBufferAllowed/);
   assert.match(sources.canonicalService, /persistBufferAllowed/);
-  assert.match(sources.canonicalService, /placeAnalysisMarker/);
+  assert.match(sources.legacyService, /"placeAnalysisMarker"/);
+  assert.match(
+    sources.legacyService,
+    /capabilities\.placeAnalysisMarker = Boolean\([\s\S]*capabilities\.previewIsochrone \|\| capabilities\.previewBuffer/,
+  );
 });
