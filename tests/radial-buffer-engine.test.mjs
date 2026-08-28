@@ -120,17 +120,14 @@ test("engine divide cruzamento do +180 em MultiPolygon válido", () => {
   });
   const result = executeRadialBuffer(input);
   const geometry = result.geojson.features[0].geometry;
+  const positions = geometryRings(geometry).flat();
 
   assert.equal(geometry.type, "MultiPolygon");
   assert.equal(geometry.coordinates.length, 2);
   assert.equal(result.engineMetadata.antimeridianSplitCount, 1);
   assertValidDatelineRings(geometry);
-  assert.ok(
-    geometry.coordinates.flat(3).some((position) => position[0] === 180),
-  );
-  assert.ok(
-    geometry.coordinates.flat(3).some((position) => position[0] === -180),
-  );
+  assert.ok(positions.some((position) => position[0] === 180));
+  assert.ok(positions.some((position) => position[0] === -180));
 });
 
 test("engine divide cruzamento do -180 em MultiPolygon válido", () => {
