@@ -104,19 +104,40 @@ test("ciclo de preview sai do componente visual e usa o Engine Adapter", () => {
   assert.match(previewHook, /commands\.addGeoJsonLayer/);
   assert.match(previewHook, /transient:\s*true/);
   assert.match(previewHook, /commandsRef\.current\.removeTransientLayer/);
-  assert.match(previewHook, /dispatchMapSaveRequest/);
-  assert.match(previewHook, /MAONO_MAP_SAVE_RESULT_EVENT/);
 });
 
-test("troca de projeto ou organização remove apenas preview transitório não salvo", () => {
+test("Manter promove isócrona localmente e não dispara salvamento", () => {
+  const keepBlock = previewHook.match(/const keep = useCallback\([\s\S]*?return true;\n  },/s)?.[0] || "";
+  assert.match(keepBlock, /markLayerPersistent\(preview\.dataId,\s*"isochrone"\)/);
+  assert.match(keepBlock, /capabilities\?\.persistIsochrone/);
+  assert.match(keepBlock, /map_isochrone_kept/);
+  assert.match(keepBlock, /Salve o projeto para gravar as alterações/);
+  assert.match(keepBlock, /setPreview\(null\)/);
+  assert.match(keepBlock, /resetMarkerRef\.current\(\)/);
+  assert.doesNotMatch(previewHook, /dispatchMapSaveRequest/);
+  assert.doesNotMatch(previewHook, /MAONO_MAP_SAVE_RESULT_EVENT/);
+  assert.doesNotMatch(previewHook, /saveRequestId/);
+  assert.doesNotMatch(previewHook, /canPersist/);
+});
+
+test("troca de projeto ou organização remove apenas preview ainda transitório", () => {
   assert.match(previewHook, /const scopeKey =/);
   assert.match(previewHook, /previousScopeKeyRef/);
   assert.match(previewHook, /requestRef\.current\?\.abort\(\)/);
   assert.match(
     previewHook,
-    /if \(current && !current\.saveRequestId\) \{[\s\S]*removeTransientLayer\(current\.dataId,\s*"isochrone"\)/,
+    /if \(current\) \{[\s\S]*removeTransientLayer\(current\.dataId,\s*"isochrone"\)/,
   );
   assert.match(previewHook, /resetMarkerRef\.current\(\)/);
+});
+
+test("overlay usa Manter para isócrona e não expõe salvamento individual", () => {
+  assert.match(overlay, /isochrone\.keep/);
+  assert.match(overlay, /capabilities\?\.persistIsochrone/);
+  assert.match(overlay, />\s*Manter\s*</);
+  assert.doesNotMatch(overlay, /isochrone\.persist/);
+  assert.doesNotMatch(overlay, /Salvar no projeto/);
+  assert.doesNotMatch(overlay, /Salvando…/);
 });
 
 test("store não recria reducer paralelo de pin", () => {
