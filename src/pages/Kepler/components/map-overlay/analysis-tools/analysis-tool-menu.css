@@ -180,16 +180,8 @@
   opacity: 0.45;
 }
 
-.maono-marker-placement[data-analysis-tool="buffer"]::after {
-  content: "Clique no mapa para definir a origem do buffer";
-}
-
-.maono-marker-placement[data-analysis-tool="isochrone"]::after {
-  content: "Clique no mapa para definir a origem da isócrona";
-}
-
-.maono-marker-placement[data-analysis-tool="marker"]::after {
-  content: "Clique no mapa para adicionar o marcador";
+.maono-marker-placement::after {
+  content: attr(data-placement-label);
 }
 
 @media (max-width: 820px) {
