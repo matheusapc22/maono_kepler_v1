@@ -377,12 +377,17 @@ export function mapToolReducer(
       const preview = action.preview ?? null;
       if (!preview || !previewIsCompatible(state.tool, preview)) return state;
 
+      const session =
+        state.tool === "buffer" && isMultiBufferState(state) && state.session
+          ? { ...state.session, dataId: preview.dataId }
+          : state.session;
+
       return nextState({
         mode: "reviewing",
         tool: state.tool,
         preliminaryOptions: state.preliminaryOptions,
         pendingPoint: state.pendingPoint,
-        session: state.session,
+        session,
         preview,
       });
     }
