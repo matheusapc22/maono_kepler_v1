@@ -18,6 +18,9 @@ type MapPanelTelemetryDetails = {
   unit?: string | null;
   rangeCount?: number | null;
   featureCount?: number | null;
+  itemCount?: number | null;
+  sessionId?: string | null;
+  dataId?: string | null;
   antimeridianSplitCount?: number | null;
 };
 
