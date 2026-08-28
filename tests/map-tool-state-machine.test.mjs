@@ -35,16 +35,68 @@ test("estado inicial é idle e satisfaz as invariantes", () => {
   assert.equal(assertMapToolStateInvariant(state), state);
 });
 
-test("buffer single percorre seleção, placement, configuração e review", () => {
+test("Buffer entra em modo multiorigem automaticamente ao ser selecionado", () => {
+  const selecting = reduce(
+    createInitialMapToolState(),
+    { type: "OPEN_TOOL_MENU" },
+    { type: "SELECT_TOOL", tool: "buffer" },
+  );
+
+  assert.equal(selecting.mode, "selectingTool");
+  assert.equal(selecting.tool, "buffer");
+  assert.equal(selecting.menu, "buffer");
+  assert.deepEqual(selecting.preliminaryOptions, {
+    kind: "buffer",
+    insertionMode: "multi",
+  });
+  assert.equal(selecting.pendingPoint, null);
+  assert.equal(selecting.session, null);
+  assert.equal(isMapToolStateValid(selecting), true);
+});
+
+test("modo single não pertence mais ao estado canônico de Buffer", () => {
+  const selecting = reduce(
+    createInitialMapToolState(),
+    { type: "OPEN_TOOL_MENU" },
+    { type: "SELECT_TOOL", tool: "buffer" },
+  );
+
+  const attemptedSingle = mapToolReducer(selecting, {
+    type: "SET_PRELIMINARY_OPTIONS",
+    options: { kind: "buffer", insertionMode: "single" },
+  });
+
+  assert.equal(attemptedSingle, selecting);
+  assert.equal(attemptedSingle.preliminaryOptions.insertionMode, "multi");
+});
+
+test("Buffer canônico exige sessão explícita antes do placement", () => {
+  const selecting = reduce(
+    createInitialMapToolState(),
+    { type: "OPEN_TOOL_MENU" },
+    { type: "SELECT_TOOL", tool: "buffer" },
+  );
+
+  const withoutSession = mapToolReducer(selecting, {
+    type: "START_PLACEMENT",
+  });
+  const withSession = mapToolReducer(selecting, {
+    type: "START_PLACEMENT",
+    session: MULTI_SESSION,
+  });
+
+  assert.equal(withoutSession, selecting);
+  assert.equal(withSession.mode, "placingPoint");
+  assert.deepEqual(withSession.session, MULTI_SESSION);
+  assert.equal(isMapToolStateValid(withSession), true);
+});
+
+test("Buffer percorre placement, configuração e review na sessão multiorigem", () => {
   const state = reduce(
     createInitialMapToolState(),
     { type: "OPEN_TOOL_MENU" },
     { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "single" },
-    },
-    { type: "START_PLACEMENT" },
+    { type: "START_PLACEMENT", session: MULTI_SESSION },
     { type: "POINT_PLACED", point: POINT_A },
     { type: "SUBMIT_CONFIGURATION" },
     {
@@ -56,62 +108,20 @@ test("buffer single percorre seleção, placement, configuração e review", () 
   assert.equal(state.mode, "reviewing");
   assert.equal(state.tool, "buffer");
   assert.deepEqual(state.pendingPoint, POINT_A);
-  assert.equal(state.preliminaryOptions?.insertionMode, "single");
-  assert.equal(state.session, null);
+  assert.equal(state.preliminaryOptions?.insertionMode, "multi");
+  assert.deepEqual(state.session, {
+    ...MULTI_SESSION,
+    dataId: "buffer-preview-1",
+  });
   assert.equal(state.preview.dataId, "buffer-preview-1");
   assert.equal(isMapToolStateValid(state), true);
 });
 
-test("buffer não entra em placement antes de escolher Single ou Multi", () => {
-  const selectingBuffer = reduce(
-    createInitialMapToolState(),
-    { type: "OPEN_TOOL_MENU" },
-    { type: "SELECT_TOOL", tool: "buffer" },
-  );
-
-  const attemptedPlacement = mapToolReducer(selectingBuffer, {
-    type: "START_PLACEMENT",
-  });
-
-  assert.equal(selectingBuffer.mode, "selectingTool");
-  assert.equal(selectingBuffer.menu, "buffer");
-  assert.equal(attemptedPlacement, selectingBuffer);
-});
-
-test("multibuffer exige sessão explícita antes do placement", () => {
-  const selectingMulti = reduce(
-    createInitialMapToolState(),
-    { type: "OPEN_TOOL_MENU" },
-    { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "multi" },
-    },
-  );
-
-  const withoutSession = mapToolReducer(selectingMulti, {
-    type: "START_PLACEMENT",
-  });
-  const withSession = mapToolReducer(selectingMulti, {
-    type: "START_PLACEMENT",
-    session: MULTI_SESSION,
-  });
-
-  assert.equal(withoutSession, selectingMulti);
-  assert.equal(withSession.mode, "placingPoint");
-  assert.deepEqual(withSession.session, MULTI_SESSION);
-  assert.equal(isMapToolStateValid(withSession), true);
-});
-
-test("cancelar ponto atual em Multibuffer preserva a sessão e retorna ao placement", () => {
+test("cancelar ponto atual em Buffer preserva a sessão e retorna ao placement", () => {
   const configuring = reduce(
     createInitialMapToolState(),
     { type: "OPEN_TOOL_MENU" },
     { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "multi" },
-    },
     { type: "START_PLACEMENT", session: MULTI_SESSION },
     { type: "POINT_PLACED", point: POINT_B },
   );
@@ -126,15 +136,11 @@ test("cancelar ponto atual em Multibuffer preserva a sessão e retorna ao placem
   assert.deepEqual(cancelled.session, MULTI_SESSION);
 });
 
-test("Multibuffer confirmado pode continuar na mesma sessão e ser finalizado", () => {
+test("Buffer confirmado pode continuar na mesma sessão e ser finalizado", () => {
   const reviewed = reduce(
     createInitialMapToolState(),
     { type: "OPEN_TOOL_MENU" },
     { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "multi" },
-    },
     { type: "START_PLACEMENT", session: MULTI_SESSION },
     { type: "POINT_PLACED", point: POINT_A },
     { type: "SUBMIT_CONFIGURATION" },
