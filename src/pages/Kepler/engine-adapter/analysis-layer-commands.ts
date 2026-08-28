@@ -132,6 +132,15 @@ function objectValue(value: any): Record<string, any> {
   return {};
 }
 
+function interactionConfigPatch(
+  value: Record<string, unknown>,
+): Parameters<typeof interactionConfigChange>[0] {
+  // Kepler 3.1 restringe `id` a uma union literal, mas o reducer recebe
+  // snapshots vindos do próprio estado. Mantemos o cast isolado na borda
+  // do adapter, sem propagar `any` para o contrato Maõno.
+  return value as unknown as Parameters<typeof interactionConfigChange>[0];
+}
+
 function normalizePalette(colors: unknown) {
   if (!Array.isArray(colors) || colors.length < 2 || colors.length > 12) {
     fail(
@@ -293,18 +302,20 @@ export function createAnalysisLayerCommands(
       );
 
       dispatchKepler(
-        interactionConfigChange({
-          ...tooltipRecord,
-          id: String(readValue(tooltip, "id") ?? "tooltip"),
-          enabled: true,
-          config: {
-            ...tooltipConfig,
-            fieldsToShow: {
-              ...fieldsToShow,
-              [dataId]: tooltipFields.map((name) => ({ name, format: null })),
+        interactionConfigChange(
+          interactionConfigPatch({
+            ...tooltipRecord,
+            id: String(readValue(tooltip, "id") ?? "tooltip"),
+            enabled: true,
+            config: {
+              ...tooltipConfig,
+              fieldsToShow: {
+                ...fieldsToShow,
+                [dataId]: tooltipFields.map((name) => ({ name, format: null })),
+              },
             },
-          },
-        }),
+          }),
+        ),
       );
     }
 
@@ -366,14 +377,16 @@ export function createAnalysisLayerCommands(
     if (!Object.prototype.hasOwnProperty.call(fieldsToShow, dataId)) return;
     delete fieldsToShow[dataId];
     dispatchKepler(
-      interactionConfigChange({
-        ...tooltipRecord,
-        id: String(readValue(tooltip, "id") ?? "tooltip"),
-        config: {
-          ...tooltipConfig,
-          fieldsToShow,
-        },
-      }),
+      interactionConfigChange(
+        interactionConfigPatch({
+          ...tooltipRecord,
+          id: String(readValue(tooltip, "id") ?? "tooltip"),
+          config: {
+            ...tooltipConfig,
+            fieldsToShow,
+          },
+        }),
+      ),
     );
   }
 
