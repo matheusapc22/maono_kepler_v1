@@ -10,6 +10,7 @@ import AnalysisToolMenu from "./analysis-tools/AnalysisToolMenu";
 import { useMapToolController } from "./analysis-tools/useMapToolController";
 import BufferDialog from "./BufferDialog";
 import IsochroneDialog from "./IsochroneDialog";
+import MarkerContextMenu from "./MarkerContextMenu";
 import { useBufferPreview } from "./useBufferPreview";
 import { useIsochronePreview } from "./useIsochronePreview";
 import { useMapMarker } from "./useMapMarker";
@@ -26,8 +27,7 @@ type OverlayIconName =
   | "legend"
   | "marker"
   | "isochrone"
-  | "buffer"
-  | "trash";
+  | "buffer";
 
 function OverlayIcon({ name }: { name: OverlayIconName }) {
   const icons: Record<OverlayIconName, ReactNode> = {
@@ -38,7 +38,7 @@ function OverlayIcon({ name }: { name: OverlayIconName }) {
       </>
     ),
     tooltip: (
-      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2 2v10Z" />
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
     ),
     legend: (
       <>
@@ -66,12 +66,6 @@ function OverlayIcon({ name }: { name: OverlayIconName }) {
         <circle cx="12" cy="12" r="8" />
         <circle cx="12" cy="12" r="1.6" />
         <path d="M12 12l5.5-5.5" />
-      </>
-    ),
-    trash: (
-      <>
-        <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6" />
-        <path d="M10 10v7M14 10v7" />
       </>
     ),
   };
@@ -118,13 +112,13 @@ export default function MapOverlayControls() {
     cancelPlacement: marker.cancelPlacement,
     resetMarker: marker.reset,
   });
-  const analysisOrigin = toolController.pendingPoint;
+  const analysisPendingPoint = toolController.pendingPoint;
   const isochrone = useIsochronePreview({
-    origin: analysisOrigin,
+    pendingPoint: analysisPendingPoint,
     onMarkerReset: marker.reset,
   });
   const buffer = useBufferPreview({
-    pendingPoint: analysisOrigin,
+    pendingPoint: analysisPendingPoint,
     session: toolController.multiBufferSession,
     onMarkerReset: marker.reset,
   });
@@ -386,14 +380,11 @@ export default function MapOverlayControls() {
           </button>
           <span>Origem</span>
 
-          {marker.menuOpen ? (
-            <div className="maono-map-marker__menu">
-              <button type="button" onClick={marker.reset}>
-                <OverlayIcon name="trash" />
-                Remover marcador
-              </button>
-            </div>
-          ) : null}
+          <MarkerContextMenu
+            open={marker.menuOpen}
+            onClose={() => marker.setMenuOpen(false)}
+            onRemove={marker.reset}
+          />
         </div>
       ) : null}
 
