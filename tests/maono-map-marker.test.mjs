@@ -8,7 +8,7 @@ import {
   screenToMarkerOrigin,
 } from "../src/pages/Kepler/components/map-overlay/marker-projection.ts";
 
-const [overlay, markerHook] = await Promise.all([
+const [overlay, markerHook, controller] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
@@ -19,6 +19,13 @@ const [overlay, markerHook] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/useMapMarker.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/analysis-tools/useMapToolController.ts",
       import.meta.url,
     ),
     "utf8",
@@ -79,14 +86,27 @@ test("descoberta da superfície aceita MapLibre, Mapbox e fallback do shell Maõ
   assert.match(markerHook, /getBoundingClientRect/);
 });
 
-test("modo de colocação atualiza a superfície e usa cursor visual de Pin", () => {
-  assert.match(markerHook, /PLACEMENT_PIN_CURSOR/);
+test("modo de colocação parametriza cursor por ferramenta", () => {
+  assert.match(markerHook, /PLACEMENT_CURSORS/);
+  assert.match(markerHook, /marker:/);
+  assert.match(markerHook, /buffer:/);
+  assert.match(markerHook, /isochrone:/);
   assert.match(markerHook, /fill='%23C5A059'/);
   assert.match(markerHook, /\.maono-marker-placement/);
-  assert.match(markerHook, /placementSurface\.style\.cursor = PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /const startPlacement = useCallback\(\(\) => \{\s*refreshCanvas\(\)/);
+  assert.match(markerHook, /PLACEMENT_CURSORS\[placementKind \?\? "marker"\]/);
+  assert.match(markerHook, /kind: MarkerPlacementKind = "marker"/);
   assert.match(overlay, /marker\.placing && marker\.canvasRect/);
   assert.match(overlay, /marker\.placeAt\(event\.clientX, event\.clientY\)/);
+});
+
+test("placeAt não abre menu e Escape do placement pertence ao controller", () => {
+  const placeAtBlock =
+    markerHook.match(/const placeAt = useCallback\([\s\S]*?\n  \);/)?.[0] || "";
+  assert.match(placeAtBlock, /setMenuOpen\(false\)/);
+  assert.doesNotMatch(placeAtBlock, /setMenuOpen\(true\)/);
+  assert.doesNotMatch(markerHook, /event\.key === "Escape"/);
+  assert.match(controller, /handlePlacementEscape/);
+  assert.match(controller, /event\.key !== "Escape"/);
 });
 
 test("overlay visual mantém projeção e pointer state fora do componente", () => {
@@ -94,7 +114,6 @@ test("overlay visual mantém projeção e pointer state fora do componente", () 
   assert.doesNotMatch(overlay, /draggingPointerRef/);
   assert.doesNotMatch(overlay, /markerMovedRef/);
   assert.match(overlay, /useMapMarker/);
-  assert.match(markerHook, /Escape/);
   assert.match(markerHook, /ArrowLeft/);
   assert.match(markerHook, /setPointerCapture/);
 });
