@@ -9,8 +9,141 @@ export type SavedConfigHydrationError = Error & {
   retryable: false;
 };
 
+const MAONO_ANALYSIS_DATA_ID_PATTERN = /^maono_analysis_(?:buffer|isochrone)_/;
+
 function isRecord(value: unknown): value is Record<string, any> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function datasetIdOf(dataset: unknown): string {
+  if (!isRecord(dataset)) return "";
+  const candidates = [dataset?.info?.id, dataset?.data?.id, dataset?.id];
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function layerDataIds(layer: unknown): string[] {
+  if (!isRecord(layer)) return [];
+  const dataId = layer?.config?.dataId ?? layer?.dataId;
+  if (Array.isArray(dataId)) {
+    return dataId.map((value) => String(value || "").trim()).filter(Boolean);
+  }
+  const value = String(dataId || "").trim();
+  return value ? [value] : [];
+}
+
+function filterDataIds(filter: unknown): string[] {
+  if (!isRecord(filter)) return [];
+  const dataId = filter.dataId;
+  if (Array.isArray(dataId)) {
+    return dataId.map((value) => String(value || "").trim()).filter(Boolean);
+  }
+  const value = String(dataId || "").trim();
+  return value ? [value] : [];
+}
+
+function isMissingMaonoAnalysisDataId(dataId: string, available: Set<string>) {
+  return MAONO_ANALYSIS_DATA_ID_PATTERN.test(dataId) && !available.has(dataId);
+}
+
+export function recoverOrphanedMaonoAnalysisReferences(savedConfig: any) {
+  if (!isRecord(savedConfig) || !Array.isArray(savedConfig.datasets)) {
+    return {
+      savedConfig,
+      recoveredDatasetIds: [] as string[],
+    };
+  }
+
+  const available = new Set(
+    savedConfig.datasets.map(datasetIdOf).filter(Boolean),
+  );
+  const config = isRecord(savedConfig.config) ? savedConfig.config : null;
+  const visState = isRecord(config?.visState) ? config.visState : null;
+  if (!config || !visState) {
+    return {
+      savedConfig,
+      recoveredDatasetIds: [] as string[],
+    };
+  }
+
+  const recovered = new Set<string>();
+  const layers = Array.isArray(visState.layers) ? visState.layers : [];
+  const nextLayers = layers.filter((layer) => {
+    const missingIds = layerDataIds(layer).filter((dataId) =>
+      isMissingMaonoAnalysisDataId(dataId, available),
+    );
+    missingIds.forEach((dataId) => recovered.add(dataId));
+    return missingIds.length === 0;
+  });
+
+  const filters = Array.isArray(visState.filters) ? visState.filters : [];
+  const nextFilters = filters.filter((filter) => {
+    const missingIds = filterDataIds(filter).filter((dataId) =>
+      isMissingMaonoAnalysisDataId(dataId, available),
+    );
+    missingIds.forEach((dataId) => recovered.add(dataId));
+    return missingIds.length === 0;
+  });
+
+  const interactionConfig = isRecord(visState.interactionConfig)
+    ? visState.interactionConfig
+    : null;
+  const tooltip = isRecord(interactionConfig?.tooltip)
+    ? interactionConfig.tooltip
+    : null;
+  const tooltipConfig = isRecord(tooltip?.config) ? tooltip.config : null;
+  const fieldsToShow = isRecord(tooltipConfig?.fieldsToShow)
+    ? tooltipConfig.fieldsToShow
+    : null;
+
+  let nextInteractionConfig = interactionConfig;
+  if (interactionConfig && tooltip && tooltipConfig && fieldsToShow) {
+    const nextFieldsToShow = { ...fieldsToShow };
+    for (const dataId of Object.keys(nextFieldsToShow)) {
+      if (isMissingMaonoAnalysisDataId(dataId, available)) {
+        delete nextFieldsToShow[dataId];
+        recovered.add(dataId);
+      }
+    }
+    nextInteractionConfig = {
+      ...interactionConfig,
+      tooltip: {
+        ...tooltip,
+        config: {
+          ...tooltipConfig,
+          fieldsToShow: nextFieldsToShow,
+        },
+      },
+    };
+  }
+
+  if (!recovered.size) {
+    return {
+      savedConfig,
+      recoveredDatasetIds: [] as string[],
+    };
+  }
+
+  return {
+    savedConfig: {
+      ...savedConfig,
+      config: {
+        ...config,
+        visState: {
+          ...visState,
+          layers: nextLayers,
+          filters: nextFilters,
+          ...(nextInteractionConfig
+            ? { interactionConfig: nextInteractionConfig }
+            : {}),
+        },
+      },
+    },
+    recoveredDatasetIds: Array.from(recovered),
+  };
 }
 
 export function validateSavedKeplerConfig(value: unknown) {
@@ -125,12 +258,15 @@ export function hydrateSavedKeplerConfig(
   const prepared = prepareSavedConfigForPointClustering(savedConfig, {
     featureEnabled,
   });
-  loadPointClusterState(prepared.savedConfig.maono);
+  const recovered = recoverOrphanedMaonoAnalysisReferences(
+    prepared.savedConfig,
+  );
+  loadPointClusterState(recovered.savedConfig.maono);
 
   let loaded: any;
   try {
     const schemaManager = resolveKeplerSchemaManager();
-    loaded = schemaManager.load(prepared.savedConfig) as any;
+    loaded = schemaManager.load(recovered.savedConfig) as any;
   } catch (error) {
     if (isSavedConfigHydrationError(error)) {
       throw error;
@@ -143,9 +279,9 @@ export function hydrateSavedKeplerConfig(
   }
 
   const datasets = loaded.datasets;
-  validateRuntimeDatasets(datasets, prepared.savedConfig.datasets.length);
+  validateRuntimeDatasets(datasets, recovered.savedConfig.datasets.length);
 
-  const config = loaded.config ?? prepared.savedConfig.config;
+  const config = loaded.config ?? recovered.savedConfig.config;
   if (!isRecord(config)) {
     throw hydrationError(new Error("O Kepler não retornou uma configuração de runtime válida."));
   }
