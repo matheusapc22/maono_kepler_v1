@@ -15,9 +15,11 @@ type AnalysisToolMenuProps = {
   state: SelectingToolMapToolState;
   canBuffer: boolean;
   canIsochrone: boolean;
+  canPlaceMarker?: boolean;
   onSelectTool: (tool: MapAnalysisTool) => void;
   onSelectBufferMode: (mode: BufferInsertionMode) => void;
   onStartPlacement: () => void;
+  onStartMarkerPlacement?: () => void;
   onCancel: () => void;
 };
 
