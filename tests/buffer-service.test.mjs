@@ -52,7 +52,8 @@ test("service gera GeoJSON e permite persistência em Production para usuário a
   assert.equal(result.geojson.features.length, 2);
   assert.deepEqual(result.metadata.rangesMeters, [500, 1250]);
   assert.equal(result.metadata.inputUnit, "km");
-  assert.equal(result.metadata.engine, "maono-radial-geodesic-v1");
+  assert.equal(result.metadata.engine, "maono-radial-geodesic-v2");
+  assert.equal(result.metadata.antimeridianSplitCount, 0);
   assert.equal(result.metadata.canPersist, true);
 });
 
@@ -70,6 +71,25 @@ test("service mantém análise executável mas canPersist=false em Preview read-
 
   assert.equal(result.geojson.features.length, 2);
   assert.equal(result.metadata.canPersist, false);
+});
+
+test("service expõe apenas contagem segura quando cruza antimeridiano", async () => {
+  const result = await generateRadialBuffer(
+    {
+      GEOPROCESSING_BUFFER_V1: "true",
+      MAONO_RUNTIME_ENV: "production",
+    },
+    new Request("https://maps.maono.test/api/maps/buffers"),
+    {
+      ...rawInput,
+      origin: { latitude: 0, longitude: 179.9 },
+      ranges: [20],
+    },
+    options(),
+  );
+
+  assert.equal(result.geojson.features[0].geometry.type, "MultiPolygon");
+  assert.equal(result.metadata.antimeridianSplitCount, 1);
 });
 
 test("service recusa execução quando feature está desligada", async () => {
@@ -129,5 +149,6 @@ test("service audita sucesso sem incluir geometria completa", async () => {
   assert.equal(events[0].action, "projects.map.buffer.preview");
   assert.equal(events[0].result, "success");
   assert.deepEqual(events[0].metadata.rangesMeters, [500, 1250]);
+  assert.equal(events[0].metadata.antimeridianSplitCount, 0);
   assert.equal("geojson" in events[0].metadata, false);
 });
