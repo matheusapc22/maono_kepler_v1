@@ -123,7 +123,8 @@ export default function MapOverlayControls() {
     onMarkerReset: marker.reset,
   });
   const buffer = useBufferPreview({
-    origin: analysisOrigin,
+    pendingPoint: analysisOrigin,
+    session: toolController.multiBufferSession,
     onMarkerReset: marker.reset,
   });
   const filtersActive = state.filters.some((filter) => filter.enabled);
@@ -132,7 +133,9 @@ export default function MapOverlayControls() {
   const isochroneCapabilityEnabled = capabilities?.previewIsochrone === true;
   const bufferCapabilityEnabled = capabilities?.previewBuffer === true;
   const analysisMarkerCapabilityEnabled = capabilities?.placeAnalysisMarker === true;
-  const analysisPreviewActive = Boolean(isochrone.preview || buffer.preview);
+  const analysisPreviewActive = Boolean(
+    isochrone.preview || (buffer.preview && !toolController.multiBufferActive),
+  );
   const selectingToolState =
     toolController.state.mode === "selectingTool" ? toolController.state : null;
   const placementTool =
@@ -148,6 +151,7 @@ export default function MapOverlayControls() {
       : "Adicionar análise";
   const launcherVisible =
     !analysisPreviewActive &&
+    !toolController.multiBufferActive &&
     toolController.state.mode !== "configuring" &&
     toolController.state.mode !== "reviewing";
 
@@ -157,7 +161,7 @@ export default function MapOverlayControls() {
     if (
       toolController.configurationTarget === "buffer" &&
       !buffer.dialogOpen &&
-      !buffer.preview
+      (!buffer.preview || toolController.multiBufferActive)
     ) {
       buffer.openDialog();
       return;
@@ -178,6 +182,7 @@ export default function MapOverlayControls() {
     isochrone.openDialog,
     isochrone.preview,
     toolController.configurationTarget,
+    toolController.multiBufferActive,
     toolController.pendingPoint,
   ]);
 
@@ -402,6 +407,18 @@ export default function MapOverlayControls() {
           />
         ) : null}
 
+        {toolController.canFinishMulti ? (
+          <section className="maono-multibuffer-session" aria-label="Sessão Multibuffers ativa">
+            <span>
+              <small>Multibuffers ativo</small>
+              <strong>{buffer.preview?.label || "Adicione a próxima origem"}</strong>
+            </span>
+            <button type="button" className="is-primary" onClick={toolController.finishMulti}>
+              Finalizar Multibuffers
+            </button>
+          </section>
+        ) : null}
+
         {tooltipsOpen ? (
           <section className="maono-tooltip-editor" aria-label="Configuração de tooltips">
             <header>
@@ -474,7 +491,7 @@ export default function MapOverlayControls() {
           </section>
         ) : null}
 
-        {buffer.preview ? (
+        {buffer.preview && !toolController.multiBufferActive ? (
           <section className="maono-isochrone-preview maono-buffer-preview">
             <div>
               <OverlayIcon name="buffer" />
