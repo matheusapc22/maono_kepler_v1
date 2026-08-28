@@ -1,0 +1,165 @@
+import { methodNotAllowed } from "../../_lib/http.js";
+import { generateRadialBuffer } from "../../_lib/geoprocessing/buffer-service.js";
+
+const MAX_REQUEST_BYTES = 16 * 1024;
+
+function endpointError(message, status, code, details = null) {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  error.details = details;
+  return error;
+}
+
+function jsonResponse(payload, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      ...extraHeaders,
+    },
+  });
+}
+
+function apiErrorResponse(error) {
+  return jsonResponse(
+    {
+      ok: false,
+      error: {
+        message: error?.message || "Não foi possível gerar o buffer.",
+        code: error?.code || "BUFFER_GENERATION_ERROR",
+        details: error?.details || null,
+      },
+    },
+    Number(error?.status || 500),
+  );
+}
+
+function validateRequestOrigin(request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return;
+
+  let requestOrigin;
+  try {
+    requestOrigin = new URL(request.url).origin;
+  } catch {
+    throw endpointError(
+      "A origem da solicitação é inválida.",
+      400,
+      "BUFFER_REQUEST_ORIGIN_INVALID",
+    );
+  }
+
+  if (origin !== requestOrigin) {
+    throw endpointError(
+      "A origem da solicitação não é permitida.",
+      403,
+      "BUFFER_CROSS_ORIGIN_FORBIDDEN",
+    );
+  }
+}
+
+async function readBoundedJsonBody(request) {
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > MAX_REQUEST_BYTES
+  ) {
+    throw endpointError(
+      "A solicitação excede o limite permitido.",
+      413,
+      "BUFFER_REQUEST_TOO_LARGE",
+    );
+  }
+
+  const contentType = String(request.headers.get("content-type") || "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (contentType !== "application/json") {
+    throw endpointError(
+      "Envie a solicitação como application/json.",
+      415,
+      "BUFFER_CONTENT_TYPE_INVALID",
+    );
+  }
+
+  const reader = request.body?.getReader();
+  const decoder = new TextDecoder();
+  let byteCount = 0;
+  let text = "";
+
+  if (!reader) {
+    throw endpointError(
+      "Envie uma solicitação JSON válida.",
+      400,
+      "INVALID_JSON_BODY",
+    );
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      byteCount += value.byteLength;
+      if (byteCount > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        throw endpointError(
+          "A solicitação excede o limite permitido.",
+          413,
+          "BUFFER_REQUEST_TOO_LARGE",
+        );
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!text.trim()) {
+    throw endpointError(
+      "Envie uma solicitação JSON válida.",
+      400,
+      "INVALID_JSON_BODY",
+    );
+  }
+
+  try {
+    const body = JSON.parse(text);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new TypeError("JSON body must be an object");
+    }
+    return body;
+  } catch {
+    throw endpointError(
+      "Envie uma solicitação JSON válida.",
+      400,
+      "INVALID_JSON_BODY",
+    );
+  }
+}
+
+export async function onRequest(context) {
+  const { request, env } = context;
+
+  if (request.method !== "POST") {
+    return methodNotAllowed(["POST"]);
+  }
+
+  try {
+    validateRequestOrigin(request);
+    const body = await readBoundedJsonBody(request);
+    const result = await generateRadialBuffer(env, request, body);
+
+    return jsonResponse({
+      ok: true,
+      ...result,
+    });
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}
