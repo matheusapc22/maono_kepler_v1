@@ -231,9 +231,10 @@ test("launcher de análise permanece visível e fail-closed pelas capabilities",
   assert.match(overlay, /canIsochrone=\{isochroneCapabilityEnabled\}/);
   assert.match(overlay, /data-analysis-marker-state/);
   assert.match(overlay, /data-isochrone-state/);
-  assert.match(toolMenu, /canPlaceMarker \?/);
   assert.match(toolMenu, /canBuffer \?/);
   assert.match(toolMenu, /canIsochrone \?/);
+  assert.doesNotMatch(toolMenu, /Adicionar marcador/);
+  assert.doesNotMatch(toolMenu, /ToolGlyph kind="marker"/);
   assert.doesNotMatch(
     overlay,
     /capabilities\?\.previewIsochrone && !isochrone\.preview \? \(/,
