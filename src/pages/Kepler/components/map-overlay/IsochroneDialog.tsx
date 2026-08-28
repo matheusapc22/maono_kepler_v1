@@ -200,7 +200,7 @@ export default function IsochroneDialog({
 
         <div className="maono-isochrone-dialog__body">
           <p className="maono-isochrone-dialog__hint">
-            A prévia só será persistida depois da sua confirmação.
+            A análise será criada como prévia. Use Manter para adicioná-la ao mapa; a gravação definitiva ocorre somente ao salvar o projeto.
           </p>
 
           <fieldset disabled={busy}>

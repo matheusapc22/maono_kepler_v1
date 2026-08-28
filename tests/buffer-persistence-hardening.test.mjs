@@ -198,7 +198,7 @@ test("viewer consegue gerar e descartar Buffer sem ganhar persistência", () => 
   assert.equal(capabilities.saveMap, false);
 });
 
-test("contrato de save aceita isócrona e Buffer e preserva tipo da análise", () => {
+test("contrato legado de save aceita isócrona e Buffer e preserva tipo da análise", () => {
   const bufferRequest = mapSaveRequestFromEvent({
     detail: {
       requestId: "map-save:buffer-1",
@@ -220,7 +220,7 @@ test("contrato de save aceita isócrona e Buffer e preserva tipo da análise", (
   assert.equal(mapSaveSourceAnalysisKind("isochrone-preview"), "isochrone");
 });
 
-test("save event falha fechado para source desconhecido", () => {
+test("save event legado falha fechado para source desconhecido", () => {
   assert.equal(
     mapSaveRequestFromEvent({
       detail: {
@@ -244,7 +244,7 @@ test("save event falha fechado para source desconhecido", () => {
   );
 });
 
-test("MaonoSaveButton promove e faz rollback usando o analysisKind do source", () => {
+test("MaonoSaveButton mantém compatibilidade com o contrato legado de save", () => {
   assert.match(saveButton, /mapSaveSourceAnalysisKind\(request\.source\)/);
   assert.match(
     saveButton,
@@ -282,11 +282,20 @@ test("tooltip de análise é merge-safe e descarte remove somente a entrada do d
   assert.match(bufferHook, /legendField/);
 });
 
-test("persistência de Buffer não cria endpoint de save paralelo", () => {
-  assert.match(bufferHook, /dispatchMapSaveRequest/);
-  assert.doesNotMatch(bufferHook, /buffers\/save|buffer\/save/);
+test("Manter Buffer promove a camada sem acionar o save global", () => {
+  assert.match(
+    bufferHook,
+    /commands\.markLayerPersistent\(preview\.dataId,\s*"buffer"\)/,
+  );
+  assert.doesNotMatch(bufferHook, /dispatchMapSaveRequest/);
+  assert.doesNotMatch(bufferHook, /MAONO_MAP_SAVE_REQUEST_EVENT/);
+  assert.doesNotMatch(bufferHook, /saveRequestId/);
+  assert.match(bufferHook, /Salve o projeto para gravar as alterações/);
   assert.match(saveButton, /serializeProjectConfig/);
-  assert.match(saveButton, /\/api\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/config/);
+  assert.match(
+    saveButton,
+    /\/api\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/config/,
+  );
 });
 
 test("Buffer permanece preview válido quando presentation ainda não encontra o dataset", () => {
@@ -301,8 +310,6 @@ test("Buffer permanece preview válido quando presentation ainda não encontra o
     const commands = createAnalysisLayerCommands({
       dispatch(action) {
         dispatched.push(action);
-        // Reproduz a janela de produção: o dispatch foi aceito, mas o
-        // getState imediato ainda não expõe o novo dataset para presentation.
       },
       getState() {
         return state;

@@ -44,44 +44,40 @@ test("preview usa Engine Adapter como camada GeoJSON transitória tipada", () =>
   assert.match(hook, /centerMap:\s*true/);
 });
 
-test("descartar buffer preserva o Pin e é bloqueado durante salvamento", () => {
+test("descartar buffer remove somente a prévia e preserva o Pin", () => {
   const discardBlock = hook.match(/const discard = useCallback\([\s\S]*?return true;\n  },/s)?.[0] || "";
-  assert.match(discardBlock, /preview\.saveRequestId/);
   assert.match(discardBlock, /removeTransientLayer\(preview\.dataId,\s*"buffer"\)/);
   assert.match(discardBlock, /setPreview\(null\)/);
   assert.doesNotMatch(discardBlock, /onMarkerReset|resetMarkerRef/);
+  assert.doesNotMatch(discardBlock, /saveRequestId/);
 });
 
-test("persistência do Buffer reutiliza dispatchMapSaveRequest e resultado global", () => {
-  assert.match(hook, /dispatchMapSaveRequest/);
-  assert.match(hook, /source:\s*"buffer-preview"/);
-  assert.match(hook, /MAONO_MAP_SAVE_RESULT_EVENT/);
-  assert.match(hook, /result\.source !== "buffer-preview"/);
-  assert.match(hook, /capabilities\?\.persistBuffer/);
-  assert.match(hook, /saveRequestId/);
-  assert.match(hook, /map_buffer_persist_requested/);
-  assert.match(hook, /map_buffer_persisted/);
-  assert.match(hook, /map_buffer_persist_failed/);
+test("Manter promove Buffer localmente sem disparar salvamento do projeto", () => {
+  const keepBlock = hook.match(/const keep = useCallback\([\s\S]*?return true;\n  },/s)?.[0] || "";
+  assert.match(keepBlock, /markLayerPersistent\(preview\.dataId,\s*"buffer"\)/);
+  assert.match(keepBlock, /capabilities\?\.persistBuffer/);
+  assert.match(keepBlock, /map_buffer_kept/);
+  assert.match(keepBlock, /Salve o projeto para gravar as alterações/);
+  assert.match(keepBlock, /setPreview\(null\)/);
+  assert.match(keepBlock, /resetMarkerRef\.current\(\)/);
+  assert.doesNotMatch(hook, /dispatchMapSaveRequest/);
+  assert.doesNotMatch(hook, /MAONO_MAP_SAVE_RESULT_EVENT/);
+  assert.doesNotMatch(hook, /saveRequestId/);
+  assert.doesNotMatch(hook, /canPersist/);
 });
 
-test("erro ou cancelamento de save preserva a prévia para retry", () => {
-  assert.match(
-    hook,
-    /setPreview\(\(value\) =>[\s\S]*saveRequestId:\s*null/,
-  );
-  assert.match(hook, /A prévia foi preservada/);
-});
-
-test("overlay integra salvar, descartar e estado de salvamento do Buffer", () => {
+test("overlay integra Manter e Descartar sem linguagem de salvamento individual", () => {
   assert.match(overlay, /useBufferPreview/);
   assert.match(overlay, /BufferDialog/);
   assert.match(overlay, /Criar buffers/);
   assert.match(overlay, /buffer\.preview/);
-  assert.match(overlay, /buffer\.persist/);
+  assert.match(overlay, /buffer\.keep/);
   assert.match(overlay, /buffer\.discard/);
   assert.match(overlay, /capabilities\?\.persistBuffer/);
-  assert.match(overlay, /Salvar no projeto/);
-  assert.match(overlay, /Salvando…/);
+  assert.match(overlay, />\s*Manter\s*</);
+  assert.doesNotMatch(overlay, /buffer\.persist/);
+  assert.doesNotMatch(overlay, /Salvar no projeto/);
+  assert.doesNotMatch(overlay, /Salvando…/);
 });
 
 test("Buffer usa tooltip e legenda nativos do Kepler em vez de overlays paralelos", () => {

@@ -7,11 +7,6 @@ import {
 import { useParams } from "react-router";
 
 import { useKeplerEngineAdapter } from "../../engine-adapter";
-import {
-  dispatchMapSaveRequest,
-  MAONO_MAP_SAVE_RESULT_EVENT,
-  mapSaveResultFromEvent,
-} from "../../map-panel/map-save-events";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
 import {
@@ -26,8 +21,6 @@ import type { MarkerOrigin } from "./marker-projection";
 export type IsochronePreviewState = {
   dataId: string;
   label: string;
-  canPersist: boolean;
-  saveRequestId: string | null;
 };
 
 export type IsochroneOverlayMessage = {
@@ -108,7 +101,7 @@ export function useIsochronePreview({
     setBusy(false);
 
     const current = previewRef.current;
-    if (current && !current.saveRequestId) {
+    if (current) {
       commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
     }
 
@@ -119,67 +112,12 @@ export function useIsochronePreview({
     resetMarkerRef.current();
   }, [scopeKey]);
 
-  useEffect(() => {
-    function handleSaveResult(event: Event) {
-      const result = mapSaveResultFromEvent(event);
-      const current = previewRef.current;
-
-      if (
-        !result ||
-        result.source !== "isochrone-preview" ||
-        !current ||
-        result.requestId !== current.saveRequestId ||
-        result.dataId !== current.dataId
-      ) {
-        return;
-      }
-
-      if (result.status === "success") {
-        setPreview(null);
-        resetMarkerRef.current();
-        setMessage({
-          tone: "success",
-          text: "A isócrona foi salva no projeto.",
-        });
-        emitMapPanelTelemetry("map_isochrone_persisted", {
-          mode: context?.mode ?? null,
-          projectId: context?.project?.id ?? null,
-          organizationId: context?.organization?.id ?? null,
-          source: "map-overlay",
-        });
-        return;
-      }
-
-      setPreview((value) =>
-        value?.dataId === result.dataId
-          ? { ...value, saveRequestId: null }
-          : value,
-      );
-      setMessage({
-        tone: "error",
-        text:
-          result.message ||
-          (result.status === "cancelled"
-            ? "O salvamento da isócrona foi cancelado."
-            : "Não foi possível salvar a isócrona."),
-      });
-    }
-
-    window.addEventListener(MAONO_MAP_SAVE_RESULT_EVENT, handleSaveResult);
-    return () =>
-      window.removeEventListener(MAONO_MAP_SAVE_RESULT_EVENT, handleSaveResult);
-  }, [
-    context?.mode,
-    context?.organization?.id,
-    context?.project?.id,
-  ]);
-
   useEffect(
     () => () => {
       requestRef.current?.abort();
       const current = previewRef.current;
 
-      if (current && !current.saveRequestId) {
+      if (current) {
         commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
       }
     },
@@ -259,8 +197,6 @@ export function useIsochronePreview({
         setPreview({
           dataId: added.value.dataId,
           label,
-          canPersist: result.metadata.canPersist,
-          saveRequestId: null,
         });
         setDialogOpen(false);
         emitMapPanelTelemetry("map_isochrone_previewed", {
@@ -311,7 +247,7 @@ export function useIsochronePreview({
   );
 
   const discard = useCallback(() => {
-    if (!preview || preview.saveRequestId) return false;
+    if (!preview) return false;
 
     const result = commands.removeTransientLayer(preview.dataId, "isochrone");
     if (!result.ok) {
@@ -340,41 +276,36 @@ export function useIsochronePreview({
     preview,
   ]);
 
-  const persist = useCallback(() => {
-    if (
-      !preview ||
-      preview.saveRequestId ||
-      !preview.canPersist ||
-      !capabilities?.persistIsochrone
-    ) {
+  const keep = useCallback(() => {
+    if (!preview || !capabilities?.persistIsochrone) {
       return false;
     }
 
-    emitMapPanelTelemetry("map_isochrone_persist_requested", {
+    const result = commands.markLayerPersistent(preview.dataId, "isochrone");
+    if (!result.ok) {
+      setMessage({
+        tone: "error",
+        text: result.reason || "Não foi possível manter a isócrona no mapa.",
+      });
+      return false;
+    }
+
+    emitMapPanelTelemetry("map_isochrone_kept", {
       mode: context?.mode ?? null,
       projectId: context?.project?.id ?? null,
       organizationId: context?.organization?.id ?? null,
       source: "map-overlay",
     });
-    const request = dispatchMapSaveRequest({
-      source: "isochrone-preview",
-      dataId: preview.dataId,
-    });
-
-    setPreview({
-      ...preview,
-      saveRequestId: request.requestId,
-    });
+    setPreview(null);
+    resetMarkerRef.current();
     setMessage({
       tone: "success",
-      text:
-        context?.mode === "create"
-          ? "Conclua os dados do novo projeto para salvar a isócrona."
-          : "Salvando a isócrona no projeto…",
+      text: "Isócrona mantida no mapa. Salve o projeto para gravar as alterações.",
     });
     return true;
   }, [
     capabilities?.persistIsochrone,
+    commands,
     context?.mode,
     context?.organization?.id,
     context?.project?.id,
@@ -392,6 +323,6 @@ export function useIsochronePreview({
     closeDialog,
     generate,
     discard,
-    persist,
+    keep,
   };
 }
