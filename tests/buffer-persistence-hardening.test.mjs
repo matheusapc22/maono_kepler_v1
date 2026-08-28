@@ -140,14 +140,9 @@ test("provider roteia transient para adapter de análise sem alterar camada norm
 });
 
 test("adapter separa gates de preview e persist por tipo", () => {
-  assert.match(analysisAdapter, /kind === "buffer"/);
-  assert.match(analysisAdapter, /"persistBuffer"/);
-  assert.match(analysisAdapter, /"previewBuffer"/);
-  assert.match(analysisAdapter, /"persistIsochrone"/);
-  assert.match(analysisAdapter, /"previewIsochrone"/);
-  assert.doesNotMatch(
+  assert.match(
     analysisAdapter,
-    /kind === "buffer"[^]*return phase === "persist" \? "persistIsochrone"/,
+    /if \(kind === "buffer"\) \{\s*return phase === "persist" \? "persistBuffer" : "previewBuffer";\s*\}\s*return phase === "persist" \? "persistIsochrone" : "previewIsochrone";/,
   );
 });
 
