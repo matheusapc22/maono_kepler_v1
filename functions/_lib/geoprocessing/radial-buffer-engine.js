@@ -43,18 +43,9 @@ function destinationPoint(origin, distanceMeters, bearingRadians) {
     );
 
   return [
-    roundCoordinate(normalizeLongitude(radiansToDegrees(longitude2))),
-    roundCoordinate(radiansToDegrees(latitude2)),
+    radiansToDegrees(longitude2),
+    radiansToDegrees(latitude2),
   ];
-}
-
-function crossesAntimeridian(coordinates) {
-  for (let index = 1; index < coordinates.length; index += 1) {
-    if (Math.abs(coordinates[index][0] - coordinates[index - 1][0]) > 180) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function closeLinearRing(coordinates) {
@@ -64,6 +55,21 @@ function closeLinearRing(coordinates) {
     coordinates.push([...first]);
   }
   return coordinates;
+}
+
+function removeConsecutiveDuplicates(coordinates) {
+  const output = [];
+  for (const position of coordinates) {
+    const previous = output[output.length - 1];
+    if (
+      !previous ||
+      previous[0] !== position[0] ||
+      previous[1] !== position[1]
+    ) {
+      output.push(position);
+    }
+  }
+  return output;
 }
 
 function validateGeneratedRing(coordinates) {
@@ -105,11 +111,110 @@ function validateGeneratedRing(coordinates) {
   }
 }
 
-function formatNumber(value) {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
+function unwrapRing(coordinates) {
+  if (!coordinates.length) return [];
+  const output = [[coordinates[0][0], coordinates[0][1]]];
+  let previousLongitude = coordinates[0][0];
+
+  for (let index = 1; index < coordinates.length; index += 1) {
+    let longitude = coordinates[index][0];
+    const latitude = coordinates[index][1];
+
+    while (longitude - previousLongitude > 180) longitude -= 360;
+    while (longitude - previousLongitude < -180) longitude += 360;
+
+    output.push([longitude, latitude]);
+    previousLongitude = longitude;
+  }
+
+  closeLinearRing(output);
+  return output;
 }
 
-function buildRadialPolygon(origin, radiusMeters, options = {}) {
+function longitudeIntersection(start, end, boundary) {
+  const deltaLongitude = end[0] - start[0];
+  if (Math.abs(deltaLongitude) < Number.EPSILON) {
+    return [boundary, start[1]];
+  }
+
+  const ratio = (boundary - start[0]) / deltaLongitude;
+  return [
+    boundary,
+    start[1] + (end[1] - start[1]) * ratio,
+  ];
+}
+
+function clipRingByLongitude(ring, boundary, keepLessOrEqual) {
+  const vertices = ring.slice(0, -1);
+  if (!vertices.length) return [];
+  const inside = (position) =>
+    keepLessOrEqual
+      ? position[0] <= boundary
+      : position[0] >= boundary;
+  const output = [];
+  let previous = vertices[vertices.length - 1];
+  let previousInside = inside(previous);
+
+  for (const current of vertices) {
+    const currentInside = inside(current);
+
+    if (currentInside) {
+      if (!previousInside) {
+        output.push(longitudeIntersection(previous, current, boundary));
+      }
+      output.push([...current]);
+    } else if (previousInside) {
+      output.push(longitudeIntersection(previous, current, boundary));
+    }
+
+    previous = current;
+    previousInside = currentInside;
+  }
+
+  return closeLinearRing(removeConsecutiveDuplicates(output));
+}
+
+function normalizeRing(ring, longitudeShift = 0) {
+  const normalized = removeConsecutiveDuplicates(
+    ring.map(([longitude, latitude]) => [
+      roundCoordinate(normalizeLongitude(longitude + longitudeShift)),
+      roundCoordinate(latitude),
+    ]),
+  );
+  closeLinearRing(normalized);
+  validateGeneratedRing(normalized);
+  return normalized;
+}
+
+function polygonFromRing(ring) {
+  return {
+    type: "Polygon",
+    coordinates: [ring],
+  };
+}
+
+function multiPolygonFromRings(rings) {
+  return {
+    type: "MultiPolygon",
+    coordinates: rings.map((ring) => [ring]),
+  };
+}
+
+function assertPolarCapSupported(origin, radiusMeters) {
+  const angularRadiusDegrees = radiansToDegrees(
+    radiusMeters / EARTH_MEAN_RADIUS_METERS,
+  );
+  if (Math.abs(origin.latitude) + angularRadiusDegrees >= 90) {
+    throw createBufferError(
+      "Buffers que envolvem um dos polos ainda não são suportados nesta versão.",
+      422,
+      "BUFFER_POLAR_CAP_UNSUPPORTED",
+      { radiusMeters },
+    );
+  }
+}
+
+function buildRadialGeometry(origin, radiusMeters, options = {}) {
   const segmentsPerQuadrant = Number.isInteger(options.segmentsPerQuadrant)
     ? options.segmentsPerQuadrant
     : DEFAULT_SEGMENTS_PER_QUADRANT;
@@ -123,27 +228,62 @@ function buildRadialPolygon(origin, radiusMeters, options = {}) {
     );
   }
 
-  const ring = [];
+  assertPolarCapSupported(origin, radiusMeters);
+
+  const rawRing = [];
   for (let index = 0; index < totalSegments; index += 1) {
     const bearing = (index / totalSegments) * Math.PI * 2;
-    ring.push(destinationPoint(origin, radiusMeters, bearing));
+    rawRing.push(destinationPoint(origin, radiusMeters, bearing));
   }
-  closeLinearRing(ring);
-  validateGeneratedRing(ring);
+  const unwrapped = unwrapRing(rawRing);
+  const longitudes = unwrapped.map((position) => position[0]);
+  const minimum = Math.min(...longitudes);
+  const maximum = Math.max(...longitudes);
 
-  if (crossesAntimeridian(ring)) {
+  if (maximum <= 180 && minimum >= -180) {
+    return {
+      geometry: polygonFromRing(normalizeRing(unwrapped)),
+      antimeridianSplit: false,
+    };
+  }
+
+  if (maximum > 180 && minimum < -180) {
     throw createBufferError(
-      "Buffers que cruzam o antimeridiano ainda não são suportados nesta versão.",
+      "A geometria cruza mais de um limite longitudinal suportado.",
       422,
-      "BUFFER_ANTIMERIDIAN_UNSUPPORTED",
+      "BUFFER_GEOMETRY_SPAN_UNSUPPORTED",
       { radiusMeters },
     );
   }
 
+  let primary;
+  let wrapped;
+
+  if (maximum > 180) {
+    primary = clipRingByLongitude(unwrapped, 180, true);
+    wrapped = clipRingByLongitude(unwrapped, 180, false);
+    return {
+      geometry: multiPolygonFromRings([
+        normalizeRing(primary),
+        normalizeRing(wrapped, -360),
+      ]),
+      antimeridianSplit: true,
+    };
+  }
+
+  primary = clipRingByLongitude(unwrapped, -180, false);
+  wrapped = clipRingByLongitude(unwrapped, -180, true);
   return {
-    type: "Polygon",
-    coordinates: [ring],
+    geometry: multiPolygonFromRings([
+      normalizeRing(primary),
+      normalizeRing(wrapped, 360),
+    ]),
+    antimeridianSplit: true,
   };
+}
+
+function formatNumber(value) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
 }
 
 export function executeRadialBuffer(input, options = {}) {
@@ -155,26 +295,32 @@ export function executeRadialBuffer(input, options = {}) {
     inputValue: input.ranges[index],
     sequence: index + 1,
   }));
+  let antimeridianSplitCount = 0;
 
   const features = [...ranges]
     .reverse()
-    .map(({ radiusMeters, inputValue, sequence }) => ({
-      type: "Feature",
-      properties: {
-        maono_analysis: "radial_buffer",
-        analysis_label: "Buffer radial",
-        source: "pin",
-        sequence,
-        radius_m: radiusMeters,
-        radius_label: `${formatNumber(inputValue)} ${input.inputUnit}`,
-        input_unit: input.inputUnit,
-        origin_latitude: input.origin.latitude,
-        origin_longitude: input.origin.longitude,
-      },
-      geometry: buildRadialPolygon(input.origin, radiusMeters, {
+    .map(({ radiusMeters, inputValue, sequence }) => {
+      const built = buildRadialGeometry(input.origin, radiusMeters, {
         segmentsPerQuadrant,
-      }),
-    }));
+      });
+      if (built.antimeridianSplit) antimeridianSplitCount += 1;
+
+      return {
+        type: "Feature",
+        properties: {
+          maono_analysis: "radial_buffer",
+          analysis_label: "Buffer radial",
+          source: "pin",
+          sequence,
+          radius_m: radiusMeters,
+          radius_label: `${formatNumber(inputValue)} ${input.inputUnit}`,
+          input_unit: input.inputUnit,
+          origin_latitude: input.origin.latitude,
+          origin_longitude: input.origin.longitude,
+        },
+        geometry: built.geometry,
+      };
+    });
 
   return {
     geojson: {
@@ -182,9 +328,10 @@ export function executeRadialBuffer(input, options = {}) {
       features,
     },
     engineMetadata: {
-      engine: "maono-radial-geodesic-v1",
+      engine: "maono-radial-geodesic-v2",
       segmentsPerQuadrant,
       totalSegments: segmentsPerQuadrant * 4,
+      antimeridianSplitCount,
     },
   };
 }
