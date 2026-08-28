@@ -25,6 +25,7 @@ export type BufferResult = {
     featureCount: number;
     engine: string;
     segmentsPerQuadrant: number;
+    antimeridianSplitCount: number;
     crs: {
       source: "EPSG:4326";
       output: "EPSG:4326";
@@ -41,6 +42,7 @@ export type BufferApiError = Error & {
 
 const CLIENT_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_CHARACTERS = 1024 * 1024;
+const MAX_BUFFER_RADIUS_METERS = 200_000;
 const UNITS = new Set<BufferUnit>(["m", "km"]);
 
 function apiError(message: string, status: number, code: string) {
@@ -48,6 +50,10 @@ function apiError(message: string, status: number, code: string) {
   error.status = status;
   error.code = code;
   return error;
+}
+
+function invalidGeoJson(message: string): never {
+  throw apiError(message, 502, "BUFFER_GEOJSON_INVALID");
 }
 
 export function parseBufferNumber(value: string | number) {
@@ -102,6 +108,7 @@ function normalizedMetadata(value: any): BufferResult["metadata"] {
   const featureCount = Number(value?.featureCount);
   const engine = typeof value?.engine === "string" ? value.engine.trim() : "";
   const segmentsPerQuadrant = Number(value?.segmentsPerQuadrant);
+  const antimeridianSplitCount = Number(value?.antimeridianSplitCount);
   const source = value?.crs?.source;
   const output = value?.crs?.output;
   const distanceMode =
@@ -116,12 +123,22 @@ function normalizedMetadata(value: any): BufferResult["metadata"] {
     ranges.length > 4 ||
     ranges.some((range) => !Number.isFinite(range) || range <= 0) ||
     rangesMeters.length !== ranges.length ||
-    rangesMeters.some((range) => !Number.isFinite(range) || range <= 0) ||
+    rangesMeters.some(
+      (range) =>
+        !Number.isFinite(range) ||
+        range <= 0 ||
+        range > MAX_BUFFER_RADIUS_METERS,
+    ) ||
+    new Set(rangesMeters).size !== rangesMeters.length ||
     !Number.isInteger(featureCount) ||
-    featureCount < 1 ||
+    featureCount !== ranges.length ||
     !engine ||
     !Number.isInteger(segmentsPerQuadrant) ||
-    segmentsPerQuadrant < 1 ||
+    segmentsPerQuadrant < 4 ||
+    segmentsPerQuadrant > 64 ||
+    !Number.isInteger(antimeridianSplitCount) ||
+    antimeridianSplitCount < 0 ||
+    antimeridianSplitCount > featureCount ||
     source !== "EPSG:4326" ||
     output !== "EPSG:4326" ||
     !distanceMode ||
@@ -142,6 +159,7 @@ function normalizedMetadata(value: any): BufferResult["metadata"] {
     featureCount,
     engine,
     segmentsPerQuadrant,
+    antimeridianSplitCount,
     crs: {
       source: "EPSG:4326",
       output: "EPSG:4326",
@@ -149,6 +167,171 @@ function normalizedMetadata(value: any): BufferResult["metadata"] {
     },
     canPersist: value.canPersist,
   };
+}
+
+function coordinateEquals(left: unknown, right: unknown) {
+  return (
+    Array.isArray(left) &&
+    Array.isArray(right) &&
+    left.length >= 2 &&
+    right.length >= 2 &&
+    left[0] === right[0] &&
+    left[1] === right[1]
+  );
+}
+
+function validatePosition(value: unknown) {
+  if (!Array.isArray(value) || value.length < 2) {
+    invalidGeoJson("O serviço retornou uma posição geográfica inválida.");
+  }
+
+  const longitude = Number(value[0]);
+  const latitude = Number(value[1]);
+  if (
+    !Number.isFinite(longitude) ||
+    !Number.isFinite(latitude) ||
+    longitude < -180 ||
+    longitude > 180 ||
+    latitude < -90 ||
+    latitude > 90
+  ) {
+    invalidGeoJson("O serviço retornou coordenadas fora dos limites válidos.");
+  }
+}
+
+function validateLinearRing(value: unknown) {
+  if (!Array.isArray(value) || value.length < 4) {
+    invalidGeoJson("O serviço retornou um anel GeoJSON incompleto.");
+  }
+
+  value.forEach(validatePosition);
+  if (!coordinateEquals(value[0], value[value.length - 1])) {
+    invalidGeoJson("O serviço retornou um anel GeoJSON não fechado.");
+  }
+
+  for (let index = 1; index < value.length; index += 1) {
+    const previous = value[index - 1] as number[];
+    const current = value[index] as number[];
+    if (Math.abs(Number(current[0]) - Number(previous[0])) > 180) {
+      invalidGeoJson(
+        "O serviço retornou um polígono com salto inválido no antimeridiano.",
+      );
+    }
+  }
+}
+
+function validatePolygonCoordinates(value: unknown) {
+  if (!Array.isArray(value) || value.length < 1) {
+    invalidGeoJson("O serviço retornou um Polygon sem anéis.");
+  }
+  value.forEach(validateLinearRing);
+}
+
+function validateGeometry(value: any) {
+  if (!value || typeof value !== "object") {
+    invalidGeoJson("O serviço retornou uma geometria ausente.");
+  }
+
+  if (value.type === "Polygon") {
+    validatePolygonCoordinates(value.coordinates);
+    return;
+  }
+
+  if (value.type === "MultiPolygon") {
+    if (!Array.isArray(value.coordinates) || value.coordinates.length < 2) {
+      invalidGeoJson(
+        "O serviço retornou um MultiPolygon sem partes suficientes.",
+      );
+    }
+    value.coordinates.forEach(validatePolygonCoordinates);
+    return;
+  }
+
+  invalidGeoJson(
+    "O serviço retornou um tipo de geometria incompatível com Buffer radial.",
+  );
+}
+
+function validateFeatureProperties(value: any, inputUnit: BufferUnit) {
+  if (!value || typeof value !== "object") {
+    invalidGeoJson("O serviço retornou propriedades de Buffer ausentes.");
+  }
+
+  const radiusMeters = Number(value.radius_m);
+  const analysisLabel =
+    typeof value.analysis_label === "string"
+      ? value.analysis_label.trim()
+      : "";
+  const radiusLabel =
+    typeof value.radius_label === "string"
+      ? value.radius_label.trim()
+      : "";
+
+  if (
+    value.maono_analysis !== "radial_buffer" ||
+    !analysisLabel ||
+    !radiusLabel ||
+    !Number.isFinite(radiusMeters) ||
+    radiusMeters <= 0 ||
+    radiusMeters > MAX_BUFFER_RADIUS_METERS ||
+    value.input_unit !== inputUnit
+  ) {
+    invalidGeoJson(
+      "O serviço retornou propriedades incompatíveis com Buffer radial.",
+    );
+  }
+
+  return radiusMeters;
+}
+
+function validateBufferGeoJson(
+  value: any,
+  metadata: BufferResult["metadata"],
+): BufferFeatureCollection {
+  if (
+    value?.type !== "FeatureCollection" ||
+    !Array.isArray(value?.features) ||
+    value.features.length < 1 ||
+    value.features.length > 4 ||
+    value.features.length !== metadata.featureCount
+  ) {
+    invalidGeoJson(
+      "O serviço não retornou uma coleção GeoJSON de Buffer válida.",
+    );
+  }
+
+  const featureRadii = value.features.map((feature: any) => {
+    if (!feature || feature.type !== "Feature") {
+      invalidGeoJson("O serviço retornou uma Feature de Buffer inválida.");
+    }
+    validateGeometry(feature.geometry);
+    return validateFeatureProperties(feature.properties, metadata.inputUnit);
+  });
+
+  const expected = [...metadata.rangesMeters].sort((left, right) => left - right);
+  const actual = [...featureRadii].sort((left, right) => left - right);
+  if (
+    expected.length !== actual.length ||
+    expected.some(
+      (valueAtIndex, index) =>
+        Math.abs(valueAtIndex - actual[index]) > 1e-6,
+    )
+  ) {
+    invalidGeoJson(
+      "Os raios do GeoJSON não correspondem aos metadados retornados.",
+    );
+  }
+
+  const splitFeatures = value.features.filter(
+    (feature: any) => feature?.geometry?.type === "MultiPolygon",
+  ).length;
+  if (splitFeatures !== metadata.antimeridianSplitCount) {
+    invalidGeoJson(
+      "A geometria e os metadados do antimeridiano são inconsistentes.",
+    );
+  }
+
+  return value as BufferFeatureCollection;
 }
 
 async function readJson(response: Response) {
@@ -190,8 +373,19 @@ export function bufferErrorMessage(error: unknown) {
     return "A ferramenta de buffers está indisponível neste ambiente.";
   }
 
-  if (api?.code === "BUFFER_ANTIMERIDIAN_UNSUPPORTED") {
-    return "Esta área ainda não é suportada pela primeira versão do Buffer.";
+  if (api?.code === "BUFFER_POLAR_CAP_UNSUPPORTED") {
+    return "Buffers que envolvem um dos polos ainda não são suportados nesta versão.";
+  }
+
+  if (api?.code === "BUFFER_GEOMETRY_SPAN_UNSUPPORTED") {
+    return "Esta extensão geográfica ainda não é suportada pelo Buffer radial.";
+  }
+
+  if (
+    api?.code === "BUFFER_GEOJSON_INVALID" ||
+    api?.code === "BUFFER_METADATA_INVALID"
+  ) {
+    return "O serviço retornou uma geometria de Buffer inválida e ela não foi adicionada ao mapa.";
   }
 
   if (api?.code === "BUFFER_CLIENT_TIMEOUT") {
@@ -258,20 +452,12 @@ export async function requestBuffer(
       );
     }
 
-    if (
-      data.geojson?.type !== "FeatureCollection" ||
-      !Array.isArray(data.geojson?.features)
-    ) {
-      throw apiError(
-        "O serviço não retornou um GeoJSON válido.",
-        502,
-        "BUFFER_GEOJSON_MISSING",
-      );
-    }
+    const metadata = normalizedMetadata(data.metadata);
+    const geojson = validateBufferGeoJson(data.geojson, metadata);
 
     return {
-      geojson: data.geojson,
-      metadata: normalizedMetadata(data.metadata),
+      geojson,
+      metadata,
     };
   } catch (error) {
     if (timedOut) {
