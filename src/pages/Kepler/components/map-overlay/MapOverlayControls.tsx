@@ -351,31 +351,24 @@ export default function MapOverlayControls() {
             <div>
               <OverlayIcon name="isochrone" />
               <span>
-                <small>
-                  {isochrone.preview.saveRequestId ? "Salvamento em andamento" : "Prévia temporária"}
-                </small>
+                <small>Prévia temporária</small>
                 <strong>{isochrone.preview.label}</strong>
-                {!isochrone.preview.canPersist ? (
-                  <em>Este modo permite consultar e descartar, mas não salvar a análise.</em>
+                {!capabilities?.persistIsochrone ? (
+                  <em>Este modo permite consultar e descartar, mas não manter a análise.</em>
                 ) : null}
               </span>
             </div>
             <div>
-              {isochrone.preview.canPersist && capabilities?.persistIsochrone ? (
+              {capabilities?.persistIsochrone ? (
                 <button
                   type="button"
                   className="is-primary"
-                  onClick={isochrone.persist}
-                  disabled={Boolean(isochrone.preview.saveRequestId)}
+                  onClick={isochrone.keep}
                 >
-                  {isochrone.preview.saveRequestId ? "Salvando…" : "Salvar no projeto"}
+                  Manter
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={isochrone.discard}
-                disabled={Boolean(isochrone.preview.saveRequestId)}
-              >
+              <button type="button" onClick={isochrone.discard}>
                 Descartar
               </button>
             </div>
@@ -387,31 +380,24 @@ export default function MapOverlayControls() {
             <div>
               <OverlayIcon name="buffer" />
               <span>
-                <small>
-                  {buffer.preview.saveRequestId ? "Salvamento em andamento" : "Prévia temporária"}
-                </small>
+                <small>Prévia temporária</small>
                 <strong>{buffer.preview.label}</strong>
-                {!buffer.preview.canPersist ? (
-                  <em>Este modo permite consultar e descartar, mas não salvar a análise.</em>
+                {!capabilities?.persistBuffer ? (
+                  <em>Este modo permite consultar e descartar, mas não manter a análise.</em>
                 ) : null}
               </span>
             </div>
             <div>
-              {buffer.preview.canPersist && capabilities?.persistBuffer ? (
+              {capabilities?.persistBuffer ? (
                 <button
                   type="button"
                   className="is-primary"
-                  onClick={buffer.persist}
-                  disabled={Boolean(buffer.preview.saveRequestId)}
+                  onClick={buffer.keep}
                 >
-                  {buffer.preview.saveRequestId ? "Salvando…" : "Salvar no projeto"}
+                  Manter
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={buffer.discard}
-                disabled={Boolean(buffer.preview.saveRequestId)}
-              >
+              <button type="button" onClick={buffer.discard}>
                 Descartar
               </button>
             </div>
