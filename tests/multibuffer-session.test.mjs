@@ -166,13 +166,22 @@ test("S04.01 useBufferPreview recebe pendingPoint explicitamente e não depende 
   assert.match(overlay, /pendingPoint:\s*analysisPendingPoint/);
 });
 
-test("S04.04/S04.05 primeiro item cria layer e seguintes atualizam o mesmo dataset", () => {
+test("S04.04/S04.05 primeiro item preserva viewport e seguintes substituem o mesmo dataset", () => {
   assert.match(hook, /const firstItem = baseSession\.items\.length === 0/);
   assert.match(hook, /commands\.addGeoJsonLayer\(\{/);
   assert.match(hook, /dataId:\s*nextSession\.dataId/);
   assert.match(hook, /updateMultiBufferDataset\(\{/);
+
+  const firstItemBlock =
+    hook.match(/if \(firstItem\) \{[\s\S]*?\n          \} else \{/s)?.[0] || "";
+  assert.match(firstItemBlock, /centerMap:\s*false/);
+
+  assert.match(updater, /replaceDataInMap/);
+  assert.match(updater, /datasetToReplaceId:\s*dataId/);
   assert.match(updater, /keepExistingConfig:\s*true/);
   assert.match(updater, /centerMap:\s*false/);
+  assert.match(updater, /autoCreateLayers:\s*false/);
+  assert.doesNotMatch(updater, /addDataToMap/);
   assert.doesNotMatch(updater, /visState|layers:\s*\[/);
 });
 
