@@ -1,4 +1,4 @@
-import { addDataToMap, wrapTo } from "@kepler.gl/actions";
+import { replaceDataInMap, wrapTo } from "@kepler.gl/actions";
 import { processGeojson } from "@kepler.gl/processors";
 import { useCallback } from "react";
 import { useDispatch, useStore } from "react-redux";
@@ -75,8 +75,9 @@ export function useMultiBufferDatasetUpdater() {
         dispatch(
           wrapTo(
             KEPLER_MAP_ID,
-            addDataToMap({
-              datasets: {
+            replaceDataInMap({
+              datasetToReplaceId: dataId,
+              datasetToUse: {
                 info: {
                   id: dataId,
                   label: String(input.label || "Multibuffers").trim() || "Multibuffers",
@@ -86,6 +87,7 @@ export function useMultiBufferDatasetUpdater() {
               options: {
                 centerMap: false,
                 keepExistingConfig: true,
+                autoCreateLayers: false,
               },
             }),
           ),
@@ -95,7 +97,7 @@ export function useMultiBufferDatasetUpdater() {
           mode: context?.mode ?? null,
           projectId: context?.project?.id ?? null,
           organizationId: context?.organization?.id ?? null,
-          source: "kepler-engine-adapter-multibuffer-v1",
+          source: "kepler-engine-adapter-multibuffer-v2",
           dataId,
         });
 

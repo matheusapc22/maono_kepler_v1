@@ -97,10 +97,11 @@ test("Buffer usa tooltip e legenda nativos do Kepler em vez de overlays paralelo
   assert.doesNotMatch(hook, /MapPopoverFactory|MapLegendPanelFactory/);
 });
 
-test("Pin é controlado por capability genérica de análise", () => {
+test("capability genérica controla a origem sem expor marcador avulso", () => {
   assert.match(overlay, /placeAnalysisMarker/);
   assert.match(overlay, /analysisMarkerCapabilityEnabled/);
   assert.doesNotMatch(overlay, /disabled=\{!isochroneCapabilityEnabled\}/);
-  assert.match(menu, /Adicionar marcador/);
+  assert.doesNotMatch(menu, /Adicionar marcador/);
+  assert.doesNotMatch(menu, /ToolGlyph kind="marker"/);
   assert.match(overlay, /data-analysis-marker-state/);
 });

@@ -19,6 +19,8 @@ import {
 
 export type MarkerPlacementKind = "marker" | "buffer" | "isochrone";
 
+export const MAONO_MAP_PLACEMENT_POINT_EVENT = "maono:map-placement-point";
+
 const MAP_SURFACE_SELECTORS = [
   ".maplibregl-canvas",
   ".mapboxgl-canvas",
@@ -75,6 +77,28 @@ function sameCanvasRect(
   );
 }
 
+function pointInsideCanvas(
+  clientX: number,
+  clientY: number,
+  rect: MapCanvasRect,
+) {
+  return (
+    clientX >= rect.left &&
+    clientX <= rect.left + rect.width &&
+    clientY >= rect.top &&
+    clientY <= rect.top + rect.height
+  );
+}
+
+function isInteractivePlacementTarget(target: EventTarget | null) {
+  return Boolean(
+    target instanceof Element &&
+      target.closest(
+        "button, a, input, select, textarea, [role='button'], [role='menu'], [role='dialog']",
+      ),
+  );
+}
+
 export function useMapMarker(viewport: MapViewportSummary | null) {
   const [placing, setPlacing] = useState(false);
   const [placementKind, setPlacementKind] =
@@ -85,6 +109,7 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
   const [rect, setRect] = useState<MapCanvasRect | null>(null);
   const draggingPointerRef = useRef<number | null>(null);
   const movedRef = useRef(false);
+  const suppressNextClickRef = useRef(false);
   const observedSurfaceRef = useRef<HTMLElement | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
@@ -169,17 +194,21 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
   useEffect(() => {
     if (!placing || !rect || typeof document === "undefined") return undefined;
 
-    const placementSurface = document.querySelector<HTMLElement>(
+    const visualOverlay = document.querySelector<HTMLElement>(
       ".maono-marker-placement",
     );
-    if (!placementSurface) return undefined;
+    const placementSurface = mapSurface();
+    const previousPointerEvents = visualOverlay?.style.pointerEvents ?? "";
+    const previousCursor = placementSurface?.style.cursor ?? "";
 
-    const previousCursor = placementSurface.style.cursor;
-    placementSurface.style.cursor =
-      PLACEMENT_CURSORS[placementKind ?? "marker"];
+    if (visualOverlay) visualOverlay.style.pointerEvents = "none";
+    if (placementSurface) {
+      placementSurface.style.cursor = PLACEMENT_CURSORS[placementKind ?? "marker"];
+    }
 
     return () => {
-      placementSurface.style.cursor = previousCursor;
+      if (visualOverlay) visualOverlay.style.pointerEvents = previousPointerEvents;
+      if (placementSurface) placementSurface.style.cursor = previousCursor;
     };
   }, [placementKind, placing, rect]);
 
@@ -207,6 +236,104 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
     },
     [rect, viewport],
   );
+
+  useEffect(() => {
+    if (!placing || !rect || typeof window === "undefined") return undefined;
+
+    let pointer:
+      | {
+          id: number;
+          startX: number;
+          startY: number;
+          moved: boolean;
+        }
+      | null = null;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.button !== 0 ||
+        !pointInsideCanvas(event.clientX, event.clientY, rect) ||
+        isInteractivePlacementTarget(event.target)
+      ) {
+        return;
+      }
+
+      pointer = {
+        id: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+      };
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!pointer || pointer.id !== event.pointerId) return;
+
+      if (
+        Math.hypot(
+          event.clientX - pointer.startX,
+          event.clientY - pointer.startY,
+        ) > 6
+      ) {
+        pointer.moved = true;
+      }
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const current = pointer;
+      pointer = null;
+
+      if (
+        !current ||
+        current.id !== event.pointerId ||
+        current.moved ||
+        !pointInsideCanvas(event.clientX, event.clientY, rect) ||
+        isInteractivePlacementTarget(event.target)
+      ) {
+        return;
+      }
+
+      const next = placeAt(event.clientX, event.clientY);
+      if (!next) return;
+
+      suppressNextClickRef.current = true;
+      window.dispatchEvent(
+        new CustomEvent(MAONO_MAP_PLACEMENT_POINT_EVENT, {
+          detail: next,
+        }),
+      );
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (pointer?.id === event.pointerId) pointer = null;
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("pointermove", handlePointerMove, true);
+    window.addEventListener("pointerup", handlePointerUp, true);
+    window.addEventListener("pointercancel", handlePointerCancel, true);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("pointermove", handlePointerMove, true);
+      window.removeEventListener("pointerup", handlePointerUp, true);
+      window.removeEventListener("pointercancel", handlePointerCancel, true);
+    };
+  }, [placeAt, placing, rect]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleClick = (event: MouseEvent) => {
+      if (!suppressNextClickRef.current) return;
+      suppressNextClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("click", handleClick, true);
+    return () => window.removeEventListener("click", handleClick, true);
+  }, []);
 
   const position = useMemo(
     () => markerOriginToScreen(origin, rect, viewport),
