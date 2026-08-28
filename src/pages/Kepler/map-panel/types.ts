@@ -133,7 +133,7 @@ export type MapPanelApiError = Error & {
   } | null;
 };
 
-export const EMPTY_MAP_CAPABILITIES: MapCapabilities = Object.freeze({
+export const EMPTY_MAP_CAPABILITIES = Object.freeze({
   viewMap: false,
   viewLayers: false,
   openLayerPanel: false,
@@ -164,9 +164,9 @@ export const EMPTY_MAP_CAPABILITIES: MapCapabilities = Object.freeze({
   editMetadata: false,
   editProjectMetadata: false,
   updateThumbnail: false,
-});
+} satisfies MapCapabilities);
 
-export const EMPTY_MAP_PANEL_FEATURES: MapPanelFeatures = Object.freeze({
+export const EMPTY_MAP_PANEL_FEATURES = Object.freeze({
   mapManagementHome: false,
   mapPanelModes: false,
   projectMapEditPermission: false,
@@ -177,4 +177,4 @@ export const EMPTY_MAP_PANEL_FEATURES: MapPanelFeatures = Object.freeze({
   maonoMapOverlay: false,
   maonoIsochrone: false,
   maonoBuffer: false,
-});
+} satisfies MapPanelFeatures);
