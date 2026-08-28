@@ -237,6 +237,7 @@ test("S04.08 expõe finalização da sessão somente depois da primeira layer", 
   assert.match(controller, /canFinishMulti/);
   assert.match(controller, /multiBufferSession\?\.dataId/);
   assert.match(controller, /type: "FINISH_MULTI"/);
-  assert.match(overlay, /Finalizar Multibuffers/);
+  assert.match(overlay, /Finalizar Buffer/);
+  assert.doesNotMatch(overlay, /Finalizar Multibuffers/);
   assert.match(overlay, /toolController\.canFinishMulti/);
 });
