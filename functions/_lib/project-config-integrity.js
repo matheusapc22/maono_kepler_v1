@@ -3,12 +3,80 @@ export const PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER = "legacy-kepler";
 export const PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER_VERSION = 1;
 export const PROJECT_CONFIG_CONTENT_TYPE = "application/json; charset=utf-8";
 
+const MAONO_ANALYSIS_DATA_ID_PATTERN = /^maono_analysis_(?:buffer|isochrone)_/;
+
 function integrityError(message, status, code, details = null) {
   const error = new Error(message);
   error.status = status;
   error.code = code;
   if (details) error.details = details;
   return error;
+}
+
+function isRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function datasetIdOf(dataset) {
+  if (!isRecord(dataset)) return "";
+  const candidates = [dataset?.info?.id, dataset?.data?.id, dataset?.id];
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function layerDataIds(layer) {
+  if (!isRecord(layer)) return [];
+  const dataId = layer?.config?.dataId ?? layer?.dataId;
+  if (Array.isArray(dataId)) {
+    return dataId.map((value) => String(value || "").trim()).filter(Boolean);
+  }
+  const value = String(dataId || "").trim();
+  return value ? [value] : [];
+}
+
+export function findMissingMaonoAnalysisDatasetIds(config) {
+  if (!isRecord(config)) return [];
+
+  const available = new Set(
+    (Array.isArray(config.datasets) ? config.datasets : [])
+      .map(datasetIdOf)
+      .filter(Boolean),
+  );
+  const layers = Array.isArray(config?.config?.visState?.layers)
+    ? config.config.visState.layers
+    : [];
+  const missing = new Set();
+
+  for (const layer of layers) {
+    for (const dataId of layerDataIds(layer)) {
+      if (
+        MAONO_ANALYSIS_DATA_ID_PATTERN.test(dataId) &&
+        !available.has(dataId)
+      ) {
+        missing.add(dataId);
+      }
+    }
+  }
+
+  return Array.from(missing);
+}
+
+export function assertMaonoAnalysisDatasetIntegrity(config) {
+  const missing = findMissingMaonoAnalysisDatasetIds(config);
+  if (!missing.length) return true;
+
+  throw integrityError(
+    "A configuração contém uma camada de análise Maõno sem o dataset correspondente.",
+    400,
+    "PROJECT_CONFIG_ANALYSIS_DATASET_MISSING",
+    {
+      missingDatasetIds: missing.slice(0, 4),
+      missingDatasetCount: missing.length,
+    },
+  );
 }
 
 export function serializeProjectConfigBytes(config) {
@@ -76,6 +144,7 @@ export function validateProjectConfig(
       { field: "datasets" },
     );
   }
+  assertMaonoAnalysisDatasetIntegrity(config);
   if (String(schemaName || "") !== PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER) {
     throw integrityError(
       "Schema de configuração não suportado.",
