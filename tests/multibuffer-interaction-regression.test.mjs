@@ -49,9 +49,10 @@ const [bufferHook, markerHook, controller, updater, menu, stateMachine] = await 
 
 test("primeiro Buffer da sessão não altera o viewport escolhido pelo usuário", () => {
   const firstItemBlock =
-    bufferHook.match(/if \(firstItem\) \{[\s\S]*?\n          \} else \{/s)?.[0] || "";
+    bufferHook.match(/if \(firstItem\) \{[\s\S]*?\n\s*\} else \{/s)?.[0] || "";
 
   assert.match(firstItemBlock, /commands\.addGeoJsonLayer/);
+  assert.match(firstItemBlock, /label:\s*"Buffer"/);
   assert.match(firstItemBlock, /centerMap:\s*false/);
 });
 
