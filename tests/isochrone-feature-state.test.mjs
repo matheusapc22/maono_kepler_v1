@@ -194,7 +194,7 @@ test("mensagem da UI distingue configuração, kill switch e permissão", () => 
   );
 });
 
-test("Pin permanece visível, mas fail-closed quando previewIsochrone é negado", async () => {
+test("Pin permanece visível e fail-closed pela capability genérica de análise", async () => {
   const [apiClient, overlay, types] = await Promise.all([
     readFile(
       new URL("../src/pages/Kepler/map-panel/map-panel-api.ts", import.meta.url),
@@ -218,8 +218,9 @@ test("Pin permanece visível, mas fail-closed quando previewIsochrone é negado"
   assert.match(apiClient, /isochroneFeatureState,/);
   assert.match(types, /isochroneFeatureState:\s*IsochroneFeatureState/);
 
-  assert.match(overlay, /disabled=\{!isochroneCapabilityEnabled\}/);
-  assert.match(overlay, /if \(!isochroneCapabilityEnabled\) return/);
+  assert.match(overlay, /disabled=\{!analysisMarkerCapabilityEnabled\}/);
+  assert.match(overlay, /if \(!analysisMarkerCapabilityEnabled\) return/);
+  assert.match(overlay, /data-analysis-marker-state/);
   assert.match(overlay, /data-isochrone-state/);
   assert.match(overlay, /describeIsochroneAvailability/);
   assert.doesNotMatch(
