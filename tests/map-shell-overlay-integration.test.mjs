@@ -185,20 +185,24 @@ test("isócronas usam somente o proxy autenticado", () => {
   }
 });
 
-test("salvar prévia reutiliza o fluxo oficial do projeto", () => {
-  assert.match(source.previewHook, /dispatchMapSaveRequest/);
-  assert.match(source.previewHook, /MAONO_MAP_SAVE_RESULT_EVENT/);
-  assert.match(source.saveEvents, /MAONO_MAP_SAVE_REQUEST_EVENT/);
-  assert.match(source.saveEvents, /MAONO_MAP_SAVE_RESULT_EVENT/);
-  assert.match(source.save, /MAONO_MAP_SAVE_REQUEST_EVENT/);
-  assert.match(source.save, /handleExternalSaveRequest/);
-  assert.match(source.save, /markLayerPersistent/);
-  assert.match(source.save, /markLayerTransient/);
-  assert.match(source.save, /transientDatasetIdsRef\.current\.size > 0/);
+test("Manter prévia promove a análise sem acionar o salvamento global", () => {
+  assert.match(
+    source.previewHook,
+    /commands\.markLayerPersistent\(preview\.dataId,\s*"isochrone"\)/,
+  );
+  assert.doesNotMatch(
+    source.previewHook,
+    /dispatchMapSaveRequest|MAONO_MAP_SAVE_RESULT_EVENT|saveRequestId/,
+  );
   assert.match(source.previewHook, /commands\.addGeoJsonLayer/);
   assert.match(source.previewHook, /commandsRef\.current\.removeTransientLayer/);
-  assert.match(source.dialog, /A prévia só será persistida/);
-  assert.doesNotMatch(source.overlay, /dispatchMapSaveRequest|requestIsochrone|AbortController/);
+  assert.match(source.overlay, /isochrone\.keep/);
+  assert.match(source.save, /transientDatasetIdsRef\.current\.size > 0/);
+  assert.match(source.save, /serializeProjectConfig/);
+  assert.doesNotMatch(
+    source.overlay,
+    /Salvar no projeto|dispatchMapSaveRequest|requestIsochrone|AbortController/,
+  );
 });
 
 test("painel do shell é estruturalmente único e não reduz o viewport medido", () => {
