@@ -1,5 +1,4 @@
 import { requireSession } from "./auth.js";
-import { isFeatureFlagEnabled } from "./organization-limit-service.js";
 import { can, recordAuditLog } from "./permissions.js";
 import {
   getAuthorizedProject,
@@ -11,7 +10,7 @@ import {
   MAP_PANEL_MODES,
 } from "./map-panel-service.js";
 
-export const EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 4;
+export const EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 5;
 export const PROJECT_CREATE_ROUTE_DEPRECATED =
   "PROJECT_CREATE_ROUTE_DEPRECATED";
 
@@ -179,15 +178,6 @@ function decisionContext(project) {
   };
 }
 
-function withBufferFeature(env, features) {
-  return {
-    ...features,
-    maonoBuffer:
-      features.maonoMapOverlay &&
-      isFeatureFlagEnabled(env?.GEOPROCESSING_BUFFER_V1, false),
-  };
-}
-
 export async function resolveCanonicalExistingProjectMapNavigation(
   env,
   request,
@@ -220,7 +210,7 @@ export async function resolveCanonicalExistingProjectMapNavigation(
     can(env, user, "project.edit", context),
     can(env, user, "project.thumbnail.update", context),
   ]);
-  const features = withBufferFeature(env, getMapPanelFeatures(env));
+  const features = getMapPanelFeatures(env);
   const viewerAllowed = viewDecision.allowed;
   const mapEditAllowed = features.projectMapEditPermission
     ? mapEditDecision.allowed
@@ -315,19 +305,17 @@ export async function resolveCanonicalExistingProjectMapNavigation(
       features.maonoMapOverlay && editorAllowed && editableWorkspace,
     toggleLegendAllowed: features.maonoMapOverlay && viewerAllowed,
     previewIsochroneAllowed: features.maonoIsochrone && viewerAllowed,
+    previewBufferAllowed: features.maonoBuffer && viewerAllowed,
     persistIsochroneAllowed:
       features.maonoIsochrone && editorAllowed && editableWorkspace,
+    persistBufferAllowed:
+      features.maonoBuffer && editorAllowed && editableWorkspace,
     removeIsochroneAllowed:
       features.maonoIsochrone && editorAllowed && editableWorkspace,
     openCreateWorkspaceAllowed: false,
     createProjectAllowed: false,
     initializeMapAllowed: false,
   });
-
-  capabilities.previewBuffer = Boolean(features.maonoBuffer && viewerAllowed);
-  capabilities.placeAnalysisMarker = Boolean(
-    capabilities.previewIsochrone || capabilities.previewBuffer,
-  );
 
   return {
     policyVersion: EXISTING_PROJECT_NAVIGATION_POLICY_VERSION,
