@@ -107,13 +107,15 @@ test("projeto existente nunca recebe capacidades exclusivas de criação", () =>
   assert.match(sources.canonicalService, /initializeMapAllowed:\s*false/);
 });
 
-test("policy v3 formaliza a separação entre projeto existente e criação", () => {
+test("policy v4 mantém a separação e incorpora capabilities de análise", () => {
   assert.match(
     sources.canonicalService,
-    /EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 3/,
+    /EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 4/,
   );
   assert.match(
     sources.canonicalService,
     /defaultExistingProjectPanel[\s\S]*editorAllowed[\s\S]*MAP_PANEL_MODES\.EDITOR[\s\S]*viewerAllowed[\s\S]*MAP_PANEL_MODES\.VIEWER/,
   );
+  assert.match(sources.canonicalService, /previewBuffer/);
+  assert.match(sources.canonicalService, /placeAnalysisMarker/);
 });

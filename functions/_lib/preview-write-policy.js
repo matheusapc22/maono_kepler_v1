@@ -11,6 +11,11 @@ const SAFE_RUNTIME_MUTATION_PATHS = [
   /^\/api\/session(?:\/|$)/,
 ];
 
+const SAFE_TRANSIENT_ANALYSIS_PATHS = [
+  /^\/api\/maps\/isochrones$/,
+  /^\/api\/maps\/buffers$/,
+];
+
 const ALWAYS_DENIED_PREVIEW_MUTATION_PATHS = [
   /^\/api\/admin(?:\/|$)/,
   /^\/api\/organizations(?:\/|$)/,
@@ -19,7 +24,6 @@ const ALWAYS_DENIED_PREVIEW_MUTATION_PATHS = [
 
 const QA_SCOPED_MUTATION_PATHS = [
   /^\/api\/projects(?:\/|$)/,
-  /^\/api\/maps\/isochrones$/,
   /^\/api\/maps\/new(?:\/|$)/,
 ];
 
@@ -27,6 +31,7 @@ export const PREVIEW_WRITE_REASONS = Object.freeze({
   NOT_PREVIEW: "NOT_PREVIEW",
   READ_ONLY_REQUEST: "READ_ONLY_REQUEST",
   PREVIEW_RUNTIME_MUTATION_ALLOWED: "PREVIEW_RUNTIME_MUTATION_ALLOWED",
+  PREVIEW_TRANSIENT_ANALYSIS_ALLOWED: "PREVIEW_TRANSIENT_ANALYSIS_ALLOWED",
   PREVIEW_MUTATIONS_DISABLED: "PREVIEW_MUTATIONS_DISABLED",
   PREVIEW_GLOBAL_MUTATION_DENIED: "PREVIEW_GLOBAL_MUTATION_DENIED",
   PREVIEW_MUTATION_SCOPE_UNRESOLVED: "PREVIEW_MUTATION_SCOPE_UNRESOLVED",
@@ -44,6 +49,10 @@ export function isMutatingMethod(method) {
 
 export function isPreviewRuntimeMutationPath(pathname) {
   return pathMatches(String(pathname || ""), SAFE_RUNTIME_MUTATION_PATHS);
+}
+
+export function isPreviewTransientAnalysisPath(pathname) {
+  return pathMatches(String(pathname || ""), SAFE_TRANSIENT_ANALYSIS_PATHS);
 }
 
 export function isPreviewAlwaysDeniedMutationPath(pathname) {
@@ -75,6 +84,13 @@ export function evaluatePreviewWritePolicy(
     return {
       allowed: true,
       reason: PREVIEW_WRITE_REASONS.PREVIEW_RUNTIME_MUTATION_ALLOWED,
+    };
+  }
+
+  if (isPreviewTransientAnalysisPath(normalizedPath)) {
+    return {
+      allowed: true,
+      reason: PREVIEW_WRITE_REASONS.PREVIEW_TRANSIENT_ANALYSIS_ALLOWED,
     };
   }
 

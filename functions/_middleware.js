@@ -4,6 +4,7 @@ import {
   isMutatingMethod,
   isPreviewQaScopedMutationPath,
   isPreviewRuntimeMutationPath,
+  isPreviewTransientAnalysisPath,
   previewWriteDeniedResponse,
 } from "./_lib/preview-write-policy.js";
 import {
@@ -123,6 +124,9 @@ export async function resolvePreviewMutationOrganizationId(
     return organizationIdForProjectSlug(env, projectSlug);
   }
 
+  // Compatibilidade para consumidores/testes antigos. Isócronas e buffers
+  // já são classificados antes como análises transitórias e não dependem
+  // desta resolução para atravessar a barreira do Preview.
   if (String(pathname || "") === "/api/maps/isochrones") {
     return isochroneTargetOrganizationId(env, request);
   }
@@ -170,7 +174,10 @@ export async function onRequest(context) {
     return withPreviewHeaders(response, { reason: "READ_ONLY_REQUEST" });
   }
 
-  if (isPreviewRuntimeMutationPath(pathname)) {
+  if (
+    isPreviewRuntimeMutationPath(pathname) ||
+    isPreviewTransientAnalysisPath(pathname)
+  ) {
     const decision = evaluatePreviewWritePolicy(policyEnv, {
       method,
       pathname,
