@@ -14,6 +14,7 @@ type MapPanelTelemetryDetails = {
   rowCount?: number | null;
   analysisType?: string | null;
   travelMode?: string | null;
+  unit?: string | null;
   rangeCount?: number | null;
   featureCount?: number | null;
 };
