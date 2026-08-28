@@ -171,9 +171,10 @@ test("S04.04/S04.05 primeiro item preserva viewport e seguintes substituem o mes
   assert.match(hook, /commands\.addGeoJsonLayer\(\{/);
   assert.match(hook, /dataId:\s*nextSession\.dataId/);
   assert.match(hook, /updateMultiBufferDataset\(\{/);
+  assert.match(hook, /label:\s*"Buffer"/);
 
   const firstItemBlock =
-    hook.match(/if \(firstItem\) \{[\s\S]*?\n          \} else \{/s)?.[0] || "";
+    hook.match(/if \(firstItem\) \{[\s\S]*?\n\s*\} else \{/s)?.[0] || "";
   assert.match(firstItemBlock, /centerMap:\s*false/);
 
   assert.match(updater, /replaceDataInMap/);
@@ -198,7 +199,7 @@ test("S04.06 features recebem IDs, origem e raio individual", () => {
   }
 });
 
-test("S04.07 ANALYSIS_CREATED grava dataId e CONTINUE_MULTI limpa pendingPoint", () => {
+test("S04.07 Buffer selecionado já nasce multi e ANALYSIS_CREATED grava dataId", () => {
   const sessionRef = {
     kind: "buffer",
     id: "buffer-session-state",
@@ -209,10 +210,6 @@ test("S04.07 ANALYSIS_CREATED grava dataId e CONTINUE_MULTI limpa pendingPoint",
   for (const action of [
     { type: "OPEN_TOOL_MENU" },
     { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "multi" },
-    },
     { type: "START_PLACEMENT", session: sessionRef },
     { type: "POINT_PLACED", point: ORIGIN_A },
     { type: "SUBMIT_CONFIGURATION" },
@@ -225,6 +222,7 @@ test("S04.07 ANALYSIS_CREATED grava dataId e CONTINUE_MULTI limpa pendingPoint",
   }
 
   assert.equal(state.mode, "reviewing");
+  assert.equal(state.preliminaryOptions.insertionMode, "multi");
   assert.equal(state.session.dataId, "maono_analysis_buffer_buffer-session-state");
 
   state = mapToolReducer(state, { type: "CONTINUE_MULTI" });
@@ -235,10 +233,11 @@ test("S04.07 ANALYSIS_CREATED grava dataId e CONTINUE_MULTI limpa pendingPoint",
   assert.match(controller, /startPlacement\("buffer"\)/);
 });
 
-test("S04.08 expõe Finalizar Multibuffers somente depois da primeira layer", () => {
+test("S04.08 expõe finalização da sessão somente depois da primeira layer", () => {
   assert.match(controller, /canFinishMulti/);
   assert.match(controller, /multiBufferSession\?\.dataId/);
   assert.match(controller, /type: "FINISH_MULTI"/);
-  assert.match(overlay, /Finalizar Multibuffers/);
+  assert.match(overlay, /Finalizar Buffer/);
+  assert.doesNotMatch(overlay, /Finalizar Multibuffers/);
   assert.match(overlay, /toolController\.canFinishMulti/);
 });

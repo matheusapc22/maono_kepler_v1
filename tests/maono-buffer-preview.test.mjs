@@ -42,13 +42,17 @@ test("cliente usa somente endpoint Maõno e não calcula geometria no navegador"
   assert.doesNotMatch(api, /turf|ST_Buffer|geoapify/i);
 });
 
-test("preview usa Engine Adapter como camada GeoJSON transitória tipada", () => {
+test("Buffer canônico usa Engine Adapter como uma única camada GeoJSON transitória", () => {
   assert.match(hook, /requestBuffer/);
   assert.match(hook, /commands\.addGeoJsonLayer/);
+  assert.match(hook, /dataId:\s*nextSession\.dataId/);
+  assert.match(hook, /label:\s*"Buffer"/);
   assert.match(hook, /transient:\s*true/);
   assert.match(hook, /analysisKind:\s*"buffer"/);
   assert.match(hook, /removeTransientLayer\(current\.dataId,\s*"buffer"\)/);
-  assert.match(hook, /centerMap:\s*true/);
+  assert.match(hook, /centerMap:\s*false/);
+  assert.doesNotMatch(hook, /centerMap:\s*true/);
+  assert.doesNotMatch(hook, /previewLabel/);
 });
 
 test("descartar buffer remove somente a prévia e preserva o Pin", () => {
@@ -64,6 +68,7 @@ test("Manter promove Buffer localmente sem disparar salvamento do projeto", () =
   assert.match(keepBlock, /markLayerPersistent\(preview\.dataId,\s*"buffer"\)/);
   assert.match(keepBlock, /capabilities\?\.persistBuffer/);
   assert.match(keepBlock, /map_buffer_kept/);
+  assert.match(keepBlock, /Buffer mantido no mapa/);
   assert.match(keepBlock, /Salve o projeto para gravar as alterações/);
   assert.match(keepBlock, /setPreview\(null\)/);
   assert.match(keepBlock, /resetMarkerRef\.current\(\)/);
@@ -88,7 +93,8 @@ test("overlay integra Manter e Descartar sem linguagem de salvamento individual"
 });
 
 test("Buffer usa tooltip e legenda nativos do Kepler em vez de overlays paralelos", () => {
-  assert.match(hook, /tooltipFields:\s*\["analysis_label",\s*"radius_label"\]/);
+  assert.match(hook, /"analysis_label"/);
+  assert.match(hook, /"radius_label"/);
   assert.match(hook, /legendField:\s*"radius_label"/);
   assert.match(analysisAdapter, /interactionConfigChange/);
   assert.match(analysisAdapter, /fieldsToShow/);

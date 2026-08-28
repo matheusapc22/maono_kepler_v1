@@ -86,11 +86,12 @@ test("descoberta da superfície aceita MapLibre, Mapbox e fallback do shell Maõ
   assert.match(markerHook, /getBoundingClientRect/);
 });
 
-test("modo de colocação parametriza cursor por ferramenta", () => {
+test("Buffer e Isócrona usam o mesmo cursor pin durante o placement", () => {
+  assert.match(markerHook, /PLACEMENT_PIN_CURSOR/);
   assert.match(markerHook, /PLACEMENT_CURSORS/);
-  assert.match(markerHook, /marker:/);
-  assert.match(markerHook, /buffer:/);
-  assert.match(markerHook, /isochrone:/);
+  assert.match(markerHook, /marker:\s*PLACEMENT_PIN_CURSOR/);
+  assert.match(markerHook, /buffer:\s*PLACEMENT_PIN_CURSOR/);
+  assert.match(markerHook, /isochrone:\s*PLACEMENT_PIN_CURSOR/);
   assert.match(markerHook, /fill='%23C5A059'/);
   assert.match(markerHook, /\.maono-marker-placement/);
   assert.match(markerHook, /const placementSurface = mapSurface\(\)/);
