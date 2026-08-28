@@ -16,9 +16,17 @@ function roundCoordinate(value) {
   return Number(value.toFixed(COORDINATE_PRECISION));
 }
 
-function normalizeLongitude(value) {
+function normalizeLongitude(value, boundaryPreference = null) {
   const normalized = ((value + 180) % 360 + 360) % 360 - 180;
-  return normalized === -180 ? 180 : normalized;
+
+  if (Math.abs(normalized + 180) < 1e-10) {
+    if (boundaryPreference === 180 || boundaryPreference === -180) {
+      return boundaryPreference;
+    }
+    return value >= 0 ? 180 : -180;
+  }
+
+  return normalized;
 }
 
 function destinationPoint(origin, distanceMeters, bearingRadians) {
@@ -51,6 +59,7 @@ function destinationPoint(origin, distanceMeters, bearingRadians) {
 function closeLinearRing(coordinates) {
   const first = coordinates[0];
   const last = coordinates[coordinates.length - 1];
+  if (!first) return coordinates;
   if (!last || first[0] !== last[0] || first[1] !== last[1]) {
     coordinates.push([...first]);
   }
@@ -174,10 +183,16 @@ function clipRingByLongitude(ring, boundary, keepLessOrEqual) {
   return closeLinearRing(removeConsecutiveDuplicates(output));
 }
 
-function normalizeRing(ring, longitudeShift = 0) {
+function normalizeRing(
+  ring,
+  longitudeShift = 0,
+  boundaryPreference = null,
+) {
   const normalized = removeConsecutiveDuplicates(
     ring.map(([longitude, latitude]) => [
-      roundCoordinate(normalizeLongitude(longitude + longitudeShift)),
+      roundCoordinate(
+        normalizeLongitude(longitude + longitudeShift, boundaryPreference),
+      ),
       roundCoordinate(latitude),
     ]),
   );
@@ -264,8 +279,8 @@ function buildRadialGeometry(origin, radiusMeters, options = {}) {
     wrapped = clipRingByLongitude(unwrapped, 180, false);
     return {
       geometry: multiPolygonFromRings([
-        normalizeRing(primary),
-        normalizeRing(wrapped, -360),
+        normalizeRing(primary, 0, 180),
+        normalizeRing(wrapped, -360, -180),
       ]),
       antimeridianSplit: true,
     };
@@ -275,8 +290,8 @@ function buildRadialGeometry(origin, radiusMeters, options = {}) {
   wrapped = clipRingByLongitude(unwrapped, -180, true);
   return {
     geometry: multiPolygonFromRings([
-      normalizeRing(primary),
-      normalizeRing(wrapped, 360),
+      normalizeRing(primary, 0, -180),
+      normalizeRing(wrapped, 360, 180),
     ]),
     antimeridianSplit: true,
   };
