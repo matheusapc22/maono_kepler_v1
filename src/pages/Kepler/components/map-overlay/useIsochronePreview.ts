@@ -109,7 +109,7 @@ export function useIsochronePreview({
 
     const current = previewRef.current;
     if (current && !current.saveRequestId) {
-      commandsRef.current.removeTransientLayer(current.dataId);
+      commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
     }
 
     setPreview(null);
@@ -126,6 +126,7 @@ export function useIsochronePreview({
 
       if (
         !result ||
+        result.source !== "isochrone-preview" ||
         !current ||
         result.requestId !== current.saveRequestId ||
         result.dataId !== current.dataId
@@ -179,7 +180,7 @@ export function useIsochronePreview({
       const current = previewRef.current;
 
       if (current && !current.saveRequestId) {
-        commandsRef.current.removeTransientLayer(current.dataId);
+        commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
       }
     },
     [],
@@ -243,6 +244,7 @@ export function useIsochronePreview({
           strokeColor: [183, 121, 31],
           opacity: 0.28,
           transient: true,
+          analysisKind: "isochrone",
           centerMap: true,
         });
 
@@ -311,7 +313,7 @@ export function useIsochronePreview({
   const discard = useCallback(() => {
     if (!preview || preview.saveRequestId) return false;
 
-    const result = commands.removeTransientLayer(preview.dataId);
+    const result = commands.removeTransientLayer(preview.dataId, "isochrone");
     if (!result.ok) {
       setMessage({
         tone: "error",
@@ -348,6 +350,12 @@ export function useIsochronePreview({
       return false;
     }
 
+    emitMapPanelTelemetry("map_isochrone_persist_requested", {
+      mode: context?.mode ?? null,
+      projectId: context?.project?.id ?? null,
+      organizationId: context?.organization?.id ?? null,
+      source: "map-overlay",
+    });
     const request = dispatchMapSaveRequest({
       source: "isochrone-preview",
       dataId: preview.dataId,
@@ -368,6 +376,8 @@ export function useIsochronePreview({
   }, [
     capabilities?.persistIsochrone,
     context?.mode,
+    context?.organization?.id,
+    context?.project?.id,
     preview,
   ]);
 
