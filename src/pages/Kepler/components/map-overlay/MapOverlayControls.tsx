@@ -418,18 +418,18 @@ export default function MapOverlayControls() {
         {toolController.canFinishMulti ? (
           <section
             className="maono-isochrone-preview maono-multibuffer-session"
-            aria-label="Sessão Multibuffers ativa"
+            aria-label="Sessão de Buffer ativa"
           >
             <div>
               <OverlayIcon name="buffer" />
               <span>
-                <small>Multibuffers ativo</small>
+                <small>Buffer ativo</small>
                 <strong>{buffer.preview?.label || "Adicione a próxima origem"}</strong>
               </span>
             </div>
             <div>
               <button type="button" className="is-primary" onClick={toolController.finishMulti}>
-                Finalizar Multibuffers
+                Finalizar Buffer
               </button>
             </div>
           </section>
