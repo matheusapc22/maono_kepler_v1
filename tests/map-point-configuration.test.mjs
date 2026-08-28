@@ -4,9 +4,9 @@ import test from "node:test";
 
 import {
   createInitialMapToolState,
+  isMapToolStateValid,
   mapToolReducer,
 } from "../src/pages/Kepler/components/map-overlay/analysis-tools/map-tool-state.ts";
-import { mapToolConfigurationTarget } from "../src/pages/Kepler/components/map-overlay/analysis-tools/useMapToolController.ts";
 
 const [overlay, markerHook, controller, styles] = await Promise.all([
   readFile(
@@ -78,10 +78,15 @@ test("S03.02 controller integra POINT_PLACED e publica pendingPoint", () => {
   const configured = placeBuffer();
   assert.equal(configured.mode, "configuring");
   assert.deepEqual(configured.pendingPoint, VALID_POINT);
-  assert.equal(mapToolConfigurationTarget(configured), "buffer");
+  assert.equal(isMapToolStateValid(configured), true);
 });
 
 test("S03.03 Buffer e Isócrona só abrem pelo target do controller", () => {
+  assert.match(controller, /export function mapToolConfigurationTarget/);
+  assert.match(controller, /!isMapToolStateValid\(state\)/);
+  assert.match(controller, /state\.mode !== "configuring"/);
+  assert.match(controller, /state\.tool === "buffer" \|\| state\.tool === "isochrone"/);
+
   assert.match(overlay, /toolController\.configurationTarget === "buffer"/);
   assert.match(overlay, /buffer\.openDialog\(\)/);
   assert.match(overlay, /toolController\.configurationTarget === "isochrone"/);
@@ -96,7 +101,7 @@ test("S03.03 Buffer e Isócrona só abrem pelo target do controller", () => {
   assert.doesNotMatch(markerMenu, /Criar buffers|Criar isócronas/);
 });
 
-test("Gate S03: target de configuração exige coordenada válida", () => {
+test("Gate S03: configuração impossível não passa pelas invariantes", () => {
   const placing = reduce(
     createInitialMapToolState(),
     { type: "OPEN_TOOL_MENU" },
@@ -113,7 +118,8 @@ test("Gate S03: target de configuração exige coordenada válida", () => {
     point: { longitude: 999, latitude: -23 },
   });
   assert.equal(invalidAttempt, placing);
-  assert.equal(mapToolConfigurationTarget(invalidAttempt), null);
+  assert.equal(invalidAttempt.mode, "placingPoint");
+  assert.equal(invalidAttempt.pendingPoint, null);
 
   const impossibleConfig = {
     mode: "configuring",
@@ -123,13 +129,27 @@ test("Gate S03: target de configuração exige coordenada válida", () => {
     session: null,
     configurationStatus: "editing",
   };
-  assert.equal(mapToolConfigurationTarget(impossibleConfig), null);
+  assert.equal(isMapToolStateValid(impossibleConfig), false);
 
   const validConfig = mapToolReducer(placing, {
     type: "POINT_PLACED",
     point: VALID_POINT,
   });
-  assert.equal(mapToolConfigurationTarget(validConfig), "buffer");
+  assert.equal(validConfig.mode, "configuring");
+  assert.equal(validConfig.tool, "buffer");
+  assert.deepEqual(validConfig.pendingPoint, VALID_POINT);
+  assert.equal(isMapToolStateValid(validConfig), true);
+});
+
+test("Gate S03: overlay exige target e pendingPoint antes de openDialog", () => {
+  const openingEffect =
+    overlay.match(/useEffect\(\(\) => \{\s*if \(!toolController\.pendingPoint\) return;[\s\S]*?\n  \}, \[/)?.[0] || "";
+
+  assert.match(openingEffect, /!toolController\.pendingPoint/);
+  assert.match(openingEffect, /configurationTarget === "buffer"/);
+  assert.match(openingEffect, /buffer\.openDialog\(\)/);
+  assert.match(openingEffect, /configurationTarget === "isochrone"/);
+  assert.match(openingEffect, /isochrone\.openDialog\(\)/);
 });
 
 test("S03.04 texto e cursor do placement são parametrizados por ferramenta", () => {
