@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildMapCapabilities,
 } from "../functions/_lib/map-panel-service.js";
+import { createAnalysisLayerCommands } from "../src/pages/Kepler/engine-adapter/analysis-layer-commands.ts";
 import {
   mapSaveRequestFromEvent,
   mapSaveResultFromEvent,
@@ -41,6 +42,130 @@ const [saveButton, provider, analysisAdapter, bufferHook] = await Promise.all([
     "utf8",
   ),
 ]);
+
+function createAnalysisRootState({ dataId = null } = {}) {
+  const datasets = new Map();
+  const layers = [];
+
+  if (dataId) {
+    datasets.set(dataId, {
+      id: dataId,
+      fields: [
+        { name: "_geojson", type: "geojson" },
+        { name: "analysis_label", type: "string" },
+        { name: "radius_label", type: "string" },
+      ],
+    });
+    layers.push({
+      id: `layer_${dataId}`,
+      type: "geojson",
+      config: {
+        dataId,
+        label: "Buffer radial",
+        color: [197, 160, 89],
+        columns: { geojson: "_geojson" },
+        isVisible: true,
+        visConfig: {
+          opacity: 0.2,
+          filled: true,
+          stroked: true,
+          strokeColor: [183, 121, 31],
+          strokeOpacity: 0.95,
+          thickness: 1.5,
+        },
+      },
+    });
+  }
+
+  return {
+    demo: {
+      keplerGl: {
+        map: {
+          visState: {
+            layers,
+            datasets,
+            interactionConfig: {
+              tooltip: {
+                id: "tooltip",
+                enabled: true,
+                config: { fieldsToShow: {} },
+              },
+            },
+          },
+          mapState: {},
+          mapStyle: {},
+          uiState: {},
+        },
+      },
+    },
+  };
+}
+
+function bufferAnalysisInput(dataId) {
+  return {
+    dataId,
+    label: "Buffer radial · 500 m",
+    geoJson: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {
+            analysis_label: "Buffer radial",
+            radius_label: "500 m",
+          },
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [-47, -15],
+                [-47, -14.9],
+                [-46.9, -14.9],
+                [-47, -15],
+              ],
+            ],
+          },
+        },
+      ],
+    },
+    color: [197, 160, 89],
+    strokeColor: [183, 121, 31],
+    opacity: 0.2,
+    transient: true,
+    analysisKind: "buffer",
+    presentation: {
+      tooltipFields: ["analysis_label", "radius_label"],
+      legendField: "radius_label",
+      legendPalette: ["#FFF8E7", "#F1D28A"],
+    },
+    centerMap: false,
+  };
+}
+
+function installTelemetryGlobals() {
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+
+  globalThis.CustomEvent = class CustomEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.detail = init.detail;
+    }
+  };
+  globalThis.window = {
+    dispatchEvent() {
+      return true;
+    },
+  };
+
+  return () => {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+
+    if (previousCustomEvent === undefined) delete globalThis.CustomEvent;
+    else globalThis.CustomEvent = previousCustomEvent;
+  };
+}
 
 test("capabilities permitem Buffer independente de isócrona", () => {
   const capabilities = buildMapCapabilities({
@@ -152,6 +277,7 @@ test("tooltip de análise é merge-safe e descarte remove somente a entrada do d
     /fieldsToShow:\s*\{\s*\.\.\.fieldsToShow,\s*\[dataId\]/,
   );
   assert.match(analysisAdapter, /delete fieldsToShow\[dataId\]/);
+  assert.match(analysisAdapter, /configurePresentationBestEffort/);
   assert.match(bufferHook, /tooltipFields/);
   assert.match(bufferHook, /legendField/);
 });
@@ -161,4 +287,142 @@ test("persistência de Buffer não cria endpoint de save paralelo", () => {
   assert.doesNotMatch(bufferHook, /buffers\/save|buffer\/save/);
   assert.match(saveButton, /serializeProjectConfig/);
   assert.match(saveButton, /\/api\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/config/);
+});
+
+test("Buffer permanece preview válido quando presentation ainda não encontra o dataset", () => {
+  const restoreGlobals = installTelemetryGlobals();
+  const dataId = "buffer-runtime-regression";
+  const state = createAnalysisRootState();
+  const dispatched = [];
+  const transient = new Set();
+  const persistentCalls = [];
+
+  try {
+    const commands = createAnalysisLayerCommands({
+      dispatch(action) {
+        dispatched.push(action);
+        // Reproduz a janela de produção: o dispatch foi aceito, mas o
+        // getState imediato ainda não expõe o novo dataset para presentation.
+      },
+      getState() {
+        return state;
+      },
+      capabilities: {
+        previewBuffer: true,
+        persistBuffer: true,
+      },
+      context: null,
+      isTransientDataset(id) {
+        return transient.has(id);
+      },
+      markTransientDataset(id) {
+        transient.add(id);
+      },
+      markPersistentDataset(id) {
+        persistentCalls.push(id);
+        transient.delete(id);
+      },
+      now: () => 1,
+      random: () => 0.1,
+    });
+
+    const result = commands.addGeoJsonLayer(bufferAnalysisInput(dataId));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.value?.dataId, dataId);
+    assert.equal(transient.has(dataId), true);
+    assert.deepEqual(persistentCalls, []);
+    assert.equal(dispatched.length, 1);
+  } finally {
+    restoreGlobals();
+  }
+});
+
+test("presentation continua aplicada quando dataset já está observável", () => {
+  const restoreGlobals = installTelemetryGlobals();
+  const dataId = "buffer-runtime-ready";
+  let state = createAnalysisRootState();
+  const dispatched = [];
+  const transient = new Set();
+
+  try {
+    const commands = createAnalysisLayerCommands({
+      dispatch(action) {
+        dispatched.push(action);
+        if (dispatched.length === 1) {
+          state = createAnalysisRootState({ dataId });
+        }
+      },
+      getState() {
+        return state;
+      },
+      capabilities: {
+        previewBuffer: true,
+        persistBuffer: true,
+      },
+      context: null,
+      isTransientDataset(id) {
+        return transient.has(id);
+      },
+      markTransientDataset(id) {
+        transient.add(id);
+      },
+      markPersistentDataset(id) {
+        transient.delete(id);
+      },
+      now: () => 1,
+      random: () => 0.1,
+    });
+
+    const result = commands.addGeoJsonLayer(bufferAnalysisInput(dataId));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.value?.dataId, dataId);
+    assert.equal(transient.has(dataId), true);
+    assert.equal(dispatched.length >= 4, true);
+  } finally {
+    restoreGlobals();
+  }
+});
+
+test("falha de presentation nunca promove nem remove o dataset recém-criado", () => {
+  const restoreGlobals = installTelemetryGlobals();
+  const dataId = "buffer-no-rollback";
+  const state = createAnalysisRootState();
+  const dispatched = [];
+  const transient = new Set();
+  let promoted = false;
+
+  try {
+    const commands = createAnalysisLayerCommands({
+      dispatch(action) {
+        dispatched.push(action);
+      },
+      getState() {
+        return state;
+      },
+      capabilities: { previewBuffer: true },
+      context: null,
+      isTransientDataset(id) {
+        return transient.has(id);
+      },
+      markTransientDataset(id) {
+        transient.add(id);
+      },
+      markPersistentDataset() {
+        promoted = true;
+      },
+      now: () => 1,
+      random: () => 0.1,
+    });
+
+    const result = commands.addGeoJsonLayer(bufferAnalysisInput(dataId));
+
+    assert.equal(result.ok, true);
+    assert.equal(transient.has(dataId), true);
+    assert.equal(promoted, false);
+    assert.equal(dispatched.length, 1);
+  } finally {
+    restoreGlobals();
+  }
 });
