@@ -144,11 +144,21 @@ test("Multibuffer confirmado pode continuar na mesma sessão e ser finalizado", 
     },
   );
 
+  assert.equal(reviewed.mode, "reviewing");
+  assert.deepEqual(reviewed.session, {
+    ...MULTI_SESSION,
+    dataId: "buffer-session-layer",
+  });
+
   const nextPlacement = mapToolReducer(reviewed, { type: "CONTINUE_MULTI" });
   const finished = mapToolReducer(nextPlacement, { type: "FINISH_MULTI" });
 
   assert.equal(nextPlacement.mode, "placingPoint");
-  assert.deepEqual(nextPlacement.session, MULTI_SESSION);
+  assert.equal(nextPlacement.pendingPoint, null);
+  assert.deepEqual(nextPlacement.session, {
+    ...MULTI_SESSION,
+    dataId: "buffer-session-layer",
+  });
   assert.deepEqual(finished, createInitialMapToolState());
 });
 

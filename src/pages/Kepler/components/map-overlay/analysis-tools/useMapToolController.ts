@@ -27,6 +27,19 @@ function createMultiBufferSession(): BufferToolSession {
   };
 }
 
+function multiBufferSessionFromState(state: MapToolState) {
+  if (
+    state.tool !== "buffer" ||
+    state.preliminaryOptions?.kind !== "buffer" ||
+    state.preliminaryOptions.insertionMode !== "multi" ||
+    state.session?.kind !== "buffer"
+  ) {
+    return null;
+  }
+
+  return state.session;
+}
+
 export function mapToolConfigurationTarget(
   state: MapToolState,
 ): "buffer" | "isochrone" | null {
@@ -180,13 +193,39 @@ export function useMapToolController({
     (preview: MapToolPreview) => {
       if (state.mode !== "configuring") return false;
       const action = { type: "ANALYSIS_CREATED" as const, preview };
-      const nextState = mapToolReducer(state, action);
-      if (nextState === state || nextState.mode !== "reviewing") return false;
+      const reviewState = mapToolReducer(state, action);
+      if (reviewState === state || reviewState.mode !== "reviewing") return false;
+
       dispatch(action);
+
+      const session = multiBufferSessionFromState(reviewState);
+      if (session) {
+        const continueAction = { type: "CONTINUE_MULTI" as const };
+        const placingState = mapToolReducer(reviewState, continueAction);
+        if (placingState.mode !== "placingPoint") return false;
+
+        dispatch(continueAction);
+        resetMarker();
+        startPlacement("buffer");
+      }
+
       return true;
     },
-    [state],
+    [resetMarker, startPlacement, state],
   );
+
+  const finishMulti = useCallback(() => {
+    const session = multiBufferSessionFromState(state);
+    if (!session?.dataId || state.mode !== "placingPoint") return false;
+
+    const nextState = mapToolReducer(state, { type: "FINISH_MULTI" });
+    if (nextState === state || nextState.mode !== "idle") return false;
+
+    cancelPlacement();
+    resetMarker();
+    dispatch({ type: "FINISH_MULTI" });
+    return true;
+  }, [cancelPlacement, resetMarker, state]);
 
   const finishAnalysis = useCallback(() => {
     cancelPlacement();
@@ -213,6 +252,8 @@ export function useMapToolController({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handlePlacementEscape, state.mode]);
 
+  const multiBufferSession = multiBufferSessionFromState(state);
+
   return {
     state,
     active: state.mode !== "idle",
@@ -222,6 +263,11 @@ export function useMapToolController({
       state.mode === "configuring" || state.mode === "reviewing"
         ? state.pendingPoint
         : null,
+    multiBufferSession,
+    multiBufferActive: Boolean(multiBufferSession),
+    canFinishMulti: Boolean(
+      multiBufferSession?.dataId && state.mode === "placingPoint",
+    ),
     toggleToolMenu,
     cancelTool,
     selectTool,
@@ -232,6 +278,7 @@ export function useMapToolController({
     cancelPendingPoint,
     submitConfiguration,
     analysisCreated,
+    finishMulti,
     finishAnalysis,
     handlePlacementEscape,
   };
