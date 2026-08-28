@@ -362,6 +362,43 @@ export function createAnalysisLayerCommands(
     }
   }
 
+  function configurePresentationBestEffort(
+    dataId: string,
+    layerId: string,
+    input: AddGeoJsonLayerInput,
+    analysisKind: MapAnalysisKind,
+  ) {
+    if (!input.presentation) return true;
+
+    try {
+      configurePresentation(dataId, layerId, input);
+      return true;
+    } catch (error) {
+      const failure =
+        error instanceof AnalysisCommandFailure
+          ? error
+          : new AnalysisCommandFailure(
+              "COMMAND_FAILED",
+              error instanceof Error
+                ? error.message
+                : "Não foi possível configurar a apresentação da análise.",
+            );
+
+      emitMapPanelTelemetry("map_analysis_presentation_failed", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        source: "kepler-analysis-layer-adapter-v1",
+        component: "analysis-presentation",
+        analysisType: analysisKind,
+        status: "degraded",
+        code: failure.code,
+      });
+
+      return false;
+    }
+  }
+
   function removeTooltipEntry(dataId: string) {
     const interactionConfig = readValue(
       selectKeplerVisState(getState()),
@@ -474,14 +511,7 @@ export function createAnalysisLayerCommands(
         );
 
         markTransientDataset(dataId);
-        try {
-          configurePresentation(dataId, layerId, input);
-        } catch (error) {
-          removeTooltipEntry(dataId);
-          dispatchKepler(removeKeplerDataset(dataId));
-          markPersistentDataset(dataId);
-          throw error;
-        }
+        configurePresentationBestEffort(dataId, layerId, input, kind);
         return { dataId };
       });
     },

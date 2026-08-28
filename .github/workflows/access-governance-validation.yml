@@ -114,7 +114,19 @@ jobs:
           tests/cloudflare-build-chunking.test.mjs
 
       - name: GATE A — Foundation stability
-        run: npm run test:foundation-gate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:foundation-gate 2>&1 | tee foundation-gate.log
+
+      - name: Upload Foundation Gate diagnostic
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-gate-log
+          path: foundation-gate.log
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: MACRO C — Progressive gate
         run: npm run test:macro-c-gate
