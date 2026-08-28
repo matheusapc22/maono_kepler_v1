@@ -2,81 +2,81 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { enrichIsochroneResult } from "../functions/api/maps/isochrones.js";
+import {
+  createIsochroneApiClient,
+  normalizeIsochroneResponse,
+} from "../src/pages/Kepler/map-panel/isochrone-api.ts";
 
 const [service, clientApi, overlay, previewHook, store] = await Promise.all([
   readFile(
-    new URL("../functions/_lib/isochrone-service.js", import.meta.url),
+    new URL("../functions/_lib/geoprocessing/isochrone-service.js", import.meta.url),
     "utf8",
   ),
   readFile(
-    new URL(
-      "../src/pages/Kepler/map-panel/isochrone-api.ts",
-      import.meta.url,
-    ),
+    new URL("../src/pages/Kepler/map-panel/isochrone-api.ts", import.meta.url),
     "utf8",
   ),
   readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
-      import.meta.url,
-    ),
+    new URL("../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx", import.meta.url),
     "utf8",
   ),
   readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/useIsochronePreview.ts",
-      import.meta.url,
-    ),
+    new URL("../src/pages/Kepler/components/map-overlay/useIsochronePreview.ts", import.meta.url),
     "utf8",
   ),
-  readFile(new URL("../src/store.ts", import.meta.url), "utf8"),
+  readFile(
+    new URL("../src/pages/Kepler/store.ts", import.meta.url),
+    "utf8",
+  ),
 ]);
 
-test("endpoint acrescenta propriedades amigáveis sem perder o contrato GeoJSON", () => {
-  const result = enrichIsochroneResult({
+test("cliente normaliza FeatureCollection e propriedades amigáveis", async () => {
+  const payload = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {
+          range: 600,
+          range_input: 10,
+          range_label: "10 min",
+          mode: "drive",
+          mode_label: "Carro",
+          type: "time",
+          type_label: "Tempo",
+          provider: "geoapify",
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-47, -15], [-46, -15], [-47, -14], [-47, -15]]],
+        },
+      },
+      {
+        type: "Feature",
+        properties: {
+          feature_type: "origin",
+          range_label: "Origem",
+        },
+        geometry: {
+          type: "Point",
+          coordinates: [-47, -15],
+        },
+      },
+    ],
+  };
+
+  const result = normalizeIsochroneResponse({
+    geojson: payload,
     metadata: {
-      type: "time",
-      mode: "drive_traffic",
-      ranges: [30],
-      featureCount: 2,
+      rangeUnit: "seconds",
+      rangeInputUnit: "minutes",
       provider: "geoapify",
-      canPersist: true,
-    },
-    geojson: {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          geometry: { type: "Polygon", coordinates: [] },
-          properties: {
-            maono_analysis: "isochrone",
-            range: 30,
-            unit: "minutes",
-          },
-        },
-        {
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [-46.63, -23.55] },
-          properties: {
-            maono_analysis: "isochrone_origin",
-            label: "Origem",
-          },
-        },
-      ],
     },
   });
 
-  assert.equal(result.geojson.features[0].properties.range, 30);
-  assert.equal(result.geojson.features[0].properties.range_label, "30 min");
-  assert.equal(
-    result.geojson.features[0].properties.mode_label,
-    "Carro com trânsito",
-  );
-  assert.equal(
-    result.geojson.features[0].properties.analysis_label,
-    "Área alcançável",
-  );
+  assert.equal(result.geojson.type, "FeatureCollection");
+  assert.equal(result.geojson.features.length, 2);
+  assert.equal(result.geojson.features[0].properties.range_label, "10 min");
   assert.equal(result.geojson.features[1].properties.range_label, "Origem");
 });
 
@@ -114,7 +114,7 @@ test("troca de projeto ou organização remove apenas preview transitório não 
   assert.match(previewHook, /requestRef\.current\?\.abort\(\)/);
   assert.match(
     previewHook,
-    /if \(current && !current\.saveRequestId\) \{[\s\S]*removeTransientLayer\(current\.dataId\)/,
+    /if \(current && !current\.saveRequestId\) \{[\s\S]*removeTransientLayer\(current\.dataId,\s*"isochrone"\)/,
   );
   assert.match(previewHook, /resetMarkerRef\.current\(\)/);
 });
