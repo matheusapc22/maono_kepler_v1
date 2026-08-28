@@ -28,13 +28,13 @@ const MAP_SURFACE_SELECTORS = [
   ".maono-kepler-viewport",
 ] as const;
 
+const PLACEMENT_PIN_CURSOR =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M12 24c0 0 9-7.4 9-14.5C21 4.25 16.97 0 12 0 7.03 0 3 4.25 3 9.5 3 16.6 12 24 12 24z' fill='%23C5A059' stroke='%230a0f18' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='9' r='3' fill='%230a0f18'/%3E%3C/svg%3E\") 16 31, crosshair";
+
 const PLACEMENT_CURSORS: Record<MarkerPlacementKind, string> = {
-  marker:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M12 24c0 0 9-7.4 9-14.5C21 4.25 16.97 0 12 0 7.03 0 3 4.25 3 9.5 3 16.6 12 24 12 24z' fill='%23C5A059' stroke='%230a0f18' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='9' r='3' fill='%230a0f18'/%3E%3C/svg%3E\") 16 31, crosshair",
-  buffer:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23C5A059' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23C5A059'/%3E%3Cpath d='M16 2v6M16 24v6M2 16h6M24 16h6' stroke='%230a0f18' stroke-width='2'/%3E%3C/svg%3E\") 16 16, crosshair",
-  isochrone:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23C5A059' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23C5A059' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23C5A059'/%3E%3C/svg%3E\") 16 16, crosshair",
+  marker: PLACEMENT_PIN_CURSOR,
+  buffer: PLACEMENT_PIN_CURSOR,
+  isochrone: PLACEMENT_PIN_CURSOR,
 };
 
 function mapSurface() {
