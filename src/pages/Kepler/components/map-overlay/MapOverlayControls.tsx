@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -38,7 +38,7 @@ function OverlayIcon({ name }: { name: OverlayIconName }) {
       </>
     ),
     tooltip: (
-      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2 2v10Z" />
     ),
     legend: (
       <>
@@ -111,6 +111,7 @@ export default function MapOverlayControls() {
   const [tooltipsOpen, setTooltipsOpen] = useState(false);
   const [tooltipDraft, setTooltipDraft] = useState<Record<string, string[]>>({});
   const [commandMessage, setCommandMessage] = useState<OverlayMessage | null>(null);
+  const handledBufferPreviewRef = useRef<string | null>(null);
   const marker = useMapMarker(state.viewport);
   const toolController = useMapToolController({
     startPlacement: marker.startPlacement,
@@ -187,17 +188,33 @@ export default function MapOverlayControls() {
   ]);
 
   useEffect(() => {
+    if (!buffer.preview) {
+      handledBufferPreviewRef.current = null;
+      return;
+    }
+
+    const previewKey = [
+      buffer.preview.dataId,
+      buffer.preview.itemCount,
+      buffer.preview.featureCount,
+    ].join(":");
+
+    if (handledBufferPreviewRef.current === previewKey) return;
+
     if (
-      buffer.preview &&
       toolController.state.mode === "configuring" &&
-      toolController.state.tool === "buffer"
+      toolController.state.tool === "buffer" &&
+      toolController.state.configurationStatus === "submitting" &&
+      !buffer.busy &&
+      !buffer.error
     ) {
-      toolController.analysisCreated({
+      const accepted = toolController.analysisCreated({
         kind: "buffer",
         dataId: buffer.preview.dataId,
       });
+      if (accepted) handledBufferPreviewRef.current = previewKey;
     }
-  }, [buffer.preview, toolController]);
+  }, [buffer.busy, buffer.error, buffer.preview, toolController]);
 
   useEffect(() => {
     if (
@@ -408,14 +425,22 @@ export default function MapOverlayControls() {
         ) : null}
 
         {toolController.canFinishMulti ? (
-          <section className="maono-multibuffer-session" aria-label="Sessão Multibuffers ativa">
-            <span>
-              <small>Multibuffers ativo</small>
-              <strong>{buffer.preview?.label || "Adicione a próxima origem"}</strong>
-            </span>
-            <button type="button" className="is-primary" onClick={toolController.finishMulti}>
-              Finalizar Multibuffers
-            </button>
+          <section
+            className="maono-isochrone-preview maono-multibuffer-session"
+            aria-label="Sessão Multibuffers ativa"
+          >
+            <div>
+              <OverlayIcon name="buffer" />
+              <span>
+                <small>Multibuffers ativo</small>
+                <strong>{buffer.preview?.label || "Adicione a próxima origem"}</strong>
+              </span>
+            </div>
+            <div>
+              <button type="button" className="is-primary" onClick={toolController.finishMulti}>
+                Finalizar Multibuffers
+              </button>
+            </div>
           </section>
         ) : null}
 
