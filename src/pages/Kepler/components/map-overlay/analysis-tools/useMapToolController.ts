@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer } from "react";
 
+import { MAONO_MAP_PLACEMENT_POINT_EVENT } from "../useMapMarker";
 import {
   createInitialMapToolState,
   isMapToolStateValid,
@@ -163,6 +164,29 @@ export function useMapToolController({
     },
     [state],
   );
+
+  useEffect(() => {
+    if (state.mode !== "placingPoint" || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handlePlacementPoint = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const point = event.detail as MapToolPoint | null;
+      if (!point) return;
+      pointPlaced(point);
+    };
+
+    window.addEventListener(
+      MAONO_MAP_PLACEMENT_POINT_EVENT,
+      handlePlacementPoint,
+    );
+    return () =>
+      window.removeEventListener(
+        MAONO_MAP_PLACEMENT_POINT_EVENT,
+        handlePlacementPoint,
+      );
+  }, [pointPlaced, state.mode]);
 
   const cancelPendingPoint = useCallback(() => {
     if (state.mode !== "configuring") return false;
