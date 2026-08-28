@@ -51,6 +51,7 @@ test("S02.01 cria AnalysisToolMenu acessível e separado do marcador", () => {
   assert.match(menu, /ArrowDown/);
   assert.match(menu, /pointerdown/);
   assert.doesNotMatch(menu, /Remover marcador/);
+  assert.doesNotMatch(menu, /Adicionar marcador/);
 });
 
 test("S02.02 botão inferior abre a máquina em vez de iniciar placement diretamente", () => {
@@ -91,13 +92,14 @@ test("S02.04 submenu Isócrona é extensível e não solicita parâmetros espaci
   );
 });
 
-test("menu respeita capabilities para Buffer, Isócrona e marcador", () => {
+test("menu respeita capabilities de Buffer/Isócrona e não oferece marcador avulso", () => {
   assert.match(menu, /canBuffer \?/);
   assert.match(menu, /canIsochrone \?/);
-  assert.match(menu, /canPlaceMarker \?/);
+  assert.doesNotMatch(menu, /Adicionar marcador/);
+  assert.doesNotMatch(menu, /ToolGlyph kind="marker"/);
   assert.match(overlay, /canBuffer=\{bufferCapabilityEnabled\}/);
   assert.match(overlay, /canIsochrone=\{isochroneCapabilityEnabled\}/);
-  assert.match(overlay, /canPlaceMarker=\{analysisMarkerCapabilityEnabled\}/);
+  assert.match(overlay, /analysisMarkerCapabilityEnabled/);
 });
 
 test("S02.05 feedback mantém botão ativo e identifica ferramenta selecionada", () => {
