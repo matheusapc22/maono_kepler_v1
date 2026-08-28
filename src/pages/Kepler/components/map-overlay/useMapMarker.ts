@@ -17,6 +17,8 @@ import {
   type MarkerOrigin,
 } from "./marker-projection";
 
+export type MarkerPlacementKind = "marker" | "buffer" | "isochrone";
+
 const MAP_SURFACE_SELECTORS = [
   ".maplibregl-canvas",
   ".mapboxgl-canvas",
@@ -24,8 +26,14 @@ const MAP_SURFACE_SELECTORS = [
   ".maono-kepler-viewport",
 ] as const;
 
-const PLACEMENT_PIN_CURSOR =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M12 24c0 0 9-7.4 9-14.5C21 4.25 16.97 0 12 0 7.03 0 3 4.25 3 9.5 3 16.6 12 24 12 24z' fill='%23C5A059' stroke='%230a0f18' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='9' r='3' fill='%230a0f18'/%3E%3C/svg%3E\") 16 31, crosshair";
+const PLACEMENT_CURSORS: Record<MarkerPlacementKind, string> = {
+  marker:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M12 24c0 0 9-7.4 9-14.5C21 4.25 16.97 0 12 0 7.03 0 3 4.25 3 9.5 3 16.6 12 24 12 24z' fill='%23C5A059' stroke='%230a0f18' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='9' r='3' fill='%230a0f18'/%3E%3C/svg%3E\") 16 31, crosshair",
+  buffer:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23C5A059' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23C5A059'/%3E%3Cpath d='M16 2v6M16 24v6M2 16h6M24 16h6' stroke='%230a0f18' stroke-width='2'/%3E%3C/svg%3E\") 16 16, crosshair",
+  isochrone:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23C5A059' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23C5A059' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23C5A059'/%3E%3C/svg%3E\") 16 16, crosshair",
+};
 
 function mapSurface() {
   for (const selector of MAP_SURFACE_SELECTORS) {
@@ -69,6 +77,8 @@ function sameCanvasRect(
 
 export function useMapMarker(viewport: MapViewportSummary | null) {
   const [placing, setPlacing] = useState(false);
+  const [placementKind, setPlacementKind] =
+    useState<MarkerPlacementKind | null>(null);
   const [origin, setOrigin] = useState<MarkerOrigin | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -146,27 +156,15 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
     movedRef.current = false;
     setDragging(false);
     setPlacing(false);
+    setPlacementKind(null);
     setOrigin(null);
     setMenuOpen(false);
   }, []);
 
   const cancelPlacement = useCallback(() => {
     setPlacing(false);
+    setPlacementKind(null);
   }, []);
-
-  useEffect(() => {
-    if (!placing) return undefined;
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        cancelPlacement();
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [cancelPlacement, placing]);
 
   useEffect(() => {
     if (!placing || !rect || typeof document === "undefined") return undefined;
@@ -177,29 +175,35 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
     if (!placementSurface) return undefined;
 
     const previousCursor = placementSurface.style.cursor;
-    placementSurface.style.cursor = PLACEMENT_PIN_CURSOR;
+    placementSurface.style.cursor =
+      PLACEMENT_CURSORS[placementKind ?? "marker"];
 
     return () => {
       placementSurface.style.cursor = previousCursor;
     };
-  }, [placing, rect]);
+  }, [placementKind, placing, rect]);
 
-  const startPlacement = useCallback(() => {
-    refreshCanvas();
-    setOrigin(null);
-    setMenuOpen(false);
-    setPlacing(true);
-  }, [refreshCanvas]);
+  const startPlacement = useCallback(
+    (kind: MarkerPlacementKind = "marker") => {
+      refreshCanvas();
+      setOrigin(null);
+      setMenuOpen(false);
+      setPlacementKind(kind);
+      setPlacing(true);
+    },
+    [refreshCanvas],
+  );
 
   const placeAt = useCallback(
-    (clientX: number, clientY: number) => {
+    (clientX: number, clientY: number): MarkerOrigin | null => {
       const next = screenToMarkerOrigin(clientX, clientY, rect, viewport);
-      if (!next) return false;
+      if (!next) return null;
 
       setOrigin(next);
       setPlacing(false);
-      setMenuOpen(true);
-      return true;
+      setPlacementKind(null);
+      setMenuOpen(false);
+      return next;
     },
     [rect, viewport],
   );
@@ -298,6 +302,7 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
 
   return {
     placing,
+    placementKind,
     origin,
     menuOpen,
     dragging,

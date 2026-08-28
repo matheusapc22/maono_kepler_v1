@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [hook, overlay, api, analysisAdapter] = await Promise.all([
+const [hook, overlay, menu, api, analysisAdapter] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/useBufferPreview.ts",
@@ -13,6 +13,13 @@ const [hook, overlay, api, analysisAdapter] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/analysis-tools/AnalysisToolMenu.tsx",
       import.meta.url,
     ),
     "utf8",
@@ -69,7 +76,7 @@ test("Manter promove Buffer localmente sem disparar salvamento do projeto", () =
 test("overlay integra Manter e Descartar sem linguagem de salvamento individual", () => {
   assert.match(overlay, /useBufferPreview/);
   assert.match(overlay, /BufferDialog/);
-  assert.match(overlay, /Criar buffers/);
+  assert.match(menu, /Criar buffer/);
   assert.match(overlay, /buffer\.preview/);
   assert.match(overlay, /buffer\.keep/);
   assert.match(overlay, /buffer\.discard/);
@@ -94,5 +101,6 @@ test("Pin é controlado por capability genérica de análise", () => {
   assert.match(overlay, /placeAnalysisMarker/);
   assert.match(overlay, /analysisMarkerCapabilityEnabled/);
   assert.doesNotMatch(overlay, /disabled=\{!isochroneCapabilityEnabled\}/);
-  assert.match(overlay, /Origem da análise/);
+  assert.match(menu, /Adicionar marcador/);
+  assert.match(overlay, /data-analysis-marker-state/);
 });

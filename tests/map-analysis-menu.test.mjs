@@ -104,10 +104,10 @@ test("S02.05 feedback mantém botão ativo e identifica ferramenta selecionada",
   assert.match(overlay, /className=\{toolController\.active \? "is-active" : ""\}/);
   assert.match(overlay, /data-active-analysis-tool=\{toolController\.state\.tool \?\? "none"\}/);
   assert.match(overlay, /data-analysis-tool=\{placementTool\}/);
-  assert.match(styles, /data-analysis-tool="buffer"/);
-  assert.match(styles, /origem do buffer/);
-  assert.match(styles, /data-analysis-tool="isochrone"/);
-  assert.match(styles, /origem da isócrona/);
+  assert.match(overlay, /data-placement-label=\{placementLabel\}/);
+  assert.match(styles, /content: attr\(data-placement-label\)/);
+  assert.match(overlay, /origem do buffer/);
+  assert.match(overlay, /origem da isócrona/);
 });
 
 test("Gate S02 Single: menu -> Buffer -> Single -> placement sem ponto prévio", () => {
@@ -156,5 +156,5 @@ test("Gate S02 Multi: sessão nasce antes do placement e nenhum ponto é criado 
   assert.equal(placing.pendingPoint, null);
   assert.deepEqual(placing.session, session);
   assert.match(controller, /createMultiBufferSession/);
-  assert.match(controller, /startPlacement\(\)/);
+  assert.match(controller, /startPlacement\(nextState\.tool\)/);
 });
