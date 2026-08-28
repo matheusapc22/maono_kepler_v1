@@ -32,8 +32,7 @@ export function useMapToolController({
 }) {
   const [state, dispatch] = useReducer(
     mapToolReducer,
-    undefined,
-    createInitialMapToolState,
+    createInitialMapToolState(),
   );
 
   const cancelTool = useCallback(() => {
