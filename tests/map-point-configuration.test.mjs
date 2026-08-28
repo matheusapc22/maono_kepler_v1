@@ -47,6 +47,12 @@ const [overlay, markerHook, controller, styles, markerContextMenu] = await Promi
 ]);
 
 const VALID_POINT = { longitude: -46.6333, latitude: -23.5505 };
+const BUFFER_SESSION = {
+  kind: "buffer",
+  id: "buffer-session-s03",
+  insertionMode: "multi",
+  dataId: null,
+};
 
 function reduce(initial, ...actions) {
   return actions.reduce(mapToolReducer, initial);
@@ -57,11 +63,7 @@ function placeBuffer(point = VALID_POINT) {
     createInitialMapToolState(),
     { type: "OPEN_TOOL_MENU" },
     { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "single" },
-    },
-    { type: "START_PLACEMENT" },
+    { type: "START_PLACEMENT", session: BUFFER_SESSION },
     { type: "POINT_PLACED", point },
   );
 }
@@ -113,11 +115,7 @@ test("Gate S03: configuração impossível não passa pelas invariantes", () => 
     createInitialMapToolState(),
     { type: "OPEN_TOOL_MENU" },
     { type: "SELECT_TOOL", tool: "buffer" },
-    {
-      type: "SET_PRELIMINARY_OPTIONS",
-      options: { kind: "buffer", insertionMode: "single" },
-    },
-    { type: "START_PLACEMENT" },
+    { type: "START_PLACEMENT", session: BUFFER_SESSION },
   );
 
   const invalidAttempt = mapToolReducer(placing, {
@@ -159,15 +157,15 @@ test("Gate S03: overlay exige target e pendingPoint antes de openDialog", () => 
   assert.match(openingEffect, /isochrone\.openDialog\(\)/);
 });
 
-test("S03.04 texto e cursor do placement são parametrizados por ferramenta", () => {
+test("S03.04 texto varia por ferramenta e cursor de placement é sempre um pin", () => {
   assert.match(overlay, /function placementPrompt/);
   assert.match(overlay, /data-placement-label=\{placementLabel\}/);
   assert.match(overlay, /data-analysis-tool=\{placementTool\}/);
   assert.match(styles, /content: attr\(data-placement-label\)/);
-  assert.match(markerHook, /PLACEMENT_CURSORS/);
-  assert.match(markerHook, /marker:/);
-  assert.match(markerHook, /buffer:/);
-  assert.match(markerHook, /isochrone:/);
+  assert.match(markerHook, /PLACEMENT_PIN_CURSOR/);
+  assert.match(markerHook, /marker:\s*PLACEMENT_PIN_CURSOR/);
+  assert.match(markerHook, /buffer:\s*PLACEMENT_PIN_CURSOR/);
+  assert.match(markerHook, /isochrone:\s*PLACEMENT_PIN_CURSOR/);
   assert.match(markerHook, /startPlacement = useCallback/);
 });
 
