@@ -15,15 +15,13 @@ type AnalysisToolMenuProps = {
   state: SelectingToolMapToolState;
   canBuffer: boolean;
   canIsochrone: boolean;
-  canPlaceMarker: boolean;
   onSelectTool: (tool: MapAnalysisTool) => void;
   onSelectBufferMode: (mode: BufferInsertionMode) => void;
   onStartPlacement: () => void;
-  onStartMarkerPlacement: () => void;
   onCancel: () => void;
 };
 
-function ToolGlyph({ kind }: { kind: "buffer" | "isochrone" | "marker" }) {
+function ToolGlyph({ kind }: { kind: "buffer" | "isochrone" }) {
   if (kind === "buffer") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -34,20 +32,11 @@ function ToolGlyph({ kind }: { kind: "buffer" | "isochrone" | "marker" }) {
     );
   }
 
-  if (kind === "isochrone") {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <circle cx="12" cy="12" r="9" />
-        <circle cx="12" cy="12" r="5" />
-        <circle cx="12" cy="12" r="1.5" />
-      </svg>
-    );
-  }
-
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
-      <circle cx="12" cy="10" r="2.5" />
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.5" />
     </svg>
   );
 }
@@ -56,11 +45,9 @@ export default function AnalysisToolMenu({
   state,
   canBuffer,
   canIsochrone,
-  canPlaceMarker,
   onSelectTool,
   onSelectBufferMode,
   onStartPlacement,
-  onStartMarkerPlacement,
   onCancel,
 }: AnalysisToolMenuProps) {
   const menuRef = useRef<HTMLElement | null>(null);
@@ -189,20 +176,6 @@ export default function AnalysisToolMenu({
                   <small>Único ou múltiplas origens</small>
                 </span>
                 <b aria-hidden="true">›</b>
-              </button>
-            ) : null}
-
-            {canPlaceMarker ? (
-              <button
-                type="button"
-                role="menuitem"
-                onClick={onStartMarkerPlacement}
-              >
-                <ToolGlyph kind="marker" />
-                <span>
-                  <strong>Adicionar marcador</strong>
-                  <small>Posicionar um ponto no mapa</small>
-                </span>
               </button>
             ) : null}
           </div>
