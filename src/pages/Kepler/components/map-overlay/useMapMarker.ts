@@ -22,6 +22,10 @@ export type MarkerPlacementKind = "marker" | "buffer" | "isochrone";
 export const MAONO_MAP_PLACEMENT_POINT_EVENT = "maono:map-placement-point";
 
 const MAP_SURFACE_SELECTORS = [
+  // DeckGL é a superfície interativa superior do Kepler e, portanto, o dono
+  // efetivo do cursor. Deve vir antes dos canvases do basemap.
+  "#default-deckgl-overlay-wrapper",
+  "#default-deckgl-overlay",
   ".maplibregl-canvas",
   ".mapboxgl-canvas",
   ".maono-kepler-viewport canvas",
@@ -37,17 +41,31 @@ const PLACEMENT_CURSORS: Record<MarkerPlacementKind, string> = {
   isochrone: PLACEMENT_PIN_CURSOR,
 };
 
-function mapSurface() {
+function mapSurfaces() {
+  const surfaces: HTMLElement[] = [];
+  const seen = new Set<HTMLElement>();
+
   for (const selector of MAP_SURFACE_SELECTORS) {
     const candidates = document.querySelectorAll<HTMLElement>(selector);
 
     for (const candidate of candidates) {
       const rect = candidate.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) return candidate;
+      if (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        !seen.has(candidate)
+      ) {
+        seen.add(candidate);
+        surfaces.push(candidate);
+      }
     }
   }
 
-  return null;
+  return surfaces;
+}
+
+function mapSurface() {
+  return mapSurfaces()[0] ?? null;
 }
 
 function canvasRect(): MapCanvasRect | null {
@@ -192,23 +210,73 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
   }, []);
 
   useEffect(() => {
-    if (!placing || !rect || typeof document === "undefined") return undefined;
+    if (
+      !placing ||
+      !rect ||
+      typeof document === "undefined" ||
+      typeof window === "undefined"
+    ) {
+      return undefined;
+    }
 
     const visualOverlay = document.querySelector<HTMLElement>(
       ".maono-marker-placement",
     );
-    const placementSurface = mapSurface();
     const previousPointerEvents = visualOverlay?.style.pointerEvents ?? "";
-    const previousCursor = placementSurface?.style.cursor ?? "";
+    const cursor = PLACEMENT_CURSORS[placementKind ?? "marker"];
+    const previousCursors = new Map<
+      HTMLElement,
+      { value: string; priority: string }
+    >();
+    let cursorFrame = 0;
+
+    const applyPlacementCursor = () => {
+      for (const surface of mapSurfaces()) {
+        if (!previousCursors.has(surface)) {
+          previousCursors.set(surface, {
+            value: surface.style.getPropertyValue("cursor"),
+            priority: surface.style.getPropertyPriority("cursor"),
+          });
+        }
+
+        // DeckGL atualiza getCursor enquanto o ponteiro se move. Aplicamos a
+        // ferramenta no próprio elemento interativo e com prioridade inline
+        // para o placement continuar visível sem bloquear pan/zoom.
+        surface.style.setProperty("cursor", cursor, "important");
+      }
+    };
+
+    const schedulePlacementCursor = () => {
+      window.cancelAnimationFrame(cursorFrame);
+      cursorFrame = window.requestAnimationFrame(applyPlacementCursor);
+    };
 
     if (visualOverlay) visualOverlay.style.pointerEvents = "none";
-    if (placementSurface) {
-      placementSurface.style.cursor = PLACEMENT_CURSORS[placementKind ?? "marker"];
-    }
+    applyPlacementCursor();
+
+    window.addEventListener("pointermove", schedulePlacementCursor, true);
+    window.addEventListener("maono:map-runtime", schedulePlacementCursor);
 
     return () => {
-      if (visualOverlay) visualOverlay.style.pointerEvents = previousPointerEvents;
-      if (placementSurface) placementSurface.style.cursor = previousCursor;
+      window.cancelAnimationFrame(cursorFrame);
+      window.removeEventListener("pointermove", schedulePlacementCursor, true);
+      window.removeEventListener("maono:map-runtime", schedulePlacementCursor);
+
+      if (visualOverlay) {
+        visualOverlay.style.pointerEvents = previousPointerEvents;
+      }
+
+      for (const [surface, previous] of previousCursors) {
+        if (previous.value) {
+          surface.style.setProperty(
+            "cursor",
+            previous.value,
+            previous.priority,
+          );
+        } else {
+          surface.style.removeProperty("cursor");
+        }
+      }
     };
   }, [placementKind, placing, rect]);
 
