@@ -2,8 +2,8 @@ import type {
   BufferFeatureCollection,
   BufferResult,
   BufferUnit,
-} from "../../../map-panel/buffer-api";
-import type { MapToolPoint } from "./map-tool-state";
+} from "../../../map-panel/buffer-api.ts";
+import type { MapToolPoint } from "./map-tool-state.ts";
 
 export type BufferSessionItem = {
   id: string;
