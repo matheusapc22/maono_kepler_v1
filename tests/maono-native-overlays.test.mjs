@@ -101,7 +101,7 @@ function geometryRootState() {
             ],
             filters: [],
             editor: {
-              features: [],
+              features: [{ id: "legacy-editor-feature" }],
               selectedFeature: null,
               visible: false,
               mode: "EDIT",
@@ -306,6 +306,10 @@ test("adapter cria filtro headless sem setPolygonFilterLayer nem seleção do Ed
     ["source-polygons", "clientes", "oculta"],
   );
   assert.equal(state.demo.keplerGl.map.visState.editor.selectedFeature, null);
+  assert.deepEqual(
+    state.demo.keplerGl.map.visState.editor.features,
+    [{ id: "legacy-editor-feature" }],
+  );
   assert.ok(result.value.filterId);
   assert.equal(
     state.demo.keplerGl.map.visState.filters[0].value.properties.filterId,
@@ -359,20 +363,25 @@ test("tooltip atualiza associações por layerId sem reativar Editor", () => {
   assert.ok(actionEndingWith(dispatches[0], "SET_FILTER"));
   assert.equal(state.demo.keplerGl.map.visState.editor.selectedFeature, null);
   assert.deepEqual(
+    state.demo.keplerGl.map.visState.editor.features,
+    [{ id: "legacy-editor-feature" }],
+  );
+  assert.deepEqual(
     state.demo.keplerGl.map.visState.filters[0].layerId.sort(),
     ["clientes", "rotas"],
   );
   assert.deepEqual(updated.value.affectedLayerIds.sort(), ["clientes", "rotas"]);
 });
 
-test("guard elimina o Editor nativo por estado antes do paint", () => {
+test("guard elimina o Editor nativo por estado antes do paint sem apagar features legadas", () => {
   assert.match(geometryManagerHook, /useLayoutEffect/);
   assert.match(geometryManagerHook, /toggleEditorVisibility/);
   assert.match(geometryManagerHook, /setEditorMode\(EDITOR_MODES\.EDIT\)/);
   assert.match(geometryManagerHook, /setSelectedFeature\(null\)/);
-  assert.match(geometryManagerHook, /setFeatures\(\[\]\)/);
   assert.match(geometryManagerHook, /toggleMapControl\("mapDraw", 0\)/);
+  assert.match(geometryManagerHook, /preservadas no estado/);
   assert.match(geometryManagerHook, /enforceGeometryFilterEngineIsolation/);
+  assert.doesNotMatch(geometryManagerHook, /setFeatures\(\[\]\)/);
   assert.doesNotMatch(geometryManagerHook, /requestAnimationFrame/);
   assert.doesNotMatch(geometryManagerHook, /addEventListener\("click"/);
   assert.doesNotMatch(geometryManagerHook, /default-deckgl-overlay/);
