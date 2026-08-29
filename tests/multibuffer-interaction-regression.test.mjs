@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [bufferHook, markerHook, controller, updater, menu, stateMachine] = await Promise.all([
+const [bufferHook, markerHook, controller, updater, menu, stateMachine, placementCss] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/useBufferPreview.ts",
@@ -45,6 +45,13 @@ const [bufferHook, markerHook, controller, updater, menu, stateMachine] = await 
     ),
     "utf8",
   ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/map-placement-mode.css",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
 ]);
 
 test("primeiro Buffer da sessão não altera o viewport escolhido pelo usuário", () => {
@@ -56,24 +63,27 @@ test("primeiro Buffer da sessão não altera o viewport escolhido pelo usuário"
   assert.match(firstItemBlock, /centerMap:\s*false/);
 });
 
-test("placement libera interação nativa, diferencia pan de clique e usa cursor pin", () => {
+test("placement libera interação nativa, diferencia pan de clique e mantém cursor pin estável", () => {
   assert.match(markerHook, /visualOverlay\.style\.pointerEvents = "none"/);
   assert.match(markerHook, /function mapSurfaces\(\)/);
   assert.match(markerHook, /#default-deckgl-overlay-wrapper/);
   assert.match(markerHook, /#default-deckgl-overlay/);
-  assert.match(markerHook, /for \(const surface of mapSurfaces\(\)\)/);
-  assert.match(markerHook, /surface\.style\.setProperty\("cursor", cursor, "important"\)/);
-  assert.match(markerHook, /requestAnimationFrame\(applyPlacementCursor\)/);
+  assert.match(markerHook, /data-maono-map-placement/);
+  assert.doesNotMatch(markerHook, /applyPlacementCursor/);
+  assert.doesNotMatch(markerHook, /schedulePlacementCursor/);
+  assert.match(placementCss, /:root\[data-maono-map-placement\]/);
+  assert.match(placementCss, /crosshair !important/);
   assert.match(markerHook, /window\.addEventListener\("pointerdown"/);
   assert.match(markerHook, /window\.addEventListener\("pointermove"/);
   assert.match(markerHook, /Math\.hypot/);
   assert.match(markerHook, /> 6/);
   assert.match(markerHook, /current\.moved/);
   assert.match(markerHook, /new CustomEvent\(MAONO_MAP_PLACEMENT_POINT_EVENT/);
-  assert.match(markerHook, /buffer:\s*PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /isochrone:\s*PLACEMENT_PIN_CURSOR/);
   assert.match(controller, /MAONO_MAP_PLACEMENT_POINT_EVENT/);
   assert.match(controller, /pointPlaced\(point\)/);
+  assert.match(controller, /const exitPlacement = useCallback/);
+  assert.match(controller, /session\?\.dataId/);
+  assert.match(controller, /return finishMulti\(\)/);
 });
 
 test("segundo e próximos buffers substituem dados sem criar nova layer nem recenter", () => {
