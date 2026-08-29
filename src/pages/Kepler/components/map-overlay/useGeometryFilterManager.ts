@@ -69,7 +69,7 @@ export function useGeometryFilterManager({
       window.cancelAnimationFrame(pendingFrame);
       pendingFrame = window.requestAnimationFrame(() => {
         const result = openSelectedGeometryFilterManager({
-          dispatch,
+          dispatch: (action) => dispatch(action as any),
           getState: () => store.getState(),
           position,
           mapIndex: 0,
