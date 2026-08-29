@@ -12,9 +12,11 @@ import BufferDialog from "./BufferDialog";
 import IsochroneDialog from "./IsochroneDialog";
 import MarkerContextMenu from "./MarkerContextMenu";
 import { useBufferPreview } from "./useBufferPreview";
+import { useGeometryFilterManager } from "./useGeometryFilterManager";
 import { useIsochronePreview } from "./useIsochronePreview";
 import { useMapMarker } from "./useMapMarker";
 import "./map-overlay-controls.css";
+import "./map-placement-mode.css";
 
 type OverlayMessage = {
   tone: "error" | "success";
@@ -92,7 +94,7 @@ function activeAnalysisToolLabel(tool: "marker" | "buffer" | "isochrone" | null)
   return "análise";
 }
 
-function placementPrompt(tool: "marker" | "buffer" | "isochrone") {
+function placementPrompt(tool: "marker" | "buffer" | "isochrone" | null) {
   if (tool === "buffer") return "Clique no mapa para definir a origem do buffer";
   if (tool === "isochrone") return "Clique no mapa para definir a origem da isócrona";
   return "Clique no mapa para adicionar o marcador";
@@ -112,6 +114,14 @@ export default function MapOverlayControls() {
     cancelPlacement: marker.cancelPlacement,
     resetMarker: marker.reset,
   });
+
+  useGeometryFilterManager({
+    enabled:
+      customMapOverlayEnabled &&
+      toolController.state.mode !== "placingPoint" &&
+      !marker.placing,
+  });
+
   const analysisPendingPoint = toolController.pendingPoint;
   const isochrone = useIsochronePreview({
     pendingPoint: analysisPendingPoint,
@@ -133,16 +143,16 @@ export default function MapOverlayControls() {
   );
   const selectingToolState =
     toolController.state.mode === "selectingTool" ? toolController.state : null;
-  const placementTool =
-    toolController.state.mode === "placingPoint"
-      ? toolController.state.tool
-      : marker.placementKind ?? "marker";
+  const placementModeActive = toolController.state.mode === "placingPoint";
+  const placementTool = placementModeActive
+    ? toolController.state.tool
+    : marker.placementKind ?? "marker";
   const activeToolLabel = activeAnalysisToolLabel(toolController.state.tool);
   const placementLabel = placementPrompt(placementTool);
   const analysisButtonLabel = toolController.menuOpen
     ? "Fechar menu de análise"
-    : toolController.state.mode === "placingPoint"
-      ? `Cancelar posicionamento de ${activeToolLabel}`
+    : placementModeActive
+      ? `Sair do modo pin de ${activeToolLabel}`
       : "Adicionar análise";
   const launcherVisible =
     !analysisPreviewActive &&
@@ -401,6 +411,21 @@ export default function MapOverlayControls() {
           </div>
         ) : null}
 
+        {placementModeActive ? (
+          <section className="maono-placement-mode" aria-label="Modo pin ativo">
+            <div className="maono-placement-mode__copy">
+              <small>Modo pin ativo</small>
+              <strong>{placementLabel}</strong>
+            </div>
+            <div className="maono-placement-mode__actions">
+              <kbd>Esc</kbd>
+              <button type="button" onClick={toolController.exitPlacement}>
+                Sair do modo pin
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         {selectingToolState ? (
           <AnalysisToolMenu
             state={selectingToolState}
@@ -578,7 +603,11 @@ export default function MapOverlayControls() {
               type="button"
               className={toolController.active ? "is-active" : ""}
               disabled={!analysisMarkerCapabilityEnabled}
-              onClick={toolController.toggleToolMenu}
+              onClick={
+                placementModeActive
+                  ? toolController.exitPlacement
+                  : toolController.toggleToolMenu
+              }
               title={analysisButtonLabel}
               aria-label={analysisButtonLabel}
               aria-haspopup="menu"

@@ -8,7 +8,14 @@ import {
   mapToolReducer,
 } from "../src/pages/Kepler/components/map-overlay/analysis-tools/map-tool-state.ts";
 
-const [overlay, markerHook, controller, styles, markerContextMenu] = await Promise.all([
+const [
+  overlay,
+  markerHook,
+  controller,
+  styles,
+  placementStyles,
+  markerContextMenu,
+] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
@@ -33,6 +40,13 @@ const [overlay, markerHook, controller, styles, markerContextMenu] = await Promi
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/analysis-tools/analysis-tool-menu.css",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/map-placement-mode.css",
       import.meta.url,
     ),
     "utf8",
@@ -157,22 +171,31 @@ test("Gate S03: overlay exige target e pendingPoint antes de openDialog", () => 
   assert.match(openingEffect, /isochrone\.openDialog\(\)/);
 });
 
-test("S03.04 texto varia por ferramenta e cursor de placement é sempre um pin", () => {
+test("S03.04 texto varia por ferramenta e cursor de placement é sempre um pin estável", () => {
   assert.match(overlay, /function placementPrompt/);
   assert.match(overlay, /data-placement-label=\{placementLabel\}/);
   assert.match(overlay, /data-analysis-tool=\{placementTool\}/);
   assert.match(styles, /content: attr\(data-placement-label\)/);
-  assert.match(markerHook, /PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /marker:\s*PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /buffer:\s*PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /isochrone:\s*PLACEMENT_PIN_CURSOR/);
+
+  assert.match(markerHook, /data-maono-map-placement/);
+  assert.match(markerHook, /root\.setAttribute/);
+  assert.doesNotMatch(markerHook, /applyPlacementCursor/);
+  assert.doesNotMatch(markerHook, /schedulePlacementCursor/);
+  assert.match(placementStyles, /:root\[data-maono-map-placement\]/);
+  assert.match(placementStyles, /#default-deckgl-overlay-wrapper/);
+  assert.match(placementStyles, /#default-deckgl-overlay/);
+  assert.match(placementStyles, /fill='%23C5A059'/);
+  assert.match(placementStyles, /crosshair !important/);
   assert.match(markerHook, /startPlacement = useCallback/);
 });
 
-test("S03.05 Escape do placement pertence ao controller", () => {
+test("S03.05 Escape e botão de saída do placement pertencem ao controller", () => {
   assert.match(controller, /handlePlacementEscape/);
   assert.match(controller, /event\.key !== "Escape"/);
-  assert.match(controller, /cancelTool\(\)/);
+  assert.match(controller, /const exitPlacement = useCallback/);
+  assert.match(controller, /return exitPlacement\(\)/);
+  assert.match(overlay, /Sair do modo pin/);
+  assert.match(overlay, /toolController\.exitPlacement/);
 
   const independentMarkerEscape =
     markerHook.match(/event\.key === "Escape"|event\.key !== "Escape"/);
