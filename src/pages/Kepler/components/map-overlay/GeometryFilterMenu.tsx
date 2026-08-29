@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useStore } from "react-redux";
 
-import { setSelectedFeature, wrapTo } from "@kepler.gl/actions";
 import type { Feature } from "@kepler.gl/types";
 
 import {
   applyGeometryFilter,
   geometryFilterLayerOptions,
+  removeGeometryFilter,
   updateGeometryFilterLayers,
 } from "../../engine-adapter/geometry-filter-command";
-import { KEPLER_MAP_ID } from "../../engine-adapter/selectors";
 import { authorizeMapPanelCommand } from "../../map-panel/map-panel-capabilities";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
@@ -22,12 +21,16 @@ type GeometryFilterStatus = {
 type GeometryFilterMenuProps = {
   feature: Feature;
   sourceLayerId?: string | null;
+  existingFilterId?: string | null;
+  initialLayerIds?: string[] | null;
   title?: string;
   description?: string;
   onApplied?: (result: {
     filterId: string;
     affectedLayerIds: string[];
   }) => void;
+  onRemoved?: (filterId: string) => void;
+  onExit?: () => void;
 };
 
 function sameLayerSelection(left: string[], right: string[]) {
@@ -36,18 +39,34 @@ function sameLayerSelection(left: string[], right: string[]) {
   return right.every((id) => leftSet.has(id));
 }
 
+function normalizedIds(values: string[] | null | undefined) {
+  return Array.from(
+    new Set(
+      (values ?? [])
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 export default function GeometryFilterMenu({
   feature,
   sourceLayerId = null,
+  existingFilterId = null,
+  initialLayerIds = null,
   title = "Aplicar esta geometria às camadas",
   description = "Selecione exatamente quais camadas devem responder a este polígono.",
   onApplied,
+  onRemoved,
+  onExit,
 }: GeometryFilterMenuProps) {
   const dispatch = useDispatch();
   const store = useStore();
   const { context } = useMapPanel();
   const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([]);
-  const [filterId, setFilterId] = useState<string | null>(null);
+  const [activeFilterId, setActiveFilterId] = useState<string | null>(
+    existingFilterId,
+  );
   const [appliedLayerIds, setAppliedLayerIds] = useState<string[]>([]);
   const [status, setStatus] = useState<GeometryFilterStatus | null>(null);
 
@@ -60,13 +79,26 @@ export default function GeometryFilterMenu({
     [layerOptions],
   );
   const selectionKey = filterableLayerIds.join("|");
+  const initialSelectionKey = normalizedIds(initialLayerIds).join("|");
 
   useEffect(() => {
-    setSelectedLayerIds(filterableLayerIds);
-    setAppliedLayerIds([]);
-    setFilterId(null);
+    const filterable = new Set(filterableLayerIds);
+    const hasExplicitInitialSelection = initialLayerIds !== null;
+    const initialSelection = hasExplicitInitialSelection
+      ? normalizedIds(initialLayerIds).filter((id) => filterable.has(id))
+      : filterableLayerIds;
+
+    setSelectedLayerIds(initialSelection);
+    setAppliedLayerIds(existingFilterId ? initialSelection : []);
+    setActiveFilterId(existingFilterId);
     setStatus(null);
-  }, [feature?.id, selectionKey]);
+  }, [
+    existingFilterId,
+    feature?.id,
+    initialLayerIds,
+    initialSelectionKey,
+    selectionKey,
+  ]);
 
   const authorization = authorizeMapPanelCommand(
     context?.capabilities,
@@ -89,10 +121,6 @@ export default function GeometryFilterMenu({
       code,
       source: "maono-geometry-filter-menu",
     });
-  }
-
-  function clearNativeEditorSelection() {
-    dispatch(wrapTo(KEPLER_MAP_ID, setSelectedFeature(null)) as any);
   }
 
   function toggleLayer(id: string) {
@@ -123,11 +151,11 @@ export default function GeometryFilterMenu({
       return;
     }
 
-    const result = filterId
+    const result = activeFilterId
       ? updateGeometryFilterLayers({
           dispatch: (action) => dispatch(action as any),
           getState: () => store.getState(),
-          filterId,
+          filterId: activeFilterId,
           targetLayerIds: selectedLayerIds,
         })
       : applyGeometryFilter({
@@ -148,18 +176,13 @@ export default function GeometryFilterMenu({
     if (!value) {
       setStatus({
         tone: "error",
-        text: "O Kepler não retornou o estado atualizado do filtro geométrico.",
+        text: "O engine não retornou o estado atualizado do filtro geométrico.",
       });
       telemetry("map_panel_command_denied", "COMMAND_FAILED");
       return;
     }
 
-    // O Polygon Filter continua sendo o motor espacial, mas a edição visual
-    // nativa não faz mais parte da experiência Maõno. Limpar a seleção remove
-    // os edit handles azuis do EditableGeoJsonLayer após criar/atualizar.
-    clearNativeEditorSelection();
-
-    setFilterId(value.filterId);
+    setActiveFilterId(value.filterId);
     setAppliedLayerIds(value.affectedLayerIds);
     setSelectedLayerIds(value.affectedLayerIds);
     setStatus({
@@ -168,9 +191,40 @@ export default function GeometryFilterMenu({
     });
     telemetry(
       "map_panel_command_executed",
-      filterId ? "GEOMETRY_FILTER_UPDATED" : "GEOMETRY_FILTER_CREATED",
+      activeFilterId ? "GEOMETRY_FILTER_UPDATED" : "GEOMETRY_FILTER_CREATED",
     );
     onApplied?.(value);
+  }
+
+  function removeCurrentFilter() {
+    if (!activeFilterId) return;
+    setStatus(null);
+
+    if (!authorization.ok) {
+      setStatus({ tone: "error", text: authorization.reason });
+      telemetry("map_panel_command_denied", authorization.code);
+      return;
+    }
+
+    const id = activeFilterId;
+    const result = removeGeometryFilter({
+      dispatch: (action) => dispatch(action as any),
+      getState: () => store.getState(),
+      filterId: id,
+    });
+
+    if (!result.ok) {
+      setStatus({ tone: "error", text: result.reason });
+      telemetry("map_panel_command_denied", result.code);
+      return;
+    }
+
+    setActiveFilterId(null);
+    setAppliedLayerIds([]);
+    setStatus({ tone: "success", text: "Filtro geométrico removido." });
+    telemetry("map_panel_command_executed", "GEOMETRY_FILTER_REMOVED");
+    onRemoved?.(id);
+    onExit?.();
   }
 
   return (
@@ -258,16 +312,37 @@ export default function GeometryFilterMenu({
               ? authorization.reason
               : selectedLayerIds.length
                 ? `${selectedLayerIds.length} camada(s) selecionada(s).`
-                : "Selecione pelo menos uma camada para aplicar o filtro.")}
+                : "Selecione pelo menos uma camada ou remova o filtro.")}
         </p>
-        <button
-          type="button"
-          className="maono-map-tooltip__apply"
-          onClick={applySelection}
-          disabled={!canApply}
-        >
-          {filterId ? "Atualizar filtro" : "Aplicar filtro"}
-        </button>
+        <div className="maono-map-tooltip__filter-actions">
+          {onExit ? (
+            <button
+              type="button"
+              className="maono-map-tooltip__exit-filter"
+              onClick={onExit}
+            >
+              Sair do filtro por geometria
+            </button>
+          ) : null}
+          {activeFilterId ? (
+            <button
+              type="button"
+              className="maono-map-tooltip__remove-filter"
+              onClick={removeCurrentFilter}
+              disabled={!authorization.ok}
+            >
+              Remover filtro
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="maono-map-tooltip__apply"
+            onClick={applySelection}
+            disabled={!canApply}
+          >
+            {activeFilterId ? "Atualizar filtro" : "Aplicar filtro"}
+          </button>
+        </div>
       </div>
     </section>
   );
