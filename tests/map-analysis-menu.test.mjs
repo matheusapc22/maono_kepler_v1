@@ -109,15 +109,16 @@ test("menu respeita capabilities de Buffer/Isócrona/Geometria e não oferece ma
   assert.match(overlay, /analysisMarkerCapabilityEnabled/);
 });
 
-test("S02.05 feedback mantém botão ativo e identifica ferramenta selecionada", () => {
+test("S02.05 feedback mantém botão ativo e identifica ferramenta ou filtro selecionado", () => {
   assert.match(
     overlay,
-    /className=\{toolController\.active \|\| geometryDraw\.active \? "is-active" : ""\}/,
+    /className=\{toolController\.active \|\| geometryFilterFlowActive \? "is-active" : ""\}/,
   );
   assert.match(
     overlay,
-    /data-active-analysis-tool=\{[\s\S]*?geometryDraw\.active[\s\S]*?"geometry-filter"[\s\S]*?toolController\.state\.tool \?\? "none"[\s\S]*?\}/,
+    /data-active-analysis-tool=\{[\s\S]*?geometryFilterFlowActive[\s\S]*?"geometry-filter"[\s\S]*?toolController\.state\.tool \?\? "none"[\s\S]*?\}/,
   );
+  assert.match(overlay, /Sair do filtro por geometria/);
   assert.match(overlay, /data-analysis-tool=\{placementTool\}/);
   assert.match(overlay, /data-placement-label=\{placementLabel\}/);
   assert.match(styles, /content: attr\(data-placement-label\)/);
