@@ -1,0 +1,220 @@
+.maono-map-tooltip.has-geometry-menu {
+  width: min(390px, calc(100vw - 24px));
+}
+
+.maono-map-tooltip__geometry-action {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(197, 160, 89, 0.2);
+}
+
+.maono-map-tooltip__geometry-action > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(197, 160, 89, 0.32);
+  border-radius: 10px;
+  color: #f7f2e8;
+  background: rgba(197, 160, 89, 0.075);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.015em;
+  text-align: left;
+}
+
+.maono-map-tooltip__geometry-action > button:hover,
+.maono-map-tooltip__geometry-action > button.is-open {
+  border-color: rgba(197, 160, 89, 0.7);
+  color: #f1d28a;
+  background: rgba(197, 160, 89, 0.13);
+}
+
+.maono-map-tooltip__geometry-action > button svg {
+  width: 17px;
+  height: 17px;
+  color: #c5a059;
+}
+
+.maono-map-tooltip__geometry-action > button b {
+  color: #c5a059;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.maono-map-tooltip__geometry-dropdown {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid rgba(197, 160, 89, 0.2);
+  border-radius: 12px;
+  background: rgba(6, 9, 14, 0.72);
+}
+
+.maono-map-tooltip__geometry-dropdown .maono-map-tooltip__filter-manager {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.maono-geometry-draw-canvas {
+  position: fixed;
+  z-index: 100043;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.maono-geometry-draw-canvas polygon {
+  fill: rgba(197, 160, 89, 0.14);
+  stroke: #c5a059;
+  stroke-width: 2;
+}
+
+.maono-geometry-draw-canvas polyline {
+  fill: none;
+  stroke: #f1d28a;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 6 5;
+}
+
+.maono-geometry-draw-canvas circle {
+  fill: #c5a059;
+  stroke: #0a0f18;
+  stroke-width: 2;
+}
+
+.maono-geometry-draw-mode,
+.maono-drawn-filter-panel {
+  width: min(390px, calc(100vw - 32px));
+  box-sizing: border-box;
+  border: 1px solid rgba(197, 160, 89, 0.42);
+  border-radius: 16px;
+  color: #eef3f8;
+  background: rgba(8, 12, 19, 0.98);
+  box-shadow: 0 24px 52px rgba(0, 0, 0, 0.62);
+  pointer-events: auto;
+  backdrop-filter: blur(16px);
+}
+
+.maono-geometry-draw-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.maono-geometry-draw-mode__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.maono-geometry-draw-mode__copy small,
+.maono-drawn-filter-panel__header small {
+  color: #c5a059;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.maono-geometry-draw-mode__copy strong,
+.maono-drawn-filter-panel__header strong {
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+.maono-geometry-draw-mode__copy span {
+  color: #8ea0b8;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.maono-geometry-draw-mode__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.maono-geometry-draw-mode__actions button,
+.maono-drawn-filter-panel__header button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #2a3a54;
+  border-radius: 9px;
+  color: #c5d0de;
+  background: #131c2a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.maono-geometry-draw-mode__actions button.is-primary {
+  border-color: #c5a059;
+  color: #090d14;
+  background: #c5a059;
+}
+
+.maono-geometry-draw-mode__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.maono-drawn-filter-panel {
+  overflow: hidden;
+}
+
+.maono-drawn-filter-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid rgba(197, 160, 89, 0.18);
+  background: rgba(15, 22, 34, 0.96);
+}
+
+.maono-drawn-filter-panel__header > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.maono-drawn-filter-panel__header button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  font-size: 18px;
+}
+
+.maono-drawn-filter-panel__body {
+  max-height: min(520px, calc(100vh - 180px));
+  padding: 12px;
+  overflow-y: auto;
+  scrollbar-color: rgba(197, 160, 89, 0.72) transparent;
+  scrollbar-width: thin;
+}
+
+.maono-drawn-filter-panel__body .maono-map-tooltip__filter-manager {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+@media (max-width: 680px) {
+  .maono-geometry-draw-mode,
+  .maono-drawn-filter-panel {
+    width: min(340px, calc(100vw - 24px));
+  }
+}
