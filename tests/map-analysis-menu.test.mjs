@@ -54,11 +54,12 @@ test("S02.01 cria AnalysisToolMenu acessível e separado do marcador", () => {
   assert.doesNotMatch(menu, /Adicionar marcador/);
 });
 
-test("S02.02 botão inferior abre a máquina em vez de iniciar placement diretamente", () => {
-  assert.match(overlay, /onClick=\{toolController\.toggleToolMenu\}/);
+test("S02.02 botão inferior abre a máquina e, durante placement, pode sair do modo pin", () => {
+  assert.match(overlay, /placementModeActive[\s\S]*?toolController\.exitPlacement[\s\S]*?: toolController\.toggleToolMenu/);
   assert.match(overlay, /aria-haspopup="menu"/);
   assert.match(overlay, /aria-expanded=\{toolController\.menuOpen\}/);
   assert.match(controller, /dispatch\(\{ type: "OPEN_TOOL_MENU" \}\)/);
+  assert.match(controller, /const exitPlacement = useCallback/);
 
   const buttonBlock =
     overlay.match(
