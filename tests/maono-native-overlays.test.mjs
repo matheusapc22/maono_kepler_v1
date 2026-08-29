@@ -10,6 +10,7 @@ import {
   isPolygonGeometryFeature,
   updateGeometryFilterLayers,
 } from "../src/pages/Kepler/engine-adapter/geometry-filter-command.ts";
+import { createGeometryFilterFeature } from "../src/pages/Kepler/components/map-overlay/useGeometryFilterDrawing.ts";
 import {
   calculateMaonoLegendInitialPosition,
   MAONO_LEGEND_HORIZONTAL_RATIO,
@@ -21,7 +22,12 @@ const [
   popoverFactory,
   popoverStyles,
   geometryFilter,
+  geometryFilterMenu,
   geometryManagerHook,
+  geometryDrawingHook,
+  analysisToolMenu,
+  overlayControls,
+  geometryUiStyles,
   mapControlFactory,
   shellRuntime,
   keplerIndex,
@@ -30,7 +36,12 @@ const [
   readFile(new URL("../src/pages/Kepler/factories/maono-map-popover.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/factories/maono-map-popover.css", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/engine-adapter/geometry-filter-command.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/map-overlay/useGeometryFilterManager.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/useGeometryFilterDrawing.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/analysis-tools/AnalysisToolMenu.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/geometry-filter-ui.css", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/factories/map-control.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/maono-map-shell/MaonoMapRuntime.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/index.tsx", import.meta.url), "utf8"),
@@ -169,24 +180,32 @@ test("legenda Maono substitui o factory oficial e preserva estado nativo", () =>
   assert.match(legendFactory, /replaceMapLegendPanel/);
 });
 
-test("tooltip Maono é proprietário e não instancia o MapPopover visual do Kepler", () => {
+test("tooltip Maono mantém filtragem recolhida atrás do botão explícito", () => {
   assert.match(popoverFactory, /MapPopoverFactory\.deps/);
   assert.match(popoverFactory, /createPortal/);
   assert.match(popoverFactory, /className={`maono-map-tooltip/);
   assert.match(popoverFactory, /<MapPopoverContent/);
   assert.match(popoverFactory, /getSelectedFeature/);
-  assert.match(popoverFactory, /GeometryFilterManager/);
-  assert.match(popoverFactory, /geometryFilterLayerOptions/);
-  assert.match(popoverFactory, /updateGeometryFilterLayers/);
-  assert.match(popoverFactory, /Aplicar filtro/);
-  assert.match(popoverFactory, /Atualizar filtro/);
-  assert.match(popoverFactory, />\s*Todas\s*</);
-  assert.match(popoverFactory, />\s*Limpar\s*</);
+  assert.match(popoverFactory, /GeometryFilterMenu/);
+  assert.match(popoverFactory, /filterMenuOpen/);
+  assert.match(popoverFactory, /Filtrar por geometria/);
+  assert.match(popoverFactory, /aria-expanded={filterMenuOpen}/);
+  assert.match(popoverFactory, /maono-map-tooltip__geometry-dropdown/);
   assert.doesNotMatch(popoverFactory, /NativeMapPopover/);
-  assert.doesNotMatch(popoverFactory, /MapPopoverFactory\(MaonoMapPopoverContent\)/);
   assert.doesNotMatch(popoverFactory, /select-geometry/);
   assert.match(popoverStyles, /\.maono-map-tooltip__layer-list/);
-  assert.match(popoverStyles, /\.maono-map-tooltip__apply/);
+  assert.match(geometryUiStyles, /\.maono-map-tooltip__geometry-action/);
+});
+
+test("gestor Maono controla todas as layers e limpa seleção editável após aplicar", () => {
+  assert.match(geometryFilterMenu, /geometryFilterLayerOptions/);
+  assert.match(geometryFilterMenu, /updateGeometryFilterLayers/);
+  assert.match(geometryFilterMenu, /Aplicar filtro/);
+  assert.match(geometryFilterMenu, /Atualizar filtro/);
+  assert.match(geometryFilterMenu, />\s*Todas\s*</);
+  assert.match(geometryFilterMenu, />\s*Limpar\s*</);
+  assert.match(geometryFilterMenu, /setSelectedFeature\(null\)/);
+  assert.match(geometryFilterMenu, /clearNativeEditorSelection/);
 });
 
 test("catálogo Maono expõe todas as layers e marca compatibilidade", () => {
@@ -274,12 +293,56 @@ test("tooltip atualiza associações do filtro sem acionar o gestor nativo", () 
   assert.doesNotMatch(geometryFilter, /openSelectedGeometryFilterManager/);
 });
 
-test("gestor antigo por clique fica sem efeitos colaterais", () => {
-  assert.match(geometryManagerHook, /export function useGeometryFilterManager/);
-  assert.doesNotMatch(geometryManagerHook, /addEventListener/);
-  assert.doesNotMatch(geometryManagerHook, /requestAnimationFrame/);
-  assert.doesNotMatch(geometryManagerHook, /setSelectedFeature/);
+test("clique no Polygon Filter só limpa a seleção nativa e não abre FeatureActionPanel", () => {
+  assert.match(geometryManagerHook, /requestAnimationFrame/);
+  assert.match(geometryManagerHook, /setSelectedFeature\(null\)/);
+  assert.match(geometryManagerHook, /FILTER_TYPES\.polygon/);
+  assert.match(geometryManagerHook, /default-deckgl-overlay/);
+  assert.doesNotMatch(geometryManagerHook, /openSelectedGeometryFilterManager/);
+  assert.doesNotMatch(geometryManagerHook, /rightClick:\s*true/);
+  assert.doesNotMatch(geometryManagerHook, /FeatureActionPanel/);
   assert.doesNotMatch(geometryManagerHook, /@turf/i);
+});
+
+test("desenho Maono cria Polygon fechado com no mínimo três vértices", () => {
+  assert.equal(
+    createGeometryFilterFeature([
+      { longitude: -47.9, latitude: -15.9 },
+      { longitude: -47.7, latitude: -15.9 },
+    ]),
+    null,
+  );
+
+  const feature = createGeometryFilterFeature([
+    { longitude: -47.9, latitude: -15.9 },
+    { longitude: -47.7, latitude: -15.9 },
+    { longitude: -47.8, latitude: -15.7 },
+  ]);
+  assert.ok(feature);
+  assert.equal(feature.geometry.type, "Polygon");
+  assert.equal(feature.geometry.coordinates[0].length, 4);
+  assert.deepEqual(
+    feature.geometry.coordinates[0][0],
+    feature.geometry.coordinates[0][3],
+  );
+  assert.equal(feature.properties.maonoGeometryFilter, true);
+});
+
+test("pin oferece desenho de área e usa overlay Maono sem edit handles arrastáveis", () => {
+  assert.match(analysisToolMenu, /Desenhar área de filtragem/);
+  assert.match(analysisToolMenu, /onStartGeometryFilterDraw/);
+  assert.match(overlayControls, /useGeometryFilterDrawing/);
+  assert.match(overlayControls, /Concluir polígono/);
+  assert.match(overlayControls, /GeometryFilterMenu/);
+  assert.match(overlayControls, /maono-geometry-draw-canvas/);
+  assert.match(geometryDrawingHook, /screenToMarkerOrigin/);
+  assert.match(geometryDrawingHook, /Backspace/);
+  assert.match(geometryDrawingHook, /Escape/);
+  assert.doesNotMatch(geometryDrawingHook, /setSelectedFeature/);
+  assert.doesNotMatch(geometryDrawingHook, /EditableGeoJsonLayer/);
+  assert.doesNotMatch(geometryDrawingHook, /@nebula\.gl/);
+  assert.match(geometryUiStyles, /\.maono-geometry-draw-canvas circle/);
+  assert.doesNotMatch(geometryUiStyles, /cursor:\s*(grab|move)/);
 });
 
 test("canto superior direito não renderiza botões nativos do Kepler", () => {
@@ -303,7 +366,7 @@ test("injeção registra controles, legenda e tooltip Maono no Kepler", () => {
   assert.match(keplerIndex, /replaceMapPopover\(\)/);
 });
 
-test("novo fluxo não depende de técnicas DOM legadas", () => {
+test("novo fluxo não depende de técnicas DOM legadas no tooltip", () => {
   const implementation = `${legendFactory}\n${popoverFactory}`;
   assert.equal(implementation.includes("MutationObserver"), false);
   assert.equal(implementation.includes("querySelector"), false);
