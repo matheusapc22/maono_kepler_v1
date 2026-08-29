@@ -63,7 +63,7 @@ test("S02.02 botão inferior abre a máquina e, durante placement, pode sair do 
 
   const buttonBlock =
     overlay.match(
-      /className=\{toolController\.active[\s\S]*?<OverlayIcon name="marker" \/>[\s\S]*?<\/button>/,
+      /className=\{toolController\.active[\s\S]*?<\/button>/,
     )?.[0] || "";
   assert.doesNotMatch(buttonBlock, /marker\.startPlacement/);
 });
@@ -97,19 +97,27 @@ test("S02.04 submenu Isócrona é extensível e não solicita parâmetros espaci
   );
 });
 
-test("menu respeita capabilities de Buffer/Isócrona e não oferece marcador avulso", () => {
+test("menu respeita capabilities de Buffer/Isócrona/Geometria e não oferece marcador avulso", () => {
   assert.match(menu, /canBuffer \?/);
   assert.match(menu, /canIsochrone \?/);
+  assert.match(menu, /canGeometryFilter && onStartGeometryFilterDraw/);
   assert.doesNotMatch(menu, /Adicionar marcador/);
   assert.doesNotMatch(menu, /ToolGlyph kind="marker"/);
   assert.match(overlay, /canBuffer=\{bufferCapabilityEnabled\}/);
   assert.match(overlay, /canIsochrone=\{isochroneCapabilityEnabled\}/);
+  assert.match(overlay, /canGeometryFilter=\{geometryFilterCapabilityEnabled\}/);
   assert.match(overlay, /analysisMarkerCapabilityEnabled/);
 });
 
 test("S02.05 feedback mantém botão ativo e identifica ferramenta selecionada", () => {
-  assert.match(overlay, /className=\{toolController\.active \? "is-active" : ""\}/);
-  assert.match(overlay, /data-active-analysis-tool=\{toolController\.state\.tool \?\? "none"\}/);
+  assert.match(
+    overlay,
+    /className=\{toolController\.active \|\| geometryDraw\.active \? "is-active" : ""\}/,
+  );
+  assert.match(
+    overlay,
+    /data-active-analysis-tool=\{[\s\S]*?geometryDraw\.active[\s\S]*?"geometry-filter"[\s\S]*?toolController\.state\.tool \?\? "none"[\s\S]*?\}/,
+  );
   assert.match(overlay, /data-analysis-tool=\{placementTool\}/);
   assert.match(overlay, /data-placement-label=\{placementLabel\}/);
   assert.match(styles, /content: attr\(data-placement-label\)/);

@@ -15,21 +15,36 @@ type AnalysisToolMenuProps = {
   state: SelectingToolMapToolState;
   canBuffer: boolean;
   canIsochrone: boolean;
+  canGeometryFilter?: boolean;
   canPlaceMarker?: boolean;
   onSelectTool: (tool: MapAnalysisTool) => void;
   onSelectBufferMode: (mode: BufferInsertionMode) => void;
   onStartPlacement: () => void;
   onStartMarkerPlacement?: () => void;
+  onStartGeometryFilterDraw?: () => void;
   onCancel: () => void;
 };
 
-function ToolGlyph({ kind }: { kind: "buffer" | "isochrone" }) {
+function ToolGlyph({ kind }: { kind: "buffer" | "isochrone" | "geometry" }) {
   if (kind === "buffer") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <circle cx="12" cy="12" r="8" />
         <circle cx="12" cy="12" r="1.6" />
         <path d="M12 12l5.5-5.5" />
+      </svg>
+    );
+  }
+
+  if (kind === "geometry") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M5 5 18 4l2 11-8 5-8-6L5 5Z" />
+        <circle cx="5" cy="5" r="1.5" />
+        <circle cx="18" cy="4" r="1.5" />
+        <circle cx="20" cy="15" r="1.5" />
+        <circle cx="12" cy="20" r="1.5" />
+        <circle cx="4" cy="14" r="1.5" />
       </svg>
     );
   }
@@ -47,8 +62,10 @@ export default function AnalysisToolMenu({
   state,
   canBuffer,
   canIsochrone,
+  canGeometryFilter = false,
   onSelectTool,
   onStartPlacement,
+  onStartGeometryFilterDraw,
   onCancel,
 }: AnalysisToolMenuProps) {
   const menuRef = useRef<HTMLElement | null>(null);
@@ -145,6 +162,21 @@ export default function AnalysisToolMenu({
             <strong>Adicionar análise</strong>
           </header>
           <div className="maono-analysis-tool-menu__items">
+            {canGeometryFilter && onStartGeometryFilterDraw ? (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={onStartGeometryFilterDraw}
+              >
+                <ToolGlyph kind="geometry" />
+                <span>
+                  <strong>Desenhar área de filtragem</strong>
+                  <small>Crie um polígono clicando no mapa</small>
+                </span>
+                <b aria-hidden="true">›</b>
+              </button>
+            ) : null}
+
             {canIsochrone ? (
               <button
                 type="button"

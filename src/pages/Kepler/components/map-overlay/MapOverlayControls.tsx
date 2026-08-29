@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import type { Feature } from "@kepler.gl/types";
+
 import {
   useKeplerEngineAdapter,
   type KeplerCommandResult,
@@ -9,14 +11,17 @@ import { useMapPanel } from "../../map-panel/MapPanelContext";
 import AnalysisToolMenu from "./analysis-tools/AnalysisToolMenu";
 import { useMapToolController } from "./analysis-tools/useMapToolController";
 import BufferDialog from "./BufferDialog";
+import GeometryFilterMenu from "./GeometryFilterMenu";
 import IsochroneDialog from "./IsochroneDialog";
 import MarkerContextMenu from "./MarkerContextMenu";
 import { useBufferPreview } from "./useBufferPreview";
+import { useGeometryFilterDrawing } from "./useGeometryFilterDrawing";
 import { useGeometryFilterManager } from "./useGeometryFilterManager";
 import { useIsochronePreview } from "./useIsochronePreview";
 import { useMapMarker } from "./useMapMarker";
 import "./map-overlay-controls.css";
 import "./map-placement-mode.css";
+import "./geometry-filter-ui.css";
 
 type OverlayMessage = {
   tone: "error" | "success";
@@ -29,7 +34,8 @@ type OverlayIconName =
   | "legend"
   | "marker"
   | "isochrone"
-  | "buffer";
+  | "buffer"
+  | "geometry";
 
 function OverlayIcon({ name }: { name: OverlayIconName }) {
   const icons: Record<OverlayIconName, ReactNode> = {
@@ -70,6 +76,16 @@ function OverlayIcon({ name }: { name: OverlayIconName }) {
         <path d="M12 12l5.5-5.5" />
       </>
     ),
+    geometry: (
+      <>
+        <path d="M5 5 18 4l2 11-8 5-8-6L5 5Z" />
+        <circle cx="5" cy="5" r="1.3" />
+        <circle cx="18" cy="4" r="1.3" />
+        <circle cx="20" cy="15" r="1.3" />
+        <circle cx="12" cy="20" r="1.3" />
+        <circle cx="4" cy="14" r="1.3" />
+      </>
+    ),
   };
 
   return (
@@ -107,8 +123,10 @@ export default function MapOverlayControls() {
   const [tooltipsOpen, setTooltipsOpen] = useState(false);
   const [tooltipDraft, setTooltipDraft] = useState<Record<string, string[]>>({});
   const [commandMessage, setCommandMessage] = useState<OverlayMessage | null>(null);
+  const [drawnFilterFeature, setDrawnFilterFeature] = useState<Feature | null>(null);
   const handledBufferPreviewRef = useRef<string | null>(null);
   const marker = useMapMarker(state.viewport);
+  const geometryDraw = useGeometryFilterDrawing(state.viewport, marker.canvasRect);
   const toolController = useMapToolController({
     startPlacement: marker.startPlacement,
     cancelPlacement: marker.cancelPlacement,
@@ -119,7 +137,8 @@ export default function MapOverlayControls() {
     enabled:
       customMapOverlayEnabled &&
       toolController.state.mode !== "placingPoint" &&
-      !marker.placing,
+      !marker.placing &&
+      !geometryDraw.active,
   });
 
   const analysisPendingPoint = toolController.pendingPoint;
@@ -138,6 +157,13 @@ export default function MapOverlayControls() {
   const isochroneCapabilityEnabled = capabilities?.previewIsochrone === true;
   const bufferCapabilityEnabled = capabilities?.previewBuffer === true;
   const analysisMarkerCapabilityEnabled = capabilities?.placeAnalysisMarker === true;
+  const geometryFilterCapabilityEnabled = capabilities?.editFilters === true;
+  const analysisLauncherEnabled = Boolean(
+    analysisMarkerCapabilityEnabled ||
+      bufferCapabilityEnabled ||
+      isochroneCapabilityEnabled ||
+      geometryFilterCapabilityEnabled,
+  );
   const analysisPreviewActive = Boolean(
     isochrone.preview || (buffer.preview && !toolController.multiBufferActive),
   );
@@ -149,16 +175,21 @@ export default function MapOverlayControls() {
     : marker.placementKind ?? "marker";
   const activeToolLabel = activeAnalysisToolLabel(toolController.state.tool);
   const placementLabel = placementPrompt(placementTool);
-  const analysisButtonLabel = toolController.menuOpen
-    ? "Fechar menu de análise"
-    : placementModeActive
-      ? `Sair do modo pin de ${activeToolLabel}`
-      : "Adicionar análise";
+  const analysisButtonLabel = geometryDraw.active
+    ? "Sair do desenho de filtro"
+    : toolController.menuOpen
+      ? "Fechar menu de análise"
+      : placementModeActive
+        ? `Sair do modo pin de ${activeToolLabel}`
+        : "Adicionar análise";
   const launcherVisible =
     !analysisPreviewActive &&
     !toolController.multiBufferActive &&
     toolController.state.mode !== "configuring" &&
     toolController.state.mode !== "reviewing";
+  const geometryPointString = geometryDraw.screenPoints
+    .map((point) => `${point.x},${point.y}`)
+    .join(" ");
 
   useEffect(() => {
     if (!toolController.pendingPoint) return;
@@ -338,6 +369,34 @@ export default function MapOverlayControls() {
     if (isochrone.discard()) toolController.finishAnalysis();
   }
 
+  function startGeometryFilterDraw() {
+    if (!geometryFilterCapabilityEnabled) return;
+    clearMessage();
+    setDrawnFilterFeature(null);
+    toolController.cancelTool();
+    marker.reset();
+    geometryDraw.start();
+  }
+
+  function finishGeometryFilterDraw() {
+    const feature = geometryDraw.finish();
+    if (!feature) {
+      setCommandMessage({
+        tone: "error",
+        text: "Defina pelo menos três pontos para concluir o polígono de filtragem.",
+      });
+      return;
+    }
+
+    setCommandMessage(null);
+    setDrawnFilterFeature(feature);
+  }
+
+  function cancelGeometryFilterDraw() {
+    geometryDraw.cancel();
+    setCommandMessage(null);
+  }
+
   return createPortal(
     <>
       <div className="maono-map-attribution" data-maono-no-preview="true">
@@ -365,6 +424,34 @@ export default function MapOverlayControls() {
           data-analysis-tool={placementTool}
           data-maono-no-preview="true"
         />
+      ) : null}
+
+      {geometryDraw.active && marker.canvasRect ? (
+        <svg
+          className="maono-geometry-draw-canvas"
+          style={{
+            left: marker.canvasRect.left,
+            top: marker.canvasRect.top,
+            width: marker.canvasRect.width,
+            height: marker.canvasRect.height,
+          }}
+          viewBox={`0 0 ${marker.canvasRect.width} ${marker.canvasRect.height}`}
+          aria-hidden="true"
+        >
+          {geometryDraw.screenPoints.length >= 3 ? (
+            <polygon points={geometryPointString} />
+          ) : geometryDraw.screenPoints.length >= 2 ? (
+            <polyline points={geometryPointString} />
+          ) : null}
+          {geometryDraw.screenPoints.map((point, index) => (
+            <circle
+              key={`${point.x}-${point.y}-${index}`}
+              cx={point.x}
+              cy={point.y}
+              r="4"
+            />
+          ))}
+        </svg>
       ) : null}
 
       {marker.origin && marker.position && !analysisPreviewActive ? (
@@ -411,6 +498,70 @@ export default function MapOverlayControls() {
           </div>
         ) : null}
 
+        {geometryDraw.active ? (
+          <section
+            className="maono-geometry-draw-mode"
+            aria-label="Desenho de polígono de filtragem ativo"
+          >
+            <div className="maono-geometry-draw-mode__copy">
+              <small>Filtro por geometria</small>
+              <strong>Desenhe o polígono no mapa</strong>
+              <span>
+                Clique para adicionar vértices. Arraste o mapa normalmente para navegar.
+                Use Backspace para desfazer ou Esc para cancelar.
+              </span>
+            </div>
+            <div className="maono-geometry-draw-mode__actions">
+              <button
+                type="button"
+                onClick={geometryDraw.undo}
+                disabled={!geometryDraw.points.length}
+              >
+                Desfazer
+              </button>
+              <button type="button" onClick={cancelGeometryFilterDraw}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="is-primary"
+                onClick={finishGeometryFilterDraw}
+                disabled={!geometryDraw.canFinish}
+              >
+                Concluir polígono
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {drawnFilterFeature ? (
+          <section
+            className="maono-drawn-filter-panel"
+            aria-label="Configurar polígono de filtragem desenhado"
+          >
+            <header className="maono-drawn-filter-panel__header">
+              <span>
+                <small>Filtro por geometria</small>
+                <strong>Área desenhada</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setDrawnFilterFeature(null)}
+                aria-label="Fechar configuração do polígono desenhado"
+              >
+                ×
+              </button>
+            </header>
+            <div className="maono-drawn-filter-panel__body">
+              <GeometryFilterMenu
+                feature={drawnFilterFeature}
+                title="Escolha as camadas filtradas"
+                description="O polígono desenhado será aplicado somente às camadas selecionadas abaixo."
+              />
+            </div>
+          </section>
+        ) : null}
+
         {placementModeActive ? (
           <section className="maono-placement-mode" aria-label="Modo pin ativo">
             <div className="maono-placement-mode__copy">
@@ -431,11 +582,13 @@ export default function MapOverlayControls() {
             state={selectingToolState}
             canBuffer={bufferCapabilityEnabled}
             canIsochrone={isochroneCapabilityEnabled}
+            canGeometryFilter={geometryFilterCapabilityEnabled}
             canPlaceMarker={analysisMarkerCapabilityEnabled}
             onSelectTool={toolController.selectTool}
             onSelectBufferMode={toolController.selectBufferMode}
             onStartPlacement={toolController.startSelectedPlacement}
             onStartMarkerPlacement={toolController.startMarkerPlacement}
+            onStartGeometryFilterDraw={startGeometryFilterDraw}
             onCancel={toolController.cancelTool}
           />
         ) : null}
@@ -601,25 +754,31 @@ export default function MapOverlayControls() {
           {launcherVisible ? (
             <button
               type="button"
-              className={toolController.active ? "is-active" : ""}
-              disabled={!analysisMarkerCapabilityEnabled}
+              className={toolController.active || geometryDraw.active ? "is-active" : ""}
+              disabled={!analysisLauncherEnabled}
               onClick={
-                placementModeActive
-                  ? toolController.exitPlacement
-                  : toolController.toggleToolMenu
+                geometryDraw.active
+                  ? cancelGeometryFilterDraw
+                  : placementModeActive
+                    ? toolController.exitPlacement
+                    : toolController.toggleToolMenu
               }
               title={analysisButtonLabel}
               aria-label={analysisButtonLabel}
               aria-haspopup="menu"
               aria-expanded={toolController.menuOpen}
-              aria-pressed={toolController.active}
-              data-active-analysis-tool={toolController.state.tool ?? "none"}
+              aria-pressed={toolController.active || geometryDraw.active}
+              data-active-analysis-tool={
+                geometryDraw.active
+                  ? "geometry-filter"
+                  : toolController.state.tool ?? "none"
+              }
               data-analysis-marker-state={
                 analysisMarkerCapabilityEnabled ? "ENABLED" : "DISABLED"
               }
               data-isochrone-state={context?.isochroneFeatureState?.reason || "UNKNOWN"}
             >
-              <OverlayIcon name="marker" />
+              <OverlayIcon name={geometryDraw.active ? "geometry" : "marker"} />
             </button>
           ) : null}
         </div>
