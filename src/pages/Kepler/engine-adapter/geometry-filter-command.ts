@@ -1,4 +1,9 @@
-import { setPolygonFilterLayer, wrapTo } from "@kepler.gl/actions";
+import {
+  removeFilter,
+  setPolygonFilterLayer,
+  setSelectedFeature,
+  wrapTo,
+} from "@kepler.gl/actions";
 import {
   EDITOR_AVAILABLE_LAYERS,
   FILTER_TYPES,
@@ -32,6 +37,15 @@ export type GeometryFilterLayerOption = {
   source: boolean;
 };
 
+export type GeometryFilterSnapshot = {
+  id: string;
+  feature: Feature;
+  layerIds: string[];
+  enabled: boolean;
+  maonoManaged: boolean;
+  sourceLayerId: string | null;
+};
+
 type GeometryFilterDependencies = {
   dispatch: (action: unknown) => unknown;
   getState: () => unknown;
@@ -47,8 +61,15 @@ type GeometryFilterUpdateDependencies = {
   targetLayerIds: string[];
 };
 
+type GeometryFilterRemoveDependencies = {
+  dispatch: (action: unknown) => unknown;
+  getState: () => unknown;
+  filterId: string;
+};
+
 const COMMAND = "filterByGeometry";
 const CAPABILITY = "editFilters" as const;
+const MAONO_GEOMETRY_FILTER_VERSION = 3;
 
 function failure(
   code: KeplerCommandErrorCode,
@@ -116,7 +137,16 @@ function filterLayerIds(filter: unknown) {
     .filter(Boolean);
 }
 
-function geometryFilterById(rootState: unknown, id: string) {
+function featureProperties(feature: unknown) {
+  const properties = readValue(feature, "properties");
+  if (!properties || typeof properties !== "object") return {};
+
+  return typeof (properties as any).toJS === "function"
+    ? (properties as any).toJS()
+    : (properties as Record<string, unknown>);
+}
+
+export function geometryFilterById(rootState: unknown, id: string) {
   const normalized = String(id ?? "").trim();
   if (!normalized) return null;
 
@@ -127,21 +157,6 @@ function geometryFilterById(rootState: unknown, id: string) {
         readValue(filter, "type") === FILTER_TYPES.polygon,
     ) ?? null
   );
-}
-
-function featureFilterId(feature: unknown) {
-  const properties = readValue(feature, "properties");
-  const value = readValue(properties, "filterId");
-  const normalized = String(value ?? "").trim();
-  return normalized || null;
-}
-
-function selectedEditorFeature(rootState: unknown): Feature | null {
-  const editor = readValue(selectKeplerVisState(rootState), "editor");
-  const selected = readValue(editor, "selectedFeature");
-  return selected && typeof selected === "object"
-    ? (selected as Feature)
-    : null;
 }
 
 function normalizedTargetIds(values: string[] | null | undefined) {
@@ -162,33 +177,97 @@ export function isPolygonGeometryFeature(
   return type === "Polygon" || type === "MultiPolygon";
 }
 
-function normalizedFilterFeature(feature: Feature): Feature {
-  const properties = readValue(feature, "properties");
-  const plainProperties =
-    properties && typeof properties === "object"
-      ? typeof (properties as any).toJS === "function"
-        ? (properties as any).toJS()
-        : properties
-      : {};
+function normalizedFilterFeature(
+  feature: Feature,
+  sourceLayerId?: string | null,
+): Feature {
+  const plainProperties = featureProperties(feature);
+  const sourceId = String(sourceLayerId ?? "").trim() || null;
 
   return {
     ...feature,
     properties: {
       ...plainProperties,
-      // Uma coluna do dataset chamada filterId nunca deve reaproveitar um
-      // Polygon Filter anterior. O primeiro toggle precisa criar um filtro.
+      // O identificador do Polygon Filter pertence ao engine e nunca deve ser
+      // herdado por acidente de uma coluna homônima do dataset.
       filterId: null,
       isClosed: true,
+      // Metadados próprios permitem que a Maõno reconheça filtros novos sem
+      // depender do estado visual do Editor do Kepler.
+      maonoGeometryFilter: true,
+      maonoGeometryFilterVersion: MAONO_GEOMETRY_FILTER_VERSION,
+      maonoSourceLayerId: sourceId,
     },
   } as Feature;
 }
 
+function clearNativeEditorSelection(dispatch: (action: unknown) => unknown) {
+  dispatch(wrapTo(KEPLER_MAP_ID, setSelectedFeature(null)));
+}
+
+function newlyCreatedPolygonFilter(
+  rootState: unknown,
+  idsBeforeCreation: Set<string>,
+) {
+  return (
+    rawFilters(rootState).find((filter) => {
+      const id = filterId(filter);
+      return (
+        id &&
+        !idsBeforeCreation.has(id) &&
+        readValue(filter, "type") === FILTER_TYPES.polygon
+      );
+    }) ?? null
+  );
+}
+
 /**
- * Catálogo que alimenta exclusivamente o gestor Maõno do tooltip.
- *
- * Todas as layers do projeto são devolvidas para a UI, inclusive ocultas e a
- * layer que originou a geometria. Tipos que o Polygon Filter do Kepler não
- * consegue filtrar continuam visíveis na lista, mas marcados como incompatíveis.
+ * Snapshot somente-leitura dos Polygon Filters existentes. A UI Maõno usa
+ * esta projeção para renderizar e gerenciar as áreas sem selecionar features
+ * no Editor do Kepler. Filtros legados também são expostos para que possam ser
+ * absorvidos pela experiência Maõno.
+ */
+export function geometryFilterSnapshots(
+  rootState: unknown,
+): GeometryFilterSnapshot[] {
+  return rawFilters(rootState).flatMap((filter) => {
+    if (readValue(filter, "type") !== FILTER_TYPES.polygon) return [];
+
+    const id = filterId(filter);
+    const feature = readValue(filter, "value") as Feature | null;
+    if (!id || !feature || !isPolygonGeometryFeature(feature)) return [];
+
+    const properties = featureProperties(feature);
+    const sourceLayerId = String(
+      properties.maonoSourceLayerId ?? "",
+    ).trim() || null;
+
+    return [
+      {
+        id,
+        feature,
+        layerIds: filterLayerIds(filter),
+        enabled: readValue(filter, "enabled") !== false,
+        maonoManaged: properties.maonoGeometryFilter === true,
+        sourceLayerId,
+      },
+    ];
+  });
+}
+
+export function geometryFilterSnapshotById(
+  rootState: unknown,
+  id: string,
+): GeometryFilterSnapshot | null {
+  const normalized = String(id ?? "").trim();
+  if (!normalized) return null;
+  return geometryFilterSnapshots(rootState).find((filter) => filter.id === normalized) ?? null;
+}
+
+/**
+ * Catálogo que alimenta exclusivamente o gestor Maõno.
+ * Todas as layers aparecem na UI; as que o Polygon Filter não consegue
+ * avaliar permanecem visíveis, porém identificadas como incompatíveis.
  */
 export function geometryFilterLayerOptions(
   rootState: unknown,
@@ -240,9 +319,10 @@ function resolveTargetLayers(rootState: unknown, requestedIds: string[]) {
 }
 
 /**
- * Cria um único Polygon Filter e associa somente as layers escolhidas no
- * tooltip Maõno. O motor espacial continua sendo o Polygon Filter oficial;
- * a seleção e a gestão de layers deixam de depender do FeatureActionPanel.
+ * Cria o Polygon Filter como um detalhe headless do engine. A identificação
+ * do filtro criado é feita pelo delta da coleção de filtros antes/depois da
+ * primeira ação, e não mais por editor.selectedFeature. Isso elimina a
+ * dependência de estado visual/editável do Kepler.
  */
 export function applyGeometryFilter({
   dispatch,
@@ -285,41 +365,60 @@ export function applyGeometryFilter({
       );
     }
 
-    let activeFeature = normalizedFilterFeature(feature);
-    const affectedLayerIds: string[] = [];
-    let createdFilterId: string | null = null;
+    const idsBeforeCreation = new Set(
+      rawFilters(getState())
+        .filter((filter) => readValue(filter, "type") === FILTER_TYPES.polygon)
+        .map(filterId)
+        .filter(Boolean),
+    );
+    const firstLayer = targets[0];
+    const sourceFeature = normalizedFilterFeature(feature, sourceLayerId);
 
-    for (const layer of targets) {
+    dispatch(
+      wrapTo(
+        KEPLER_MAP_ID,
+        setPolygonFilterLayer(firstLayer, sourceFeature),
+      ),
+    );
+
+    const createdFilter = newlyCreatedPolygonFilter(
+      getState(),
+      idsBeforeCreation,
+    );
+    const createdFilterId = filterId(createdFilter);
+    const activeFeature = readValue(createdFilter, "value") as Feature | null;
+
+    // setPolygonFilterLayer seleciona a feature internamente. A Maõno não usa
+    // essa seleção e a remove na mesma transação de comando antes de retornar.
+    clearNativeEditorSelection(dispatch);
+
+    if (
+      !createdFilter ||
+      !createdFilterId ||
+      !activeFeature ||
+      !isPolygonGeometryFeature(activeFeature)
+    ) {
+      return failure(
+        "COMMAND_FAILED",
+        "O engine não confirmou a criação do filtro poligonal.",
+      );
+    }
+
+    for (const layer of targets.slice(1)) {
       dispatch(
         wrapTo(
           KEPLER_MAP_ID,
           setPolygonFilterLayer(layer, activeFeature),
         ),
       );
-
-      affectedLayerIds.push(layerId(layer));
-
-      const selectedFeature = selectedEditorFeature(getState());
-      const selectedFilterId = featureFilterId(selectedFeature);
-      if (
-        !selectedFeature ||
-        !isPolygonGeometryFeature(selectedFeature) ||
-        !selectedFilterId
-      ) {
-        return failure(
-          "COMMAND_FAILED",
-          "O Kepler não confirmou a criação do filtro poligonal.",
-        );
-      }
-
-      activeFeature = selectedFeature;
-      createdFilterId = selectedFilterId;
+      clearNativeEditorSelection(dispatch);
     }
 
-    if (!createdFilterId) {
+    const snapshot = geometryFilterSnapshotById(getState(), createdFilterId);
+    if (!snapshot) {
       return failure(
         "COMMAND_FAILED",
-        "O Kepler não retornou o identificador do filtro poligonal.",
+        "O estado final do filtro geométrico não pôde ser confirmado.",
       );
     }
 
@@ -327,11 +426,12 @@ export function applyGeometryFilter({
       ok: true,
       changed: true,
       value: {
-        filterId: createdFilterId,
-        affectedLayerIds,
+        filterId: snapshot.id,
+        affectedLayerIds: snapshot.layerIds,
       },
     };
   } catch (error) {
+    clearNativeEditorSelection(dispatch);
     return failure(
       "COMMAND_FAILED",
       error instanceof Error
@@ -342,9 +442,8 @@ export function applyGeometryFilter({
 }
 
 /**
- * Sincroniza a lista de layers de um Polygon Filter já criado. O algoritmo
- * calcula apenas o delta e usa setPolygonFilterLayer para ligar/desligar cada
- * associação, sem abrir menus ou selecionar features no Editor do Kepler.
+ * Sincroniza somente as associações de layer do Polygon Filter headless.
+ * A UI não seleciona, move nem edita a geometria pelo Editor do Kepler.
  */
 export function updateGeometryFilterLayers({
   dispatch,
@@ -409,6 +508,7 @@ export function updateGeometryFilterLayers({
     }
 
     if (!changedIds.size) {
+      clearNativeEditorSelection(dispatch);
       return {
         ok: true,
         changed: false,
@@ -442,22 +542,87 @@ export function updateGeometryFilterLayers({
           setPolygonFilterLayer(layer, feature),
         ),
       );
+      clearNativeEditorSelection(dispatch);
+    }
+
+    const snapshot = geometryFilterSnapshotById(getState(), normalizedId);
+    if (!snapshot) {
+      return failure(
+        "COMMAND_FAILED",
+        "O estado final do filtro geométrico não pôde ser confirmado.",
+      );
     }
 
     return {
       ok: true,
       changed: true,
       value: {
-        filterId: normalizedId,
-        affectedLayerIds: desiredIds,
+        filterId: snapshot.id,
+        affectedLayerIds: snapshot.layerIds,
       },
     };
   } catch (error) {
+    clearNativeEditorSelection(dispatch);
     return failure(
       "COMMAND_FAILED",
       error instanceof Error
         ? error.message
         : "Não foi possível atualizar o filtro geométrico.",
+    );
+  }
+}
+
+/**
+ * Remove definitivamente um Polygon Filter. "Sair do filtro por geometria"
+ * fecha somente o modo de gestão; remoção é uma ação explícita e separada.
+ */
+export function removeGeometryFilter({
+  dispatch,
+  getState,
+  filterId: requestedFilterId,
+}: GeometryFilterRemoveDependencies): KeplerCommandResult<GeometryFilterResult> {
+  try {
+    if (!selectKeplerMapState(getState())) {
+      return failure(
+        "MAP_UNAVAILABLE",
+        "A instância do mapa ainda não está disponível.",
+      );
+    }
+
+    const normalizedId = String(requestedFilterId ?? "").trim();
+    const filters = rawFilters(getState());
+    const index = filters.findIndex(
+      (filter) =>
+        filterId(filter) === normalizedId &&
+        readValue(filter, "type") === FILTER_TYPES.polygon,
+    );
+
+    if (!normalizedId || index < 0) {
+      return failure(
+        "COMMAND_INVALID",
+        "O filtro geométrico não está mais disponível no mapa.",
+      );
+    }
+
+    const affectedLayerIds = filterLayerIds(filters[index]);
+    dispatch(wrapTo(KEPLER_MAP_ID, removeFilter(index)));
+    clearNativeEditorSelection(dispatch);
+
+    return {
+      ok: true,
+      changed: true,
+      value: {
+        filterId: normalizedId,
+        affectedLayerIds,
+      },
+    };
+  } catch (error) {
+    clearNativeEditorSelection(dispatch);
+    return failure(
+      "COMMAND_FAILED",
+      error instanceof Error
+        ? error.message
+        : "Não foi possível remover o filtro geométrico.",
     );
   }
 }
