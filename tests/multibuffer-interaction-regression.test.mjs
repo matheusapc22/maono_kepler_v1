@@ -58,7 +58,12 @@ test("primeiro Buffer da sessão não altera o viewport escolhido pelo usuário"
 
 test("placement libera interação nativa, diferencia pan de clique e usa cursor pin", () => {
   assert.match(markerHook, /visualOverlay\.style\.pointerEvents = "none"/);
-  assert.match(markerHook, /const placementSurface = mapSurface\(\)/);
+  assert.match(markerHook, /function mapSurfaces\(\)/);
+  assert.match(markerHook, /#default-deckgl-overlay-wrapper/);
+  assert.match(markerHook, /#default-deckgl-overlay/);
+  assert.match(markerHook, /for \(const surface of mapSurfaces\(\)\)/);
+  assert.match(markerHook, /surface\.style\.setProperty\("cursor", cursor, "important"\)/);
+  assert.match(markerHook, /requestAnimationFrame\(applyPlacementCursor\)/);
   assert.match(markerHook, /window\.addEventListener\("pointerdown"/);
   assert.match(markerHook, /window\.addEventListener\("pointermove"/);
   assert.match(markerHook, /Math\.hypot/);

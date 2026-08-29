@@ -78,15 +78,18 @@ test("marcador não observa mais todas as mutações do document.body", () => {
   assert.match(markerHook, /sameCanvasRect/);
 });
 
-test("descoberta da superfície aceita MapLibre, Mapbox e fallback do shell Maõno", () => {
+test("descoberta prioriza a superfície DeckGL e mantém fallbacks MapLibre, Mapbox e Maõno", () => {
+  assert.match(markerHook, /#default-deckgl-overlay-wrapper/);
+  assert.match(markerHook, /#default-deckgl-overlay/);
   assert.match(markerHook, /\.maplibregl-canvas/);
   assert.match(markerHook, /\.mapboxgl-canvas/);
   assert.match(markerHook, /\.maono-kepler-viewport canvas/);
   assert.match(markerHook, /\.maono-kepler-viewport/);
+  assert.match(markerHook, /function mapSurfaces\(\)/);
   assert.match(markerHook, /getBoundingClientRect/);
 });
 
-test("Buffer e Isócrona usam o mesmo cursor pin durante o placement", () => {
+test("Buffer e Isócrona usam o mesmo cursor pin no dono real do cursor", () => {
   assert.match(markerHook, /PLACEMENT_PIN_CURSOR/);
   assert.match(markerHook, /PLACEMENT_CURSORS/);
   assert.match(markerHook, /marker:\s*PLACEMENT_PIN_CURSOR/);
@@ -94,8 +97,15 @@ test("Buffer e Isócrona usam o mesmo cursor pin durante o placement", () => {
   assert.match(markerHook, /isochrone:\s*PLACEMENT_PIN_CURSOR/);
   assert.match(markerHook, /fill='%23C5A059'/);
   assert.match(markerHook, /\.maono-marker-placement/);
-  assert.match(markerHook, /const placementSurface = mapSurface\(\)/);
-  assert.match(markerHook, /PLACEMENT_CURSORS\[placementKind \?\? "marker"\]/);
+  assert.match(markerHook, /for \(const surface of mapSurfaces\(\)\)/);
+  assert.match(
+    markerHook,
+    /surface\.style\.setProperty\("cursor", cursor, "important"\)/,
+  );
+  assert.match(markerHook, /requestAnimationFrame\(applyPlacementCursor\)/);
+  assert.match(markerHook, /addEventListener\("pointermove", schedulePlacementCursor, true\)/);
+  assert.match(markerHook, /getPropertyPriority\("cursor"\)/);
+  assert.match(markerHook, /removeProperty\("cursor"\)/);
   assert.match(markerHook, /kind: MarkerPlacementKind = "marker"/);
   assert.match(overlay, /marker\.placing && marker\.canvasRect/);
   assert.match(overlay, /marker\.placeAt\(event\.clientX, event\.clientY\)/);
