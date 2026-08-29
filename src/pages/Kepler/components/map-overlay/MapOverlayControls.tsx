@@ -16,7 +16,6 @@ import IsochroneDialog from "./IsochroneDialog";
 import MarkerContextMenu from "./MarkerContextMenu";
 import { useBufferPreview } from "./useBufferPreview";
 import { useGeometryFilterDrawing } from "./useGeometryFilterDrawing";
-import { useGeometryFilterManager } from "./useGeometryFilterManager";
 import { useIsochronePreview } from "./useIsochronePreview";
 import { useMapMarker } from "./useMapMarker";
 import "./map-overlay-controls.css";
@@ -133,14 +132,6 @@ export default function MapOverlayControls() {
     resetMarker: marker.reset,
   });
 
-  useGeometryFilterManager({
-    enabled:
-      customMapOverlayEnabled &&
-      toolController.state.mode !== "placingPoint" &&
-      !marker.placing &&
-      !geometryDraw.active,
-  });
-
   const analysisPendingPoint = toolController.pendingPoint;
   const isochrone = useIsochronePreview({
     pendingPoint: analysisPendingPoint,
@@ -175,8 +166,9 @@ export default function MapOverlayControls() {
     : marker.placementKind ?? "marker";
   const activeToolLabel = activeAnalysisToolLabel(toolController.state.tool);
   const placementLabel = placementPrompt(placementTool);
-  const analysisButtonLabel = geometryDraw.active
-    ? "Sair do desenho de filtro"
+  const geometryFilterFlowActive = geometryDraw.active || Boolean(drawnFilterFeature);
+  const analysisButtonLabel = geometryFilterFlowActive
+    ? "Sair do filtro por geometria"
     : toolController.menuOpen
       ? "Fechar menu de análise"
       : placementModeActive
@@ -392,8 +384,9 @@ export default function MapOverlayControls() {
     setDrawnFilterFeature(feature);
   }
 
-  function cancelGeometryFilterDraw() {
+  function exitGeometryFilterFlow() {
     geometryDraw.cancel();
+    setDrawnFilterFeature(null);
     setCommandMessage(null);
   }
 
@@ -508,7 +501,7 @@ export default function MapOverlayControls() {
               <strong>Desenhe o polígono no mapa</strong>
               <span>
                 Clique para adicionar vértices. Arraste o mapa normalmente para navegar.
-                Use Backspace para desfazer ou Esc para cancelar.
+                Use Backspace para desfazer ou Esc para sair.
               </span>
             </div>
             <div className="maono-geometry-draw-mode__actions">
@@ -519,8 +512,8 @@ export default function MapOverlayControls() {
               >
                 Desfazer
               </button>
-              <button type="button" onClick={cancelGeometryFilterDraw}>
-                Cancelar
+              <button type="button" onClick={exitGeometryFilterFlow}>
+                Sair do filtro por geometria
               </button>
               <button
                 type="button"
@@ -546,8 +539,8 @@ export default function MapOverlayControls() {
               </span>
               <button
                 type="button"
-                onClick={() => setDrawnFilterFeature(null)}
-                aria-label="Fechar configuração do polígono desenhado"
+                onClick={exitGeometryFilterFlow}
+                aria-label="Sair do filtro por geometria"
               >
                 ×
               </button>
@@ -557,6 +550,7 @@ export default function MapOverlayControls() {
                 feature={drawnFilterFeature}
                 title="Escolha as camadas filtradas"
                 description="O polígono desenhado será aplicado somente às camadas selecionadas abaixo."
+                onExit={exitGeometryFilterFlow}
               />
             </div>
           </section>
@@ -754,11 +748,11 @@ export default function MapOverlayControls() {
           {launcherVisible ? (
             <button
               type="button"
-              className={toolController.active || geometryDraw.active ? "is-active" : ""}
+              className={toolController.active || geometryFilterFlowActive ? "is-active" : ""}
               disabled={!analysisLauncherEnabled}
               onClick={
-                geometryDraw.active
-                  ? cancelGeometryFilterDraw
+                geometryFilterFlowActive
+                  ? exitGeometryFilterFlow
                   : placementModeActive
                     ? toolController.exitPlacement
                     : toolController.toggleToolMenu
@@ -767,9 +761,9 @@ export default function MapOverlayControls() {
               aria-label={analysisButtonLabel}
               aria-haspopup="menu"
               aria-expanded={toolController.menuOpen}
-              aria-pressed={toolController.active || geometryDraw.active}
+              aria-pressed={toolController.active || geometryFilterFlowActive}
               data-active-analysis-tool={
-                geometryDraw.active
+                geometryFilterFlowActive
                   ? "geometry-filter"
                   : toolController.state.tool ?? "none"
               }
@@ -778,7 +772,7 @@ export default function MapOverlayControls() {
               }
               data-isochrone-state={context?.isochroneFeatureState?.reason || "UNKNOWN"}
             >
-              <OverlayIcon name={geometryDraw.active ? "geometry" : "marker"} />
+              <OverlayIcon name={geometryFilterFlowActive ? "geometry" : "marker"} />
             </button>
           ) : null}
         </div>
