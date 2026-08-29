@@ -3,6 +3,8 @@
 // associações de layers explicitamente. Mantemos o hook como no-op temporário
 // para preservar compatibilidade com o runtime enquanto a chamada antiga é
 // removida em uma limpeza posterior.
-export function useGeometryFilterManager() {
+export function useGeometryFilterManager(
+  _options: { enabled?: boolean } = {},
+) {
   return undefined;
 }
