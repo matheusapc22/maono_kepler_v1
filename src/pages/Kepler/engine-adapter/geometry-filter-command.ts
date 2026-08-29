@@ -1,7 +1,7 @@
 import {
+  addFilter,
   removeFilter,
-  setPolygonFilterLayer,
-  setSelectedFeature,
+  setFilter,
   wrapTo,
 } from "@kepler.gl/actions";
 import {
@@ -10,6 +10,7 @@ import {
   GEOCODER_LAYER_ID,
 } from "@kepler.gl/constants";
 import type { Feature } from "@kepler.gl/types";
+import { generatePolygonFilter } from "@kepler.gl/utils";
 
 import {
   KEPLER_MAP_ID,
@@ -108,6 +109,10 @@ function layerConfig(layer: unknown) {
   return readValue(layer, "config");
 }
 
+function layerDataId(layer: unknown) {
+  return String(readValue(layerConfig(layer), "dataId") ?? "").trim();
+}
+
 function layerLabel(layer: unknown) {
   const config = layerConfig(layer);
   return String(
@@ -159,6 +164,17 @@ export function geometryFilterById(rootState: unknown, id: string) {
   );
 }
 
+function geometryFilterIndexById(rootState: unknown, id: string) {
+  const normalized = String(id ?? "").trim();
+  if (!normalized) return -1;
+
+  return rawFilters(rootState).findIndex(
+    (filter) =>
+      filterId(filter) === normalized &&
+      readValue(filter, "type") === FILTER_TYPES.polygon,
+  );
+}
+
 function normalizedTargetIds(values: string[] | null | undefined) {
   return Array.from(
     new Set(
@@ -188,37 +204,15 @@ function normalizedFilterFeature(
     ...feature,
     properties: {
       ...plainProperties,
-      // O identificador do Polygon Filter pertence ao engine e nunca deve ser
-      // herdado por acidente de uma coluna homônima do dataset.
+      // Um `filterId` vindo dos dados nunca pode ser confundido com o id do
+      // filtro interno que será gerado abaixo.
       filterId: null,
       isClosed: true,
-      // Metadados próprios permitem que a Maõno reconheça filtros novos sem
-      // depender do estado visual do Editor do Kepler.
       maonoGeometryFilter: true,
       maonoGeometryFilterVersion: MAONO_GEOMETRY_FILTER_VERSION,
       maonoSourceLayerId: sourceId,
     },
   } as Feature;
-}
-
-function clearNativeEditorSelection(dispatch: (action: unknown) => unknown) {
-  dispatch(wrapTo(KEPLER_MAP_ID, setSelectedFeature(null)));
-}
-
-function newlyCreatedPolygonFilter(
-  rootState: unknown,
-  idsBeforeCreation: Set<string>,
-) {
-  return (
-    rawFilters(rootState).find((filter) => {
-      const id = filterId(filter);
-      return (
-        id &&
-        !idsBeforeCreation.has(id) &&
-        readValue(filter, "type") === FILTER_TYPES.polygon
-      );
-    }) ?? null
-  );
 }
 
 /**
@@ -308,7 +302,7 @@ function resolveTargetLayers(rootState: unknown, requestedIds: string[]) {
 
   for (const id of requestedIds) {
     const layer = byId.get(id);
-    if (!layer || !layerFilterable(layer)) {
+    if (!layer || !layerFilterable(layer) || !layerDataId(layer)) {
       rejected.push(id);
       continue;
     }
@@ -319,10 +313,12 @@ function resolveTargetLayers(rootState: unknown, requestedIds: string[]) {
 }
 
 /**
- * Cria o Polygon Filter como um detalhe headless do engine. A identificação
- * do filtro criado é feita pelo delta da coleção de filtros antes/depois da
- * primeira ação, e não mais por editor.selectedFeature. Isso elimina a
- * dependência de estado visual/editável do Kepler.
+ * Cria o filtro espacial sem acionar `setPolygonFilterLayer`, que é a ação
+ * interativa do Kepler responsável por também selecionar a feature no Editor.
+ *
+ * `generatePolygonFilter` é usado somente para obter a estrutura de filtro e
+ * o predicado compatível com o engine; a inserção é feita por `addFilter` +
+ * `setFilter`, de modo que nenhum estado de desenho/seleção seja tocado.
  */
 export function applyGeometryFilter({
   dispatch,
@@ -358,61 +354,59 @@ export function applyGeometryFilter({
     }
 
     const { targets, rejected } = resolveTargetLayers(getState(), requestedIds);
-    if (rejected.length) {
+    if (rejected.length || !targets.length) {
       return failure(
         "COMMAND_INVALID",
-        `Camadas incompatíveis com o filtro geométrico: ${rejected.join(", ")}.`,
+        rejected.length
+          ? `Camadas incompatíveis com o filtro geométrico: ${rejected.join(", ")}.`
+          : "Nenhuma camada compatível está disponível para aplicar o filtro.",
       );
     }
 
-    const idsBeforeCreation = new Set(
-      rawFilters(getState())
-        .filter((filter) => readValue(filter, "type") === FILTER_TYPES.polygon)
-        .map(filterId)
-        .filter(Boolean),
-    );
-    const firstLayer = targets[0];
     const sourceFeature = normalizedFilterFeature(feature, sourceLayerId);
+    const generatedFilter = generatePolygonFilter(targets, sourceFeature);
+    const createdFilterId = String(generatedFilter.id ?? "").trim();
+    const firstDataId = String(generatedFilter.dataId?.[0] ?? "").trim();
+
+    if (!createdFilterId || !firstDataId) {
+      return failure(
+        "COMMAND_FAILED",
+        "O engine não conseguiu preparar o filtro poligonal.",
+      );
+    }
 
     dispatch(
       wrapTo(
         KEPLER_MAP_ID,
-        setPolygonFilterLayer(firstLayer, sourceFeature),
+        addFilter(firstDataId, createdFilterId),
       ),
     );
 
-    const createdFilter = newlyCreatedPolygonFilter(
-      getState(),
-      idsBeforeCreation,
+    const filterIndex = rawFilters(getState()).findIndex(
+      (filter) => filterId(filter) === createdFilterId,
     );
-    const createdFilterId = filterId(createdFilter);
-    const activeFeature = readValue(createdFilter, "value") as Feature | null;
-
-    // setPolygonFilterLayer seleciona a feature internamente. A Maõno não usa
-    // essa seleção e a remove na mesma transação de comando antes de retornar.
-    clearNativeEditorSelection(dispatch);
-
-    if (
-      !createdFilter ||
-      !createdFilterId ||
-      !activeFeature ||
-      !isPolygonGeometryFeature(activeFeature)
-    ) {
+    if (filterIndex < 0) {
       return failure(
         "COMMAND_FAILED",
-        "O engine não confirmou a criação do filtro poligonal.",
+        "O estado do filtro poligonal não foi criado.",
       );
     }
 
-    for (const layer of targets.slice(1)) {
-      dispatch(
-        wrapTo(
-          KEPLER_MAP_ID,
-          setPolygonFilterLayer(layer, activeFeature),
+    dispatch(
+      wrapTo(
+        KEPLER_MAP_ID,
+        setFilter(
+          filterIndex,
+          ["type", "fixedDomain", "layerId", "value"],
+          [
+            FILTER_TYPES.polygon,
+            true,
+            generatedFilter.layerId,
+            generatedFilter.value,
+          ],
         ),
-      );
-      clearNativeEditorSelection(dispatch);
-    }
+      ),
+    );
 
     const snapshot = geometryFilterSnapshotById(getState(), createdFilterId);
     if (!snapshot) {
@@ -431,7 +425,6 @@ export function applyGeometryFilter({
       },
     };
   } catch (error) {
-    clearNativeEditorSelection(dispatch);
     return failure(
       "COMMAND_FAILED",
       error instanceof Error
@@ -442,8 +435,9 @@ export function applyGeometryFilter({
 }
 
 /**
- * Sincroniza somente as associações de layer do Polygon Filter headless.
- * A UI não seleciona, move nem edita a geometria pelo Editor do Kepler.
+ * Atualiza as associações do Polygon Filter pela propriedade `layerId` do
+ * filtro, sem usar a ação interativa `setPolygonFilterLayer`. O próprio reducer
+ * do Kepler deriva os dataIds afetados e recalcula os registros filtrados.
  */
 export function updateGeometryFilterLayers({
   dispatch,
@@ -488,7 +482,7 @@ export function updateGeometryFilterLayers({
       );
     }
 
-    const { targets, rejected } = resolveTargetLayers(getState(), desiredIds);
+    const { rejected } = resolveTargetLayers(getState(), desiredIds);
     if (rejected.length) {
       return failure(
         "COMMAND_INVALID",
@@ -496,54 +490,38 @@ export function updateGeometryFilterLayers({
       );
     }
 
-    const currentIds = new Set(filterLayerIds(filter));
+    const currentIds = filterLayerIds(filter);
+    const currentSet = new Set(currentIds);
     const desiredSet = new Set(desiredIds);
-    const changedIds = new Set<string>();
+    const unchanged =
+      currentSet.size === desiredSet.size &&
+      desiredIds.every((id) => currentSet.has(id));
 
-    for (const id of currentIds) {
-      if (!desiredSet.has(id)) changedIds.add(id);
-    }
-    for (const id of desiredSet) {
-      if (!currentIds.has(id)) changedIds.add(id);
-    }
-
-    if (!changedIds.size) {
-      clearNativeEditorSelection(dispatch);
+    if (unchanged) {
       return {
         ok: true,
         changed: false,
         value: {
           filterId: normalizedId,
-          affectedLayerIds: desiredIds,
+          affectedLayerIds: currentIds,
         },
       };
     }
 
-    const targetById = new Map(targets.map((layer) => [layerId(layer), layer]));
-    for (const id of currentIds) {
-      if (changedIds.has(id) && !targetById.has(id)) {
-        const layer = rawLayers(getState()).find((candidate) => layerId(candidate) === id);
-        if (layer && layerFilterable(layer)) targetById.set(id, layer);
-      }
-    }
-
-    for (const id of changedIds) {
-      const layer = targetById.get(id);
-      if (!layer) {
-        return failure(
-          "COMMAND_FAILED",
-          `A camada ${id} não está disponível para atualizar o filtro.`,
-        );
-      }
-
-      dispatch(
-        wrapTo(
-          KEPLER_MAP_ID,
-          setPolygonFilterLayer(layer, feature),
-        ),
+    const filterIndex = geometryFilterIndexById(getState(), normalizedId);
+    if (filterIndex < 0) {
+      return failure(
+        "COMMAND_FAILED",
+        "O filtro geométrico não pôde ser localizado para atualização.",
       );
-      clearNativeEditorSelection(dispatch);
     }
+
+    dispatch(
+      wrapTo(
+        KEPLER_MAP_ID,
+        setFilter(filterIndex, "layerId", desiredIds),
+      ),
+    );
 
     const snapshot = geometryFilterSnapshotById(getState(), normalizedId);
     if (!snapshot) {
@@ -562,7 +540,6 @@ export function updateGeometryFilterLayers({
       },
     };
   } catch (error) {
-    clearNativeEditorSelection(dispatch);
     return failure(
       "COMMAND_FAILED",
       error instanceof Error
@@ -606,7 +583,6 @@ export function removeGeometryFilter({
 
     const affectedLayerIds = filterLayerIds(filters[index]);
     dispatch(wrapTo(KEPLER_MAP_ID, removeFilter(index)));
-    clearNativeEditorSelection(dispatch);
 
     return {
       ok: true,
@@ -617,7 +593,6 @@ export function removeGeometryFilter({
       },
     };
   } catch (error) {
-    clearNativeEditorSelection(dispatch);
     return failure(
       "COMMAND_FAILED",
       error instanceof Error
