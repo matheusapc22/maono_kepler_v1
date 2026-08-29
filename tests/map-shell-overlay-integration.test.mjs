@@ -26,6 +26,7 @@ const files = {
   previewHook: "../src/pages/Kepler/components/map-overlay/useIsochronePreview.ts",
   legendFactory: "../src/pages/Kepler/factories/maono-map-legend-panel.tsx",
   popoverFactory: "../src/pages/Kepler/factories/maono-map-popover.tsx",
+  popoverCss: "../src/pages/Kepler/factories/maono-map-popover.css",
   dialog: "../src/pages/Kepler/components/map-overlay/IsochroneDialog.tsx",
   api: "../src/pages/Kepler/map-panel/isochrone-api.ts",
   saveEvents: "../src/pages/Kepler/map-panel/map-save-events.ts",
@@ -270,15 +271,19 @@ test("instrumentação cobre a cadeia geométrica e só ativa por opt-in", () =>
   assert.match(source.layoutDebug, /getBoundingClientRect/);
 });
 
-test("tema visual usa dourado Maõno e os overlays oficiais", () => {
+test("tema visual usa dourado Maõno e overlays sob controle Maõno", () => {
   assert.match(source.shellTokens, /#c5a059/i);
   assert.match(source.overlayCss, /#c5a059/i);
   assert.match(source.legendFactory, /#c5a059/i);
   assert.match(source.legendFactory, /MapLegendPanelFactory/);
   assert.match(source.legendFactory, /MapLegend/);
-  assert.match(source.popoverFactory, /#c5a059/i);
-  assert.match(source.popoverFactory, /MapPopoverFactory/);
-  assert.match(source.popoverFactory, /\.map-popover/);
+  assert.match(source.popoverCss, /#c5a059/i);
+  assert.match(source.popoverCss, /\.maono-map-tooltip/);
+  assert.match(source.popoverFactory, /MapPopoverFactory\.deps/);
+  assert.match(source.popoverFactory, /createPortal/);
+  assert.match(source.popoverFactory, /maono-map-tooltip/);
+  assert.doesNotMatch(source.popoverFactory, /NativeMapPopover/);
+  assert.doesNotMatch(source.popoverFactory, /\.map-popover/);
   assert.match(source.shellCss, /@media \(max-width: 820px\)/);
   assert.match(source.overlayCss, /@media \(max-width: 820px\)/);
   assert.match(source.shellCss, /prefers-reduced-motion/);
