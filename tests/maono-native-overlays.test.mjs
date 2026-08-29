@@ -116,60 +116,81 @@ function geometryRootState() {
   };
 }
 
-function nativePolygonAction(action) {
-  return [action, action?.payload, action?.payload?.payload].find(
-    (candidate) => candidate?.layer && candidate?.feature,
+function findNestedAction(value, matcher, depth = 0, seen = new Set()) {
+  if (!value || typeof value !== "object" || depth > 7 || seen.has(value)) {
+    return null;
+  }
+  seen.add(value);
+  if (matcher(value)) return value;
+
+  for (const nested of Object.values(value)) {
+    const found = findNestedAction(nested, matcher, depth + 1, seen);
+    if (found) return found;
+  }
+  return null;
+}
+
+function actionEndingWith(action, suffix) {
+  return findNestedAction(
+    action,
+    (candidate) => String(candidate?.type ?? "").endsWith(suffix),
   );
 }
 
-function polygonDispatches(dispatches) {
-  return dispatches.filter((action) => Boolean(nativePolygonAction(action)));
+function deriveDataIds(visState, layerIds) {
+  return layerIds
+    .map((id) => visState.layers.find((layer) => layer.id === id)?.config?.dataId)
+    .filter(Boolean);
 }
 
-function createPolygonFilterReducer(state, dispatches) {
+function applySetFilterAction(visState, action) {
+  const filter = visState.filters[action.idx];
+  assert.ok(filter, `filter ${action.idx} deve existir`);
+
+  const props = Array.isArray(action.prop) ? action.prop : [action.prop];
+  const values = Array.isArray(action.prop) ? action.value : [action.value];
+
+  props.forEach((prop, index) => {
+    const value = values[index];
+    if (prop === "layerId") {
+      filter.layerId = [...value];
+      filter.dataId = deriveDataIds(visState, filter.layerId);
+      return;
+    }
+    filter[prop] = value;
+  });
+}
+
+function createHeadlessFilterReducer(state, dispatches) {
   return (action) => {
     dispatches.push(action);
     const visState = state.demo.keplerGl.map.visState;
-    const native = nativePolygonAction(action);
 
-    // O adapter envia setSelectedFeature(null) após cada mutação espacial.
-    // O fake reducer só precisa refletir esse efeito para provar que o comando
-    // termina sem estado visual do Editor selecionado.
-    if (!native) {
-      visState.editor.selectedFeature = null;
+    const add = actionEndingWith(action, "ADD_FILTER");
+    if (add) {
+      visState.filters.push({
+        id: add.id,
+        dataId: add.dataId ? [add.dataId] : [],
+        enabled: true,
+        fixedDomain: false,
+        type: null,
+        name: [],
+        layerId: [],
+        value: null,
+      });
       return;
     }
 
-    const incoming = native.feature;
-    const incomingFilterId = incoming.properties?.filterId;
-    const id = incomingFilterId || "polygon-filter-test";
-    const selectedFeature = {
-      ...incoming,
-      properties: {
-        ...(incoming.properties || {}),
-        filterId: id,
-        isClosed: true,
-      },
-    };
-    let filter = visState.filters.find((candidate) => candidate.id === id);
-
-    if (!filter) {
-      filter = {
-        id,
-        type: "polygon",
-        layerId: [native.layer.id],
-        value: selectedFeature,
-        enabled: true,
-      };
-      visState.filters.push(filter);
-    } else if (filter.layerId.includes(native.layer.id)) {
-      filter.layerId = filter.layerId.filter((layerId) => layerId !== native.layer.id);
-    } else {
-      filter.layerId.push(native.layer.id);
+    const set = actionEndingWith(action, "SET_FILTER");
+    if (set) {
+      applySetFilterAction(visState, set);
+      return;
     }
 
-    filter.value = selectedFeature;
-    visState.editor.selectedFeature = selectedFeature;
+    const remove = actionEndingWith(action, "REMOVE_FILTER");
+    if (remove) {
+      visState.filters.splice(remove.idx, 1);
+    }
   };
 }
 
@@ -262,10 +283,10 @@ test("catálogo Maono expõe todas as layers e marca compatibilidade", () => {
   );
 });
 
-test("adapter cria um único filtro e encerra sem seleção visual do Kepler", () => {
+test("adapter cria filtro headless sem setPolygonFilterLayer nem seleção do Editor", () => {
   const state = geometryRootState();
   const dispatches = [];
-  const dispatch = createPolygonFilterReducer(state, dispatches);
+  const dispatch = createHeadlessFilterReducer(state, dispatches);
 
   const result = applyGeometryFilter({
     dispatch,
@@ -276,14 +297,20 @@ test("adapter cria um único filtro e encerra sem seleção visual do Kepler", (
   });
 
   assert.equal(result.ok, true);
-  assert.equal(polygonDispatches(dispatches).length, 3);
+  assert.equal(dispatches.length, 2);
+  assert.ok(actionEndingWith(dispatches[0], "ADD_FILTER"));
+  assert.ok(actionEndingWith(dispatches[1], "SET_FILTER"));
   assert.equal(state.demo.keplerGl.map.visState.filters.length, 1);
   assert.deepEqual(
     state.demo.keplerGl.map.visState.filters[0].layerId,
     ["source-polygons", "clientes", "oculta"],
   );
   assert.equal(state.demo.keplerGl.map.visState.editor.selectedFeature, null);
-  assert.equal(result.value.filterId, "polygon-filter-test");
+  assert.ok(result.value.filterId);
+  assert.equal(
+    state.demo.keplerGl.map.visState.filters[0].value.properties.filterId,
+    result.value.filterId,
+  );
   assert.deepEqual(
     result.value.affectedLayerIds,
     ["source-polygons", "clientes", "oculta"],
@@ -295,19 +322,21 @@ test("adapter cria um único filtro e encerra sem seleção visual do Kepler", (
   assert.equal(snapshots[0].sourceLayerId, "source-polygons");
 });
 
-test("adapter descobre filtro pelo delta e não por editor.selectedFeature", () => {
-  assert.match(geometryFilter, /newlyCreatedPolygonFilter/);
-  assert.match(geometryFilter, /idsBeforeCreation/);
-  assert.match(geometryFilter, /setSelectedFeature\(null\)/);
+test("adapter usa estrutura do engine sem acionar a funcionalidade interativa do Kepler", () => {
+  assert.match(geometryFilter, /generatePolygonFilter/);
+  assert.match(geometryFilter, /addFilter/);
+  assert.match(geometryFilter, /setFilter/);
   assert.match(geometryFilter, /removeGeometryFilter/);
+  assert.doesNotMatch(geometryFilter, /\bsetPolygonFilterLayer\s*\(/);
+  assert.doesNotMatch(geometryFilter, /setSelectedFeature/);
   assert.doesNotMatch(geometryFilter, /selectedEditorFeature/);
   assert.doesNotMatch(geometryFilter, /openSelectedGeometryFilterManager/);
 });
 
-test("tooltip atualiza associações sem reativar seleção editável", () => {
+test("tooltip atualiza associações por layerId sem reativar Editor", () => {
   const state = geometryRootState();
   const dispatches = [];
-  const dispatch = createPolygonFilterReducer(state, dispatches);
+  const dispatch = createHeadlessFilterReducer(state, dispatches);
 
   const created = applyGeometryFilter({
     dispatch,
@@ -326,7 +355,8 @@ test("tooltip atualiza associações sem reativar seleção editável", () => {
   });
 
   assert.equal(updated.ok, true);
-  assert.equal(polygonDispatches(dispatches).length, 2);
+  assert.equal(dispatches.length, 1);
+  assert.ok(actionEndingWith(dispatches[0], "SET_FILTER"));
   assert.equal(state.demo.keplerGl.map.visState.editor.selectedFeature, null);
   assert.deepEqual(
     state.demo.keplerGl.map.visState.filters[0].layerId.sort(),
@@ -335,7 +365,8 @@ test("tooltip atualiza associações sem reativar seleção editável", () => {
   assert.deepEqual(updated.value.affectedLayerIds.sort(), ["clientes", "rotas"]);
 });
 
-test("guard elimina o Editor nativo por estado e não por corrida de eventos", () => {
+test("guard elimina o Editor nativo por estado antes do paint", () => {
+  assert.match(geometryManagerHook, /useLayoutEffect/);
   assert.match(geometryManagerHook, /toggleEditorVisibility/);
   assert.match(geometryManagerHook, /setEditorMode\(EDITOR_MODES\.EDIT\)/);
   assert.match(geometryManagerHook, /setSelectedFeature\(null\)/);
@@ -417,11 +448,12 @@ test("desenho Maono cria Polygon fechado com no mínimo três vértices", () => 
   assert.equal(feature.properties.maonoGeometryFilter, true);
 });
 
-test("pin oferece desenho de área e usa overlay Maono sem edit handles arrastáveis", () => {
+test("pin oferece desenho de área e saída explícita sem edit handles arrastáveis", () => {
   assert.match(analysisToolMenu, /Desenhar área de filtragem/);
   assert.match(analysisToolMenu, /onStartGeometryFilterDraw/);
   assert.match(overlayControls, /useGeometryFilterDrawing/);
   assert.match(overlayControls, /Concluir polígono/);
+  assert.match(overlayControls, /Sair do filtro por geometria/);
   assert.match(overlayControls, /GeometryFilterMenu/);
   assert.match(overlayControls, /maono-geometry-draw-canvas/);
   assert.match(geometryDrawingHook, /screenToMarkerOrigin/);
