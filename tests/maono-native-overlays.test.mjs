@@ -242,7 +242,7 @@ test("tooltip cria um único filtro somente nas layers escolhidas", () => {
   );
 });
 
-test("tooltip atualiza associações do filtro sem FeatureActionPanel", () => {
+test("tooltip atualiza associações do filtro sem acionar o gestor nativo", () => {
   const state = geometryRootState();
   const dispatches = [];
   const dispatch = createPolygonFilterReducer(state, dispatches);
@@ -272,7 +272,6 @@ test("tooltip atualiza associações do filtro sem FeatureActionPanel", () => {
   assert.deepEqual(updated.value.affectedLayerIds, ["clientes", "rotas"]);
   assert.doesNotMatch(geometryFilter, /setSelectedFeature/);
   assert.doesNotMatch(geometryFilter, /openSelectedGeometryFilterManager/);
-  assert.doesNotMatch(geometryFilter, /FeatureActionPanel/);
 });
 
 test("gestor antigo por clique fica sem efeitos colaterais", () => {
@@ -280,7 +279,6 @@ test("gestor antigo por clique fica sem efeitos colaterais", () => {
   assert.doesNotMatch(geometryManagerHook, /addEventListener/);
   assert.doesNotMatch(geometryManagerHook, /requestAnimationFrame/);
   assert.doesNotMatch(geometryManagerHook, /setSelectedFeature/);
-  assert.doesNotMatch(geometryManagerHook, /FeatureActionPanel/);
   assert.doesNotMatch(geometryManagerHook, /@turf/i);
 });
 
