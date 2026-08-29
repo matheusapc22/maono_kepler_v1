@@ -94,7 +94,7 @@ function activeAnalysisToolLabel(tool: "marker" | "buffer" | "isochrone" | null)
   return "análise";
 }
 
-function placementPrompt(tool: "marker" | "buffer" | "isochrone") {
+function placementPrompt(tool: "marker" | "buffer" | "isochrone" | null) {
   if (tool === "buffer") return "Clique no mapa para definir a origem do buffer";
   if (tool === "isochrone") return "Clique no mapa para definir a origem da isócrona";
   return "Clique no mapa para adicionar o marcador";
