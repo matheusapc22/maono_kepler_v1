@@ -1,0 +1,102 @@
+:root[data-maono-map-placement] #default-deckgl-overlay-wrapper,
+:root[data-maono-map-placement] #default-deckgl-overlay,
+:root[data-maono-map-placement] .maplibregl-canvas,
+:root[data-maono-map-placement] .mapboxgl-canvas,
+:root[data-maono-map-placement] .maono-kepler-viewport canvas,
+:root[data-maono-map-placement] .maono-kepler-viewport,
+:root[data-maono-map-placement] .maono-marker-placement {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M12 24c0 0 9-7.4 9-14.5C21 4.25 16.97 0 12 0 7.03 0 3 4.25 3 9.5 3 16.6 12 24 12 24z' fill='%23C5A059' stroke='%230a0f18' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='9' r='3' fill='%230a0f18'/%3E%3C/svg%3E") 16 31, crosshair !important;
+}
+
+.maono-placement-mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: min(390px, calc(100vw - 32px));
+  padding: 12px 13px;
+  border: 1px solid rgba(197, 160, 89, 0.44);
+  border-radius: 14px;
+  color: #f7f2e8;
+  background: rgba(8, 12, 19, 0.97);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.54);
+  pointer-events: auto;
+  backdrop-filter: blur(14px);
+}
+
+.maono-placement-mode__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.maono-placement-mode__copy small {
+  color: #c5a059;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.maono-placement-mode__copy strong {
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.maono-placement-mode__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.maono-placement-mode__actions kbd {
+  padding: 4px 6px;
+  border: 1px solid #2a3a54;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  color: #9aa9bc;
+  background: #111927;
+  font-size: 9px;
+  font-family: inherit;
+}
+
+.maono-placement-mode__actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(197, 160, 89, 0.44);
+  border-radius: 9px;
+  color: #f1d28a;
+  background: rgba(197, 160, 89, 0.1);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.maono-placement-mode__actions button:hover {
+  border-color: #c5a059;
+  background: rgba(197, 160, 89, 0.17);
+}
+
+.maono-placement-mode__actions button:focus-visible {
+  outline: 2px solid #f1d28a;
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .maono-placement-mode {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .maono-placement-mode__actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

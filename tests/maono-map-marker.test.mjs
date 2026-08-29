@@ -8,7 +8,7 @@ import {
   screenToMarkerOrigin,
 } from "../src/pages/Kepler/components/map-overlay/marker-projection.ts";
 
-const [overlay, markerHook, controller] = await Promise.all([
+const [overlay, markerHook, controller, placementCss] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
@@ -26,6 +26,13 @@ const [overlay, markerHook, controller] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/analysis-tools/useMapToolController.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/map-placement-mode.css",
       import.meta.url,
     ),
     "utf8",
@@ -89,26 +96,23 @@ test("descoberta prioriza a superfície DeckGL e mantém fallbacks MapLibre, Map
   assert.match(markerHook, /getBoundingClientRect/);
 });
 
-test("Buffer e Isócrona usam o mesmo cursor pin no dono real do cursor", () => {
-  assert.match(markerHook, /PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /PLACEMENT_CURSORS/);
-  assert.match(markerHook, /marker:\s*PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /buffer:\s*PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /isochrone:\s*PLACEMENT_PIN_CURSOR/);
-  assert.match(markerHook, /fill='%23C5A059'/);
-  assert.match(markerHook, /\.maono-marker-placement/);
-  assert.match(markerHook, /for \(const surface of mapSurfaces\(\)\)/);
-  assert.match(
-    markerHook,
-    /surface\.style\.setProperty\("cursor", cursor, "important"\)/,
-  );
-  assert.match(markerHook, /requestAnimationFrame\(applyPlacementCursor\)/);
-  assert.match(markerHook, /addEventListener\("pointermove", schedulePlacementCursor, true\)/);
-  assert.match(markerHook, /getPropertyPriority\("cursor"\)/);
-  assert.match(markerHook, /removeProperty\("cursor"\)/);
-  assert.match(markerHook, /kind: MarkerPlacementKind = "marker"/);
-  assert.match(overlay, /marker\.placing && marker\.canvasRect/);
-  assert.match(overlay, /marker\.placeAt\(event\.clientX, event\.clientY\)/);
+test("cursor pin fica estável por estado CSS sem disputar pointermove com getCursor do DeckGL", () => {
+  assert.match(markerHook, /useLayoutEffect/);
+  assert.match(markerHook, /data-maono-map-placement/);
+  assert.match(markerHook, /root\.setAttribute/);
+  assert.match(markerHook, /root\.removeAttribute/);
+  assert.doesNotMatch(markerHook, /applyPlacementCursor/);
+  assert.doesNotMatch(markerHook, /schedulePlacementCursor/);
+  assert.doesNotMatch(markerHook, /setProperty\("cursor"/);
+
+  assert.match(placementCss, /:root\[data-maono-map-placement\]/);
+  assert.match(placementCss, /#default-deckgl-overlay-wrapper/);
+  assert.match(placementCss, /#default-deckgl-overlay/);
+  assert.match(placementCss, /\.maplibregl-canvas/);
+  assert.match(placementCss, /\.mapboxgl-canvas/);
+  assert.match(placementCss, /fill='%23C5A059'/);
+  assert.match(placementCss, /crosshair !important/);
+  assert.match(overlay, /map-placement-mode\.css/);
 });
 
 test("placement preserva interação nativa de zoom/pan e só aceita clique sem arrasto", () => {
@@ -124,14 +128,23 @@ test("placement preserva interação nativa de zoom/pan e só aceita clique sem 
   assert.match(controller, /pointPlaced\(point\)/);
 });
 
-test("placeAt não abre menu e Escape do placement pertence ao controller", () => {
+test("modo pin possui saída explícita por botão e Escape sem descartar Buffer já criado", () => {
   const placeAtBlock =
     markerHook.match(/const placeAt = useCallback\([\s\S]*?\n  \);/)?.[0] || "";
   assert.match(placeAtBlock, /setMenuOpen\(false\)/);
   assert.doesNotMatch(placeAtBlock, /setMenuOpen\(true\)/);
   assert.doesNotMatch(markerHook, /event\.key === "Escape"/);
+
+  assert.match(controller, /const exitPlacement = useCallback/);
+  assert.match(controller, /session\?\.dataId/);
+  assert.match(controller, /return finishMulti\(\)/);
   assert.match(controller, /handlePlacementEscape/);
+  assert.match(controller, /return exitPlacement\(\)/);
   assert.match(controller, /event\.key !== "Escape"/);
+
+  assert.match(overlay, /Modo pin ativo/);
+  assert.match(overlay, /Sair do modo pin/);
+  assert.match(overlay, /toolController\.exitPlacement/);
 });
 
 test("overlay visual mantém projeção e pointer state fora do componente", () => {

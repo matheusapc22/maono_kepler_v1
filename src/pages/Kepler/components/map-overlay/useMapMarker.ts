@@ -3,6 +3,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -31,15 +32,6 @@ const MAP_SURFACE_SELECTORS = [
   ".maono-kepler-viewport canvas",
   ".maono-kepler-viewport",
 ] as const;
-
-const PLACEMENT_PIN_CURSOR =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'%3E%3Cpath d='M12 24c0 0 9-7.4 9-14.5C21 4.25 16.97 0 12 0 7.03 0 3 4.25 3 9.5 3 16.6 12 24 12 24z' fill='%23C5A059' stroke='%230a0f18' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='9' r='3' fill='%230a0f18'/%3E%3C/svg%3E\") 16 31, crosshair";
-
-const PLACEMENT_CURSORS: Record<MarkerPlacementKind, string> = {
-  marker: PLACEMENT_PIN_CURSOR,
-  buffer: PLACEMENT_PIN_CURSOR,
-  isochrone: PLACEMENT_PIN_CURSOR,
-};
 
 function mapSurfaces() {
   const surfaces: HTMLElement[] = [];
@@ -209,76 +201,37 @@ export function useMapMarker(viewport: MapViewportSummary | null) {
     setPlacementKind(null);
   }, []);
 
-  useEffect(() => {
-    if (
-      !placing ||
-      !rect ||
-      typeof document === "undefined" ||
-      typeof window === "undefined"
-    ) {
-      return undefined;
-    }
+  useLayoutEffect(() => {
+    if (!placing || typeof document === "undefined") return undefined;
 
     const visualOverlay = document.querySelector<HTMLElement>(
       ".maono-marker-placement",
     );
     const previousPointerEvents = visualOverlay?.style.pointerEvents ?? "";
-    const cursor = PLACEMENT_CURSORS[placementKind ?? "marker"];
-    const previousCursors = new Map<
-      HTMLElement,
-      { value: string; priority: string }
-    >();
-    let cursorFrame = 0;
+    const root = document.documentElement;
+    const previousPlacement = root.getAttribute("data-maono-map-placement");
 
-    const applyPlacementCursor = () => {
-      for (const surface of mapSurfaces()) {
-        if (!previousCursors.has(surface)) {
-          previousCursors.set(surface, {
-            value: surface.style.getPropertyValue("cursor"),
-            priority: surface.style.getPropertyPriority("cursor"),
-          });
-        }
-
-        // DeckGL atualiza getCursor enquanto o ponteiro se move. Aplicamos a
-        // ferramenta no próprio elemento interativo e com prioridade inline
-        // para o placement continuar visível sem bloquear pan/zoom.
-        surface.style.setProperty("cursor", cursor, "important");
-      }
-    };
-
-    const schedulePlacementCursor = () => {
-      window.cancelAnimationFrame(cursorFrame);
-      cursorFrame = window.requestAnimationFrame(applyPlacementCursor);
-    };
-
+    // O cursor agora é travado pela cascata CSS em uma única mudança de estado.
+    // Isso evita disputar frame a frame com o getCursor interno do DeckGL, que
+    // era a causa do pin alternar visualmente entre pin/grab/pointer.
+    root.setAttribute(
+      "data-maono-map-placement",
+      placementKind ?? "marker",
+    );
     if (visualOverlay) visualOverlay.style.pointerEvents = "none";
-    applyPlacementCursor();
-
-    window.addEventListener("pointermove", schedulePlacementCursor, true);
-    window.addEventListener("maono:map-runtime", schedulePlacementCursor);
 
     return () => {
-      window.cancelAnimationFrame(cursorFrame);
-      window.removeEventListener("pointermove", schedulePlacementCursor, true);
-      window.removeEventListener("maono:map-runtime", schedulePlacementCursor);
-
       if (visualOverlay) {
         visualOverlay.style.pointerEvents = previousPointerEvents;
       }
 
-      for (const [surface, previous] of previousCursors) {
-        if (previous.value) {
-          surface.style.setProperty(
-            "cursor",
-            previous.value,
-            previous.priority,
-          );
-        } else {
-          surface.style.removeProperty("cursor");
-        }
+      if (previousPlacement) {
+        root.setAttribute("data-maono-map-placement", previousPlacement);
+      } else {
+        root.removeAttribute("data-maono-map-placement");
       }
     };
-  }, [placementKind, placing, rect]);
+  }, [placementKind, placing]);
 
   const startPlacement = useCallback(
     (kind: MarkerPlacementKind = "marker") => {
