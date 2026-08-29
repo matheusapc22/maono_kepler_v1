@@ -251,6 +251,20 @@ export function useMapToolController({
     return true;
   }, [cancelPlacement, resetMarker, state]);
 
+  const exitPlacement = useCallback(() => {
+    if (state.mode !== "placingPoint") return false;
+
+    const session = multiBufferSessionFromState(state);
+    if (session?.dataId) {
+      // Ao sair do modo pin depois de já existir um Buffer, a sessão é
+      // finalizada em vez de descartar silenciosamente a análise criada.
+      return finishMulti();
+    }
+
+    cancelTool();
+    return true;
+  }, [cancelTool, finishMulti, state]);
+
   const finishAnalysis = useCallback(() => {
     cancelPlacement();
     resetMarker();
@@ -258,10 +272,8 @@ export function useMapToolController({
   }, [cancelPlacement, resetMarker]);
 
   const handlePlacementEscape = useCallback(() => {
-    if (state.mode !== "placingPoint") return false;
-    cancelTool();
-    return true;
-  }, [cancelTool, state.mode]);
+    return exitPlacement();
+  }, [exitPlacement]);
 
   useEffect(() => {
     if (state.mode !== "placingPoint") return undefined;
@@ -294,6 +306,7 @@ export function useMapToolController({
     ),
     toggleToolMenu,
     cancelTool,
+    exitPlacement,
     selectTool,
     selectBufferMode,
     startSelectedPlacement,
