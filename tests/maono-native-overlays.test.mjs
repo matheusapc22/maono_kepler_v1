@@ -7,6 +7,8 @@ import {
   applyGeometryFilter,
   geometryFilterTargetLayerIds,
   isPolygonGeometryFeature,
+  openSelectedGeometryFilterManager,
+  selectedGeometryFilter,
 } from "../src/pages/Kepler/engine-adapter/geometry-filter-command.ts";
 import {
   calculateMaonoLegendInitialPosition,
@@ -14,10 +16,20 @@ import {
   MAONO_LEGEND_VERTICAL_RATIO,
 } from "../src/pages/Kepler/factories/maono-map-legend-position.ts";
 
-const [legendFactory, popoverFactory, geometryFilter, shellRuntime, keplerIndex] = await Promise.all([
+const [
+  legendFactory,
+  popoverFactory,
+  geometryFilter,
+  geometryManagerHook,
+  overlayControls,
+  shellRuntime,
+  keplerIndex,
+] = await Promise.all([
   readFile(new URL("../src/pages/Kepler/factories/maono-map-legend-panel.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/factories/maono-map-popover.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/engine-adapter/geometry-filter-command.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/useGeometryFilterManager.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/maono-map-shell/MaonoMapRuntime.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/index.tsx", import.meta.url), "utf8"),
 ]);
@@ -125,9 +137,11 @@ test("popup Maono mantém o MapPopover oficial e injeta ação semântica no con
 
 test("filtro de geometria delega ao Polygon Filter oficial do Kepler", () => {
   assert.match(geometryFilter, /setPolygonFilterLayer/);
+  assert.match(geometryFilter, /setSelectedFeature/);
   assert.match(geometryFilter, /wrapTo/);
   assert.match(geometryFilter, /KEPLER_MAP_ID/);
   assert.match(geometryFilter, /EDITOR_AVAILABLE_LAYERS/);
+  assert.match(geometryFilter, /FILTER_TYPES/);
   assert.match(geometryFilter, /GEOCODER_LAYER_ID/);
   assert.match(geometryFilter, /selectedFeature/);
   assert.match(geometryFilter, /filterId/);
@@ -185,6 +199,62 @@ test("uma geometria produz um único filtro Kepler compartilhado entre layers", 
   assert.deepEqual(state.demo.keplerGl.map.visState.filters[0].layerId, ["clientes", "rotas", "areas"]);
   assert.equal(result.value.filterId, "polygon-filter-test");
   assert.deepEqual(result.value.affectedLayerIds, ["clientes", "rotas", "areas"]);
+});
+
+test("clique em Polygon Filter selecionado abre o FeatureActionPanel nativo no ponto clicado", () => {
+  const state = geometryRootState();
+  const filterFeature = {
+    ...polygon,
+    id: "polygon-filter-feature",
+    properties: {
+      ...polygon.properties,
+      filterId: "polygon-filter-test",
+      isClosed: true,
+    },
+  };
+  state.demo.keplerGl.map.visState.filters = [
+    {
+      id: "polygon-filter-test",
+      type: "polygon",
+      layerId: ["clientes", "rotas"],
+      value: filterFeature,
+      enabled: true,
+    },
+  ];
+  state.demo.keplerGl.map.visState.editor.selectedFeature = filterFeature;
+
+  const selected = selectedGeometryFilter(state);
+  assert.ok(selected);
+  assert.equal(selected.filterId, "polygon-filter-test");
+
+  const dispatches = [];
+  const result = openSelectedGeometryFilterManager({
+    dispatch: (action) => dispatches.push(action),
+    getState: () => state,
+    position: { x: 180, y: 240 },
+    mapIndex: 0,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.filterId, "polygon-filter-test");
+  assert.equal(dispatches.length, 1);
+  const serialized = JSON.stringify(dispatches[0]);
+  assert.match(serialized, /"rightClick":true/);
+  assert.match(serialized, /"x":180/);
+  assert.match(serialized, /"y":240/);
+});
+
+test("gestão por clique reutiliza picking do DeckGL e não cria motor espacial paralelo", () => {
+  assert.match(geometryManagerHook, /composedPath/);
+  assert.match(geometryManagerHook, /default-deckgl-overlay-wrapper/);
+  assert.match(geometryManagerHook, /requestAnimationFrame/);
+  assert.match(geometryManagerHook, /openSelectedGeometryFilterManager/);
+  assert.match(geometryManagerHook, /authorizeMapPanelCommand/);
+  assert.match(geometryManagerHook, /"editFilters"/);
+  assert.doesNotMatch(geometryManagerHook, /pointInPolygon/i);
+  assert.doesNotMatch(geometryManagerHook, /booleanPointInPolygon/i);
+  assert.doesNotMatch(geometryManagerHook, /@turf/i);
+  assert.match(overlayControls, /useGeometryFilterManager/);
 });
 
 test("injeção oficial registra legenda e popup no Kepler", () => {
