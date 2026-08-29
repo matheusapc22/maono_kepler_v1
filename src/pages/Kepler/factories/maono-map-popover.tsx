@@ -13,6 +13,7 @@ import GeometryFilterMenu from "../components/map-overlay/GeometryFilterMenu";
 import { isPolygonGeometryFeature } from "../engine-adapter/geometry-filter-command.ts";
 import "./maono-map-popover.css";
 import "../components/map-overlay/geometry-filter-ui.css";
+import "../components/map-overlay/geometry-filter-runtime.css";
 
 function clamp(value, minimum, maximum) {
   return Math.min(Math.max(value, minimum), maximum);
@@ -164,6 +165,7 @@ export function MaonoMapPopoverFactory(MapPopoverContent) {
                   <GeometryFilterMenu
                     feature={feature}
                     sourceLayerId={sourceLayerId}
+                    onExit={() => setFilterMenuOpen(false)}
                   />
                 </div>
               ) : null}
