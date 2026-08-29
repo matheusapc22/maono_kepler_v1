@@ -225,14 +225,21 @@ test("launcher de análise permanece visível e fail-closed pelas capabilities",
   assert.match(apiClient, /isochroneFeatureState,/);
   assert.match(types, /isochroneFeatureState:\s*IsochroneFeatureState/);
 
-  assert.match(overlay, /disabled=\{!analysisMarkerCapabilityEnabled\}/);
+  assert.match(overlay, /disabled=\{!analysisLauncherEnabled\}/);
+  assert.match(overlay, /analysisLauncherEnabled = Boolean/);
+  assert.match(overlay, /analysisMarkerCapabilityEnabled/);
+  assert.match(overlay, /bufferCapabilityEnabled/);
+  assert.match(overlay, /isochroneCapabilityEnabled/);
+  assert.match(overlay, /geometryFilterCapabilityEnabled/);
   assert.match(overlay, /canPlaceMarker=\{analysisMarkerCapabilityEnabled\}/);
   assert.match(overlay, /canBuffer=\{bufferCapabilityEnabled\}/);
   assert.match(overlay, /canIsochrone=\{isochroneCapabilityEnabled\}/);
+  assert.match(overlay, /canGeometryFilter=\{geometryFilterCapabilityEnabled\}/);
   assert.match(overlay, /data-analysis-marker-state/);
   assert.match(overlay, /data-isochrone-state/);
   assert.match(toolMenu, /canBuffer \?/);
   assert.match(toolMenu, /canIsochrone \?/);
+  assert.match(toolMenu, /canGeometryFilter && onStartGeometryFilterDraw/);
   assert.doesNotMatch(toolMenu, /Adicionar marcador/);
   assert.doesNotMatch(toolMenu, /ToolGlyph kind="marker"/);
   assert.doesNotMatch(
