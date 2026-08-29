@@ -3,7 +3,6 @@ import { useDispatch, useSelector, useStore } from "react-redux";
 
 import {
   setEditorMode,
-  setFeatures,
   setSelectedFeature,
   toggleEditorVisibility,
   toggleMapControl,
@@ -13,7 +12,6 @@ import { EDITOR_MODES } from "@kepler.gl/constants";
 
 import {
   KEPLER_MAP_ID,
-  collectionToArray,
   readValue,
   selectKeplerMapState,
   selectKeplerUiState,
@@ -25,7 +23,6 @@ type GeometryFilterIsolationState = {
   editorVisible: boolean;
   editorMode: string;
   selectedFeature: boolean;
-  editorFeatureCount: number;
   mapDrawActive: boolean;
 };
 
@@ -43,9 +40,6 @@ function geometryFilterIsolationState(
     editorVisible: Boolean(editor && readValue(editor, "visible") !== false),
     editorMode: String(readValue(editor, "mode") ?? ""),
     selectedFeature: Boolean(readValue(editor, "selectedFeature")),
-    editorFeatureCount: collectionToArray(
-      readValue(editor, "features"),
-    ).length,
     mapDrawActive: readValue(mapDraw, "active") === true,
   };
 }
@@ -57,7 +51,6 @@ function isolationKey(rootState: unknown) {
     state.editorVisible ? 1 : 0,
     state.editorMode,
     state.selectedFeature ? 1 : 0,
-    state.editorFeatureCount,
     state.mapDrawActive ? 1 : 0,
   ].join(":");
 }
@@ -67,9 +60,9 @@ function isolationKey(rootState: unknown) {
  *
  * O Polygon Filter continua existindo no Redux do Kepler apenas como engine
  * espacial. Desenho, seleção, handles, cursor, tooltip de edição e menu de
- * contexto não podem permanecer ativos. Cada condição é lida novamente do
- * store imediatamente antes do dispatch; isso torna a função idempotente até
- * se houver mais de uma instância do guard durante uma transição de runtime.
+ * contexto não podem permanecer ativos. Features legadas do Editor são
+ * preservadas no estado: ficam invisíveis, mas não são apagadas, evitando
+ * perda silenciosa de conteúdo histórico do projeto.
  */
 export function enforceGeometryFilterEngineIsolation(
   dispatch: (action: unknown) => unknown,
@@ -92,11 +85,6 @@ export function enforceGeometryFilterEngineIsolation(
 
   if (state.selectedFeature) {
     dispatch(wrapTo(KEPLER_MAP_ID, setSelectedFeature(null)));
-    changed = true;
-  }
-
-  if (state.editorFeatureCount > 0) {
-    dispatch(wrapTo(KEPLER_MAP_ID, setFeatures([])));
     changed = true;
   }
 
