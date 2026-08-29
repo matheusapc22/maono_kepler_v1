@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 
 import {
@@ -101,7 +101,7 @@ export function enforceGeometryFilterEngineIsolation(
   }
 
   if (state.editorVisible) {
-    dispatch(wrapTo(KEPLER_MAP_ID, toggleEditorVisibility()))
+    dispatch(wrapTo(KEPLER_MAP_ID, toggleEditorVisibility()));
     changed = true;
   }
 
@@ -110,9 +110,9 @@ export function enforceGeometryFilterEngineIsolation(
 
 /**
  * Guard de isolamento, sem listeners de clique, requestAnimationFrame ou
- * manipulação do DOM. A reação ocorre ao estado Redux do próprio Kepler, então
- * não existe uma janela visual em que os handles azuis ou as mensagens
- * "Drag to move..." precisem aparecer para depois serem apagados.
+ * manipulação do DOM. useLayoutEffect aplica a correção de estado antes do
+ * paint do browser sempre que o Kepler tenta reativar qualquer parte do
+ * Editor, evitando até o frame intermediário com handles/tooltips nativos.
  */
 export function useGeometryFilterManager({
   enabled = true,
@@ -123,7 +123,7 @@ export function useGeometryFilterManager({
   const store = useStore();
   const revision = useSelector(isolationKey);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) return;
 
     // Ler o estado fresco torna o uso seguro caso outro guard tenha acabado de
