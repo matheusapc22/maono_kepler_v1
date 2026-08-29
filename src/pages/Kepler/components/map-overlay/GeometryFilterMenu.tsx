@@ -144,23 +144,33 @@ export default function GeometryFilterMenu({
       return;
     }
 
+    const value = result.value;
+    if (!value) {
+      setStatus({
+        tone: "error",
+        text: "O Kepler não retornou o estado atualizado do filtro geométrico.",
+      });
+      telemetry("map_panel_command_denied", "COMMAND_FAILED");
+      return;
+    }
+
     // O Polygon Filter continua sendo o motor espacial, mas a edição visual
     // nativa não faz mais parte da experiência Maõno. Limpar a seleção remove
     // os edit handles azuis do EditableGeoJsonLayer após criar/atualizar.
     clearNativeEditorSelection();
 
-    setFilterId(result.value.filterId);
-    setAppliedLayerIds(result.value.affectedLayerIds);
-    setSelectedLayerIds(result.value.affectedLayerIds);
+    setFilterId(value.filterId);
+    setAppliedLayerIds(value.affectedLayerIds);
+    setSelectedLayerIds(value.affectedLayerIds);
     setStatus({
       tone: "success",
-      text: `Filtro aplicado em ${result.value.affectedLayerIds.length} camada(s).`,
+      text: `Filtro aplicado em ${value.affectedLayerIds.length} camada(s).`,
     });
     telemetry(
       "map_panel_command_executed",
       filterId ? "GEOMETRY_FILTER_UPDATED" : "GEOMETRY_FILTER_CREATED",
     );
-    onApplied?.(result.value);
+    onApplied?.(value);
   }
 
   return (
