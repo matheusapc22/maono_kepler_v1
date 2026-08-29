@@ -65,6 +65,14 @@ function sameLayerSelection(left, right) {
   return right.every((id) => leftSet.has(id));
 }
 
+function geometrySignature(feature, sourceLayerId) {
+  try {
+    return `${String(sourceLayerId ?? "")}:${JSON.stringify(feature?.geometry ?? null)}`;
+  } catch {
+    return `${String(sourceLayerId ?? "")}:${String(feature?.geometry?.type ?? "geometry")}`;
+  }
+}
+
 function GeometryFilterManager({ feature, sourceLayerId }) {
   const dispatch = useDispatch();
   const store = useStore();
@@ -83,13 +91,17 @@ function GeometryFilterManager({ feature, sourceLayerId }) {
     [layerOptions],
   );
   const selectionKey = filterableLayerIds.join("|");
+  const geometryKey = useMemo(
+    () => geometrySignature(feature, sourceLayerId),
+    [feature?.geometry, sourceLayerId],
+  );
 
   useEffect(() => {
     setSelectedLayerIds(filterableLayerIds);
     setAppliedLayerIds([]);
     setFilterId(null);
     setStatus(null);
-  }, [feature?.id, selectionKey]);
+  }, [geometryKey, selectionKey]);
 
   const authorization = authorizeMapPanelCommand(
     context?.capabilities,
@@ -170,7 +182,10 @@ function GeometryFilterManager({ feature, sourceLayerId }) {
       tone: "success",
       text: `Filtro aplicado em ${result.value.affectedLayerIds.length} camada(s).`,
     });
-    telemetry("map_panel_command_executed", filterId ? "GEOMETRY_FILTER_UPDATED" : "GEOMETRY_FILTER_CREATED");
+    telemetry(
+      "map_panel_command_executed",
+      filterId ? "GEOMETRY_FILTER_UPDATED" : "GEOMETRY_FILTER_CREATED",
+    );
   }
 
   return (
