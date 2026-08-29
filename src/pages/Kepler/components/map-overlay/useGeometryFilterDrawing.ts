@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Feature } from "@kepler.gl/types";
 
-import type { MapViewportSummary } from "../../engine-adapter/types";
+import type { MapViewportSummary } from "../../engine-adapter/types.ts";
 import {
   markerOriginToScreen,
   screenToMarkerOrigin,
   type MapCanvasRect,
   type MarkerOrigin,
-} from "./marker-projection";
+} from "./marker-projection.ts";
 
 function pointInsideCanvas(
   clientX: number,
