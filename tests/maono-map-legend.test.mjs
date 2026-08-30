@@ -48,7 +48,9 @@ test("posição inicial da legenda é projetada sem disparar Redux ao abrir", ()
   assert.match(legendPosition, /MAONO_LEGEND_HORIZONTAL_RATIO = 0\.63/);
   assert.match(
     legendPosition,
-    /desiredX = width \* MAONO_LEGEND_HORIZONTAL_RATIO/,
+    /desiredLeft = width \* MAONO_LEGEND_HORIZONTAL_RATIO/,
   );
+  assert.match(legendPosition, /anchorX: "right"/);
+  assert.match(legendPosition, /width - left - panelWidth/);
   assert.match(legendPosition, /MAONO_LEGEND_EDGE_MARGIN = 16/);
 });
