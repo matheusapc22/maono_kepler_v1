@@ -15,7 +15,7 @@ type MaonoBasemapPanelProps = {
 function visualTone(style: MaonoBasemapStyleOption) {
   const id = style.id.toLocaleLowerCase();
   if (id.includes("night") || id.includes("dark")) return "dark";
-  if (id.includes("light")) return "light";
+  if (id.includes("light") || id.includes("positron")) return "light";
   if (id.includes("muted")) return "muted";
   return "custom";
 }
@@ -30,6 +30,33 @@ function persistenceMessage(mode: MapRuntimeMode) {
   }
 
   return "A escolha entra nas alterações do mapa e será persistida quando você salvar o projeto.";
+}
+
+function BasemapPreview({ style }: { style: MaonoBasemapStyleOption }) {
+  return (
+    <span
+      className="maono-basemap-panel__preview"
+      data-basemap-tone={visualTone(style)}
+      data-kepler-preview={style.previewUrl ? "true" : "false"}
+      aria-hidden="true"
+    >
+      <i />
+      <i />
+      <i />
+      {style.previewUrl ? (
+        <img
+          src={style.previewUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={(event) => {
+            event.currentTarget.hidden = true;
+          }}
+        />
+      ) : null}
+    </span>
+  );
 }
 
 export default function MaonoBasemapPanel({
@@ -90,15 +117,7 @@ export default function MaonoBasemapPanel({
                 }
               }}
             >
-              <span
-                className="maono-basemap-panel__preview"
-                data-basemap-tone={visualTone(style)}
-                aria-hidden="true"
-              >
-                <i />
-                <i />
-                <i />
-              </span>
+              <BasemapPreview style={style} />
               <span className="maono-basemap-panel__option-copy">
                 <strong>{style.label}</strong>
                 <small>
