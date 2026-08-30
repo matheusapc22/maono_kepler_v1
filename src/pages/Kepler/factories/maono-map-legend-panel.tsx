@@ -86,6 +86,16 @@ function maonoLegendTheme(outerTheme = {}) {
   };
 }
 
+function hasStoredLegendPosition(position) {
+  return Boolean(
+    position &&
+      Number.isFinite(Number(position.x)) &&
+      Number.isFinite(Number(position.y)) &&
+      ["left", "right"].includes(position.anchorX) &&
+      ["top", "bottom"].includes(position.anchorY),
+  );
+}
+
 MaonoMapLegendPanelFactory.deps = MapLegendPanelFactory.deps;
 
 /**
@@ -122,7 +132,9 @@ export function MaonoMapLegendPanelFactory(
     ...props
   }) => {
     const positionedForCurrentOpenRef = useRef(false);
-    const active = Boolean(uiState?.mapControls?.mapLegend?.active);
+    const mapLegend = uiState?.mapControls?.mapLegend;
+    const active = Boolean(mapLegend?.active);
+    const storedPosition = mapLegend?.settings?.position;
     const width = Number(props.mapState?.width) || 0;
     const height = Number(props.mapState?.height) || 0;
 
@@ -133,6 +145,11 @@ export function MaonoMapLegendPanelFactory(
       }
 
       if (props.isExport || positionedForCurrentOpenRef.current) {
+        return;
+      }
+
+      if (hasStoredLegendPosition(storedPosition)) {
+        positionedForCurrentOpenRef.current = true;
         return;
       }
 
@@ -147,13 +164,17 @@ export function MaonoMapLegendPanelFactory(
       active,
       height,
       props.isExport,
+      storedPosition,
       updateMapControlSettings,
       width,
     ]);
 
     return (
       <ThemeProvider theme={maonoLegendTheme}>
-        <NativeMapLegendPanel {...props} />
+        <NativeMapLegendPanel
+          {...props}
+          setMapControlSettings={updateMapControlSettings}
+        />
       </ThemeProvider>
     );
   };
