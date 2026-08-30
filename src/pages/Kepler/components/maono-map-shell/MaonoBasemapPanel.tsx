@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import type {
   MaonoBasemapController,
   MaonoBasemapStyleOption,
-} from "../../engine-adapter/basemap-controller.ts";
-import type { MapRuntimeMode } from "../../map-panel/types.ts";
+} from "../../engine-adapter/basemap-controller";
+import type { MapRuntimeMode } from "../../map-panel/types";
 import "./maono-basemap-panel.css";
 
 type MaonoBasemapPanelProps = {
