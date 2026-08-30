@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 export type MapShellIconName =
+  | "basemap"
   | "chevron-left"
   | "chevron-right"
   | "create"
@@ -13,6 +14,13 @@ export type MapShellIconName =
   | "viewer";
 
 const ICON_PATHS: Record<MapShellIconName, ReactNode> = {
+  basemap: (
+    <>
+      <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
+      <path d="M9 3v15" />
+      <path d="M15 6v15" />
+    </>
+  ),
   "chevron-left": <path d="m15 18-6-6 6-6" />,
   "chevron-right": <path d="m9 18 6-6-6-6" />,
   create: (
