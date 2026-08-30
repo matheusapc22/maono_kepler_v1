@@ -22,6 +22,8 @@ type MapPanelTelemetryDetails = {
   sessionId?: string | null;
   dataId?: string | null;
   antimeridianSplitCount?: number | null;
+  styleId?: string | null;
+  persistence?: "project" | "session" | null;
 };
 
 export function emitMapPanelTelemetry(

@@ -4,13 +4,17 @@ import maonoSymbol from "../../../../assets/images/Logo_Simbolo.png";
 import type { MapPanelContextValue } from "../../map-panel/types";
 import MapShellIcon from "./MapShellIcon";
 import type { MaonoMapPanelTab } from "./map-shell-events";
+import type { MaonoMapShellPanel } from "./map-shell-panels";
 
 type MapSidebarProps = {
   context: MapPanelContextValue;
   panelOpen: boolean;
+  activePanel: MaonoMapShellPanel;
   layerPanelAvailable: boolean;
+  basemapAvailable: boolean;
   loggingOut: boolean;
   onPanelTabSelect: (tab: MaonoMapPanelTab) => void;
+  onOpenBasemap: () => void;
   onOpenData: () => void;
   onLogout: () => Promise<void>;
 };
@@ -26,9 +30,12 @@ function SidebarLabel({ children }: { children: string }) {
 export default function MapSidebar({
   context,
   panelOpen,
+  activePanel,
   layerPanelAvailable,
+  basemapAvailable,
   loggingOut,
   onPanelTabSelect,
+  onOpenBasemap,
   onOpenData,
   onLogout,
 }: MapSidebarProps) {
@@ -37,6 +44,9 @@ export default function MapSidebar({
     layerPanelAvailable &&
       capabilities.openLayerPanel &&
       capabilities.viewLayers,
+  );
+  const canOpenBasemap = Boolean(
+    basemapAvailable && capabilities.viewMap,
   );
   const canImportData = capabilities.createLayer === true;
 
@@ -62,15 +72,34 @@ export default function MapSidebar({
         {canOpenLayers ? (
           <button
             type="button"
-            className={panelOpen ? "is-active" : ""}
+            className={
+              panelOpen && activePanel === "layers" ? "is-active" : ""
+            }
             onClick={() => onPanelTabSelect("layers")}
-            aria-pressed={panelOpen}
+            aria-pressed={panelOpen && activePanel === "layers"}
             aria-controls="maono-map-engine-panel"
             aria-label="Camadas"
             title="Camadas"
           >
             <MapShellIcon name="layers" />
             <SidebarLabel>Camadas</SidebarLabel>
+          </button>
+        ) : null}
+
+        {canOpenBasemap ? (
+          <button
+            type="button"
+            className={
+              panelOpen && activePanel === "basemap" ? "is-active" : ""
+            }
+            onClick={onOpenBasemap}
+            aria-pressed={panelOpen && activePanel === "basemap"}
+            aria-controls="maono-basemap-panel"
+            aria-label="Mapa base"
+            title="Mapa base"
+          >
+            <MapShellIcon name="basemap" />
+            <SidebarLabel>Mapa base</SidebarLabel>
           </button>
         ) : null}
 

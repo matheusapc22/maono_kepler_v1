@@ -26,6 +26,10 @@ const [
   layoutDebug,
   backButton,
   mapPanelProvider,
+  basemapController,
+  basemapPanel,
+  basemapPanelCss,
+  shellPanels,
 ] = await Promise.all([
   source("index.tsx"),
   source("components/maono-map-shell/MaonoMapRuntime.tsx"),
@@ -44,6 +48,10 @@ const [
   source("components/maono-map-shell/map-layout-debug.ts"),
   source("components/back-to-projects-button.tsx"),
   source("map-panel/MapPanelProvider.tsx"),
+  source("engine-adapter/basemap-controller.ts"),
+  source("components/maono-map-shell/MaonoBasemapPanel.tsx"),
+  source("components/maono-map-shell/maono-basemap-panel.css"),
+  source("components/maono-map-shell/map-shell-panels.ts"),
 ]);
 const appRoutes = await readFile(
   new URL("../src/Routes.tsx", import.meta.url),
@@ -137,11 +145,14 @@ test("create de projeto existente é somente redirect de compatibilidade", () =>
   assert.doesNotMatch(createRouteBlock, /KeplerApp/);
 });
 
-test("sidebar contém somente ferramentas capability-aware, sem decidir modo", () => {
-  for (const capability of ["openLayerPanel", "viewLayers", "createLayer"]) {
-    assert.match(sidebar, new RegExp(`capabilities\.${capability}`));
+test("sidebar contém ferramentas capability-aware, incluindo mapa base", () => {
+  for (const capability of ["openLayerPanel", "viewLayers", "viewMap", "createLayer"]) {
+    assert.match(sidebar, new RegExp(`capabilities\\.${capability}`));
   }
 
+  assert.match(sidebar, /onOpenBasemap/);
+  assert.match(sidebar, /MapShellIcon name="basemap"/);
+  assert.match(sidebar, /aria-label="Mapa base"/);
   assert.match(runtime, /context\.capabilities\.viewFilters/);
   assert.doesNotMatch(sidebar, /capabilities\.viewFilters/);
   assert.doesNotMatch(sidebar, /context\.availablePanels/);
@@ -154,6 +165,24 @@ test("sidebar contém somente ferramentas capability-aware, sem decidir modo", (
   assert.doesNotMatch(sidebar, /user\?\.role/);
   assert.doesNotMatch(sidebar, /checkAdminUser/);
   assert.doesNotMatch(sidebar, /localStorage/);
+});
+
+test("mapa base Maõno está disponível em view, editor e create sem ampliar persistência", () => {
+  assert.match(runtime, /context\?\.capabilities\.viewMap/);
+  assert.match(runtime, /basemapController\.available/);
+  assert.match(runtime, /setActivePanel\("basemap"\)/);
+  assert.match(runtime, /<MaonoBasemapPanel/);
+  assert.match(shellPanels, /"layers" \| "basemap"/);
+  assert.match(basemapController, /capabilities\.viewMap/);
+  assert.match(basemapController, /mapStyleChange\(normalized\)/);
+  assert.match(basemapController, /wrapTo\(KEPLER_MAP_ID/);
+  assert.match(basemapController, /context\.capabilities\.saveMap \? "project" : "session"/);
+  assert.doesNotMatch(basemapController, /editLayerStyle/);
+  assert.match(basemapPanel, /mode === "viewer"/);
+  assert.match(basemapPanel, /somente para esta sessão/);
+  assert.match(basemapPanel, /mode === "create"/);
+  assert.match(basemapPanel, /será incluído na configuração do novo mapa/);
+  assert.match(basemapPanelCss, /\.maono-basemap-panel__option\.is-selected/);
 });
 
 test("topbar informa o modo atual sem transformá-lo em seletor", () => {
@@ -179,7 +208,9 @@ test("Filtros permanecem exclusivamente como subfunção do painel de Camadas", 
   assert.match(layerPanel, /id="maono-filters-tab"/);
   assert.match(sidebar, /onPanelTabSelect\("layers"\)/);
   assert.doesNotMatch(sidebar, /onPanelTabSelect\("filters"\)/);
-  assert.match(panelHost, /aria-controls="maono-map-engine-panel"/);
+  assert.match(panelHost, /aria-controls=\{controlsId\}/);
+  assert.match(shellPanels, /"maono-map-engine-panel"/);
+  assert.match(shellPanels, /"maono-basemap-panel"/);
   assert.match(layerPanel, /id="maono-map-engine-panel"/);
 });
 
