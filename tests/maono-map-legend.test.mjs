@@ -23,17 +23,25 @@ test("legenda Maõno localiza o separador de intervalos sem alterar palavras", (
   assert.match(index, /replaceLegendRow\(\)/);
 });
 
-test("legenda Maõno mantém o callback nativo necessário para arrastar", () => {
+test("legenda Maõno preserva o fluxo nativo de abertura, drag e resize", () => {
+  assert.doesNotMatch(legendPanel, /\bwithState\b/);
+  assert.doesNotMatch(legendPanel, /\buiStateLens\b/);
+  assert.doesNotMatch(legendPanel, /useLayoutEffect/);
+  assert.doesNotMatch(legendPanel, /updateMapControlSettings\("mapLegend"/);
+  assert.match(legendPanel, /const mapLegend = props\.mapControls\?\.mapLegend/);
   assert.match(
     legendPanel,
-    /<NativeMapLegendPanel[\s\S]*setMapControlSettings=\{updateMapControlSettings\}/,
+    /<NativeMapLegendPanel \{\.\.\.props\} mapControls=\{mapControls\} \/>/,
   );
-  assert.match(legendPanel, /mapLegend\?\.settings\?\.position/);
-  assert.match(legendPanel, /hasStoredLegendPosition\(storedPosition\)/);
-  assert.match(legendPanel, /updateMapControlSettings\("mapLegend", \{ position \}\)/);
 });
 
-test("posição inicial da legenda nasce um pouco mais à direita", () => {
+test("posição inicial da legenda é projetada sem disparar Redux ao abrir", () => {
+  assert.match(legendPanel, /mapControlsWithInitialLegendPosition/);
+  assert.match(legendPanel, /hasStoredLegendPosition\(storedPosition\)/);
+  assert.match(
+    legendPanel,
+    /calculateMaonoLegendInitialPosition\(\{ width, height \}\)/,
+  );
   assert.match(legendPosition, /MAONO_LEGEND_HORIZONTAL_RATIO = 0\.63/);
   assert.match(
     legendPosition,
