@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { mapStyleChange, wrapTo } from "@kepler.gl/actions";
+import { getApplicationConfig } from "@kepler.gl/utils";
 
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
 import { useMapPanel } from "../map-panel/MapPanelContext";
@@ -14,6 +15,7 @@ import type { KeplerCommandResult } from "./types";
 export type MaonoBasemapStyleOption = {
   id: string;
   label: string;
+  previewUrl: string | null;
   selected: boolean;
   source: "default" | "custom";
 };
@@ -26,8 +28,23 @@ export type MaonoBasemapController = {
   selectStyle: (styleId: string) => KeplerCommandResult;
 };
 
-const DEFAULT_STYLE_ORDER = ["light", "muted", "dark", "muted_night"];
+const DEFAULT_STYLE_ORDER = [
+  "no_map",
+  "dark-matter",
+  "positron",
+  "voyager",
+  "satellite",
+  "light",
+  "muted",
+  "dark",
+  "muted_night",
+];
 const DEFAULT_STYLE_LABELS: Record<string, string> = {
+  no_map: "Sem mapa base",
+  "dark-matter": "Dark Matter",
+  positron: "Positron",
+  voyager: "Voyager",
+  satellite: "Satélite",
   light: "Claro",
   muted: "Suave",
   dark: "Escuro",
@@ -74,6 +91,27 @@ function styleLabel(styleId: string, style: unknown) {
   return configured || DEFAULT_STYLE_LABELS[styleId] || titleFromId(styleId);
 }
 
+/**
+ * O Kepler guarda a miniatura oficial de cada BaseMapStyle em `icon`.
+ * Nos estilos padrão esse valor pode ser relativo ao CDN configurado pela
+ * própria aplicação (ex.: `geodude/UBER_DARK_V2.png`); estilos customizados
+ * também podem fornecer uma URL absoluta. A Maõno reaproveita exatamente o
+ * mesmo asset em vez de manter ilustrações paralelas.
+ */
+export function resolveBasemapPreviewUrl(style: unknown): string | null {
+  const icon = String(readValue(style, "icon") ?? "").trim();
+  if (!icon) return null;
+
+  if (/^(?:https?:|data:|blob:)/i.test(icon) || icon.startsWith("/")) {
+    return icon;
+  }
+
+  const cdnUrl = String(getApplicationConfig().cdnUrl ?? "").trim();
+  if (!cdnUrl) return icon;
+
+  return `${cdnUrl.replace(/\/+$/, "")}/${icon.replace(/^\/+/, "")}`;
+}
+
 function normalizeStyles(mapState: unknown): MaonoBasemapStyleOption[] {
   const mapStyle = readValue(mapState, "mapStyle");
   const currentStyleId = String(
@@ -89,6 +127,7 @@ function normalizeStyles(mapState: unknown): MaonoBasemapStyleOption[] {
       return {
         id,
         label: styleLabel(id, style),
+        previewUrl: resolveBasemapPreviewUrl(style),
         selected: id === currentStyleId,
         source: DEFAULT_STYLE_ORDER.includes(id)
           ? ("default" as const)

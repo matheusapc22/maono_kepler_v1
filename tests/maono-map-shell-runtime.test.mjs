@@ -185,6 +185,20 @@ test("mapa base Maõno está disponível em view, editor e create sem ampliar pe
   assert.match(basemapPanelCss, /\.maono-basemap-panel__option\.is-selected/);
 });
 
+test("seletor Maõno reutiliza as miniaturas oficiais de mapa base do Kepler", () => {
+  assert.match(basemapController, /getApplicationConfig/);
+  assert.match(basemapController, /readValue\(style, "icon"\)/);
+  assert.match(basemapController, /previewUrl: resolveBasemapPreviewUrl\(style\)/);
+  assert.match(basemapController, /getApplicationConfig\(\)\.cdnUrl/);
+  assert.match(basemapPanel, /style\.previewUrl/);
+  assert.match(basemapPanel, /<img/);
+  assert.match(basemapPanel, /src=\{style\.previewUrl\}/);
+  assert.match(basemapPanel, /loading="lazy"/);
+  assert.match(basemapPanel, /event\.currentTarget\.hidden = true/);
+  assert.match(basemapPanelCss, /\.maono-basemap-panel__preview img/);
+  assert.match(basemapPanelCss, /object-fit:\s*cover/);
+});
+
 test("topbar informa o modo atual sem transformá-lo em seletor", () => {
   assert.match(topbar, /modeLabel\(context\.mode\)/);
   assert.match(topbar, /user\?\.name/);
