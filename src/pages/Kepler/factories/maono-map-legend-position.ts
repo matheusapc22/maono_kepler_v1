@@ -15,7 +15,7 @@ export type MaonoLegendPosition = {
   anchorY: "top";
 };
 
-export const MAONO_LEGEND_HORIZONTAL_RATIO = 0.6;
+export const MAONO_LEGEND_HORIZONTAL_RATIO = 0.63;
 export const MAONO_LEGEND_VERTICAL_RATIO = 0.12;
 export const MAONO_LEGEND_EDGE_MARGIN = 16;
 export const MAONO_LEGEND_DEFAULT_WIDTH = 300;
@@ -40,9 +40,9 @@ function clamp(value: number, minimum: number, maximum: number) {
  * Calcula a posição inicial da legenda somente a partir do estado de viewport
  * que o Kepler entrega ao componente React. Não mede canvas nem legenda via DOM.
  *
- * Em viewports normais a origem é exatamente 60% do canvas no eixo X e 12%
- * no eixo Y. Em viewports estreitos o ponto é limitado para manter o painel
- * visível dentro do canvas.
+ * Em viewports normais a origem é 63% do canvas no eixo X e 12% no eixo Y,
+ * deixando o nascimento da legenda um pouco mais à direita. Em viewports
+ * estreitos o ponto é limitado para manter o painel visível dentro do canvas.
  */
 export function calculateMaonoLegendInitialPosition(
   canvas: MaonoLegendCanvasSize,
