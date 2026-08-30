@@ -6,10 +6,14 @@ import { GEOCODER_LAYER_ID } from "@kepler.gl/constants";
 import {
   applyGeometryFilter,
   geometryFilterLayerOptions,
+  geometryFilterSnapshots,
   geometryFilterTargetLayerIds,
   isPolygonGeometryFeature,
   updateGeometryFilterLayers,
 } from "../src/pages/Kepler/engine-adapter/geometry-filter-command.ts";
+import {
+  hitTestProjectedGeometry,
+} from "../src/pages/Kepler/components/map-overlay/geometry-filter-overlay-utils.ts";
 import { createGeometryFilterFeature } from "../src/pages/Kepler/components/map-overlay/useGeometryFilterDrawing.ts";
 import {
   calculateMaonoLegendInitialPosition,
@@ -25,6 +29,8 @@ const [
   geometryFilterMenu,
   geometryManagerHook,
   geometryDrawingHook,
+  geometryRuntime,
+  geometryRuntimeStyles,
   analysisToolMenu,
   overlayControls,
   geometryUiStyles,
@@ -39,6 +45,8 @@ const [
   readFile(new URL("../src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/map-overlay/useGeometryFilterManager.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/map-overlay/useGeometryFilterDrawing.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/MaonoGeometryFilterRuntime.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/geometry-filter-runtime.css", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/map-overlay/analysis-tools/AnalysisToolMenu.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/map-overlay/geometry-filter-ui.css", import.meta.url), "utf8"),
@@ -92,10 +100,15 @@ function geometryRootState() {
               testLayer("calor", "heatmap"),
             ],
             filters: [],
-            editor: { features: [], selectedFeature: null },
+            editor: {
+              features: [{ id: "legacy-editor-feature" }],
+              selectedFeature: null,
+              visible: false,
+              mode: "EDIT",
+            },
           },
           mapState: { width: 1000, height: 700 },
-          uiState: {},
+          uiState: { mapControls: { mapDraw: { active: false } } },
           mapStyle: {},
         },
       },
@@ -103,49 +116,81 @@ function geometryRootState() {
   };
 }
 
-function nativePolygonAction(action) {
-  return [action, action?.payload, action?.payload?.payload].find(
-    (candidate) => candidate?.layer && candidate?.feature,
+function findNestedAction(value, matcher, depth = 0, seen = new Set()) {
+  if (!value || typeof value !== "object" || depth > 7 || seen.has(value)) {
+    return null;
+  }
+  seen.add(value);
+  if (matcher(value)) return value;
+
+  for (const nested of Object.values(value)) {
+    const found = findNestedAction(nested, matcher, depth + 1, seen);
+    if (found) return found;
+  }
+  return null;
+}
+
+function actionEndingWith(action, suffix) {
+  return findNestedAction(
+    action,
+    (candidate) => String(candidate?.type ?? "").endsWith(suffix),
   );
 }
 
-function createPolygonFilterReducer(state, dispatches) {
+function deriveDataIds(visState, layerIds) {
+  return layerIds
+    .map((id) => visState.layers.find((layer) => layer.id === id)?.config?.dataId)
+    .filter(Boolean);
+}
+
+function applySetFilterAction(visState, action) {
+  const filter = visState.filters[action.idx];
+  assert.ok(filter, `filter ${action.idx} deve existir`);
+
+  const props = Array.isArray(action.prop) ? action.prop : [action.prop];
+  const values = Array.isArray(action.prop) ? action.value : [action.value];
+
+  props.forEach((prop, index) => {
+    const value = values[index];
+    if (prop === "layerId") {
+      filter.layerId = [...value];
+      filter.dataId = deriveDataIds(visState, filter.layerId);
+      return;
+    }
+    filter[prop] = value;
+  });
+}
+
+function createHeadlessFilterReducer(state, dispatches) {
   return (action) => {
     dispatches.push(action);
-    const native = nativePolygonAction(action);
-    assert.ok(native, "setPolygonFilterLayer deve atravessar wrapTo");
-
     const visState = state.demo.keplerGl.map.visState;
-    const incoming = native.feature;
-    const incomingFilterId = incoming.properties?.filterId;
-    const id = incomingFilterId || "polygon-filter-test";
-    const selectedFeature = {
-      ...incoming,
-      properties: {
-        ...(incoming.properties || {}),
-        filterId: id,
-        isClosed: true,
-      },
-    };
-    let filter = visState.filters.find((candidate) => candidate.id === id);
 
-    if (!filter) {
-      filter = {
-        id,
-        type: "polygon",
-        layerId: [native.layer.id],
-        value: selectedFeature,
+    const add = actionEndingWith(action, "ADD_FILTER");
+    if (add) {
+      visState.filters.push({
+        id: add.id,
+        dataId: add.dataId ? [add.dataId] : [],
         enabled: true,
-      };
-      visState.filters.push(filter);
-    } else if (filter.layerId.includes(native.layer.id)) {
-      filter.layerId = filter.layerId.filter((layerId) => layerId !== native.layer.id);
-    } else {
-      filter.layerId.push(native.layer.id);
+        fixedDomain: false,
+        type: null,
+        name: [],
+        layerId: [],
+        value: null,
+      });
+      return;
     }
 
-    filter.value = selectedFeature;
-    visState.editor.selectedFeature = selectedFeature;
+    const set = actionEndingWith(action, "SET_FILTER");
+    if (set) {
+      applySetFilterAction(visState, set);
+      return;
+    }
+
+    const remove = actionEndingWith(action, "REMOVE_FILTER");
+    if (remove) {
+      visState.filters.splice(remove.idx, 1);
+    }
   };
 }
 
@@ -180,7 +225,7 @@ test("legenda Maono substitui o factory oficial e preserva estado nativo", () =>
   assert.match(legendFactory, /replaceMapLegendPanel/);
 });
 
-test("tooltip Maono mantém filtragem recolhida atrás do botão explícito", () => {
+test("tooltip Maono mantém filtragem recolhida e oferece saída explícita", () => {
   assert.match(popoverFactory, /MapPopoverFactory\.deps/);
   assert.match(popoverFactory, /createPortal/);
   assert.match(popoverFactory, /className={`maono-map-tooltip/);
@@ -191,21 +236,25 @@ test("tooltip Maono mantém filtragem recolhida atrás do botão explícito", ()
   assert.match(popoverFactory, /Filtrar por geometria/);
   assert.match(popoverFactory, /aria-expanded={filterMenuOpen}/);
   assert.match(popoverFactory, /maono-map-tooltip__geometry-dropdown/);
+  assert.match(popoverFactory, /onExit=\{\(\) => setFilterMenuOpen\(false\)\}/);
   assert.doesNotMatch(popoverFactory, /NativeMapPopover/);
   assert.doesNotMatch(popoverFactory, /select-geometry/);
   assert.match(popoverStyles, /\.maono-map-tooltip__layer-list/);
   assert.match(geometryUiStyles, /\.maono-map-tooltip__geometry-action/);
 });
 
-test("gestor Maono controla todas as layers e limpa seleção editável após aplicar", () => {
+test("gestor Maono controla layers, saída e remoção sem importar o Editor", () => {
   assert.match(geometryFilterMenu, /geometryFilterLayerOptions/);
   assert.match(geometryFilterMenu, /updateGeometryFilterLayers/);
+  assert.match(geometryFilterMenu, /removeGeometryFilter/);
   assert.match(geometryFilterMenu, /Aplicar filtro/);
   assert.match(geometryFilterMenu, /Atualizar filtro/);
+  assert.match(geometryFilterMenu, /Sair do filtro por geometria/);
+  assert.match(geometryFilterMenu, /Remover filtro/);
   assert.match(geometryFilterMenu, />\s*Todas\s*</);
   assert.match(geometryFilterMenu, />\s*Limpar\s*</);
-  assert.match(geometryFilterMenu, /setSelectedFeature\(null\)/);
-  assert.match(geometryFilterMenu, /clearNativeEditorSelection/);
+  assert.doesNotMatch(geometryFilterMenu, /setSelectedFeature/);
+  assert.doesNotMatch(geometryFilterMenu, /@kepler\.gl\/actions/);
 });
 
 test("catálogo Maono expõe todas as layers e marca compatibilidade", () => {
@@ -234,10 +283,10 @@ test("catálogo Maono expõe todas as layers e marca compatibilidade", () => {
   );
 });
 
-test("tooltip cria um único filtro somente nas layers escolhidas", () => {
+test("adapter cria filtro headless sem setPolygonFilterLayer nem seleção do Editor", () => {
   const state = geometryRootState();
   const dispatches = [];
-  const dispatch = createPolygonFilterReducer(state, dispatches);
+  const dispatch = createHeadlessFilterReducer(state, dispatches);
 
   const result = applyGeometryFilter({
     dispatch,
@@ -248,23 +297,50 @@ test("tooltip cria um único filtro somente nas layers escolhidas", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(dispatches.length, 3);
+  assert.equal(dispatches.length, 2);
+  assert.ok(actionEndingWith(dispatches[0], "ADD_FILTER"));
+  assert.ok(actionEndingWith(dispatches[1], "SET_FILTER"));
   assert.equal(state.demo.keplerGl.map.visState.filters.length, 1);
   assert.deepEqual(
     state.demo.keplerGl.map.visState.filters[0].layerId,
     ["source-polygons", "clientes", "oculta"],
   );
-  assert.equal(result.value.filterId, "polygon-filter-test");
+  assert.equal(state.demo.keplerGl.map.visState.editor.selectedFeature, null);
+  assert.deepEqual(
+    state.demo.keplerGl.map.visState.editor.features,
+    [{ id: "legacy-editor-feature" }],
+  );
+  assert.ok(result.value.filterId);
+  assert.equal(
+    state.demo.keplerGl.map.visState.filters[0].value.properties.filterId,
+    result.value.filterId,
+  );
   assert.deepEqual(
     result.value.affectedLayerIds,
     ["source-polygons", "clientes", "oculta"],
   );
+
+  const snapshots = geometryFilterSnapshots(state);
+  assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0].maonoManaged, true);
+  assert.equal(snapshots[0].sourceLayerId, "source-polygons");
 });
 
-test("tooltip atualiza associações do filtro sem acionar o gestor nativo", () => {
+test("adapter usa estrutura do engine sem acionar a funcionalidade interativa do Kepler", () => {
+  assert.match(geometryFilter, /generatePolygonFilter/);
+  assert.match(geometryFilter, /addFilter/);
+  assert.match(geometryFilter, /setFilter/);
+  assert.match(geometryFilter, /removeGeometryFilter/);
+  assert.doesNotMatch(geometryFilter, /\bsetPolygonFilterLayer\s*\(/);
+  assert.doesNotMatch(geometryFilter, /setSelectedFeature/);
+  assert.doesNotMatch(geometryFilter, /selectedEditorFeature/);
+  assert.doesNotMatch(geometryFilter, /openSelectedGeometryFilterManager/);
+});
+
+test("tooltip atualiza associações por layerId sem reativar Editor", () => {
   const state = geometryRootState();
   const dispatches = [];
-  const dispatch = createPolygonFilterReducer(state, dispatches);
+  const dispatch = createHeadlessFilterReducer(state, dispatches);
 
   const created = applyGeometryFilter({
     dispatch,
@@ -283,25 +359,78 @@ test("tooltip atualiza associações do filtro sem acionar o gestor nativo", () 
   });
 
   assert.equal(updated.ok, true);
-  assert.equal(dispatches.length, 2);
+  assert.equal(dispatches.length, 1);
+  assert.ok(actionEndingWith(dispatches[0], "SET_FILTER"));
+  assert.equal(state.demo.keplerGl.map.visState.editor.selectedFeature, null);
+  assert.deepEqual(
+    state.demo.keplerGl.map.visState.editor.features,
+    [{ id: "legacy-editor-feature" }],
+  );
   assert.deepEqual(
     state.demo.keplerGl.map.visState.filters[0].layerId.sort(),
     ["clientes", "rotas"],
   );
-  assert.deepEqual(updated.value.affectedLayerIds, ["clientes", "rotas"]);
-  assert.doesNotMatch(geometryFilter, /setSelectedFeature/);
-  assert.doesNotMatch(geometryFilter, /openSelectedGeometryFilterManager/);
+  assert.deepEqual(updated.value.affectedLayerIds.sort(), ["clientes", "rotas"]);
 });
 
-test("clique no Polygon Filter só limpa a seleção nativa e não abre FeatureActionPanel", () => {
-  assert.match(geometryManagerHook, /requestAnimationFrame/);
+test("guard elimina o Editor nativo por estado antes do paint sem apagar features legadas", () => {
+  assert.match(geometryManagerHook, /useLayoutEffect/);
+  assert.match(geometryManagerHook, /toggleEditorVisibility/);
+  assert.match(geometryManagerHook, /setEditorMode\(EDITOR_MODES\.EDIT\)/);
   assert.match(geometryManagerHook, /setSelectedFeature\(null\)/);
-  assert.match(geometryManagerHook, /FILTER_TYPES\.polygon/);
-  assert.match(geometryManagerHook, /default-deckgl-overlay/);
-  assert.doesNotMatch(geometryManagerHook, /openSelectedGeometryFilterManager/);
+  assert.match(geometryManagerHook, /toggleMapControl\("mapDraw", 0\)/);
+  assert.match(geometryManagerHook, /preservadas no estado/);
+  assert.match(geometryManagerHook, /enforceGeometryFilterEngineIsolation/);
+  assert.doesNotMatch(geometryManagerHook, /setFeatures\(\[\]\)/);
+  assert.doesNotMatch(geometryManagerHook, /requestAnimationFrame/);
+  assert.doesNotMatch(geometryManagerHook, /addEventListener\("click"/);
+  assert.doesNotMatch(geometryManagerHook, /default-deckgl-overlay/);
   assert.doesNotMatch(geometryManagerHook, /rightClick:\s*true/);
   assert.doesNotMatch(geometryManagerHook, /FeatureActionPanel/);
   assert.doesNotMatch(geometryManagerHook, /@turf/i);
+});
+
+test("runtime Maono desenha e gerencia filtros sem picking do Editor", () => {
+  assert.match(geometryRuntime, /geometryFilterSnapshots/);
+  assert.match(geometryRuntime, /projectGeometryFilter/);
+  assert.match(geometryRuntime, /hitTestProjectedGeometry/);
+  assert.match(geometryRuntime, /GeometryFilterMenu/);
+  assert.match(geometryRuntime, /Sair do filtro por geometria/);
+  assert.match(geometryRuntime, /Gerenciar filtros geométricos/);
+  assert.match(geometryRuntime, /pointerdown/);
+  assert.match(geometryRuntime, /Math\.hypot/);
+  assert.match(geometryRuntime, /> 6/);
+  assert.doesNotMatch(geometryRuntime, /EditableGeoJsonLayer/);
+  assert.doesNotMatch(geometryRuntime, /FeatureActionPanel/);
+  assert.doesNotMatch(geometryRuntime, /setSelectedFeature/);
+  assert.match(geometryRuntimeStyles, /\.maono-geometry-filter-overlay/);
+  assert.match(geometryRuntimeStyles, /pointer-events:\s*none/);
+  assert.match(shellRuntime, /MaonoGeometryFilterRuntime/);
+});
+
+test("hit-test da UI respeita interior, buracos e borda do polígono", () => {
+  const projected = {
+    path: "",
+    polygons: [[
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
+      ],
+      [
+        { x: 40, y: 40 },
+        { x: 60, y: 40 },
+        { x: 60, y: 60 },
+        { x: 40, y: 60 },
+      ],
+    ]],
+  };
+
+  assert.equal(hitTestProjectedGeometry(projected, { x: 20, y: 20 }), true);
+  assert.equal(hitTestProjectedGeometry(projected, { x: 50, y: 50 }), false);
+  assert.equal(hitTestProjectedGeometry(projected, { x: 102, y: 50 }, 3), true);
+  assert.equal(hitTestProjectedGeometry(projected, { x: 120, y: 50 }), false);
 });
 
 test("desenho Maono cria Polygon fechado com no mínimo três vértices", () => {
@@ -328,11 +457,12 @@ test("desenho Maono cria Polygon fechado com no mínimo três vértices", () => 
   assert.equal(feature.properties.maonoGeometryFilter, true);
 });
 
-test("pin oferece desenho de área e usa overlay Maono sem edit handles arrastáveis", () => {
+test("pin oferece desenho de área e saída explícita sem edit handles arrastáveis", () => {
   assert.match(analysisToolMenu, /Desenhar área de filtragem/);
   assert.match(analysisToolMenu, /onStartGeometryFilterDraw/);
   assert.match(overlayControls, /useGeometryFilterDrawing/);
   assert.match(overlayControls, /Concluir polígono/);
+  assert.match(overlayControls, /Sair do filtro por geometria/);
   assert.match(overlayControls, /GeometryFilterMenu/);
   assert.match(overlayControls, /maono-geometry-draw-canvas/);
   assert.match(geometryDrawingHook, /screenToMarkerOrigin/);

@@ -12,6 +12,7 @@ import "../../engine-adapter/map-flight.css";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
 import MaonoLayerPanelErrorBoundary from "../maono-layer-panel/ErrorBoundary";
 import MaonoLayerPanel from "../maono-layer-panel/MaonoLayerPanel";
+import MaonoGeometryFilterRuntime from "../map-overlay/MaonoGeometryFilterRuntime";
 import MapOverlayControls from "../map-overlay/MapOverlayControls";
 import MaonoMapShell from "./MaonoMapShell";
 import MapPanelHost from "./MapPanelHost";
@@ -279,7 +280,12 @@ export default function MaonoMapRuntime({
       }
     >
       {children}
-      {customMapOverlayEnabled ? <MapOverlayControls /> : null}
+      {customMapOverlayEnabled ? (
+        <>
+          <MapOverlayControls />
+          <MaonoGeometryFilterRuntime />
+        </>
+      ) : null}
     </MaonoMapShell>
   );
 }
