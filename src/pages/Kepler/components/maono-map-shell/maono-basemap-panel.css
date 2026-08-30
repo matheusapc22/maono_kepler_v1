@@ -110,6 +110,22 @@
   box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
 }
 
+.maono-basemap-panel__preview img {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  background: #0c111a;
+}
+
+.maono-basemap-panel__preview img[hidden] {
+  display: none;
+}
+
 .maono-basemap-panel__preview::before,
 .maono-basemap-panel__preview::after,
 .maono-basemap-panel__preview i {
