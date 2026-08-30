@@ -7,6 +7,7 @@ import {
 import { useNavigate } from "react-router";
 
 import { useSession } from "../../../../auth/session";
+import { useMaonoBasemapController } from "../../engine-adapter/basemap-controller.ts";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
 import "../../engine-adapter/map-flight.css";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
@@ -14,6 +15,7 @@ import MaonoLayerPanelErrorBoundary from "../maono-layer-panel/ErrorBoundary";
 import MaonoLayerPanel from "../maono-layer-panel/MaonoLayerPanel";
 import MaonoGeometryFilterRuntime from "../map-overlay/MaonoGeometryFilterRuntime";
 import MapOverlayControls from "../map-overlay/MapOverlayControls";
+import MaonoBasemapPanel from "./MaonoBasemapPanel";
 import MaonoMapShell from "./MaonoMapShell";
 import MapPanelHost from "./MapPanelHost";
 import MapSidebar from "./MapSidebar";
@@ -25,6 +27,7 @@ import {
   requestMaonoMapPanelTab,
   type MaonoMapPanelTab,
 } from "./map-shell-events";
+import type { MaonoMapShellPanel } from "./map-shell-panels";
 
 function initiallyOpenPanel() {
   if (typeof window === "undefined") {
@@ -56,6 +59,9 @@ export default function MaonoMapRuntime({
     markClean,
     state: engineState,
   } = useKeplerEngineAdapter();
+  const basemapController = useMaonoBasemapController();
+  const [activePanel, setActivePanel] =
+    useState<MaonoMapShellPanel>("layers");
   const [activePanelTab, setActivePanelTab] =
     useState<MaonoMapPanelTab>("layers");
   const [panelOpen, setPanelOpen] = useState(initiallyOpenPanel);
@@ -64,12 +70,29 @@ export default function MaonoMapRuntime({
     customLayerPanelEnabled &&
       context?.capabilities.openLayerPanel,
   );
+  const basemapAvailable = Boolean(
+    customMapShellEnabled &&
+      context?.capabilities.viewMap &&
+      basemapController.available,
+  );
+  const panelAvailable = layerPanelAvailable || basemapAvailable;
 
   useEffect(() => {
-    if (!layerPanelAvailable) {
+    if (!panelAvailable) {
       setPanelOpen(false);
+      return;
     }
-  }, [layerPanelAvailable]);
+
+    if (activePanel === "layers" && !layerPanelAvailable && basemapAvailable) {
+      setActivePanel("basemap");
+    } else if (
+      activePanel === "basemap" &&
+      !basemapAvailable &&
+      layerPanelAvailable
+    ) {
+      setActivePanel("layers");
+    }
+  }, [activePanel, basemapAvailable, layerPanelAvailable, panelAvailable]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -155,6 +178,7 @@ export default function MaonoMapRuntime({
         return;
       }
 
+      setActivePanel("layers");
       setActivePanelTab(tab);
       setPanelOpen(true);
       requestMaonoMapPanelTab(tab);
@@ -162,19 +186,28 @@ export default function MaonoMapRuntime({
     [context, layerPanelAvailable],
   );
 
+  const openBasemapPanel = useCallback(() => {
+    if (!basemapAvailable) {
+      return;
+    }
+
+    setActivePanel("basemap");
+    setPanelOpen(true);
+  }, [basemapAvailable]);
+
   const togglePanel = useCallback(() => {
-    if (!layerPanelAvailable) {
+    if (!panelAvailable) {
       return;
     }
 
     setPanelOpen((current) => {
       const next = !current;
-      if (next) {
+      if (next && activePanel === "layers") {
         requestMaonoMapPanelTab(activePanelTab);
       }
       return next;
     });
-  }, [activePanelTab, layerPanelAvailable]);
+  }, [activePanel, activePanelTab, panelAvailable]);
 
   const handleLogout = useCallback(async () => {
     if (loggingOut) {
@@ -202,12 +235,12 @@ export default function MaonoMapRuntime({
     return <>{children}</>;
   }
 
-  const effectivePanelOpen = layerPanelAvailable && panelOpen;
+  const effectivePanelOpen = panelAvailable && panelOpen;
 
   return (
     <MaonoMapShell
       mode={context.mode}
-      panelAvailable={layerPanelAvailable}
+      panelAvailable={panelAvailable}
       panelOpen={effectivePanelOpen}
       activePanelTab={activePanelTab}
       mapReady={engineState.ready}
@@ -232,9 +265,12 @@ export default function MaonoMapRuntime({
         <MapSidebar
           context={context}
           panelOpen={effectivePanelOpen}
+          activePanel={activePanel}
           layerPanelAvailable={layerPanelAvailable}
+          basemapAvailable={basemapAvailable}
           loggingOut={loggingOut}
           onPanelTabSelect={selectPanelTab}
+          onOpenBasemap={openBasemapPanel}
           onOpenData={handleOpenData}
           onLogout={handleLogout}
         />
@@ -253,29 +289,36 @@ export default function MaonoMapRuntime({
       }
       panelHost={
         <MapPanelHost
-          available={layerPanelAvailable}
+          available={panelAvailable}
           open={effectivePanelOpen}
-          activeTab={activePanelTab}
+          activePanel={activePanel}
+          activeLayerTab={activePanelTab}
           onToggle={togglePanel}
           onClose={() => setPanelOpen(false)}
         >
-          <MaonoLayerPanelErrorBoundary
-            fallback={
-              <aside
-                className="maono-map-panel-host__error"
-                role="alert"
-                aria-label="Falha no painel de camadas"
-              >
-                <strong>Painel temporariamente indisponível</strong>
-                <span>
-                  Feche e abra o painel novamente. O mapa e os controles nativos
-                  continuam disponíveis.
-                </span>
-              </aside>
-            }
-          >
-            <MaonoLayerPanel />
-          </MaonoLayerPanelErrorBoundary>
+          {activePanel === "basemap" ? (
+            <MaonoBasemapPanel
+              controller={basemapController}
+              mode={context.mode}
+            />
+          ) : (
+            <MaonoLayerPanelErrorBoundary
+              fallback={
+                <aside
+                  className="maono-map-panel-host__error"
+                  role="alert"
+                  aria-label="Falha no painel de camadas"
+                >
+                  <strong>Painel temporariamente indisponível</strong>
+                  <span>
+                    Feche e abra o painel novamente. O mapa continua disponível.
+                  </span>
+                </aside>
+              }
+            >
+              <MaonoLayerPanel />
+            </MaonoLayerPanelErrorBoundary>
+          )}
         </MapPanelHost>
       }
     >
