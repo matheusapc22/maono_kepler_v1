@@ -39,6 +39,7 @@ import { usePointClustering } from "./hooks/use-point-clustering";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
 import { replaceMapLegendPanel } from "./factories/maono-map-legend-panel";
+import { replaceLegendRow } from "./factories/maono-legend-row";
 import { replaceMapPopover } from "./factories/maono-map-popover";
 import { replacePanelHeader } from "./factories/panel-header";
 import { replaceLayerConfigurator } from "./factories/layer-configurator";
@@ -108,6 +109,7 @@ const KeplerGl = injectComponents([
   replaceLoadDataModal(),
   replaceMapControl(),
   replaceMapLegendPanel(),
+  replaceLegendRow(),
   replaceMapPopover(),
   replacePanelHeader(),
   replaceDatasetSection(),
