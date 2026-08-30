@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: MIT
 // @ts-nocheck
 
-import React, { useLayoutEffect, useRef } from "react";
+import React from "react";
 import styled, { ThemeProvider } from "styled-components";
 
-import { setMapControlSettings } from "@kepler.gl/actions";
-import {
-  MapLegendPanelFactory,
-  withState,
-} from "@kepler.gl/components";
-import { uiStateLens } from "@kepler.gl/reducers";
+import { MapLegendPanelFactory } from "@kepler.gl/components";
 
 import {
   calculateMaonoLegendInitialPosition,
@@ -96,6 +91,23 @@ function hasStoredLegendPosition(position) {
   );
 }
 
+function mapControlsWithInitialLegendPosition(mapControls, position) {
+  if (!mapControls?.mapLegend || !position) {
+    return mapControls;
+  }
+
+  return {
+    ...mapControls,
+    mapLegend: {
+      ...mapControls.mapLegend,
+      settings: {
+        ...(mapControls.mapLegend.settings || {}),
+        position,
+      },
+    },
+  };
+}
+
 MaonoMapLegendPanelFactory.deps = MapLegendPanelFactory.deps;
 
 /**
@@ -104,6 +116,11 @@ MaonoMapLegendPanelFactory.deps = MapLegendPanelFactory.deps;
  * A lista de layers, a simbologia, os controles, o drag, o resize e a
  * persistência de settings continuam pertencendo ao MapLegendPanel/MapLegend
  * oficiais do Kepler. Não existe segunda legenda nem espelhamento de estado.
+ *
+ * Importante: este factory NÃO cria uma segunda conexão Redux. MapControl já
+ * entrega mapControls e setMapControlSettings corretamente escopados para esta
+ * instância do mapa. Reutilizar withState aqui sombreava esse callback nativo e
+ * fazia o DraggableLegend executar uma action fora do fluxo esperado ao abrir.
  */
 export function MaonoMapLegendPanelFactory(
   MapControlTooltip,
@@ -126,66 +143,34 @@ export function MaonoMapLegendPanelFactory(
     MapLegend,
   );
 
-  const MaonoMapLegendPanel = ({
-    uiState,
-    setMapControlSettings: updateMapControlSettings,
-    ...props
-  }) => {
-    const positionedForCurrentOpenRef = useRef(false);
-    const mapLegend = uiState?.mapControls?.mapLegend;
-    const active = Boolean(mapLegend?.active);
+  const MaonoMapLegendPanel = (props) => {
+    const mapLegend = props.mapControls?.mapLegend;
     const storedPosition = mapLegend?.settings?.position;
     const width = Number(props.mapState?.width) || 0;
     const height = Number(props.mapState?.height) || 0;
 
-    useLayoutEffect(() => {
-      if (!active) {
-        positionedForCurrentOpenRef.current = false;
-        return;
-      }
-
-      if (props.isExport || positionedForCurrentOpenRef.current) {
-        return;
-      }
-
-      if (hasStoredLegendPosition(storedPosition)) {
-        positionedForCurrentOpenRef.current = true;
-        return;
-      }
-
-      const position = calculateMaonoLegendInitialPosition({ width, height });
-      if (!position) {
-        return;
-      }
-
-      updateMapControlSettings("mapLegend", { position });
-      positionedForCurrentOpenRef.current = true;
-    }, [
-      active,
-      height,
-      props.isExport,
-      storedPosition,
-      updateMapControlSettings,
-      width,
-    ]);
+    // A posição Maõno é somente uma projeção de apresentação enquanto ainda
+    // não existe posição persistida. Assim, abrir a legenda não dispara Redux.
+    // No primeiro drag/resize o próprio Kepler persiste a posição por meio do
+    // setMapControlSettings ORIGINAL recebido em props.
+    const initialPosition =
+      mapLegend?.active && !props.isExport && !hasStoredLegendPosition(storedPosition)
+        ? calculateMaonoLegendInitialPosition({ width, height })
+        : null;
+    const mapControls = mapControlsWithInitialLegendPosition(
+      props.mapControls,
+      initialPosition,
+    );
 
     return (
       <ThemeProvider theme={maonoLegendTheme}>
-        <NativeMapLegendPanel
-          {...props}
-          setMapControlSettings={updateMapControlSettings}
-        />
+        <NativeMapLegendPanel {...props} mapControls={mapControls} />
       </ThemeProvider>
     );
   };
 
   MaonoMapLegendPanel.displayName = "MaonoMapLegendPanel";
-
-  return withState(
-    [uiStateLens],
-    (state) => state,
-    { setMapControlSettings },
-  )(MaonoMapLegendPanel);
+  return MaonoMapLegendPanel;
 }
 
 export function replaceMapLegendPanel() {
