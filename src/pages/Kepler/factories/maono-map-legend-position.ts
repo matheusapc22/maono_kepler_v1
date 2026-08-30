@@ -11,7 +11,7 @@ export type MaonoLegendPanelSize = {
 export type MaonoLegendPosition = {
   x: number;
   y: number;
-  anchorX: "left";
+  anchorX: "right";
   anchorY: "top";
 };
 
@@ -40,9 +40,11 @@ function clamp(value: number, minimum: number, maximum: number) {
  * Calcula a posição inicial da legenda somente a partir do estado de viewport
  * que o Kepler entrega ao componente React. Não mede canvas nem legenda via DOM.
  *
- * Em viewports normais a origem é 63% do canvas no eixo X e 12% no eixo Y,
- * deixando o nascimento da legenda um pouco mais à direita. Em viewports
- * estreitos o ponto é limitado para manter o painel visível dentro do canvas.
+ * A borda esquerda nasce em 63% do canvas no eixo X e 12% no eixo Y. O valor
+ * final é convertido para uma âncora `right`, mantendo exatamente a mesma
+ * posição visual. Isso evita o efeito nativo do Kepler que reposiciona âncoras
+ * `left` quando o painel lateral abre/fecha e, portanto, evita uma gravação de
+ * settings durante a própria abertura da legenda.
  */
 export function calculateMaonoLegendInitialPosition(
   canvas: MaonoLegendCanvasSize,
@@ -54,15 +56,20 @@ export function calculateMaonoLegendInitialPosition(
 
   const panelWidth = finiteDimension(panel.width) || DEFAULT_PANEL_SIZE.width;
   const panelHeight = finiteDimension(panel.height) || DEFAULT_PANEL_SIZE.height;
-  const desiredX = width * MAONO_LEGEND_HORIZONTAL_RATIO;
+  const desiredLeft = width * MAONO_LEGEND_HORIZONTAL_RATIO;
   const desiredY = height * MAONO_LEGEND_VERTICAL_RATIO;
-  const maximumX = width - panelWidth - MAONO_LEGEND_EDGE_MARGIN;
+  const maximumLeft = width - panelWidth - MAONO_LEGEND_EDGE_MARGIN;
   const maximumY = height - panelHeight - MAONO_LEGEND_EDGE_MARGIN;
+  const left = clamp(desiredLeft, MAONO_LEGEND_EDGE_MARGIN, maximumLeft);
+  const right = Math.max(
+    MAONO_LEGEND_EDGE_MARGIN,
+    width - left - panelWidth,
+  );
 
   return {
-    x: clamp(desiredX, MAONO_LEGEND_EDGE_MARGIN, maximumX),
+    x: right,
     y: clamp(desiredY, MAONO_LEGEND_EDGE_MARGIN, maximumY),
-    anchorX: "left",
+    anchorX: "right",
     anchorY: "top",
   };
 }
