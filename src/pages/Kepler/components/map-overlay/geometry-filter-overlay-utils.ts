@@ -1,9 +1,9 @@
 import { WebMercatorViewport } from "@deck.gl/core";
 import type { Feature } from "@kepler.gl/types";
 
-import type { MapViewportSummary } from "../../engine-adapter/types";
-import { collectionToArray, readValue } from "../../engine-adapter/selectors";
-import type { MapCanvasRect } from "./marker-projection";
+import type { MapViewportSummary } from "../../engine-adapter/types.ts";
+import { collectionToArray, readValue } from "../../engine-adapter/selectors.ts";
+import type { MapCanvasRect } from "./marker-projection.ts";
 
 export type GeometryScreenPoint = {
   x: number;
