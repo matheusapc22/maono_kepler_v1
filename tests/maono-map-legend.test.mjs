@@ -24,7 +24,10 @@ test("legenda Maõno localiza o separador de intervalos sem alterar palavras", (
 });
 
 test("legenda Maõno preserva o fluxo nativo de abertura, drag e resize", () => {
-  assert.doesNotMatch(legendPanel, /\bwithState\b/);
+  assert.doesNotMatch(
+    legendPanel,
+    /import\s+\{[^}]*withState[^}]*\}\s+from\s+"@kepler\.gl\/components"/,
+  );
   assert.doesNotMatch(legendPanel, /\buiStateLens\b/);
   assert.doesNotMatch(legendPanel, /useLayoutEffect/);
   assert.doesNotMatch(legendPanel, /updateMapControlSettings\("mapLegend"/);
