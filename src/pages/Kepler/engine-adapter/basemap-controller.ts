@@ -2,14 +2,14 @@ import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { mapStyleChange, wrapTo } from "@kepler.gl/actions";
 
-import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry.ts";
-import { useMapPanel } from "../map-panel/MapPanelContext.tsx";
+import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
+import { useMapPanel } from "../map-panel/MapPanelContext";
 import {
   KEPLER_MAP_ID,
   readValue,
   selectKeplerMapState,
-} from "./selectors.ts";
-import type { KeplerCommandResult } from "./types.ts";
+} from "./selectors";
+import type { KeplerCommandResult } from "./types";
 
 export type MaonoBasemapStyleOption = {
   id: string;
@@ -37,8 +37,18 @@ const DEFAULT_STYLE_LABELS: Record<string, string> = {
 function entries(value: unknown): Array<[string, unknown]> {
   if (!value || typeof value !== "object") return [];
 
-  if (typeof (value as { entrySeq?: () => { toArray: () => Array<[string, unknown]> } }).entrySeq === "function") {
-    return (value as { entrySeq: () => { toArray: () => Array<[string, unknown]> } })
+  if (
+    typeof (
+      value as {
+        entrySeq?: () => { toArray: () => Array<[string, unknown]> };
+      }
+    ).entrySeq === "function"
+  ) {
+    return (
+      value as {
+        entrySeq: () => { toArray: () => Array<[string, unknown]> };
+      }
+    )
       .entrySeq()
       .toArray();
   }
@@ -66,7 +76,9 @@ function styleLabel(styleId: string, style: unknown) {
 
 function normalizeStyles(mapState: unknown): MaonoBasemapStyleOption[] {
   const mapStyle = readValue(mapState, "mapStyle");
-  const currentStyleId = String(readValue(mapStyle, "styleType") ?? "").trim();
+  const currentStyleId = String(
+    readValue(mapStyle, "styleType") ?? "",
+  ).trim();
   const rawStyles = readValue(mapStyle, "mapStyles");
 
   return entries(rawStyles)
@@ -104,7 +116,8 @@ export function useMaonoBasemapController(): MaonoBasemapController {
   const { context } = useMapPanel();
   const styles = useMemo(() => normalizeStyles(mapState), [mapState]);
   const mapStyle = readValue(mapState, "mapStyle");
-  const currentStyleId = String(readValue(mapStyle, "styleType") ?? "").trim() || null;
+  const currentStyleId =
+    String(readValue(mapStyle, "styleType") ?? "").trim() || null;
   const available = context?.capabilities.viewMap === true;
   const loading = Boolean(available && mapState && styles.length === 0);
 
@@ -116,7 +129,8 @@ export function useMaonoBasemapController(): MaonoBasemapController {
         return {
           ok: false,
           code: "CAPABILITY_DENIED",
-          reason: "Você não possui acesso para alterar a visualização do mapa-base.",
+          reason:
+            "Você não possui acesso para alterar a visualização do mapa-base.",
           command: "setBasemapStyle",
           capability: "viewMap",
         };
