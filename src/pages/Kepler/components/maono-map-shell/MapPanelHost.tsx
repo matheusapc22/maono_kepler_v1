@@ -2,11 +2,17 @@ import type { ReactNode } from "react";
 
 import MapShellIcon from "./MapShellIcon";
 import type { MaonoMapPanelTab } from "./map-shell-events";
+import {
+  maonoMapShellPanelControlId,
+  maonoMapShellPanelLabel,
+  type MaonoMapShellPanel,
+} from "./map-shell-panels";
 
 type MapPanelHostProps = {
   available: boolean;
   open: boolean;
-  activeTab: MaonoMapPanelTab;
+  activePanel: MaonoMapShellPanel;
+  activeLayerTab: MaonoMapPanelTab;
   children: ReactNode;
   onToggle: () => void;
   onClose: () => void;
@@ -15,7 +21,8 @@ type MapPanelHostProps = {
 export default function MapPanelHost({
   available,
   open,
-  activeTab,
+  activePanel,
+  activeLayerTab,
   children,
   onToggle,
   onClose,
@@ -24,7 +31,11 @@ export default function MapPanelHost({
     return null;
   }
 
-  const activeLabel = activeTab === "filters" ? "Filtros" : "Camadas";
+  const activeLabel =
+    activePanel === "layers" && activeLayerTab === "filters"
+      ? "Filtros"
+      : maonoMapShellPanelLabel(activePanel);
+  const controlsId = maonoMapShellPanelControlId(activePanel);
   const actionLabel = open
     ? `Recolher painel de ${activeLabel.toLowerCase()}`
     : `Abrir painel de ${activeLabel.toLowerCase()}`;
@@ -32,7 +43,8 @@ export default function MapPanelHost({
   return (
     <div
       className="maono-map-panel-host"
-      data-active-tab={activeTab}
+      data-active-panel={activePanel}
+      data-active-tab={activeLayerTab}
       data-panel-open={open ? "true" : "false"}
       data-maono-no-preview="true"
     >
@@ -58,7 +70,7 @@ export default function MapPanelHost({
         type="button"
         className="maono-map-panel-host__handle"
         onClick={onToggle}
-        aria-controls="maono-map-engine-panel"
+        aria-controls={controlsId}
         aria-expanded={open}
         aria-label={actionLabel}
         title={actionLabel}
