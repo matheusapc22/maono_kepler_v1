@@ -63,45 +63,46 @@ test("boot inicial usa a mesma estratégia 100vh com upgrade para 100dvh", () =>
   );
 });
 
-test("desktop reserva fisicamente o painel e não renderiza o mapa por baixo", () => {
-  assert.match(shell, /import "\.\/maono-map-layout-contract\.css"/);
+test("painel é overlay opaco e mantém a barreira visual da PR 106", () => {
+  assert.match(shell, /className="maono-map-runtime__map"/);
   assert.match(shellLayout, /@media \(min-width: 1021px\)/);
   assert.match(
     shellLayout,
-    /\.maono-map-runtime--panel-open \.maono-map-runtime__map\s*\{[\s\S]*left:\s*var\(--maono-map-panel-width\)/,
+    /\.maono-map-panel-host__panel\s*\{[\s\S]*isolation:\s*isolate[\s\S]*contain:\s*paint[\s\S]*background:\s*var\(--maono-map-panel\)/,
   );
   assert.match(
     shellLayout,
-    /\.maono-map-panel-host__panel\s*\{[\s\S]*isolation:\s*isolate[\s\S]*background:\s*var\(--maono-map-panel\)/,
+    /\.maono-map-panel-host__panel::before\s*\{[\s\S]*background:\s*var\(--maono-map-panel\)/,
   );
-  assert.match(shellLayout, /contain:\s*paint/);
+  assert.match(shellLayout, /\.maono-map-panel-host__panel\s*\{[\s\S]*pointer-events:\s*auto/);
   assert.doesNotMatch(shellLayout, /\bzoom\s*:/i);
   assert.doesNotMatch(shellLayout, /transform:\s*scale\(/i);
 });
 
-test("docking do mapa é atômico e não anima a geometria medida pelo Kepler", () => {
+test("abrir ou fechar painel não altera geometria do viewport do Kepler", () => {
   const mapRule = shellLayout.match(/\.maono-map-runtime__map\s*\{([\s\S]*?)\}/)?.[1] ?? "";
 
   assert.doesNotMatch(mapRule, /transition\s*:/i);
   assert.doesNotMatch(mapRule, /will-change\s*:/i);
-  assert.match(
+  assert.doesNotMatch(mapRule, /(?:left|right|width|height|inset|transform)\s*:/i);
+  assert.doesNotMatch(
     shellLayout,
-    /\.maono-map-runtime--panel-open \.maono-map-runtime__map\s*\{[\s\S]*left:\s*var\(--maono-map-panel-width\)/,
+    /\.maono-map-runtime--panel-(?:open|collapsed)\s+\.maono-map-runtime__map/,
   );
   assert.match(shellLayout, /\.maono-map-topbar\s*\{[\s\S]*transition:\s*left/);
 });
 
-test("tablet e mobile mantêm overlay opaco sem nascer aberto", () => {
+test("tablet e mobile mantêm overlay bloqueante sem redimensionar o mapa", () => {
   assert.match(shellLayout, /@media \(max-width: 1020px\)/);
-  assert.match(
-    shellLayout,
-    /\.maono-map-runtime--panel-open \.maono-map-runtime__map,[\s\S]*left:\s*0/,
-  );
   assert.match(shellLayout, /\.maono-map-panel-host__backdrop\s*\{[\s\S]*pointer-events:\s*auto/);
+  assert.doesNotMatch(
+    shellLayout,
+    /\.maono-map-runtime--panel-(?:open|collapsed)\s+\.maono-map-runtime__map/,
+  );
   assert.match(shellRuntime, /matchMedia\("\(max-width: 1020px\)"\)/);
 });
 
-test("Kepler mede o contêiner real após docking via ResizeObserver", () => {
+test("Kepler conserva ResizeObserver apenas para mudanças reais de contêiner", () => {
   assert.match(kepler, /ResizeObserver/);
   assert.match(kepler, /getBoundingClientRect\(\)/);
   assert.match(kepler, /MeasuredKeplerViewport/);

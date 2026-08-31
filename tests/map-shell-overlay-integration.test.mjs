@@ -208,7 +208,7 @@ test("Manter prévia promove a análise sem acionar o salvamento global", () => 
   );
 });
 
-test("painel do shell é único e separa fisicamente painel e mapa no desktop", () => {
+test("painel do shell é único, opaco e sobrepõe o mapa sem alterar sua geometria", () => {
   assert.match(
     source.runtime,
     /<MapPanelHost[\s\S]*<MaonoLayerPanel \/>[\s\S]*<\/MapPanelHost>/,
@@ -224,12 +224,15 @@ test("painel do shell é único e separa fisicamente painel e mapa no desktop", 
     /\.maono-map-panel-host__panel\s*\{[\s\S]*position: absolute;/,
   );
   assert.match(source.shellLayout, /@media \(min-width: 1021px\)/);
-  assert.match(
+  assert.doesNotMatch(
     source.shellLayout,
-    /\.maono-map-runtime--panel-open \.maono-map-runtime__map\s*\{[\s\S]*left:\s*var\(--maono-map-panel-width\)/,
+    /\.maono-map-runtime--panel-(?:open|collapsed)\s+\.maono-map-runtime__map/,
   );
   assert.match(source.shellLayout, /contain:\s*paint/);
+  assert.match(source.shellLayout, /isolation:\s*isolate/);
   assert.match(source.shellLayout, /background:\s*var\(--maono-map-panel\)/);
+  assert.match(source.shellLayout, /\.maono-map-panel-host__panel::before/);
+  assert.match(source.shellLayout, /pointer-events:\s*auto/);
   assert.doesNotMatch(source.shellLayout, /\bzoom\s*:/i);
   assert.doesNotMatch(source.shellLayout, /transform:\s*scale\(/i);
   assert.doesNotMatch(
@@ -238,11 +241,11 @@ test("painel do shell é único e separa fisicamente painel e mapa no desktop", 
   );
 });
 
-test("tablet e mobile preservam mapa com painel em overlay bloqueante", () => {
+test("tablet e mobile preservam viewport com painel em overlay bloqueante", () => {
   assert.match(source.shellLayout, /@media \(max-width: 1020px\)/);
-  assert.match(
+  assert.doesNotMatch(
     source.shellLayout,
-    /\.maono-map-runtime--panel-open \.maono-map-runtime__map,[\s\S]*left:\s*0/,
+    /\.maono-map-runtime--panel-(?:open|collapsed)\s+\.maono-map-runtime__map/,
   );
   assert.match(
     source.shellLayout,

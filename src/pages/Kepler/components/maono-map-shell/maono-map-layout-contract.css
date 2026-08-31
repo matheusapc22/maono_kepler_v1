@@ -1,18 +1,18 @@
 /* SPDX-License-Identifier: MIT
  * Contrato de layout do shell Maõno.
  *
- * Desktop: sidebar | painel | mapa. O canvas do Kepler não existe sob o painel.
- * Tablet/mobile: o painel volta a ser overlay opaco com backdrop.
+ * O viewport do Kepler permanece geometricamente invariável quando o painel
+ * abre ou fecha. O painel é uma superfície opaca em overlay, acima do mapa,
+ * com isolamento de pintura e de interação.
  */
 
 .maono-map-runtime__map {
   z-index: 1;
   /*
-   * A geometria do mapa não pode ser animada. O Kepler mede esta superfície
-   * com ResizeObserver e recebe width/height explícitos. Animar `left` faria o
-   * viewport variar frame a frame, provocando uma sequência de resizes em
-   * MapLibre/Deck.gl e o flash visual das camadas. O docking continua físico,
-   * mas a troca de largura acontece de forma atômica.
+   * Não adicionar aqui, nem em estados panel-open/panel-collapsed, regras que
+   * alterem left/right/width/height/inset/transform do contêiner do mapa.
+   * Esta superfície é medida pelo ResizeObserver e alimenta width/height do
+   * Kepler. O painel lateral deve ser completamente neutro para essa geometria.
    */
 }
 
@@ -28,8 +28,8 @@
   box-shadow: 18px 0 38px rgba(0, 0, 0, 0.5);
 }
 
-/* Barreira visual própria. Mesmo que uma superfície interna do painel seja
- * translúcida, o mapa nunca reaparece por baixo dela. */
+/* Barreira visual própria. O canvas pode continuar existindo sob o painel,
+ * mas nunca deve reaparecer através das superfícies internas do painel. */
 .maono-map-panel-host__panel::before {
   position: absolute;
   inset: 0;
@@ -39,23 +39,19 @@
   pointer-events: none;
 }
 
-/* O painel recebe todos os eventos na sua área e impede que hover/click do
- * Deck/MapLibre atravessem para o mapa. */
+/* O painel recebe todos os eventos na sua área e impede que hover/click/scroll
+ * do Deck/MapLibre atravessem para o mapa que permanece estático por baixo. */
 .maono-map-panel-host__panel {
   pointer-events: auto;
 }
 
 @media (min-width: 1021px) {
-  /* A largura do painel é estrutural: quando aberto, reduz a superfície real
-   * medida do mapa. O ResizeObserver do Kepler recebe somente a largura final,
-   * sem uma animação geométrica intermediária. */
-  .maono-map-runtime--panel-open .maono-map-runtime__map {
-    left: var(--maono-map-panel-width);
-  }
-
-  /* A topbar pertence à superfície cartográfica. Também recua para não ocupar
-   * o painel e manter uma única hierarquia visual. A animação da topbar é
-   * segura porque ela não participa da medição do viewport do Kepler. */
+  /*
+   * Desktop usa overlay estruturalmente isolado: somente painel, handle e
+   * topbar se movem. A geometria de .maono-map-runtime__map não participa da
+   * abertura/fechamento, portanto o ResizeObserver do Kepler não é acionado
+   * pela UI lateral.
+   */
   .maono-map-runtime--panel-open .maono-map-topbar {
     left: calc(var(--maono-map-panel-width) + 18px);
   }
@@ -70,13 +66,8 @@
 }
 
 @media (max-width: 1020px) {
-  /* Em telas menores, preservar largura útil do mapa é mais importante que
-   * docking. O painel é overlay, porém totalmente opaco e com backdrop. */
-  .maono-map-runtime--panel-open .maono-map-runtime__map,
-  .maono-map-runtime--panel-collapsed .maono-map-runtime__map {
-    left: 0;
-  }
-
+  /* Tablet/mobile preservam a mesma invariância geométrica do mapa e usam
+   * backdrop bloqueante para a experiência modal do painel em overlay. */
   .maono-map-runtime--panel-open .maono-map-topbar,
   .maono-map-runtime--panel-collapsed .maono-map-topbar {
     left: 18px;
