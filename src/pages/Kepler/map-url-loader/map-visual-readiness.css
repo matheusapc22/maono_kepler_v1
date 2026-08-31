@@ -22,8 +22,14 @@
   pointer-events: none;
 }
 
+.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__panel,
+.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__panel {
+  transform: translateX(-105%);
+}
+
 .maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__handle,
 .maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__handle {
+  left: 0 !important;
   pointer-events: none;
 }
 
