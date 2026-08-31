@@ -101,6 +101,36 @@ Fora do escopo da PR 3:
 - remoção global de `--mm-teal` enquanto áreas ainda não migradas o consumirem;
 - estados semânticos de sucesso, aviso, erro e informação.
 
+## PR 4 — Shell Maõno / Kepler / painéis
+
+A quarta etapa transforma o ambiente cartográfico em consumidor efetivo do contrato global iniciado na PR 109, sem modificar a geometria do viewport, o `ResizeObserver` ou a arquitetura de overlay estabilizada nas PRs de layout do mapa.
+
+Escopo migrado:
+
+- `maono-map-tokens.css` deixa de manter uma paleta de marca paralela e passa a derivar accent e semântica de `--maono-accent*` e `--maono-semantic-*`;
+- `src/pages/Kepler/maono-kepler-theme.ts` aplica o dourado aos slots nativos do Kepler v3 que originalmente usam verde/cyan em active, primary/CTA, selection, switch, checkbox e histogram;
+- `maono-map-accent.css` consolida tabs, filtros, basemap, sidebar, botões flutuantes, ferramentas de análise e states ativos no contrato dourado;
+- `--maono-filter-accent` continua disponível quando representar cor de dado/layer, evitando confundir identidade visual com codificação cartográfica;
+- o painel de agrupamento de pontos deixa de usar `#20c7b5` e superfícies verdes e passa a usar fundo neutro, bordas/glow dourados, toggle dourado e focus ring global;
+- o gate de acesso ao mapa deixa o CTA azul legado e passa ao CTA dourado Maõno;
+- `is-clean` permanece verde de sucesso, `is-dirty` permanece warning, loading permanece info e erros permanecem danger, agora ligados aos tokens semânticos globais;
+- mensagens de salvamento bem-sucedido continuam verdes por semântica funcional, e não por branding.
+
+Proteção de regressão:
+
+- `tests/maono-map-accent.test.mjs` garante sincronização entre tokens CSS e o bridge do tema Kepler;
+- o teste impede a reintrodução dos defaults verdes/cyan ativos do Kepler no bridge;
+- o painel de agrupamento não pode reintroduzir `#20c7b5` nem suas antigas superfícies verdes;
+- a nova camada visual não pode definir `.maono-map-runtime__map` nem participar da lógica de `ResizeObserver`;
+- o teste passa a integrar `test:map-panels`.
+
+Fora do escopo da PR 4:
+
+- cores de layer, swatches, categorias, resultados de Buffer/Isócrona e outras cores que codifiquem dados;
+- alterações no contrato de layout/overlay do mapa;
+- Admin, Login e superfícies residuais fora do Kepler;
+- remoção global de `--mm-teal` enquanto ainda existirem consumidores fora das áreas migradas.
+
 ## Regra de classificação
 
 | Uso | Cor desejada | Token |
@@ -120,7 +150,7 @@ Não adicionar novos literais verdes/teal/mint para identidade visual. Quando o 
 
 1. ✅ Formulários e drawers: focus, labels, ações e estados ativos — PR 2.
 2. ✅ Cards e listagens: bordas, glows, hover e seleção — PR 3.
-3. Shell do mapa/Kepler: tabs, focus, filtros, painéis e controles residuais.
+3. ✅ Shell do mapa/Kepler: tabs, focus, filtros, painéis, botões e states — PR 4.
 4. Admin, login e demais superfícies: varredura de hardcodes e aliases legados.
 5. Remover aliases verdes de marca, como `--mm-teal`, quando não houver mais consumidores.
 

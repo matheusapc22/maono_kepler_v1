@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 
 import type { MapRuntimeMode } from "../../map-panel/types";
 import type { MaonoMapPanelTab } from "./map-shell-events";
+import "../../maono-kepler-theme";
 import "./maono-map-tokens.css";
 import "./maono-map-shell.css";
 import "./maono-map-panel-readability.css";
 import "./maono-map-layout-contract.css";
+import "./maono-map-accent.css";
 
 type MaonoMapShellProps = {
   children: ReactNode;

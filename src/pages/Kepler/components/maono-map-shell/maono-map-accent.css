@@ -1,0 +1,182 @@
+/*
+ * PR 4 — Shell Maõno / Kepler / painéis.
+ *
+ * Esta camada consolida tabs, filtros, botões e estados interativos do mapa no
+ * contrato dourado global criado na PR 109. Ela não altera geometria do
+ * viewport nem cores que codificam dados (swatches de layer, categorias,
+ * resultados analíticos). Verde permanece reservado a sucesso funcional.
+ */
+
+/* Tabs do painel — identidade ativa é sempre Maõno Gold. */
+.maono-map-runtime .maono-layer-panel__tabs button:hover:not(.is-active) {
+  color: var(--maono-accent-text);
+  background: var(--maono-accent-surface);
+}
+
+.maono-map-runtime .maono-layer-panel__tabs button.is-active {
+  border-bottom-color: var(--maono-accent);
+  color: var(--maono-accent-bright);
+  background: var(--maono-accent-surface);
+}
+
+.maono-map-runtime
+  :is(
+    .maono-layer-panel button,
+    .maono-layer-panel input,
+    .maono-layer-panel select,
+    .maono-layer-panel summary,
+    .maono-basemap-panel button,
+    .maono-map-overlay button,
+    .maono-geometry-runtime-controls button,
+    .maono-geometry-runtime-manager button
+  ):focus-visible {
+  outline-color: var(--maono-focus-ring);
+}
+
+/* Filtros — chrome ativo dourado; --maono-filter-accent continua livre para
+ * representar cor de dados quando o próprio filtro/layer precisar disso. */
+.maono-map-runtime .maono-filter-add-flow {
+  border-color: var(--maono-accent-border);
+  background: var(--maono-accent-surface);
+}
+
+.maono-map-runtime .maono-filter-add-flow > button,
+.maono-map-runtime .maono-filter-focus-results {
+  border-color: var(--maono-accent-border);
+  color: #17140e;
+  background: var(--maono-accent);
+}
+
+.maono-map-runtime .maono-filter-group:hover,
+.maono-map-runtime .maono-filter-group.is-expanded,
+.maono-map-runtime .maono-filter-row:hover {
+  border-color: var(--maono-accent-border);
+}
+
+.maono-map-runtime .maono-filter-group__toggle:focus-visible {
+  outline-color: var(--maono-focus-ring);
+}
+
+.maono-map-runtime .maono-filter-group__toggle:hover svg,
+.maono-map-runtime
+  .maono-filter-group.is-expanded
+  .maono-filter-group__toggle
+  svg,
+.maono-map-runtime .maono-filter-editor__reset,
+.maono-map-runtime .maono-filter-category__summary button {
+  color: var(--maono-accent-text);
+}
+
+.maono-map-runtime .maono-filter-editor__reset,
+.maono-map-runtime .maono-filter-category__summary button {
+  background: var(--maono-accent-surface);
+}
+
+/* Sidebar e botões de ferramenta. */
+.maono-map-runtime .maono-map-sidebar__nav a:hover,
+.maono-map-runtime .maono-map-sidebar__nav button:hover,
+.maono-map-runtime .maono-map-sidebar__nav .is-active {
+  color: var(--maono-accent);
+  border-color: var(--maono-accent-border);
+  box-shadow:
+    inset 0 1px var(--maono-accent-surface),
+    0 0 18px var(--maono-accent-glow);
+}
+
+.maono-map-runtime .maono-map-overlay__buttons > button:hover:not(:disabled),
+.maono-map-runtime .maono-map-overlay__buttons > button.is-active {
+  border-color: var(--maono-accent);
+  color: var(--maono-accent-text);
+  box-shadow:
+    inset 0 1px var(--maono-accent-surface),
+    0 0 22px var(--maono-accent-glow),
+    0 14px 30px rgba(0, 0, 0, 0.52);
+}
+
+.maono-map-runtime .maono-geometry-runtime-controls > button:hover,
+.maono-map-runtime .maono-geometry-runtime-controls > button.is-active {
+  border-color: var(--maono-accent);
+  color: var(--maono-accent-text);
+  background:
+    linear-gradient(180deg, var(--maono-accent-surface), transparent 120%),
+    rgba(19, 28, 42, 0.97);
+}
+
+/* Basemap — estado selecionado segue o mesmo contrato dos demais states. */
+.maono-map-runtime .maono-basemap-panel__option:hover {
+  border-color: var(--maono-accent-border);
+}
+
+.maono-map-runtime .maono-basemap-panel__option.is-selected {
+  border-color: var(--maono-accent-border-strong);
+  background:
+    linear-gradient(180deg, var(--maono-accent-surface), rgba(12, 17, 26, 0.96));
+  box-shadow:
+    inset 0 1px var(--maono-accent-surface),
+    0 0 0 1px var(--maono-accent-border),
+    0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.maono-map-runtime
+  .maono-basemap-panel__option.is-selected
+  .maono-basemap-panel__selection {
+  border-color: var(--maono-accent);
+  background: var(--maono-accent);
+}
+
+/* Menus de análise e escolhas nativas customizadas. */
+.maono-map-runtime .maono-analysis-tool-menu__items > button:hover,
+.maono-map-runtime .maono-analysis-tool-menu__items > button:focus-visible {
+  border-color: var(--maono-accent-border);
+  background:
+    linear-gradient(180deg, var(--maono-accent-surface), transparent 130%),
+    #131c2a;
+}
+
+.maono-map-runtime
+  .maono-analysis-tool-menu__body
+  label:has(input:checked) {
+  border-color: var(--maono-accent-border-strong);
+  background: var(--maono-accent-surface);
+}
+
+.maono-map-runtime .maono-analysis-tool-menu__body input,
+.maono-map-runtime .maono-tooltip-editor input,
+.maono-map-runtime .maono-point-spatial-grouping__checkbox input {
+  accent-color: var(--maono-accent);
+}
+
+/* Estados semânticos do mapa não são branding. */
+.maono-map-runtime .maono-map-topbar__status.is-clean {
+  color: var(--maono-semantic-success);
+}
+
+.maono-map-runtime .maono-map-topbar__status.is-dirty {
+  color: var(--maono-semantic-warning);
+}
+
+.maono-map-runtime .maono-map-topbar__status.is-loading {
+  color: var(--maono-semantic-info);
+}
+
+.maono-map-runtime .maono-layer-panel__notice.is-success,
+.maono-map-runtime .maono-layer-panel__save-message:not(.is-error) {
+  border-color: color-mix(
+    in srgb,
+    var(--maono-semantic-success) 38%,
+    transparent
+  );
+  color: color-mix(
+    in srgb,
+    var(--maono-semantic-success) 62%,
+    white
+  );
+  background: color-mix(
+    in srgb,
+    var(--maono-semantic-success) 14%,
+    transparent
+  );
+}
+
+/* Esta camada é exclusivamente visual. Nunca adicionar regras para
+ * .maono-map-runtime__map, width/height/left/right ou ResizeObserver aqui. */

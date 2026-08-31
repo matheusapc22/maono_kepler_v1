@@ -12,8 +12,10 @@
 }
 
 .maono-map-gate__card {
-  background: #1c2330;
-  border: 1px solid #344054;
+  background:
+    radial-gradient(circle at 100% 0%, var(--maono-accent-surface), transparent 34%),
+    #1c2330;
+  border: 1px solid var(--maono-accent-border);
   border-radius: 16px;
   display: grid;
   gap: 10px;
@@ -38,9 +40,21 @@
 }
 
 .maono-map-gate__actions a {
-  background: #2f7df4;
+  background: linear-gradient(
+    135deg,
+    var(--maono-accent-bright),
+    var(--maono-accent-strong)
+  );
+  border: 1px solid var(--maono-accent-border-strong);
   border-radius: 8px;
-  color: #fff;
+  color: #17140e;
   padding: 9px 12px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px var(--maono-accent-glow);
+}
+
+.maono-map-gate__actions a:focus-visible {
+  outline: 2px solid var(--maono-focus-ring);
+  outline-offset: 3px;
 }
 
