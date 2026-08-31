@@ -1,0 +1,110 @@
+/* SPDX-License-Identifier: MIT
+ * Contrato de layout do shell Maõno.
+ *
+ * Desktop: sidebar | painel | mapa. O canvas do Kepler não existe sob o painel.
+ * Tablet/mobile: o painel volta a ser overlay opaco com backdrop.
+ */
+
+.maono-map-runtime__map {
+  z-index: 1;
+  transition: left var(--maono-map-transition);
+  will-change: left;
+}
+
+.maono-map-panel-host {
+  z-index: 31;
+}
+
+.maono-map-panel-host__panel {
+  isolation: isolate;
+  contain: paint;
+  border-right: 1px solid var(--maono-map-border);
+  background: var(--maono-map-panel);
+  box-shadow: 18px 0 38px rgba(0, 0, 0, 0.5);
+}
+
+/* Barreira visual própria. Mesmo que uma superfície interna do painel seja
+ * translúcida, o mapa nunca reaparece por baixo dela. */
+.maono-map-panel-host__panel::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--maono-map-panel);
+  content: "";
+  pointer-events: none;
+}
+
+/* O painel recebe todos os eventos na sua área e impede que hover/click do
+ * Deck/MapLibre atravessem para o mapa. */
+.maono-map-panel-host__panel {
+  pointer-events: auto;
+}
+
+@media (min-width: 1021px) {
+  /* A largura do painel é estrutural: quando aberto, reduz a superfície real
+   * medida do mapa. O ResizeObserver do Kepler recebe a nova largura e refaz o
+   * viewport sem usar transform/zoom CSS. */
+  .maono-map-runtime--panel-open .maono-map-runtime__map {
+    left: var(--maono-map-panel-width);
+  }
+
+  /* A topbar pertence à superfície cartográfica. Também recua para não ocupar
+   * o painel e manter uma única hierarquia visual. */
+  .maono-map-runtime--panel-open .maono-map-topbar {
+    left: calc(var(--maono-map-panel-width) + 18px);
+  }
+
+  .maono-map-topbar {
+    transition: left var(--maono-map-transition);
+  }
+
+  .maono-map-panel-host__backdrop {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1020px) {
+  /* Em telas menores, preservar largura útil do mapa é mais importante que
+   * docking. O painel é overlay, porém totalmente opaco e com backdrop. */
+  .maono-map-runtime--panel-open .maono-map-runtime__map,
+  .maono-map-runtime--panel-collapsed .maono-map-runtime__map {
+    left: 0;
+  }
+
+  .maono-map-runtime--panel-open .maono-map-topbar,
+  .maono-map-runtime--panel-collapsed .maono-map-topbar {
+    left: 18px;
+  }
+
+  .maono-map-panel-host__backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgba(2, 3, 5, 0.56);
+    cursor: pointer;
+    pointer-events: auto;
+    backdrop-filter: blur(1px);
+  }
+
+  .maono-map-panel-host__panel {
+    z-index: 2;
+    max-width: calc(100% - 24px);
+  }
+}
+
+@media (max-width: 820px) {
+  .maono-map-runtime--panel-open .maono-map-topbar,
+  .maono-map-runtime--panel-collapsed .maono-map-topbar {
+    left: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maono-map-runtime__map,
+  .maono-map-topbar {
+    transition-duration: 0.01ms !important;
+  }
+}
