@@ -43,7 +43,10 @@ body {
   overflow-x: hidden;
 }
 
+/* index.css mantinha height:100vh no root. Este arquivo é carregado depois e
+ * passa a ser a fonte única da altura útil da aplicação. */
 #root {
+  height: var(--maono-app-viewport-height) !important;
   min-height: var(--maono-app-viewport-height) !important;
   isolation: isolate;
 }
