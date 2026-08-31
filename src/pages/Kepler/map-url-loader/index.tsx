@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { connect } from "react-redux";
+import { connect, useStore } from "react-redux";
 import { useParams } from "react-router";
 import { addDataToMap, toggleModal } from "@kepler.gl/actions";
 import { selectIsMapLoading } from "../reducers/selectors";
@@ -14,10 +14,17 @@ import {
   updateActiveMapLoadTraceContext,
 } from "../observability/map-load-trace";
 import {
+  expectedDatasetIdsFromRuntimeDatasets,
+  expectedLayerIdsFromRuntimeConfig,
+  isMapVisualReadinessError,
+  waitForMaonoMapVisualReadiness,
+} from "./map-visual-readiness.ts";
+import {
   hydrateSavedKeplerConfig,
   isSavedConfigHydrationError,
   validateSavedKeplerConfig,
 } from "./saved-config-hydrator.ts";
+import "./map-visual-readiness.css";
 
 const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
@@ -212,6 +219,10 @@ async function requestProjectConfig(
 async function loadProjectConfig(
   projectSlug: string,
   dispatch: any,
+  store: {
+    getState: () => unknown;
+    subscribe: (listener: () => void) => () => void;
+  },
   signal: AbortSignal,
   readOnly: boolean,
 ) {
@@ -281,6 +292,13 @@ async function loadProjectConfig(
     const loadedConfig = hydrateSavedKeplerConfig(savedConfig, {
       featureEnabled: POINT_CLUSTERING_FEATURE_ENABLED,
     });
+    const expectedLayerIds = expectedLayerIdsFromRuntimeConfig(
+      loadedConfig.config,
+    );
+    const expectedDatasetIds = expectedDatasetIdsFromRuntimeDatasets(
+      loadedConfig.datasets,
+    );
+
     recordMapLoadEvent("MIGRATED", traceContext);
     recordMapLoadEvent("ENGINE_HYDRATION_STARTED", traceContext);
 
@@ -296,6 +314,13 @@ async function loadProjectConfig(
         },
       }),
     );
+
+    await waitForMaonoMapVisualReadiness({
+      store,
+      expectedLayerIds,
+      expectedDatasetIds,
+      signal,
+    });
   } finally {
     dispatch(setLoadingMapStatus(false));
   }
@@ -313,6 +338,7 @@ const MapUrlLoader = connectStore(
   }) => {
     const { projectSlug } = useParams();
     const { context } = useMapPanel();
+    const store = useStore();
     const loadedProjectRef = useRef<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retryToken, setRetryToken] = useState(0);
@@ -352,6 +378,7 @@ const MapUrlLoader = connectStore(
       loadProjectConfig(
         projectSlug,
         dispatch,
+        store,
         controller.signal,
         context?.mode === "viewer",
       ).catch((err) => {
@@ -359,12 +386,25 @@ const MapUrlLoader = connectStore(
           return;
         }
 
+        const visualReadinessFailure = isMapVisualReadinessError(err);
         const hydrationFailure = isSavedConfigHydrationError(err);
         failActiveMapLoadTrace({
-          stage: "CONFIG_VALIDATED",
-          code: hydrationFailure ? err.code : "MAP_CONFIG_LOAD_FAILED",
-          category: hydrationFailure ? err.category : "MAP_CONFIG",
-          retryable: hydrationFailure ? err.retryable : true,
+          stage: visualReadinessFailure ? "MAP_READY" : "CONFIG_VALIDATED",
+          code: visualReadinessFailure
+            ? err.code
+            : hydrationFailure
+              ? err.code
+              : "MAP_CONFIG_LOAD_FAILED",
+          category: visualReadinessFailure
+            ? err.category
+            : hydrationFailure
+              ? err.category
+              : "MAP_CONFIG",
+          retryable: visualReadinessFailure
+            ? err.retryable
+            : hydrationFailure
+              ? err.retryable
+              : true,
           status: null,
         });
         loadedProjectRef.current = null;
@@ -386,6 +426,7 @@ const MapUrlLoader = connectStore(
       dispatch,
       projectSlug,
       retryToken,
+      store,
     ]);
 
     if (error) {
@@ -407,7 +448,12 @@ const MapUrlLoader = connectStore(
     }
 
     return isMapLoading ? (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-2 bg-black/50">
+      <div
+        className="maono-map-central-loading fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-2 bg-black/50"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
         <Spinner className="h-10 w-10 text-white" />
         <p className="animate-pulse text-white text-center">
           Os dados estão sendo carregados... <br /> Isso pode levar alguns
