@@ -79,6 +79,9 @@ export default function MaonoMapRuntime({
       basemapController.available,
   );
   const panelAvailable = layerPanelAvailable || basemapAvailable;
+  const loadInteractionBlocked = Boolean(
+    context?.project && (!engineState.ready || engineState.isLoading),
+  );
 
   useEffect(() => {
     if (!panelAvailable) {
@@ -168,7 +171,7 @@ export default function MaonoMapRuntime({
 
   const selectPanelTab = useCallback(
     (tab: MaonoMapPanelTab) => {
-      if (!context || !layerPanelAvailable) {
+      if (!context || !layerPanelAvailable || loadInteractionBlocked) {
         return;
       }
 
@@ -186,20 +189,20 @@ export default function MaonoMapRuntime({
       setPanelOpen(true);
       requestMaonoMapPanelTab(tab);
     },
-    [context, layerPanelAvailable],
+    [context, layerPanelAvailable, loadInteractionBlocked],
   );
 
   const openBasemapPanel = useCallback(() => {
-    if (!basemapAvailable) {
+    if (!basemapAvailable || loadInteractionBlocked) {
       return;
     }
 
     setActivePanel("basemap");
     setPanelOpen(true);
-  }, [basemapAvailable]);
+  }, [basemapAvailable, loadInteractionBlocked]);
 
   const togglePanel = useCallback(() => {
-    if (!panelAvailable) {
+    if (!panelAvailable || loadInteractionBlocked) {
       return;
     }
 
@@ -210,7 +213,12 @@ export default function MaonoMapRuntime({
       }
       return next;
     });
-  }, [activePanel, activePanelTab, panelAvailable]);
+  }, [
+    activePanel,
+    activePanelTab,
+    loadInteractionBlocked,
+    panelAvailable,
+  ]);
 
   const handleLogout = useCallback(async () => {
     if (loggingOut) {
@@ -227,18 +235,22 @@ export default function MaonoMapRuntime({
   }, [loggingOut, logout, navigate]);
 
   const handleOpenData = useCallback(() => {
-    if (context?.capabilities.createLayer !== true) {
+    if (
+      loadInteractionBlocked ||
+      context?.capabilities.createLayer !== true
+    ) {
       return;
     }
 
     commands.openAddDataModal();
-  }, [commands, context?.capabilities.createLayer]);
+  }, [commands, context?.capabilities.createLayer, loadInteractionBlocked]);
 
   if (!customMapShellEnabled || !context) {
     return <>{children}</>;
   }
 
-  const effectivePanelOpen = panelAvailable && panelOpen;
+  const effectivePanelOpen =
+    panelAvailable && panelOpen && !loadInteractionBlocked;
 
   return (
     <MaonoMapShell
