@@ -67,11 +67,13 @@ test("ações do card usam tokens dourados em hover e estados ativos", () => {
 
 test("itens de listagem do menu de ações usam dourado no hover e foco", () => {
   const menuState = ruleFor(".mm-project-actions-menu__item:hover");
-  const menuFocus = ruleFor(".mm-project-actions-menu__item:focus-visible");
 
   assert.match(menuState, /--maono-accent-text/);
   assert.match(menuState, /--maono-accent-surface-strong/);
-  assert.match(menuFocus, /--maono-accent-border-strong/);
+  assert.match(
+    layer,
+    /\.mm-project-actions-menu__item:focus-visible\s*\{[\s\S]*?--maono-accent-border-strong/,
+  );
 });
 
 test("focus ring dos controles de card vem do contrato global", () => {
