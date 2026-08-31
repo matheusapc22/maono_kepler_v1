@@ -1,0 +1,134 @@
+/*
+ * PR 3 — Cards e listagens.
+ *
+ * Esta camada migra estados de identidade visual dos cards de projeto e
+ * listagens associadas para os tokens dourados definidos na PR 109.
+ * Verde permanece reservado a estados semânticos reais, não a hover,
+ * seleção, abertura, foco ou glow de marca.
+ *
+ * O prefixo :root aumenta a especificidade de forma controlada. A camada é
+ * carregada globalmente antes do grafo de páginas, então ela não depende da
+ * ordem de injeção do CSS estrutural importado pelos componentes de Projects.
+ */
+
+:root .mm-projects-content {
+  --project-focus-ring: var(--maono-focus-ring);
+  --maono-gold-border: var(--maono-accent-border-strong);
+  --maono-gold-glow: var(--maono-accent-glow-strong);
+}
+
+/* Card — hover e abertura são estados de marca, não sucesso. */
+:root .mm-projects-content .mm-project-card:hover {
+  border-color: var(--maono-accent-border);
+  background:
+    radial-gradient(
+      circle at 18% 0%,
+      var(--maono-accent-surface),
+      transparent 44%
+    ),
+    linear-gradient(180deg, rgba(17, 20, 25, 0.99), rgba(8, 14, 20, 0.99));
+  box-shadow:
+    0 20px 42px rgba(0, 0, 0, 0.3),
+    0 0 0 1px var(--maono-accent-border),
+    0 0 24px var(--maono-accent-glow);
+}
+
+:root .mm-projects-content .mm-project-card.is-opening {
+  border-color: var(--maono-accent-border-strong);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.3),
+    0 0 0 1px var(--maono-accent-border),
+    0 0 30px var(--maono-accent-glow-strong);
+}
+
+/* Fallbacks de preview: brilho decorativo também segue a marca. */
+:root .mm-projects-content .mm-project-card__preview-fallback {
+  background:
+    radial-gradient(
+      circle at 50% 35%,
+      var(--maono-accent-surface),
+      transparent 38%
+    ),
+    var(--mm-bg);
+}
+
+:root .mm-projects-content
+  .mm-project-card__preview-fallback.is-missing-neutral {
+  background:
+    radial-gradient(
+      circle at 50% 38%,
+      var(--maono-accent-surface),
+      transparent 40%
+    ),
+    #0f1115;
+}
+
+:root .mm-projects-content .mm-project-card__preview-fallback > span {
+  color: var(--maono-accent-text);
+}
+
+/* Ações sobre o card — hover e estado aberto/selecionado. */
+:root .mm-projects-content
+  :is(.mm-project-card__favorite, .mm-project-card__more):hover:not(:disabled) {
+  border-color: var(--maono-accent-border-strong) !important;
+  color: var(--maono-accent-text) !important;
+  background: var(--maono-accent-surface-strong) !important;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.28),
+    0 11px 26px rgba(0, 0, 0, 0.55),
+    0 0 20px var(--maono-accent-glow) !important;
+}
+
+:root .mm-projects-content .mm-project-card__favorite.is-active,
+:root .mm-projects-content .mm-project-card__more[aria-expanded="true"] {
+  border-color: var(--maono-accent-border-strong) !important;
+  color: var(--maono-accent-text) !important;
+  background: var(--maono-accent-surface-strong) !important;
+  box-shadow:
+    0 0 0 1px var(--maono-accent-border),
+    0 0 22px var(--maono-accent-glow) !important;
+}
+
+/* Lista de ações do card, renderizada por portal em document.body. */
+:root .mm-project-actions-menu__item:hover,
+:root .mm-project-actions-menu__item:focus-visible {
+  color: var(--maono-accent-text) !important;
+  background: var(--maono-accent-surface-strong) !important;
+  outline: none;
+}
+
+:root .mm-project-actions-menu__item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--maono-accent-border-strong);
+}
+
+/* CTA e controles navegáveis: foco sempre vem do contrato global. */
+:root .mm-projects-content
+  :is(
+    .mm-project-card__favorite,
+    .mm-project-card__more,
+    .mm-project-card__open
+  ):focus-visible {
+  outline-color: var(--maono-focus-ring);
+}
+
+:root .mm-projects-content
+  .mm-project-card:hover
+  a.mm-project-card__open:not([aria-disabled="true"]),
+:root .mm-projects-content
+  .mm-project-card
+  a.mm-project-card__open:hover:not([aria-disabled="true"]) {
+  border-color: var(--maono-accent-bright);
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.31),
+    0 0 26px var(--maono-accent-glow-strong),
+    inset 0 1px 0 rgba(255, 253, 237, 0.66);
+}
+
+:root .mm-projects-content
+  .mm-project-card
+  a.mm-project-card__open:active:not([aria-disabled="true"]) {
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.28),
+    0 0 14px var(--maono-accent-glow),
+    inset 0 2px 4px rgba(83, 48, 8, 0.22);
+}

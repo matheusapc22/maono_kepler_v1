@@ -29,17 +29,16 @@ Ação futura: migrar usos de identidade visual para os tokens `--maono-accent*`
 
 ### Cards de projetos
 
-Arquivo: `src/pages/Projects/components/project-cards.css`
+Arquivo estrutural legado: `src/pages/Projects/components/project-cards.css`
 
 Achados de accent legado:
 
 - bordas e glows em `rgba(52, 211, 153, ...)`;
 - destaques em `rgba(110, 231, 183, ...)`;
-- outros verdes do mesmo grupo aplicados a hover/seleção/abertura do card.
+- outros verdes do mesmo grupo aplicados a hover/seleção/abertura do card;
+- fallback de preview e menu de ações também utilizavam verde como decoração de marca.
 
-Esses usos correspondem ao contorno verde de destaque observado nos cards e são identidade visual, não estado semântico.
-
-Ação futura: substituir borda, glow, hover e seleção por `--maono-accent-border*` e `--maono-accent-glow*`.
+Ação da PR 3: os estados visuais passam a ser sobrescritos pela camada `src/pages/Projects/maono-card-list-accent.css`, consumindo exclusivamente tokens `--maono-accent*` e `--maono-focus-ring`. O CSS estrutural original permanece intacto para reduzir risco de regressão de layout.
 
 ### Drawer de metadados do projeto
 
@@ -77,6 +76,31 @@ Fora do escopo da PR 2:
 - aliases verdes legados ainda consumidos por áreas não migradas;
 - estados semânticos de sucesso, aviso, erro e informação.
 
+## PR 3 — cards e listagens
+
+A terceira etapa migra a identidade visual dos cards de projeto e de suas listagens associadas sem alterar o componente React, o fluxo de abertura, favoritos ou comportamento responsivo.
+
+Escopo migrado:
+
+- hover do card passa a usar `--maono-accent-border` e `--maono-accent-glow`;
+- estado `.is-opening` recebe contorno forte e glow dourado, deixando de parecer um estado verde de sucesso;
+- fallbacks de preview passam a usar `--maono-accent-surface` e `--maono-accent-text` como decoração de marca;
+- botões de favorito e mais ações passam a dourado no hover;
+- favorito ativo e menu aberto (`aria-expanded="true"`) compartilham o mesmo contrato de estado ativo dourado;
+- itens do menu de ações passam a usar surface/text/border dourados em hover e `focus-visible`;
+- focus ring dos controles do card passa explicitamente a `--maono-focus-ring`;
+- contorno e glow do CTA `Abrir projeto` passam a consumir os tokens globais de accent nos estados hover/active.
+
+A camada `src/pages/Projects/maono-card-list-accent.css` é carregada depois dos tokens e da camada de formulários. Ela não contém aliases verdes, literais verdes legados nem regras de `.is-success`.
+
+Fora do escopo da PR 3:
+
+- kanban, calendário, métricas e timeline da Central de Chamados;
+- shell do mapa/Kepler;
+- Admin e Login;
+- remoção global de `--mm-teal` enquanto áreas ainda não migradas o consumirem;
+- estados semânticos de sucesso, aviso, erro e informação.
+
 ## Regra de classificação
 
 | Uso | Cor desejada | Token |
@@ -95,7 +119,7 @@ Não adicionar novos literais verdes/teal/mint para identidade visual. Quando o 
 ## Fila de migração
 
 1. ✅ Formulários e drawers: focus, labels, ações e estados ativos — PR 2.
-2. Cards e listagens: bordas, glows, hover e seleção.
+2. ✅ Cards e listagens: bordas, glows, hover e seleção — PR 3.
 3. Shell do mapa/Kepler: tabs, focus, filtros, painéis e controles residuais.
 4. Admin, login e demais superfícies: varredura de hardcodes e aliases legados.
 5. Remover aliases verdes de marca, como `--mm-teal`, quando não houver mais consumidores.
