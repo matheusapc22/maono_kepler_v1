@@ -1,0 +1,119 @@
+/* PR 5 — Central de Chamados residual accent migration.
+ * Branding/interação passa a usar dourado global. Estados funcionais continuam
+ * ligados aos tokens semânticos e o alias legado --mm-teal permanece definido
+ * no stylesheet estrutural até a limpeza final da PR 6.
+ */
+
+:root .ticket-center-shell {
+  --ticket-accent: var(--maono-accent-bright);
+  --ticket-accent-strong: var(--maono-accent-strong);
+}
+
+:root .ticket-organization-chip {
+  border-color: var(--maono-accent-border);
+  background: var(--maono-accent-surface);
+  color: var(--maono-accent-text);
+}
+
+:root .ticket-secondary-action:hover:not(:disabled),
+:root .ticket-table-action:hover:not(:disabled),
+:root .ticket-load-more:hover:not(:disabled),
+:root .ticket-pagination button:hover:not(:disabled),
+:root .ticket-calendar-toolbar button:hover:not(:disabled),
+:root .ticket-attachments button:hover:not(:disabled),
+:root .ticket-detail-error button:hover:not(:disabled),
+:root .ticket-list-tool:hover:not(:disabled) {
+  border-color: var(--maono-accent-border-strong);
+  background: var(--maono-accent-surface);
+}
+
+:root .ticket-subject-button:hover,
+:root .ticket-kanban-subject:hover,
+:root .ticket-calendar-more,
+:root .ticket-calendar-undated button strong,
+:root .ticket-empty-state > span {
+  color: var(--maono-accent-bright);
+}
+
+:root .ticket-metrics > button,
+:root .ticket-metrics > article {
+  background:
+    radial-gradient(circle at 100% 0, var(--maono-accent-surface), transparent 45%),
+    var(--mm-surface);
+}
+
+:root .ticket-metrics > button:hover,
+:root .ticket-metrics > button.is-active {
+  border-color: var(--maono-accent-border-strong);
+  background:
+    radial-gradient(circle at 100% 0, var(--maono-accent-surface-strong), transparent 55%),
+    var(--mm-surface-2);
+}
+
+:root .ticket-metric-icon.metric-open {
+  color: var(--maono-accent-bright);
+  background: var(--maono-accent-surface);
+}
+
+/* Em andamento é informação funcional, não branding. */
+:root .ticket-metric-icon.metric-progress {
+  color: var(--maono-semantic-info);
+  background: color-mix(in srgb, var(--maono-semantic-info) 10%, transparent);
+}
+
+:root .ticket-metric-icon.metric-closed {
+  color: var(--maono-semantic-success);
+  background: color-mix(in srgb, var(--maono-semantic-success) 10%, transparent);
+}
+
+/* Prioridade baixa é categorização funcional; não deve usar o dourado da marca. */
+:root .ticket-priority.priority-low {
+  border-color: color-mix(in srgb, var(--maono-semantic-info) 32%, transparent);
+  color: var(--maono-semantic-info);
+  background: color-mix(in srgb, var(--maono-semantic-info) 7%, transparent);
+}
+
+:root .ticket-kanban-card.priority-low,
+:root .ticket-calendar-event.priority-low {
+  border-left-color: var(--maono-semantic-info);
+}
+
+:root .ticket-new-panel,
+:root .ticket-detail-drawer {
+  background:
+    radial-gradient(circle at 100% 0, var(--maono-accent-surface), transparent 38%),
+    #0f1319;
+}
+
+:root .ticket-attachment-icon {
+  color: var(--maono-accent-bright);
+  background: var(--maono-accent-surface);
+}
+
+:root .ticket-history li > span {
+  border-color: var(--maono-accent);
+}
+
+:root .ticket-center-shell :is(
+  button,
+  input,
+  textarea,
+  select,
+  label[tabindex]
+):focus-visible {
+  outline: 2px solid var(--maono-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Feedback continua semântico. */
+:root .ticket-toast {
+  border-color: color-mix(in srgb, var(--maono-semantic-success) 45%, transparent);
+  color: var(--maono-semantic-success);
+  background: color-mix(in srgb, var(--maono-semantic-success) 10%, #0f1319);
+}
+
+:root .ticket-error-notice,
+:root .ticket-form-error,
+:root .ticket-danger-action {
+  --ticket-danger: var(--maono-semantic-danger);
+}
