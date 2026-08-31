@@ -1,8 +1,20 @@
-/* PR 5 — Central de Chamados residual accent migration.
- * Branding/interação passa a usar dourado global. Estados funcionais continuam
- * ligados aos tokens semânticos e o alias legado --mm-teal permanece definido
- * no stylesheet estrutural até a limpeza final da PR 6.
+/* PR 6 — hardening final do contrato de accent Maõno.
+ *
+ * O monólito estrutural projects.css ainda contém aliases históricos. Em vez de
+ * permitir que esses aliases carreguem uma paleta própria para o runtime, esta
+ * camada os transforma em aliases de compatibilidade para os tokens oficiais.
+ * A especificidade html:root garante o bridge mesmo quando o CSS estrutural é
+ * emitido depois deste módulo pelo bundler.
  */
+
+html:root {
+  --mm-gold: var(--maono-accent-strong);
+  --mm-gold-bright: var(--maono-accent-bright);
+  --mm-gold-muted: var(--maono-accent-muted);
+  --mm-teal: var(--maono-accent);
+  --mm-danger: var(--maono-semantic-danger);
+  --mm-success: var(--maono-semantic-success);
+}
 
 :root .ticket-center-shell {
   --ticket-accent: var(--maono-accent-bright);
@@ -73,6 +85,10 @@
   background: color-mix(in srgb, var(--maono-semantic-info) 7%, transparent);
 }
 
+:root .ticket-priority-badge.priority-low i {
+  background: var(--maono-semantic-info);
+}
+
 :root .ticket-kanban-card.priority-low,
 :root .ticket-calendar-event.priority-low {
   border-left-color: var(--maono-semantic-info);
@@ -103,6 +119,56 @@
 ):focus-visible {
   outline: 2px solid var(--maono-focus-ring);
   outline-offset: 2px;
+}
+
+/* Barras de capacidade são chrome de marca, não uma segunda paleta teal. */
+:root .projects-limit-progress > span {
+  background: linear-gradient(
+    90deg,
+    var(--maono-accent-strong),
+    var(--maono-accent-bright)
+  );
+}
+
+/* Roadmap: chrome dourado; estado em andamento usa informação semântica. */
+:root .roadmap-shell {
+  --roadmap-gold: var(--maono-accent-strong);
+}
+
+:root .roadmap-header small,
+:root .roadmap-metrics article > span,
+:root .roadmap-tools button.active,
+:root .roadmap-list td:first-child small,
+:root .roadmap-drawer header small {
+  color: var(--maono-accent-bright);
+}
+
+:root .roadmap-tools button.active {
+  border-color: var(--maono-accent-border-strong);
+  background: var(--maono-accent-surface);
+}
+
+:root .roadmap-metrics article > span {
+  background: var(--maono-accent-surface);
+}
+
+:root .roadmap-milestone {
+  border-color: var(--maono-accent-bright);
+  background: color-mix(in srgb, var(--maono-accent) 22%, #0f1319);
+}
+
+:root .roadmap-task-bar {
+  border-color: color-mix(in srgb, var(--maono-semantic-info) 42%, transparent);
+  background: color-mix(in srgb, var(--maono-semantic-info) 18%, transparent);
+}
+
+:root .roadmap-task-bar em {
+  background: color-mix(in srgb, var(--maono-semantic-info) 48%, transparent);
+}
+
+:root .roadmap-status:not(.status-completed):not(.status-blocked) {
+  color: var(--maono-semantic-info);
+  background: color-mix(in srgb, var(--maono-semantic-info) 10%, transparent);
 }
 
 /* Feedback continua semântico. */
