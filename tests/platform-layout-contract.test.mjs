@@ -84,13 +84,10 @@ test("abrir ou fechar painel não altera geometria do viewport do Kepler", () =>
 
   assert.doesNotMatch(mapRule, /transition\s*:/i);
   assert.doesNotMatch(mapRule, /will-change\s*:/i);
+  assert.doesNotMatch(mapRule, /(?:left|right|width|height|inset|transform)\s*:/i);
   assert.doesNotMatch(
     shellLayout,
     /\.maono-map-runtime--panel-(?:open|collapsed)\s+\.maono-map-runtime__map/,
-  );
-  assert.doesNotMatch(
-    shellLayout,
-    /\.maono-map-runtime__map\s*\{[\s\S]*?(?:left|right|width|height|inset|transform)\s*:/i,
   );
   assert.match(shellLayout, /\.maono-map-topbar\s*\{[\s\S]*transition:\s*left/);
 });
