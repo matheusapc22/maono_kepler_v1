@@ -131,6 +131,41 @@ Fora do escopo da PR 4:
 - Admin, Login e superfícies residuais fora do Kepler;
 - remoção global de `--mm-teal` enquanto ainda existirem consumidores fora das áreas migradas.
 
+## PR 5 — Admin, Login e superfícies residuais
+
+A quinta etapa fecha a migração visual das superfícies principais antes da limpeza estrutural final dos aliases históricos.
+
+Escopo migrado:
+
+- `src/pages/Admin/maono-admin-accent.css` faz `--admin-gold` e `--admin-gold-bright` derivarem do design system global e isola aliases neutros do Admin que ainda eram herdados de Projects;
+- botões, links, tabs, inputs e selects do Admin passam a ter `focus-visible` dourado e campos ativos recebem border/glow do contrato Maõno;
+- membership ativa continua verde por semântica funcional, guidance informativo usa `--maono-semantic-info` e warning permanece semântico;
+- `src/pages/maono-login-accent.css` preserva o desenho atual do Login, mas passa spinner, labels, inputs, links, CTA, autofill e focus ring para os tokens `--maono-accent*` e `--maono-focus-ring`;
+- `src/pages/Projects/maono-residual-accent.css` cobre os resíduos visuais da Central de Chamados: chip de organização, hover de ações, links/assuntos, métricas, drawers, anexos, timeline, empty state e focus ring;
+- `metric-progress` e `priority-low` deixam de usar teal de marca e passam a `--maono-semantic-info`;
+- métricas/feedback de fechado e toast de sucesso continuam em `--maono-semantic-success`;
+- fundos decorativos teal de métricas e drawers passam para superfícies douradas derivadas dos tokens globais.
+
+Estratégia de compatibilidade:
+
+- `--mm-teal` continua temporariamente definido em `projects.css` para não misturar a migração visual com uma grande limpeza estrutural;
+- os consumidores visuais conhecidos são supersedidos pela camada residual da PR 5;
+- a remoção física de aliases/hardcodes antigos fica reservada para a PR 6, quando o risco de regressão visual estiver isolado.
+
+Proteção de regressão:
+
+- `tests/maono-residual-accent.test.mjs` valida Admin, Login e Central de Chamados;
+- a camada residual não pode reintroduzir `#20c7b5`, `#67e8dd`, `#9af5eb` ou `rgba(32, 199, 181, ...)` como branding;
+- o teste exige que estados funcionais continuem consumindo os tokens semânticos;
+- o gate `test:accent-residual` passa a integrar `test:projects`.
+
+Fora do escopo da PR 5:
+
+- remoção física de aliases e regras legadas já sobrescritas;
+- alterações de autenticação, permissões, chamados ou regras de negócio;
+- mudanças no layout responsivo;
+- qualquer modificação na arquitetura do mapa/Kepler.
+
 ## Regra de classificação
 
 | Uso | Cor desejada | Token |
@@ -151,8 +186,8 @@ Não adicionar novos literais verdes/teal/mint para identidade visual. Quando o 
 1. ✅ Formulários e drawers: focus, labels, ações e estados ativos — PR 2.
 2. ✅ Cards e listagens: bordas, glows, hover e seleção — PR 3.
 3. ✅ Shell do mapa/Kepler: tabs, focus, filtros, painéis, botões e states — PR 4.
-4. Admin, login e demais superfícies: varredura de hardcodes e aliases legados.
-5. Remover aliases verdes de marca, como `--mm-teal`, quando não houver mais consumidores.
+4. ✅ Admin, Login e superfícies residuais: tokenização e classificação semântica — PR 5.
+5. Remover aliases verdes de marca, hardcodes históricos e regras sobrescritas; adicionar gate global — PR 6.
 
 ## Critério de conclusão
 
