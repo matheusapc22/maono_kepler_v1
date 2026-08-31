@@ -17,13 +17,14 @@ const SOURCE_EXTENSIONS = new Set([".css", ".ts", ".tsx", ".js", ".jsx"]);
 /*
  * Dívida histórica congelada. Estes arquivos são anteriores ao design system e
  * ainda carregam literais antigos no CSS estrutural. Eles podem perder dívida,
- * mas código novo não pode copiá-la. A camada de compatibilidade neutraliza os
- * aliases no runtime até a futura decomposição desses monólitos.
+ * mas código novo não pode copiá-la. As camadas de compatibilidade neutralizam
+ * os aliases no runtime até a futura decomposição desses monólitos.
  */
 const FROZEN_LEGACY_FILES = new Set([
   "src/pages/Projects/projects.css",
   "src/pages/Projects/components/project-cards.css",
   "src/pages/Projects/components/project-metadata-panel.css",
+  "src/pages/Admin/admin.css",
 ]);
 
 const COMPAT_FILE = "src/pages/Projects/maono-residual-accent.css";
