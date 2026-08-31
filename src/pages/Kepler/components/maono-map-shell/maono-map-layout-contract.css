@@ -7,8 +7,13 @@
 
 .maono-map-runtime__map {
   z-index: 1;
-  transition: left var(--maono-map-transition);
-  will-change: left;
+  /*
+   * A geometria do mapa não pode ser animada. O Kepler mede esta superfície
+   * com ResizeObserver e recebe width/height explícitos. Animar `left` faria o
+   * viewport variar frame a frame, provocando uma sequência de resizes em
+   * MapLibre/Deck.gl e o flash visual das camadas. O docking continua físico,
+   * mas a troca de largura acontece de forma atômica.
+   */
 }
 
 .maono-map-panel-host {
@@ -42,14 +47,15 @@
 
 @media (min-width: 1021px) {
   /* A largura do painel é estrutural: quando aberto, reduz a superfície real
-   * medida do mapa. O ResizeObserver do Kepler recebe a nova largura e refaz o
-   * viewport sem usar transform/zoom CSS. */
+   * medida do mapa. O ResizeObserver do Kepler recebe somente a largura final,
+   * sem uma animação geométrica intermediária. */
   .maono-map-runtime--panel-open .maono-map-runtime__map {
     left: var(--maono-map-panel-width);
   }
 
   /* A topbar pertence à superfície cartográfica. Também recua para não ocupar
-   * o painel e manter uma única hierarquia visual. */
+   * o painel e manter uma única hierarquia visual. A animação da topbar é
+   * segura porque ela não participa da medição do viewport do Kepler. */
   .maono-map-runtime--panel-open .maono-map-topbar {
     left: calc(var(--maono-map-panel-width) + 18px);
   }
@@ -103,7 +109,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .maono-map-runtime__map,
   .maono-map-topbar {
     transition-duration: 0.01ms !important;
   }
