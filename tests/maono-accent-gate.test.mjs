@@ -20,6 +20,7 @@ test("gate congela explicitamente apenas dívida estrutural conhecida", () => {
     "src/pages/Projects/projects.css",
     "src/pages/Projects/components/project-cards.css",
     "src/pages/Projects/components/project-metadata-panel.css",
+    "src/pages/Admin/admin.css",
   ]) {
     assert.ok(gate.includes(file), `arquivo legado não documentado no gate: ${file}`);
   }
