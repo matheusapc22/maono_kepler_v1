@@ -1,7 +1,12 @@
 .maono-map-runtime {
-  --maono-map-gold: #c5a059;
-  --maono-map-gold-bright: #e2c275;
-  --maono-map-gold-soft: #f0dfbd;
+  /*
+   * O Shell não mantém mais uma paleta de marca paralela. Accent e semântica
+   * vêm do contrato global criado na PR 109; aliases locais permanecem apenas
+   * para compatibilidade com os componentes de mapa já existentes.
+   */
+  --maono-map-gold: var(--maono-accent, #c5a059);
+  --maono-map-gold-bright: var(--maono-accent-bright, #f2c766);
+  --maono-map-gold-soft: var(--maono-accent-text, #f3d58a);
   --maono-map-ink: #04060a;
   --maono-map-panel: #0a0f18;
   --maono-map-panel-raised: #131c2a;
@@ -9,9 +14,10 @@
   --maono-map-text: #f7f2e8;
   --maono-map-text-soft: #c8d1df;
   --maono-map-muted: #758196;
-  --maono-map-danger: #fb7185;
-  --maono-map-success: #6ee7b7;
-  --maono-map-warning: #f4c46e;
+  --maono-map-danger: var(--maono-semantic-danger, #ef4444);
+  --maono-map-success: var(--maono-semantic-success, #22c55e);
+  --maono-map-warning: var(--maono-semantic-warning, #f59e0b);
+  --maono-map-info: var(--maono-semantic-info, #38bdf8);
   --maono-map-rail-width: 80px;
   --maono-map-panel-width: min(510px, calc(100vw - 112px));
   --maono-map-radius: 14px;
