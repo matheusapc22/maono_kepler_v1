@@ -52,7 +52,30 @@ Achados de accent legado:
 - ações de destaque com verde;
 - estados de sucesso também usam verde.
 
-Ação futura: migrar eyebrow, foco e ações de marca para dourado. Manter feedback de sucesso como semântico, preferencialmente através de `--maono-semantic-success`.
+Ação da PR 2: branding e interação do drawer passaram a consumir a camada `src/pages/Projects/maono-form-accent.css`, com eyebrow, brilho decorativo, spinner, ação principal, foco e focus ring dourados. O estado `.is-success` permanece sob as regras semânticas originais.
+
+## PR 2 — formulários e modais
+
+A segunda etapa da migração aplica os tokens definidos na PR 109 sem alterar regras de negócio ou estrutura dos componentes.
+
+Escopo migrado:
+
+- `input`, `textarea` e `select` em formulários de Projects recebem `--maono-accent-border-strong` e `--maono-accent-glow` durante foco;
+- `focus-visible` do drawer de metadados e da Central de Chamados passa a usar `--maono-focus-ring`;
+- `:focus-within` da busca composta da Central de Chamados passa a usar borda/glow dourados;
+- eyebrow do drawer passa a `--maono-accent-text`;
+- spinner de carregamento passa a `--maono-accent-bright`, pois loading não representa sucesso;
+- botão primário do drawer passa a gradiente construído com `--maono-accent-bright` e `--maono-accent-strong`;
+- brilho decorativo do fundo do drawer passa a `--maono-accent-surface`;
+- labels comuns e headings principais permanecem neutros para preservar a hierarquia visual.
+
+Fora do escopo da PR 2:
+
+- cards e listagens;
+- kanban, calendário, métricas e timeline enquanto elementos de visualização;
+- shell do mapa/Kepler;
+- aliases verdes legados ainda consumidos por áreas não migradas;
+- estados semânticos de sucesso, aviso, erro e informação.
 
 ## Regra de classificação
 
@@ -71,7 +94,7 @@ Não adicionar novos literais verdes/teal/mint para identidade visual. Quando o 
 
 ## Fila de migração
 
-1. Formulários e drawers: focus, labels, ações e estados ativos.
+1. ✅ Formulários e drawers: focus, labels, ações e estados ativos — PR 2.
 2. Cards e listagens: bordas, glows, hover e seleção.
 3. Shell do mapa/Kepler: tabs, focus, filtros, painéis e controles residuais.
 4. Admin, login e demais superfícies: varredura de hardcodes e aliases legados.
