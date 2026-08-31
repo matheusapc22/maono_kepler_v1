@@ -23,6 +23,29 @@ const en = {
 
 export const messages = {
   en,
+  pt: {
+    "maono.legend.title": "Maõno",
+
+    // O catálogo pt do Kepler 3.2.0 não possui o bloco mapLegend. Sem estes
+    // overrides, o react-intl cai no defaultMessage inglês (Fill color,
+    // Outline, Source e Target) mesmo com a interface em português.
+    "mapLegend.layers.default.singleColor.color": "Cor de preenchimento",
+    "mapLegend.layers.default.singleColor.strokeColor": "Contorno",
+    "mapLegend.layers.line.singleColor.sourceColor": "Origem",
+    "mapLegend.layers.line.singleColor.targetColor": "Destino",
+    "mapLegend.layers.arc.singleColor.sourceColor": "Origem",
+    "mapLegend.layers.arc.singleColor.targetColor": "Destino",
+
+    // Ajustes de vocabulário para português do Brasil no contexto cartográfico.
+    // O pt nativo do Kepler usa "Espessura do texto" para property.weight,
+    // mas na legenda esse canal representa a espessura do traço da geometria.
+    "property.weight": "Espessura do traço",
+    "property.fillColor": "Cor de preenchimento",
+    "property.strokeColor": "Cor do contorno",
+    "property.outline": "Contorno",
+    "property.stroke": "Traçado",
+    "property.pointCount": "Contagem de pontos",
+  },
   fi: {
     "modal.loadData.remote": "Lataa kartta URL-osoitteen avulla",
     "sampleMapsTab.noData": "Ei aineistoja?",
