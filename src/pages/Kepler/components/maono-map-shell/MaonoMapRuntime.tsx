@@ -34,7 +34,10 @@ function initiallyOpenPanel() {
     return true;
   }
 
-  return !window.matchMedia("(max-width: 820px)").matches;
+  // O painel nasce aberto apenas quando há largura suficiente para o modo
+  // dockado. Em tablet/mobile ele continua disponível como overlay, mas nasce
+  // recolhido para não encobrir o mapa logo na entrada.
+  return !window.matchMedia("(max-width: 1020px)").matches;
 }
 
 export default function MaonoMapRuntime({

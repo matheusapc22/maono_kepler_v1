@@ -2,6 +2,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import "./platform-layout.css";
 import "./components/loading/Skeleton.css";
 import "./fallback-ui-styles";
 import "./auto-project-id";

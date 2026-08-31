@@ -36,6 +36,13 @@
         --mm-boot-gold-bright: #f2cf7a;
         --mm-boot-gold-soft: rgba(214, 168, 79, 0.18);
         --mm-boot-scan-duration: 1.25s;
+        --mm-boot-viewport-height: 100vh;
+      }
+
+      @supports (height: 100dvh) {
+        :root {
+          --mm-boot-viewport-height: 100dvh;
+        }
       }
 
       * {
@@ -47,6 +54,11 @@
       #root {
         min-height: 100%;
         margin: 0;
+      }
+
+      body,
+      #root {
+        min-height: var(--mm-boot-viewport-height);
       }
 
       body {
@@ -65,7 +77,7 @@
 
       .mm-boot-screen {
         display: grid;
-        min-height: 100vh;
+        min-height: var(--mm-boot-viewport-height);
         place-items: center;
         padding: 24px;
         background:

@@ -1,0 +1,121 @@
+/* SPDX-License-Identifier: MIT
+ * Contrato global de viewport da plataforma Maõno.
+ *
+ * O objetivo aqui não é aplicar zoom artificial, mas garantir que todas as
+ * rotas partam da mesma unidade de viewport, tipografia-base e comportamento
+ * de overflow, independentemente do tamanho físico da tela ou das barras
+ * dinâmicas do navegador.
+ */
+
+:root {
+  --maono-app-viewport-height: 100vh;
+  --maono-app-min-width: 320px;
+  --maono-app-content-max-width: 1600px;
+  --maono-app-page-gutter: clamp(16px, 2.2vw, 32px);
+  --maono-app-font-size: 16px;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --maono-app-viewport-height: 100dvh;
+  }
+}
+
+html {
+  width: 100%;
+  min-width: var(--maono-app-min-width);
+  min-height: 100%;
+  font-size: var(--maono-app-font-size);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body,
+#root {
+  width: 100%;
+  min-width: var(--maono-app-min-width);
+  min-height: var(--maono-app-viewport-height);
+  margin: 0;
+}
+
+body {
+  min-height: var(--maono-app-viewport-height) !important;
+  overflow-x: hidden;
+}
+
+/* index.css mantinha height:100vh no root. Este arquivo é carregado depois e
+ * passa a ser a fonte única da altura útil da aplicação. */
+#root {
+  height: var(--maono-app-viewport-height) !important;
+  min-height: var(--maono-app-viewport-height) !important;
+  isolation: isolate;
+}
+
+/* As superfícies principais partem da mesma altura útil. Regras locais podem
+ * crescer verticalmente quando o conteúdo exigir, mas não podem nascer com
+ * uma referência de viewport diferente. */
+.maono-login-page,
+.mm-projects-page,
+.mm-projects-layout,
+.mm-loading-screen,
+.admin-page,
+.maono-admin-page,
+.maono-map-gate {
+  min-height: var(--maono-app-viewport-height) !important;
+}
+
+/* Projetos e Admin usam rails sticky. A altura do rail precisa seguir a mesma
+ * unidade dinâmica da página para não mudar entre computadores/browsers. */
+.mm-projects-sidebar,
+.admin-rail {
+  min-height: var(--maono-app-viewport-height) !important;
+}
+
+/* O login anteriormente usava overflow:hidden + 100vh. Em alturas menores
+ * isso cortava o card e fazia a tela parecer ter outra escala. Mantemos a
+ * composição centralizada, porém permitimos scroll vertical quando necessário. */
+.maono-login-page {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding-block: clamp(16px, 4vh, 40px);
+}
+
+@media (min-width: 768px) {
+  .maono-login-page__card {
+    width: min(calc(100vw - 40px), 1180px);
+    min-height: min(620px, calc(var(--maono-app-viewport-height) - 32px));
+  }
+
+  .maono-login-page__content {
+    min-height: min(620px, calc(var(--maono-app-viewport-height) - 32px));
+  }
+
+  .maono-login-page__content--floating {
+    min-height: min(564px, calc(var(--maono-app-viewport-height) - 88px));
+  }
+}
+
+/* Evita variações de escala tipográfica causadas por herança entre chunks de
+ * rota. Os componentes continuam livres para usar rem/clamp responsivos. */
+.maono-login-page,
+.mm-projects-page,
+.maono-admin-page,
+.maono-map-runtime {
+  font-size: var(--maono-app-font-size);
+}
+
+/* Telas de aplicação devem preencher a largura disponível sem introduzir uma
+ * segunda largura de viewport baseada em conteúdo. */
+.mm-projects-page,
+.maono-admin-page,
+.maono-map-runtime,
+.mm-loading-screen {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .maono-login-page {
+    padding-block: 0;
+  }
+}
