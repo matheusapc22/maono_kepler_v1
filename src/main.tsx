@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "./maono-design-tokens.css";
 import "./index.css";
 import "./platform-layout.css";
 import "./components/loading/Skeleton.css";
