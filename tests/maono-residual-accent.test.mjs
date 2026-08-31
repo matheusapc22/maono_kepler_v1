@@ -22,7 +22,7 @@ const [
   readFile(new URL("package.json", ROOT), "utf8"),
 ]);
 
-test("PR 5 carrega os bridges depois dos tokens globais", () => {
+test("bridges visuais carregam depois dos tokens globais", () => {
   const tokenImport = 'import "./maono-design-tokens.css";';
   const residualImports = [
     'import "./pages/Projects/maono-residual-accent.css";',
@@ -102,7 +102,7 @@ test("Central de Chamados usa dourado para chrome residual", () => {
   }
 });
 
-test("estados de chamados permanecem semânticos e não viram dourado", () => {
+test("estados funcionais permanecem semânticos e não viram dourado", () => {
   assert.match(
     ticketAccent,
     /\.ticket-metric-icon\.metric-progress[\s\S]*?--maono-semantic-info/,
@@ -116,17 +116,43 @@ test("estados de chamados permanecem semânticos e não viram dourado", () => {
     /\.ticket-metric-icon\.metric-closed[\s\S]*?--maono-semantic-success/,
   );
   assert.match(ticketAccent, /\.ticket-toast[\s\S]*?--maono-semantic-success/);
+  assert.match(ticketAccent, /\.roadmap-task-bar[\s\S]*?--maono-semantic-info/);
+  assert.match(
+    ticketAccent,
+    /\.roadmap-status:not\(\.status-completed\):not\(\.status-blocked\)[\s\S]*?--maono-semantic-info/,
+  );
 });
 
-test("alias teal permanece apenas como legado até a PR de limpeza", () => {
+test("aliases históricos ficam neutralizados por bridge canônico de maior especificidade", () => {
+  // Dívida física ainda existente no monólito; PR 6 impede que ela defina o runtime.
   assert.match(projectsLegacy, /--mm-teal:\s*#20c7b5/);
+
+  assert.match(ticketAccent, /html:root\s*\{/);
+  assert.match(ticketAccent, /--mm-teal:\s*var\(--maono-accent\)/);
+  assert.match(ticketAccent, /--mm-gold:\s*var\(--maono-accent-strong\)/);
+  assert.match(ticketAccent, /--mm-gold-bright:\s*var\(--maono-accent-bright\)/);
+  assert.match(ticketAccent, /--mm-gold-muted:\s*var\(--maono-accent-muted\)/);
+  assert.match(ticketAccent, /--mm-danger:\s*var\(--maono-semantic-danger\)/);
+  assert.match(ticketAccent, /--mm-success:\s*var\(--maono-semantic-success\)/);
   assert.doesNotMatch(ticketAccent, /var\(--mm-teal\)/);
+
+  assert.match(tokens, /--maono-accent-muted:\s*#8a6a2f/);
   assert.match(tokens, /--maono-semantic-success:/);
   assert.match(tokens, /--maono-semantic-info:/);
 });
 
-test("teste residual participa do gate de Projects", () => {
+test("limites e Roadmap usam contrato global em vez da antiga paleta teal", () => {
+  assert.match(
+    ticketAccent,
+    /\.projects-limit-progress > span[\s\S]*?--maono-accent-strong[\s\S]*?--maono-accent-bright/,
+  );
+  assert.match(ticketAccent, /\.roadmap-shell[\s\S]*?--maono-accent-strong/);
+  assert.match(ticketAccent, /\.roadmap-milestone[\s\S]*?--maono-accent-bright/);
+});
+
+test("gates de accent participam do gate de Projects", () => {
   const pkg = JSON.parse(packageJson);
   assert.match(pkg.scripts["test:accent-residual"], /maono-residual-accent\.test\.mjs/);
   assert.match(pkg.scripts["test:projects"], /test:accent-residual/);
+  assert.match(pkg.scripts["test:projects"], /test:accent-gate/);
 });
