@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./maono-design-tokens.css";
 import "./pages/Projects/maono-form-accent.css";
+import "./pages/Projects/maono-card-list-accent.css";
 import "./index.css";
 import "./platform-layout.css";
 import "./components/loading/Skeleton.css";
