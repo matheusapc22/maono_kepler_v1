@@ -11,8 +11,10 @@
 
 /* The desktop shell normally remembers the Layers panel as open. While a
  * project is hydrating we keep the panel visually and interactively closed;
- * when visual readiness clears isMapLoading, the existing shell state becomes
- * visible again without resizing the WebGL viewport. */
+ * data-map-ready=false also covers the first paint before MapUrlLoader raises
+ * isMapLoading, preventing a one-frame panel flash. */
+.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__panel,
+.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__backdrop,
 .maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__panel,
 .maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__backdrop {
   visibility: hidden;
@@ -20,13 +22,13 @@
   pointer-events: none;
 }
 
+.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__handle,
 .maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__handle {
   pointer-events: none;
 }
 
-/* The centralized overlay is the only loading feedback. The inline notice is
- * retained in markup only for backwards-compatible panel code paths, but is
- * never presented while the project loading contract is active. */
+/* The centralized overlay is the only loading feedback. The legacy inline
+ * notice is suppressed even if the panel markup is mounted during hydration. */
 .maono-layer-panel__notice:has(.maono-layer-panel__loading) {
   display: none;
 }
