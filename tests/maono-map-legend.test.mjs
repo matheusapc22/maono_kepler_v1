@@ -8,14 +8,29 @@ async function source(relativePath) {
   return readFile(new URL(relativePath, ROOT), "utf8");
 }
 
-const [index, legendRow, legendPanel, legendPosition] = await Promise.all([
+const [index, legendRow, legendPanel, legendPosition, localization] = await Promise.all([
   source("index.tsx"),
   source("factories/maono-legend-row.tsx"),
   source("factories/maono-map-legend-panel.tsx"),
   source("factories/maono-map-legend-position.ts"),
+  source("constants/localization.ts"),
 ]);
 
-test("legenda Maõno usa vocabulário pt-BR sem alterar nomes de campos", () => {
+test("catálogo Maõno completa o vocabulário pt-BR ausente no Kepler 3.2.0", () => {
+  assert.match(localization, /pt:\s*\{/);
+  assert.match(
+    localization,
+    /"mapLegend\.layers\.default\.singleColor\.color": "Cor de preenchimento"/,
+  );
+  assert.match(
+    localization,
+    /"mapLegend\.layers\.default\.singleColor\.strokeColor": "Contorno"/,
+  );
+  assert.match(localization, /"property\.weight": "Espessura do traço"/);
+  assert.match(localization, /"property\.strokeColor": "Cor do contorno"/);
+});
+
+test("legenda Maõno localiza fallback textual sem alterar nomes de campos", () => {
   assert.match(legendRow, /"fill color": "Cor de preenchimento"/);
   assert.match(legendRow, /outline: "Contorno"/);
   assert.match(legendRow, /"stroke color": "Cor do contorno"/);
