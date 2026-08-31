@@ -1,0 +1,33 @@
+/* SPDX-License-Identifier: MIT
+ * Tokens visuais globais da Maõno.
+ *
+ * Regra de marca:
+ * - dourado é o único accent de identidade visual;
+ * - verde não deve ser usado como accent de marca;
+ * - cores semânticas permanecem separadas e só devem representar estado.
+ */
+
+:root {
+  /* Brand accent — Maõno Gold */
+  --maono-accent: #c5a059;
+  --maono-accent-rgb: 197 160 89;
+  --maono-accent-strong: #d6a84f;
+  --maono-accent-bright: #f2c766;
+  --maono-accent-text: #f3d58a;
+  --maono-accent-surface: rgb(var(--maono-accent-rgb) / 0.12);
+  --maono-accent-surface-strong: rgb(var(--maono-accent-rgb) / 0.2);
+  --maono-accent-border: rgb(var(--maono-accent-rgb) / 0.45);
+  --maono-accent-border-strong: rgb(var(--maono-accent-rgb) / 0.72);
+  --maono-accent-glow: rgb(var(--maono-accent-rgb) / 0.24);
+  --maono-accent-glow-strong: rgb(var(--maono-accent-rgb) / 0.38);
+  --maono-focus-ring: var(--maono-accent-bright);
+
+  /*
+   * Semântica funcional. Estes tokens não representam a marca.
+   * Verde continua permitido somente para sucesso/estado positivo real.
+   */
+  --maono-semantic-success: #22c55e;
+  --maono-semantic-warning: #f59e0b;
+  --maono-semantic-danger: #ef4444;
+  --maono-semantic-info: #38bdf8;
+}
