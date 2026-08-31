@@ -1,0 +1,62 @@
+/* PR 5 — Admin visual bridge.
+ * Mantém layout/comportamento intactos e transforma o Admin em consumidor
+ * do design system global criado na PR 109.
+ */
+
+:root .maono-admin-page {
+  --admin-gold: var(--maono-accent-strong);
+  --admin-gold-bright: var(--maono-accent-bright);
+
+  /* Compatibilidade temporária com seletores legados do Admin que ainda
+   * referenciam aliases de Projects. A origem passa a ser local ao Admin. */
+  --mm-border: var(--admin-border);
+  --mm-border-strong: var(--admin-border-strong);
+  --mm-muted: var(--admin-muted);
+}
+
+:root .maono-admin-page :is(
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 2px solid var(--maono-focus-ring) !important;
+  outline-offset: 2px;
+}
+
+:root .maono-admin-page :is(input, select, textarea):focus {
+  border-color: var(--maono-accent-border-strong) !important;
+  box-shadow: 0 0 0 3px var(--maono-accent-glow) !important;
+}
+
+:root .maono-admin-page .admin-nav button.active,
+:root .maono-admin-page .admin-user-dialog-tabs button.active {
+  border-color: var(--maono-accent-border) !important;
+  color: var(--maono-accent-bright) !important;
+  background: var(--maono-accent-surface) !important;
+}
+
+:root .maono-admin-page .admin-nav button.active {
+  box-shadow: inset 3px 0 0 var(--maono-accent) !important;
+}
+
+:root .maono-admin-page .admin-membership-state.active {
+  border-color: color-mix(in srgb, var(--maono-semantic-success) 36%, transparent) !important;
+  color: var(--maono-semantic-success) !important;
+  background: color-mix(in srgb, var(--maono-semantic-success) 8%, transparent) !important;
+}
+
+:root .maono-admin-page .admin-user-guidance:not(.warning) {
+  border-color: color-mix(in srgb, var(--maono-semantic-info) 30%, transparent) !important;
+  border-left-color: var(--maono-semantic-info) !important;
+  color: #dbeafe !important;
+  background: color-mix(in srgb, var(--maono-semantic-info) 7%, transparent) !important;
+}
+
+:root .maono-admin-page .admin-user-guidance.warning {
+  border-color: var(--maono-accent-border) !important;
+  border-left-color: var(--maono-semantic-warning) !important;
+  background: color-mix(in srgb, var(--maono-semantic-warning) 7%, transparent) !important;
+}

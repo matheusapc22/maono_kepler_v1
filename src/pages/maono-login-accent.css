@@ -1,0 +1,98 @@
+/* PR 5 — Login accent bridge.
+ * O desenho do Login permanece o mesmo; esta camada remove a dependência
+ * visual de uma paleta dourada paralela e usa os tokens globais Maõno.
+ */
+
+:root .maono-login-page__spinner {
+  border-top-color: var(--maono-accent-bright);
+}
+
+:root .maono-login-page__field-label,
+:root .maono-login-page__link-button {
+  color: var(--maono-accent-bright);
+  -webkit-text-fill-color: var(--maono-accent-bright);
+}
+
+:root .maono-login-page__input {
+  border-color: var(--maono-accent-border);
+  caret-color: var(--maono-accent-bright);
+}
+
+:root .maono-login-page__input:focus {
+  border-color: var(--maono-accent-border-strong);
+  box-shadow:
+    0 0 0 4px var(--maono-accent-surface),
+    0 0 22px var(--maono-accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:root .maono-login-page__input:-webkit-autofill,
+:root .maono-login-page__input:-webkit-autofill:hover,
+:root .maono-login-page__input:-webkit-autofill:active {
+  border-color: var(--maono-accent-border) !important;
+  caret-color: var(--maono-accent-bright) !important;
+}
+
+:root .maono-login-page__input:-webkit-autofill:focus {
+  border-color: var(--maono-accent-border-strong) !important;
+  box-shadow:
+    0 0 0 1000px #303034 inset,
+    0 0 0 4px var(--maono-accent-surface),
+    0 0 22px var(--maono-accent-glow) !important;
+}
+
+:root .maono-login-page__password-toggle {
+  color: var(--maono-accent-text);
+  -webkit-text-fill-color: var(--maono-accent-text);
+}
+
+:root .maono-login-page__link-button {
+  text-decoration-color: var(--maono-accent-border);
+}
+
+:root .maono-login-page__submit {
+  border-color: var(--maono-accent-border-strong);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.42) 0%,
+      rgba(255, 255, 255, 0.08) 16%,
+      transparent 32%
+    ),
+    linear-gradient(
+      90deg,
+      var(--maono-accent) 0%,
+      var(--maono-accent-strong) 28%,
+      var(--maono-accent-bright) 52%,
+      var(--maono-accent-strong) 75%,
+      var(--maono-accent-bright) 100%
+    );
+  box-shadow:
+    0 18px 44px var(--maono-accent-glow),
+    0 0 34px var(--maono-accent-surface-strong),
+    inset 0 1px 0 rgba(255, 255, 255, 0.58),
+    inset 0 -1px 0 rgba(80, 52, 11, 0.42);
+}
+
+:root .maono-login-page__submit:hover:not(:disabled) {
+  box-shadow:
+    0 22px 54px var(--maono-accent-glow-strong),
+    0 0 44px var(--maono-accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    inset 0 -1px 0 rgba(80, 52, 11, 0.38);
+}
+
+:root .maono-login-page :is(
+  button,
+  input,
+  a,
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 2px solid var(--maono-focus-ring);
+  outline-offset: 3px;
+}
+
+:root .maono-login-page__error {
+  border-color: color-mix(in srgb, var(--maono-semantic-danger) 30%, transparent);
+  background: color-mix(in srgb, var(--maono-semantic-danger) 10%, transparent);
+}
