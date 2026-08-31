@@ -16,6 +16,7 @@ const [
   panelHost,
   shell,
   shellCss,
+  shellLayout,
   shellTokens,
   layerPanel,
   layerPanelCss,
@@ -38,6 +39,7 @@ const [
   source("components/maono-map-shell/MapPanelHost.tsx"),
   source("components/maono-map-shell/MaonoMapShell.tsx"),
   source("components/maono-map-shell/maono-map-shell.css"),
+  source("components/maono-map-shell/maono-map-layout-contract.css"),
   source("components/maono-map-shell/maono-map-tokens.css"),
   source("components/maono-layer-panel/MaonoLayerPanel.tsx"),
   source("components/maono-layer-panel/maono-layer-panel.css"),
@@ -228,14 +230,24 @@ test("Filtros permanecem exclusivamente como subfunção do painel de Camadas", 
   assert.match(layerPanel, /id="maono-map-engine-panel"/);
 });
 
-test("layout usa overlay em todos os breakpoints sem flex-basis no painel", () => {
+test("layout usa docking no desktop e overlay opaco em telas menores", () => {
   assert.match(shellTokens, /#c5a059/i);
   assert.match(shellCss, /\.maono-map-panel-host\s*\{[\s\S]*position: absolute;[\s\S]*inset: 0;/);
   assert.match(shellCss, /\.maono-map-panel-host__panel\s*\{[\s\S]*position: absolute;/);
+  assert.match(shellLayout, /@media \(min-width: 1021px\)/);
+  assert.match(
+    shellLayout,
+    /\.maono-map-runtime--panel-open \.maono-map-runtime__map\s*\{[\s\S]*left:\s*var\(--maono-map-panel-width\)/,
+  );
+  assert.match(shellLayout, /@media \(max-width: 1020px\)/);
+  assert.match(shellLayout, /\.maono-map-panel-host__backdrop\s*\{[\s\S]*pointer-events:\s*auto/);
+  assert.match(shellLayout, /\.maono-map-panel-host__panel\s*\{[\s\S]*background:\s*var\(--maono-map-panel\)/);
   assert.match(shellCss, /@media \(max-width: 820px\)/);
   assert.match(shellCss, /prefers-reduced-motion/);
   assert.match(shellCss, /:focus-visible/);
   assert.match(shellCss, /--maono-map-panel-width/);
+  assert.doesNotMatch(shellLayout, /\bzoom\s*:/i);
+  assert.doesNotMatch(shellLayout, /transform:\s*scale\(/i);
   assert.doesNotMatch(
     shellCss,
     /\.maono-map-runtime(?:--panel-collapsed)? \.maono-layer-panel[\s\S]{0,300}flex-basis/,
