@@ -61,6 +61,21 @@ const MaonoLegendFrame = styled.div`
     border-radius: 999px;
     background: rgba(197, 160, 89, 0.72);
   }
+
+  /*
+   * O MapLegend 3.2.0 concatena o segundo trecho de LayerDefaultLegend como
+   * texto literal " by ", portanto ele não passa pelo catálogo de tradução.
+   * Mantemos o DOM/factory nativo e localizamos somente a apresentação desse
+   * conector para "por", sem alterar nomes de campos ou métricas.
+   */
+  .legend--layer_size-schema p > .legend--layer_by + .legend--layer_by {
+    font-size: 0;
+  }
+
+  .legend--layer_size-schema p > .legend--layer_by + .legend--layer_by::after {
+    content: " por ";
+    font-size: 11px;
+  }
 `;
 
 function maonoLegendTheme(outerTheme = {}) {
