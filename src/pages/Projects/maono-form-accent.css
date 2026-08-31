@@ -1,0 +1,142 @@
+/* SPDX-License-Identifier: MIT
+ * PR 2 — Formulários e modais.
+ *
+ * Esta camada migra accents de interação para os tokens dourados definidos em
+ * maono-design-tokens.css. Ela é deliberadamente específica para superfícies
+ * de formulário/drawer e não altera cores semânticas de sucesso/erro/aviso.
+ */
+
+/* =========================================================
+   Drawer: informações do projeto
+========================================================= */
+
+.mm-project-metadata-panel.mm-project-metadata-panel {
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      var(--maono-accent-surface),
+      transparent 30%
+    ),
+    linear-gradient(180deg, #0b1420 0%, #07101a 100%);
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-panel__eyebrow {
+  color: var(--maono-accent-text);
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-panel__close:hover:not(:disabled) {
+  border-color: var(--maono-accent-border-strong);
+  background: var(--maono-accent-surface);
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-panel__spinner {
+  border-top-color: var(--maono-accent-bright);
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-field
+  :is(input, textarea):focus {
+  border-color: var(--maono-accent-border-strong);
+  box-shadow: 0 0 0 3px var(--maono-accent-glow);
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-button.is-primary {
+  border-color: var(--maono-accent-border-strong);
+  color: #171105;
+  background: linear-gradient(
+    135deg,
+    var(--maono-accent-bright),
+    var(--maono-accent-strong)
+  );
+  box-shadow: 0 10px 24px var(--maono-accent-glow);
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-button.is-primary:hover:not(:disabled) {
+  border-color: var(--maono-focus-ring);
+  box-shadow: 0 12px 28px var(--maono-accent-glow-strong);
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  :is(button, input, textarea, select, [href], [tabindex]):focus-visible {
+  outline: 3px solid var(--maono-focus-ring);
+  outline-offset: 3px;
+}
+
+/* Labels de campo continuam neutros: o dourado marca hierarquia e interação. */
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-field
+  > span {
+  color: #e2e8f0;
+}
+
+.mm-project-metadata-panel.mm-project-metadata-panel
+  .mm-project-metadata-form__section-heading
+  h3 {
+  color: #f8fafc;
+}
+
+/* =========================================================
+   Formulários compartilhados de Projects
+========================================================= */
+
+.mm-projects-page.mm-projects-page
+  :is(
+    .projects-inline-form,
+    .projects-management-form,
+    .mm-form-grid,
+    .mm-table-wrap,
+    .ticket-new-form,
+    .ticket-filter-bar,
+    .ticket-detail-management,
+    .ticket-row-actions,
+    .ticket-kanban-card
+  )
+  :is(input, textarea, select):focus {
+  border-color: var(--maono-accent-border-strong);
+  box-shadow: 0 0 0 3px var(--maono-accent-glow);
+}
+
+/* Busca composta: o wrapper recebe a borda/glow quando o input interno foca. */
+.mm-projects-page.mm-projects-page .ticket-filter-input-wrap:focus-within {
+  border-color: var(--maono-accent-border-strong);
+  box-shadow: 0 0 0 3px var(--maono-accent-glow);
+}
+
+/* Central de Chamados tinha focus-visible ligado ao alias teal legado. */
+.ticket-center-shell.ticket-center-shell
+  :is(button, input, textarea, select, label[tabindex]):focus-visible {
+  outline: 2px solid var(--maono-focus-ring);
+  outline-offset: 2px;
+}
+
+.ticket-center-shell.ticket-center-shell
+  :is(
+    .ticket-field,
+    .ticket-new-form,
+    .ticket-filter-bar,
+    .ticket-detail-management,
+    .ticket-row-actions,
+    .ticket-kanban-card
+  )
+  :is(input, textarea, select):focus {
+  border-color: var(--maono-accent-border-strong);
+  box-shadow: 0 0 0 3px var(--maono-accent-glow);
+}
+
+/* Labels e títulos de formulário permanecem neutros; eyebrows de marca são dourados. */
+.ticket-center-shell.ticket-center-shell
+  :is(.ticket-filter-label, .ticket-field > span) {
+  color: var(--mm-text-soft, #c6c0b1);
+}
+
+/*
+ * Contrato:
+ * - não adicionar literais green/teal/mint neste arquivo;
+ * - success/error/warning continuam definidos pelas regras semânticas originais;
+ * - cards, listagens, Kepler e demais accents ficam fora do escopo desta PR.
+ */
