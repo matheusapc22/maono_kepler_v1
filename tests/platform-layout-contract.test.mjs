@@ -79,6 +79,18 @@ test("desktop reserva fisicamente o painel e não renderiza o mapa por baixo", (
   assert.doesNotMatch(shellLayout, /transform:\s*scale\(/i);
 });
 
+test("docking do mapa é atômico e não anima a geometria medida pelo Kepler", () => {
+  const mapRule = shellLayout.match(/\.maono-map-runtime__map\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+
+  assert.doesNotMatch(mapRule, /transition\s*:/i);
+  assert.doesNotMatch(mapRule, /will-change\s*:/i);
+  assert.match(
+    shellLayout,
+    /\.maono-map-runtime--panel-open \.maono-map-runtime__map\s*\{[\s\S]*left:\s*var\(--maono-map-panel-width\)/,
+  );
+  assert.match(shellLayout, /\.maono-map-topbar\s*\{[\s\S]*transition:\s*left/);
+});
+
 test("tablet e mobile mantêm overlay opaco sem nascer aberto", () => {
   assert.match(shellLayout, /@media \(max-width: 1020px\)/);
   assert.match(
