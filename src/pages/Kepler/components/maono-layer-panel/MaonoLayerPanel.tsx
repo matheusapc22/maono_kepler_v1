@@ -372,7 +372,14 @@ export default function MaonoLayerPanel() {
   }
 
   const tabCount = Number(canViewLayers) + Number(canViewFilters);
-  const title = tab === "layers" ? "Camadas" : "Filtros";
+  const projectName = context?.project?.name?.trim();
+  const organizationName = context?.organization?.name?.trim();
+  const title =
+    projectName && organizationName
+      ? `${projectName} - ${organizationName}`
+      : projectName ||
+        organizationName ||
+        (tab === "layers" ? "Camadas" : "Filtros");
   const count = tab === "layers" ? layers.length : filters.length;
 
   return (
@@ -387,7 +394,17 @@ export default function MaonoLayerPanel() {
     >
       <header className="maono-layer-panel__header">
         <div>
-          <strong>{title}</strong>
+          <strong
+            title={title}
+            style={{
+              display: "block",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {title}
+          </strong>
           <span>{count} {count === 1 ? "item" : "itens"}</span>
         </div>
         <span className="maono-layer-panel__mode">
