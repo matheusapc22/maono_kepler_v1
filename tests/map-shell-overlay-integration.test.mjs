@@ -17,6 +17,7 @@ const files = {
   layerPanelCss: "../src/pages/Kepler/components/maono-layer-panel/maono-layer-panel.css",
   panelEvents: "../src/pages/Kepler/components/maono-map-shell/map-shell-events.ts",
   shellCss: "../src/pages/Kepler/components/maono-map-shell/maono-map-shell.css",
+  shellLayout: "../src/pages/Kepler/components/maono-map-shell/maono-map-layout-contract.css",
   shellTokens: "../src/pages/Kepler/components/maono-map-shell/maono-map-tokens.css",
   layerPanel: "../src/pages/Kepler/components/maono-layer-panel/MaonoLayerPanel.tsx",
   overlay: "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
@@ -126,7 +127,8 @@ test("sidebar abre Camadas e Filtros permanece na navegação interna do painel"
   assert.match(source.layerPanel, /id="maono-filters-tab"/);
   assert.match(source.sidebar, /onPanelTabSelect\("layers"\)/);
   assert.doesNotMatch(source.sidebar, /onPanelTabSelect\("filters"\)/);
-  assert.match(source.panelHost, /aria-controls="maono-map-engine-panel"/);
+  assert.match(source.panelHost, /const controlsId = maonoMapShellPanelControlId\(activePanel\)/);
+  assert.match(source.panelHost, /aria-controls=\{controlsId\}/);
   assert.match(source.layerPanel, /id="maono-map-engine-panel"/);
 });
 
@@ -206,7 +208,7 @@ test("Manter prévia promove a análise sem acionar o salvamento global", () => 
   );
 });
 
-test("painel do shell é estruturalmente único e não reduz o viewport medido", () => {
+test("painel do shell é único e separa fisicamente painel e mapa no desktop", () => {
   assert.match(
     source.runtime,
     /<MapPanelHost[\s\S]*<MaonoLayerPanel \/>[\s\S]*<\/MapPanelHost>/,
@@ -221,10 +223,32 @@ test("painel do shell é estruturalmente único e não reduz o viewport medido",
     source.shellCss,
     /\.maono-map-panel-host__panel\s*\{[\s\S]*position: absolute;/,
   );
+  assert.match(source.shellLayout, /@media \(min-width: 1021px\)/);
+  assert.match(
+    source.shellLayout,
+    /\.maono-map-runtime--panel-open \.maono-map-runtime__map\s*\{[\s\S]*left:\s*var\(--maono-map-panel-width\)/,
+  );
+  assert.match(source.shellLayout, /contain:\s*paint/);
+  assert.match(source.shellLayout, /background:\s*var\(--maono-map-panel\)/);
+  assert.doesNotMatch(source.shellLayout, /\bzoom\s*:/i);
+  assert.doesNotMatch(source.shellLayout, /transform:\s*scale\(/i);
   assert.doesNotMatch(
     source.layerPanelCss.slice(0, 700),
     /flex:\s*0\s+0\s+340px|width:\s*340px/,
   );
+});
+
+test("tablet e mobile preservam mapa com painel em overlay bloqueante", () => {
+  assert.match(source.shellLayout, /@media \(max-width: 1020px\)/);
+  assert.match(
+    source.shellLayout,
+    /\.maono-map-runtime--panel-open \.maono-map-runtime__map,[\s\S]*left:\s*0/,
+  );
+  assert.match(
+    source.shellLayout,
+    /\.maono-map-panel-host__backdrop\s*\{[\s\S]*pointer-events:\s*auto/,
+  );
+  assert.match(source.runtime, /matchMedia\("\(max-width: 1020px\)"\)/);
 });
 
 test("invariante geométrica aceita apenas variação de até um pixel", () => {
