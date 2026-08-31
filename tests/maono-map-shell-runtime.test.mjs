@@ -230,18 +230,20 @@ test("Filtros permanecem exclusivamente como subfunção do painel de Camadas", 
   assert.match(layerPanel, /id="maono-map-engine-panel"/);
 });
 
-test("layout usa docking no desktop e overlay opaco em telas menores", () => {
+test("layout usa overlay opaco em todos os breakpoints sem alterar o viewport", () => {
   assert.match(shellTokens, /#c5a059/i);
   assert.match(shellCss, /\.maono-map-panel-host\s*\{[\s\S]*position: absolute;[\s\S]*inset: 0;/);
   assert.match(shellCss, /\.maono-map-panel-host__panel\s*\{[\s\S]*position: absolute;/);
   assert.match(shellLayout, /@media \(min-width: 1021px\)/);
-  assert.match(
-    shellLayout,
-    /\.maono-map-runtime--panel-open \.maono-map-runtime__map\s*\{[\s\S]*left:\s*var\(--maono-map-panel-width\)/,
-  );
   assert.match(shellLayout, /@media \(max-width: 1020px\)/);
+  assert.doesNotMatch(
+    shellLayout,
+    /\.maono-map-runtime--panel-(?:open|collapsed)\s+\.maono-map-runtime__map/,
+  );
   assert.match(shellLayout, /\.maono-map-panel-host__backdrop\s*\{[\s\S]*pointer-events:\s*auto/);
   assert.match(shellLayout, /\.maono-map-panel-host__panel\s*\{[\s\S]*background:\s*var\(--maono-map-panel\)/);
+  assert.match(shellLayout, /contain:\s*paint/);
+  assert.match(shellLayout, /isolation:\s*isolate/);
   assert.match(shellCss, /@media \(max-width: 820px\)/);
   assert.match(shellCss, /prefers-reduced-motion/);
   assert.match(shellCss, /:focus-visible/);
