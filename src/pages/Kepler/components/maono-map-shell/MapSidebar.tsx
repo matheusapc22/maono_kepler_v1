@@ -12,6 +12,7 @@ type MapSidebarProps = {
   activePanel: MaonoMapShellPanel;
   layerPanelAvailable: boolean;
   basemapAvailable: boolean;
+  mapLoading: boolean;
   loggingOut: boolean;
   onPanelTabSelect: (tab: MaonoMapPanelTab) => void;
   onOpenBasemap: () => void;
@@ -33,6 +34,7 @@ export default function MapSidebar({
   activePanel,
   layerPanelAvailable,
   basemapAvailable,
+  mapLoading,
   loggingOut,
   onPanelTabSelect,
   onOpenBasemap,
@@ -49,6 +51,7 @@ export default function MapSidebar({
     basemapAvailable && capabilities.viewMap,
   );
   const canImportData = capabilities.createLayer === true;
+  const loadingTitle = "Disponível quando o mapa terminar de carregar.";
 
   return (
     <aside
@@ -76,10 +79,11 @@ export default function MapSidebar({
               panelOpen && activePanel === "layers" ? "is-active" : ""
             }
             onClick={() => onPanelTabSelect("layers")}
+            disabled={mapLoading}
             aria-pressed={panelOpen && activePanel === "layers"}
             aria-controls="maono-map-engine-panel"
             aria-label="Camadas"
-            title="Camadas"
+            title={mapLoading ? loadingTitle : "Camadas"}
           >
             <MapShellIcon name="layers" />
             <SidebarLabel>Camadas</SidebarLabel>
@@ -93,10 +97,11 @@ export default function MapSidebar({
               panelOpen && activePanel === "basemap" ? "is-active" : ""
             }
             onClick={onOpenBasemap}
+            disabled={mapLoading}
             aria-pressed={panelOpen && activePanel === "basemap"}
             aria-controls="maono-basemap-panel"
             aria-label="Mapa base"
-            title="Mapa base"
+            title={mapLoading ? loadingTitle : "Mapa base"}
           >
             <MapShellIcon name="basemap" />
             <SidebarLabel>Mapa base</SidebarLabel>
@@ -107,8 +112,9 @@ export default function MapSidebar({
           <button
             type="button"
             onClick={onOpenData}
+            disabled={mapLoading}
             aria-label="Adicionar dados"
-            title="Adicionar dados"
+            title={mapLoading ? loadingTitle : "Adicionar dados"}
           >
             <MapShellIcon name="data" />
             <SidebarLabel>Adicionar dados</SidebarLabel>
