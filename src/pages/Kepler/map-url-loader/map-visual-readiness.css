@@ -1,0 +1,32 @@
+/* Visual load gate for persisted projects.
+ *
+ * The map viewport remains physically static. This file must never alter
+ * .maono-map-runtime__map geometry (width/height/left/right) or the existing
+ * ResizeObserver contract.
+ */
+
+.maono-map-central-loading {
+  z-index: 100000 !important;
+}
+
+/* The desktop shell normally remembers the Layers panel as open. While a
+ * project is hydrating we keep the panel visually and interactively closed;
+ * when visual readiness clears isMapLoading, the existing shell state becomes
+ * visible again without resizing the WebGL viewport. */
+.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__panel,
+.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__backdrop {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__handle {
+  pointer-events: none;
+}
+
+/* The centralized overlay is the only loading feedback. The inline notice is
+ * retained in markup only for backwards-compatible panel code paths, but is
+ * never presented while the project loading contract is active. */
+.maono-layer-panel__notice:has(.maono-layer-panel__loading) {
+  display: none;
+}
