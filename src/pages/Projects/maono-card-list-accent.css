@@ -5,16 +5,20 @@
  * listagens associadas para os tokens dourados definidos na PR 109.
  * Verde permanece reservado a estados semânticos reais, não a hover,
  * seleção, abertura, foco ou glow de marca.
+ *
+ * O prefixo :root aumenta a especificidade de forma controlada. A camada é
+ * carregada globalmente antes do grafo de páginas, então ela não depende da
+ * ordem de injeção do CSS estrutural importado pelos componentes de Projects.
  */
 
-.mm-projects-content {
+:root .mm-projects-content {
   --project-focus-ring: var(--maono-focus-ring);
   --maono-gold-border: var(--maono-accent-border-strong);
   --maono-gold-glow: var(--maono-accent-glow-strong);
 }
 
 /* Card — hover e abertura são estados de marca, não sucesso. */
-.mm-projects-content .mm-project-card:hover {
+:root .mm-projects-content .mm-project-card:hover {
   border-color: var(--maono-accent-border);
   background:
     radial-gradient(
@@ -29,7 +33,7 @@
     0 0 24px var(--maono-accent-glow);
 }
 
-.mm-projects-content .mm-project-card.is-opening {
+:root .mm-projects-content .mm-project-card.is-opening {
   border-color: var(--maono-accent-border-strong);
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.3),
@@ -38,7 +42,7 @@
 }
 
 /* Fallbacks de preview: brilho decorativo também segue a marca. */
-.mm-projects-content .mm-project-card__preview-fallback {
+:root .mm-projects-content .mm-project-card__preview-fallback {
   background:
     radial-gradient(
       circle at 50% 35%,
@@ -48,7 +52,7 @@
     var(--mm-bg);
 }
 
-.mm-projects-content
+:root .mm-projects-content
   .mm-project-card__preview-fallback.is-missing-neutral {
   background:
     radial-gradient(
@@ -59,12 +63,12 @@
     #0f1115;
 }
 
-.mm-projects-content .mm-project-card__preview-fallback > span {
+:root .mm-projects-content .mm-project-card__preview-fallback > span {
   color: var(--maono-accent-text);
 }
 
 /* Ações sobre o card — hover e estado aberto/selecionado. */
-.mm-projects-content
+:root .mm-projects-content
   :is(.mm-project-card__favorite, .mm-project-card__more):hover:not(:disabled) {
   border-color: var(--maono-accent-border-strong) !important;
   color: var(--maono-accent-text) !important;
@@ -75,8 +79,8 @@
     0 0 20px var(--maono-accent-glow) !important;
 }
 
-.mm-projects-content .mm-project-card__favorite.is-active,
-.mm-projects-content .mm-project-card__more[aria-expanded="true"] {
+:root .mm-projects-content .mm-project-card__favorite.is-active,
+:root .mm-projects-content .mm-project-card__more[aria-expanded="true"] {
   border-color: var(--maono-accent-border-strong) !important;
   color: var(--maono-accent-text) !important;
   background: var(--maono-accent-surface-strong) !important;
@@ -85,20 +89,20 @@
     0 0 22px var(--maono-accent-glow) !important;
 }
 
-/* Lista de ações do card. */
-.mm-project-actions-menu__item:hover,
-.mm-project-actions-menu__item:focus-visible {
+/* Lista de ações do card, renderizada por portal em document.body. */
+:root .mm-project-actions-menu__item:hover,
+:root .mm-project-actions-menu__item:focus-visible {
   color: var(--maono-accent-text) !important;
   background: var(--maono-accent-surface-strong) !important;
   outline: none;
 }
 
-.mm-project-actions-menu__item:focus-visible {
+:root .mm-project-actions-menu__item:focus-visible {
   box-shadow: inset 0 0 0 2px var(--maono-accent-border-strong);
 }
 
 /* CTA e controles navegáveis: foco sempre vem do contrato global. */
-.mm-projects-content
+:root .mm-projects-content
   :is(
     .mm-project-card__favorite,
     .mm-project-card__more,
@@ -107,10 +111,10 @@
   outline-color: var(--maono-focus-ring);
 }
 
-.mm-projects-content
+:root .mm-projects-content
   .mm-project-card:hover
   a.mm-project-card__open:not([aria-disabled="true"]),
-.mm-projects-content
+:root .mm-projects-content
   .mm-project-card
   a.mm-project-card__open:hover:not([aria-disabled="true"]) {
   border-color: var(--maono-accent-bright);
@@ -120,7 +124,7 @@
     inset 0 1px 0 rgba(255, 253, 237, 0.66);
 }
 
-.mm-projects-content
+:root .mm-projects-content
   .mm-project-card
   a.mm-project-card__open:active:not([aria-disabled="true"]) {
   box-shadow:
