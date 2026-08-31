@@ -8,20 +8,31 @@
 
 .maono-point-cluster-settings__trigger {
   min-height: 42px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid var(--maono-accent-border);
   border-radius: 10px;
   padding: 0 16px;
-  background: #163b37;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  background:
+    linear-gradient(180deg, var(--maono-accent-surface), transparent 120%),
+    #101826;
+  color: var(--maono-accent-text);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 18px var(--maono-accent-glow);
   cursor: pointer;
   font-weight: 700;
+}
+
+.maono-point-cluster-settings__trigger:hover {
+  border-color: var(--maono-accent-border-strong);
+  background:
+    linear-gradient(180deg, var(--maono-accent-surface-strong), transparent 120%),
+    #131c2a;
 }
 
 .maono-point-cluster-settings__trigger:focus-visible,
 .maono-point-cluster-settings__panel button:focus-visible,
 .maono-point-cluster-settings__panel input:focus-visible {
-  outline: 3px solid #f2c766;
+  outline: 3px solid var(--maono-focus-ring);
   outline-offset: 2px;
 }
 
@@ -32,11 +43,15 @@
   width: min(420px, calc(100vw - 32px));
   max-height: min(680px, calc(100vh - 96px));
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--maono-accent-border);
   border-radius: 14px;
-  background: #102825;
+  background:
+    radial-gradient(circle at 100% 0%, var(--maono-accent-surface), transparent 34%),
+    #0a0f18;
   color: #f7f3e8;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.42),
+    0 0 24px var(--maono-accent-glow);
 }
 
 .maono-point-cluster-settings__header {
@@ -44,7 +59,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(197, 160, 89, 0.18);
 }
 
 .maono-point-cluster-settings__header h2 {
@@ -55,7 +70,7 @@
 
 .maono-point-cluster-settings__header p {
   margin: 5px 0 0;
-  color: #c9d9d5;
+  color: #aeb9c9;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -63,13 +78,19 @@
 .maono-point-cluster-settings__header button {
   width: 36px;
   height: 36px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: #fff;
+  color: #c8d1df;
   cursor: pointer;
   font-size: 26px;
   line-height: 1;
+}
+
+.maono-point-cluster-settings__header button:hover {
+  border-color: var(--maono-accent-border);
+  color: var(--maono-accent-text);
+  background: var(--maono-accent-surface);
 }
 
 .maono-point-cluster-settings__content {
@@ -81,14 +102,15 @@
 .maono-point-cluster-settings__empty {
   margin: 0;
   padding: 14px;
-  color: #c9d9d5;
+  color: #9aa7ba;
 }
 
 .maono-point-cluster-settings__layer {
   margin: 0 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(117, 129, 150, 0.24);
   border-radius: 10px;
   padding: 14px;
+  background: rgba(19, 28, 42, 0.42);
 }
 
 .maono-point-cluster-settings__layer:last-child {
@@ -99,6 +121,7 @@
   max-width: 100%;
   padding: 0 6px;
   overflow: hidden;
+  color: var(--maono-accent-text);
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 700;
@@ -106,7 +129,7 @@
 
 .maono-point-cluster-settings__meta {
   margin: 0 0 12px;
-  color: #a9c2bc;
+  color: #8f9db1;
   font-size: 12px;
 }
 
@@ -122,7 +145,7 @@
 .maono-point-cluster-settings__toggle input {
   width: 18px;
   height: 18px;
-  accent-color: #20c7b5;
+  accent-color: var(--maono-accent);
 }
 
 .maono-point-cluster-settings__grid {
@@ -135,18 +158,24 @@
 .maono-point-cluster-settings__grid > label:not(.maono-point-cluster-settings__toggle) {
   display: grid;
   gap: 6px;
-  color: #d8e3e0;
+  color: #c8d1df;
   font-size: 12px;
 }
 
 .maono-point-cluster-settings__grid input[type="number"] {
   width: 100%;
   min-height: 38px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid #2a3950;
   border-radius: 7px;
   padding: 0 9px;
-  background: #081c1a;
+  background: #101827;
   color: #fff;
+}
+
+.maono-point-cluster-settings__grid input[type="number"]:focus {
+  border-color: var(--maono-accent-border-strong);
+  box-shadow: 0 0 0 3px var(--maono-accent-glow);
+  outline: 0;
 }
 
 .maono-point-cluster-settings__grid .maono-point-cluster-settings__toggle {
@@ -157,7 +186,11 @@
   margin: 12px 0 0;
   border-radius: 8px;
   padding: 10px;
-  background: rgba(242, 199, 102, 0.12);
+  background: color-mix(
+    in srgb,
+    var(--maono-semantic-warning) 12%,
+    transparent
+  );
   color: #f2dba4;
   font-size: 12px;
   line-height: 1.45;
