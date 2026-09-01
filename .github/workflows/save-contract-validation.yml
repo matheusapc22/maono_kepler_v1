@@ -5,11 +5,13 @@ on:
     paths:
       - "functions/api/projects/**"
       - "functions/_lib/save-*.js"
+      - "functions/_lib/dropbox*.js"
       - "functions/_lib/error-catalog.js"
       - "src/pages/Kepler/save-observability.ts"
       - "src/pages/Kepler/components/maono-save-button.tsx"
       - "migrations/**"
       - "tests/save-*.test.mjs"
+      - "tests/dropbox-*.test.mjs"
       - ".github/workflows/save-contract-validation.yml"
   workflow_dispatch:
 
@@ -35,3 +37,6 @@ jobs:
 
       - name: Validate save observability and deploy contract
         run: npm run test:save-observability
+
+      - name: Validate Dropbox resilience contract
+        run: npm run test:dropbox-resilience
