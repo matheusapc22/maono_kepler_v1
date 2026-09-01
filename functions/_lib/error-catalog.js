@@ -46,8 +46,10 @@ export const ERROR_DEFINITIONS = Object.freeze({
   DROPBOX_DOWNLOAD_FAILED: { category: E.STORAGE, status: 502, retryable: true },
   DROPBOX_METADATA_FAILED: { category: E.STORAGE, status: 502, retryable: true },
   DROPBOX_TOKEN_REFRESH_FAILED: { category: E.STORAGE, status: 503, retryable: true },
+  DROPBOX_TIMEOUT: { category: E.STORAGE, status: 504, retryable: true },
   DROPBOX_RATE_LIMITED: { category: E.STORAGE, status: 429, retryable: true },
   DROPBOX_UNAVAILABLE: { category: E.STORAGE, status: 503, retryable: true },
+  DROPBOX_AUTH_FAILED: { category: E.STORAGE, status: 503, retryable: false },
   DROPBOX_UPLOAD_SESSION_FAILED: { category: E.STORAGE, status: 502, retryable: true },
 
   PERFORMANCE_PAYLOAD_TOO_LARGE: { category: E.PERFORMANCE, status: 413, retryable: false },

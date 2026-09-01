@@ -1,4 +1,4 @@
-import { requireEnv } from "./http.js";
+import { getDropboxClient } from "./dropbox-client.js";
 import {
   deleteLocalStoragePath,
   downloadLocalStorageFile,
@@ -9,8 +9,6 @@ import {
   uploadLocalStorageFile,
 } from "./local-storage.js";
 
-
-const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_DOWNLOAD_URL = "https://content.dropboxapi.com/2/files/download";
 const DROPBOX_UPLOAD_URL = "https://content.dropboxapi.com/2/files/upload";
 const DROPBOX_UPLOAD_SESSION_START_URL =
@@ -25,6 +23,10 @@ const DROPBOX_CREATE_FOLDER_URL =
 const DROPBOX_DELETE_URL = "https://api.dropboxapi.com/2/files/delete_v2";
 const DROPBOX_METADATA_URL = "https://api.dropboxapi.com/2/files/get_metadata";
 const DROPBOX_UPLOAD_CONTENT_TYPE = "application/octet-stream";
+
+const DROPBOX_METADATA_TIMEOUT_MS = 5_000;
+const DROPBOX_CONTENT_TIMEOUT_MS = 8_000;
+const DROPBOX_SESSION_TIMEOUT_MS = 8_000;
 
 export function normalizeDropboxFolderPath(path) {
   const cleanPath = String(path || "").trim().replace(/\/+$/g, "");
@@ -114,95 +116,59 @@ export function getRevisionedPreviewFileNameFromConfigFile(
   return `${canonicalName}.r${normalizedRevision}.png`;
 }
 
-async function getDropboxAccessToken(env) {
-  requireEnv(env, [
-    "DROPBOX_APP_KEY",
-    "DROPBOX_APP_SECRET",
-    "DROPBOX_REFRESH_TOKEN",
-  ]);
-
-  const body = new URLSearchParams();
-  body.set("grant_type", "refresh_token");
-  body.set("refresh_token", env.DROPBOX_REFRESH_TOKEN);
-  body.set("client_id", env.DROPBOX_APP_KEY);
-  body.set("client_secret", env.DROPBOX_APP_SECRET);
-
-  const response = await fetch(DROPBOX_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-
-    throw new Error(
-      `Falha ao renovar token Dropbox: ${response.status} ${text}`,
-    );
-  }
-
-  const data = await response.json();
-
-  return data.access_token;
-}
-
-async function createDropboxFolderWithToken(accessToken, path) {
+async function createDropboxFolderWithClient(client, path) {
   const normalizedPath = normalizeDropboxFolderPath(path);
 
-  if (!normalizedPath) {
-    return null;
-  }
+  if (!normalizedPath) return null;
 
-  const response = await fetch(DROPBOX_CREATE_FOLDER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      path: normalizedPath,
-      autorename: false,
+  const response = await client.request({
+    operation: "files.create_folder_v2",
+    url: DROPBOX_CREATE_FOLDER_URL,
+    timeoutMs: DROPBOX_METADATA_TIMEOUT_MS,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path: normalizedPath,
+        autorename: false,
+      }),
     }),
   });
 
-  if (response.ok) {
-    return await response.json();
-  }
+  if (response.ok) return await response.json();
 
   const text = await response.text();
-
   if (text.includes("path/conflict/folder") || text.includes("path/conflict")) {
     return null;
   }
 
-  throw new Error(
+  const error = new Error(
     `Falha ao criar pasta Dropbox ${normalizedPath}: ${response.status} ${text}`,
   );
+  error.status = response.status;
+  error.code = "DROPBOX_CREATE_FOLDER_FAILED";
+  error.dropboxStatus = response.status;
+  throw error;
 }
 
 export async function ensureDropboxFolder(env, path) {
   if (isLocalStorageMode(env)) {
-    return await ensureLocalStorageFolder(
-      env,
-      path,
-    );
+    return await ensureLocalStorageFolder(env, path);
   }
 
-  const accessToken = await getDropboxAccessToken(env);
   const normalizedPath = normalizeDropboxFolderPath(path);
+  if (!normalizedPath) return null;
 
-  if (!normalizedPath) {
-    return null;
-  }
-
+  const client = getDropboxClient(env);
   const parts = normalizedPath.split("/").filter(Boolean);
   let current = "";
 
   for (const part of parts) {
     current = `${current}/${part}`;
-    await createDropboxFolderWithToken(accessToken, current);
+    await createDropboxFolderWithClient(client, current);
   }
 
   return { path: normalizedPath };
@@ -210,37 +176,41 @@ export async function ensureDropboxFolder(env, path) {
 
 export async function listDropboxFolder(env, path = "") {
   if (isLocalStorageMode(env)) {
-    return await listLocalStorageFolder(
-      env,
-      path,
-    );
+    return await listLocalStorageFolder(env, path);
   }
 
-  const accessToken = await getDropboxAccessToken(env);
+  const client = getDropboxClient(env);
   const normalizedPath = normalizeDropboxFolderPath(path);
-
-  const response = await fetch(DROPBOX_LIST_FOLDER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      path: normalizedPath,
-      recursive: false,
-      include_deleted: false,
-      include_has_explicit_shared_members: false,
-      include_mounted_folders: true,
-      include_non_downloadable_files: true,
+  const response = await client.request({
+    operation: "files.list_folder",
+    url: DROPBOX_LIST_FOLDER_URL,
+    timeoutMs: DROPBOX_METADATA_TIMEOUT_MS,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path: normalizedPath,
+        recursive: false,
+        include_deleted: false,
+        include_has_explicit_shared_members: false,
+        include_mounted_folders: true,
+        include_non_downloadable_files: true,
+      }),
     }),
   });
 
   if (!response.ok) {
     const text = await response.text();
-
-    throw new Error(
+    const error = new Error(
       `Falha ao listar pasta Dropbox ${normalizedPath || "/"}: ${response.status} ${text}`,
     );
+    error.status = response.status;
+    error.code = "DROPBOX_LIST_FOLDER_FAILED";
+    error.dropboxStatus = response.status;
+    throw error;
   }
 
   return await response.json();
@@ -248,26 +218,27 @@ export async function listDropboxFolder(env, path = "") {
 
 export async function getDropboxMetadata(env, rootPath, fileName) {
   if (isLocalStorageMode(env)) {
-    return await getLocalStorageMetadata(
-      env,
-      rootPath,
-      fileName,
-    );
+    return await getLocalStorageMetadata(env, rootPath, fileName);
   }
 
-  const accessToken = await getDropboxAccessToken(env);
+  const client = getDropboxClient(env);
   const path = joinDropboxPath(rootPath, fileName);
-  const response = await fetch(DROPBOX_METADATA_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      path,
-      include_media_info: false,
-      include_deleted: false,
-      include_has_explicit_shared_members: false,
+  const response = await client.request({
+    operation: "files.get_metadata",
+    url: DROPBOX_METADATA_URL,
+    timeoutMs: DROPBOX_METADATA_TIMEOUT_MS,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path,
+        include_media_info: false,
+        include_deleted: false,
+        include_has_explicit_shared_members: false,
+      }),
     }),
   });
 
@@ -276,11 +247,11 @@ export async function getDropboxMetadata(env, rootPath, fileName) {
     const error = new Error(
       `Falha ao consultar arquivo Dropbox ${path}: ${response.status} ${text}`,
     );
-
     error.status = response.status;
     error.code = text.includes("path/not_found")
       ? "DROPBOX_PATH_NOT_FOUND"
       : "DROPBOX_METADATA_FAILED";
+    error.dropboxStatus = response.status;
     throw error;
   }
 
@@ -289,34 +260,41 @@ export async function getDropboxMetadata(env, rootPath, fileName) {
 
 export async function deleteDropboxPath(env, path) {
   if (isLocalStorageMode(env)) {
-    return await deleteLocalStoragePath(
-      env,
-      path,
-    );
+    return await deleteLocalStoragePath(env, path);
   }
 
-  const accessToken = await getDropboxAccessToken(env);
   const normalizedPath = normalizeDropboxPath(path);
-
   if (!normalizedPath) {
-    throw new Error("Não é permitido excluir a raiz do Dropbox.");
+    const error = new Error("Não é permitido excluir a raiz do Dropbox.");
+    error.status = 400;
+    error.code = "DROPBOX_PATH_INVALID";
+    throw error;
   }
 
-  const response = await fetch(DROPBOX_DELETE_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ path: normalizedPath }),
+  const client = getDropboxClient(env);
+  const response = await client.request({
+    operation: "files.delete_v2",
+    url: DROPBOX_DELETE_URL,
+    timeoutMs: DROPBOX_METADATA_TIMEOUT_MS,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ path: normalizedPath }),
+    }),
   });
 
   if (!response.ok) {
     const text = await response.text();
-
-    throw new Error(
+    const error = new Error(
       `Falha ao excluir caminho Dropbox ${normalizedPath}: ${response.status} ${text}`,
     );
+    error.status = response.status;
+    error.code = "DROPBOX_DELETE_FAILED";
+    error.dropboxStatus = response.status;
+    throw error;
   }
 
   return await response.json();
@@ -327,39 +305,36 @@ export async function deleteDropboxPathIfExists(env, path) {
     return await deleteDropboxPath(env, path);
   } catch (error) {
     const message = String(error?.message || "");
-
     if (message.includes("path/not_found") || message.includes("not_found")) {
       return null;
     }
-
     throw error;
   }
 }
 
 export async function downloadDropboxTextFile(env, rootPath, fileName) {
   const response = await downloadDropboxBinaryFile(env, rootPath, fileName);
-
   return await response.text();
 }
 
 export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
   if (isLocalStorageMode(env)) {
-    return await downloadLocalStorageFile(
-      env,
-      rootPath,
-      fileName,
-    );
+    return await downloadLocalStorageFile(env, rootPath, fileName);
   }
 
-  const accessToken = await getDropboxAccessToken(env);
+  const client = getDropboxClient(env);
   const path = joinDropboxPath(rootPath, fileName);
-
-  const response = await fetch(DROPBOX_DOWNLOAD_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Dropbox-API-Arg": JSON.stringify({ path }),
-    },
+  const response = await client.request({
+    operation: "files.download",
+    url: DROPBOX_DOWNLOAD_URL,
+    timeoutMs: DROPBOX_CONTENT_TIMEOUT_MS,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Dropbox-API-Arg": JSON.stringify({ path }),
+      },
+    }),
   });
 
   if (!response.ok) {
@@ -367,8 +342,11 @@ export async function downloadDropboxBinaryFile(env, rootPath, fileName) {
     const error = new Error(
       `Falha ao baixar arquivo Dropbox ${path}: ${response.status} ${text}`,
     );
-
     error.status = response.status;
+    error.code = text.includes("path/not_found")
+      ? "DROPBOX_PATH_NOT_FOUND"
+      : "DROPBOX_DOWNLOAD_FAILED";
+    error.dropboxStatus = response.status;
     throw error;
   }
 
@@ -407,31 +385,29 @@ export async function uploadDropboxBinaryFile(
 
   const normalizedRootPath = normalizeDropboxFolderPath(rootPath);
   const path = joinDropboxPath(normalizedRootPath, fileName);
-
   await ensureDropboxFolder(env, normalizedRootPath);
 
-  const accessToken = await getDropboxAccessToken(env);
+  const client = getDropboxClient(env);
   const createOnly = writeMode === "create";
-
-  const response = await fetch(DROPBOX_UPLOAD_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-
-      // A API /2/files/upload do Dropbox aceita application/octet-stream.
-      // Não envie application/json nem image/png aqui; o tipo real é inferido
-      // pelo nome/extensão do arquivo.
-      "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
-
-      "Dropbox-API-Arg": JSON.stringify({
-        path,
-        mode: createOnly ? "add" : "overwrite",
-        autorename: false,
-        mute: false,
-        strict_conflict: createOnly,
-      }),
-    },
-    body: content,
+  const response = await client.request({
+    operation: "files.upload",
+    url: DROPBOX_UPLOAD_URL,
+    timeoutMs: DROPBOX_CONTENT_TIMEOUT_MS,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
+        "Dropbox-API-Arg": JSON.stringify({
+          path,
+          mode: createOnly ? "add" : "overwrite",
+          autorename: false,
+          mute: false,
+          strict_conflict: createOnly,
+        }),
+      },
+      body: content,
+    }),
   });
 
   if (!response.ok) {
@@ -453,19 +429,29 @@ export async function uploadDropboxBinaryFile(
 async function uploadSessionRequest(
   env,
   url,
+  operation,
   apiArgument,
   content,
   errorMessage,
 ) {
-  const accessToken = await getDropboxAccessToken(env);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
-      "Dropbox-API-Arg": JSON.stringify(apiArgument),
-    },
-    body: content,
+  const client = getDropboxClient(env);
+  const response = await client.request({
+    operation,
+    url,
+    timeoutMs: DROPBOX_SESSION_TIMEOUT_MS,
+    // Upload sessions use cursor/offset semantics. Retrying a response-lost
+    // mutation blindly can advance the cursor twice, so SAVE-03 keeps these
+    // operations bounded by timeout but does not retry them automatically.
+    maxRetries: 0,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": DROPBOX_UPLOAD_CONTENT_TYPE,
+        "Dropbox-API-Arg": JSON.stringify(apiArgument),
+      },
+      body: content,
+    }),
   });
 
   if (!response.ok) {
@@ -484,6 +470,7 @@ export async function startDropboxUploadSession(env) {
   return uploadSessionRequest(
     env,
     DROPBOX_UPLOAD_SESSION_START_URL,
+    "files.upload_session.start",
     { close: false },
     new Uint8Array(0),
     "Falha ao iniciar sessão de upload no Dropbox",
@@ -499,6 +486,7 @@ export async function appendDropboxUploadSession(
   return uploadSessionRequest(
     env,
     DROPBOX_UPLOAD_SESSION_APPEND_URL,
+    "files.upload_session.append",
     {
       cursor: {
         session_id: sessionId,
@@ -525,6 +513,7 @@ export async function finishDropboxUploadSession(
   return uploadSessionRequest(
     env,
     DROPBOX_UPLOAD_SESSION_FINISH_URL,
+    "files.upload_session.finish",
     {
       cursor: {
         session_id: sessionId,

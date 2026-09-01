@@ -20,16 +20,35 @@ function mapConfigStorageError(error, operation) {
 
   const status = Number(error?.status || 500);
   const message = String(error?.message || "");
+  const providerCode = String(error?.code || "");
+  const providerStatus = Number(
+    error?.providerStatus ?? error?.dropboxStatus ?? error?.details?.providerStatus ?? 0,
+  ) || null;
+  const retryable =
+    typeof error?.retryable === "boolean"
+      ? error.retryable
+      : typeof error?.details?.retryable === "boolean"
+        ? error.details.retryable
+        : status === 429 || status >= 500;
   let code = "MAP_CONFIG_STORAGE_FAILED";
+
   if (
     status === 404 ||
-    error?.code === "DROPBOX_PATH_NOT_FOUND" ||
+    providerCode === "DROPBOX_PATH_NOT_FOUND" ||
     /path\/not_found|not_found/i.test(message)
   ) {
     code = "MAP_CONFIG_NOT_FOUND";
-  } else if (status === 401 || status === 403) {
+  } else if (
+    providerCode === "DROPBOX_AUTH_FAILED" ||
+    status === 401 ||
+    status === 403
+  ) {
     code = "MAP_CONFIG_STORAGE_AUTH_FAILED";
-  } else if (status === 429 || status >= 500) {
+  } else if (
+    ["DROPBOX_TIMEOUT", "DROPBOX_RATE_LIMITED", "DROPBOX_UNAVAILABLE"].includes(providerCode) ||
+    status === 429 ||
+    status >= 500
+  ) {
     code = "MAP_CONFIG_STORAGE_UNAVAILABLE";
   } else if (operation === "read") {
     code = "MAP_CONFIG_STORAGE_READ_FAILED";
@@ -44,20 +63,42 @@ function mapConfigStorageError(error, operation) {
   const wrapped = new Error(
     code === "MAP_CONFIG_NOT_FOUND"
       ? "A revisão de configuração não foi encontrada no storage."
-      : operation === "write"
-        ? "Não foi possível persistir a configuração do mapa."
-        : operation === "metadata"
-          ? "Não foi possível consultar os metadados da configuração do mapa."
-          : operation === "prepare"
-            ? "Não foi possível preparar o storage da configuração do mapa."
-            : "Não foi possível carregar a configuração do mapa.",
+      : code === "MAP_CONFIG_STORAGE_AUTH_FAILED"
+        ? "A autenticação do storage da configuração do mapa falhou."
+        : operation === "write"
+          ? "Não foi possível persistir a configuração do mapa."
+          : operation === "metadata"
+            ? "Não foi possível consultar os metadados da configuração do mapa."
+            : operation === "prepare"
+              ? "Não foi possível preparar o storage da configuração do mapa."
+              : "Não foi possível carregar a configuração do mapa.",
   );
-  wrapped.status = code === "MAP_CONFIG_NOT_FOUND" ? 404 : status;
+  wrapped.status =
+    code === "MAP_CONFIG_NOT_FOUND"
+      ? 404
+      : code === "MAP_CONFIG_STORAGE_AUTH_FAILED" ||
+          code === "MAP_CONFIG_STORAGE_UNAVAILABLE"
+        ? 503
+        : status;
   wrapped.code = code;
+  wrapped.retryable = retryable;
+  wrapped.provider = "dropbox";
+  wrapped.providerStatus = providerStatus;
   wrapped.details = {
     provider: "dropbox",
     operation,
-    retryable: status === 429 || status >= 500,
+    retryable,
+    providerCode: providerCode || null,
+    providerStatus,
+    ...(Number.isInteger(Number(error?.details?.attempts))
+      ? { attempts: Number(error.details.attempts) }
+      : {}),
+    ...(Number.isFinite(Number(error?.details?.providerElapsedMs))
+      ? { providerElapsedMs: Number(error.details.providerElapsedMs) }
+      : {}),
+    ...(Number.isFinite(Number(error?.details?.retryAfterMs))
+      ? { retryAfterMs: Number(error.details.retryAfterMs) }
+      : {}),
   };
   wrapped.cause = error;
   return wrapped;
