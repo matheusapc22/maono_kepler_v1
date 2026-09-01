@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { dropboxContentHashHex } from "../functions/_lib/dropbox-content-hash.js";
+import {
+  DROPBOX_CONTENT_HASH_BLOCK_BYTES,
+  dropboxContentHashBlockDigest,
+  dropboxContentHashFromBlockDigestsHex,
+  dropboxContentHashHex,
+} from "../functions/_lib/dropbox-content-hash.js";
 import {
   PROJECT_CONFIG_CHECKSUM_ALGORITHM_DROPBOX,
   verifyProjectConfigBytes,
@@ -76,6 +81,33 @@ test("save acima de 8 MiB envia MapConfig bruto e metadata em headers", () => {
   assert.equal(parsed.expectedConfigRevision, undefined);
 });
 
+test("hash incremental streamed coincide com o content_hash canônico do Dropbox", async () => {
+  const bytes = new Uint8Array(DROPBOX_CONTENT_HASH_BLOCK_BYTES + 12345);
+  for (let index = 0; index < bytes.byteLength; index += 4096) {
+    bytes[index] = (index / 4096) % 251;
+  }
+
+  const blockDigests = [];
+  for (
+    let offset = 0;
+    offset < bytes.byteLength;
+    offset += DROPBOX_CONTENT_HASH_BLOCK_BYTES
+  ) {
+    blockDigests.push(
+      await dropboxContentHashBlockDigest(
+        bytes.subarray(
+          offset,
+          Math.min(offset + DROPBOX_CONTENT_HASH_BLOCK_BYTES, bytes.byteLength),
+        ),
+      ),
+    );
+  }
+
+  const incremental = await dropboxContentHashFromBlockDigestsHex(blockDigests);
+  const canonical = await dropboxContentHashHex(bytes);
+  assert.equal(incremental, canonical);
+});
+
 test("integridade aceita content_hash Dropbox nas revisões streamed", async () => {
   const bytes = new TextEncoder().encode(
     JSON.stringify({ version: "v1", config: {}, datasets: [], value: "stream" }),
@@ -98,6 +130,8 @@ test("streaming backend nunca materializa o request grande como text/json", asyn
   assert.match(service, /request\.body\.getReader\(\)/);
   assert.doesNotMatch(service, /request\.text\s*\(/);
   assert.doesNotMatch(service, /request\.json\s*\(/);
+  assert.match(service, /StreamingJsonBoundaryGuard/);
+  assert.doesNotMatch(service, /this\.stack\s*=|this\.inString\s*=/);
   assert.match(service, /DROPBOX_STREAM_BLOCK_BYTES/);
   assert.match(service, /appendLargeDropboxUploadSession/);
   assert.match(service, /finishLargeDropboxUploadSession/);
@@ -118,10 +152,14 @@ test("streaming preserva reserve -> storage -> ready -> publish", async () => {
   assert.match(service, /providerHash[\s\S]*contentHash/);
 });
 
-test("Dropbox streaming usa blocos de 4 MiB e cursor sem retry cego", async () => {
+test("Dropbox streaming usa bloco canônico de content_hash e cursor sem retry cego", async () => {
   const transport = await readFile(transportPath, "utf8");
 
-  assert.match(transport, /DROPBOX_STREAM_BLOCK_BYTES = 4 \* 1024 \* 1024/);
+  assert.match(
+    transport,
+    /DROPBOX_STREAM_BLOCK_BYTES = DROPBOX_CONTENT_HASH_BLOCK_BYTES/,
+  );
+  assert.equal(DROPBOX_CONTENT_HASH_BLOCK_BYTES, 4 * 1024 * 1024);
   assert.match(transport, /maxRetries:\s*0/);
   assert.match(transport, /strict_conflict:\s*createOnly/);
   assert.match(transport, /DROPBOX_UPLOAD_SESSION_OFFSET_CONFLICT/);
