@@ -70,7 +70,7 @@ test("contrato de frontend incompatível falha antes da consulta ao D1", async (
     ),
     (error) => {
       assert.equal(error.code, "SAVE_CLIENT_CONTRACT_UNSUPPORTED");
-      assert.equal(error.status, 409);
+      assert.equal(error.status, 412);
       assert.equal(error.retryable, false);
       return true;
     },
@@ -109,5 +109,6 @@ test("metadados e headers expõem contrato/schema, não exigem SHA igual", () =>
 
   assert.equal(headers["X-Maono-Api-Contract"], String(SAVE_API_CONTRACT_VERSION));
   assert.equal(headers["X-Maono-Api-Build"], "api-123");
+  assert.equal(headers["X-Maono-Db-Schema-Expected"], String(SAVE_EXPECTED_DB_SCHEMA_VERSION));
   assert.equal(headers["X-Maono-Db-Schema"], String(SAVE_EXPECTED_DB_SCHEMA_VERSION));
 });
