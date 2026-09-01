@@ -131,7 +131,7 @@ export async function onRequest(context) {
     });
 
     saveTrace?.fail(normalized, {
-      stage: normalized?.details?.stage || saveTrace?.currentStage || "VALIDATE",
+      stage: normalized?.details?.stage || saveTrace?.currentStage || null,
       httpStatus: status,
       category: normalized.category,
       retryable: normalized.retryable,
