@@ -132,8 +132,11 @@ test("bridge de tema e camada visual carregam no shell sem tocar no viewport", (
 
   assert.ok(mapShell.indexOf(themeImport) < mapShell.indexOf(tokenImport));
   assert.ok(mapShell.indexOf(layoutImport) < mapShell.indexOf(accentImport));
-  assert.doesNotMatch(accentLayer, /\.maono-map-runtime__map\s*\{/);
-  assert.doesNotMatch(accentLayer, /ResizeObserver/);
+
+  const accentLayerCode = accentLayer.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  assert.doesNotMatch(accentLayerCode, /\.maono-map-runtime__map\s*\{/);
+  assert.doesNotMatch(accentLayerCode, /ResizeObserver/);
 });
 
 test("tabs, filtros, basemap e ferramentas usam o contrato dourado", () => {
