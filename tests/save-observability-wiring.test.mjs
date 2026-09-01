@@ -40,7 +40,7 @@ test("serviço mede somente fronteiras reais do pipeline de publicação", () =>
     "PUBLISH",
   ];
   for (const stage of expectedStages) {
-    assert.match(service, new RegExp(`runObservedStage\\(trace, \\\"${stage}\\\"`));
+    assert.match(service, new RegExp(`runObservedStage\\(trace, "${stage}"`));
   }
   assert.match(service, /getSaveTraceForConfig\(config\)/);
   assert.doesNotMatch(service, /saveId\s*[:=].*project_config_revisions/);
@@ -84,7 +84,7 @@ test("telemetria cobre serialização, sucesso, falha HTTP e falha de rede", () 
 test("criação não registra o objeto de erro bruto e foundation gate inclui SAVE-01", () => {
   assert.doesNotMatch(
     createRoute,
-    /Falha na criação completa do projeto:\\", error\)/,
+    /console\.error\([\s\S]*?Falha na criação completa do projeto:[\s\S]*?,\s*error\s*\)/,
   );
   assert.match(
     packageJson.scripts["test:save-observability"],
