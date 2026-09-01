@@ -31,6 +31,15 @@ import {
   type MapSaveResultStatus,
 } from "../map-panel/map-save-events";
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
+import {
+  beginClientSaveAttempt,
+  buildSaveRequestHeaders,
+  clientSaveTotalDurationMs,
+  isNetworkSaveFailure,
+  readSaveResponseDiagnostics,
+  serializeSaveRequest,
+  type ClientSaveAttempt,
+} from "../save-observability";
 
 const CREATION_KEY_PREFIX = "maono.project-create.idempotency";
 const ASYNC_THUMBNAIL_ENABLED =
@@ -59,6 +68,8 @@ type ApiError = {
     stage?: string;
     retryable?: boolean;
     idempotencyKey?: string;
+    provider?: string;
+    providerStatus?: number;
   } | null;
 };
 
@@ -168,6 +179,38 @@ function getSaveFailureMessage(error: unknown) {
   }
 
   return message;
+}
+
+function emitSaveTelemetry(
+  event: string,
+  details: Parameters<typeof emitMapPanelTelemetry>[1] = {},
+) {
+  try {
+    emitMapPanelTelemetry(event, details);
+  } catch {
+    // Observabilidade é best-effort e nunca pode alterar o resultado do save.
+  }
+}
+
+function emitClientSaveFailure(
+  attempt: ClientSaveAttempt,
+  error: unknown,
+  details: Parameters<typeof emitMapPanelTelemetry>[1] = {},
+) {
+  const networkFailure = isNetworkSaveFailure(error);
+  emitSaveTelemetry("map_save_failed", {
+    saveId: attempt.saveId,
+    correlationId: attempt.correlationId,
+    operation: attempt.operation,
+    stage: null,
+    code: networkFailure
+      ? "INFRASTRUCTURE_NETWORK_FAILURE"
+      : "PROJECT_SAVE_CLIENT_FAILURE",
+    category: "INFRASTRUCTURE",
+    retryable: networkFailure,
+    durationMs: clientSaveTotalDurationMs(attempt),
+    ...details,
+  });
 }
 
 function getActiveOrganizationId(user: any) {
@@ -525,15 +568,22 @@ const MaonoSaveButton: React.FC = () => {
       return;
     }
 
+    const attempt = beginClientSaveAttempt("update");
+    let failureTelemetryEmitted = false;
+    let payloadBytes: number | null = null;
+    let serializeDurationMs: number | null = null;
+
     operationInFlightRef.current = true;
     setSaving(true);
     setMessage("");
-    emitMapPanelTelemetry("map_save_requested", {
+    emitSaveTelemetry("map_save_requested", {
       mode: context?.mode ?? null,
       projectId: context?.project?.id ?? null,
       organizationId: context?.organization?.id ?? null,
       policyVersion: context?.policyVersion ?? null,
       operation: "update",
+      saveId: attempt.saveId,
+      correlationId: attempt.correlationId,
     });
 
     try {
@@ -551,43 +601,83 @@ const MaonoSaveButton: React.FC = () => {
             0,
         ) || 0,
       );
+      const serialized = serializeSaveRequest(attempt, {
+        config,
+        expectedConfigRevision,
+        ...(legacy
+          ? {
+              thumbnailDataUrl: legacy.dataUrl,
+              thumbnailCapture: {
+                method: legacy.method,
+                diagnostics: legacy.diagnostics.join(" | "),
+              },
+            }
+          : {}),
+      });
+      payloadBytes = serialized.payloadBytes;
+      serializeDurationMs = serialized.serializeDurationMs;
+      emitSaveTelemetry("map_save_serialized", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        operation: "update",
+        saveId: attempt.saveId,
+        correlationId: attempt.correlationId,
+        payloadBytes,
+        serializeDurationMs,
+        expectedRevision: expectedConfigRevision,
+      });
+
       const response = await fetch(
         `/api/projects/${encodeURIComponent(projectSlug)}/config`,
         {
           method: "PUT",
           credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            config,
-            expectedConfigRevision,
-            ...(legacy
-              ? {
-                  thumbnailDataUrl: legacy.dataUrl,
-                  thumbnailCapture: {
-                    method: legacy.method,
-                    diagnostics: legacy.diagnostics.join(" | "),
-                  },
-                }
-              : {}),
-          }),
+          headers: buildSaveRequestHeaders(attempt),
+          body: serialized.body,
         },
       );
+      const responseDiagnostics = readSaveResponseDiagnostics(response, attempt);
       const data = await readJsonResponse(response);
 
       if (!response.ok || data?.ok === false) {
+        failureTelemetryEmitted = true;
+        emitSaveTelemetry("map_save_failed", {
+          mode: context?.mode ?? null,
+          projectId: context?.project?.id ?? null,
+          organizationId: context?.organization?.id ?? null,
+          operation: "update",
+          saveId: responseDiagnostics.saveId,
+          correlationId: responseDiagnostics.correlationId,
+          payloadBytes,
+          serializeDurationMs,
+          durationMs: clientSaveTotalDurationMs(attempt),
+          expectedRevision: expectedConfigRevision,
+          stage: data?.error?.details?.stage ?? null,
+          code: data?.error?.code ?? "PROJECT_SAVE_FAILED",
+          category: data?.error?.category ?? null,
+          retryable:
+            typeof data?.error?.retryable === "boolean"
+              ? data.error.retryable
+              : data?.error?.details?.retryable ?? null,
+          httpStatus: response.status,
+          provider: data?.error?.details?.provider ?? null,
+          providerStatus: data?.error?.details?.providerStatus ?? null,
+          serverTiming: responseDiagnostics.serverTiming,
+        });
         if (response.status === 403) {
           refresh();
         }
         if (response.status === 409) {
-          emitMapPanelTelemetry("map_save_conflict", {
+          emitSaveTelemetry("map_save_conflict", {
             mode: context?.mode ?? null,
             projectId: context?.project?.id ?? null,
             organizationId: context?.organization?.id ?? null,
             code: data?.error?.code ?? "PROJECT_VERSION_CONFLICT",
             operation: "update",
+            saveId: responseDiagnostics.saveId,
+            correlationId: responseDiagnostics.correlationId,
+            expectedRevision: expectedConfigRevision,
           });
         }
         throw new Error(getSaveErrorMessage(response, data));
@@ -595,12 +685,21 @@ const MaonoSaveButton: React.FC = () => {
 
       const revision = resolveConfigRevision(data);
       void refresh();
-      emitMapPanelTelemetry("map_save_succeeded", {
+      emitSaveTelemetry("map_save_succeeded", {
         mode: context?.mode ?? null,
         projectId: context?.project?.id ?? null,
         organizationId: context?.organization?.id ?? null,
         policyVersion: context?.policyVersion ?? null,
         operation: "update",
+        saveId: responseDiagnostics.saveId,
+        correlationId: responseDiagnostics.correlationId,
+        payloadBytes,
+        serializeDurationMs,
+        durationMs: clientSaveTotalDurationMs(attempt),
+        expectedRevision: expectedConfigRevision,
+        candidateRevision: revision,
+        httpStatus: response.status,
+        serverTiming: responseDiagnostics.serverTiming,
       });
       setMessageType("success");
       setMessage(
@@ -616,6 +715,15 @@ const MaonoSaveButton: React.FC = () => {
         handlePreviewState,
       );
     } catch (error) {
+      if (!failureTelemetryEmitted) {
+        emitClientSaveFailure(attempt, error, {
+          mode: context?.mode ?? null,
+          projectId: context?.project?.id ?? null,
+          organizationId: context?.organization?.id ?? null,
+          payloadBytes,
+          serializeDurationMs,
+        });
+      }
       const failure = getSaveFailureMessage(error);
       setMessageType("error");
       setMessage(failure);
@@ -648,6 +756,11 @@ const MaonoSaveButton: React.FC = () => {
       return;
     }
 
+    const attempt = beginClientSaveAttempt("create");
+    let failureTelemetryEmitted = false;
+    let payloadBytes: number | null = null;
+    let serializeDurationMs: number | null = null;
+
     setCreationDraft(input);
     operationInFlightRef.current = true;
     setSaving(true);
@@ -656,11 +769,13 @@ const MaonoSaveButton: React.FC = () => {
     setCreationStage(
       ASYNC_THUMBNAIL_ENABLED ? "creating_record" : "capturing",
     );
-    emitMapPanelTelemetry("map_save_requested", {
+    emitSaveTelemetry("map_save_requested", {
       mode: context?.mode ?? null,
       organizationId: context?.organization?.id ?? activeOrganizationId,
       policyVersion: context?.policyVersion ?? null,
       operation: "create",
+      saveId: attempt.saveId,
+      correlationId: attempt.correlationId,
     });
 
     try {
@@ -673,32 +788,43 @@ const MaonoSaveButton: React.FC = () => {
       const idempotencyKey = getOrCreateCreationKey(
         activeOrganizationId,
       );
+      const serialized = serializeSaveRequest(attempt, {
+        name: input.name,
+        description: input.description,
+        organizationId: activeOrganizationId,
+        idempotencyKey,
+        config,
+        ...(legacy
+          ? {
+              thumbnailDataUrl: legacy.dataUrl,
+              thumbnailCapture: {
+                method: legacy.method,
+                diagnostics: legacy.diagnostics.join(" | "),
+              },
+            }
+          : {}),
+      });
+      payloadBytes = serialized.payloadBytes;
+      serializeDurationMs = serialized.serializeDurationMs;
+      emitSaveTelemetry("map_save_serialized", {
+        mode: context?.mode ?? null,
+        organizationId: context?.organization?.id ?? activeOrganizationId,
+        operation: "create",
+        saveId: attempt.saveId,
+        correlationId: attempt.correlationId,
+        payloadBytes,
+        serializeDurationMs,
+        expectedRevision: 0,
+      });
 
       setCreationStage("creating_record");
       const response = await fetch("/api/projects", {
         method: "POST",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          name: input.name,
-          description: input.description,
-          organizationId: activeOrganizationId,
-          idempotencyKey,
-          config,
-          ...(legacy
-            ? {
-                thumbnailDataUrl: legacy.dataUrl,
-                thumbnailCapture: {
-                  method: legacy.method,
-                  diagnostics: legacy.diagnostics.join(" | "),
-                },
-              }
-            : {}),
-        }),
+        headers: buildSaveRequestHeaders(attempt),
+        body: serialized.body,
       });
+      const responseDiagnostics = readSaveResponseDiagnostics(response, attempt);
       const data =
         (await readJsonResponse(response)) as ProjectWriteResponse;
 
@@ -707,6 +833,29 @@ const MaonoSaveButton: React.FC = () => {
         data?.ok === false ||
         !data?.project?.slug
       ) {
+        failureTelemetryEmitted = true;
+        emitSaveTelemetry("map_save_failed", {
+          mode: context?.mode ?? null,
+          organizationId: context?.organization?.id ?? activeOrganizationId,
+          operation: "create",
+          saveId: responseDiagnostics.saveId,
+          correlationId: responseDiagnostics.correlationId,
+          payloadBytes,
+          serializeDurationMs,
+          durationMs: clientSaveTotalDurationMs(attempt),
+          expectedRevision: 0,
+          stage: data?.error?.details?.stage ?? null,
+          code: data?.error?.code ?? "PROJECT_CREATION_FAILED",
+          category: data?.error?.category ?? null,
+          retryable:
+            typeof data?.error?.retryable === "boolean"
+              ? data.error.retryable
+              : data?.error?.details?.retryable ?? null,
+          httpStatus: response.status,
+          provider: data?.error?.details?.provider ?? null,
+          providerStatus: data?.error?.details?.providerStatus ?? null,
+          serverTiming: responseDiagnostics.serverTiming,
+        });
         if (response.status === 403) {
           refresh();
         }
@@ -722,11 +871,20 @@ const MaonoSaveButton: React.FC = () => {
 
       const createdSlug = data.project.slug;
       const revision = resolveConfigRevision(data);
-      emitMapPanelTelemetry("map_save_succeeded", {
+      emitSaveTelemetry("map_save_succeeded", {
         mode: context?.mode ?? null,
         organizationId: context?.organization?.id ?? activeOrganizationId,
         policyVersion: context?.policyVersion ?? null,
         operation: "create",
+        saveId: responseDiagnostics.saveId,
+        correlationId: responseDiagnostics.correlationId,
+        payloadBytes,
+        serializeDurationMs,
+        durationMs: clientSaveTotalDurationMs(attempt),
+        expectedRevision: 0,
+        candidateRevision: revision,
+        httpStatus: response.status,
+        serverTiming: responseDiagnostics.serverTiming,
       });
       finishPendingMapSave("success");
       enqueuePreview(createdSlug, revision, config);
@@ -735,6 +893,14 @@ const MaonoSaveButton: React.FC = () => {
         { replace: true },
       );
     } catch (error) {
+      if (!failureTelemetryEmitted) {
+        emitClientSaveFailure(attempt, error, {
+          mode: context?.mode ?? null,
+          organizationId: context?.organization?.id ?? activeOrganizationId,
+          payloadBytes,
+          serializeDurationMs,
+        });
+      }
       const failure = getSaveFailureMessage(error);
       setCreationStage("error");
       setCreationError(failure);
