@@ -21,7 +21,11 @@ test("middleware envia projeto legado para promoção streaming e preserva ACTIV
   );
   assert.match(
     middleware,
-    /project\.lifecycle_state !== PROJECT_LIFECYCLE_STATES\.ACTIVE[\s\S]*PROJECT_CONFIG_LIFECYCLE_BLOCKED/,
+    /project\.lifecycle_state !== PROJECT_LIFECYCLE_STATES\.ACTIVE/,
+  );
+  assert.match(
+    middleware,
+    /error\.code = "PROJECT_CONFIG_LIFECYCLE_BLOCKED"/,
   );
   assert.match(
     middleware,
