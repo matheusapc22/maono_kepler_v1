@@ -39,10 +39,11 @@ function randomId(prefix: "save" | "corr") {
 }
 
 function clientBuildId() {
+  const viteEnv = import.meta.env ?? {};
   return String(
-    import.meta.env.VITE_MAONO_CLIENT_BUILD_ID ??
-      import.meta.env.VITE_COMMIT_SHA ??
-      import.meta.env.VITE_GIT_COMMIT_SHA ??
+    viteEnv.VITE_MAONO_CLIENT_BUILD_ID ??
+      viteEnv.VITE_COMMIT_SHA ??
+      viteEnv.VITE_GIT_COMMIT_SHA ??
       "dev",
   ).slice(0, 120);
 }

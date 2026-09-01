@@ -270,7 +270,10 @@ test("config publica JSON/revisão via MapConfigRepository antes de responder PE
     config,
     /!asyncThumbnailEnabled\(env\)[\s\S]*body\?\.thumbnailDataUrl/,
   );
-  assert.match(config, /Server-Timing/);
+  assert.match(
+    config,
+    /combineHeaders\(saveTrace,\s*deploymentMetadata\)/,
+  );
 });
 
 test("criação também deixa o PNG fora do caminho crítico do lifecycle", () => {

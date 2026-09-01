@@ -22,7 +22,7 @@ test("PUT e POST leem body uma vez, correlacionam saveId e ecoam headers", () =>
     assert.match(source, /createSaveTrace/);
     assert.match(source, /readSaveJsonBody\(request, saveTrace\)/);
     assert.match(source, /bindSaveTraceToConfig/);
-    assert.match(source, /saveTrace\?\.responseHeaders\(\)/);
+    assert.match(source, /saveTrace\?\.responseHeaders\?\.\(\)/);
   }
   assert.match(backendObservability, /"X-Maono-Save-Id"/);
   assert.match(backendObservability, /"X-Correlation-Id"/);
