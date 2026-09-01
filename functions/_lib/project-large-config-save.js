@@ -26,6 +26,8 @@ export const INLINE_CONFIG_HARD_LIMIT_BYTES = 12 * 1024 * 1024;
 export const LARGE_CONFIG_CHECKSUM_ALGORITHM = "dropbox-content-hash";
 export const LARGE_CONFIG_CONTENT_TYPE = "application/json; charset=utf-8";
 
+const JSON_WHITESPACE = new Set([0x20, 0x09, 0x0a, 0x0d]);
+
 function saveError(message, status, code, details = null) {
   const error = new Error(message);
   error.status = status;
@@ -143,95 +145,43 @@ function validateLargeSaveHeaders(request) {
   };
 }
 
-class StreamingJsonObjectGuard {
+// A validação semântica completa ocorre no cliente antes do JSON.stringify.
+// No Worker, evitar um parser/scan byte-a-byte é parte do requisito de CPU
+// limitada do large path. Esta guarda confirma apenas que o stream recebido
+// tem fronteiras compatíveis com um objeto JSON serializado pelo cliente.
+class StreamingJsonBoundaryGuard {
   constructor() {
-    this.stack = [];
-    this.started = false;
-    this.finished = false;
-    this.inString = false;
-    this.escape = false;
+    this.firstNonWhitespace = null;
+    this.lastNonWhitespace = null;
   }
 
   push(bytes) {
-    for (let index = 0; index < bytes.byteLength; index += 1) {
+    if (this.firstNonWhitespace === null) {
+      for (let index = 0; index < bytes.byteLength; index += 1) {
+        const byte = bytes[index];
+        if (!JSON_WHITESPACE.has(byte)) {
+          this.firstNonWhitespace = byte;
+          break;
+        }
+      }
+    }
+
+    for (let index = bytes.byteLength - 1; index >= 0; index -= 1) {
       const byte = bytes[index];
-      if (!this.started) {
-        if ([0x20, 0x09, 0x0a, 0x0d].includes(byte)) continue;
-        if (byte !== 0x7b) {
-          throw saveError(
-            "O MapConfig grande deve ser um objeto JSON.",
-            400,
-            "INVALID_KEPLER_CONFIG",
-            { field: "root" },
-          );
-        }
-        this.started = true;
-        this.stack.push(0x7d);
-        continue;
-      }
-
-      if (this.finished) {
-        if (![0x20, 0x09, 0x0a, 0x0d].includes(byte)) {
-          throw saveError(
-            "Há conteúdo adicional após o MapConfig JSON.",
-            400,
-            "INVALID_KEPLER_CONFIG",
-          );
-        }
-        continue;
-      }
-
-      if (this.inString) {
-        if (this.escape) {
-          this.escape = false;
-          continue;
-        }
-        if (byte === 0x5c) {
-          this.escape = true;
-        } else if (byte === 0x22) {
-          this.inString = false;
-        } else if (byte < 0x20) {
-          throw saveError(
-            "String JSON inválida no MapConfig.",
-            400,
-            "INVALID_KEPLER_CONFIG",
-          );
-        }
-        continue;
-      }
-
-      if (byte === 0x22) {
-        this.inString = true;
-      } else if (byte === 0x7b) {
-        this.stack.push(0x7d);
-      } else if (byte === 0x5b) {
-        this.stack.push(0x5d);
-      } else if (byte === 0x7d || byte === 0x5d) {
-        const expected = this.stack.pop();
-        if (expected !== byte) {
-          throw saveError(
-            "Estrutura JSON inválida no MapConfig.",
-            400,
-            "INVALID_KEPLER_CONFIG",
-          );
-        }
-        if (this.stack.length === 0) this.finished = true;
+      if (!JSON_WHITESPACE.has(byte)) {
+        this.lastNonWhitespace = byte;
+        break;
       }
     }
   }
 
   finish() {
-    if (
-      !this.started ||
-      !this.finished ||
-      this.inString ||
-      this.escape ||
-      this.stack.length !== 0
-    ) {
+    if (this.firstNonWhitespace !== 0x7b || this.lastNonWhitespace !== 0x7d) {
       throw saveError(
-        "O MapConfig grande foi recebido de forma incompleta.",
+        "O MapConfig grande não possui fronteiras de objeto JSON válidas.",
         400,
         "INVALID_KEPLER_CONFIG",
+        { field: "root" },
       );
     }
   }
@@ -372,16 +322,18 @@ async function finishSessionWithReconciliation(
 async function updateLinkedOrganizationFile(env, project, artifact) {
   if (!project?.organization_file_id || !env?.DB?.prepare) return null;
   try {
+    // organization_files.sha256 significa SHA-256 convencional. Uma revisão
+    // streamed usa Dropbox content_hash, então não gravamos algoritmo distinto
+    // dentro de uma coluna semanticamente sha256.
     await env.DB.prepare(
       `UPDATE organization_files
           SET size_bytes = ?,
-              sha256 = ?,
               is_project = 1,
               active = 1,
               updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`,
     )
-      .bind(artifact.sizeBytes, artifact.checksum, project.organization_file_id)
+      .bind(artifact.sizeBytes, project.organization_file_id)
       .run();
     return null;
   } catch (error) {
@@ -412,6 +364,22 @@ function revisionHead(project, artifact, revision) {
   };
 }
 
+function assertExpectedRevisionBeforeStreaming(project, expectedRevision) {
+  const currentRevision = Math.max(0, Number(project?.config_revision || 0));
+  if (currentRevision !== expectedRevision) {
+    throw saveError(
+      "O projeto foi alterado por outra operação.",
+      409,
+      "PROJECT_CONFIG_REVISION_CONFLICT",
+      {
+        expectedConfigRevision: expectedRevision,
+        currentConfigRevision: currentRevision,
+        stage: "RESERVE",
+      },
+    );
+  }
+}
+
 export async function saveLargeProjectConfigStream(
   env,
   { request, project, user, saveTrace = null },
@@ -432,6 +400,8 @@ export async function saveLargeProjectConfigStream(
   }
 
   const manifest = validateLargeSaveHeaders(request);
+  assertExpectedRevisionBeforeStreaming(project, manifest.expectedRevision);
+
   const nextRevision = manifest.expectedRevision + 1;
   const storageRef = createMapConfigStorageRef(project.id, nextRevision);
   const fileName = getMapConfigRevisionFileName(
@@ -460,7 +430,7 @@ export async function saveLargeProjectConfigStream(
   }
 
   const reader = request.body.getReader();
-  const guard = new StreamingJsonObjectGuard();
+  const guard = new StreamingJsonBoundaryGuard();
   const blockDigests = [];
   let pending = new Uint8Array(DROPBOX_STREAM_BLOCK_BYTES);
   let pendingLength = 0;
@@ -476,6 +446,7 @@ export async function saveLargeProjectConfigStream(
       if (done) break;
       const incoming = value instanceof Uint8Array ? value : new Uint8Array(value);
       if (!incoming.byteLength) continue;
+
       totalBytes += incoming.byteLength;
       if (totalBytes > manifest.declaredSize) {
         throw saveError(
