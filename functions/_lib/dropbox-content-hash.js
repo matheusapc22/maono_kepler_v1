@@ -1,4 +1,4 @@
-const DROPBOX_CONTENT_HASH_BLOCK_BYTES = 4 * 1024 * 1024;
+export const DROPBOX_CONTENT_HASH_BLOCK_BYTES = 4 * 1024 * 1024;
 
 function normalizeBytes(input) {
   if (input instanceof Uint8Array) return input;
@@ -18,6 +18,29 @@ function hex(bytes) {
     .join("");
 }
 
+export async function dropboxContentHashBlockDigest(input) {
+  const bytes = normalizeBytes(input);
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+}
+
+export async function dropboxContentHashFromBlockDigestsHex(blockDigests) {
+  const digests = Array.from(blockDigests || [], (digest) => normalizeBytes(digest));
+  const concatenated = new Uint8Array(digests.length * 32);
+
+  for (let index = 0; index < digests.length; index += 1) {
+    if (digests[index].byteLength !== 32) {
+      const error = new Error("Digest de bloco inválido para content hash Dropbox.");
+      error.status = 400;
+      error.code = "DROPBOX_CONTENT_HASH_DIGEST_INVALID";
+      throw error;
+    }
+    concatenated.set(digests[index], index * 32);
+  }
+
+  const finalDigest = await crypto.subtle.digest("SHA-256", concatenated);
+  return hex(new Uint8Array(finalDigest));
+}
+
 export async function dropboxContentHashHex(input) {
   const bytes = normalizeBytes(input);
   const blockDigests = [];
@@ -31,15 +54,8 @@ export async function dropboxContentHashHex(input) {
       offset,
       Math.min(offset + DROPBOX_CONTENT_HASH_BLOCK_BYTES, bytes.byteLength),
     );
-    const digest = await crypto.subtle.digest("SHA-256", block);
-    blockDigests.push(new Uint8Array(digest));
+    blockDigests.push(await dropboxContentHashBlockDigest(block));
   }
 
-  const concatenated = new Uint8Array(blockDigests.length * 32);
-  for (let index = 0; index < blockDigests.length; index += 1) {
-    concatenated.set(blockDigests[index], index * 32);
-  }
-
-  const finalDigest = await crypto.subtle.digest("SHA-256", concatenated);
-  return hex(new Uint8Array(finalDigest));
+  return dropboxContentHashFromBlockDigestsHex(blockDigests);
 }
