@@ -31,6 +31,7 @@ export const LARGE_CONFIG_CHECKSUM_ALGORITHM = "dropbox-content-hash";
 export const LARGE_CONFIG_CONTENT_TYPE = "application/json; charset=utf-8";
 
 const JSON_WHITESPACE = new Set([0x20, 0x09, 0x0a, 0x0d]);
+const SESSION_RECONCILE_MAX_WAIT_MS = 5_000;
 
 function saveError(message, status, code, details = null) {
   const error = new Error(message);
@@ -207,6 +208,22 @@ function isSessionOffsetAcknowledgement(error, expectedEnd) {
   );
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+async function waitBeforeReconciledRetry(error) {
+  const retryAfter = Number(error?.details?.retryAfterMs);
+  if (Number.isFinite(retryAfter) && retryAfter >= 0) {
+    if (retryAfter > SESSION_RECONCILE_MAX_WAIT_MS) return false;
+    await sleep(retryAfter);
+    return true;
+  }
+
+  await sleep(Math.round(250 + Math.random() * 250));
+  return true;
+}
+
 async function appendBlock(env, sessionId, offset, block) {
   const expectedEnd = offset + block.byteLength;
   try {
@@ -219,7 +236,9 @@ async function appendBlock(env, sessionId, offset, block) {
       ["DROPBOX_TIMEOUT", "DROPBOX_UNAVAILABLE", "DROPBOX_UPLOAD_SESSION_FAILED"].includes(
         String(firstError?.code || ""),
       );
-    if (!retryable) throw firstError;
+    if (!retryable || !(await waitBeforeReconciledRetry(firstError))) {
+      throw firstError;
+    }
 
     try {
       await appendLargeDropboxUploadSession(env, sessionId, offset, block);
@@ -280,7 +299,9 @@ async function finishSessionWithReconciliation(
       ["DROPBOX_TIMEOUT", "DROPBOX_UNAVAILABLE", "DROPBOX_UPLOAD_SESSION_FAILED"].includes(
         String(firstError?.code || ""),
       );
-    if (!retryable) throw firstError;
+    if (!retryable || !(await waitBeforeReconciledRetry(firstError))) {
+      throw firstError;
+    }
 
     try {
       const raw = await finishLargeDropboxUploadSession(
@@ -354,7 +375,8 @@ function revisionHead(project, artifact, revision) {
 
 function assertExpectedRevisionBeforeStreaming(project, expectedRevision) {
   const currentRevision = Math.max(0, Number(project?.config_revision || 0));
-  if (currentRevision !== expectedRevision) {
+  const possibleAlreadyPublished = currentRevision === expectedRevision + 1;
+  if (currentRevision !== expectedRevision && !possibleAlreadyPublished) {
     throw saveError(
       "O projeto foi alterado por outra operação.",
       409,
