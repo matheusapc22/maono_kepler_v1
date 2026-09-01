@@ -6,12 +6,14 @@ on:
       - "functions/api/projects/**"
       - "functions/_lib/save-*.js"
       - "functions/_lib/dropbox*.js"
+      - "functions/_lib/project-large-config-save.js"
       - "functions/_lib/error-catalog.js"
       - "src/pages/Kepler/save-observability.ts"
       - "src/pages/Kepler/components/maono-save-button.tsx"
       - "migrations/**"
       - "tests/save-*.test.mjs"
       - "tests/dropbox-*.test.mjs"
+      - "tests/project-large-save.test.mjs"
       - ".github/workflows/save-contract-validation.yml"
   workflow_dispatch:
 
@@ -40,3 +42,6 @@ jobs:
 
       - name: Validate Dropbox resilience contract
         run: npm run test:dropbox-resilience && node --test tests/dropbox-runtime-fetch.test.mjs
+
+      - name: Validate large MapConfig streaming save
+        run: node --experimental-strip-types --test tests/project-large-save.test.mjs
