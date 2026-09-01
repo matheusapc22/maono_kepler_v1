@@ -39,4 +39,4 @@ jobs:
         run: npm run test:save-observability
 
       - name: Validate Dropbox resilience contract
-        run: npm run test:dropbox-resilience
+        run: npm run test:dropbox-resilience && node --test tests/dropbox-runtime-fetch.test.mjs

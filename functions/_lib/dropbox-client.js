@@ -48,6 +48,10 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
+function runtimeFetch(...args) {
+  return globalThis.fetch(...args);
+}
+
 function providerRequestId(response) {
   return response?.headers?.get?.("x-dropbox-request-id") || null;
 }
@@ -130,7 +134,12 @@ function defaultMetricLogger(metric) {
 export class DropboxClient {
   constructor(env, options = {}) {
     this.env = env;
-    this.fetchFn = options.fetchFn || globalThis.fetch;
+    // Não desacople o fetch nativo do objeto global. Alguns runtimes Web/Workers
+    // validam o receiver da chamada e podem lançar TypeError/"Illegal invocation"
+    // quando `globalThis.fetch` é armazenado e depois chamado como método do client.
+    // O wrapper mantém o receiver correto e continua permitindo fetchFn injetável
+    // nos testes.
+    this.fetchFn = options.fetchFn || runtimeFetch;
     this.sleepFn = options.sleepFn || sleep;
     this.randomFn = options.randomFn || Math.random;
     this.nowFn = options.nowFn || nowMs;
