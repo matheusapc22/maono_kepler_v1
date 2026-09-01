@@ -1,5 +1,7 @@
 export type SaveOperation = "create" | "update";
 
+export const MAONO_SAVE_CLIENT_CONTRACT = 1;
+
 export type ClientSaveAttempt = {
   saveId: string;
   correlationId: string;
@@ -18,6 +20,9 @@ export type SaveResponseDiagnostics = {
   saveId: string;
   correlationId: string;
   serverTiming: string | null;
+  apiContract: string | null;
+  apiBuild: string | null;
+  dbSchema: string | null;
 };
 
 function nowMs() {
@@ -31,6 +36,16 @@ function randomId(prefix: "save" | "corr") {
     return `${prefix}_${crypto.randomUUID()}`;
   }
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function clientBuildId() {
+  const viteEnv = import.meta.env ?? {};
+  return String(
+    viteEnv.VITE_MAONO_CLIENT_BUILD_ID ??
+      viteEnv.VITE_COMMIT_SHA ??
+      viteEnv.VITE_GIT_COMMIT_SHA ??
+      "dev",
+  ).slice(0, 120);
 }
 
 export function measureUtf8PayloadBytes(value: string) {
@@ -70,6 +85,8 @@ export function buildSaveRequestHeaders(attempt: ClientSaveAttempt) {
     Accept: "application/json",
     "X-Maono-Save-Id": attempt.saveId,
     "X-Correlation-Id": attempt.correlationId,
+    "X-Maono-Client-Contract": String(MAONO_SAVE_CLIENT_CONTRACT),
+    "X-Maono-Client-Build": clientBuildId(),
   };
 }
 
@@ -82,6 +99,9 @@ export function readSaveResponseDiagnostics(
     correlationId:
       response.headers.get("X-Correlation-Id") || attempt.correlationId,
     serverTiming: response.headers.get("Server-Timing"),
+    apiContract: response.headers.get("X-Maono-Api-Contract"),
+    apiBuild: response.headers.get("X-Maono-Api-Build"),
+    dbSchema: response.headers.get("X-Maono-Db-Schema"),
   };
 }
 

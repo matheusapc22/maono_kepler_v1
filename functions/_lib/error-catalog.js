@@ -62,6 +62,8 @@ export const ERROR_DEFINITIONS = Object.freeze({
   ENGINE_RESULT_INVALID: { category: E.ENGINE, status: 500, retryable: false },
   ENGINE_UNAVAILABLE: { category: E.ENGINE, status: 503, retryable: true },
 
+  SAVE_CLIENT_CONTRACT_UNSUPPORTED: { category: E.INFRASTRUCTURE, status: 412, retryable: false },
+  SAVE_DB_SCHEMA_MISMATCH: { category: E.INFRASTRUCTURE, status: 503, retryable: true },
   DATABASE_NOT_CONFIGURED: { category: E.INFRASTRUCTURE, status: 500, retryable: false },
   INFRASTRUCTURE_ENV_NOT_CONFIGURED: { category: E.INFRASTRUCTURE, status: 500, retryable: false },
   INFRASTRUCTURE_D1_NOT_CONFIGURED: { category: E.INFRASTRUCTURE, status: 500, retryable: false },

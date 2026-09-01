@@ -13,6 +13,12 @@ import {
   createSaveTrace,
   readSaveJsonBody,
 } from "../../_lib/save-observability.js";
+import {
+  assertSaveDeployCompatibility,
+  getSaveClientMetadata,
+  getSaveDeploymentMetadata,
+  saveDeployResponseHeaders,
+} from "../../_lib/save-deploy-contract.js";
 import { requireSession } from "../../_lib/auth.js";
 import { listProjectsForActiveOrganization } from "../../_lib/project-list.js";
 import {
@@ -37,14 +43,40 @@ function publicCreatedProject(project) {
   };
 }
 
+function combineHeaders(saveTrace, deploymentMetadata) {
+  return {
+    ...saveDeployResponseHeaders(deploymentMetadata),
+    ...(saveTrace?.responseHeaders?.() || {}),
+  };
+}
+
+function publicSaveMessage(normalized, requestMethod) {
+  if (normalized.code === "SAVE_CLIENT_CONTRACT_UNSUPPORTED") {
+    return "A Maõno foi atualizada. Recarregue a página antes de salvar novamente.";
+  }
+  if (normalized.code === "SAVE_DB_SCHEMA_MISMATCH") {
+    return "O serviço está sendo atualizado. Tente salvar novamente em instantes.";
+  }
+  return normalized.message ||
+    (requestMethod === "GET"
+      ? "Não foi possível carregar os projetos."
+      : "Não foi possível criar o projeto.");
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
+  const correlationId = getOrCreateCorrelationId(request);
+  const clientMetadata = getSaveClientMetadata(request);
+  let deploymentMetadata = getSaveDeploymentMetadata(env);
+
   if (!["GET", "POST"].includes(request.method)) {
-    return methodNotAllowed(["GET", "POST"]);
+    return methodNotAllowed(["GET", "POST"], {
+      correlationId,
+      headers: saveDeployResponseHeaders(deploymentMetadata),
+    });
   }
 
-  const correlationId = getOrCreateCorrelationId(request);
   const saveTrace = request.method === "POST"
     ? createSaveTrace({ request, correlationId, operation: "create" })
     : null;
@@ -71,9 +103,15 @@ export async function onRequest(context) {
         error.status,
         error.code,
         null,
-        { correlationId, headers: saveTrace?.responseHeaders() },
+        {
+          correlationId,
+          headers: combineHeaders(saveTrace, deploymentMetadata),
+        },
       );
     }
+
+    // SAVE-02: contratos são validados antes de qualquer mutação de criação.
+    deploymentMetadata = await assertSaveDeployCompatibility(env, request);
 
     const body = await readSaveJsonBody(request, saveTrace);
     bindSaveTraceToConfig(body?.config, saveTrace);
@@ -117,10 +155,14 @@ export async function onRequest(context) {
         configRevision: result.configRevision,
         thumbnail: result.thumbnail,
         preview: result.preview,
+        deploy: {
+          apiContract: deploymentMetadata.apiContract,
+          dbSchema: deploymentMetadata.actualDbSchema,
+        },
       },
       {
         status: result.status,
-        headers: saveTrace?.responseHeaders(),
+        headers: combineHeaders(saveTrace, deploymentMetadata),
       },
     );
   } catch (error) {
@@ -137,25 +179,28 @@ export async function onRequest(context) {
       retryable: normalized.retryable,
     });
 
-    if (status >= 500) {
+    if (status >= 500 || normalized.code?.startsWith?.("SAVE_")) {
       console.error("[Maono projects] Falha na criação completa do projeto:", {
+        event: "project_save_failed",
         saveId: saveTrace?.saveId ?? null,
         correlationId,
         code: normalized.code,
         category: normalized.category,
         retryable: normalized.retryable,
         status: normalized.status,
+        clientContract: clientMetadata.clientContract,
+        clientBuild: clientMetadata.clientBuild,
+        apiContract: deploymentMetadata.apiContract,
+        apiBuild: deploymentMetadata.apiBuild,
+        dbSchemaExpected: deploymentMetadata.expectedDbSchema,
+        dbSchemaActual: normalized?.details?.actualDbSchema ?? deploymentMetadata.actualDbSchema ?? null,
       });
     }
 
     return errorResponseFromError(normalized, {
       correlationId,
-      headers: saveTrace?.responseHeaders(),
-      publicMessage:
-        normalized.message ||
-        (request.method === "GET"
-          ? "Não foi possível carregar os projetos."
-          : "Não foi possível criar o projeto."),
+      headers: combineHeaders(saveTrace, deploymentMetadata),
+      publicMessage: publicSaveMessage(normalized, request.method),
     });
   }
 }

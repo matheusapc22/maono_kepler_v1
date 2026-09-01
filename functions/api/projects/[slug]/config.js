@@ -13,6 +13,12 @@ import {
   createSaveTrace,
   readSaveJsonBody,
 } from "../../../_lib/save-observability.js";
+import {
+  assertSaveDeployCompatibility,
+  getSaveClientMetadata,
+  getSaveDeploymentMetadata,
+  saveDeployResponseHeaders,
+} from "../../../_lib/save-deploy-contract.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, publicProject } from "../../../_lib/projects.js";
 import { touchProjectAfterConfigSave } from "../../../_lib/project-service.js";
@@ -40,6 +46,13 @@ const AUDIT_SHORT_TEXT_LIMIT = 160;
 
 function asyncThumbnailEnabled(env) {
   return String(env?.ASYNC_PROJECT_THUMBNAIL ?? "true").toLowerCase() !== "false";
+}
+
+function combineHeaders(saveTrace, deploymentMetadata) {
+  return {
+    ...saveDeployResponseHeaders(deploymentMetadata),
+    ...(saveTrace?.responseHeaders?.() || {}),
+  };
 }
 
 function decodeProjectSlug(value) {
@@ -153,6 +166,25 @@ function logUnexpectedError(error) {
       retryable: error?.retryable ?? null,
     });
   }
+}
+
+function logSaveDeployFailure(error, context = {}) {
+  if (!String(error?.code || "").startsWith("SAVE_")) return;
+  console.error("[Maono save deploy]", {
+    event: "project_save_deploy_failed",
+    correlationId: error?.correlationId ?? context.correlationId ?? null,
+    code: error?.code ?? null,
+    status: Number(error?.status || 500),
+    retryable: Boolean(error?.retryable),
+    clientContract: context.client?.clientContract ?? null,
+    clientBuild: context.client?.clientBuild ?? null,
+    apiContract: context.deployment?.apiContract ?? null,
+    apiBuild: context.deployment?.apiBuild ?? null,
+    dbSchemaExpected: context.deployment?.expectedDbSchema ?? null,
+    dbSchemaActual: error?.details?.actualDbSchema ?? context.deployment?.actualDbSchema ?? null,
+    projectId: context.projectId ?? null,
+    organizationId: context.organizationId ?? null,
+  });
 }
 
 function sanitizeAuditText(value, maxLength = AUDIT_TEXT_LIMIT) {
@@ -295,8 +327,13 @@ async function hydrateLifecycleProject(env, project) {
 export async function onRequest(context) {
   const { request, env, params } = context;
   const correlationId = getOrCreateCorrelationId(request);
+  const clientMetadata = getSaveClientMetadata(request);
+  let deploymentMetadata = getSaveDeploymentMetadata(env);
   if (!["GET", "PUT"].includes(request.method)) {
-    return methodNotAllowed(["GET", "PUT"], { correlationId });
+    return methodNotAllowed(["GET", "PUT"], {
+      correlationId,
+      headers: saveDeployResponseHeaders(deploymentMetadata),
+    });
   }
 
   const saveTrace = request.method === "PUT"
@@ -323,7 +360,7 @@ export async function onRequest(context) {
         400,
         error.code,
         null,
-        { correlationId, headers: saveTrace?.responseHeaders() },
+        { correlationId, headers: combineHeaders(saveTrace, deploymentMetadata) },
       );
     }
 
@@ -338,7 +375,7 @@ export async function onRequest(context) {
         404,
         error.code,
         null,
-        { correlationId, headers: saveTrace?.responseHeaders() },
+        { correlationId, headers: combineHeaders(saveTrace, deploymentMetadata) },
       );
     }
     project = await hydrateLifecycleProject(env, project);
@@ -374,13 +411,20 @@ export async function onRequest(context) {
         legacy: loaded.legacy,
       });
 
-      return jsonResponse({
-        ok: true,
-        project: publicProjectForConfigResponse(project),
-        lifecycle: loaded.lifecycle,
-        config: loaded.config,
-      });
+      return jsonResponse(
+        {
+          ok: true,
+          project: publicProjectForConfigResponse(project),
+          lifecycle: loaded.lifecycle,
+          config: loaded.config,
+        },
+        { headers: saveDeployResponseHeaders(deploymentMetadata) },
+      );
     }
+
+    // SAVE-02: valida FE ↔ API ↔ D1 antes de ler o payload de persistência e,
+    // principalmente, antes de reservar/gravar qualquer revisão.
+    deploymentMetadata = await assertSaveDeployCompatibility(env, request);
 
     const body = await readSaveJsonBody(request, saveTrace);
     const config = body?.config;
@@ -407,7 +451,7 @@ export async function onRequest(context) {
         400,
         "INVALID_KEPLER_CONFIG",
         null,
-        { correlationId, headers: saveTrace?.responseHeaders() },
+        { correlationId, headers: combineHeaders(saveTrace, deploymentMetadata) },
       );
     }
 
@@ -475,6 +519,11 @@ export async function onRequest(context) {
       preview: publicPreview,
       previewError: sanitizeAuditText(previewError, AUDIT_TEXT_LIMIT),
       thumbnailCapture: publicThumbnailCaptureForAudit(body?.thumbnailCapture),
+      clientContract: deploymentMetadata.clientContract,
+      clientBuild: deploymentMetadata.clientBuild,
+      apiContract: deploymentMetadata.apiContract,
+      apiBuild: deploymentMetadata.apiBuild,
+      dbSchema: deploymentMetadata.actualDbSchema,
     });
 
     saveTrace?.finishSuccess({ httpStatus: 200 });
@@ -494,8 +543,12 @@ export async function onRequest(context) {
         },
         preview: publicPreview,
         previewError,
+        deploy: {
+          apiContract: deploymentMetadata.apiContract,
+          dbSchema: deploymentMetadata.actualDbSchema,
+        },
       },
-      { headers: saveTrace?.responseHeaders() },
+      { headers: combineHeaders(saveTrace, deploymentMetadata) },
     );
   } catch (error) {
     const status = Number(error?.status || 500);
@@ -510,6 +563,13 @@ export async function onRequest(context) {
       retryable: normalized.retryable,
     });
     logUnexpectedError(normalized);
+    logSaveDeployFailure(normalized, {
+      correlationId,
+      client: clientMetadata,
+      deployment: deploymentMetadata,
+      projectId: project?.id ?? null,
+      organizationId: getProjectOrganizationId(project),
+    });
 
     await auditUnexpectedProjectConfigError(
       env,
@@ -526,8 +586,20 @@ export async function onRequest(context) {
 
     const responseOptions = {
       correlationId,
-      headers: saveTrace?.responseHeaders(),
+      headers: combineHeaders(saveTrace, deploymentMetadata),
     };
+    if (normalized.code === "SAVE_CLIENT_CONTRACT_UNSUPPORTED") {
+      return errorResponseFromError(normalized, {
+        ...responseOptions,
+        publicMessage: "A Maõno foi atualizada. Recarregue a página antes de salvar novamente.",
+      });
+    }
+    if (normalized.code === "SAVE_DB_SCHEMA_MISMATCH") {
+      return errorResponseFromError(normalized, {
+        ...responseOptions,
+        publicMessage: "O serviço está sendo atualizado. Tente salvar novamente em instantes.",
+      });
+    }
     if (status === 401) {
       return errorResponseFromError(normalized, {
         ...responseOptions,

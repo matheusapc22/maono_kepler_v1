@@ -173,7 +173,10 @@ test("política de preview continua independente do salvamento do JSON", () => {
   assert.match(configSource, /asyncThumbnailEnabled\(env\)/);
   assert.match(configSource, /configRevision/);
   assert.match(configSource, /preview_status = 'PENDING'|thumbnailState/);
-  assert.match(configSource, /Server-Timing/);
+  assert.match(
+    configSource,
+    /combineHeaders\(saveTrace,\s*deploymentMetadata\)/,
+  );
   assert.match(configServiceSource, /publishProjectConfigRevision/);
 
   const saveIndex = configSource.indexOf("const saved = await saveProjectConfig");

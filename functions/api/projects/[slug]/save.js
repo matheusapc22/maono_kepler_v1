@@ -9,6 +9,12 @@ import {
   getOrCreateCorrelationId,
   normalizeMaonoError,
 } from "../../../_lib/maono-error.js";
+import {
+  assertSaveDeployCompatibility,
+  getSaveDeploymentMetadata,
+  getSaveClientMetadata,
+  saveDeployResponseHeaders,
+} from "../../../_lib/save-deploy-contract.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject } from "../../../_lib/projects.js";
 import { uploadDropboxTextFile } from "../../../_lib/dropbox.js";
@@ -86,6 +92,24 @@ function logUnexpectedError(error) {
   }
 }
 
+function logSaveFailure(error, context = {}) {
+  console.error("[Maono save failure]", {
+    event: "project_save_failed",
+    request_id: error?.correlationId ?? context.correlationId ?? null,
+    error_code: error?.code ?? "SAVE_UNKNOWN",
+    http_status: Number(error?.status || 500),
+    retryable: Boolean(error?.retryable),
+    client_contract: context.client?.clientContract ?? null,
+    client_build: context.client?.clientBuild ?? null,
+    api_contract: context.deployment?.apiContract ?? null,
+    api_build: context.deployment?.apiBuild ?? null,
+    db_schema_expected: context.deployment?.expectedDbSchema ?? null,
+    db_schema_actual: error?.details?.actualDbSchema ?? context.deployment?.actualDbSchema ?? null,
+    project_id: context.projectId ?? null,
+    organization_id: context.organizationId ?? null,
+  });
+}
+
 async function auditLegacySave(env, request, user, project, result, metadata = {}) {
   await recordAuditLog(env, {
     actorUserId: user?.id,
@@ -126,11 +150,33 @@ async function auditUnexpectedLegacySaveError(
   });
 }
 
+function publicSaveMessage(normalized, status) {
+  if (normalized.code === "SAVE_CLIENT_CONTRACT_UNSUPPORTED") {
+    return "A Maõno foi atualizada. Recarregue a página antes de salvar novamente.";
+  }
+  if (normalized.code === "SAVE_DB_SCHEMA_MISMATCH") {
+    return "O serviço está sendo atualizado. Tente salvar novamente em instantes.";
+  }
+  if (status === 400) return normalized.message || "Requisição inválida.";
+  if (status === 401) return "Sessão inválida ou expirada.";
+  if (status === 403) {
+    return "Você não tem permissão para salvar alterações permanentes neste projeto.";
+  }
+  if (status === 404) return "Projeto não encontrado ou sem permissão de acesso.";
+  return "Não foi possível salvar o projeto.";
+}
+
 export async function onRequest(context) {
   const { request, env, params } = context;
   const correlationId = getOrCreateCorrelationId(request);
+  const clientMetadata = getSaveClientMetadata(request);
+  let deploymentMetadata = getSaveDeploymentMetadata(env);
+
   if (request.method !== "POST") {
-    return methodNotAllowed(["POST"], { correlationId });
+    return methodNotAllowed(["POST"], {
+      correlationId,
+      headers: saveDeployResponseHeaders(deploymentMetadata),
+    });
   }
 
   let user = null;
@@ -154,7 +200,10 @@ export async function onRequest(context) {
         400,
         "PROJECT_SLUG_REQUIRED",
         null,
-        { correlationId },
+        {
+          correlationId,
+          headers: saveDeployResponseHeaders(deploymentMetadata),
+        },
       );
     }
 
@@ -171,7 +220,10 @@ export async function onRequest(context) {
         404,
         "PROJECT_NOT_FOUND",
         null,
-        { correlationId },
+        {
+          correlationId,
+          headers: saveDeployResponseHeaders(deploymentMetadata),
+        },
       );
     }
 
@@ -190,6 +242,10 @@ export async function onRequest(context) {
       },
     );
 
+    // SAVE-02: drift é validado antes de ler/gravar o conteúdo persistente.
+    // Builds podem diferir; somente versões explícitas de contrato/schema bloqueiam.
+    deploymentMetadata = await assertSaveDeployCompatibility(env, request);
+
     const body = await readJsonBody(request);
     const config = body?.config;
     if (!config || typeof config !== "object" || Array.isArray(config)) {
@@ -204,7 +260,10 @@ export async function onRequest(context) {
         400,
         "MISSING_CONFIG",
         null,
-        { correlationId },
+        {
+          correlationId,
+          headers: saveDeployResponseHeaders(deploymentMetadata),
+        },
       );
     }
 
@@ -223,24 +282,36 @@ export async function onRequest(context) {
       correlationId,
       sizeBytes,
       dropboxRev: dropboxResult?.rev ?? null,
+      clientContract: deploymentMetadata.clientContract,
+      clientBuild: deploymentMetadata.clientBuild,
+      apiContract: deploymentMetadata.apiContract,
+      apiBuild: deploymentMetadata.apiBuild,
+      dbSchema: deploymentMetadata.actualDbSchema,
     });
 
-    return jsonResponse({
-      ok: true,
-      saved: true,
-      legacy: true,
-      project: {
-        id: project.id,
-        slug: project.slug,
-        name: project.name,
+    return jsonResponse(
+      {
+        ok: true,
+        saved: true,
+        legacy: true,
+        project: {
+          id: project.id,
+          slug: project.slug,
+          name: project.name,
+        },
+        dropbox: {
+          id: dropboxResult?.id,
+          name: dropboxResult?.name,
+          rev: dropboxResult?.rev,
+          pathDisplay: dropboxResult?.path_display,
+        },
+        deploy: {
+          apiContract: deploymentMetadata.apiContract,
+          dbSchema: deploymentMetadata.actualDbSchema,
+        },
       },
-      dropbox: {
-        id: dropboxResult?.id,
-        name: dropboxResult?.name,
-        rev: dropboxResult?.rev,
-        pathDisplay: dropboxResult?.path_display,
-      },
-    });
+      { headers: saveDeployResponseHeaders(deploymentMetadata) },
+    );
   } catch (error) {
     const normalized = normalizeMaonoError(error, {
       defaultCode: "PROJECT_SAVE_ERROR",
@@ -248,6 +319,13 @@ export async function onRequest(context) {
     });
     const status = Number(normalized.status || 500);
     logUnexpectedError(normalized);
+    logSaveFailure(normalized, {
+      correlationId,
+      client: clientMetadata,
+      deployment: deploymentMetadata,
+      projectId: project?.id ?? null,
+      organizationId: getProjectOrganizationId(project),
+    });
 
     await auditUnexpectedLegacySaveError(
       env,
@@ -260,34 +338,10 @@ export async function onRequest(context) {
       status < 500 ? "invalid" : "error",
     ).catch(() => null);
 
-    if (status === 400) {
-      return errorResponseFromError(normalized, {
-        correlationId,
-        publicMessage: error?.message || "Requisição inválida.",
-      });
-    }
-    if (status === 401) {
-      return errorResponseFromError(normalized, {
-        correlationId,
-        publicMessage: "Sessão inválida ou expirada.",
-      });
-    }
-    if (status === 403) {
-      return errorResponseFromError(normalized, {
-        correlationId,
-        publicMessage: "Você não tem permissão para salvar alterações permanentes neste projeto.",
-      });
-    }
-    if (status === 404) {
-      return errorResponseFromError(normalized, {
-        correlationId,
-        publicMessage: "Projeto não encontrado ou sem permissão de acesso.",
-      });
-    }
-
     return errorResponseFromError(normalized, {
       correlationId,
-      publicMessage: "Não foi possível salvar o projeto.",
+      headers: saveDeployResponseHeaders(deploymentMetadata),
+      publicMessage: publicSaveMessage(normalized, status),
     });
   }
 }
