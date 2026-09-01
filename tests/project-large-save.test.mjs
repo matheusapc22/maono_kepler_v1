@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { dropboxContentHashHex } from "../functions/_lib/dropbox-content-hash.js";
+import {
+  PROJECT_CONFIG_CHECKSUM_ALGORITHM_DROPBOX,
+  verifyProjectConfigBytes,
+} from "../functions/_lib/project-config-integrity.js";
 import {
   MAONO_LARGE_SAVE_THRESHOLD_BYTES,
   beginClientSaveAttempt,
@@ -69,6 +74,22 @@ test("save acima de 8 MiB envia MapConfig bruto e metadata em headers", () => {
   assert.equal(parsed.version, "v1");
   assert.equal(parsed.largeFixture.length, MAONO_LARGE_SAVE_THRESHOLD_BYTES + 1024);
   assert.equal(parsed.expectedConfigRevision, undefined);
+});
+
+test("integridade aceita content_hash Dropbox nas revisões streamed", async () => {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({ version: "v1", config: {}, datasets: [], value: "stream" }),
+  );
+  const expected = await dropboxContentHashHex(bytes);
+  const verified = await verifyProjectConfigBytes(bytes, {
+    expectedChecksum: expected,
+    expectedAlgorithm: PROJECT_CONFIG_CHECKSUM_ALGORITHM_DROPBOX,
+    expectedSizeBytes: bytes.byteLength,
+  });
+
+  assert.equal(verified.checksum, expected);
+  assert.equal(verified.checksumAlgorithm, "dropbox-content-hash");
+  assert.equal(verified.sizeBytes, bytes.byteLength);
 });
 
 test("streaming backend nunca materializa o request grande como text/json", async () => {
