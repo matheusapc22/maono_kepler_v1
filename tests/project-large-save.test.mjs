@@ -106,13 +106,12 @@ test("Dropbox streaming usa blocos de 4 MiB e cursor sem retry cego", async () =
   assert.match(transport, /DROPBOX_UPLOAD_SESSION_OFFSET_CONFLICT/);
 });
 
-test("middleware só intercepta PUT grande e mantém demais rotas nativas", async () => {
+test("middleware intercepta somente PUT /config grande e protege clientes antigos", async () => {
   const middleware = await readFile(middlewarePath, "utf8");
 
-  assert.match(
-    middleware,
-    /request\.method !== "PUT" \|\| !isLargeProjectConfigRequest\(request\)/,
-  );
+  assert.match(middleware, /targetsConfigPut\(request\)/);
+  assert.match(middleware, /isLargeProjectConfigRequest\(request\)/);
+  assert.match(middleware, /assertInlineProjectConfigRequestSize\(request\)/);
   assert.match(middleware, /return context\.next\(\)/);
   assert.match(middleware, /assertSaveDeployCompatibility/);
   assert.match(middleware, /can\(env, user, "project\.save"/);
