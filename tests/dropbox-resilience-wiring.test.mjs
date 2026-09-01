@@ -40,6 +40,18 @@ test("upload imutável continua create-only e conflito é reconciliado no reposi
   assert.match(repository, /idempotent:\s*true/);
 });
 
+test("repository preserva auth não recuperável e diagnósticos do provider", async () => {
+  const repository = await readFile(repositoryPath, "utf8");
+  assert.match(
+    repository,
+    /providerCode === "DROPBOX_AUTH_FAILED"[\s\S]*MAP_CONFIG_STORAGE_AUTH_FAILED/,
+  );
+  assert.match(repository, /wrapped\.retryable = retryable/);
+  assert.match(repository, /providerStatus/);
+  assert.match(repository, /providerElapsedMs/);
+  assert.match(repository, /retryAfterMs/);
+});
+
 test("upload sessions não recebem retry cego por cursor", async () => {
   const dropbox = await readFile(dropboxPath, "utf8");
   assert.match(
