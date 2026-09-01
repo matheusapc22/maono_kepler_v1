@@ -13,15 +13,14 @@ import {
   getProjectLifecycleRow,
   publicProjectLifecycle,
 } from "../../../_lib/project-lifecycle.js";
-import {
-  createSaveTrace,
-} from "../../../_lib/save-observability.js";
+import { createSaveTrace } from "../../../_lib/save-observability.js";
 import {
   assertSaveDeployCompatibility,
   getSaveDeploymentMetadata,
   saveDeployResponseHeaders,
 } from "../../../_lib/save-deploy-contract.js";
 import {
+  assertInlineProjectConfigRequestSize,
   isLargeProjectConfigRequest,
   saveLargeProjectConfigStream,
 } from "../../../_lib/project-large-config-save.js";
@@ -43,6 +42,15 @@ function combineHeaders(trace, deployment) {
     ...saveDeployResponseHeaders(deployment),
     ...(trace?.responseHeaders?.() || {}),
   };
+}
+
+function targetsConfigPut(request) {
+  if (request.method !== "PUT") return false;
+  try {
+    return /\/api\/projects\/[^/]+\/config\/?$/.test(new URL(request.url).pathname);
+  } catch {
+    return false;
+  }
 }
 
 async function hydrateLifecycleProject(env, project) {
@@ -91,13 +99,27 @@ function projectResponse(project, configRevision) {
 export async function onRequest(context) {
   const { request, env, params } = context;
 
-  if (request.method !== "PUT" || !isLargeProjectConfigRequest(request)) {
+  if (!targetsConfigPut(request)) {
     return context.next();
   }
 
   const correlationId = getOrCreateCorrelationId(request);
-  const trace = createSaveTrace({ request, correlationId, operation: "update" });
   let deployment = getSaveDeploymentMetadata(env);
+
+  if (!isLargeProjectConfigRequest(request)) {
+    try {
+      assertInlineProjectConfigRequestSize(request);
+      return context.next();
+    } catch (error) {
+      const normalized = normalizeMaonoError(error, { correlationId });
+      return errorResponseFromError(normalized, {
+        correlationId,
+        headers: saveDeployResponseHeaders(deployment),
+      });
+    }
+  }
+
+  const trace = createSaveTrace({ request, correlationId, operation: "update" });
   let user = null;
   let project = null;
   let slug = null;
@@ -142,7 +164,6 @@ export async function onRequest(context) {
       throw error;
     }
 
-    // SAVE-02 continua sendo a barreira de deploy antes de qualquer escrita.
     deployment = await assertSaveDeployCompatibility(env, request);
 
     const saved = await saveLargeProjectConfigStream(env, {
