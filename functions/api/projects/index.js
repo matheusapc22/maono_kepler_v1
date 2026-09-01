@@ -1,9 +1,18 @@
 import {
   errorResponse,
+  errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
-  readJsonBody,
 } from "../../_lib/http.js";
+import {
+  getOrCreateCorrelationId,
+  normalizeMaonoError,
+} from "../../_lib/maono-error.js";
+import {
+  bindSaveTraceToConfig,
+  createSaveTrace,
+  readSaveJsonBody,
+} from "../../_lib/save-observability.js";
 import { requireSession } from "../../_lib/auth.js";
 import { listProjectsForActiveOrganization } from "../../_lib/project-list.js";
 import {
@@ -35,6 +44,11 @@ export async function onRequest(context) {
     return methodNotAllowed(["GET", "POST"]);
   }
 
+  const correlationId = getOrCreateCorrelationId(request);
+  const saveTrace = request.method === "POST"
+    ? createSaveTrace({ request, correlationId, operation: "create" })
+    : null;
+
   try {
     const user = await requireSession(env, request);
 
@@ -46,14 +60,32 @@ export async function onRequest(context) {
     // A flag pode impedir novas admissões durante rollout, mas nunca muda o
     // protocolo de leitura/save de projetos que já possuem lifecycle_state.
     if (!isProjectLifecycleEnabled(env)) {
-      return errorResponse(
+      const error = new Error(
         "A criação de novos projetos está temporariamente indisponível.",
-        503,
-        "PROJECT_LIFECYCLE_ROLLOUT_DISABLED",
+      );
+      error.status = 503;
+      error.code = "PROJECT_LIFECYCLE_ROLLOUT_DISABLED";
+      saveTrace?.fail(error, { stage: "VALIDATE", httpStatus: 503 });
+      return errorResponse(
+        error.message,
+        error.status,
+        error.code,
+        null,
+        { correlationId, headers: saveTrace?.responseHeaders() },
       );
     }
 
-    const body = await readJsonBody(request);
+    const body = await readSaveJsonBody(request, saveTrace);
+    bindSaveTraceToConfig(body?.config, saveTrace);
+    saveTrace?.updateContext({
+      organizationId:
+        body?.organizationId ??
+        body?.organization_id ??
+        body?.organization?.id ??
+        null,
+      expectedRevision: 0,
+    });
+
     const result = await createProjectFromKepler(
       env,
       request,
@@ -61,6 +93,17 @@ export async function onRequest(context) {
       body,
       { getActiveOrganizationId },
     );
+
+    saveTrace?.updateContext({
+      projectId: result.project?.id ?? null,
+      organizationId:
+        result.project?.organization_id ??
+        result.project?.organizationId ??
+        body?.organizationId ??
+        null,
+      candidateRevision: result.configRevision ?? null,
+    });
+    saveTrace?.finishSuccess({ httpStatus: result.status });
 
     return jsonResponse(
       {
@@ -75,24 +118,44 @@ export async function onRequest(context) {
         thumbnail: result.thumbnail,
         preview: result.preview,
       },
-      { status: result.status },
+      {
+        status: result.status,
+        headers: saveTrace?.responseHeaders(),
+      },
     );
   } catch (error) {
     const status = Number(error?.status || 500);
-    const code = error?.code || "PROJECTS_ERROR";
+    const normalized = normalizeMaonoError(error, {
+      defaultCode: "PROJECTS_ERROR",
+      correlationId,
+    });
+
+    saveTrace?.fail(normalized, {
+      stage: normalized?.details?.stage || saveTrace?.currentStage || null,
+      httpStatus: status,
+      category: normalized.category,
+      retryable: normalized.retryable,
+    });
 
     if (status >= 500) {
-      console.error("[Maono projects] Falha na criação completa do projeto:", error);
+      console.error("[Maono projects] Falha na criação completa do projeto:", {
+        saveId: saveTrace?.saveId ?? null,
+        correlationId,
+        code: normalized.code,
+        category: normalized.category,
+        retryable: normalized.retryable,
+        status: normalized.status,
+      });
     }
 
-    return errorResponse(
-      error?.message ||
+    return errorResponseFromError(normalized, {
+      correlationId,
+      headers: saveTrace?.responseHeaders(),
+      publicMessage:
+        normalized.message ||
         (request.method === "GET"
           ? "Não foi possível carregar os projetos."
           : "Não foi possível criar o projeto."),
-      status,
-      code,
-      error?.details || null,
-    );
+    });
   }
 }
