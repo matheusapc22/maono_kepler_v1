@@ -107,9 +107,13 @@ export async function assertSaveDeployCompatibility(env, request, options = {}) 
 }
 
 export function saveDeployResponseHeaders(metadata = {}) {
-  const headers = new Headers();
-  headers.set("X-Maono-Api-Contract", String(metadata.apiContract || SAVE_API_CONTRACT_VERSION));
-  headers.set("X-Maono-Api-Build", cleanBuildId(metadata.apiBuild));
-  headers.set("X-Maono-Db-Schema", String(metadata.actualDbSchema ?? metadata.expectedDbSchema ?? SAVE_EXPECTED_DB_SCHEMA_VERSION));
-  return headers;
+  return {
+    "X-Maono-Api-Contract": String(metadata.apiContract || SAVE_API_CONTRACT_VERSION),
+    "X-Maono-Api-Build": cleanBuildId(metadata.apiBuild),
+    "X-Maono-Db-Schema": String(
+      metadata.actualDbSchema ??
+        metadata.expectedDbSchema ??
+        SAVE_EXPECTED_DB_SCHEMA_VERSION,
+    ),
+  };
 }
