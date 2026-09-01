@@ -20,6 +20,7 @@ import {
 import { MAP_CONFIG_SAVE_MODES } from "./map-config-repository.js";
 import { resolveMapConfigRepository } from "./map-config-repository-factory.js";
 import { createMapConfigStorageRef } from "./map-config-storage-ref.js";
+import { getSaveTraceForConfig } from "./save-observability.js";
 
 function serviceError(message, status, code, details = null) {
   const error = new Error(message);
@@ -32,6 +33,10 @@ function serviceError(message, status, code, details = null) {
 function transitionId() {
   if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
   return `transition-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function runObservedStage(trace, stage, work) {
+  return trace ? trace.stage(stage, work) : work();
 }
 
 function decodeJsonBytes(bytes) {
@@ -241,14 +246,32 @@ export async function saveLegacyProjectConfig(
   },
 ) {
   const repository = resolveMapConfigRepository(env, mapConfigRepository);
-  const artifact = await buildProjectConfigArtifact(config);
-  await repository.saveRevision({
-    project,
-    revision: Math.max(1, Number(project.config_revision || 0) + 1),
-    bytes: artifact.bytes,
-    contentType: artifact.contentType,
-    mode: MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE,
+  const trace = getSaveTraceForConfig(config);
+  trace?.updateContext({
+    projectId: project?.id ?? null,
+    organizationId: project?.organization_id ?? null,
+    expectedRevision: Math.max(0, Number(project?.config_revision || 0)),
+    candidateRevision: Math.max(1, Number(project?.config_revision || 0) + 1),
+    provider: repository.provider,
   });
+
+  const serialized = await runObservedStage(trace, "SERIALIZE", async () =>
+    serializeProjectConfigBytes(config),
+  );
+  const artifact = await runObservedStage(trace, "VALIDATE", async () => {
+    validateProjectConfig(config, { bytes: serialized.bytes });
+    const built = await buildProjectConfigArtifactFromBytes(serialized.bytes);
+    return { text: serialized.text, ...built };
+  });
+  await runObservedStage(trace, "WRITE", () =>
+    repository.saveRevision({
+      project,
+      revision: Math.max(1, Number(project.config_revision || 0) + 1),
+      bytes: artifact.bytes,
+      contentType: artifact.contentType,
+      mode: MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE,
+    }),
+  );
   const organizationFileWarning = await updateLinkedOrganizationFile(
     env,
     project,
@@ -257,11 +280,13 @@ export async function saveLegacyProjectConfig(
 
   let updatedProject;
   try {
-    updatedProject = await touchProjectAfterConfigSave(env, {
-      projectId: project.id,
-      organizationId: project.organization_id,
-      actor,
-    });
+    updatedProject = await runObservedStage(trace, "PUBLISH", () =>
+      touchProjectAfterConfigSave(env, {
+        projectId: project.id,
+        organizationId: project.organization_id,
+        actor,
+      }),
+    );
   } catch (error) {
     throw legacyCommitNotConfirmed(error);
   }
@@ -292,7 +317,14 @@ export async function saveVersionedProjectConfig(
   },
 ) {
   const repository = resolveMapConfigRepository(env, mapConfigRepository);
+  const trace = getSaveTraceForConfig(config);
   const expected = Number(expectedConfigRevision);
+  trace?.updateContext({
+    projectId: project?.id ?? null,
+    organizationId: project?.organization_id ?? null,
+    expectedRevision: expected,
+    provider: repository.provider,
+  });
   if (!Number.isInteger(expected) || expected < 0) {
     throw serviceError(
       "Informe a revisão de configuração que está sendo editada.",
@@ -311,13 +343,17 @@ export async function saveVersionedProjectConfig(
   }
 
   let stage = "SERIALIZE";
-  const serialized = serializeProjectConfigBytes(config);
+  const serialized = await runObservedStage(trace, "SERIALIZE", async () =>
+    serializeProjectConfigBytes(config),
+  );
   stage = "VALIDATE";
-  validateProjectConfig(config, { bytes: serialized.bytes });
-  stage = "CANDIDATE_CHECKSUM";
-  const artifact = await buildProjectConfigArtifactFromBytes(serialized.bytes);
+  const artifact = await runObservedStage(trace, "VALIDATE", async () => {
+    validateProjectConfig(config, { bytes: serialized.bytes });
+    return buildProjectConfigArtifactFromBytes(serialized.bytes);
+  });
 
   const nextRevision = expected + 1;
+  trace?.updateContext({ candidateRevision: nextRevision });
   const id = transitionId();
   const storageRef = createMapConfigStorageRef(project.id, nextRevision);
   const storageProvider = repository.provider;
@@ -326,42 +362,49 @@ export async function saveVersionedProjectConfig(
 
   try {
     stage = "RESERVE";
-    reservation = await reserveProjectConfigRevision(env, {
-      projectId: project.id,
-      organizationId: project.organization_id,
-      expectedCurrentRevision: expected,
-      checksumAlgorithm: artifact.checksumAlgorithm,
-      checksum: artifact.checksum,
-      storageProvider,
-      storageRef,
-      schemaName: artifact.schemaName,
-      schemaVersion: artifact.schemaVersion,
-      sizeBytes: artifact.sizeBytes,
-      contentType: artifact.contentType,
-      actorUserId: actor?.id ?? null,
-      transitionId: id,
-      allowedLifecycleStates,
-    });
+    reservation = await runObservedStage(trace, "RESERVE", () =>
+      reserveProjectConfigRevision(env, {
+        projectId: project.id,
+        organizationId: project.organization_id,
+        expectedCurrentRevision: expected,
+        checksumAlgorithm: artifact.checksumAlgorithm,
+        checksum: artifact.checksum,
+        storageProvider,
+        storageRef,
+        schemaName: artifact.schemaName,
+        schemaVersion: artifact.schemaVersion,
+        sizeBytes: artifact.sizeBytes,
+        contentType: artifact.contentType,
+        actorUserId: actor?.id ?? null,
+        transitionId: id,
+        allowedLifecycleStates,
+      }),
+    );
 
     publicationCompleted = Boolean(reservation.alreadyPublished);
 
     if (reservation.alreadyPublished) {
+      stage = "WRITE";
+      const stored = await runObservedStage(trace, "WRITE", () =>
+        repository.saveRevision({
+          project: reservation.project,
+          revision: nextRevision,
+          storageRef,
+          bytes: artifact.bytes,
+          contentType: artifact.contentType,
+          mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+        }),
+      );
       stage = "VERIFY";
-      const stored = await repository.saveRevision({
-        project: reservation.project,
-        revision: nextRevision,
-        storageRef,
-        bytes: artifact.bytes,
-        contentType: artifact.contentType,
-        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-      });
-      await verifyPersistedRevision(repository, {
-        project: reservation.project,
-        revision: nextRevision,
-        storageRef,
-        artifact,
-        stored,
-      });
+      await runObservedStage(trace, "VERIFY", () =>
+        verifyPersistedRevision(repository, {
+          project: reservation.project,
+          revision: nextRevision,
+          storageRef,
+          artifact,
+          stored,
+        }),
+      );
       const recoveredProject = reservation.project;
       const organizationFileWarning = await updateLinkedOrganizationFile(
         env,
@@ -386,57 +429,66 @@ export async function saveVersionedProjectConfig(
     let ready = reservation.revision;
 
     stage = "WRITE";
-    const stored = await repository.saveRevision({
-      project,
-      revision: nextRevision,
-      storageRef,
-      bytes: artifact.bytes,
-      contentType: artifact.contentType,
-      mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-    });
+    const stored = await runObservedStage(trace, "WRITE", () =>
+      repository.saveRevision({
+        project,
+        revision: nextRevision,
+        storageRef,
+        bytes: artifact.bytes,
+        contentType: artifact.contentType,
+        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+      }),
+    );
 
     stage = "VERIFY";
-    await verifyPersistedRevision(repository, {
-      project,
-      revision: nextRevision,
-      storageRef,
-      artifact,
-      stored,
-    });
+    await runObservedStage(trace, "VERIFY", () =>
+      verifyPersistedRevision(repository, {
+        project,
+        revision: nextRevision,
+        storageRef,
+        artifact,
+        stored,
+      }),
+    );
 
     if (ready.status !== "READY") {
-      let providerVersion = stored.providerVersion ?? null;
-      let providerHash = stored.providerHash ?? null;
-      if (!providerVersion && !providerHash) {
-        const metadata = await repository.getMetadata({
-          project,
-          revision: nextRevision,
-          storageRef,
-          mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-        });
-        providerVersion = metadata?.providerVersion ?? null;
-        providerHash = metadata?.providerHash ?? null;
-      }
+      stage = "READY";
+      ready = await runObservedStage(trace, "READY", async () => {
+        let providerVersion = stored.providerVersion ?? null;
+        let providerHash = stored.providerHash ?? null;
+        if (!providerVersion && !providerHash) {
+          const metadata = await repository.getMetadata({
+            project,
+            revision: nextRevision,
+            storageRef,
+            mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
+          });
+          providerVersion = metadata?.providerVersion ?? null;
+          providerHash = metadata?.providerHash ?? null;
+        }
 
-      ready = await markProjectConfigRevisionReady(env, {
-        projectId: project.id,
-        revision: nextRevision,
-        checksum: artifact.checksum,
-        storageProviderVersion: providerVersion,
-        storageProviderHash: providerHash,
+        return markProjectConfigRevisionReady(env, {
+          projectId: project.id,
+          revision: nextRevision,
+          checksum: artifact.checksum,
+          storageProviderVersion: providerVersion,
+          storageProviderHash: providerHash,
+        });
       });
     }
 
     stage = "PUBLISH";
-    const updatedProject = await publishProjectConfigRevision(env, {
-      projectId: project.id,
-      organizationId: project.organization_id,
-      expectedCurrentRevision: expected,
-      revision: nextRevision,
-      actor,
-      markPreviewPending,
-      expectedLifecycleState,
-    });
+    const updatedProject = await runObservedStage(trace, "PUBLISH", () =>
+      publishProjectConfigRevision(env, {
+        projectId: project.id,
+        organizationId: project.organization_id,
+        expectedCurrentRevision: expected,
+        revision: nextRevision,
+        actor,
+        markPreviewPending,
+        expectedLifecycleState,
+      }),
+    );
     publicationCompleted = true;
 
     const organizationFileWarning = await updateLinkedOrganizationFile(
