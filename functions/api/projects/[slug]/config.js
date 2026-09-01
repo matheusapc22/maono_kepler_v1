@@ -3,12 +3,16 @@ import {
   errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
-  readJsonBody,
 } from "../../../_lib/http.js";
 import {
   getOrCreateCorrelationId,
   normalizeMaonoError,
 } from "../../../_lib/maono-error.js";
+import {
+  bindSaveTraceToConfig,
+  createSaveTrace,
+  readSaveJsonBody,
+} from "../../../_lib/save-observability.js";
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, publicProject } from "../../../_lib/projects.js";
 import { touchProjectAfterConfigSave } from "../../../_lib/project-service.js";
@@ -295,6 +299,9 @@ export async function onRequest(context) {
     return methodNotAllowed(["GET", "PUT"], { correlationId });
   }
 
+  const saveTrace = request.method === "PUT"
+    ? createSaveTrace({ request, correlationId, operation: "update" })
+    : null;
   const action = request.method === "GET" ? "projects.config.read" : "projects.config.save";
   const permission = request.method === "GET" ? "project.view" : "project.save";
   let user = null;
@@ -307,27 +314,39 @@ export async function onRequest(context) {
     slug = decodeProjectSlug(params?.slug);
 
     if (!slug) {
+      const error = new Error("Slug do projeto não informado.");
+      error.status = 400;
+      error.code = "PROJECT_SLUG_REQUIRED";
+      saveTrace?.fail(error, { stage: "VALIDATE", httpStatus: 400 });
       return errorResponse(
-        "Slug do projeto não informado.",
+        error.message,
         400,
-        "PROJECT_SLUG_REQUIRED",
+        error.code,
         null,
-        { correlationId },
+        { correlationId, headers: saveTrace?.responseHeaders() },
       );
     }
 
     project = await getAuthorizedProject(env, user, slug);
     if (!project) {
+      const error = new Error("Projeto não encontrado ou sem permissão de acesso.");
+      error.status = 404;
+      error.code = "PROJECT_NOT_FOUND";
+      saveTrace?.fail(error, { stage: "VALIDATE", httpStatus: 404 });
       return errorResponse(
-        "Projeto não encontrado ou sem permissão de acesso.",
+        error.message,
         404,
-        "PROJECT_NOT_FOUND",
+        error.code,
         null,
-        { correlationId },
+        { correlationId, headers: saveTrace?.responseHeaders() },
       );
     }
     project = await hydrateLifecycleProject(env, project);
     fileName = project.default_config_file || "config.kepler.json";
+    saveTrace?.updateContext({
+      projectId: project.id,
+      organizationId: getProjectOrganizationId(project),
+    });
 
     await requireProjectConfigPermission(
       env,
@@ -363,8 +382,11 @@ export async function onRequest(context) {
       });
     }
 
-    const body = await readJsonBody(request);
+    const body = await readSaveJsonBody(request, saveTrace);
     const config = body?.config;
+    bindSaveTraceToConfig(config, saveTrace);
+    const expectedConfigRevision = body?.expectedConfigRevision;
+    saveTrace?.updateContext({ expectedRevision: expectedConfigRevision });
     const validationError = validateKeplerConfig(config);
     if (validationError) {
       await auditProjectConfigAccess(env, request, user, project, action, "invalid", {
@@ -372,29 +394,34 @@ export async function onRequest(context) {
         fileName,
         permission,
         correlationId,
+        saveId: saveTrace?.saveId ?? null,
         reason: "INVALID_KEPLER_CONFIG",
         validationError,
       });
+      const error = new Error(validationError);
+      error.status = 400;
+      error.code = "INVALID_KEPLER_CONFIG";
+      saveTrace?.fail(error, { stage: "VALIDATE", httpStatus: 400 });
       return errorResponse(
         validationError,
         400,
         "INVALID_KEPLER_CONFIG",
         null,
-        { correlationId },
+        { correlationId, headers: saveTrace?.responseHeaders() },
       );
     }
 
-    const saveStartedAt = Date.now();
     const saved = await saveProjectConfig(env, {
       project,
       config,
-      expectedConfigRevision: body?.expectedConfigRevision,
+      expectedConfigRevision,
       actor: { id: user.id, name: user.name || "Usuário" },
       touchProjectAfterConfigSave,
     });
     let updatedProject = { ...project, ...saved.project };
     const configRevision = Number(saved.revision || updatedProject.config_revision || 0);
     const sizeBytes = Number(saved.artifact?.sizeBytes || 0);
+    saveTrace?.updateContext({ candidateRevision: configRevision });
     let preview = null;
     let previewError = null;
 
@@ -429,13 +456,13 @@ export async function onRequest(context) {
 
     const publicPreview = publicPreviewForConfigResponse(preview);
     const thumbnailState = publicProjectPreview(updatedProject);
-    const saveConfigMs = Date.now() - saveStartedAt;
 
     await auditProjectConfigAccess(env, request, user, updatedProject, action, "success", {
       slug,
       fileName,
       permission,
       correlationId,
+      saveId: saveTrace?.saveId ?? null,
       sizeBytes,
       configRevision,
       lifecycleState: updatedProject.lifecycle_state ?? null,
@@ -444,12 +471,13 @@ export async function onRequest(context) {
       checksumAlgorithm: updatedProject.config_checksum_algorithm ?? null,
       revisionMode: saved.legacy ? "legacy" : "immutable",
       previewStatus: thumbnailState.thumbnailStatus,
-      saveConfigMs,
+      saveConfigMs: saveTrace?.totalDurationMs() ?? null,
       preview: publicPreview,
       previewError: sanitizeAuditText(previewError, AUDIT_TEXT_LIMIT),
       thumbnailCapture: publicThumbnailCaptureForAudit(body?.thumbnailCapture),
     });
 
+    saveTrace?.finishSuccess({ httpStatus: 200 });
     return jsonResponse(
       {
         ok: true,
@@ -467,17 +495,19 @@ export async function onRequest(context) {
         preview: publicPreview,
         previewError,
       },
-      {
-        headers: {
-          "Server-Timing": `save-config;dur=${saveConfigMs}`,
-        },
-      },
+      { headers: saveTrace?.responseHeaders() },
     );
   } catch (error) {
     const status = Number(error?.status || 500);
     const normalized = normalizeMaonoError(error, {
       defaultCode: "PROJECT_CONFIG_ERROR",
       correlationId,
+    });
+    saveTrace?.fail(normalized, {
+      stage: normalized?.details?.stage || saveTrace?.currentStage || "VALIDATE",
+      httpStatus: status,
+      category: normalized.category,
+      retryable: normalized.retryable,
     });
     logUnexpectedError(normalized);
 
@@ -494,33 +524,37 @@ export async function onRequest(context) {
       status < 500 ? "invalid" : "error",
     ).catch(() => null);
 
+    const responseOptions = {
+      correlationId,
+      headers: saveTrace?.responseHeaders(),
+    };
     if (status === 401) {
       return errorResponseFromError(normalized, {
-        correlationId,
+        ...responseOptions,
         publicMessage: "Sessão inválida ou expirada.",
       });
     }
     if (status === 403) {
       return errorResponseFromError(normalized, {
-        correlationId,
+        ...responseOptions,
         publicMessage: "Você não tem permissão para acessar ou alterar este projeto.",
       });
     }
     if (status === 404) {
       return errorResponseFromError(normalized, {
-        correlationId,
+        ...responseOptions,
         publicMessage: "Projeto não encontrado ou sem permissão de acesso.",
       });
     }
     if (status < 500) {
       return errorResponseFromError(normalized, {
-        correlationId,
+        ...responseOptions,
         publicMessage: error?.message || "Requisição inválida.",
       });
     }
 
     return errorResponseFromError(normalized, {
-      correlationId,
+      ...responseOptions,
       publicMessage: "Não foi possível processar a configuração do projeto.",
     });
   }
