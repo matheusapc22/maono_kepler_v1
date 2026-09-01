@@ -40,7 +40,8 @@ function defaultRetryDelay(retryIndex, random = Math.random) {
     [1_500, 3_000],
   ];
   const [min, max] = windows[Math.min(retryIndex, windows.length - 1)];
-  return Math.round(min + Math.max(0, Math.min(1, random())) * (max - min));
+  const unit = Math.max(0, Math.min(1, Number(random()) || 0));
+  return Math.round(min + unit * (max - min));
 }
 
 function sleep(ms) {
@@ -53,6 +54,10 @@ function providerRequestId(response) {
 
 function isAbortError(error) {
   return error?.name === "AbortError" || error?.code === "ABORT_ERR";
+}
+
+function isCanonicalDropboxError(error) {
+  return String(error?.code || "").startsWith("DROPBOX_");
 }
 
 function dropboxError(code, {
@@ -136,16 +141,18 @@ export class DropboxClient {
   }
 
   emitMetric(payload) {
-    const metric = {
-      provider: "dropbox",
-      ...payload,
-    };
+    const metric = { provider: "dropbox", ...payload };
     try {
       this.metricFn?.(metric);
     } catch {
       // Observabilidade do provider nunca pode alterar o resultado da operação.
     }
     return metric;
+  }
+
+  invalidateAccessToken() {
+    this.accessToken = null;
+    this.accessTokenExpiresAt = 0;
   }
 
   tokenStillValid() {
@@ -276,10 +283,7 @@ export class DropboxClient {
       try {
         const accessToken = auth ? await this.getAccessToken() : null;
         const init = await buildInit({ accessToken, attempt });
-        response = await this.fetchFn(url, {
-          ...init,
-          signal: controller.signal,
-        });
+        response = await this.fetchFn(url, { ...init, signal: controller.signal });
         providerStatus = Number(response?.status || 0) || null;
         outcome = response?.ok ? "success" : "response";
       } catch (error) {
@@ -292,8 +296,43 @@ export class DropboxClient {
 
       const attemptDurationMs = Math.max(0, this.nowFn() - attemptStartedAt);
       const elapsedMs = Math.max(0, this.nowFn() - startedAt);
+
+      if (!response && isCanonicalDropboxError(lastFailure)) {
+        this.emitMetric({
+          event: "dropbox_request_attempt",
+          operation,
+          attempt,
+          status: lastFailure?.providerStatus ?? null,
+          outcome: "terminal_error",
+          attemptDurationMs,
+          providerElapsedMs: elapsedMs,
+        });
+        this.emitMetric({
+          event: "dropbox_request_summary",
+          operation,
+          attempts: attempt,
+          status: lastFailure?.providerStatus ?? null,
+          outcome: lastFailure.code,
+          providerElapsedMs: elapsedMs,
+        });
+        throw lastFailure;
+      }
+
+      if (!response && lastFailure?.retryable === false) {
+        this.emitMetric({
+          event: "dropbox_request_attempt",
+          operation,
+          attempt,
+          status: Number(lastFailure?.status || 0) || null,
+          outcome: "terminal_error",
+          attemptDurationMs,
+          providerElapsedMs: elapsedMs,
+        });
+        throw lastFailure;
+      }
+
       const retryableResponse = response && RETRYABLE_STATUS.has(Number(response.status));
-      const retryableFailure = !response && (timedOut || lastFailure);
+      const retryableFailure = !response && (timedOut || Boolean(lastFailure));
 
       if (response?.ok) {
         this.emitMetric({
@@ -318,6 +357,9 @@ export class DropboxClient {
       }
 
       if (response && !retryableResponse) {
+        if ([401, 403].includes(Number(response.status))) {
+          this.invalidateAccessToken();
+        }
         const canonical = terminalErrorForResponse(response, {
           operation,
           attempts: attempt,
@@ -343,14 +385,11 @@ export class DropboxClient {
       lastRetryAfterMs = retryAfterMs;
       const retryIndex = attempt - 1;
       const retryDelayMs = retryAfterMs ?? defaultRetryDelay(retryIndex, this.randomFn);
-      const canRetryCount = attempt <= retries;
       const remainingMs = Math.max(0, deadlineAt - this.nowFn());
-      const canRetryBudget =
-        remainingMs > retryDelayMs + RESPONSE_RESERVE_MS + 250;
       const willRetry = Boolean(
         (retryableResponse || retryableFailure) &&
-        canRetryCount &&
-        canRetryBudget,
+        attempt <= retries &&
+        remainingMs > retryDelayMs + RESPONSE_RESERVE_MS + 250,
       );
 
       this.emitMetric({
@@ -442,4 +481,12 @@ export function getDropboxClient(env) {
 export const __dropboxClientTesting = Object.freeze({
   parseRetryAfter,
   defaultRetryDelay,
+  constants: {
+    DEFAULT_TIMEOUT_MS,
+    TOKEN_TIMEOUT_MS,
+    DEFAULT_BUDGET_MS,
+    RESPONSE_RESERVE_MS,
+    TOKEN_SAFETY_WINDOW_MS,
+    MAX_RETRIES,
+  },
 });
