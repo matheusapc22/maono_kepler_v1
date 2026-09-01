@@ -1,4 +1,7 @@
+import { dropboxContentHashHex } from "./dropbox-content-hash.js";
+
 export const PROJECT_CONFIG_CHECKSUM_ALGORITHM = "sha256";
+export const PROJECT_CONFIG_CHECKSUM_ALGORITHM_DROPBOX = "dropbox-content-hash";
 export const PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER = "legacy-kepler";
 export const PROJECT_CONFIG_SCHEMA_LEGACY_KEPLER_VERSION = 1;
 export const PROJECT_CONFIG_CONTENT_TYPE = "application/json; charset=utf-8";
@@ -236,7 +239,10 @@ export async function verifyProjectConfigBytes(
 ) {
   const algorithm = String(expectedAlgorithm || "").trim().toLowerCase();
 
-  if (algorithm !== PROJECT_CONFIG_CHECKSUM_ALGORITHM) {
+  if (
+    algorithm !== PROJECT_CONFIG_CHECKSUM_ALGORITHM &&
+    algorithm !== PROJECT_CONFIG_CHECKSUM_ALGORITHM_DROPBOX
+  ) {
     throw integrityError(
       "Algoritmo de integridade de configuração não suportado.",
       500,
@@ -262,7 +268,10 @@ export async function verifyProjectConfigBytes(
   }
 
   const expected = String(expectedChecksum || "").trim().toLowerCase();
-  const actual = await sha256Hex(source);
+  const actual =
+    algorithm === PROJECT_CONFIG_CHECKSUM_ALGORITHM_DROPBOX
+      ? await dropboxContentHashHex(source)
+      : await sha256Hex(source);
 
   if (!expected || actual !== expected) {
     throw integrityError(
