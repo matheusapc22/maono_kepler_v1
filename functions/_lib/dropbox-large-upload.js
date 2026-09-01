@@ -1,4 +1,5 @@
 import { getDropboxClient } from "./dropbox-client.js";
+import { DROPBOX_CONTENT_HASH_BLOCK_BYTES } from "./dropbox-content-hash.js";
 import { joinDropboxPath } from "./dropbox.js";
 
 const DROPBOX_UPLOAD_SESSION_START_URL =
@@ -10,7 +11,7 @@ const DROPBOX_UPLOAD_SESSION_FINISH_URL =
 const DROPBOX_UPLOAD_CONTENT_TYPE = "application/octet-stream";
 const DROPBOX_SESSION_TIMEOUT_MS = 8_000;
 
-export const DROPBOX_STREAM_BLOCK_BYTES = 4 * 1024 * 1024;
+export const DROPBOX_STREAM_BLOCK_BYTES = DROPBOX_CONTENT_HASH_BLOCK_BYTES;
 
 function uploadError(message, status, code, details = null) {
   const error = new Error(message);
