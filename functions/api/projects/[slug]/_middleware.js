@@ -10,7 +10,9 @@ import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, publicProject } from "../../../_lib/projects.js";
 import { can, recordAuditLog } from "../../../_lib/permissions.js";
 import {
+  PROJECT_LIFECYCLE_STATES,
   getProjectLifecycleRow,
+  isLifecycleManagedProject,
   publicProjectLifecycle,
 } from "../../../_lib/project-lifecycle.js";
 import { createSaveTrace } from "../../../_lib/save-observability.js";
@@ -24,6 +26,7 @@ import {
   isLargeProjectConfigRequest,
   saveLargeProjectConfigStream,
 } from "../../../_lib/project-large-config-save.js";
+import { saveLargeLegacyProjectConfigStream } from "../../../_lib/project-large-legacy-config-save.js";
 
 function decodeProjectSlug(value) {
   try {
@@ -96,6 +99,16 @@ function projectResponse(project, configRevision) {
   };
 }
 
+function lifecycleBlockedError(project) {
+  const error = new Error(
+    "Somente projetos ACTIVE podem publicar uma nova revisão.",
+  );
+  error.status = 409;
+  error.code = "PROJECT_CONFIG_LIFECYCLE_BLOCKED";
+  error.details = { lifecycleState: project?.lifecycle_state ?? null };
+  return error;
+}
+
 export async function onRequest(context) {
   const { request, env, params } = context;
 
@@ -166,12 +179,26 @@ export async function onRequest(context) {
 
     deployment = await assertSaveDeployCompatibility(env, request);
 
-    const saved = await saveLargeProjectConfigStream(env, {
-      request,
-      project,
-      user,
-      saveTrace: trace,
-    });
+    let saved;
+    if (!isLifecycleManagedProject(project)) {
+      saved = await saveLargeLegacyProjectConfigStream(env, {
+        request,
+        project,
+        user,
+        saveTrace: trace,
+      });
+    } else {
+      if (project.lifecycle_state !== PROJECT_LIFECYCLE_STATES.ACTIVE) {
+        throw lifecycleBlockedError(project);
+      }
+      saved = await saveLargeProjectConfigStream(env, {
+        request,
+        project,
+        user,
+        saveTrace: trace,
+      });
+    }
+
     const updatedProject = { ...project, ...saved.project };
     const configRevision = Number(
       saved.revision ?? updatedProject.config_revision ?? 0,
@@ -189,6 +216,7 @@ export async function onRequest(context) {
       transport: "stream",
       checksumAlgorithm: saved.artifact?.checksumAlgorithm ?? null,
       idempotent: Boolean(saved.idempotent),
+      promotedFromLegacy: Boolean(saved.promotedFromLegacy),
     }).catch(() => null);
 
     return jsonResponse(
@@ -209,6 +237,7 @@ export async function onRequest(context) {
         preview: null,
         previewError: null,
         transport: "stream",
+        promotedFromLegacy: Boolean(saved.promotedFromLegacy),
       },
       { headers: combineHeaders(trace, deployment) },
     );
