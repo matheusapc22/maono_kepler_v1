@@ -74,7 +74,9 @@ export async function assertSaveDeployCompatibility(env, request, options = {}) 
   ) {
     throw createMaonoError("SAVE_CLIENT_CONTRACT_UNSUPPORTED", {
       message: "A versão aberta da Maõno não é compatível com o serviço de salvamento.",
-      status: 409,
+      // 412 evita confundir drift de deploy com o 409 reservado a conflito
+      // de revisão concorrente do projeto.
+      status: 412,
       retryable: false,
       details: {
         clientContract: client.clientContract,
@@ -107,13 +109,15 @@ export async function assertSaveDeployCompatibility(env, request, options = {}) 
 }
 
 export function saveDeployResponseHeaders(metadata = {}) {
-  return {
+  const headers = {
     "X-Maono-Api-Contract": String(metadata.apiContract || SAVE_API_CONTRACT_VERSION),
     "X-Maono-Api-Build": cleanBuildId(metadata.apiBuild),
-    "X-Maono-Db-Schema": String(
-      metadata.actualDbSchema ??
-        metadata.expectedDbSchema ??
-        SAVE_EXPECTED_DB_SCHEMA_VERSION,
+    "X-Maono-Db-Schema-Expected": String(
+      metadata.expectedDbSchema ?? SAVE_EXPECTED_DB_SCHEMA_VERSION,
     ),
   };
+  if (metadata.actualDbSchema !== null && metadata.actualDbSchema !== undefined) {
+    headers["X-Maono-Db-Schema"] = String(metadata.actualDbSchema);
+  }
+  return headers;
 }
