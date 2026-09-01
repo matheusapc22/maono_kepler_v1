@@ -96,6 +96,12 @@ import { injectComponents } from "@kepler.gl/components";
 import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
 import MapUrlLoader from "./map-url-loader";
+import {
+  isMaonoMapVisualReadinessPending,
+  notifyMaonoMapRender,
+  registerMaonoDeckRuntime,
+  registerMaonoMapRuntime,
+} from "./map-url-loader/map-visual-readiness.ts";
 import { useHideMapAttribution } from "../../hooks/useHideMapAttrition";
 import {
   MapPanelAccessGate,
@@ -161,9 +167,11 @@ function observeMaonoMapRef(mapRef: unknown) {
   const map = ref?.getMap?.() as {
     isStyleLoaded?: () => boolean;
     getStyle?: () => {layers?: unknown[]};
+    triggerRepaint?: () => void;
     on?: (event: string, handler: (event?: unknown) => void) => void;
   } | null;
 
+  registerMaonoMapRuntime(map);
   emitMaonoMapRuntimeEvent("map-ref", {
     attached: Boolean(map),
     styleLoaded: Boolean(map?.isStyleLoaded?.()),
@@ -176,13 +184,18 @@ function observeMaonoMapRef(mapRef: unknown) {
   map.on?.("style.load", () => {
     const layerCount = map.getStyle?.()?.layers?.length ?? 0;
     emitMaonoMapRuntimeEvent("style-loaded", {layerCount});
+    if (isMaonoMapVisualReadinessPending()) {
+      map.triggerRepaint?.();
+    }
   });
   map.on?.("render", () => {
-    if (firstRenderObserved) return;
+    const readinessPending = isMaonoMapVisualReadinessPending();
+    if (firstRenderObserved && !readinessPending) return;
+
     firstRenderObserved = true;
-    emitMaonoMapRuntimeEvent("map-render", {
-      styleLoaded: Boolean(map.isStyleLoaded?.()),
-    });
+    const styleLoaded = Boolean(map.isStyleLoaded?.());
+    notifyMaonoMapRender({ styleLoaded });
+    emitMaonoMapRuntimeEvent("map-render", { styleLoaded });
   });
   map.on?.("error", (event) => {
     const error = (event as {error?: {message?: unknown}} | null)?.error;
@@ -650,9 +663,10 @@ const App = (props) => {
                                     height,
                                   })
                                 }
-                                onDeckInitialized={() =>
-                                  emitMaonoMapRuntimeEvent("deck-initialized")
-                                }
+                                onDeckInitialized={(deck) => {
+                                  registerMaonoDeckRuntime(deck);
+                                  emitMaonoMapRuntimeEvent("deck-initialized");
+                                }}
                                 getMapboxRef={(mapRef) =>
                                   observeMaonoMapRef(mapRef)
                                 }
