@@ -95,3 +95,15 @@ test("criação não registra o objeto de erro bruto e foundation gate inclui SA
     /test:save-observability/,
   );
 });
+
+test("SAVE-02 fica acoplada ao gate de observabilidade existente", () => {
+  assert.match(clientObservability, /X-Maono-Client-Contract/);
+  assert.match(clientObservability, /X-Maono-Client-Build/);
+  assert.match(configRoute, /assertSaveDeployCompatibility\(env, request\)/);
+  assert.match(createRoute, /assertSaveDeployCompatibility\(env, request\)/);
+});
+
+// Os testes importados registram seus casos no mesmo processo executado por
+// `npm run test:save-observability`, mantendo SAVE-02 dentro do foundation gate.
+await import("./save-deploy-contract.test.mjs");
+await import("./save-deploy-wiring.test.mjs");
