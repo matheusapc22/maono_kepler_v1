@@ -52,6 +52,9 @@ export function serializeSaveRequest(
   serializeStartedAt = attempt.startedAt,
 ): SerializedSaveRequest {
   const body = JSON.stringify(payload);
+  if (typeof body !== "string") {
+    throw new Error("Não foi possível serializar a tentativa de salvamento.");
+  }
   const completedAt = nowMs();
   return {
     body,
