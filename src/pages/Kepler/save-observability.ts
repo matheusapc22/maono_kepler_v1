@@ -1,0 +1,92 @@
+export type SaveOperation = "create" | "update";
+
+export type ClientSaveAttempt = {
+  saveId: string;
+  correlationId: string;
+  operation: SaveOperation;
+  startedAt: number;
+};
+
+export type SerializedSaveRequest = {
+  body: string;
+  payloadBytes: number;
+  serializeDurationMs: number;
+  totalDurationMs: number;
+};
+
+export type SaveResponseDiagnostics = {
+  saveId: string;
+  correlationId: string;
+  serverTiming: string | null;
+};
+
+function nowMs() {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+function randomId(prefix: "save" | "corr") {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+export function measureUtf8PayloadBytes(value: string) {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+export function beginClientSaveAttempt(operation: SaveOperation): ClientSaveAttempt {
+  return {
+    saveId: randomId("save"),
+    correlationId: randomId("corr"),
+    operation,
+    startedAt: nowMs(),
+  };
+}
+
+export function serializeSaveRequest(
+  attempt: ClientSaveAttempt,
+  payload: unknown,
+  serializeStartedAt = attempt.startedAt,
+): SerializedSaveRequest {
+  const body = JSON.stringify(payload);
+  const completedAt = nowMs();
+  return {
+    body,
+    payloadBytes: measureUtf8PayloadBytes(body),
+    serializeDurationMs: Math.max(0, Math.round(completedAt - serializeStartedAt)),
+    totalDurationMs: Math.max(0, Math.round(completedAt - attempt.startedAt)),
+  };
+}
+
+export function buildSaveRequestHeaders(attempt: ClientSaveAttempt) {
+  return {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-Maono-Save-Id": attempt.saveId,
+    "X-Correlation-Id": attempt.correlationId,
+  };
+}
+
+export function readSaveResponseDiagnostics(
+  response: Response,
+  attempt: ClientSaveAttempt,
+): SaveResponseDiagnostics {
+  return {
+    saveId: response.headers.get("X-Maono-Save-Id") || attempt.saveId,
+    correlationId:
+      response.headers.get("X-Correlation-Id") || attempt.correlationId,
+    serverTiming: response.headers.get("Server-Timing"),
+  };
+}
+
+export function clientSaveTotalDurationMs(attempt: ClientSaveAttempt) {
+  return Math.max(0, Math.round(nowMs() - attempt.startedAt));
+}
+
+export function isNetworkSaveFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /failed to fetch|networkerror|load failed|network request failed/i.test(message);
+}
