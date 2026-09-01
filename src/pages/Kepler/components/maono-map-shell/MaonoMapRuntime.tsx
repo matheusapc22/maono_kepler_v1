@@ -283,6 +283,7 @@ export default function MaonoMapRuntime({
           activePanel={activePanel}
           layerPanelAvailable={layerPanelAvailable}
           basemapAvailable={basemapAvailable}
+          mapLoading={loadInteractionBlocked}
           loggingOut={loggingOut}
           onPanelTabSelect={selectPanelTab}
           onOpenBasemap={openBasemapPanel}
