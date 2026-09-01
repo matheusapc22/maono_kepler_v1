@@ -29,7 +29,7 @@ test("revisão já publicada nunca é marcada FAILED por etapa auxiliar posterio
   );
   assert.match(
     serviceSource,
-    /const updatedProject = await publishProjectConfigRevision[\s\S]*publicationCompleted = true/,
+    /const updatedProject = await runObservedStage\(trace, "PUBLISH",[\s\S]*publishProjectConfigRevision\(env,[\s\S]*publicationCompleted = true/,
   );
   assert.match(
     serviceSource,
