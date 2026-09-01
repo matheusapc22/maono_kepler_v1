@@ -228,7 +228,7 @@ function waitForHydration(
   onSnapshot: (snapshot: MapHydrationSnapshot) => void,
 ) {
   return new Promise<MapHydrationSnapshot>((resolve, reject) => {
-    let unsubscribe = () => undefined;
+    let unsubscribe: () => void = () => undefined;
 
     const cleanup = () => {
       unsubscribe();
