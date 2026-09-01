@@ -245,10 +245,23 @@ export function createSaveTrace({
     } catch (error) {
       const duration = Math.max(0, nowMs() - stageStartedAt);
       timings.push({ stage: stageName, duration });
-      fail(error, {
-        stage: stageName,
-        stageDurationMs: duration,
-      });
+      log(
+        {
+          event: "project_save_stage",
+          stage: stageName,
+          stageDurationMs: duration,
+          totalDurationMs: totalDurationMs(),
+          code: error?.code ?? null,
+          category: error?.category ?? null,
+          retryable:
+            typeof error?.retryable === "boolean"
+              ? error.retryable
+              : error?.details?.retryable,
+          result: "error",
+          error,
+        },
+        "error",
+      );
       throw error;
     }
   }
