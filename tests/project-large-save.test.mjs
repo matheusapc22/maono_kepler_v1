@@ -124,7 +124,7 @@ test("integridade aceita content_hash Dropbox nas revisões streamed", async () 
   assert.equal(verified.sizeBytes, bytes.byteLength);
 });
 
-test("streaming backend nunca materializa o request grande como text/json", async () => {
+test("streaming backend não materializa nem percorre byte a byte o request grande", async () => {
   const service = await readFile(servicePath, "utf8");
 
   assert.match(service, /request\.body\.getReader\(\)/);
@@ -133,8 +133,8 @@ test("streaming backend nunca materializa o request grande como text/json", asyn
   assert.match(service, /StreamingJsonBoundaryGuard/);
   assert.doesNotMatch(service, /this\.stack\s*=|this\.inString\s*=/);
   assert.match(service, /DROPBOX_STREAM_BLOCK_BYTES/);
-  assert.match(service, /appendLargeDropboxUploadSession/);
-  assert.match(service, /finishLargeDropboxUploadSession/);
+  assert.match(service, /dropboxContentHashBlockDigest/);
+  assert.match(service, /dropboxContentHashFromBlockDigestsHex/);
 });
 
 test("streaming preserva reserve -> storage -> ready -> publish", async () => {
@@ -152,7 +152,17 @@ test("streaming preserva reserve -> storage -> ready -> publish", async () => {
   assert.match(service, /providerHash[\s\S]*contentHash/);
 });
 
-test("Dropbox streaming usa bloco canônico de content_hash e cursor sem retry cego", async () => {
+test("retry após resposta perdida preserva caminho idempotente N+1", async () => {
+  const service = await readFile(servicePath, "utf8");
+
+  assert.match(service, /currentRevision === expectedRevision \+ 1/);
+  assert.match(service, /reservation\.alreadyPublished/);
+  assert.match(service, /idempotent:\s*true/);
+  assert.match(service, /waitBeforeReconciledRetry/);
+  assert.match(service, /retryAfterMs/);
+});
+
+test("Dropbox streaming usa bloco canônico e retry apenas onde é seguro", async () => {
   const transport = await readFile(transportPath, "utf8");
 
   assert.match(
@@ -160,7 +170,18 @@ test("Dropbox streaming usa bloco canônico de content_hash e cursor sem retry c
     /DROPBOX_STREAM_BLOCK_BYTES = DROPBOX_CONTENT_HASH_BLOCK_BYTES/,
   );
   assert.equal(DROPBOX_CONTENT_HASH_BLOCK_BYTES, 4 * 1024 * 1024);
-  assert.match(transport, /maxRetries:\s*0/);
+  assert.match(
+    transport,
+    /startLargeDropboxUploadSession[\s\S]*maxRetries:\s*3/,
+  );
+  assert.match(
+    transport,
+    /appendLargeDropboxUploadSession[\s\S]*maxRetries:\s*0/,
+  );
+  assert.match(
+    transport,
+    /finishLargeDropboxUploadSession[\s\S]*maxRetries:\s*0/,
+  );
   assert.match(transport, /strict_conflict:\s*createOnly/);
   assert.match(transport, /DROPBOX_UPLOAD_SESSION_OFFSET_CONFLICT/);
 });
