@@ -43,15 +43,21 @@ function findCorrectOffset(value) {
 
 async function sessionRequest(
   env,
-  { url, operation, apiArgument, body, failureMessage },
+  {
+    url,
+    operation,
+    apiArgument,
+    body,
+    failureMessage,
+    maxRetries = 0,
+  },
 ) {
   const client = getDropboxClient(env);
   const response = await client.request({
     operation,
     url,
     timeoutMs: DROPBOX_SESSION_TIMEOUT_MS,
-    // Cursor mutations are reconciled by offset/metadata instead of blind retry.
-    maxRetries: 0,
+    maxRetries,
     buildInit: ({ accessToken }) => ({
       method: "POST",
       headers: {
@@ -112,6 +118,9 @@ export async function startLargeDropboxUploadSession(env) {
     apiArgument: { close: false },
     body: new Uint8Array(0),
     failureMessage: "Falha ao iniciar streaming do MapConfig no Dropbox",
+    // A perda da resposta pode deixar uma sessão órfã, mas não grava arquivo.
+    // Por isso start pode usar a política resiliente normal da SAVE-03.
+    maxRetries: 3,
   });
 }
 
@@ -133,6 +142,8 @@ export async function appendLargeDropboxUploadSession(
     },
     body: content,
     failureMessage: "Falha ao continuar streaming do MapConfig no Dropbox",
+    // Mutação por cursor: retry só depois de reconciliar correct_offset.
+    maxRetries: 0,
   });
 }
 
@@ -173,5 +184,7 @@ export async function finishLargeDropboxUploadSession(
     },
     body: content,
     failureMessage: `Falha ao concluir streaming do MapConfig no Dropbox ${path}`,
+    // Finish é reconciliado por metadata antes de qualquer repetição.
+    maxRetries: 0,
   });
 }
