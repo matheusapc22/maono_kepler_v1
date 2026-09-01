@@ -34,6 +34,7 @@
     "test:projects": "npm run test:error-contract && npm run test:login && npm run test:project-cards && npm run test:project-metadata && npm run test:project-preview && npm run test:project-lifecycle && npm run test:map-panels && npm run test:accent-residual && npm run test:accent-gate",
     "test:map-load-observability": "node --experimental-strip-types --test tests/map-load-observability.test.mjs tests/map-load-privacy.test.mjs tests/map-load-wiring.test.mjs",
     "test:save-observability": "node --experimental-strip-types --test tests/save-observability.test.mjs tests/save-observability-privacy.test.mjs tests/save-observability-wiring.test.mjs",
+    "test:dropbox-resilience": "node --test tests/dropbox-resilience.test.mjs tests/dropbox-resilience-wiring.test.mjs",
     "test:foundation-gate": "npm run test:preview-safety && npm run test:projects && npm run test:map-load-observability && npm run test:save-observability",
     "test:macro-c-gate": "node scripts/macro-c-gate.mjs"
   },
