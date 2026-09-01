@@ -3,6 +3,10 @@ import {
   getDropboxMetadata,
 } from "./dropbox.js";
 import {
+  dropboxContentHashBlockDigest,
+  dropboxContentHashFromBlockDigestsHex,
+} from "./dropbox-content-hash.js";
+import {
   DROPBOX_STREAM_BLOCK_BYTES,
   appendLargeDropboxUploadSession,
   finishLargeDropboxUploadSession,
@@ -187,22 +191,6 @@ class StreamingJsonBoundaryGuard {
   }
 }
 
-function hex(bytes) {
-  return Array.from(bytes)
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function blockDigest(block) {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", block));
-}
-
-async function finalDropboxHash(blockDigests) {
-  const concatenated = new Uint8Array(blockDigests.length * 32);
-  blockDigests.forEach((digest, index) => concatenated.set(digest, index * 32));
-  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", concatenated)));
-}
-
 function normalizeProviderMetadata(metadata, fallbackSize = 0) {
   return {
     providerVersion: metadata?.rev ?? null,
@@ -339,7 +327,7 @@ async function updateLinkedOrganizationFile(env, project, artifact) {
   } catch (error) {
     console.warn("[Maono large save] Falha auxiliar ao sincronizar organization_file", {
       projectId: project?.id ?? null,
-      organizationFileId: project?.organization_file_id ?? null,
+      organizationFileId: project.organization_file_id,
       code: error?.code || "PROJECT_ORGANIZATION_FILE_SYNC_FAILED",
     });
     return {
@@ -476,7 +464,7 @@ export async function saveLargeProjectConfigStream(
 
         if (pendingLength === pending.byteLength) {
           const block = pending;
-          blockDigests.push(await blockDigest(block));
+          blockDigests.push(await dropboxContentHashBlockDigest(block));
           offset = await appendBlock(env, sessionId, offset, block);
           pending = new Uint8Array(DROPBOX_STREAM_BLOCK_BYTES);
           pendingLength = 0;
@@ -499,9 +487,9 @@ export async function saveLargeProjectConfigStream(
 
     const finalBlock = pending.subarray(0, pendingLength);
     if (finalBlock.byteLength > 0) {
-      blockDigests.push(await blockDigest(finalBlock));
+      blockDigests.push(await dropboxContentHashBlockDigest(finalBlock));
     }
-    const contentHash = await finalDropboxHash(blockDigests);
+    const contentHash = await dropboxContentHashFromBlockDigestsHex(blockDigests);
     const artifact = {
       checksum: contentHash,
       contentHash,
