@@ -2,6 +2,13 @@ import {
   PROJECT_LIFECYCLE_STATES,
   normalizeLifecycleState,
 } from "./project-lifecycle.js";
+import {
+  deleteDropboxPathIfExists,
+  joinDropboxPath,
+} from "./dropbox.js";
+import { getMapConfigRevisionFileName } from "./map-config-storage-ref.js";
+
+const ABANDONED_READY_GRACE_SECONDS = 30;
 
 function revisionError(message, status, code, details = null) {
   const error = new Error(message);
@@ -60,6 +67,170 @@ export async function getProjectConfigRevision(env, projectId, revision) {
     )
     .bind(projectId, revision)
     .first();
+}
+
+async function claimAbandonedReadyRevision(db, existing) {
+  if (
+    existing?.status !== "READY" ||
+    existing?.published_at !== null && existing?.published_at !== undefined
+  ) {
+    return null;
+  }
+
+  return db
+    .prepare(
+      `UPDATE project_config_revisions
+          SET status = 'FAILED',
+              error_code = 'PROJECT_CONFIG_READY_ABANDONED',
+              error_stage = 'PUBLISH',
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND status = 'READY'
+          AND published_at IS NULL
+          AND updated_at <= datetime('now', '-${ABANDONED_READY_GRACE_SECONDS} seconds')
+        RETURNING *`,
+    )
+    .bind(existing.id)
+    .first();
+}
+
+async function removeUnpublishedRevisionArtifact(
+  env,
+  project,
+  revision,
+  storageProvider,
+) {
+  if (String(storageProvider || "").trim().toLowerCase() !== "dropbox") {
+    return false;
+  }
+  if (!project?.dropbox_root_path) {
+    return false;
+  }
+
+  const fileName = getMapConfigRevisionFileName(
+    project.default_config_file || "config.kepler.json",
+    revision,
+  );
+  const path = joinDropboxPath(project.dropbox_root_path, fileName);
+  await deleteDropboxPathIfExists(env, path);
+  return true;
+}
+
+async function recycleUnpublishedRevisionCandidate(
+  env,
+  {
+    db,
+    project,
+    existing,
+    projectId,
+    organizationId,
+    expected,
+    nextRevision,
+    checksumAlgorithm,
+    checksum,
+    storageProvider,
+    storageRef,
+    schemaName,
+    schemaVersion,
+    sizeBytes,
+    contentType,
+    actorUserId,
+    transitionId,
+  },
+) {
+  let reclaimable = existing;
+
+  if (existing?.status === "READY") {
+    reclaimable = await claimAbandonedReadyRevision(db, existing);
+  }
+
+  if (
+    !reclaimable ||
+    reclaimable.status !== "FAILED" ||
+    (reclaimable.published_at !== null && reclaimable.published_at !== undefined)
+  ) {
+    return null;
+  }
+
+  const current = await getProjectForRevision(db, projectId, organizationId);
+  const currentRevision = Number(current?.config_revision || 0);
+  if (currentRevision !== expected) {
+    throw revisionError(
+      "O projeto foi alterado por outra operação.",
+      409,
+      "PROJECT_CONFIG_REVISION_CONFLICT",
+      {
+        expectedConfigRevision: expected,
+        currentConfigRevision,
+      },
+    );
+  }
+
+  const removed = await removeUnpublishedRevisionArtifact(
+    env,
+    project,
+    nextRevision,
+    reclaimable.storage_provider || storageProvider,
+  );
+
+  if (!removed) {
+    return null;
+  }
+
+  const recycled = await db
+    .prepare(
+      `UPDATE project_config_revisions
+          SET status = 'WRITING',
+              checksum_algorithm = ?,
+              checksum = ?,
+              storage_provider = ?,
+              storage_ref = ?,
+              storage_provider_version = NULL,
+              storage_provider_hash = NULL,
+              schema_name = ?,
+              schema_version = ?,
+              size_bytes = ?,
+              content_type = ?,
+              created_by = ?,
+              transition_id = ?,
+              attempts = attempts + 1,
+              ready_at = NULL,
+              published_at = NULL,
+              error_code = NULL,
+              error_stage = NULL,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND status = 'FAILED'
+          AND published_at IS NULL
+        RETURNING *`,
+    )
+    .bind(
+      String(checksumAlgorithm).toLowerCase(),
+      String(checksum).toLowerCase(),
+      storageProvider,
+      storageRef,
+      schemaName,
+      schemaVersion,
+      sizeBytes,
+      contentType,
+      actorUserId,
+      transitionId,
+      reclaimable.id,
+    )
+    .first();
+
+  if (!recycled) {
+    return null;
+  }
+
+  return {
+    revision: recycled,
+    project: current,
+    idempotent: false,
+    retry: true,
+    replacedUnpublishedCandidate: true,
+    alreadyPublished: false,
+  };
 }
 
 export async function reserveProjectConfigRevision(
@@ -168,6 +339,30 @@ export async function reserveProjectConfigRevision(
         String(checksumAlgorithm).toLowerCase() ||
       String(existing.checksum).toLowerCase() !== normalizedChecksum
     ) {
+      const recycled = await recycleUnpublishedRevisionCandidate(env, {
+        db,
+        project,
+        existing,
+        projectId: normalizedProjectId,
+        organizationId: normalizedOrganizationId,
+        expected,
+        nextRevision,
+        checksumAlgorithm,
+        checksum: normalizedChecksum,
+        storageProvider,
+        storageRef,
+        schemaName,
+        schemaVersion,
+        sizeBytes,
+        contentType,
+        actorUserId,
+        transitionId,
+      });
+
+      if (recycled) {
+        return recycled;
+      }
+
       throw revisionError(
         "A próxima revisão já foi reservada por outro conteúdo.",
         409,
@@ -175,6 +370,8 @@ export async function reserveProjectConfigRevision(
         {
           expectedConfigRevision: expected,
           reservedRevision: nextRevision,
+          reservedStatus: existing.status || null,
+          unpublishedCandidate: existing.published_at == null,
         },
       );
     }
