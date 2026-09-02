@@ -25,6 +25,9 @@ import {
   getMapConfigRevisionFileName,
 } from "../../../_lib/map-config-storage-ref.js";
 
+const STREAM_START_TIMEOUT_MS = 20_000;
+const STREAM_INACTIVITY_TIMEOUT_MS = 20_000;
+
 function decodeProjectSlug(value) {
   try {
     return decodeURIComponent(String(value || "")).trim();
@@ -159,6 +162,171 @@ async function auditStream(env, request, user, project, slug, result, metadata =
   });
 }
 
+function scheduleAudit(context, task, label = "stream") {
+  const settled = Promise.resolve(task).catch((error) => {
+    console.warn("[Maono config-stream] Audit assíncrono falhou", {
+      label,
+      code: error?.code || "AUDIT_WRITE_FAILED",
+    });
+  });
+
+  if (typeof context?.waitUntil === "function") {
+    context.waitUntil(settled);
+  }
+}
+
+async function withStreamStartDeadline(task, timeoutMs = STREAM_START_TIMEOUT_MS) {
+  let timeoutId = null;
+
+  try {
+    return await Promise.race([
+      Promise.resolve().then(task),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(
+            streamError(
+              "O storage não iniciou o stream do projeto dentro do prazo.",
+              504,
+              "PROJECT_CONFIG_STREAM_START_TIMEOUT",
+              { timeoutMs },
+            ),
+          );
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+function withStreamInactivityWatchdog(
+  source,
+  timeoutMs = STREAM_INACTIVITY_TIMEOUT_MS,
+) {
+  if (!source || typeof source.getReader !== "function") {
+    throw streamError(
+      "O storage não disponibilizou um stream legível para o projeto.",
+      502,
+      "PROJECT_CONFIG_STREAM_BODY_UNAVAILABLE",
+    );
+  }
+
+  const reader = source.getReader();
+  let timeoutId = null;
+  let closed = false;
+
+  return new ReadableStream({
+    start(controller) {
+      const clearWatchdog = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      };
+
+      const failForInactivity = () => {
+        if (closed) return;
+        closed = true;
+        clearWatchdog();
+        const error = streamError(
+          "O stream do projeto ficou sem progresso e foi interrompido.",
+          504,
+          "PROJECT_CONFIG_STREAM_INACTIVITY_TIMEOUT",
+          { timeoutMs },
+        );
+        Promise.resolve(reader.cancel(error)).catch(() => undefined);
+        controller.error(error);
+      };
+
+      const armWatchdog = () => {
+        clearWatchdog();
+        timeoutId = setTimeout(failForInactivity, timeoutMs);
+      };
+
+      const pump = async () => {
+        if (closed) return;
+        armWatchdog();
+
+        try {
+          const { done, value } = await reader.read();
+          clearWatchdog();
+
+          if (done) {
+            closed = true;
+            controller.close();
+            return;
+          }
+
+          controller.enqueue(value);
+          pump();
+        } catch (error) {
+          clearWatchdog();
+          if (closed) return;
+          closed = true;
+          controller.error(error);
+        }
+      };
+
+      pump();
+    },
+    cancel(reason) {
+      closed = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      return reader.cancel(reason);
+    },
+  });
+}
+
+async function preparePublishedUpstream(env, project, published) {
+  return withStreamStartDeadline(async () => {
+    // Save S05/S03 already verifies the immutable object before publication.
+    // On every read we re-check cheap provider metadata (size/content hash when
+    // available) instead of downloading the whole object into Worker memory to
+    // recompute SHA-256. The actual bytes are then proxied as a stream.
+    const storageMetadata = await getDropboxMetadata(
+      env,
+      project.dropbox_root_path,
+      published.fileName,
+    );
+    const verifiedMetadata = assertPublishedMetadata(
+      published,
+      storageMetadata,
+    );
+
+    const upstream = await downloadDropboxBinaryFile(
+      env,
+      project.dropbox_root_path,
+      published.fileName,
+    );
+
+    const upstreamSize = Number(upstream.headers.get("content-length") || 0);
+    if (
+      verifiedMetadata.sizeBytes > 0 &&
+      upstreamSize > 0 &&
+      verifiedMetadata.sizeBytes !== upstreamSize
+    ) {
+      throw streamError(
+        "O tamanho recebido do storage mudou durante o carregamento.",
+        409,
+        "PROJECT_CONFIG_SIZE_MISMATCH",
+        {
+          expectedSizeBytes: verifiedMetadata.sizeBytes,
+          actualSizeBytes: upstreamSize,
+        },
+      );
+    }
+
+    return {
+      upstream,
+      verifiedMetadata,
+      sizeBytes: upstreamSize || verifiedMetadata.sizeBytes || 0,
+    };
+  });
+}
+
 export async function onRequest(context) {
   const { request, env, params } = context;
   const correlationId = getOrCreateCorrelationId(request);
@@ -206,11 +374,15 @@ export async function onRequest(context) {
     });
 
     if (!decision.allowed) {
-      await auditStream(env, request, user, project, slug, "denied", {
-        permission: "project.view",
-        reason: decision.reason,
-        correlationId,
-      });
+      scheduleAudit(
+        context,
+        auditStream(env, request, user, project, slug, "denied", {
+          permission: "project.view",
+          reason: decision.reason,
+          correlationId,
+        }),
+        "denied",
+      );
       throw streamError("Acesso negado.", 403, "FORBIDDEN", {
         permission: "project.view",
         reason: decision.reason || "DENY_BY_DEFAULT",
@@ -218,63 +390,33 @@ export async function onRequest(context) {
     }
 
     const published = resolvePublishedFile(project);
-
-    // Save S05/S03 already verifies the immutable object before publication.
-    // On every read we re-check cheap provider metadata (size/content hash when
-    // available) instead of downloading the whole object into Worker memory to
-    // recompute SHA-256. The actual bytes are then proxied as a stream.
-    const storageMetadata = await getDropboxMetadata(
-      env,
-      project.dropbox_root_path,
-      published.fileName,
-    );
-    const verifiedMetadata = assertPublishedMetadata(
-      published,
-      storageMetadata,
-    );
-
-    const upstream = await downloadDropboxBinaryFile(
-      env,
-      project.dropbox_root_path,
-      published.fileName,
-    );
-
-    const upstreamSize = Number(upstream.headers.get("content-length") || 0);
-    if (
-      verifiedMetadata.sizeBytes > 0 &&
-      upstreamSize > 0 &&
-      verifiedMetadata.sizeBytes !== upstreamSize
-    ) {
-      throw streamError(
-        "O tamanho recebido do storage mudou durante o carregamento.",
-        409,
-        "PROJECT_CONFIG_SIZE_MISMATCH",
-        {
-          expectedSizeBytes: verifiedMetadata.sizeBytes,
-          actualSizeBytes: upstreamSize,
-        },
-      );
-    }
-
-    const sizeBytes = upstreamSize || verifiedMetadata.sizeBytes || 0;
-
-    await auditStream(env, request, user, project, slug, "success", {
-      permission: "project.view",
-      correlationId,
-      configRevision: published.revision,
-      lifecycleState: project.lifecycle_state ?? null,
-      schemaName: published.schemaName,
-      schemaVersion: published.schemaVersion,
+    const {
+      upstream,
+      verifiedMetadata,
       sizeBytes,
-      transport: "stream",
-      integrity:
-        verifiedMetadata.providerHashVerified
-          ? "provider-content-hash"
-          : "size-metadata",
-      legacy: published.legacy,
-    });
+    } = await preparePublishedUpstream(env, project, published);
 
-    const body = upstream.body ?? (await upstream.arrayBuffer());
+    const body = withStreamInactivityWatchdog(upstream.body);
+
+    scheduleAudit(
+      context,
+      auditStream(env, request, user, project, slug, "success", {
+        permission: "project.view",
+        correlationId,
+        configRevision: published.revision,
+        lifecycleState: project.lifecycle_state ?? null,
+        schemaName: published.schemaName,
+        schemaVersion: published.schemaVersion,
+        sizeBytes,
+        transport: "stream",
+        integrity:
+          verifiedMetadata.providerHashVerified
+            ? "provider-content-hash"
+            : "size-metadata",
+        legacy: published.legacy,
+      }),
+      "success",
+    );
 
     return new Response(body, {
       status: 200,
@@ -298,15 +440,19 @@ export async function onRequest(context) {
     });
 
     if (user && project) {
-      await auditStream(env, request, user, project, slug, "error", {
-        correlationId,
-        reason: normalized.code || "PROJECT_CONFIG_STREAM_ERROR",
-        category: normalized.category || null,
-        retryable:
-          typeof normalized.retryable === "boolean"
-            ? normalized.retryable
-            : null,
-      }).catch(() => null);
+      scheduleAudit(
+        context,
+        auditStream(env, request, user, project, slug, "error", {
+          correlationId,
+          reason: normalized.code || "PROJECT_CONFIG_STREAM_ERROR",
+          category: normalized.category || null,
+          retryable:
+            typeof normalized.retryable === "boolean"
+              ? normalized.retryable
+              : null,
+        }),
+        "error",
+      );
     }
 
     return errorResponseFromError(normalized, {
