@@ -7,6 +7,7 @@ on:
       - "functions/_lib/save-*.js"
       - "functions/_lib/dropbox*.js"
       - "functions/_lib/project-large-config-save.js"
+      - "functions/_lib/project-large-legacy-config-save.js"
       - "functions/_lib/error-catalog.js"
       - "src/pages/Kepler/save-observability.ts"
       - "src/pages/Kepler/components/maono-save-button.tsx"
@@ -14,6 +15,7 @@ on:
       - "tests/save-*.test.mjs"
       - "tests/dropbox-*.test.mjs"
       - "tests/project-large-save.test.mjs"
+      - "tests/project-large-legacy-lifecycle.test.mjs"
       - ".github/workflows/save-contract-validation.yml"
   workflow_dispatch:
 
@@ -44,4 +46,4 @@ jobs:
         run: npm run test:dropbox-resilience && node --test tests/dropbox-runtime-fetch.test.mjs
 
       - name: Validate large MapConfig streaming save
-        run: node --experimental-strip-types --test tests/project-large-save.test.mjs
+        run: node --experimental-strip-types --test tests/project-large-save.test.mjs tests/project-large-legacy-lifecycle.test.mjs
