@@ -16,6 +16,7 @@ on:
       - "tests/dropbox-*.test.mjs"
       - "tests/project-large-save.test.mjs"
       - "tests/project-large-legacy-lifecycle.test.mjs"
+      - "tests/project-config-stream-watchdog.test.mjs"
       - ".github/workflows/save-contract-validation.yml"
   workflow_dispatch:
 
@@ -47,3 +48,6 @@ jobs:
 
       - name: Validate large MapConfig streaming save
         run: node --experimental-strip-types --test tests/project-large-save.test.mjs tests/project-large-legacy-lifecycle.test.mjs
+
+      - name: Validate large MapConfig stream watchdog
+        run: node --test tests/project-config-stream-watchdog.test.mjs
