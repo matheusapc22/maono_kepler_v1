@@ -202,6 +202,26 @@ export function registerMaonoDeckRuntime(value: unknown) {
   deckRuntimeListeners.forEach((listener) => listener());
 }
 
+export function resetMaonoMapVisualReadinessRuntime() {
+  currentMapRuntime = null;
+  currentDeckRuntime = null;
+  lastMapRenderStyleLoaded = false;
+  mapRuntimeListeners.forEach((listener) => listener());
+  deckRuntimeListeners.forEach((listener) => listener());
+}
+
+export function getMaonoMapVisualReadinessDiagnostics() {
+  return {
+    mapRuntimeAttached: Boolean(currentMapRuntime),
+    deckRuntimeAttached: Boolean(currentDeckRuntime),
+    pendingVisualReadiness,
+    mapRuntimeListenerCount: mapRuntimeListeners.size,
+    deckRuntimeListenerCount: deckRuntimeListeners.size,
+    mapRenderListenerCount: mapRenderListeners.size,
+    mapRenderGeneration,
+  };
+}
+
 export function notifyMaonoMapRender({
   styleLoaded,
 }: {
