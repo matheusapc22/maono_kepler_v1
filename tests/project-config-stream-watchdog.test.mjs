@@ -26,7 +26,19 @@ test("config-stream bounds storage preparation before response headers", () => {
 test("config-stream aborts a stalled response body instead of hanging forever", () => {
   assert.match(source, /STREAM_INACTIVITY_TIMEOUT_MS\s*=\s*20_000/);
   assert.match(source, /PROJECT_CONFIG_STREAM_INACTIVITY_TIMEOUT/);
-  assert.match(source, /withStreamInactivityWatchdog\(upstream\.body\)/);
+  assert.match(source, /withStreamInactivityWatchdog\(/);
+  assert.match(source, /upstream\.body/);
+  assert.match(source, /expectedSizeBytes: sizeBytes/);
+});
+
+test("LOAD-01H3 emits server transport telemetry with correlation and provider evidence", () => {
+  assert.match(source, /\[Maono config-stream transport\]/);
+  assert.match(source, /correlationId/);
+  assert.match(source, /bytesReadFromUpstream/);
+  assert.match(source, /bytesForwarded/);
+  assert.match(source, /upstreamContentLength/);
+  assert.match(source, /providerRequestId/);
+  assert.match(source, /failureStage/);
 });
 
 test("config-stream never falls back to buffering the entire MapConfig", () => {
