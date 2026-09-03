@@ -28,6 +28,7 @@ import {
 const STREAM_START_TIMEOUT_MS = 20_000;
 const STREAM_INACTIVITY_TIMEOUT_MS = 20_000;
 const EXPECTED_REVISION_HEADER = "X-Maono-Expected-Config-Revision";
+const STREAM_TELEMETRY_PREFIX = "[Maono config-stream transport]";
 
 function decodeProjectSlug(value) {
   try {
@@ -231,9 +232,62 @@ async function withStreamStartDeadline(task, timeoutMs = STREAM_START_TIMEOUT_MS
   }
 }
 
+function nonNegativeInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : null;
+}
+
+function positiveInteger(value) {
+  const number = nonNegativeInteger(value);
+  return number !== null && number > 0 ? number : null;
+}
+
+function safeTelemetryText(value, maxLength = 160) {
+  const text = String(value || "").trim();
+  return text ? text.slice(0, maxLength) : null;
+}
+
+function chunkByteLength(value) {
+  const size = Number(value?.byteLength ?? 0);
+  return Number.isInteger(size) && size >= 0 ? size : 0;
+}
+
+function emitStreamTelemetry(options, event, state, extra = {}) {
+  const metric = {
+    event,
+    correlationId: safeTelemetryText(options?.correlationId, 100),
+    projectId: nonNegativeInteger(options?.projectId),
+    revision: nonNegativeInteger(options?.revision),
+    expectedRevision: nonNegativeInteger(options?.expectedRevision),
+    retryPinned: options?.expectedRevision !== null && options?.expectedRevision !== undefined,
+    expectedSizeBytes: positiveInteger(options?.expectedSizeBytes),
+    bytesReadFromUpstream: nonNegativeInteger(state?.bytesReadFromUpstream) ?? 0,
+    bytesForwarded: nonNegativeInteger(state?.bytesForwarded) ?? 0,
+    upstreamStatus: nonNegativeInteger(options?.upstreamStatus),
+    upstreamContentLength: positiveInteger(options?.upstreamContentLength),
+    providerRequestId: safeTelemetryText(options?.providerRequestId, 120),
+    durationMs: Math.max(0, Date.now() - Number(state?.startedAt || Date.now())),
+    failureStage: extra.failureStage || null,
+    code: safeTelemetryText(extra.code, 120),
+  };
+
+  try {
+    options?.onTelemetry?.(metric);
+  } catch {
+    // Telemetria nunca altera o resultado do stream.
+  }
+
+  return metric;
+}
+
+function defaultStreamTelemetryLogger(metric) {
+  console.info(STREAM_TELEMETRY_PREFIX, metric);
+}
+
 export function withStreamInactivityWatchdog(
   source,
   timeoutMs = STREAM_INACTIVITY_TIMEOUT_MS,
+  options = {},
 ) {
   if (!source || typeof source.getReader !== "function") {
     throw streamError(
@@ -244,6 +298,16 @@ export function withStreamInactivityWatchdog(
   }
 
   const reader = source.getReader();
+  const expectedSizeBytes = positiveInteger(options.expectedSizeBytes);
+  const telemetryOptions = {
+    ...options,
+    expectedSizeBytes,
+  };
+  const state = {
+    startedAt: Date.now(),
+    bytesReadFromUpstream: 0,
+    bytesForwarded: 0,
+  };
   let timeoutId = null;
   let closed = false;
   let readInFlight = null;
@@ -256,24 +320,45 @@ export function withStreamInactivityWatchdog(
     }
   };
 
-  const failForInactivity = () => {
+  const cancelUpstream = (reason) => {
+    Promise.resolve(reader.cancel(reason)).catch(() => undefined);
+  };
+
+  const failStream = (controller, error, failureStage = "dropbox_to_worker") => {
     if (closed) return;
     closed = true;
     clearWatchdog();
+    emitStreamTelemetry(telemetryOptions, "config_stream_error", state, {
+      failureStage,
+      code: error?.code || "PROJECT_CONFIG_STREAM_UPSTREAM_READ_FAILED",
+    });
+    cancelUpstream(error);
+    controller?.error(error);
+  };
+
+  const failForInactivity = () => {
+    if (closed) return;
     const error = streamError(
       "O stream do projeto ficou sem progresso e foi interrompido.",
       504,
       "PROJECT_CONFIG_STREAM_INACTIVITY_TIMEOUT",
-      { timeoutMs },
+      {
+        timeoutMs,
+        failureStage: "dropbox_to_worker",
+        expectedSizeBytes,
+        bytesReadFromUpstream: state.bytesReadFromUpstream,
+        bytesForwarded: state.bytesForwarded,
+      },
     );
-    Promise.resolve(reader.cancel(error)).catch(() => undefined);
-    downstreamController?.error(error);
+    failStream(downstreamController, error, "dropbox_to_worker");
   };
 
   const armWatchdog = () => {
     clearWatchdog();
     timeoutId = setTimeout(failForInactivity, timeoutMs);
   };
+
+  emitStreamTelemetry(telemetryOptions, "config_stream_started", state);
 
   return new ReadableStream(
     {
@@ -290,17 +375,76 @@ export function withStreamInactivityWatchdog(
 
             if (closed) return;
             if (done) {
+              if (
+                expectedSizeBytes !== null &&
+                state.bytesForwarded < expectedSizeBytes
+              ) {
+                const error = streamError(
+                  "O storage encerrou o stream antes de entregar todos os bytes publicados.",
+                  502,
+                  "PROJECT_CONFIG_STREAM_TRUNCATED",
+                  {
+                    failureStage: "dropbox_to_worker",
+                    expectedSizeBytes,
+                    bytesReadFromUpstream: state.bytesReadFromUpstream,
+                    bytesForwarded: state.bytesForwarded,
+                  },
+                );
+                failStream(controller, error, "dropbox_to_worker");
+                return;
+              }
+
               closed = true;
+              emitStreamTelemetry(
+                telemetryOptions,
+                "config_stream_complete",
+                state,
+              );
               controller.close();
               return;
             }
 
+            const chunkSize = chunkByteLength(value);
+            state.bytesReadFromUpstream += chunkSize;
+
+            if (
+              expectedSizeBytes !== null &&
+              state.bytesReadFromUpstream > expectedSizeBytes
+            ) {
+              const error = streamError(
+                "O storage entregou mais bytes do que o tamanho publicado.",
+                502,
+                "PROJECT_CONFIG_STREAM_LENGTH_MISMATCH",
+                {
+                  failureStage: "dropbox_to_worker",
+                  expectedSizeBytes,
+                  bytesReadFromUpstream: state.bytesReadFromUpstream,
+                  bytesForwarded: state.bytesForwarded,
+                },
+              );
+              failStream(controller, error, "dropbox_to_worker");
+              return;
+            }
+
             controller.enqueue(value);
+            state.bytesForwarded += chunkSize;
           } catch (error) {
             clearWatchdog();
             if (closed) return;
-            closed = true;
-            controller.error(error);
+            const normalized = error?.code
+              ? error
+              : streamError(
+                  "O storage interrompeu a leitura do stream do projeto.",
+                  502,
+                  "PROJECT_CONFIG_STREAM_UPSTREAM_READ_FAILED",
+                  {
+                    failureStage: "dropbox_to_worker",
+                    expectedSizeBytes,
+                    bytesReadFromUpstream: state.bytesReadFromUpstream,
+                    bytesForwarded: state.bytesForwarded,
+                  },
+                );
+            failStream(controller, normalized, "dropbox_to_worker");
           } finally {
             readInFlight = null;
           }
@@ -309,6 +453,17 @@ export function withStreamInactivityWatchdog(
         return readInFlight;
       },
       cancel(reason) {
+        if (!closed) {
+          emitStreamTelemetry(
+            telemetryOptions,
+            "config_stream_cancelled",
+            state,
+            {
+              failureStage: "worker_to_client",
+              code: "PROJECT_CONFIG_STREAM_DOWNSTREAM_CANCELLED",
+            },
+          );
+        }
         closed = true;
         clearWatchdog();
         downstreamController = null;
@@ -370,6 +525,9 @@ async function preparePublishedUpstream(env, project, published) {
       verifiedMetadata,
       sizeBytes: upstreamSize || verifiedMetadata.sizeBytes || 0,
       contentLengthBytes,
+      upstreamStatus: Number(upstream.status || 0) || null,
+      upstreamContentLength: upstreamSize || null,
+      providerRequestId: upstream.headers.get("x-dropbox-request-id") || null,
     };
   });
 }
@@ -445,9 +603,26 @@ export async function onRequest(context) {
       verifiedMetadata,
       sizeBytes,
       contentLengthBytes,
+      upstreamStatus,
+      upstreamContentLength,
+      providerRequestId,
     } = await preparePublishedUpstream(env, project, published);
 
-    const body = withStreamInactivityWatchdog(upstream.body);
+    const body = withStreamInactivityWatchdog(
+      upstream.body,
+      STREAM_INACTIVITY_TIMEOUT_MS,
+      {
+        expectedSizeBytes: sizeBytes,
+        correlationId,
+        projectId: project.id,
+        revision: published.revision,
+        expectedRevision,
+        upstreamStatus,
+        upstreamContentLength,
+        providerRequestId,
+        onTelemetry: defaultStreamTelemetryLogger,
+      },
+    );
 
     scheduleAudit(
       context,
@@ -476,6 +651,8 @@ export async function onRequest(context) {
       "X-Content-Type-Options": "nosniff",
       "X-Correlation-Id": correlationId,
       "X-Maono-Config-Transport": "stream",
+      "X-Maono-Stream-Integrity-Mode":
+        sizeBytes > 0 ? "server-eof-byte-count" : "size-unavailable",
       "X-Maono-Project-Id": String(project.id),
       "X-Maono-Config-Revision": String(published.revision || 0),
       "X-Maono-Config-Size": String(sizeBytes || 0),
