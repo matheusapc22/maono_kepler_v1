@@ -117,6 +117,7 @@ async function loadProjectConfig(
 
   try {
     const activeTrace = getActiveMapLoadTrace();
+    recordMapLoadEvent("CONFIG_REQUESTED");
     const loaded = await loadProjectConfigStream(projectSlug, signal, {
       correlationId: activeTrace?.correlationId ?? null,
       onAttempt: recordActiveMapLoadTransportAttempt,
@@ -150,9 +151,6 @@ async function loadProjectConfig(
     recordMapLoadEvent("MIGRATED", traceContext);
     recordMapLoadEvent("ENGINE_HYDRATION_STARTED", traceContext);
 
-    // Kepler's addDataToMap adds datasets to the active instance. Explicitly
-    // unload the prior project first so repeated project cycles cannot retain
-    // old datasets/layers/filters in the same long-lived Redux store.
     releaseKeplerDatasets(store, dispatch);
     throwIfLoadAborted(signal);
 
