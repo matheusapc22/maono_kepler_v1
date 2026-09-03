@@ -1,0 +1,52 @@
+name: LOAD-01H2 validation
+
+on:
+  pull_request:
+    paths:
+      - "functions/api/projects/**/config-stream.js"
+      - "functions/_lib/map-load-observability.js"
+      - "src/pages/Kepler/index.tsx"
+      - "src/pages/Kepler/map-url-loader/**"
+      - "src/pages/Kepler/observability/map-load-trace.ts"
+      - "tests/project-config-stream-backpressure.test.mjs"
+      - "tests/project-large-load-resilience.test.mjs"
+      - "tests/project-editor-lifecycle-cleanup.test.mjs"
+      - "tests/project-config-stream-watchdog.test.mjs"
+      - "tests/map-load-*.test.mjs"
+      - ".github/workflows/load-01h2-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  load-resilience:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Validate streaming backpressure and watchdog
+        run: node --test tests/project-config-stream-watchdog.test.mjs tests/project-config-stream-backpressure.test.mjs
+
+      - name: Validate large-load retry taxonomy and lifecycle cleanup
+        run: node --experimental-strip-types --test tests/project-large-load-resilience.test.mjs tests/project-editor-lifecycle-cleanup.test.mjs tests/map-visual-readiness.test.mjs
+
+      - name: Validate load observability contract
+        run: npm run test:map-load-observability
+
+      - name: Guard large-save regression
+        run: node --experimental-strip-types --test tests/project-large-save.test.mjs tests/project-large-legacy-lifecycle.test.mjs
+
+      - name: Build
+        run: npm run build
