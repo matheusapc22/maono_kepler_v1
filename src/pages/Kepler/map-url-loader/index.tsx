@@ -19,7 +19,6 @@ import {
   expectedDatasetIdsFromRuntimeDatasets,
   expectedLayerIdsFromRuntimeConfig,
   isMapVisualReadinessError,
-  resetMaonoMapVisualReadinessRuntime,
   waitForMaonoMapVisualReadiness,
 } from "./map-visual-readiness.ts";
 import {
@@ -38,9 +37,6 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
 
-// UI-only threshold. Large configs get one paint opportunity before canonical
-// Kepler schema hydration. File size must never select a different parser or
-// change SavedDataset -> RuntimeDataset semantics.
 const LARGE_CONFIG_UI_YIELD_BYTES = 10 * 1024 * 1024;
 
 const mapStateToProps = (state: any) => ({
@@ -97,6 +93,13 @@ function releaseKeplerDatasets(
   for (const datasetId of currentDatasetIds(store)) {
     dispatch(removeDataset(datasetId));
   }
+}
+
+function throwIfLoadAborted(signal: AbortSignal) {
+  if (!signal.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Aborted", "AbortError");
 }
 
 async function loadProjectConfig(
@@ -175,13 +178,6 @@ async function loadProjectConfig(
   }
 }
 
-function throwIfLoadAborted(signal: AbortSignal) {
-  if (!signal.aborted) return;
-  throw signal.reason instanceof Error
-    ? signal.reason
-    : new DOMException("Aborted", "AbortError");
-}
-
 const MapUrlLoader = connectStore(
   ({
     isMapLoading,
@@ -209,7 +205,6 @@ const MapUrlLoader = connectStore(
         loadedProjectRef.current = null;
         releaseKeplerDatasets(store, dispatch);
         loadPointClusterState(undefined);
-        resetMaonoMapVisualReadinessRuntime();
         return;
       }
 
@@ -279,7 +274,6 @@ const MapUrlLoader = connectStore(
         );
         releaseKeplerDatasets(store, dispatch);
         loadPointClusterState(undefined);
-        resetMaonoMapVisualReadinessRuntime();
       };
     }, [
       context?.mode,
