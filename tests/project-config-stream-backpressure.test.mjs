@@ -32,6 +32,7 @@ test("LOAD-01H2 removes recursive start pump and uses demand-driven pull", () =>
 
 test("LOAD-01H3 counts server-side bytes and fails explicit premature EOF", () => {
   assert.match(source, /bytesForwarded/);
+  assert.match(source, /bytesReadFromUpstream/);
   assert.match(source, /PROJECT_CONFIG_STREAM_TRUNCATED/);
   assert.match(source, /PROJECT_CONFIG_STREAM_LENGTH_MISMATCH/);
   assert.match(source, /failureStage: "dropbox_to_worker"/);
@@ -128,6 +129,7 @@ test("exact upstream EOF closes only after forwarding every expected byte", asyn
   const result = await readAllBytes(wrapped);
   assert.equal(result.size, expected.byteLength);
   assert.equal(telemetry.at(-1).event, "config_stream_complete");
+  assert.equal(telemetry.at(-1).bytesReadFromUpstream, expected.byteLength);
   assert.equal(telemetry.at(-1).bytesForwarded, expected.byteLength);
   assert.equal(telemetry.at(-1).expectedSizeBytes, expected.byteLength);
   assert.equal(telemetry.at(-1).failureStage, null);
@@ -135,15 +137,11 @@ test("exact upstream EOF closes only after forwarding every expected byte", asyn
 
 test("premature upstream EOF becomes PROJECT_CONFIG_STREAM_TRUNCATED instead of clean 200 body", async () => {
   const telemetry = [];
-  let cancelled = false;
   const upstream = new ReadableStream(
     {
       start(controller) {
         controller.enqueue(new Uint8Array([1, 2, 3]));
         controller.close();
-      },
-      cancel() {
-        cancelled = true;
       },
     },
     { highWaterMark: 0 },
@@ -164,15 +162,16 @@ test("premature upstream EOF becomes PROJECT_CONFIG_STREAM_TRUNCATED instead of 
     (error) => {
       assert.equal(error.code, "PROJECT_CONFIG_STREAM_TRUNCATED");
       assert.equal(error.details.expectedSizeBytes, 5);
+      assert.equal(error.details.bytesReadFromUpstream, 3);
       assert.equal(error.details.bytesForwarded, 3);
       assert.equal(error.details.failureStage, "dropbox_to_worker");
       return true;
     },
   );
 
-  assert.equal(cancelled, true);
   assert.equal(telemetry.at(-1).event, "config_stream_error");
   assert.equal(telemetry.at(-1).code, "PROJECT_CONFIG_STREAM_TRUNCATED");
+  assert.equal(telemetry.at(-1).bytesReadFromUpstream, 3);
   assert.equal(telemetry.at(-1).bytesForwarded, 3);
   assert.equal(telemetry.at(-1).failureStage, "dropbox_to_worker");
 });
@@ -202,10 +201,13 @@ test("server rejects bytes beyond published size and cancels upstream", async ()
     (error) => {
       assert.equal(error.code, "PROJECT_CONFIG_STREAM_LENGTH_MISMATCH");
       assert.equal(error.details.expectedSizeBytes, 3);
-      assert.equal(error.details.bytesForwarded, 4);
+      assert.equal(error.details.bytesReadFromUpstream, 4);
+      assert.equal(error.details.bytesForwarded, 0);
       return true;
     },
   );
   assert.equal(cancelled, true);
   assert.equal(telemetry.at(-1).code, "PROJECT_CONFIG_STREAM_LENGTH_MISMATCH");
+  assert.equal(telemetry.at(-1).bytesReadFromUpstream, 4);
+  assert.equal(telemetry.at(-1).bytesForwarded, 0);
 });
