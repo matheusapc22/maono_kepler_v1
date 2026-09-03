@@ -79,6 +79,7 @@ export function isMapConfigStreamError(error: unknown): error is MapConfigStream
 }
 
 function finiteNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
@@ -257,6 +258,10 @@ async function readCompleteJsonBody(
   const chunks: Uint8Array[] = [];
   let receivedBytes = 0;
   const bodyStartedAt = now();
+  const cancelForNavigation = () => {
+    Promise.resolve(reader.cancel(abortError(signal))).catch(() => undefined);
+  };
+  signal.addEventListener("abort", cancelForNavigation, { once: true });
 
   try {
     while (true) {
@@ -289,8 +294,11 @@ async function readCompleteJsonBody(
         bodyDurationMs,
       },
     );
+  } finally {
+    signal.removeEventListener("abort", cancelForNavigation);
   }
 
+  throwIfAborted(signal);
   const bodyDurationMs = now() - bodyStartedAt;
   if (receivedBytes < expectedSizeBytes) {
     throw new MapConfigStreamError(
@@ -325,7 +333,6 @@ async function readCompleteJsonBody(
     );
   }
 
-  throwIfAborted(signal);
   const text = decodeAfterCompletenessCheck(chunks);
   const parseStartedAt = now();
   try {
