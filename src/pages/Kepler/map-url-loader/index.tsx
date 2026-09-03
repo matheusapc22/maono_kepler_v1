@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { connect, useStore } from "react-redux";
 import { useParams } from "react-router";
-import { addDataToMap, toggleModal } from "@kepler.gl/actions";
+import { addDataToMap, removeDataset, toggleModal } from "@kepler.gl/actions";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
@@ -50,7 +50,6 @@ const mapStateToProps = (state: any) => ({
 });
 
 const dispatchToProps = (dispatch: any) => ({ dispatch });
-
 const connectStore = connect(mapStateToProps, dispatchToProps);
 
 function yieldToBrowser(signal: AbortSignal) {
@@ -72,6 +71,32 @@ function yieldToBrowser(signal: AbortSignal) {
 
     signal.addEventListener("abort", handleAbort, { once: true });
   });
+}
+
+function currentDatasetIds(store: { getState: () => unknown }) {
+  const datasets = (store.getState() as any)?.demo?.keplerGl?.map?.visState?.datasets;
+  if (!datasets) return [] as string[];
+
+  const keySeq = datasets?.keySeq?.();
+  if (typeof keySeq?.toArray === "function") {
+    return keySeq.toArray().map(String).filter(Boolean);
+  }
+  if (datasets instanceof Map) {
+    return Array.from(datasets.keys()).map(String).filter(Boolean);
+  }
+  if (typeof datasets === "object") {
+    return Object.keys(datasets);
+  }
+  return [] as string[];
+}
+
+function releaseKeplerDatasets(
+  store: { getState: () => unknown },
+  dispatch: any,
+) {
+  for (const datasetId of currentDatasetIds(store)) {
+    dispatch(removeDataset(datasetId));
+  }
 }
 
 async function loadProjectConfig(
@@ -99,7 +124,6 @@ async function loadProjectConfig(
       revision: loaded.revision,
       schemaVersion: loaded.schemaVersion,
     };
-
     updateActiveMapLoadTraceContext(traceContext);
 
     const savedConfig = loaded.config;
@@ -107,8 +131,6 @@ async function loadProjectConfig(
     recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
 
     if (loaded.sizeBytes >= LARGE_CONFIG_UI_YIELD_BYTES) {
-      // Give the loading overlay one paint opportunity before the synchronous
-      // canonical Kepler hydration work begins. This does not change data semantics.
       await yieldToBrowser(signal);
     }
 
@@ -125,13 +147,17 @@ async function loadProjectConfig(
     recordMapLoadEvent("MIGRATED", traceContext);
     recordMapLoadEvent("ENGINE_HYDRATION_STARTED", traceContext);
 
+    // Kepler's addDataToMap adds datasets to the active instance. Explicitly
+    // unload the prior project first so repeated project cycles cannot retain
+    // old datasets/layers/filters in the same long-lived Redux store.
+    releaseKeplerDatasets(store, dispatch);
+    throwIfLoadAborted(signal);
+
     dispatch(
       addDataToMap({
         datasets: loadedConfig.datasets,
         config: loadedConfig.config,
         options: {
-          // A saved project already carries its mapState. Recomputing bounds
-          // over every feature is expensive for large GeoJSONs and redundant.
           centerMap: false,
           readOnly: readOnly,
         },
@@ -147,6 +173,13 @@ async function loadProjectConfig(
   } finally {
     dispatch(setLoadingMapStatus(false));
   }
+}
+
+function throwIfLoadAborted(signal: AbortSignal) {
+  if (!signal.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Aborted", "AbortError");
 }
 
 const MapUrlLoader = connectStore(
@@ -167,16 +200,14 @@ const MapUrlLoader = connectStore(
     const [retryToken, setRetryToken] = useState(0);
 
     useEffect(() => {
-      if (!isMapLoading || currentModal == null) {
-        return;
-      }
-
+      if (!isMapLoading || currentModal == null) return;
       dispatch(toggleModal(null));
     }, [currentModal, dispatch, isMapLoading]);
 
     useEffect(() => {
       if (!projectSlug) {
         loadedProjectRef.current = null;
+        releaseKeplerDatasets(store, dispatch);
         loadPointClusterState(undefined);
         resetMaonoMapVisualReadinessRuntime();
         return;
@@ -190,12 +221,9 @@ const MapUrlLoader = connectStore(
         retryToken,
       ].join(":");
 
-      if (loadedProjectRef.current === contextKey) {
-        return;
-      }
+      if (loadedProjectRef.current === contextKey) return;
 
       const controller = new AbortController();
-
       loadedProjectRef.current = contextKey;
       setError(null);
 
@@ -206,9 +234,7 @@ const MapUrlLoader = connectStore(
         controller.signal,
         context?.mode === "viewer",
       ).catch((err) => {
-        if (controller.signal.aborted) {
-          return;
-        }
+        if (controller.signal.aborted) return;
 
         const visualReadinessFailure = isMapVisualReadinessError(err);
         const hydrationFailure = isSavedConfigHydrationError(err);
@@ -251,6 +277,7 @@ const MapUrlLoader = connectStore(
         controller.abort(
           new DOMException("Carregamento cancelado pela navegação.", "AbortError"),
         );
+        releaseKeplerDatasets(store, dispatch);
         loadPointClusterState(undefined);
         resetMaonoMapVisualReadinessRuntime();
       };
