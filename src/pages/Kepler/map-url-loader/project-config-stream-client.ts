@@ -5,8 +5,6 @@ export type MapConfigStreamFailureClass =
   | "revision_changed"
   | "navigation_abort";
 
-export type MapConfigStreamAttemptOutcome = "success" | "retry" | "error" | "aborted";
-
 export type MapConfigStreamAttemptTrace = {
   attempt: 1 | 2;
   revision: number | null;
@@ -17,7 +15,7 @@ export type MapConfigStreamAttemptTrace = {
   parseDurationMs: number;
   failureClass: MapConfigStreamFailureClass | null;
   retryScheduled: boolean;
-  outcome: MapConfigStreamAttemptOutcome;
+  outcome: "success" | "retry" | "error" | "aborted";
   code: string | null;
 };
 
@@ -32,7 +30,7 @@ export type LoadedProjectConfigStream = {
   attemptCount: 1 | 2;
 };
 
-type MapConfigStreamErrorOptions = {
+type ErrorOptions = {
   code: string;
   category?: string;
   retryable?: boolean;
@@ -59,28 +57,20 @@ export class MapConfigStreamError extends Error {
   bodyDurationMs: number;
   parseDurationMs: number;
 
-  constructor(message: string, options: MapConfigStreamErrorOptions) {
+  constructor(message: string, options: ErrorOptions) {
     super(message);
     this.name = "MapConfigStreamError";
     this.code = options.code;
     this.category = options.category || "MAP_CONFIG_LOAD";
     this.retryable = Boolean(options.retryable);
-    this.status = Number.isFinite(Number(options.status)) ? Number(options.status) : null;
+    this.status = finiteNumber(options.status);
     this.correlationId = options.correlationId || null;
     this.failureClass = options.failureClass;
-    this.revision = Number.isInteger(options.revision) ? Number(options.revision) : null;
-    this.expectedSizeBytes = Number.isInteger(options.expectedSizeBytes)
-      ? Number(options.expectedSizeBytes)
-      : null;
-    this.receivedBytes = Number.isFinite(options.receivedBytes)
-      ? Number(options.receivedBytes)
-      : 0;
-    this.bodyDurationMs = Number.isFinite(options.bodyDurationMs)
-      ? Math.max(0, Math.round(Number(options.bodyDurationMs)))
-      : 0;
-    this.parseDurationMs = Number.isFinite(options.parseDurationMs)
-      ? Math.max(0, Math.round(Number(options.parseDurationMs)))
-      : 0;
+    this.revision = integerOrNull(options.revision);
+    this.expectedSizeBytes = integerOrNull(options.expectedSizeBytes);
+    this.receivedBytes = finiteNumber(options.receivedBytes) ?? 0;
+    this.bodyDurationMs = roundedDuration(options.bodyDurationMs);
+    this.parseDurationMs = roundedDuration(options.parseDurationMs);
   }
 }
 
@@ -88,27 +78,19 @@ export function isMapConfigStreamError(error: unknown): error is MapConfigStream
   return error instanceof MapConfigStreamError;
 }
 
-function isAbortError(error: unknown, signal: AbortSignal) {
-  return signal.aborted || (error instanceof DOMException && error.name === "AbortError");
+function finiteNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
-function throwIfAborted(signal: AbortSignal) {
-  if (!signal.aborted) return;
-  throw signal.reason instanceof Error
-    ? signal.reason
-    : new DOMException("Carregamento cancelado pela navegação.", "AbortError");
+function integerOrNull(value: unknown) {
+  const number = finiteNumber(value);
+  return number !== null && Number.isInteger(number) ? number : null;
 }
 
-function readNonNegativeIntegerHeader(headers: Headers, name: string) {
-  const raw = String(headers.get(name) || "").trim();
-  if (!raw) return null;
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= 0 ? value : null;
-}
-
-function readPositiveIntegerHeader(headers: Headers, name: string) {
-  const value = readNonNegativeIntegerHeader(headers, name);
-  return value !== null && value > 0 ? value : null;
+function roundedDuration(value: unknown) {
+  const number = finiteNumber(value);
+  return number === null ? 0 : Math.round(number);
 }
 
 function nowMs() {
@@ -117,7 +99,29 @@ function nowMs() {
     : Date.now();
 }
 
-function mapServerErrorCode(code: string | null) {
+function abortError(signal: AbortSignal) {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Carregamento cancelado pela navegação.", "AbortError");
+}
+
+function throwIfAborted(signal: AbortSignal) {
+  if (signal.aborted) throw abortError(signal);
+}
+
+function isAbort(error: unknown, signal: AbortSignal) {
+  return signal.aborted || (error instanceof DOMException && error.name === "AbortError");
+}
+
+function headerInteger(headers: Headers, name: string, positiveOnly = false) {
+  const raw = String(headers.get(name) || "").trim();
+  if (!raw) return null;
+  const number = Number(raw);
+  if (!Number.isInteger(number) || number < 0) return null;
+  return positiveOnly && number === 0 ? null : number;
+}
+
+function serverCode(code: string | null) {
   if (code === "PROJECT_CONFIG_STREAM_REVISION_CHANGED") {
     return "MAP_CONFIG_STREAM_REVISION_CHANGED";
   }
@@ -130,7 +134,7 @@ function mapServerErrorCode(code: string | null) {
   return code || "PROJECT_CONFIG_LOAD_FAILED";
 }
 
-async function parseSmallErrorResponse(response: Response) {
+async function apiError(response: Response) {
   let payload: any = null;
   try {
     payload = await response.json();
@@ -138,71 +142,60 @@ async function parseSmallErrorResponse(response: Response) {
     payload = null;
   }
 
-  const serverCode = payload?.error?.code || payload?.code || null;
-  const code = mapServerErrorCode(serverCode);
-  const category = payload?.error?.category || payload?.category || "MAP_CONFIG_LOAD";
-  const retryableFromPayload = payload?.error?.retryable ?? payload?.retryable;
-  const retryableStatus = [408, 425, 429].includes(response.status) || response.status >= 500;
+  const code = serverCode(payload?.error?.code || payload?.code || null);
   const revisionChanged = code === "MAP_CONFIG_STREAM_REVISION_CHANGED";
   const timeout = code === "MAP_CONFIG_STREAM_TIMEOUT";
-  const correlationId =
-    payload?.error?.correlationId ||
-    payload?.correlationId ||
-    response.headers.get("X-Correlation-Id") ||
-    null;
-  const message =
-    payload?.error?.message ||
-    payload?.message ||
-    (revisionChanged
-      ? "O projeto foi atualizado durante o carregamento. Reabra para carregar a revisão mais recente."
-      : "Não foi possível carregar a configuração do projeto.");
+  const retryablePayload = payload?.error?.retryable ?? payload?.retryable;
+  const retryableStatus = [408, 425, 429].includes(response.status) || response.status >= 500;
 
-  return new MapConfigStreamError(message, {
-    code,
-    category,
-    retryable: revisionChanged
-      ? false
-      : typeof retryableFromPayload === "boolean"
-        ? retryableFromPayload
-        : timeout || retryableStatus,
-    status: response.status,
-    correlationId,
-    failureClass: revisionChanged ? "revision_changed" : "headers",
-  });
+  return new MapConfigStreamError(
+    payload?.error?.message ||
+      payload?.message ||
+      (revisionChanged
+        ? "O projeto foi atualizado durante o carregamento. Reabra para carregar a revisão mais recente."
+        : "Não foi possível carregar a configuração do projeto."),
+    {
+      code,
+      category: payload?.error?.category || payload?.category || "MAP_CONFIG_LOAD",
+      retryable: revisionChanged
+        ? false
+        : typeof retryablePayload === "boolean"
+          ? retryablePayload
+          : timeout || retryableStatus,
+      status: response.status,
+      correlationId:
+        payload?.error?.correlationId ||
+        payload?.correlationId ||
+        response.headers.get("X-Correlation-Id"),
+      failureClass: revisionChanged ? "revision_changed" : "headers",
+    },
+  );
 }
 
 async function defaultSleep(ms: number, signal: AbortSignal) {
   throwIfAborted(signal);
   await new Promise<void>((resolve, reject) => {
-    const timeoutId = setTimeout(resolve, ms);
     const onAbort = () => {
-      clearTimeout(timeoutId);
-      reject(
-        signal.reason instanceof Error
-          ? signal.reason
-          : new DOMException("Carregamento cancelado pela navegação.", "AbortError"),
-      );
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(abortError(signal));
     };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
     signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) onAbort();
-    else {
-      setTimeout(() => signal.removeEventListener("abort", onAbort), ms + 1);
-    }
   });
 }
 
-function decodeChunks(chunks: Uint8Array[]) {
+function decodeAfterCompletenessCheck(chunks: Uint8Array[]) {
   const decoder = new TextDecoder("utf-8", { fatal: false });
   let text = "";
-
   for (let index = 0; index < chunks.length; index += 1) {
-    const chunk = chunks[index];
-    text += decoder.decode(chunk, { stream: true });
+    text += decoder.decode(chunks[index], { stream: true });
     chunks[index] = new Uint8Array(0);
   }
-
-  text += decoder.decode();
-  return text;
+  return text + decoder.decode();
 }
 
 async function readCompleteJsonBody(
@@ -210,9 +203,9 @@ async function readCompleteJsonBody(
   signal: AbortSignal,
   now: () => number,
 ) {
-  const revision = readNonNegativeIntegerHeader(response.headers, "X-Maono-Config-Revision");
-  const configSize = readPositiveIntegerHeader(response.headers, "X-Maono-Config-Size");
-  const contentLength = readPositiveIntegerHeader(response.headers, "Content-Length");
+  const revision = headerInteger(response.headers, "X-Maono-Config-Revision");
+  const configSize = headerInteger(response.headers, "X-Maono-Config-Size", true);
+  const contentLength = headerInteger(response.headers, "Content-Length", true);
   const correlationId = response.headers.get("X-Correlation-Id") || null;
 
   if (configSize !== null && contentLength !== null && configSize !== contentLength) {
@@ -276,11 +269,11 @@ async function readCompleteJsonBody(
     }
   } catch (error) {
     const bodyDurationMs = now() - bodyStartedAt;
-    if (isAbortError(error, signal)) throw error;
+    if (isAbort(error, signal)) throw error;
     try {
       await reader.cancel(error);
     } catch {
-      // Best effort only: the original transport error is more useful.
+      // Upstream cancellation is best effort after a transport failure.
     }
     throw new MapConfigStreamError(
       "O carregamento foi interrompido antes de receber todos os dados do projeto.",
@@ -315,7 +308,6 @@ async function readCompleteJsonBody(
       },
     );
   }
-
   if (receivedBytes > expectedSizeBytes) {
     throw new MapConfigStreamError(
       "O carregamento recebeu mais bytes do que o tamanho publicado do projeto.",
@@ -334,13 +326,18 @@ async function readCompleteJsonBody(
   }
 
   throwIfAborted(signal);
-  const text = decodeChunks(chunks);
+  const text = decodeAfterCompletenessCheck(chunks);
   const parseStartedAt = now();
-  let config: unknown;
   try {
-    config = JSON.parse(text);
+    return {
+      config: JSON.parse(text),
+      revision,
+      expectedSizeBytes,
+      receivedBytes,
+      bodyDurationMs: roundedDuration(bodyDurationMs),
+      parseDurationMs: roundedDuration(now() - parseStartedAt),
+    };
   } catch {
-    const parseDurationMs = now() - parseStartedAt;
     throw new MapConfigStreamError(
       "A configuração armazenada foi recebida por completo, mas o JSON é inválido.",
       {
@@ -353,30 +350,20 @@ async function readCompleteJsonBody(
         expectedSizeBytes,
         receivedBytes,
         bodyDurationMs,
-        parseDurationMs,
+        parseDurationMs: now() - parseStartedAt,
       },
     );
   }
-
-  return {
-    config,
-    revision,
-    expectedSizeBytes,
-    receivedBytes,
-    bodyDurationMs: Math.max(0, Math.round(bodyDurationMs)),
-    parseDurationMs: Math.max(0, Math.round(now() - parseStartedAt)),
-  };
 }
 
 function emitAttempt(
   callback: ((trace: MapConfigStreamAttemptTrace) => void) | undefined,
   trace: MapConfigStreamAttemptTrace,
 ) {
-  if (!callback) return;
   try {
-    callback(trace);
+    callback?.(trace);
   } catch {
-    // Observability must never break project loading.
+    // Observability never changes the load result.
   }
 }
 
@@ -385,6 +372,7 @@ type ProjectConfigStreamOptions = {
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   random?: () => number;
   now?: () => number;
+  correlationId?: string | null;
   onAttempt?: (trace: MapConfigStreamAttemptTrace) => void;
 };
 
@@ -399,16 +387,16 @@ export async function loadProjectConfigStream(
   const now = options.now || nowMs;
   let pinnedRevision: number | null = null;
 
-  for (let attempt = 1 as 1 | 2; attempt <= 2; attempt = (attempt + 1) as 1 | 2) {
+  for (let attemptNumber = 1; attemptNumber <= 2; attemptNumber += 1) {
+    const attempt = attemptNumber as 1 | 2;
     throwIfAborted(signal);
     const attemptStartedAt = now();
     let response: Response | null = null;
     let responseRevision: number | null = pinnedRevision;
 
     try {
-      const headers: Record<string, string> = {
-        Accept: "application/json",
-      };
+      const headers: Record<string, string> = { Accept: "application/json" };
+      if (options.correlationId) headers["X-Correlation-Id"] = options.correlationId;
       if (pinnedRevision !== null) {
         headers["X-Maono-Expected-Config-Revision"] = String(pinnedRevision);
       }
@@ -421,14 +409,11 @@ export async function loadProjectConfigStream(
         signal,
       });
 
-      const responseStartMs = Math.max(0, Math.round(now() - attemptStartedAt));
-      responseRevision = readNonNegativeIntegerHeader(
-        response.headers,
-        "X-Maono-Config-Revision",
-      );
+      const responseStartMs = roundedDuration(now() - attemptStartedAt);
+      responseRevision = headerInteger(response.headers, "X-Maono-Config-Revision");
 
       if (!response.ok) {
-        const error = await parseSmallErrorResponse(response);
+        const error = await apiError(response);
         const retryScheduled = error.retryable && attempt === 1;
         emitAttempt(options.onAttempt, {
           attempt,
@@ -444,9 +429,7 @@ export async function loadProjectConfigStream(
           code: error.code,
         });
         if (!retryScheduled) throw error;
-
-        const delayMs = 500 + Math.round(random() * 500);
-        await sleep(delayMs, signal);
+        await sleep(500 + Math.round(random() * 500), signal);
         continue;
       }
 
@@ -479,22 +462,18 @@ export async function loadProjectConfigStream(
           outcome: "success",
           code: null,
         });
-
         return {
           config: body.config,
-          projectId: readNonNegativeIntegerHeader(response.headers, "X-Maono-Project-Id"),
+          projectId: headerInteger(response.headers, "X-Maono-Project-Id"),
           revision: body.revision,
           schemaName: response.headers.get("X-Maono-Config-Schema") || null,
-          schemaVersion: readNonNegativeIntegerHeader(
-            response.headers,
-            "X-Maono-Config-Schema-Version",
-          ),
+          schemaVersion: headerInteger(response.headers, "X-Maono-Config-Schema-Version"),
           sizeBytes: body.receivedBytes,
           correlationId: response.headers.get("X-Correlation-Id") || null,
           attemptCount: attempt,
         };
       } catch (error) {
-        if (isAbortError(error, signal)) {
+        if (isAbort(error, signal)) {
           emitAttempt(options.onAttempt, {
             attempt,
             revision: responseRevision,
@@ -535,24 +514,21 @@ export async function loadProjectConfigStream(
           outcome: retryScheduled ? "retry" : "error",
           code: normalized.code,
         });
-
         if (!retryScheduled) throw normalized;
         if (responseRevision !== null) pinnedRevision = responseRevision;
-        const delayMs = 500 + Math.round(random() * 500);
-        await sleep(delayMs, signal);
+        await sleep(500 + Math.round(random() * 500), signal);
       }
     } catch (error) {
-      if (isAbortError(error, signal)) throw error;
+      if (isAbort(error, signal)) throw error;
       if (isMapConfigStreamError(error)) throw error;
 
-      const responseStartMs = Math.max(0, Math.round(now() - attemptStartedAt));
       const transportError = new MapConfigStreamError(
         "Não foi possível concluir a transferência da configuração do projeto.",
         {
           code: "MAP_CONFIG_STREAM_INTERRUPTED",
           retryable: true,
           status: response?.status ?? null,
-          correlationId: response?.headers.get("X-Correlation-Id") || null,
+          correlationId: response?.headers.get("X-Correlation-Id") || options.correlationId || null,
           failureClass: "headers",
           revision: responseRevision,
         },
@@ -563,7 +539,7 @@ export async function loadProjectConfigStream(
         revision: responseRevision,
         expectedSizeBytes: null,
         receivedBytes: 0,
-        responseStartMs,
+        responseStartMs: roundedDuration(now() - attemptStartedAt),
         bodyDurationMs: 0,
         parseDurationMs: 0,
         failureClass: "headers",
@@ -572,8 +548,7 @@ export async function loadProjectConfigStream(
         code: transportError.code,
       });
       if (!retryScheduled) throw transportError;
-      const delayMs = 500 + Math.round(random() * 500);
-      await sleep(delayMs, signal);
+      await sleep(500 + Math.round(random() * 500), signal);
     }
   }
 
