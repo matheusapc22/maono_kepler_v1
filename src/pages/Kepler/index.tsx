@@ -101,6 +101,7 @@ import {
   notifyMaonoMapRender,
   registerMaonoDeckRuntime,
   registerMaonoMapRuntime,
+  resetMaonoMapVisualReadinessRuntime,
 } from "./map-url-loader/map-visual-readiness.ts";
 import { useHideMapAttribution } from "../../hooks/useHideMapAttrition";
 import {
@@ -135,7 +136,8 @@ const BannerKey = `banner-${FormLink}`;
 const keplerGlGetState = (state) => state.demo.keplerGl;
 const MAONO_SCREENSHOT_TIMEOUT_MS = 6000;
 
-const observedMapInstances = new WeakSet<object>();
+let observedMaonoMap = null;
+let releaseObservedMaonoMapListeners = null;
 
 function emitMaonoMapRuntimeEvent(
   phase:
@@ -162,6 +164,19 @@ function safeMapErrorMessage(value: unknown) {
     .slice(0, 320);
 }
 
+function releaseObservedMaonoMapRef() {
+  releaseObservedMaonoMapListeners?.();
+  releaseObservedMaonoMapListeners = null;
+  observedMaonoMap = null;
+  registerMaonoMapRuntime(null);
+}
+
+function releaseMaonoRuntimeObservers() {
+  releaseObservedMaonoMapRef();
+  registerMaonoDeckRuntime(null);
+  resetMaonoMapVisualReadinessRuntime();
+}
+
 function observeMaonoMapRef(mapRef: unknown) {
   const ref = mapRef as {getMap?: () => unknown} | null;
   const map = ref?.getMap?.() as {
@@ -169,26 +184,35 @@ function observeMaonoMapRef(mapRef: unknown) {
     getStyle?: () => {layers?: unknown[]};
     triggerRepaint?: () => void;
     on?: (event: string, handler: (event?: unknown) => void) => void;
+    off?: (event: string, handler: (event?: unknown) => void) => void;
   } | null;
+
+  if (!map) {
+    releaseObservedMaonoMapRef();
+    emitMaonoMapRuntimeEvent("map-ref", { attached: false, styleLoaded: false });
+    return;
+  }
 
   registerMaonoMapRuntime(map);
   emitMaonoMapRuntimeEvent("map-ref", {
-    attached: Boolean(map),
-    styleLoaded: Boolean(map?.isStyleLoaded?.()),
+    attached: true,
+    styleLoaded: Boolean(map.isStyleLoaded?.()),
   });
 
-  if (!map || observedMapInstances.has(map)) return;
-  observedMapInstances.add(map);
+  if (observedMaonoMap === map) return;
+  releaseObservedMaonoMapRef();
+  observedMaonoMap = map;
+  registerMaonoMapRuntime(map);
 
   let firstRenderObserved = false;
-  map.on?.("style.load", () => {
+  const handleStyleLoad = () => {
     const layerCount = map.getStyle?.()?.layers?.length ?? 0;
     emitMaonoMapRuntimeEvent("style-loaded", {layerCount});
     if (isMaonoMapVisualReadinessPending()) {
       map.triggerRepaint?.();
     }
-  });
-  map.on?.("render", () => {
+  };
+  const handleRender = () => {
     const readinessPending = isMaonoMapVisualReadinessPending();
     if (firstRenderObserved && !readinessPending) return;
 
@@ -196,13 +220,23 @@ function observeMaonoMapRef(mapRef: unknown) {
     const styleLoaded = Boolean(map.isStyleLoaded?.());
     notifyMaonoMapRender({ styleLoaded });
     emitMaonoMapRuntimeEvent("map-render", { styleLoaded });
-  });
-  map.on?.("error", (event) => {
+  };
+  const handleError = (event) => {
     const error = (event as {error?: {message?: unknown}} | null)?.error;
     emitMaonoMapRuntimeEvent("map-error", {
       message: safeMapErrorMessage(error?.message),
     });
-  });
+  };
+
+  map.on?.("style.load", handleStyleLoad);
+  map.on?.("render", handleRender);
+  map.on?.("error", handleError);
+
+  releaseObservedMaonoMapListeners = () => {
+    map.off?.("style.load", handleStyleLoad);
+    map.off?.("render", handleRender);
+    map.off?.("error", handleError);
+  };
 }
 
 function normalizeScreenshotPayload(screenshot) {
@@ -423,6 +457,12 @@ const App = (props) => {
   const pointClustering = usePointClustering();
   const [mapRootRef, mapRootSize] = useParentElementSize();
   useSynchronizedKeplerFrame(mapRootRef, mapRootSize);
+
+  useEffect(() => {
+    return () => {
+      releaseMaonoRuntimeObservers();
+    };
+  }, []);
 
   const duckDbPluginEnabled = (getApplicationConfig().plugins || []).some(
     (p) => p.name === "duckdb"

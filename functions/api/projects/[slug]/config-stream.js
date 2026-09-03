@@ -27,6 +27,7 @@ import {
 
 const STREAM_START_TIMEOUT_MS = 20_000;
 const STREAM_INACTIVITY_TIMEOUT_MS = 20_000;
+const EXPECTED_REVISION_HEADER = "X-Maono-Expected-Config-Revision";
 
 function decodeProjectSlug(value) {
   try {
@@ -64,6 +65,22 @@ function streamError(message, status, code, details = null) {
   error.code = code;
   if (details) error.details = details;
   return error;
+}
+
+function readExpectedRevision(request) {
+  const raw = String(request.headers.get(EXPECTED_REVISION_HEADER) || "").trim();
+  if (!raw) return null;
+
+  const revision = Number(raw);
+  if (!Number.isInteger(revision) || revision < 0) {
+    throw streamError(
+      "A revisão esperada informada pelo cliente é inválida.",
+      400,
+      "PROJECT_CONFIG_EXPECTED_REVISION_INVALID",
+    );
+  }
+
+  return revision;
 }
 
 function resolvePublishedFile(project) {
@@ -106,6 +123,20 @@ function resolvePublishedFile(project) {
   };
 }
 
+function assertExpectedRevision(expectedRevision, publishedRevision) {
+  if (expectedRevision === null || expectedRevision === publishedRevision) return;
+
+  throw streamError(
+    "A revisão publicada mudou durante a repetição do carregamento.",
+    409,
+    "PROJECT_CONFIG_STREAM_REVISION_CHANGED",
+    {
+      expectedRevision,
+      actualRevision: publishedRevision,
+    },
+  );
+}
+
 function assertPublishedMetadata(published, metadata) {
   const metadataSize = Number(metadata?.size || 0);
   const metadataHash = String(
@@ -144,6 +175,7 @@ function assertPublishedMetadata(published, metadata) {
 
   return {
     sizeBytes: metadataSize || published.sizeBytes || 0,
+    metadataSizeBytes: metadataSize,
     providerHashVerified: Boolean(expectedHash && metadataHash),
   };
 }
@@ -199,7 +231,7 @@ async function withStreamStartDeadline(task, timeoutMs = STREAM_START_TIMEOUT_MS
   }
 }
 
-function withStreamInactivityWatchdog(
+export function withStreamInactivityWatchdog(
   source,
   timeoutMs = STREAM_INACTIVITY_TIMEOUT_MS,
 ) {
@@ -214,70 +246,77 @@ function withStreamInactivityWatchdog(
   const reader = source.getReader();
   let timeoutId = null;
   let closed = false;
+  let readInFlight = null;
+  let downstreamController = null;
 
-  return new ReadableStream({
-    start(controller) {
-      const clearWatchdog = () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-      };
+  const clearWatchdog = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
 
-      const failForInactivity = () => {
-        if (closed) return;
+  const failForInactivity = () => {
+    if (closed) return;
+    closed = true;
+    clearWatchdog();
+    const error = streamError(
+      "O stream do projeto ficou sem progresso e foi interrompido.",
+      504,
+      "PROJECT_CONFIG_STREAM_INACTIVITY_TIMEOUT",
+      { timeoutMs },
+    );
+    Promise.resolve(reader.cancel(error)).catch(() => undefined);
+    downstreamController?.error(error);
+  };
+
+  const armWatchdog = () => {
+    clearWatchdog();
+    timeoutId = setTimeout(failForInactivity, timeoutMs);
+  };
+
+  return new ReadableStream(
+    {
+      pull(controller) {
+        if (closed) return undefined;
+        downstreamController = controller;
+        if (readInFlight) return readInFlight;
+
+        armWatchdog();
+        readInFlight = (async () => {
+          try {
+            const { done, value } = await reader.read();
+            clearWatchdog();
+
+            if (closed) return;
+            if (done) {
+              closed = true;
+              controller.close();
+              return;
+            }
+
+            controller.enqueue(value);
+          } catch (error) {
+            clearWatchdog();
+            if (closed) return;
+            closed = true;
+            controller.error(error);
+          } finally {
+            readInFlight = null;
+          }
+        })();
+
+        return readInFlight;
+      },
+      cancel(reason) {
         closed = true;
         clearWatchdog();
-        const error = streamError(
-          "O stream do projeto ficou sem progresso e foi interrompido.",
-          504,
-          "PROJECT_CONFIG_STREAM_INACTIVITY_TIMEOUT",
-          { timeoutMs },
-        );
-        Promise.resolve(reader.cancel(error)).catch(() => undefined);
-        controller.error(error);
-      };
-
-      const armWatchdog = () => {
-        clearWatchdog();
-        timeoutId = setTimeout(failForInactivity, timeoutMs);
-      };
-
-      const pump = async () => {
-        if (closed) return;
-        armWatchdog();
-
-        try {
-          const { done, value } = await reader.read();
-          clearWatchdog();
-
-          if (done) {
-            closed = true;
-            controller.close();
-            return;
-          }
-
-          controller.enqueue(value);
-          pump();
-        } catch (error) {
-          clearWatchdog();
-          if (closed) return;
-          closed = true;
-          controller.error(error);
-        }
-      };
-
-      pump();
+        downstreamController = null;
+        return reader.cancel(reason);
+      },
     },
-    cancel(reason) {
-      closed = true;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      return reader.cancel(reason);
-    },
-  });
+    { highWaterMark: 0 },
+  );
 }
 
 async function preparePublishedUpstream(env, project, published) {
@@ -319,10 +358,18 @@ async function preparePublishedUpstream(env, project, published) {
       );
     }
 
+    const contentLengthBytes =
+      verifiedMetadata.metadataSizeBytes > 0 &&
+      upstreamSize > 0 &&
+      verifiedMetadata.metadataSizeBytes === upstreamSize
+        ? upstreamSize
+        : null;
+
     return {
       upstream,
       verifiedMetadata,
       sizeBytes: upstreamSize || verifiedMetadata.sizeBytes || 0,
+      contentLengthBytes,
     };
   });
 }
@@ -390,10 +437,14 @@ export async function onRequest(context) {
     }
 
     const published = resolvePublishedFile(project);
+    const expectedRevision = readExpectedRevision(request);
+    assertExpectedRevision(expectedRevision, published.revision);
+
     const {
       upstream,
       verifiedMetadata,
       sizeBytes,
+      contentLengthBytes,
     } = await preparePublishedUpstream(env, project, published);
 
     const body = withStreamInactivityWatchdog(upstream.body);
@@ -404,6 +455,7 @@ export async function onRequest(context) {
         permission: "project.view",
         correlationId,
         configRevision: published.revision,
+        expectedRevision,
         lifecycleState: project.lifecycle_state ?? null,
         schemaName: published.schemaName,
         schemaVersion: published.schemaVersion,
@@ -418,20 +470,25 @@ export async function onRequest(context) {
       "success",
     );
 
+    const headers = new Headers({
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+      "X-Correlation-Id": correlationId,
+      "X-Maono-Config-Transport": "stream",
+      "X-Maono-Project-Id": String(project.id),
+      "X-Maono-Config-Revision": String(published.revision || 0),
+      "X-Maono-Config-Size": String(sizeBytes || 0),
+      "X-Maono-Config-Schema": String(published.schemaName || ""),
+      "X-Maono-Config-Schema-Version": String(published.schemaVersion || 0),
+    });
+    if (contentLengthBytes !== null) {
+      headers.set("Content-Length", String(contentLengthBytes));
+    }
+
     return new Response(body, {
       status: 200,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "private, no-store, max-age=0",
-        "X-Content-Type-Options": "nosniff",
-        "X-Correlation-Id": correlationId,
-        "X-Maono-Config-Transport": "stream",
-        "X-Maono-Project-Id": String(project.id),
-        "X-Maono-Config-Revision": String(published.revision || 0),
-        "X-Maono-Config-Size": String(sizeBytes || 0),
-        "X-Maono-Config-Schema": String(published.schemaName || ""),
-        "X-Maono-Config-Schema-Version": String(published.schemaVersion || 0),
-      },
+      headers,
     });
   } catch (error) {
     const normalized = normalizeMaonoError(error, {

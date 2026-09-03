@@ -14,6 +14,14 @@ const CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$/;
 const SAFE_CODE_PATTERN = /^[A-Z0-9_:-]{2,120}$/;
 const SAFE_CATEGORY_PATTERN = /^[A-Z0-9_:-]{2,80}$/;
 const MAX_TRACE_DURATION_MS = 3_600_000;
+const SAFE_FAILURE_CLASSES = new Set([
+  "headers",
+  "body",
+  "parse",
+  "revision_changed",
+  "navigation_abort",
+]);
+const SAFE_ATTEMPT_OUTCOMES = new Set(["success", "retry", "error", "aborted"]);
 
 function safeInteger(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -73,6 +81,73 @@ function sanitizeError(value) {
   };
 }
 
+function sanitizeTransportAttempt(value, expectedAttempt) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (safeInteger(value.attempt) !== expectedAttempt) return null;
+  const outcome = SAFE_ATTEMPT_OUTCOMES.has(value.outcome) ? value.outcome : null;
+  if (!outcome) return null;
+  const failureClass =
+    value.failureClass === null || value.failureClass === undefined
+      ? null
+      : SAFE_FAILURE_CLASSES.has(value.failureClass)
+        ? value.failureClass
+        : undefined;
+  if (failureClass === undefined) return null;
+
+  const responseStartMs = safeDuration(value.responseStartMs);
+  const bodyDurationMs = safeDuration(value.bodyDurationMs);
+  const parseDurationMs = safeDuration(value.parseDurationMs);
+  const receivedBytes = safeInteger(value.receivedBytes);
+  if (
+    responseStartMs === null ||
+    bodyDurationMs === null ||
+    parseDurationMs === null ||
+    receivedBytes === null
+  ) {
+    return null;
+  }
+
+  return {
+    attempt: expectedAttempt,
+    revision: safeInteger(value.revision),
+    expectedSizeBytes: safeInteger(value.expectedSizeBytes),
+    receivedBytes,
+    responseStartMs,
+    bodyDurationMs,
+    parseDurationMs,
+    failureClass,
+    retryScheduled: Boolean(value.retryScheduled),
+    outcome,
+    code: safeCode(value.code, SAFE_CODE_PATTERN),
+  };
+}
+
+function sanitizeTransport(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      attempts: [],
+      heapUsedBeforeBytes: null,
+      heapUsedAfterBytes: null,
+    };
+  }
+
+  const sourceAttempts = Array.isArray(value.attempts) ? value.attempts : [];
+  if (sourceAttempts.length > 2) return null;
+
+  const attempts = [];
+  for (let index = 0; index < sourceAttempts.length; index += 1) {
+    const sanitized = sanitizeTransportAttempt(sourceAttempts[index], index + 1);
+    if (!sanitized) return null;
+    attempts.push(sanitized);
+  }
+
+  return {
+    attempts,
+    heapUsedBeforeBytes: safeInteger(value.heapUsedBeforeBytes),
+    heapUsedAfterBytes: safeInteger(value.heapUsedAfterBytes),
+  };
+}
+
 export function sanitizeMapLoadTracePayload(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
@@ -108,6 +183,9 @@ export function sanitizeMapLoadTracePayload(value) {
   const error = status === "error" ? sanitizeError(value.error) : null;
   if (status === "error" && !error) return null;
 
+  const transport = sanitizeTransport(value.transport);
+  if (!transport) return null;
+
   return {
     correlationId,
     projectId: safeId(value.projectId),
@@ -117,6 +195,7 @@ export function sanitizeMapLoadTracePayload(value) {
     status,
     events,
     error,
+    transport,
   };
 }
 

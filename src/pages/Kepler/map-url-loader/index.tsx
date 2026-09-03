@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { connect, useStore } from "react-redux";
 import { useParams } from "react-router";
-import { addDataToMap, toggleModal } from "@kepler.gl/actions";
+import { addDataToMap, removeDataset, toggleModal } from "@kepler.gl/actions";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
@@ -10,6 +10,8 @@ import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 import {
   failActiveMapLoadTrace,
+  getActiveMapLoadTrace,
+  recordActiveMapLoadTransportAttempt,
   recordMapLoadEvent,
   updateActiveMapLoadTraceContext,
 } from "../observability/map-load-trace";
@@ -19,6 +21,10 @@ import {
   isMapVisualReadinessError,
   waitForMaonoMapVisualReadiness,
 } from "./map-visual-readiness.ts";
+import {
+  isMapConfigStreamError,
+  loadProjectConfigStream,
+} from "./project-config-stream-client.ts";
 import {
   hydrateSavedKeplerConfig,
   isSavedConfigHydrationError,
@@ -30,11 +36,7 @@ const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(
     import.meta.env.VITE_POINT_CLUSTERING_V1,
   );
-const PROJECT_LOAD_RETRY_DELAYS_MS = [350, 900];
 
-// UI-only threshold. Large configs get one paint opportunity before canonical
-// Kepler schema hydration. File size must never select a different parser or
-// change SavedDataset -> RuntimeDataset semantics.
 const LARGE_CONFIG_UI_YIELD_BYTES = 10 * 1024 * 1024;
 
 const mapStateToProps = (state: any) => ({
@@ -44,45 +46,7 @@ const mapStateToProps = (state: any) => ({
 });
 
 const dispatchToProps = (dispatch: any) => ({ dispatch });
-
 const connectStore = connect(mapStateToProps, dispatchToProps);
-
-async function parseJsonResponse(response: Response) {
-  try {
-    return await response.json();
-  } catch {
-    throw new Error("A resposta do servidor não está em JSON válido.");
-  }
-}
-
-function getApiErrorMessage(data: any, fallback: string) {
-  return data?.error?.message || data?.message || fallback;
-}
-
-function retryableProjectStatus(status: number) {
-  return status === 408 || status === 425 || status === 429 || status >= 500;
-}
-
-function waitForRetry(milliseconds: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException("Aborted", "AbortError"));
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      signal.removeEventListener("abort", handleAbort);
-      resolve();
-    }, milliseconds);
-
-    function handleAbort() {
-      window.clearTimeout(timeoutId);
-      reject(new DOMException("Aborted", "AbortError"));
-    }
-
-    signal.addEventListener("abort", handleAbort, { once: true });
-  });
-}
 
 function yieldToBrowser(signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -105,115 +69,37 @@ function yieldToBrowser(signal: AbortSignal) {
   });
 }
 
-function numericHeader(response: Response, name: string) {
-  const value = Number(response.headers.get(name));
-  return Number.isFinite(value) ? value : null;
+function currentDatasetIds(store: { getState: () => unknown }) {
+  const datasets = (store.getState() as any)?.demo?.keplerGl?.map?.visState?.datasets;
+  if (!datasets) return [] as string[];
+
+  const keySeq = datasets?.keySeq?.();
+  if (typeof keySeq?.toArray === "function") {
+    return keySeq.toArray().map(String).filter(Boolean);
+  }
+  if (datasets instanceof Map) {
+    return Array.from(datasets.keys()).map(String).filter(Boolean);
+  }
+  if (typeof datasets === "object") {
+    return Object.keys(datasets);
+  }
+  return [] as string[];
 }
 
-async function requestProjectConfigResponse(
-  projectSlug: string,
-  signal: AbortSignal,
+function releaseKeplerDatasets(
+  store: { getState: () => unknown },
+  dispatch: any,
 ) {
-  const totalAttempts = PROJECT_LOAD_RETRY_DELAYS_MS.length + 1;
-  let lastError: unknown = null;
-
-  for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
-    try {
-      const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectSlug)}/config-stream`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-          },
-          signal,
-        },
-      );
-
-      if (
-        retryableProjectStatus(response.status) &&
-        attempt < PROJECT_LOAD_RETRY_DELAYS_MS.length
-      ) {
-        response.body?.cancel().catch(() => undefined);
-        await waitForRetry(PROJECT_LOAD_RETRY_DELAYS_MS[attempt], signal);
-        continue;
-      }
-
-      return response;
-    } catch (error) {
-      if (signal.aborted) throw error;
-      lastError = error;
-
-      if (attempt >= PROJECT_LOAD_RETRY_DELAYS_MS.length) {
-        throw error;
-      }
-
-      await waitForRetry(PROJECT_LOAD_RETRY_DELAYS_MS[attempt], signal);
-    }
+  for (const datasetId of currentDatasetIds(store)) {
+    dispatch(removeDataset(datasetId));
   }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Não foi possível carregar o projeto.");
 }
 
-async function requestProjectConfig(
-  projectSlug: string,
-  signal: AbortSignal,
-) {
-  const response = await requestProjectConfigResponse(projectSlug, signal);
-
-  if (!response.ok) {
-    return {
-      response,
-      data: await parseJsonResponse(response),
-      sizeBytes: 0,
-    };
-  }
-
-  if (response.headers.get("X-Maono-Config-Transport") !== "stream") {
-    throw new Error("O servidor não confirmou o transporte otimizado do projeto.");
-  }
-
-  let config: any;
-  try {
-    // Do not retry a successful HTTP response that contains invalid JSON. A
-    // second parse of the same huge immutable revision only multiplies memory
-    // pressure and cannot repair corrupted content.
-    config = await response.json();
-  } catch {
-    throw new Error("A configuração armazenada não está em JSON válido.");
-  }
-
-  const projectId = numericHeader(response, "X-Maono-Project-Id");
-  const revision = numericHeader(response, "X-Maono-Config-Revision");
-  const schemaVersion = numericHeader(
-    response,
-    "X-Maono-Config-Schema-Version",
-  );
-  const sizeBytes =
-    numericHeader(response, "X-Maono-Config-Size") ?? 0;
-
-  return {
-    response,
-    sizeBytes,
-    data: {
-      ok: true,
-      project: {
-        id: projectId,
-        configRevision: revision,
-      },
-      lifecycle: {
-        configRevision: revision,
-        schema: {
-          name: response.headers.get("X-Maono-Config-Schema"),
-          version: schemaVersion,
-        },
-      },
-      config,
-    },
-  };
+function throwIfLoadAborted(signal: AbortSignal) {
+  if (!signal.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Aborted", "AbortError");
 }
 
 async function loadProjectConfig(
@@ -230,62 +116,25 @@ async function loadProjectConfig(
   dispatch(setLoadingMapStatus(true));
 
   try {
-    const { response, data, sizeBytes } = await requestProjectConfig(
-      projectSlug,
-      signal,
-    );
+    const activeTrace = getActiveMapLoadTrace();
+    recordMapLoadEvent("CONFIG_REQUESTED");
+    const loaded = await loadProjectConfigStream(projectSlug, signal, {
+      correlationId: activeTrace?.correlationId ?? null,
+      onAttempt: recordActiveMapLoadTransportAttempt,
+    });
 
-    if (!response.ok || !data?.ok) {
-      failActiveMapLoadTrace({
-        stage: "CONFIG_VALIDATED",
-        code: data?.error?.code || "MAP_CONFIG_LOAD_FAILED",
-        category: data?.error?.category || "MAP_CONFIG",
-        retryable:
-          typeof data?.error?.retryable === "boolean"
-            ? data.error.retryable
-            : retryableProjectStatus(response.status),
-        status: response.status,
-      });
-
-      const message = getApiErrorMessage(
-        data,
-        `Não foi possível carregar o projeto ${projectSlug}.`,
-      );
-
-      throw new Error(message);
-    }
-
-    const projectId = data?.project?.id ?? null;
-    const revisionValue =
-      data?.lifecycle?.configRevision ??
-      data?.project?.lifecycle?.configRevision ??
-      data?.project?.configRevision ??
-      null;
-    const schemaVersionValue =
-      data?.lifecycle?.schema?.version ??
-      data?.project?.lifecycle?.schema?.version ??
-      null;
-    const revision = Number.isFinite(Number(revisionValue))
-      ? Number(revisionValue)
-      : null;
-    const schemaVersion = Number.isFinite(Number(schemaVersionValue))
-      ? Number(schemaVersionValue)
-      : null;
     const traceContext = {
-      projectId,
-      revision,
-      schemaVersion,
+      projectId: loaded.projectId,
+      revision: loaded.revision,
+      schemaVersion: loaded.schemaVersion,
     };
-
     updateActiveMapLoadTraceContext(traceContext);
 
-    const savedConfig = data.config;
+    const savedConfig = loaded.config;
     validateSavedKeplerConfig(savedConfig);
     recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
 
-    if (sizeBytes >= LARGE_CONFIG_UI_YIELD_BYTES) {
-      // Give the loading overlay one paint opportunity before the synchronous
-      // canonical Kepler hydration work begins. This does not change data semantics.
+    if (loaded.sizeBytes >= LARGE_CONFIG_UI_YIELD_BYTES) {
       await yieldToBrowser(signal);
     }
 
@@ -302,13 +151,14 @@ async function loadProjectConfig(
     recordMapLoadEvent("MIGRATED", traceContext);
     recordMapLoadEvent("ENGINE_HYDRATION_STARTED", traceContext);
 
+    releaseKeplerDatasets(store, dispatch);
+    throwIfLoadAborted(signal);
+
     dispatch(
       addDataToMap({
         datasets: loadedConfig.datasets,
         config: loadedConfig.config,
         options: {
-          // A saved project already carries its mapState. Recomputing bounds
-          // over every feature is expensive for large GeoJSONs and redundant.
           centerMap: false,
           readOnly: readOnly,
         },
@@ -344,16 +194,14 @@ const MapUrlLoader = connectStore(
     const [retryToken, setRetryToken] = useState(0);
 
     useEffect(() => {
-      if (!isMapLoading || currentModal == null) {
-        return;
-      }
-
+      if (!isMapLoading || currentModal == null) return;
       dispatch(toggleModal(null));
     }, [currentModal, dispatch, isMapLoading]);
 
     useEffect(() => {
       if (!projectSlug) {
         loadedProjectRef.current = null;
+        releaseKeplerDatasets(store, dispatch);
         loadPointClusterState(undefined);
         return;
       }
@@ -366,12 +214,9 @@ const MapUrlLoader = connectStore(
         retryToken,
       ].join(":");
 
-      if (loadedProjectRef.current === contextKey) {
-        return;
-      }
+      if (loadedProjectRef.current === contextKey) return;
 
       const controller = new AbortController();
-
       loadedProjectRef.current = contextKey;
       setError(null);
 
@@ -382,30 +227,35 @@ const MapUrlLoader = connectStore(
         controller.signal,
         context?.mode === "viewer",
       ).catch((err) => {
-        if (controller.signal.aborted) {
-          return;
-        }
+        if (controller.signal.aborted) return;
 
         const visualReadinessFailure = isMapVisualReadinessError(err);
         const hydrationFailure = isSavedConfigHydrationError(err);
+        const transportFailure = isMapConfigStreamError(err);
         failActiveMapLoadTrace({
           stage: visualReadinessFailure ? "MAP_READY" : "CONFIG_VALIDATED",
           code: visualReadinessFailure
             ? err.code
             : hydrationFailure
               ? err.code
-              : "MAP_CONFIG_LOAD_FAILED",
+              : transportFailure
+                ? err.code
+                : "MAP_CONFIG_CLIENT_PARSE_FAILED",
           category: visualReadinessFailure
             ? err.category
             : hydrationFailure
               ? err.category
-              : "MAP_CONFIG",
+              : transportFailure
+                ? err.category
+                : "MAP_CONFIG",
           retryable: visualReadinessFailure
             ? err.retryable
             : hydrationFailure
               ? err.retryable
-              : true,
-          status: null,
+              : transportFailure
+                ? err.retryable
+                : false,
+          status: transportFailure ? err.status : null,
         });
         loadedProjectRef.current = null;
         setError(
@@ -417,7 +267,11 @@ const MapUrlLoader = connectStore(
       });
 
       return () => {
-        controller.abort();
+        controller.abort(
+          new DOMException("Carregamento cancelado pela navegação.", "AbortError"),
+        );
+        releaseKeplerDatasets(store, dispatch);
+        loadPointClusterState(undefined);
       };
     }, [
       context?.mode,

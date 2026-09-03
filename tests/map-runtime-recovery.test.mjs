@@ -12,6 +12,7 @@ const [
   newMapRoute,
   isochroneRoute,
   loader,
+  configStreamClient,
   mapPanelApi,
   configStreamRoute,
   savedConfigHydrator,
@@ -33,6 +34,13 @@ const [
   ),
   readFile(
     new URL("../src/pages/Kepler/map-url-loader/index.tsx", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/map-url-loader/project-config-stream-client.ts",
+      import.meta.url,
+    ),
     "utf8",
   ),
   readFile(
@@ -107,26 +115,43 @@ test("schema defensivo da análise usa apenas DDL idempotente", async () => {
   assert.match(statements[2], /CREATE INDEX IF NOT EXISTS idx_map_analysis_rate_limits_org_type/);
 });
 
-test("loader tenta novamente apenas falhas transitórias e não reinicia a sessão", () => {
-  assert.match(loader, /PROJECT_LOAD_RETRY_DELAYS_MS/);
-  assert.match(loader, /status === 429 \|\| status >= 500/);
+test("loader delega retry transitório ao cliente de stream e não reinicia a sessão", () => {
+  assert.match(loader, /loadProjectConfigStream/);
   assert.match(loader, /setRetryToken\(\(current\) => current \+ 1\)/);
   assert.doesNotMatch(loader, /window\.location\.reload/);
+
+  assert.match(
+    configStreamClient,
+    /for \(let attemptNumber = 1; attemptNumber <= 2; attemptNumber \+= 1\)/,
+  );
+  assert.match(
+    configStreamClient,
+    /\[408, 425, 429\]\.includes\(response\.status\) \|\| response\.status >= 500/,
+  );
+  assert.match(configStreamClient, /retryScheduled = error\.retryable && attempt === 1/);
+  assert.match(configStreamClient, /500 \+ Math\.round\(random\(\) \* 500\)/);
 });
 
-test("loader de projeto pesado mantém streaming e hidratação canônica", () => {
-  assert.match(loader, /\/config-stream/);
-  assert.match(loader, /X-Maono-Config-Transport/);
+test("loader de projeto pesado mantém streaming íntegro e hidratação canônica", () => {
+  assert.match(loader, /loadProjectConfigStream/);
   assert.match(loader, /LARGE_CONFIG_UI_YIELD_BYTES/);
   assert.match(loader, /hydrateSavedKeplerConfig/);
-  assert.match(loader, /await response\.json\(\)/);
   assert.match(loader, /centerMap: false/);
   assert.match(loader, /yieldToBrowser/);
   assert.match(loader, /recordMapLoadEvent\("MIGRATED"/);
+  assert.doesNotMatch(loader, /await response\.json\(\)/);
   assert.doesNotMatch(loader, /LARGE_CONFIG_FAST_PATH_BYTES/);
   assert.doesNotMatch(loader, /isCurrentKeplerDocument/);
   assert.doesNotMatch(loader, /directKeplerPayload/);
-  assert.doesNotMatch(loader, /response\.ok && attempt < PROJECT_LOAD_RETRY_DELAYS_MS\.length/);
+
+  assert.match(configStreamClient, /\/config-stream/);
+  assert.match(configStreamClient, /X-Maono-Config-Transport/);
+  assert.match(configStreamClient, /response\.body\?\.getReader\(\)/);
+  assert.match(configStreamClient, /receivedBytes \+= value\.byteLength/);
+  assert.match(configStreamClient, /receivedBytes < expectedSizeBytes/);
+  assert.match(configStreamClient, /receivedBytes > expectedSizeBytes/);
+  assert.match(configStreamClient, /JSON\.parse\(text\)/);
+  assert.match(configStreamClient, /X-Maono-Expected-Config-Revision/);
 });
 
 test("hydrator usa schema oficial e exige contrato fields/rows", () => {
