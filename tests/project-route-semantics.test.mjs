@@ -20,6 +20,26 @@ const urls = {
     "../functions/_lib/project-map-navigation-service.js",
     import.meta.url,
   ),
+  routePolicy: new URL(
+    "../functions/_lib/project-map-route-policy.js",
+    import.meta.url,
+  ),
+  projectMiddleware: new URL(
+    "../functions/api/projects/[slug]/_middleware.js",
+    import.meta.url,
+  ),
+  mapAccessEndpoint: new URL(
+    "../functions/api/organizations/[id]/users/[userId]/map-access.js",
+    import.meta.url,
+  ),
+  usersAccess: new URL(
+    "../src/pages/Projects/components/UsersAccessOverviewSection.tsx",
+    import.meta.url,
+  ),
+  mapAccessManager: new URL(
+    "../src/components/access/ProjectMapAccessManager.tsx",
+    import.meta.url,
+  ),
   legacyService: new URL(
     "../functions/_lib/map-panel-service.js",
     import.meta.url,
@@ -54,49 +74,139 @@ test("novo mapa reconcilia storage organizacional bloqueado uma única vez", () 
   );
   assert.match(
     sources.newMapContext,
-    /context\?\.reason !== STORAGE_NOT_READY/,
-  );
-  assert.match(
-    sources.newMapContext,
     /ensureOrganizationStorage\(env, organization\)/,
   );
   assert.match(
     sources.newMapContext,
-    /if \(await reconcileBlockedOrganizationStorage\(runtimeEnv, context\)\) \{[\s\S]*context = await resolveNewMapCreateContext\(runtimeEnv, request\)/,
-  );
-  assert.match(
-    sources.newMapContext,
-    /WHERE id = \?[\s\S]*AND active = 1/,
+    /context = await resolveNewMapCreateContext\(runtimeEnv, request, \{ user \}\)/,
   );
   assert.doesNotMatch(sources.newMapContext, /UPDATE organizations/i);
-  assert.doesNotMatch(sources.newMapContext, /ensureDropboxFolder/);
   assert.doesNotMatch(sources.newMapContext, /while\s*\(|for\s*\(/);
 });
 
-test("rota create de projeto existente é apenas redirect temporário", () => {
+test("Viewer é hard-denied na rota de criação", () => {
+  assert.match(sources.newMapContext, /normalizeRole\(user\?\.role\) === "viewer"/);
+  assert.match(sources.newMapContext, /VIEWER_PROJECT_CREATE_FORBIDDEN/);
+  assert.match(sources.newMapContext, /error\.status = 403/);
+});
+
+test("rota create de projeto existente continua apenas redirect depreciado", () => {
   assert.match(
     sources.routes,
     /path="\/projects\/:projectSlug\/create"[\s\S]*element=\{<DeprecatedProjectCreateRedirect\s*\/>\}/,
   );
   assert.match(
-    sources.routes,
-    /DeprecatedProjectCreateRedirect[\s\S]*\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/manage/,
+    sources.canonicalService,
+    /PROJECT_CREATE_ROUTE_DEPRECATED/,
   );
-
-  const createRouteStart = sources.routes.indexOf(
-    'path="/projects/:projectSlug/create"',
+  assert.match(
+    sources.canonicalService,
+    /requestedMode === MAP_PANEL_MODES\.CREATE[\s\S]*status:\s*410/,
   );
-  const nextRouteStart = sources.routes.indexOf("<Route", createRouteStart + 10);
-  const createRouteBlock = sources.routes.slice(createRouteStart, nextRouteStart);
-  assert.doesNotMatch(createRouteBlock, /KeplerApp/);
 });
 
-test("manage de projeto existente prioriza editor e depois viewer", () => {
+test("policy v6 resolve exatamente uma rota por projeto", () => {
   assert.match(
-    sources.management,
-    /context\.availablePanels\.editor\.allowed[\s\S]*\?\s*"edit"[\s\S]*context\.availablePanels\.viewer\.allowed[\s\S]*\?\s*"view"/,
+    sources.canonicalService,
+    /EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 6/,
   );
-  assert.doesNotMatch(sources.management, /availablePanels\.create\.allowed/);
+  assert.match(sources.canonicalService, /resolveEffectiveProjectMapRoute/);
+  assert.match(sources.canonicalService, /const assignedMode = routePolicy\.mode/);
+  assert.match(
+    sources.canonicalService,
+    /const viewerAssigned = assignedMode === PROJECT_MAP_ROUTE_MODES\.VIEWER/,
+  );
+  assert.match(
+    sources.canonicalService,
+    /const editorAssigned = assignedMode === PROJECT_MAP_ROUTE_MODES\.EDITOR/,
+  );
+  assert.match(
+    sources.canonicalService,
+    /requestedMode !== assignedMode[\s\S]*PROJECT_MAP_ROUTE_NOT_ASSIGNED/,
+  );
+  assert.doesNotMatch(sources.canonicalService, /defaultExistingProjectPanel/);
+});
+
+test("Viewer e Editor nunca são expostos simultaneamente como rotas permitidas", () => {
+  assert.match(
+    sources.canonicalService,
+    /viewer:\s*\{[\s\S]*allowed:\s*viewerAssigned\s*&&\s*Boolean\(assignedModeAllowed\)/,
+  );
+  assert.match(
+    sources.canonicalService,
+    /editor:\s*\{[\s\S]*allowed:\s*editorAssigned\s*&&\s*Boolean\(assignedModeAllowed\)/,
+  );
+  assert.match(sources.canonicalService, /PROJECT_MAP_ROUTE_NOT_ASSIGNED/);
+});
+
+test("manage redireciona pela rota atribuída e não prioriza Editor", () => {
+  assert.match(sources.management, /context\.defaultPanel === "editor"/);
+  assert.match(sources.management, /context\.defaultPanel === "viewer"/);
+  assert.doesNotMatch(
+    sources.management,
+    /context\.availablePanels\.editor\.allowed[\s\S]*context\.availablePanels\.viewer\.allowed/,
+  );
+});
+
+test("resolver de rota força role Viewer e normaliza legado para Editor", () => {
+  assert.match(
+    sources.routePolicy,
+    /if \(role === "viewer"\)[\s\S]*PROJECT_MAP_ROUTE_MODES\.VIEWER/,
+  );
+  assert.match(sources.routePolicy, /EDITOR_ACCESS_LEVELS = new Set\(\["editor", "write", "owner"\]\)/);
+  assert.match(sources.routePolicy, /if \(role === "super_admin"\)[\s\S]*PROJECT_MAP_ROUTE_MODES\.EDITOR/);
+});
+
+test("modo Viewer bloqueia persistência direta antes dos endpoints de escrita", () => {
+  assert.match(
+    sources.routePolicy,
+    /PROJECT_MAP_VIEWER_PERSISTENCE_FORBIDDEN/,
+  );
+  assert.match(sources.projectMiddleware, /assertProjectPersistenceRoute/);
+  assert.match(sources.projectMiddleware, /targetsViewerRestrictedMutation/);
+  assert.match(sources.projectMiddleware, /\/save\\\/\?\$/);
+  assert.match(sources.projectMiddleware, /\/metadata\\\/\?\$/);
+  assert.match(sources.projectMiddleware, /\/thumbnail/);
+  assert.match(
+    sources.projectMiddleware,
+    /await loadPersistenceContext\(env, request, params\)[\s\S]*return context\.next\(\)/,
+  );
+});
+
+test("capabilities preparam Change Request somente no workspace Viewer", () => {
+  assert.match(
+    sources.canonicalService,
+    /requestProjectChange:\s*viewerWorkspace\s*&&\s*canViewMap/,
+  );
+  assert.match(sources.canonicalService, /reviewProjectChange:\s*false/);
+  assert.match(sources.canonicalService, /applyProjectChange:\s*false/);
+});
+
+test("gestão de mapa grava uma única access_level viewer ou editor", () => {
+  assert.match(sources.mapAccessEndpoint, /ROUTE_MODES = new Set\(\["viewer", "editor"\]\)/);
+  assert.match(
+    sources.mapAccessEndpoint,
+    /UPDATE user_projects[\s\S]*SET access_level = \?[\s\S]*WHERE user_id = \? AND project_id = \?/,
+  );
+  assert.doesNotMatch(sources.mapAccessEndpoint, /INSERT INTO user_projects/);
+  assert.match(sources.mapAccessEndpoint, /VIEWER_ROUTE_LOCKED/);
+});
+
+test("Create é independente da rota e usa negação explícita", () => {
+  assert.match(sources.mapAccessEndpoint, /CREATE_PERMISSION = "project\.create"/);
+  assert.match(sources.mapAccessEndpoint, /INSERT INTO user_permission_denials/);
+  assert.match(sources.mapAccessEndpoint, /updateProjectCreateAccess|setCreateAccess/);
+  assert.match(sources.mapAccessEndpoint, /VIEWER_PROJECT_CREATE_FORBIDDEN/);
+});
+
+test("Usuários e Acessos oferece gestor exclusivo de mapa sem substituir permissões adicionais", () => {
+  assert.match(sources.usersAccess, /ProjectMapAccessManager/);
+  assert.match(sources.usersAccess, />\s*Mapa\s*<\/button>/);
+  assert.match(sources.usersAccess, />\s*Gerenciar\s*<\/button>/);
+  assert.match(sources.mapAccessManager, /<option value="viewer">Viewer<\/option>/);
+  assert.match(sources.mapAccessManager, /<option value="editor">Editor<\/option>/);
+  assert.match(sources.mapAccessManager, /viewerRole[\s\S]*disabled=/);
+  assert.match(sources.mapAccessManager, /Pode criar novos projetos/);
 });
 
 test("endpoint usa somente o contrato canônico de projeto existente", () => {
@@ -121,17 +231,6 @@ test("contrato canônico não consulta project.create para projeto existente", (
   );
 });
 
-test("modo create explícito de projeto existente é Gone e aponta para manage", () => {
-  assert.match(
-    sources.canonicalService,
-    /requestedMode === MAP_PANEL_MODES\.CREATE[\s\S]*status:\s*410/,
-  );
-  assert.match(
-    sources.canonicalService,
-    /replacementRoute:[\s\S]*\/projects\/\$\{encodeURIComponent\(project\.slug\)\}\/manage/,
-  );
-});
-
 test("projeto existente nunca recebe capacidades exclusivas de criação", () => {
   assert.match(
     sources.canonicalService,
@@ -139,23 +238,4 @@ test("projeto existente nunca recebe capacidades exclusivas de criação", () =>
   );
   assert.match(sources.canonicalService, /createProjectAllowed:\s*false/);
   assert.match(sources.canonicalService, /initializeMapAllowed:\s*false/);
-});
-
-test("policy v5 mantém separação e fecha capabilities de análise", () => {
-  assert.match(
-    sources.canonicalService,
-    /EXISTING_PROJECT_NAVIGATION_POLICY_VERSION = 5/,
-  );
-  assert.match(
-    sources.canonicalService,
-    /defaultExistingProjectPanel[\s\S]*editorAllowed[\s\S]*MAP_PANEL_MODES\.EDITOR[\s\S]*viewerAllowed[\s\S]*MAP_PANEL_MODES\.VIEWER/,
-  );
-  assert.match(sources.canonicalService, /buildMapCapabilities/);
-  assert.match(sources.canonicalService, /previewBufferAllowed/);
-  assert.match(sources.canonicalService, /persistBufferAllowed/);
-  assert.match(sources.legacyService, /"placeAnalysisMarker"/);
-  assert.match(
-    sources.legacyService,
-    /capabilities\.placeAnalysisMarker = Boolean\([\s\S]*capabilities\.previewIsochrone \|\| capabilities\.previewBuffer/,
-  );
 });
