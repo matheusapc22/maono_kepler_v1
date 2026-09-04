@@ -9,7 +9,8 @@ export function withWorkspaceEditingParity(context) {
       editLayers: true,
       editStyle: true,
       editLayerStyle: true,
-      createLayer: false,
+      createLayer: true,
+      addData: false,
       removeLayer: true,
       duplicateLayer: true,
       reorderLayers: true,
@@ -29,6 +30,7 @@ export function withWorkspaceEditingParity(context) {
     });
   } else if (context.mode === "editor" || context.mode === "create") {
     capabilities.placeAnalysisMarker = true;
+    capabilities.addData = true;
   }
 
   return { ...context, capabilities };
