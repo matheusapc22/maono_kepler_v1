@@ -5,6 +5,7 @@ import {
 } from "../../../_lib/http.js";
 import { getOrCreateCorrelationId } from "../../../_lib/maono-error.js";
 import { resolveCanonicalExistingProjectMapNavigation } from "../../../_lib/project-map-navigation-service.js";
+import { withWorkspaceEditingParity } from "../../../_lib/project-map-workspace-capabilities.js";
 import {
   resolveIsochroneFeatureState,
   withMapAnalysisRuntimeDefaults,
@@ -22,16 +23,18 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const isochroneFeatureState = resolveIsochroneFeatureState(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
-    const navigation = await resolveCanonicalExistingProjectMapNavigation(
-      runtimeEnv,
-      request,
-      params?.slug,
-      {
-        requestedMode:
-          url.searchParams.get("mode") ||
-          url.searchParams.get("requestedMode") ||
-          "manage",
-      },
+    const navigation = withWorkspaceEditingParity(
+      await resolveCanonicalExistingProjectMapNavigation(
+        runtimeEnv,
+        request,
+        params?.slug,
+        {
+          requestedMode:
+            url.searchParams.get("mode") ||
+            url.searchParams.get("requestedMode") ||
+            "manage",
+        },
+      ),
     );
 
     return jsonResponse(
