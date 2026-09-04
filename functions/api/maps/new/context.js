@@ -4,10 +4,52 @@ import {
   methodNotAllowed,
 } from "../../../_lib/http.js";
 import { resolveNewMapCreateContext } from "../../../_lib/map-panel-service.js";
+import { ensureOrganizationStorage } from "../../../_lib/organization-storage.js";
 import {
   resolveIsochroneFeatureState,
   withMapAnalysisRuntimeDefaults,
 } from "../../../_lib/map-analysis-runtime.js";
+
+const STORAGE_NOT_READY = "ORGANIZATION_STORAGE_NOT_CONFIGURED";
+const STORAGE_PROVISION_FAILED = "ORGANIZATION_STORAGE_PROVISION_FAILED";
+
+async function reconcileBlockedOrganizationStorage(env, context) {
+  if (
+    context?.allowed ||
+    context?.reason !== STORAGE_NOT_READY ||
+    !context?.organization?.id ||
+    !env?.DB?.prepare
+  ) {
+    return false;
+  }
+
+  const organization = await env.DB.prepare(
+    `SELECT *
+     FROM organizations
+     WHERE id = ?
+       AND active = 1
+     LIMIT 1`,
+  )
+    .bind(context.organization.id)
+    .first();
+
+  if (!organization) return false;
+
+  try {
+    const storage = await ensureOrganizationStorage(env, organization);
+    return storage?.ready === true;
+  } catch (error) {
+    console.warn("[Maono new-map storage] Falha ao reconciliar armazenamento", {
+      organizationId: organization.id,
+      code: error?.code || STORAGE_PROVISION_FAILED,
+    });
+
+    if (error?.code !== STORAGE_PROVISION_FAILED) {
+      throw error;
+    }
+    return false;
+  }
+}
 
 export async function onRequest({ request, env }) {
   if (request.method !== "GET") {
@@ -17,7 +59,11 @@ export async function onRequest({ request, env }) {
   try {
     const isochroneFeatureState = resolveIsochroneFeatureState(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
-    const context = await resolveNewMapCreateContext(runtimeEnv, request);
+    let context = await resolveNewMapCreateContext(runtimeEnv, request);
+
+    if (await reconcileBlockedOrganizationStorage(runtimeEnv, context)) {
+      context = await resolveNewMapCreateContext(runtimeEnv, request);
+    }
 
     return jsonResponse({
       ok: true,

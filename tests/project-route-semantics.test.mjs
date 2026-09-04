@@ -12,6 +12,10 @@ const urls = {
     "../functions/api/projects/[slug]/map-navigation.js",
     import.meta.url,
   ),
+  newMapContext: new URL(
+    "../functions/api/maps/new/context.js",
+    import.meta.url,
+  ),
   canonicalService: new URL(
     "../functions/_lib/project-map-navigation-service.js",
     import.meta.url,
@@ -37,6 +41,36 @@ test("novo projeto permanece exclusivo de /maps/new/create", () => {
     sources.legacyService,
     /mode:\s*MAP_PANEL_MODES\.CREATE[\s\S]*route:\s*preflight\.allowed\s*\?\s*"\/maps\/new\/create"/,
   );
+});
+
+test("novo mapa reconcilia storage organizacional bloqueado uma única vez", () => {
+  assert.match(
+    sources.newMapContext,
+    /import \{ ensureOrganizationStorage \} from "\.\.\/\.\.\/\.\.\/_lib\/organization-storage\.js"/,
+  );
+  assert.match(
+    sources.newMapContext,
+    /STORAGE_NOT_READY = "ORGANIZATION_STORAGE_NOT_CONFIGURED"/,
+  );
+  assert.match(
+    sources.newMapContext,
+    /context\?\.reason !== STORAGE_NOT_READY/,
+  );
+  assert.match(
+    sources.newMapContext,
+    /ensureOrganizationStorage\(env, organization\)/,
+  );
+  assert.match(
+    sources.newMapContext,
+    /if \(await reconcileBlockedOrganizationStorage\(runtimeEnv, context\)\) \{[\s\S]*context = await resolveNewMapCreateContext\(runtimeEnv, request\)/,
+  );
+  assert.match(
+    sources.newMapContext,
+    /WHERE id = \?[\s\S]*AND active = 1/,
+  );
+  assert.doesNotMatch(sources.newMapContext, /UPDATE organizations/i);
+  assert.doesNotMatch(sources.newMapContext, /ensureDropboxFolder/);
+  assert.doesNotMatch(sources.newMapContext, /while\s*\(|for\s*\(/);
 });
 
 test("rota create de projeto existente é apenas redirect temporário", () => {
