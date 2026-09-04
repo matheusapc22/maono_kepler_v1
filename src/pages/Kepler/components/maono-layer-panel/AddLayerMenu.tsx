@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { MaonoDatasetSnapshot } from "../../integration/keplerBridge";
+import { useMapPanel } from "../../map-panel/MapPanelContext";
 import LayerPanelIcon from "./LayerPanelIcon";
 
 type Props = {
@@ -24,10 +25,12 @@ function datasetMeta(dataset: MaonoDatasetSnapshot) {
 }
 
 export default function AddLayerMenu({ datasets, onCreate, onImport }: Props) {
+  const { context } = useMapPanel();
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const canImportData = context?.capabilities.addData === true;
   const sortedDatasets = useMemo(
     () =>
       [...datasets].sort((left, right) =>
@@ -132,25 +135,28 @@ export default function AddLayerMenu({ datasets, onCreate, onImport }: Props) {
               ))
             ) : (
               <p>
-                Nenhum dataset disponível. Importe dados antes de criar uma
-                camada.
+                {canImportData
+                  ? "Nenhum dataset disponível. Importe dados antes de criar uma camada."
+                  : "Nenhum dataset existente está disponível para criar uma camada."}
               </p>
             )}
           </div>
 
-          <button
-            type="button"
-            role="menuitem"
-            className="maono-add-layer__import"
-            onClick={() => {
-              if (onImport()) {
-                setOpen(false);
-              }
-            }}
-          >
-            <LayerPanelIcon name="upload" />
-            Importar novo dado
-          </button>
+          {canImportData ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="maono-add-layer__import"
+              onClick={() => {
+                if (onImport()) {
+                  setOpen(false);
+                }
+              }}
+            >
+              <LayerPanelIcon name="upload" />
+              Importar novo dado
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
