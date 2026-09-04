@@ -7,6 +7,7 @@ import {
   isMapToolStateValid,
   mapToolReducer,
 } from "../src/pages/Kepler/components/map-overlay/analysis-tools/map-tool-state.ts";
+import { withWorkspaceEditingParity } from "../functions/_lib/project-map-workspace-capabilities.js";
 
 const [
   overlay,
@@ -15,6 +16,11 @@ const [
   styles,
   placementStyles,
   markerContextMenu,
+  pointWorkflow,
+  pointDatasetCommand,
+  mapRuntime,
+  mapNavigationEndpoint,
+  newMapContextEndpoint,
 ] = await Promise.all([
   readFile(
     new URL(
@@ -56,6 +62,38 @@ const [
       "../src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx",
       import.meta.url,
     ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/engine-adapter/usePointDatasetCommand.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/maono-map-shell/MaonoMapRuntime.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../functions/api/projects/[slug]/map-navigation.js",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL("../functions/api/maps/new/context.js", import.meta.url),
     "utf8",
   ),
 ]);
@@ -211,4 +249,85 @@ test("submissão e preview continuam vinculados ao pendingPoint validado", () =>
   assert.match(overlay, /toolController\.analysisCreated/);
   assert.match(controller, /type: "SUBMIT_CONFIGURATION"/);
   assert.match(controller, /type: "ANALYSIS_CREATED"/);
+});
+
+test("PR3 Viewer recebe paridade de edição local sem Add Data nem SAVE", () => {
+  const context = withWorkspaceEditingParity({
+    mode: "viewer",
+    capabilities: {
+      previewBuffer: true,
+      previewIsochrone: true,
+      createLayer: true,
+      saveMap: true,
+    },
+  });
+
+  for (const capability of [
+    "configureTooltips",
+    "editLayers",
+    "editStyle",
+    "editLayerStyle",
+    "removeLayer",
+    "duplicateLayer",
+    "reorderLayers",
+    "manageFilters",
+    "editFilters",
+    "placeAnalysisMarker",
+    "persistBuffer",
+    "persistIsochrone",
+  ]) {
+    assert.equal(context.capabilities[capability], true, capability);
+  }
+  assert.equal(context.capabilities.createLayer, false);
+  assert.equal(context.capabilities.saveMap, false);
+  assert.equal(context.capabilities.requestProjectChange, true);
+  assert.equal(context.capabilities.editMetadata, false);
+  assert.equal(context.capabilities.updateThumbnail, false);
+});
+
+test("PR3 Editor/Create preservam persistência normal e recebem Pin independente de análise", () => {
+  for (const mode of ["editor", "create"]) {
+    const context = withWorkspaceEditingParity({
+      mode,
+      capabilities: {
+        createLayer: true,
+        saveMap: true,
+        placeAnalysisMarker: false,
+      },
+    });
+    assert.equal(context.capabilities.createLayer, true);
+    assert.equal(context.capabilities.saveMap, true);
+    assert.equal(context.capabilities.placeAnalysisMarker, true);
+  }
+  assert.match(mapNavigationEndpoint, /withWorkspaceEditingParity/);
+  assert.match(newMapContextEndpoint, /withWorkspaceEditingParity/);
+});
+
+test("PR3 Marker expõe Criar ponto e workflow usa posição atual do marcador", () => {
+  assert.match(markerContextMenu, /Criar ponto/);
+  assert.match(markerContextMenu, /MAONO_CREATE_POINT_FROM_MARKER_EVENT/);
+  assert.match(pointWorkflow, /querySelector<HTMLElement>\("\.maono-map-marker"\)/);
+  assert.match(pointWorkflow, /screenToMarkerOrigin/);
+  assert.match(pointWorkflow, /Point-from-Pin/);
+  assert.match(mapRuntime, /<PointFromPinWorkflow \/>/);
+});
+
+test("PR3 Viewer serializa point.create enquanto Editor/Create atualizam somente dataset alvo", () => {
+  assert.match(pointWorkflow, /new ViewerWorkingCopyStore/);
+  assert.match(pointWorkflow, /type: "point\.create"/);
+  assert.match(pointWorkflow, /submitProjectChangeRequest/);
+  assert.match(pointWorkflow, /completeSubmission/);
+  assert.match(pointWorkflow, /context\?\.capabilities\.createLayer === true/);
+
+  assert.match(pointDatasetCommand, /replaceDataInMap/);
+  assert.match(pointDatasetCommand, /datasetToReplaceId: dataId/);
+  assert.match(pointDatasetCommand, /keepExistingConfig: true/);
+  assert.match(pointDatasetCommand, /addDataToMap/);
+  assert.match(pointDatasetCommand, /input\.target\.createNew \? "createLayer" : "editLayers"/);
+});
+
+test("PR3 bloqueia submit Viewer se houver mutação local não serializada", () => {
+  assert.match(pointWorkflow, /untrackedViewerChanges = viewerEnabled && engineState\.hasUnsavedChanges/);
+  assert.match(pointWorkflow, /ainda não possuem contrato de Change Request/);
+  assert.match(pointWorkflow, /untrackedViewerChanges \|\|/);
 });
