@@ -71,10 +71,19 @@ BEGIN
   SELECT RAISE(ABORT, 'PROJECT_CHANGE_REQUEST_IMMUTABLE');
 END;
 
--- Operações não são editáveis. DELETE permanece permitido apenas para cascatas de lifecycle
--- (por exemplo, exclusão do projeto/request), pois não existe endpoint público de delete.
 CREATE TRIGGER IF NOT EXISTS trg_project_change_operations_no_update
 BEFORE UPDATE ON project_change_operations
+BEGIN
+  SELECT RAISE(ABORT, 'PROJECT_CHANGE_OPERATION_IMMUTABLE');
+END;
+
+-- DELETE direto é proibido enquanto o pai existe. Cascatas continuam possíveis porque,
+-- durante ON DELETE CASCADE do pai, a linha de project_change_requests já não existe.
+CREATE TRIGGER IF NOT EXISTS trg_project_change_operations_no_direct_delete
+BEFORE DELETE ON project_change_operations
+WHEN EXISTS (
+  SELECT 1 FROM project_change_requests WHERE id = OLD.change_request_id
+)
 BEGIN
   SELECT RAISE(ABORT, 'PROJECT_CHANGE_OPERATION_IMMUTABLE');
 END;
