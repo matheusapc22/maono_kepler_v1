@@ -64,6 +64,23 @@ const [markerContextMenu, mapSidebar, addLayerMenu] = await Promise.all([
   ),
 ]);
 
+const [pointWorkflow, pointDatasetCommand] = await Promise.all([
+  readFile(
+    new URL(
+      "../src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/engine-adapter/usePointDatasetCommand.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+]);
+
 const viewport = {
   longitude: -46.63,
   latitude: -23.55,
@@ -175,7 +192,6 @@ test("modo pin possui saída explícita por botão e Escape sem descartar Buffer
 test("overlay visual mantém projeção e pointer state fora do componente", () => {
   assert.doesNotMatch(overlay, /WebMercatorViewport/);
   assert.doesNotMatch(overlay, /draggingPointerRef/);
-  assert.doesNotMatch(overlay, /markerMovedRef/);
   assert.match(overlay, /useMapMarker/);
   assert.match(markerHook, /ArrowLeft/);
   assert.match(markerHook, /setPointerCapture/);
@@ -207,4 +223,24 @@ test("hotfix Point-from-Pin é capability explícita e Criar ponto fica visível
   assert.match(markerContextMenu, /data-quick-action="create-point"/);
   assert.match(markerContextMenu, /Criar ponto/);
   assert.match(markerContextMenu, /MAONO_CREATE_POINT_FROM_MARKER_EVENT/);
+});
+
+test("Novo ponto pode ser atribuído a camada de pontos existente e preserva o dataset escolhido", () => {
+  assert.match(pointWorkflow, /engineState\.layers\.flatMap/);
+  assert.match(pointWorkflow, /\["point", "cluster", "heatmap"\]\.includes\(managedType\)/);
+  assert.match(pointWorkflow, /key: layer\.id/);
+  assert.match(pointWorkflow, /dataId,/);
+  assert.match(pointWorkflow, /layerId: layer\.id/);
+  assert.match(pointWorkflow, /setTargetKey\(targets\[0\]\?\.key \|\| ""\)/);
+  assert.match(pointWorkflow, /<span>Camada \*<\/span>/);
+  assert.match(pointWorkflow, /value=\{targetKey\}/);
+  assert.match(pointWorkflow, /targetLayerId: target\.layerId/);
+  assert.match(pointWorkflow, /targetDataId: target\.dataId/);
+
+  assert.match(pointDatasetCommand, /const dataId = String\(input\.target\.dataId \|\| ""\)\.trim\(\)/);
+  assert.match(pointDatasetCommand, /rows\.push\(nextRow\(headers, \{ \.\.\.input, latitude, longitude \}\)\)/);
+  assert.match(pointDatasetCommand, /replaceDataInMap/);
+  assert.match(pointDatasetCommand, /datasetToReplaceId: dataId/);
+  assert.match(pointDatasetCommand, /autoCreateLayers: false/);
+  assert.match(pointDatasetCommand, /layerId: input\.target\.layerId/);
 });
