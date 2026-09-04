@@ -238,13 +238,13 @@ export default function MaonoMapRuntime({
   const handleOpenData = useCallback(() => {
     if (
       loadInteractionBlocked ||
-      context?.capabilities.addData !== true
+      context?.capabilities.importData !== true
     ) {
       return;
     }
 
     commands.openAddDataModal();
-  }, [commands, context?.capabilities.addData, loadInteractionBlocked]);
+  }, [commands, context?.capabilities.importData, loadInteractionBlocked]);
 
   if (!customMapShellEnabled || !context) {
     return <>{children}</>;
