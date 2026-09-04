@@ -49,7 +49,7 @@ export type PointDatasetInput = {
 
 function failure(
   command: string,
-  capability: "editLayers" | "createLayer",
+  capability: "editLayers" | "addData",
   code: "CAPABILITY_DENIED" | "COMMAND_INVALID" | "MAP_UNAVAILABLE" | "DATASET_NOT_FOUND" | "COMMAND_FAILED",
   reason: string,
 ): KeplerCommandResult {
@@ -120,7 +120,7 @@ export function usePointDatasetCommand() {
   return useCallback(
     (input: PointDatasetInput): KeplerCommandResult<{ dataId: string; layerId: string | null }> => {
       const command = "createPointFromPin";
-      const capability = input.target.createNew ? "createLayer" : "editLayers";
+      const capability = input.target.createNew ? "addData" : "editLayers";
       const authorization = authorizeMapPanelCommand(
         context?.capabilities,
         command,
