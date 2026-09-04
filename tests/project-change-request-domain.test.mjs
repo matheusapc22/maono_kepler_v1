@@ -86,6 +86,16 @@ test("registry backend aceita point.create v1 e rejeita operação desconhecida"
   );
 });
 
+test("createdAt é obrigatório para manter hash idempotente entre retries", () => {
+  const withoutCreatedAt = submission();
+  delete withoutCreatedAt.operations[0].createdAt;
+  assert.throws(
+    () => normalizeChangeRequestSubmission(withoutCreatedAt),
+    /Campo obrigatório ausente/,
+  );
+  assert.doesNotMatch(service, /operation\.createdAt \|\| new Date/);
+});
+
 test("hash é canônico para payload semanticamente idêntico", async () => {
   const a = normalizeChangeRequestSubmission(
     submission({ latitude: -15.78, longitude: -47.92, properties: { b: 2, a: 1 } }),
@@ -105,6 +115,29 @@ test("submit exige Viewer route, Idempotency-Key e usa batch atômico", () => {
   assert.match(service, /request\.headers\.get\("Idempotency-Key"\)/);
   assert.match(service, /await db\.batch\(statements\)/);
   assert.match(service, /project\.change_request\.submitted/);
+});
+
+test("submit cria Ticket e evento no mesmo batch e vincula ticket_id à Change Request", () => {
+  const ticketInsert = service.indexOf("INSERT INTO organization_tickets");
+  const requestInsert = service.indexOf("INSERT INTO project_change_requests", ticketInsert);
+  const eventInsert = service.indexOf("INSERT INTO ticket_events", requestInsert);
+  const batch = service.indexOf("await db.batch(statements)", eventInsert);
+
+  assert.ok(ticketInsert >= 0);
+  assert.ok(requestInsert > ticketInsert);
+  assert.ok(eventInsert > requestInsert);
+  assert.ok(batch > eventInsert);
+  assert.match(service, /TKT-CR-/);
+  assert.match(service, /category, created_by, active/);
+  assert.match(service, /'new', 'normal', 'map'/);
+  assert.match(service, /ticket_id/);
+  assert.match(service, /source: "project_change_request"/);
+});
+
+test("schema guard exige também tabelas canônicas do Ticket Center", () => {
+  assert.match(service, /"organization_tickets"/);
+  assert.match(service, /"ticket_events"/);
+  assert.match(service, /PROJECT_CHANGE_REQUEST_SCHEMA_OUTDATED/);
 });
 
 test("replay idempotente é resolvido antes de rejeitar revisão-base stale", () => {
