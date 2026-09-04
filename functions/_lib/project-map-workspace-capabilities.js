@@ -9,10 +9,11 @@ export function withWorkspaceEditingParity(context) {
       editLayers: true,
       editStyle: true,
       editLayerStyle: true,
-      // Criar/organizar camadas existentes continua sendo edição local;
-      // importar ou nascer um dataset novo é a capacidade ortogonal addData.
+      // O Viewer pode criar/organizar camadas e propor uma nova camada de pontos.
+      // Importação genérica de datasets permanece separada e bloqueada.
       createLayer: true,
-      addData: false,
+      addData: true,
+      importData: false,
       createPoint: true,
       removeLayer: true,
       duplicateLayer: true,
@@ -33,8 +34,9 @@ export function withWorkspaceEditingParity(context) {
     });
   } else if (context.mode === "editor" || context.mode === "create") {
     capabilities.placeAnalysisMarker = true;
-    capabilities.addData = true;
     capabilities.createPoint = true;
+    capabilities.addData = true;
+    capabilities.importData = true;
   }
 
   return { ...context, capabilities };
