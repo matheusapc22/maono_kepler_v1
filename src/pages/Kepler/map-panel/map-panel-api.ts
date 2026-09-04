@@ -32,6 +32,10 @@ function isRuntimeMode(value: unknown): value is MapRuntimeMode {
   return value === "viewer" || value === "editor" || value === "create";
 }
 
+function isExistingProjectMode(value: unknown): value is "viewer" | "editor" {
+  return value === "viewer" || value === "editor";
+}
+
 function isNavigationMode(value: unknown): value is MapNavigationMode {
   return value === "manage" || isRuntimeMode(value);
 }
@@ -413,11 +417,15 @@ async function requestMapContext(
       : isRuntimeMode(context.defaultPanel)
         ? context.defaultPanel
         : null;
+  const assignedMode = isExistingProjectMode(context.assignedMode)
+    ? context.assignedMode
+    : null;
 
   return {
     policyVersion,
     mode: context.mode,
     requestedMode: context.requestedMode,
+    assignedMode,
     defaultPanel,
     availablePanels,
     allowed,
