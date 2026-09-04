@@ -13,6 +13,7 @@ export function withWorkspaceEditingParity(context) {
       // importar ou nascer um dataset novo é a capacidade ortogonal addData.
       createLayer: true,
       addData: false,
+      createPoint: true,
       removeLayer: true,
       duplicateLayer: true,
       reorderLayers: true,
@@ -33,6 +34,7 @@ export function withWorkspaceEditingParity(context) {
   } else if (context.mode === "editor" || context.mode === "create") {
     capabilities.placeAnalysisMarker = true;
     capabilities.addData = true;
+    capabilities.createPoint = true;
   }
 
   return { ...context, capabilities };
