@@ -52,12 +52,13 @@ test("migration 0020 cria apenas request + operations com vínculo opcional ao t
   assert.match(migration, /UNIQUE \(organization_id, requested_by_user_id, idempotency_key\)/);
 });
 
-test("migration protege conteúdo submitted e operações contra mutação", () => {
+test("migration protege conteúdo submitted sem bloquear cascatas de lifecycle", () => {
   assert.match(migration, /trg_project_change_requests_immutable_content/);
   assert.match(migration, /RAISE\(ABORT, 'PROJECT_CHANGE_REQUEST_IMMUTABLE'\)/);
   assert.match(migration, /trg_project_change_operations_no_update/);
-  assert.match(migration, /trg_project_change_operations_no_delete/);
   assert.match(migration, /PROJECT_CHANGE_OPERATION_IMMUTABLE/);
+  assert.match(migration, /REFERENCES project_change_requests\(id\) ON DELETE CASCADE/);
+  assert.doesNotMatch(migration, /trg_project_change_operations_no_delete/);
 });
 
 test("máquina de estados nasce preparada sem expor comandos de review nesta PR", () => {
