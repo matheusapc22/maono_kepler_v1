@@ -1,6 +1,7 @@
 import {
   errorResponse,
   errorResponseFromError,
+  jsonResponse,
   methodNotAllowed,
 } from "../../../_lib/http.js";
 import {
@@ -10,9 +11,11 @@ import {
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject } from "../../../_lib/projects.js";
 import { can, recordAuditLog } from "../../../_lib/permissions.js";
+import { getDropboxClient } from "../../../_lib/dropbox-client.js";
 import {
   downloadDropboxBinaryFile,
   getDropboxMetadata,
+  joinDropboxPath,
 } from "../../../_lib/dropbox.js";
 import {
   PROJECT_LIFECYCLE_STATES,
@@ -29,6 +32,8 @@ const STREAM_START_TIMEOUT_MS = 20_000;
 const STREAM_INACTIVITY_TIMEOUT_MS = 20_000;
 const EXPECTED_REVISION_HEADER = "X-Maono-Expected-Config-Revision";
 const STREAM_TELEMETRY_PREFIX = "[Maono config-stream transport]";
+const DROPBOX_TEMPORARY_LINK_URL =
+  "https://api.dropboxapi.com/2/files/get_temporary_link";
 
 function decodeProjectSlug(value) {
   try {
@@ -82,6 +87,70 @@ function readExpectedRevision(request) {
   }
 
   return revision;
+}
+
+function directDeliveryRequested(request) {
+  try {
+    return new URL(request.url).searchParams.get("delivery") === "direct";
+  } catch {
+    return false;
+  }
+}
+
+async function createDropboxTemporaryLink(env, rootPath, fileName) {
+  const path = joinDropboxPath(rootPath, fileName);
+  const client = getDropboxClient(env);
+  const response = await client.request({
+    operation: "files.get_temporary_link",
+    url: DROPBOX_TEMPORARY_LINK_URL,
+    timeoutMs: 5_000,
+    buildInit: ({ accessToken }) => ({
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ path }),
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    const error = streamError(
+      "Não foi possível preparar o acesso direto à configuração do projeto.",
+      response.status >= 500 ? 503 : response.status,
+      text.includes("path/not_found")
+        ? "DROPBOX_PATH_NOT_FOUND"
+        : "DROPBOX_TEMPORARY_LINK_FAILED",
+    );
+    error.dropboxStatus = response.status;
+    throw error;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw streamError(
+      "O storage retornou um descriptor de download inválido.",
+      502,
+      "DROPBOX_TEMPORARY_LINK_INVALID",
+    );
+  }
+
+  const downloadUrl = String(payload?.link || "").trim();
+  if (!/^https:\/\//i.test(downloadUrl)) {
+    throw streamError(
+      "O storage não retornou uma URL temporária válida.",
+      502,
+      "DROPBOX_TEMPORARY_LINK_INVALID",
+    );
+  }
+
+  return {
+    downloadUrl,
+    metadata: payload?.metadata || null,
+  };
 }
 
 function resolvePublishedFile(project) {
@@ -476,10 +545,6 @@ export function withStreamInactivityWatchdog(
 
 async function preparePublishedUpstream(env, project, published) {
   return withStreamStartDeadline(async () => {
-    // Save S05/S03 already verifies the immutable object before publication.
-    // On every read we re-check cheap provider metadata (size/content hash when
-    // available) instead of downloading the whole object into Worker memory to
-    // recompute SHA-256. The actual bytes are then proxied as a stream.
     const storageMetadata = await getDropboxMetadata(
       env,
       project.dropbox_root_path,
@@ -597,6 +662,77 @@ export async function onRequest(context) {
     const published = resolvePublishedFile(project);
     const expectedRevision = readExpectedRevision(request);
     assertExpectedRevision(expectedRevision, published.revision);
+
+    if (directDeliveryRequested(request)) {
+      const temporary = await withStreamStartDeadline(() =>
+        createDropboxTemporaryLink(
+          env,
+          project.dropbox_root_path,
+          published.fileName,
+        ),
+      );
+      const verifiedMetadata = assertPublishedMetadata(
+        published,
+        temporary.metadata,
+      );
+      const sizeBytes = verifiedMetadata.sizeBytes;
+
+      scheduleAudit(
+        context,
+        auditStream(env, request, user, project, slug, "success", {
+          permission: "project.view",
+          correlationId,
+          configRevision: published.revision,
+          expectedRevision,
+          lifecycleState: project.lifecycle_state ?? null,
+          schemaName: published.schemaName,
+          schemaVersion: published.schemaVersion,
+          sizeBytes,
+          transport: "direct",
+          integrity:
+            verifiedMetadata.providerHashVerified
+              ? "provider-content-hash"
+              : "size-metadata",
+          legacy: published.legacy,
+        }),
+        "direct",
+      );
+
+      console.info("[Maono config direct]", {
+        correlationId,
+        projectId: project.id,
+        revision: published.revision,
+        sizeBytes,
+      });
+
+      return jsonResponse(
+        {
+          ok: true,
+          transport: "direct",
+          downloadUrl: temporary.downloadUrl,
+          projectId: Number(project.id),
+          revision: published.revision,
+          sizeBytes,
+          schemaName: published.schemaName,
+          schemaVersion: published.schemaVersion,
+          correlationId,
+        },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "private, no-store, max-age=0",
+            "Pragma": "no-cache",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+            "X-Correlation-Id": correlationId,
+            "X-Maono-Config-Transport": "direct",
+            "X-Maono-Project-Id": String(project.id),
+            "X-Maono-Config-Revision": String(published.revision || 0),
+            "X-Maono-Config-Size": String(sizeBytes || 0),
+          },
+        },
+      );
+    }
 
     const {
       upstream,
