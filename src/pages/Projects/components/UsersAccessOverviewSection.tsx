@@ -15,6 +15,7 @@ import OrganizationPermissionManager, {
   loadAccessGovernance,
   type AccessGovernanceCapabilities,
 } from "../../../components/access/OrganizationPermissionManager";
+import ProjectMapAccessManager from "../../../components/access/ProjectMapAccessManager";
 import {
   accessFromCode,
   profileFromTechnical,
@@ -122,6 +123,8 @@ export default function UsersAccessOverviewSection({
     useState<AccessGovernanceCapabilities | null>(null);
   const [managementTargetUserId, setManagementTargetUserId] =
     useState<ApiId | null>(null);
+  const [mapAccessTargetUserId, setMapAccessTargetUserId] =
+    useState<ApiId | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [profileFilter, setProfileFilter] = useState("all");
@@ -186,6 +189,16 @@ export default function UsersAccessOverviewSection({
     [delegatedAlternative, governance, user?.id],
   );
 
+  const canManageMapPerson = useCallback(
+    (person: OrganizationUser) =>
+      (isSuperAdmin || delegatedAlternative) &&
+      person.active !== false &&
+      !sameId(person.id, user?.id) &&
+      (isSuperAdmin ||
+        Boolean(governance?.allowedTargetLevels.includes(targetLevel(person)))),
+    [delegatedAlternative, governance, isSuperAdmin, user?.id],
+  );
+
   const active = people.filter((item) => item.active !== false).length;
   const suspended = people.length - active;
   const limit = limits?.users.limit ?? Math.max(active, people.length);
@@ -246,8 +259,8 @@ export default function UsersAccessOverviewSection({
           <span className="people-eyebrow">VISÃO DA EQUIPE</span>
           <h2>Usuários e Acessos</h2>
           <p>
-            Consulte pessoas, perfis e acessos da organização. O Super Admin
-            configura políticas no Painel Admin; delegados atuam nesta lista.
+            Consulte pessoas, perfis e acessos da organização. Cada vínculo de
+            projeto usa uma única rota de mapa: Viewer ou Editor.
           </p>
         </div>
         <div className="people-access-actions">
@@ -269,16 +282,23 @@ export default function UsersAccessOverviewSection({
         <div className="people-notice governance active" role="status">
           <strong>Delegação limitada ativa</strong>
           <span>
-            Use o botão <strong>Gerenciar</strong> na linha de cada pessoa
-            elegível. O painel respeita a organização ativa, os perfis
-            permitidos e a whitelist definida pelo Super Admin.
+            Use <strong>Mapa</strong> para definir Viewer ou Editor por projeto
+            e <strong>Gerenciar</strong> para os acessos adicionais autorizados.
+          </span>
+        </div>
+      ) : isSuperAdmin ? (
+        <div className="people-notice governance active" role="status">
+          <strong>Gestão de rotas disponível</strong>
+          <span>
+            Use <strong>Mapa</strong> para atribuir a rota exclusiva e controlar
+            a criação de novos projetos.
           </span>
         </div>
       ) : (
         <div className="people-notice governance" role="status">
           <strong>Consulta operacional</strong>
           <span>
-            Esta tela não altera perfis, vínculos ou acessos adicionais.
+            Esta tela não altera perfis, vínculos ou acessos sem delegação.
           </span>
         </div>
       )}
@@ -381,46 +401,65 @@ export default function UsersAccessOverviewSection({
               </tr>
             )}
             {!loading &&
-              filtered.map((person) => (
-                <tr key={String(person.id)}>
-                  <td>
-                    <strong>{person.name || "Pessoa sem nome"}</strong>
-                    <small>{person.email}</small>
-                  </td>
-                  <td>
-                    <span
-                      className={
-                        "people-status " +
-                        (person.active === false ? "suspended" : "active")
-                      }
-                    >
-                      {person.active === false ? "Suspenso" : "Ativo"}
-                    </span>
-                  </td>
-                  <td>{profileLabel(person)}</td>
-                  <td>
-                    {(person.permissions ?? []).length
-                      ? String(person.permissions?.length) +
-                        " acesso" +
-                        (person.permissions?.length === 1 ? "" : "s")
-                      : "Nenhum adicional"}
-                  </td>
-                  <td>{formatDate(person.updatedAt ?? person.createdAt)}</td>
-                  <td>
-                    {canManagePerson(person) ? (
-                      <button
-                        className="mm-btn tiny people-manage-button"
-                        type="button"
-                        onClick={() => setManagementTargetUserId(person.id)}
+              filtered.map((person) => {
+                const manageAdditional = canManagePerson(person);
+                const manageMap = canManageMapPerson(person);
+                return (
+                  <tr key={String(person.id)}>
+                    <td>
+                      <strong>{person.name || "Pessoa sem nome"}</strong>
+                      <small>{person.email}</small>
+                    </td>
+                    <td>
+                      <span
+                        className={
+                          "people-status " +
+                          (person.active === false ? "suspended" : "active")
+                        }
                       >
-                        Gerenciar
-                      </button>
-                    ) : (
-                      <span className="people-action-unavailable">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                        {person.active === false ? "Suspenso" : "Ativo"}
+                      </span>
+                    </td>
+                    <td>{profileLabel(person)}</td>
+                    <td>
+                      {(person.permissions ?? []).length
+                        ? String(person.permissions?.length) +
+                          " acesso" +
+                          (person.permissions?.length === 1 ? "" : "s")
+                        : "Nenhum adicional"}
+                    </td>
+                    <td>{formatDate(person.updatedAt ?? person.createdAt)}</td>
+                    <td>
+                      {manageMap || manageAdditional ? (
+                        <div className="people-access-actions">
+                          {manageMap && (
+                            <button
+                              className="mm-btn tiny people-manage-button"
+                              type="button"
+                              onClick={() => setMapAccessTargetUserId(person.id)}
+                            >
+                              Mapa
+                            </button>
+                          )}
+                          {manageAdditional && (
+                            <button
+                              className="mm-btn tiny people-manage-button"
+                              type="button"
+                              onClick={() =>
+                                setManagementTargetUserId(person.id)
+                              }
+                            >
+                              Gerenciar
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="people-action-unavailable">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>
@@ -435,6 +474,16 @@ export default function UsersAccessOverviewSection({
           onSaved={load}
         />
       )}
+
+      {mapAccessTargetUserId !== null &&
+        (isSuperAdmin || delegatedAlternative) && (
+          <ProjectMapAccessManager
+            organizationId={organizationId}
+            userId={mapAccessTargetUserId}
+            onClose={() => setMapAccessTargetUserId(null)}
+            onSaved={load}
+          />
+        )}
     </section>
   );
 }
