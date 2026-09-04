@@ -44,6 +44,22 @@ type ErrorOptions = {
   parseDurationMs?: number;
 };
 
+type DirectDescriptor = {
+  downloadUrl: string;
+  projectId: number | null;
+  revision: number;
+  sizeBytes: number;
+  schemaName: string | null;
+  schemaVersion: number | null;
+  correlationId: string | null;
+};
+
+type BodyMetadata = {
+  revision?: number | null;
+  expectedSizeBytes?: number | null;
+  correlationId?: string | null;
+};
+
 export class MapConfigStreamError extends Error {
   code: string;
   category: string;
@@ -87,6 +103,11 @@ function finiteNumber(value: unknown) {
 function integerOrNull(value: unknown) {
   const number = finiteNumber(value);
   return number !== null && Number.isInteger(number) ? number : null;
+}
+
+function positiveIntegerOrNull(value: unknown) {
+  const number = integerOrNull(value);
+  return number !== null && number > 0 ? number : null;
 }
 
 function roundedDuration(value: unknown) {
@@ -143,26 +164,36 @@ async function apiError(response: Response) {
     payload = null;
   }
 
-  const code = serverCode(payload?.error?.code || payload?.code || null);
+  const workerResourceLimit =
+    payload?.cloudflare_error === true && Number(payload?.error_code) === 1102;
+  const code = workerResourceLimit
+    ? "MAP_CONFIG_WORKER_RESOURCE_LIMIT"
+    : serverCode(payload?.error?.code || payload?.code || null);
   const revisionChanged = code === "MAP_CONFIG_STREAM_REVISION_CHANGED";
   const timeout = code === "MAP_CONFIG_STREAM_TIMEOUT";
   const retryablePayload = payload?.error?.retryable ?? payload?.retryable;
   const retryableStatus = [408, 425, 429].includes(response.status) || response.status >= 500;
 
   return new MapConfigStreamError(
-    payload?.error?.message ||
-      payload?.message ||
-      (revisionChanged
-        ? "O projeto foi atualizado durante o carregamento. Reabra para carregar a revisão mais recente."
-        : "Não foi possível carregar a configuração do projeto."),
+    workerResourceLimit
+      ? "O Worker excedeu o limite de recursos ao preparar o carregamento do projeto."
+      : payload?.error?.message ||
+        payload?.message ||
+        (revisionChanged
+          ? "O projeto foi atualizado durante o carregamento. Reabra para carregar a revisão mais recente."
+          : "Não foi possível carregar a configuração do projeto."),
     {
       code,
-      category: payload?.error?.category || payload?.category || "MAP_CONFIG_LOAD",
-      retryable: revisionChanged
+      category: workerResourceLimit
+        ? "INFRASTRUCTURE"
+        : payload?.error?.category || payload?.category || "MAP_CONFIG_LOAD",
+      retryable: workerResourceLimit
         ? false
-        : typeof retryablePayload === "boolean"
-          ? retryablePayload
-          : timeout || retryableStatus,
+        : revisionChanged
+          ? false
+          : typeof retryablePayload === "boolean"
+            ? retryablePayload
+            : timeout || retryableStatus,
       status: response.status,
       correlationId:
         payload?.error?.correlationId ||
@@ -203,13 +234,22 @@ async function readCompleteJsonBody(
   response: Response,
   signal: AbortSignal,
   now: () => number,
+  metadata: BodyMetadata = {},
 ) {
-  const revision = headerInteger(response.headers, "X-Maono-Config-Revision");
-  const configSize = headerInteger(response.headers, "X-Maono-Config-Size", true);
+  const metadataRevision = integerOrNull(metadata.revision);
+  const revision = metadataRevision ?? headerInteger(response.headers, "X-Maono-Config-Revision");
+  const metadataSize = positiveIntegerOrNull(metadata.expectedSizeBytes);
+  const configSize = metadataSize ?? headerInteger(response.headers, "X-Maono-Config-Size", true);
   const contentLength = headerInteger(response.headers, "Content-Length", true);
-  const correlationId = response.headers.get("X-Correlation-Id") || null;
+  const correlationId =
+    metadata.correlationId || response.headers.get("X-Correlation-Id") || null;
 
-  if (configSize !== null && contentLength !== null && configSize !== contentLength) {
+  if (
+    metadataSize === null &&
+    configSize !== null &&
+    contentLength !== null &&
+    configSize !== contentLength
+  ) {
     throw new MapConfigStreamError(
       "O servidor informou tamanhos incompatíveis para a configuração do projeto.",
       {
@@ -224,7 +264,7 @@ async function readCompleteJsonBody(
     );
   }
 
-  const expectedSizeBytes = configSize ?? contentLength;
+  const expectedSizeBytes = metadataSize ?? configSize ?? contentLength;
   if (expectedSizeBytes === null) {
     throw new MapConfigStreamError(
       "O servidor não informou um tamanho confiável para validar a configuração.",
@@ -363,6 +403,71 @@ async function readCompleteJsonBody(
   }
 }
 
+async function readDirectDescriptor(response: Response): Promise<DirectDescriptor> {
+  if (response.headers.get("X-Maono-Config-Transport") !== "direct") {
+    try {
+      await response.body?.cancel();
+    } catch {
+      // Deploy drift guard: cancel legacy proxy body without turning it into a fallback.
+    }
+    throw new MapConfigStreamError(
+      "O backend ainda não disponibiliza a entrega direta da configuração.",
+      {
+        code: "MAP_CONFIG_DIRECT_DELIVERY_UNAVAILABLE",
+        retryable: false,
+        status: response.status,
+        correlationId: response.headers.get("X-Correlation-Id"),
+        failureClass: "headers",
+        revision: headerInteger(response.headers, "X-Maono-Config-Revision"),
+      },
+    );
+  }
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  const downloadUrl = String(payload?.downloadUrl || "").trim();
+  const revision = integerOrNull(payload?.revision);
+  const sizeBytes = positiveIntegerOrNull(payload?.sizeBytes);
+  let validUrl = false;
+  try {
+    validUrl = new URL(downloadUrl).protocol === "https:";
+  } catch {
+    validUrl = false;
+  }
+
+  if (!validUrl || revision === null || sizeBytes === null) {
+    throw new MapConfigStreamError(
+      "O backend retornou um descriptor de download inválido.",
+      {
+        code: "MAP_CONFIG_DIRECT_DESCRIPTOR_INVALID",
+        retryable: false,
+        status: response.status,
+        correlationId:
+          payload?.correlationId || response.headers.get("X-Correlation-Id"),
+        failureClass: "headers",
+        revision,
+        expectedSizeBytes: sizeBytes,
+      },
+    );
+  }
+
+  return {
+    downloadUrl,
+    projectId: integerOrNull(payload?.projectId),
+    revision,
+    sizeBytes,
+    schemaName: typeof payload?.schemaName === "string" ? payload.schemaName : null,
+    schemaVersion: integerOrNull(payload?.schemaVersion),
+    correlationId:
+      payload?.correlationId || response.headers.get("X-Correlation-Id") || null,
+  };
+}
+
 function emitAttempt(
   callback: ((trace: MapConfigStreamAttemptTrace) => void) | undefined,
   trace: MapConfigStreamAttemptTrace,
@@ -408,13 +513,16 @@ export async function loadProjectConfigStream(
         headers["X-Maono-Expected-Config-Revision"] = String(pinnedRevision);
       }
 
-      response = await fetchImpl(`/api/projects/${encodeURIComponent(projectSlug)}/config-stream`, {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-        headers,
-        signal,
-      });
+      response = await fetchImpl(
+        `/api/projects/${encodeURIComponent(projectSlug)}/config-stream?delivery=direct`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          headers,
+          signal,
+        },
+      );
 
       const responseStartMs = roundedDuration(now() - attemptStartedAt);
       responseRevision = headerInteger(response.headers, "X-Maono-Config-Revision");
@@ -440,22 +548,54 @@ export async function loadProjectConfigStream(
         continue;
       }
 
-      if (response.headers.get("X-Maono-Config-Transport") !== "stream") {
+      const descriptor = await readDirectDescriptor(response);
+      responseRevision = descriptor.revision;
+      if (pinnedRevision !== null && descriptor.revision !== pinnedRevision) {
         throw new MapConfigStreamError(
-          "O servidor não confirmou o transporte seguro da configuração.",
+          "A revisão publicada mudou durante a repetição do carregamento.",
           {
-            code: "MAP_CONFIG_STREAM_HEADERS_INVALID",
+            code: "MAP_CONFIG_STREAM_REVISION_CHANGED",
             retryable: false,
-            status: response.status,
-            correlationId: response.headers.get("X-Correlation-Id"),
-            failureClass: "headers",
-            revision: responseRevision,
+            status: 409,
+            correlationId: descriptor.correlationId,
+            failureClass: "revision_changed",
+            revision: descriptor.revision,
+            expectedSizeBytes: descriptor.sizeBytes,
           },
         );
       }
 
       try {
-        const body = await readCompleteJsonBody(response, signal, now);
+        const downloadResponse = await fetchImpl(descriptor.downloadUrl, {
+          method: "GET",
+          credentials: "omit",
+          cache: "no-store",
+          referrerPolicy: "no-referrer",
+          signal,
+        });
+
+        if (!downloadResponse.ok) {
+          const retryableStatus =
+            [408, 425, 429].includes(downloadResponse.status) || downloadResponse.status >= 500;
+          throw new MapConfigStreamError(
+            "O storage não conseguiu entregar a configuração do projeto.",
+            {
+              code: "MAP_CONFIG_DIRECT_DOWNLOAD_FAILED",
+              retryable: retryableStatus,
+              status: downloadResponse.status,
+              correlationId: descriptor.correlationId,
+              failureClass: "headers",
+              revision: descriptor.revision,
+              expectedSizeBytes: descriptor.sizeBytes,
+            },
+          );
+        }
+
+        const body = await readCompleteJsonBody(downloadResponse, signal, now, {
+          revision: descriptor.revision,
+          expectedSizeBytes: descriptor.sizeBytes,
+          correlationId: descriptor.correlationId,
+        });
         emitAttempt(options.onAttempt, {
           attempt,
           revision: body.revision,
@@ -471,12 +611,12 @@ export async function loadProjectConfigStream(
         });
         return {
           config: body.config,
-          projectId: headerInteger(response.headers, "X-Maono-Project-Id"),
+          projectId: descriptor.projectId,
           revision: body.revision,
-          schemaName: response.headers.get("X-Maono-Config-Schema") || null,
-          schemaVersion: headerInteger(response.headers, "X-Maono-Config-Schema-Version"),
+          schemaName: descriptor.schemaName,
+          schemaVersion: descriptor.schemaVersion,
           sizeBytes: body.receivedBytes,
-          correlationId: response.headers.get("X-Correlation-Id") || null,
+          correlationId: descriptor.correlationId,
           attemptCount: attempt,
         };
       } catch (error) {
@@ -499,14 +639,18 @@ export async function loadProjectConfigStream(
 
         const normalized = isMapConfigStreamError(error)
           ? error
-          : new MapConfigStreamError("Falha ao processar a configuração recebida.", {
-              code: "MAP_CONFIG_CLIENT_PARSE_FAILED",
-              retryable: false,
-              status: response.status,
-              correlationId: response.headers.get("X-Correlation-Id"),
-              failureClass: "parse",
-              revision: responseRevision,
-            });
+          : new MapConfigStreamError(
+              "Não foi possível acessar diretamente a configuração no storage.",
+              {
+                code: "MAP_CONFIG_DIRECT_DOWNLOAD_FAILED",
+                retryable: true,
+                status: null,
+                correlationId: descriptor.correlationId,
+                failureClass: "headers",
+                revision: descriptor.revision,
+                expectedSizeBytes: descriptor.sizeBytes,
+              },
+            );
         const retryScheduled = normalized.retryable && attempt === 1;
         emitAttempt(options.onAttempt, {
           attempt,
@@ -522,7 +666,7 @@ export async function loadProjectConfigStream(
           code: normalized.code,
         });
         if (!retryScheduled) throw normalized;
-        if (responseRevision !== null) pinnedRevision = responseRevision;
+        pinnedRevision = descriptor.revision;
         await sleep(500 + Math.round(random() * 500), signal);
       }
     } catch (error) {
@@ -530,12 +674,13 @@ export async function loadProjectConfigStream(
       if (isMapConfigStreamError(error)) throw error;
 
       const transportError = new MapConfigStreamError(
-        "Não foi possível concluir a transferência da configuração do projeto.",
+        "Não foi possível preparar a entrega direta da configuração do projeto.",
         {
-          code: "MAP_CONFIG_STREAM_INTERRUPTED",
+          code: "MAP_CONFIG_DIRECT_DELIVERY_FAILED",
           retryable: true,
           status: response?.status ?? null,
-          correlationId: response?.headers.get("X-Correlation-Id") || options.correlationId || null,
+          correlationId:
+            response?.headers.get("X-Correlation-Id") || options.correlationId || null,
           failureClass: "headers",
           revision: responseRevision,
         },
@@ -560,7 +705,7 @@ export async function loadProjectConfigStream(
   }
 
   throw new MapConfigStreamError("Não foi possível carregar a configuração do projeto.", {
-    code: "MAP_CONFIG_STREAM_INTERRUPTED",
+    code: "MAP_CONFIG_DIRECT_DELIVERY_FAILED",
     retryable: false,
     failureClass: "body",
   });
