@@ -78,9 +78,8 @@ function openWorkingCopyDb(): Promise<IDBDatabase> {
     }
     const request = globalThis.indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "key" });
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+        request.result.createObjectStore(STORE_NAME, { keyPath: "key" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -95,39 +94,28 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
+async function withStore<T>(
+  mode: IDBTransactionMode,
+  action: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  const db = await openWorkingCopyDb();
+  try {
+    return await requestResult(action(db.transaction(STORE_NAME, mode).objectStore(STORE_NAME)));
+  } finally {
+    db.close();
+  }
+}
+
 export const indexedDbWorkingCopyStorage: ViewerWorkingCopyStorage = {
   async get(key) {
-    const db = await openWorkingCopyDb();
-    try {
-      const value = await requestResult(
-        db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(key),
-      );
-      return value ? clone(value as ViewerWorkingCopy) : null;
-    } finally {
-      db.close();
-    }
+    const value = await withStore("readonly", (store) => store.get(key));
+    return value ? clone(value as ViewerWorkingCopy) : null;
   },
-
   async put(value) {
-    const db = await openWorkingCopyDb();
-    try {
-      await requestResult(
-        db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).put(clone(value)),
-      );
-    } finally {
-      db.close();
-    }
+    await withStore("readwrite", (store) => store.put(clone(value)));
   },
-
   async delete(key) {
-    const db = await openWorkingCopyDb();
-    try {
-      await requestResult(
-        db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(key),
-      );
-    } finally {
-      db.close();
-    }
+    await withStore("readwrite", (store) => store.delete(key));
   },
 };
 
@@ -154,6 +142,20 @@ function validateOperation(operation: ViewerChangeOperation) {
   entry.validate(operation.payload);
 }
 
+function assertBaseRevision(value: number) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error("WORKING_COPY_BASE_REVISION_INVALID");
+  }
+}
+
+function staleError(baseRevision: number, currentRevision: number) {
+  return Object.assign(new Error("WORKING_COPY_BASE_REVISION_STALE"), {
+    code: "WORKING_COPY_BASE_REVISION_STALE",
+    baseRevision,
+    currentRevision,
+  });
+}
+
 export class ViewerWorkingCopyStore {
   readonly key: string;
   private readonly identity: ReturnType<typeof normalizeIdentity>;
@@ -166,15 +168,18 @@ export class ViewerWorkingCopyStore {
     this.key = workingCopyKey(identity);
   }
 
-  async load() {
+  load() {
     return this.storage.get(this.key);
   }
 
   async ensure(baseRevision: number): Promise<ViewerWorkingCopy> {
+    assertBaseRevision(baseRevision);
     const existing = await this.load();
-    if (existing) return existing;
-    if (!Number.isInteger(baseRevision) || baseRevision < 0) {
-      throw new Error("WORKING_COPY_BASE_REVISION_INVALID");
+    if (existing) {
+      if (existing.baseRevision !== baseRevision) {
+        throw staleError(existing.baseRevision, baseRevision);
+      }
+      return existing;
     }
     const now = new Date().toISOString();
     const value: ViewerWorkingCopy = {
@@ -191,10 +196,7 @@ export class ViewerWorkingCopyStore {
     return clone(value);
   }
 
-  async appendOperation(
-    baseRevision: number,
-    operation: ViewerChangeOperation,
-  ): Promise<ViewerWorkingCopy> {
+  async appendOperation(baseRevision: number, operation: ViewerChangeOperation) {
     validateOperation(operation);
     const current = await this.ensure(baseRevision);
     if (current.operations.some((item) => item.id === operation.id)) {
@@ -209,7 +211,7 @@ export class ViewerWorkingCopyStore {
     return clone(next);
   }
 
-  async removeOperation(operationId: string): Promise<ViewerWorkingCopy | null> {
+  async removeOperation(operationId: string) {
     const current = await this.load();
     if (!current) return null;
     const next = {
@@ -221,26 +223,21 @@ export class ViewerWorkingCopyStore {
     return clone(next);
   }
 
-  async snapshot(): Promise<ViewerWorkingCopy | null> {
+  async snapshot() {
     const current = await this.load();
     return current ? clone(current) : null;
   }
 
-  async clear() {
-    await this.storage.delete(this.key);
+  clear() {
+    return this.storage.delete(this.key);
   }
 
   async assertCurrentRevision(currentRevision: number) {
+    assertBaseRevision(Number(currentRevision));
     const current = await this.load();
     if (!current) return null;
     if (current.baseRevision !== Number(currentRevision)) {
-      const error = new Error("WORKING_COPY_BASE_REVISION_STALE");
-      Object.assign(error, {
-        code: "WORKING_COPY_BASE_REVISION_STALE",
-        baseRevision: current.baseRevision,
-        currentRevision: Number(currentRevision),
-      });
-      throw error;
+      throw staleError(current.baseRevision, Number(currentRevision));
     }
     return clone(current);
   }
