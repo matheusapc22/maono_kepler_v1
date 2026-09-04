@@ -10,92 +10,25 @@ import {
 } from "../src/pages/Kepler/components/map-overlay/marker-projection.ts";
 
 const [overlay, markerHook, controller, placementCss] = await Promise.all([
-  readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-  readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/useMapMarker.ts",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-  readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/analysis-tools/useMapToolController.ts",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-  readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/map-placement-mode.css",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/useMapMarker.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/analysis-tools/useMapToolController.ts", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/map-placement-mode.css", import.meta.url), "utf8"),
 ]);
 
 const [markerContextMenu, mapSidebar, addLayerMenu] = await Promise.all([
-  readFile(
-    new URL(
-      "../src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-  readFile(
-    new URL(
-      "../src/pages/Kepler/components/maono-map-shell/MapSidebar.tsx",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-  readFile(
-    new URL(
-      "../src/pages/Kepler/components/maono-layer-panel/AddLayerMenu.tsx",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/maono-map-shell/MapSidebar.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/maono-layer-panel/AddLayerMenu.tsx", import.meta.url), "utf8"),
 ]);
 
 const [pointWorkflow, pointDatasetCommand] = await Promise.all([
-  readFile(
-    new URL(
-      "../src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-  readFile(
-    new URL(
-      "../src/pages/Kepler/engine-adapter/usePointDatasetCommand.ts",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
+  readFile(new URL("../src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/engine-adapter/usePointDatasetCommand.ts", import.meta.url), "utf8"),
 ]);
 
-const viewport = {
-  longitude: -46.63,
-  latitude: -23.55,
-  zoom: 8,
-  bearing: 0,
-  pitch: 0,
-  width: 1000,
-  height: 700,
-};
-const canvas = {
-  left: 100,
-  top: 50,
-  width: 1000,
-  height: 700,
-};
+const viewport = { longitude: -46.63, latitude: -23.55, zoom: 8, bearing: 0, pitch: 0, width: 1000, height: 700 };
+const canvas = { left: 100, top: 50, width: 1000, height: 700 };
 
 test("normalização de longitude usa o intervalo -180/180", () => {
   assert.equal(normalizeLongitude(181), -179);
@@ -107,13 +40,7 @@ test("projeção do marcador faz round-trip entre mapa e tela", () => {
   const origin = { latitude: -23.55, longitude: -46.63 };
   const screen = markerOriginToScreen(origin, canvas, viewport);
   assert.ok(screen);
-
-  const restored = screenToMarkerOrigin(
-    screen.left,
-    screen.top,
-    canvas,
-    viewport,
-  );
+  const restored = screenToMarkerOrigin(screen.left, screen.top, canvas, viewport);
   assert.ok(restored);
   assert.ok(Math.abs(restored.latitude - origin.latitude) < 1e-6);
   assert.ok(Math.abs(restored.longitude - origin.longitude) < 1e-6);
@@ -146,7 +73,6 @@ test("cursor pin fica estável por estado CSS sem disputar pointermove com getCu
   assert.doesNotMatch(markerHook, /applyPlacementCursor/);
   assert.doesNotMatch(markerHook, /schedulePlacementCursor/);
   assert.doesNotMatch(markerHook, /setProperty\("cursor"/);
-
   assert.match(placementCss, /:root\[data-maono-map-placement\]/);
   assert.match(placementCss, /#default-deckgl-overlay-wrapper/);
   assert.match(placementCss, /#default-deckgl-overlay/);
@@ -171,19 +97,16 @@ test("placement preserva interação nativa de zoom/pan e só aceita clique sem 
 });
 
 test("modo pin possui saída explícita por botão e Escape sem descartar Buffer já criado", () => {
-  const placeAtBlock =
-    markerHook.match(/const placeAt = useCallback\([\s\S]*?\n  \);/)?.[0] || "";
+  const placeAtBlock = markerHook.match(/const placeAt = useCallback\([\s\S]*?\n  \);/)?.[0] || "";
   assert.match(placeAtBlock, /setMenuOpen\(false\)/);
   assert.doesNotMatch(placeAtBlock, /setMenuOpen\(true\)/);
   assert.doesNotMatch(markerHook, /event\.key === "Escape"/);
-
   assert.match(controller, /const exitPlacement = useCallback/);
   assert.match(controller, /session\?\.dataId/);
   assert.match(controller, /return finishMulti\(\)/);
   assert.match(controller, /handlePlacementEscape/);
   assert.match(controller, /return exitPlacement\(\)/);
   assert.match(controller, /event\.key !== "Escape"/);
-
   assert.match(overlay, /Modo pin ativo/);
   assert.match(overlay, /Sair do modo pin/);
   assert.match(overlay, /toolController\.exitPlacement/);
@@ -198,10 +121,7 @@ test("overlay visual mantém projeção e pointer state fora do componente", () 
 });
 
 test("Viewer pode criar camada de pontos, mas não importar dados genéricos", () => {
-  const viewer = withWorkspaceEditingParity({
-    mode: "viewer",
-    capabilities: { createLayer: false, addData: false, importData: true },
-  });
+  const viewer = withWorkspaceEditingParity({ mode: "viewer", capabilities: { createLayer: false, addData: false, importData: true } });
   assert.equal(viewer.capabilities.createLayer, true);
   assert.equal(viewer.capabilities.addData, true);
   assert.equal(viewer.capabilities.importData, false);
@@ -219,7 +139,6 @@ test("hotfix Point-from-Pin é capability explícita e Criar ponto fica visível
     assert.equal(context.capabilities.createPoint, true, mode);
     assert.equal(context.capabilities.placeAnalysisMarker, true, mode);
   }
-
   assert.match(markerContextMenu, /capabilities\.createPoint === true/);
   assert.match(markerContextMenu, /if \(!open\)/);
   assert.match(markerContextMenu, /data-quick-action="create-point"/);
@@ -238,7 +157,6 @@ test("Novo ponto pode ser atribuído a camada de pontos existente e preserva o d
   assert.match(pointWorkflow, /value=\{targetKey\}/);
   assert.match(pointWorkflow, /targetLayerId: target\.layerId/);
   assert.match(pointWorkflow, /targetDataId: target\.dataId/);
-
   assert.match(pointDatasetCommand, /const dataId = String\(input\.target\.dataId \|\| ""\)\.trim\(\)/);
   assert.match(pointDatasetCommand, /rows\.push\(nextRow\(headers, \{ \.\.\.input, latitude, longitude \}\)\)/);
   assert.match(pointDatasetCommand, /replaceDataInMap/);
