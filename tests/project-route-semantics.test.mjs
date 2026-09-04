@@ -142,9 +142,21 @@ test("Viewer e Editor nunca são expostos simultaneamente como rotas permitidas"
 test("manage redireciona pela rota atribuída e não prioriza Editor", () => {
   assert.match(sources.management, /context\.defaultPanel === "editor"/);
   assert.match(sources.management, /context\.defaultPanel === "viewer"/);
+
+  const destinationStart = sources.management.indexOf("const destination =");
+  const destinationEnd = sources.management.indexOf(
+    "if (!destination)",
+    destinationStart,
+  );
+  assert.ok(destinationStart >= 0 && destinationEnd > destinationStart);
+
+  const destinationBlock = sources.management.slice(
+    destinationStart,
+    destinationEnd,
+  );
   assert.doesNotMatch(
-    sources.management,
-    /context\.availablePanels\.editor\.allowed[\s\S]*context\.availablePanels\.viewer\.allowed/,
+    destinationBlock,
+    /context\.availablePanels\.(?:editor|viewer)\.allowed/,
   );
 });
 
