@@ -9,6 +9,8 @@ export function withWorkspaceEditingParity(context) {
       editLayers: true,
       editStyle: true,
       editLayerStyle: true,
+      // Criar/organizar camadas existentes continua sendo edição local;
+      // importar ou nascer um dataset novo é a capacidade ortogonal addData.
       createLayer: true,
       addData: false,
       removeLayer: true,
