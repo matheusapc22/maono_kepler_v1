@@ -105,6 +105,22 @@ test("revision divergente sinaliza stale sem apagar a working copy", async () =>
   assert.equal((await store.load()).operations.length, 1);
 });
 
+test("completeSubmission remove apenas selecionadas e rotaciona submissionKey", async () => {
+  const storage = memoryStorage();
+  const store = new ViewerWorkingCopyStore(identity, storage);
+  await store.appendOperation(184, pointOperation("op-1"));
+  const before = await store.appendOperation(184, pointOperation("op-2"));
+
+  const afterPartial = await store.completeSubmission(["op-1"]);
+  assert.deepEqual(afterPartial.operations.map((item) => item.id), ["op-2"]);
+  assert.notEqual(afterPartial.submissionKey, before.submissionKey);
+  assert.equal(afterPartial.baseRevision, before.baseRevision);
+
+  const afterAll = await store.completeSubmission(["op-2"]);
+  assert.equal(afterAll, null);
+  assert.equal(await store.load(), null);
+});
+
 test("removeOperation e clear mantêm lifecycle mínimo", async () => {
   const storage = memoryStorage();
   const store = new ViewerWorkingCopyStore(identity, storage);

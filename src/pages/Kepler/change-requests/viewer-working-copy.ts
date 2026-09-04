@@ -225,6 +225,28 @@ export class ViewerWorkingCopyStore {
     return clone(next);
   }
 
+  async completeSubmission(operationIds: string[]) {
+    const current = await this.load();
+    if (!current) return null;
+    const submitted = new Set(operationIds.map(String));
+    const operations = current.operations.filter((item) => !submitted.has(item.id));
+    if (operations.length === current.operations.length) {
+      return clone(current);
+    }
+    if (operations.length === 0) {
+      await this.clear();
+      return null;
+    }
+    const next = {
+      ...current,
+      operations,
+      submissionKey: crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.storage.put(next);
+    return clone(next);
+  }
+
   async snapshot() {
     const current = await this.load();
     return current ? clone(current) : null;

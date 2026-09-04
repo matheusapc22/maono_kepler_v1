@@ -7,6 +7,7 @@ import {
 import { useNavigate } from "react-router";
 
 import { useSession } from "../../../../auth/session";
+import PointFromPinWorkflow from "../../change-requests/PointFromPinWorkflow";
 import { useMaonoBasemapController } from "../../engine-adapter/basemap-controller.ts";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
 import "../../engine-adapter/map-flight.css";
@@ -237,13 +238,13 @@ export default function MaonoMapRuntime({
   const handleOpenData = useCallback(() => {
     if (
       loadInteractionBlocked ||
-      context?.capabilities.createLayer !== true
+      context?.capabilities.addData !== true
     ) {
       return;
     }
 
     commands.openAddDataModal();
-  }, [commands, context?.capabilities.createLayer, loadInteractionBlocked]);
+  }, [commands, context?.capabilities.addData, loadInteractionBlocked]);
 
   if (!customMapShellEnabled || !context) {
     return <>{children}</>;
@@ -342,6 +343,7 @@ export default function MaonoMapRuntime({
       {customMapOverlayEnabled ? (
         <>
           <MapOverlayControls />
+          <PointFromPinWorkflow />
           <MaonoGeometryFilterRuntime />
         </>
       ) : null}

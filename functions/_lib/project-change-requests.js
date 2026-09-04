@@ -101,7 +101,7 @@ function normalizeOperation(operation, index) {
     type,
     version,
     payload: operation.payload,
-    createdAt: normalizeText(operation.createdAt || new Date().toISOString(), { required: true, maxLength: 64 }),
+    createdAt: normalizeText(operation.createdAt, { required: true, maxLength: 64 }),
   };
   const serialized = JSON.stringify(normalized);
   if (new TextEncoder().encode(serialized).byteLength > MAX_OPERATION_JSON_BYTES) {
@@ -154,10 +154,15 @@ export async function buildChangeRequestSubmissionHash(projectId, submission) {
 }
 
 export async function ensureProjectChangeRequestSchema(env) {
-  for (const table of ["project_change_requests", "project_change_operations"]) {
+  for (const table of [
+    "project_change_requests",
+    "project_change_operations",
+    "organization_tickets",
+    "ticket_events",
+  ]) {
     if (!(await tableExists(env, table))) {
       throw domainError(
-        "A migration 0020_project_change_requests.sql ainda não foi aplicada.",
+        "O schema de solicitações de alteração ainda não está disponível neste ambiente.",
         503,
         "PROJECT_CHANGE_REQUEST_SCHEMA_OUTDATED",
       );
@@ -252,6 +257,27 @@ async function safeAudit(env, event) {
   }
 }
 
+function changeRequestTicket(changeRequestId, project, submission, user) {
+  const code = `TKT-CR-${changeRequestId.slice(3)}`;
+  const projectName = String(project.name || project.slug || "Projeto").trim();
+  const subject = `Solicitação de alterações — ${projectName}`.slice(0, 160);
+  const description = [
+    `Projeto: ${projectName}`,
+    `Revisão-base: ${submission.baseRevision}`,
+    `Alterações: ${submission.operations.length}`,
+    "",
+    "Motivo:",
+    submission.reason,
+  ].join("\n").slice(0, 5000);
+
+  return {
+    code,
+    subject,
+    description,
+    createdBy: user.id,
+  };
+}
+
 export async function submitProjectChangeRequest(env, request, slug, input) {
   await ensureProjectChangeRequestSchema(env);
   const { user, project } = await requireChangeRequestProject(env, request, slug, { viewerOnly: true });
@@ -300,19 +326,37 @@ export async function submitProjectChangeRequest(env, request, slug, input) {
   }
 
   const changeRequestId = `cr_${crypto.randomUUID()}`;
+  const ticket = changeRequestTicket(changeRequestId, project, submission, user);
+  const ticketIdSql = `(SELECT id FROM organization_tickets WHERE organization_id = ? AND code = ? LIMIT 1)`;
   const statements = [
     db
       .prepare(
+        `INSERT INTO organization_tickets (
+          organization_id, code, subject, description, status, priority,
+          category, created_by, active
+        ) VALUES (?, ?, ?, ?, 'new', 'normal', 'map', ?, 1)`,
+      )
+      .bind(
+        project.organization_id,
+        ticket.code,
+        ticket.subject,
+        ticket.description,
+        ticket.createdBy,
+      ),
+    db
+      .prepare(
         `INSERT INTO project_change_requests (
-          id, organization_id, project_id, requested_by_user_id, base_revision,
-          status, reason, idempotency_key, submission_hash
-        ) VALUES (?, ?, ?, ?, ?, 'submitted', ?, ?, ?)`,
+          id, organization_id, project_id, requested_by_user_id, ticket_id,
+          base_revision, status, reason, idempotency_key, submission_hash
+        ) VALUES (?, ?, ?, ?, ${ticketIdSql}, ?, 'submitted', ?, ?, ?)`,
       )
       .bind(
         changeRequestId,
         project.organization_id,
         project.id,
         user.id,
+        project.organization_id,
+        ticket.code,
         submission.baseRevision,
         submission.reason,
         idempotencyKey,
@@ -333,6 +377,25 @@ export async function submitProjectChangeRequest(env, request, slug, input) {
           JSON.stringify(operation),
         ),
     ),
+    db
+      .prepare(
+        `INSERT INTO ticket_events (
+          organization_id, ticket_id, event_type, actor_user_id, metadata
+        ) VALUES (?, ${ticketIdSql}, 'ticket.created', ?, ?)`,
+      )
+      .bind(
+        project.organization_id,
+        project.organization_id,
+        ticket.code,
+        user.id,
+        JSON.stringify({
+          source: "project_change_request",
+          changeRequestId,
+          projectId: project.id,
+          baseRevision: submission.baseRevision,
+          operationCount: submission.operations.length,
+        }),
+      ),
   ];
 
   await db.batch(statements);
@@ -340,20 +403,38 @@ export async function submitProjectChangeRequest(env, request, slug, input) {
   const row = await loadOwnedRequest(db, project.id, user.id, changeRequestId);
   const operations = await loadOperations(db, changeRequestId);
 
-  await safeAudit(env, {
-    action: "project.change_request.submitted",
-    actorUserId: user.id,
-    organizationId: project.organization_id,
-    projectId: project.id,
-    resourceType: "project_change_request",
-    resourceId: changeRequestId,
-    result: "success",
-    request,
-    metadata: {
-      baseRevision: submission.baseRevision,
-      operationCount: submission.operations.length,
-    },
-  });
+  await Promise.all([
+    safeAudit(env, {
+      action: "project.change_request.submitted",
+      actorUserId: user.id,
+      organizationId: project.organization_id,
+      projectId: project.id,
+      resourceType: "project_change_request",
+      resourceId: changeRequestId,
+      result: "success",
+      request,
+      metadata: {
+        baseRevision: submission.baseRevision,
+        operationCount: submission.operations.length,
+        ticketId: row?.ticket_id || null,
+      },
+    }),
+    safeAudit(env, {
+      action: "ticket.created",
+      actorUserId: user.id,
+      organizationId: project.organization_id,
+      projectId: project.id,
+      resourceType: "ticket",
+      resourceId: row?.ticket_id || ticket.code,
+      result: "success",
+      request,
+      metadata: {
+        source: "project_change_request",
+        changeRequestId,
+        code: ticket.code,
+      },
+    }),
+  ]);
 
   return {
     status: 201,
