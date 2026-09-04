@@ -73,14 +73,12 @@ export async function onRequest({ request, env }) {
 
     const isochroneFeatureState = resolveIsochroneFeatureState(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
-    let context = withWorkspaceEditingParity(
-      await resolveNewMapCreateContext(runtimeEnv, request, { user }),
-    );
+    let context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
+    context = withWorkspaceEditingParity(context);
 
     if (await reconcileBlockedOrganizationStorage(runtimeEnv, context)) {
-      context = withWorkspaceEditingParity(
-        await resolveNewMapCreateContext(runtimeEnv, request, { user }),
-      );
+      context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
+      context = withWorkspaceEditingParity(context);
     }
 
     return jsonResponse({
