@@ -141,7 +141,7 @@ export default function PointFromPinWorkflow() {
 
   const targets = useMemo<PointTargetOption[]>(() => {
     const datasets = new Map(engineState.datasets.map((dataset) => [dataset.id, dataset]));
-    const compatible = engineState.layers.flatMap((layer) => {
+    const compatible: PointTargetOption[] = engineState.layers.flatMap((layer) => {
       const dataId = layer.dataIds[0] ?? null;
       const dataset = dataId ? datasets.get(dataId) : null;
       const managedType = layer.structure.managedType || layer.type;
@@ -175,7 +175,7 @@ export default function PointFromPinWorkflow() {
       ];
     });
 
-    if (context?.capabilities.createLayer === true) {
+    if (context?.capabilities.addData === true) {
       compatible.push({
         key: NEW_TARGET_KEY,
         dataId: null,
@@ -194,7 +194,7 @@ export default function PointFromPinWorkflow() {
     }
 
     return compatible;
-  }, [context?.capabilities.createLayer, engineState.datasets, engineState.layers]);
+  }, [context?.capabilities.addData, engineState.datasets, engineState.layers]);
 
   const store = useMemo(() => {
     if (
@@ -271,6 +271,13 @@ export default function PointFromPinWorkflow() {
         !context ||
         !engineState.ready ||
         context.capabilities.placeAnalysisMarker !== true
+      ) {
+        return;
+      }
+      if (
+        document.querySelector(
+          ".maono-buffer-dialog, .maono-isochrone-dialog",
+        )
       ) {
         return;
       }
