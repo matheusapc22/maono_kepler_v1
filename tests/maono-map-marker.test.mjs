@@ -197,18 +197,20 @@ test("overlay visual mantém projeção e pointer state fora do componente", () 
   assert.match(markerHook, /setPointerCapture/);
 });
 
-test("hotfix Viewer esconde todos os atalhos Maõno de Add Data sem remover criar camada", () => {
+test("Viewer pode criar camada de pontos, mas não importar dados genéricos", () => {
   const viewer = withWorkspaceEditingParity({
     mode: "viewer",
-    capabilities: { createLayer: false, addData: true },
+    capabilities: { createLayer: false, addData: false, importData: true },
   });
   assert.equal(viewer.capabilities.createLayer, true);
-  assert.equal(viewer.capabilities.addData, false);
-  assert.match(mapSidebar, /canImportData = capabilities\.addData === true/);
+  assert.equal(viewer.capabilities.addData, true);
+  assert.equal(viewer.capabilities.importData, false);
+  assert.match(mapSidebar, /canImportData = capabilities\.importData === true/);
   assert.doesNotMatch(mapSidebar, /canImportData = capabilities\.createLayer/);
-  assert.match(addLayerMenu, /canImportData = context\?\.capabilities\.addData === true/);
+  assert.match(addLayerMenu, /canImportData = context\?\.capabilities\.importData === true/);
   assert.match(addLayerMenu, /\{canImportData \? \(/);
   assert.match(addLayerMenu, /Importar novo dado/);
+  assert.match(pointWorkflow, /context\?\.capabilities\.addData === true/);
 });
 
 test("hotfix Point-from-Pin é capability explícita e Criar ponto fica visível após posicionar Pin", () => {
