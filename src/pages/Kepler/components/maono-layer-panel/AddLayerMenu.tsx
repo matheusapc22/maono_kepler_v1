@@ -30,7 +30,7 @@ export default function AddLayerMenu({ datasets, onCreate, onImport }: Props) {
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const canImportData = context?.capabilities.addData === true;
+  const canImportData = context?.capabilities.importData === true;
   const sortedDatasets = useMemo(
     () =>
       [...datasets].sort((left, right) =>
