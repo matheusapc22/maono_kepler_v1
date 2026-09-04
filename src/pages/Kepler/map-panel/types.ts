@@ -36,6 +36,9 @@ export type MapCapabilities = {
   editMetadata: boolean;
   editProjectMetadata: boolean;
   updateThumbnail: boolean;
+  requestProjectChange: boolean;
+  reviewProjectChange: boolean;
+  applyProjectChange: boolean;
 };
 
 export type MapPanelFeatures = {
@@ -85,6 +88,7 @@ export type MapPanelContextValue = {
   policyVersion: number;
   mode: MapRuntimeMode;
   requestedMode: MapNavigationMode;
+  assignedMode?: "viewer" | "editor" | null;
   defaultPanel: MapRuntimeMode | null;
   availablePanels: {
     viewer: MapPanelAvailability;
@@ -125,7 +129,9 @@ export type MapPanelApiError = Error & {
   code?: string;
   details?: {
     requestedMode?: MapNavigationMode;
+    assignedMode?: "viewer" | "editor" | null;
     fallbackPanel?: MapRuntimeMode | null;
+    replacementRoute?: string | null;
     availablePanels?: {
       viewer: boolean | MapPanelAvailability;
       editor: boolean | MapPanelAvailability;
@@ -166,6 +172,9 @@ export const EMPTY_MAP_CAPABILITIES = Object.freeze({
   editMetadata: false,
   editProjectMetadata: false,
   updateThumbnail: false,
+  requestProjectChange: false,
+  reviewProjectChange: false,
+  applyProjectChange: false,
 } satisfies MapCapabilities);
 
 export const EMPTY_MAP_PANEL_FEATURES = Object.freeze({
