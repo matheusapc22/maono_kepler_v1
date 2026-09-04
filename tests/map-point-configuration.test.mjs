@@ -21,6 +21,7 @@ const [
   mapRuntime,
   mapNavigationEndpoint,
   newMapContextEndpoint,
+  mapCapabilities,
 ] = await Promise.all([
   readFile(
     new URL(
@@ -94,6 +95,13 @@ const [
   ),
   readFile(
     new URL("../functions/api/maps/new/context.js", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/map-panel/map-panel-capabilities.ts",
+      import.meta.url,
+    ),
     "utf8",
   ),
 ]);
@@ -310,6 +318,11 @@ test("PR3 Editor/Create preservam importação, SAVE e Pin independente de anál
   assert.match(mapNavigationEndpoint, /withWorkspaceEditingParity/);
   assert.match(newMapContextEndpoint, /withWorkspaceEditingParity/);
   assert.match(mapRuntime, /context\?\.capabilities\.importData !== true/);
+});
+
+test("Add Data genérico permanece fail-closed por importData", () => {
+  assert.match(mapCapabilities, /command === "openAddDataModal" \? "importData" : capability/);
+  assert.match(mapCapabilities, /requiredCapability/);
 });
 
 test("PR3 Marker expõe Criar ponto e workflow usa posição atual do marcador", () => {
