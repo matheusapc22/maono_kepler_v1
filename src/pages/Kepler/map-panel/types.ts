@@ -15,6 +15,7 @@ export type MapCapabilities = {
   configureTooltips: boolean;
   toggleLegend: boolean;
   placeAnalysisMarker: boolean;
+  createPoint: boolean;
   previewIsochrone: boolean;
   previewBuffer: boolean;
   persistIsochrone: boolean;
@@ -152,6 +153,7 @@ export const EMPTY_MAP_CAPABILITIES = Object.freeze({
   configureTooltips: false,
   toggleLegend: false,
   placeAnalysisMarker: false,
+  createPoint: false,
   previewIsochrone: false,
   previewBuffer: false,
   persistIsochrone: false,
