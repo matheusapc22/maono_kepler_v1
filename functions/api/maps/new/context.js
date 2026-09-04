@@ -11,6 +11,7 @@ import {
 } from "../../../_lib/map-analysis-runtime.js";
 
 const STORAGE_NOT_READY = "ORGANIZATION_STORAGE_NOT_CONFIGURED";
+const STORAGE_PROVISION_FAILED = "ORGANIZATION_STORAGE_PROVISION_FAILED";
 
 async function reconcileBlockedOrganizationStorage(env, context) {
   if (
@@ -40,8 +41,12 @@ async function reconcileBlockedOrganizationStorage(env, context) {
   } catch (error) {
     console.warn("[Maono new-map storage] Falha ao reconciliar armazenamento", {
       organizationId: organization.id,
-      code: error?.code || "ORGANIZATION_STORAGE_PROVISION_FAILED",
+      code: error?.code || STORAGE_PROVISION_FAILED,
     });
+
+    if (error?.code !== STORAGE_PROVISION_FAILED) {
+      throw error;
+    }
     return false;
   }
 }
