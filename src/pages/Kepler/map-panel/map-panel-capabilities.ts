@@ -11,16 +11,30 @@ export type KeplerCommandResult =
       command: string;
     };
 
+function effectiveCapability(
+  command: string,
+  capability: keyof MapCapabilities,
+): keyof MapCapabilities {
+  // Add Data/importação é ortogonal à criação local de camadas/pontos.
+  // Mesmo que um chamador legado ainda passe createLayer, o modal de importação
+  // só abre quando importData foi explicitamente concedido.
+  return command === "openAddDataModal" ? "importData" : capability;
+}
+
 export function authorizeMapPanelCommand(
   capabilities: Partial<MapCapabilities> | null | undefined,
   command: string,
   capability: keyof MapCapabilities,
 ): KeplerCommandResult {
   const normalizedCommand = String(command || "").trim();
+  const requiredCapability = effectiveCapability(normalizedCommand, capability);
 
   if (
     !normalizedCommand ||
-    !Object.prototype.hasOwnProperty.call(EMPTY_MAP_CAPABILITIES, capability)
+    !Object.prototype.hasOwnProperty.call(
+      EMPTY_MAP_CAPABILITIES,
+      requiredCapability,
+    )
   ) {
     return {
       ok: false,
@@ -30,12 +44,12 @@ export function authorizeMapPanelCommand(
     };
   }
 
-  if (capabilities?.[capability] !== true) {
+  if (capabilities?.[requiredCapability] !== true) {
     return {
       ok: false,
       code: "CAPABILITY_DENIED",
-      reason: `A capacidade ${capability} não foi concedida.`,
-      capability,
+      reason: `A capacidade ${requiredCapability} não foi concedida.`,
+      capability: requiredCapability,
       command: normalizedCommand,
     };
   }
