@@ -34,8 +34,27 @@ function pointOperation(id = "op-1") {
     id,
     type: "point.create",
     version: 1,
-    payload: { latitude: -15.78, longitude: -47.92, properties: { name: "Ponto" } },
+    payload: {
+      latitude: -15.78,
+      longitude: -47.92,
+      targetLayerId: "layer-existing",
+      targetDataId: "data-existing",
+      targetLabel: "Leads",
+      properties: { name: "Ponto" },
+    },
     createdAt: "2026-09-04T12:00:00.000Z",
+  };
+}
+
+function newLayerPointOperation(id) {
+  return {
+    ...pointOperation(id),
+    payload: {
+      ...pointOperation(id).payload,
+      targetLayerId: null,
+      targetDataId: null,
+      targetLabel: "Pontos adicionados",
+    },
   };
 }
 
@@ -64,6 +83,28 @@ test("operação, baseRevision e submissionKey sobrevivem a nova instância do s
   assert.equal(restored.submissionKey, saved.submissionKey);
   assert.equal(restored.operations.length, 1);
   assert.deepEqual(restored.operations[0], pointOperation());
+});
+
+test("Viewer agrupa múltiplos pontos na mesma nova camada temporária", async () => {
+  const storage = memoryStorage();
+  const store = new ViewerWorkingCopyStore(identity, storage);
+  const first = await store.appendOperation(184, newLayerPointOperation("op-1"));
+  const second = await store.appendOperation(184, newLayerPointOperation("op-2"));
+
+  const firstPayload = first.operations[0].payload;
+  const secondPayload = second.operations[1].payload;
+  assert.match(firstPayload.targetLayerId, /^tmp_layer_/);
+  assert.match(firstPayload.targetDataId, /^tmp_data_/);
+  assert.equal(firstPayload.targetMode, "new");
+  assert.equal(secondPayload.targetLayerId, firstPayload.targetLayerId);
+  assert.equal(secondPayload.targetDataId, firstPayload.targetDataId);
+
+  const afterPartial = await store.completeSubmission(["op-1"]);
+  const third = await store.appendOperation(184, newLayerPointOperation("op-3"));
+  const remainingPayload = afterPartial.operations[0].payload;
+  const thirdPayload = third.operations.at(-1).payload;
+  assert.equal(thirdPayload.targetLayerId, remainingPayload.targetLayerId);
+  assert.equal(thirdPayload.targetDataId, remainingPayload.targetDataId);
 });
 
 test("snapshot é cópia independente e não altera o valor persistido", async () => {
