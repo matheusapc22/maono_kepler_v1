@@ -5,6 +5,7 @@ import {
 } from "../../../_lib/http.js";
 import { normalizeRole, requireSession } from "../../../_lib/auth.js";
 import { resolveNewMapCreateContext } from "../../../_lib/map-panel-service.js";
+import { withWorkspaceEditingParity } from "../../../_lib/project-map-workspace-capabilities.js";
 import { ensureOrganizationStorage } from "../../../_lib/organization-storage.js";
 import {
   resolveIsochroneFeatureState,
@@ -72,10 +73,14 @@ export async function onRequest({ request, env }) {
 
     const isochroneFeatureState = resolveIsochroneFeatureState(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
-    let context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
+    let context = withWorkspaceEditingParity(
+      await resolveNewMapCreateContext(runtimeEnv, request, { user }),
+    );
 
     if (await reconcileBlockedOrganizationStorage(runtimeEnv, context)) {
-      context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
+      context = withWorkspaceEditingParity(
+        await resolveNewMapCreateContext(runtimeEnv, request, { user }),
+      );
     }
 
     return jsonResponse({
