@@ -9,6 +9,7 @@ import {
 import { requireSession } from "../../../_lib/auth.js";
 import { getAuthorizedProject, publicProject } from "../../../_lib/projects.js";
 import { can, recordAuditLog } from "../../../_lib/permissions.js";
+import { assertProjectPersistenceRoute } from "../../../_lib/project-map-route-policy.js";
 import {
   PROJECT_LIFECYCLE_STATES,
   getProjectLifecycleRow,
@@ -47,13 +48,40 @@ function combineHeaders(trace, deployment) {
   };
 }
 
-function targetsConfigPut(request) {
-  if (request.method !== "PUT") return false;
+function requestPath(request) {
   try {
-    return /\/api\/projects\/[^/]+\/config\/?$/.test(new URL(request.url).pathname);
+    return new URL(request.url).pathname;
   } catch {
-    return false;
+    return "";
   }
+}
+
+function targetsConfigPut(request) {
+  return (
+    request.method === "PUT" &&
+    /\/api\/projects\/[^/]+\/config\/?$/.test(requestPath(request))
+  );
+}
+
+function targetsViewerRestrictedMutation(request) {
+  const path = requestPath(request);
+  const method = String(request.method || "GET").toUpperCase();
+  if (method === "PUT" && /\/api\/projects\/[^/]+\/config\/?$/.test(path)) {
+    return true;
+  }
+  if (method === "POST" && /\/api\/projects\/[^/]+\/save\/?$/.test(path)) {
+    return true;
+  }
+  if (
+    (method === "PATCH" || method === "PUT") &&
+    /\/api\/projects\/[^/]+\/metadata\/?$/.test(path)
+  ) {
+    return true;
+  }
+  return (
+    ["POST", "PUT", "PATCH", "DELETE"].includes(method) &&
+    /\/api\/projects\/[^/]+\/thumbnail(?:\/|$)/.test(path)
+  );
 }
 
 async function hydrateLifecycleProject(env, project) {
@@ -71,6 +99,26 @@ async function hydrateLifecycleProject(env, project) {
     }
     throw error;
   }
+}
+
+async function loadPersistenceContext(env, request, params) {
+  const user = await requireSession(env, request);
+  const slug = decodeProjectSlug(params?.slug);
+  if (!slug) {
+    const error = new Error("Slug do projeto não informado.");
+    error.status = 400;
+    error.code = "PROJECT_SLUG_REQUIRED";
+    throw error;
+  }
+  const project = await getAuthorizedProject(env, user, slug);
+  if (!project) {
+    const error = new Error("Projeto não encontrado ou sem permissão de acesso.");
+    error.status = 404;
+    error.code = "PROJECT_NOT_FOUND";
+    throw error;
+  }
+  assertProjectPersistenceRoute(user, project);
+  return { user, project, slug };
 }
 
 async function auditLargeSave(env, request, user, project, result, metadata = {}) {
@@ -111,9 +159,19 @@ function lifecycleBlockedError(project) {
 
 export async function onRequest(context) {
   const { request, env, params } = context;
+  const configPut = targetsConfigPut(request);
+  const restrictedMutation = targetsViewerRestrictedMutation(request);
 
-  if (!targetsConfigPut(request)) {
-    return context.next();
+  if (!configPut) {
+    if (!restrictedMutation) return context.next();
+    const correlationId = getOrCreateCorrelationId(request);
+    try {
+      await loadPersistenceContext(env, request, params);
+      return context.next();
+    } catch (error) {
+      const normalized = normalizeMaonoError(error, { correlationId });
+      return errorResponseFromError(normalized, { correlationId });
+    }
   }
 
   const correlationId = getOrCreateCorrelationId(request);
@@ -121,6 +179,7 @@ export async function onRequest(context) {
 
   if (!isLargeProjectConfigRequest(request)) {
     try {
+      await loadPersistenceContext(env, request, params);
       assertInlineProjectConfigRequestSize(request);
       return context.next();
     } catch (error) {
@@ -154,6 +213,7 @@ export async function onRequest(context) {
       error.code = "PROJECT_NOT_FOUND";
       throw error;
     }
+    assertProjectPersistenceRoute(user, project);
     project = await hydrateLifecycleProject(env, project);
     trace.updateContext({
       projectId: project.id,
