@@ -159,12 +159,14 @@ function staleError(baseRevision: number, currentRevision: number) {
 export class ViewerWorkingCopyStore {
   readonly key: string;
   private readonly identity: ReturnType<typeof normalizeIdentity>;
+  private readonly storage: ViewerWorkingCopyStorage;
 
   constructor(
     identity: ViewerWorkingCopyIdentity,
-    private readonly storage: ViewerWorkingCopyStorage = indexedDbWorkingCopyStorage,
+    storage: ViewerWorkingCopyStorage = indexedDbWorkingCopyStorage,
   ) {
     this.identity = normalizeIdentity(identity);
+    this.storage = storage;
     this.key = workingCopyKey(identity);
   }
 
