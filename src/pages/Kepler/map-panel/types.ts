@@ -24,6 +24,7 @@ export type MapCapabilities = {
   editStyle: boolean;
   editLayerStyle: boolean;
   createLayer: boolean;
+  addData?: boolean;
   removeLayer: boolean;
   duplicateLayer: boolean;
   reorderLayers: boolean;
@@ -160,6 +161,7 @@ export const EMPTY_MAP_CAPABILITIES = Object.freeze({
   editStyle: false,
   editLayerStyle: false,
   createLayer: false,
+  addData: false,
   removeLayer: false,
   duplicateLayer: false,
   reorderLayers: false,
