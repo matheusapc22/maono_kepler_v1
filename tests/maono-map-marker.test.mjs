@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { withWorkspaceEditingParity } from "../functions/_lib/project-map-workspace-capabilities.js";
 import {
   markerOriginToScreen,
   normalizeLongitude,
@@ -33,6 +34,30 @@ const [overlay, markerHook, controller, placementCss] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/map-overlay/map-placement-mode.css",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+]);
+
+const [markerContextMenu, mapSidebar, addLayerMenu] = await Promise.all([
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/maono-map-shell/MapSidebar.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/components/maono-layer-panel/AddLayerMenu.tsx",
       import.meta.url,
     ),
     "utf8",
@@ -154,4 +179,32 @@ test("overlay visual mantém projeção e pointer state fora do componente", () 
   assert.match(overlay, /useMapMarker/);
   assert.match(markerHook, /ArrowLeft/);
   assert.match(markerHook, /setPointerCapture/);
+});
+
+test("hotfix Viewer esconde todos os atalhos Maõno de Add Data sem remover criar camada", () => {
+  const viewer = withWorkspaceEditingParity({
+    mode: "viewer",
+    capabilities: { createLayer: false, addData: true },
+  });
+  assert.equal(viewer.capabilities.createLayer, true);
+  assert.equal(viewer.capabilities.addData, false);
+  assert.match(mapSidebar, /canImportData = capabilities\.addData === true/);
+  assert.doesNotMatch(mapSidebar, /canImportData = capabilities\.createLayer/);
+  assert.match(addLayerMenu, /canImportData = context\?\.capabilities\.addData === true/);
+  assert.match(addLayerMenu, /\{canImportData \? \(/);
+  assert.match(addLayerMenu, /Importar novo dado/);
+});
+
+test("hotfix Point-from-Pin é capability explícita e Criar ponto fica visível após posicionar Pin", () => {
+  for (const mode of ["viewer", "editor", "create"]) {
+    const context = withWorkspaceEditingParity({ mode, capabilities: {} });
+    assert.equal(context.capabilities.createPoint, true, mode);
+    assert.equal(context.capabilities.placeAnalysisMarker, true, mode);
+  }
+
+  assert.match(markerContextMenu, /capabilities\.createPoint === true/);
+  assert.match(markerContextMenu, /if \(!open\)/);
+  assert.match(markerContextMenu, /data-quick-action="create-point"/);
+  assert.match(markerContextMenu, /Criar ponto/);
+  assert.match(markerContextMenu, /MAONO_CREATE_POINT_FROM_MARKER_EVENT/);
 });
