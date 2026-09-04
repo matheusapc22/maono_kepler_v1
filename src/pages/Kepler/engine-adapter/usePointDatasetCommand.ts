@@ -47,12 +47,22 @@ export type PointDatasetInput = {
   };
 };
 
+type PointDatasetResult = {
+  dataId: string;
+  layerId: string | null;
+};
+
+type PointCommandFailure = Extract<
+  KeplerCommandResult<PointDatasetResult>,
+  { ok: false }
+>;
+
 function failure(
   command: string,
   capability: "editLayers" | "addData",
   code: "CAPABILITY_DENIED" | "COMMAND_INVALID" | "MAP_UNAVAILABLE" | "DATASET_NOT_FOUND" | "COMMAND_FAILED",
   reason: string,
-): KeplerCommandResult {
+): PointCommandFailure {
   return { ok: false, code, reason, command, capability };
 }
 
@@ -118,7 +128,7 @@ export function usePointDatasetCommand() {
   const { context } = useMapPanel();
 
   return useCallback(
-    (input: PointDatasetInput): KeplerCommandResult<{ dataId: string; layerId: string | null }> => {
+    (input: PointDatasetInput): KeplerCommandResult<PointDatasetResult> => {
       const command = "createPointFromPin";
       const capability = input.target.createNew ? "addData" : "editLayers";
       const authorization = authorizeMapPanelCommand(
@@ -186,6 +196,14 @@ export function usePointDatasetCommand() {
               input.tempId,
             ]]),
           );
+          if (!data) {
+            return failure(
+              command,
+              capability,
+              "COMMAND_INVALID",
+              "Não foi possível estruturar o novo dataset de pontos.",
+            );
+          }
 
           dispatch(
             wrapTo(
@@ -213,7 +231,6 @@ export function usePointDatasetCommand() {
                             columns: {
                               lat: "latitude",
                               lng: "longitude",
-                              altitude: null,
                             },
                             isVisible: true,
                             color: [197, 160, 89],
@@ -273,6 +290,15 @@ export function usePointDatasetCommand() {
           headers.map((_, columnIndex) => reader.valueAt(rowIndex, columnIndex)),
         );
         rows.push(nextRow(headers, { ...input, latitude, longitude }));
+        const data = processCsvData(csvText(headers, rows));
+        if (!data) {
+          return failure(
+            command,
+            capability,
+            "COMMAND_INVALID",
+            "Não foi possível estruturar o dataset atualizado.",
+          );
+        }
 
         dispatch(
           wrapTo(
@@ -284,7 +310,7 @@ export function usePointDatasetCommand() {
                   id: dataId,
                   label: datasetLabel(dataset, input.target.label || dataId),
                 },
-                data: processCsvData(csvText(headers, rows)),
+                data,
               },
               options: {
                 centerMap: false,
