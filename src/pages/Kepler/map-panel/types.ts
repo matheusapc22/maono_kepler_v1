@@ -15,7 +15,7 @@ export type MapCapabilities = {
   configureTooltips: boolean;
   toggleLegend: boolean;
   placeAnalysisMarker: boolean;
-  createPoint: boolean;
+  createPoint?: boolean;
   previewIsochrone: boolean;
   previewBuffer: boolean;
   persistIsochrone: boolean;
