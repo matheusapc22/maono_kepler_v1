@@ -89,10 +89,11 @@ export default function MapManagementPage() {
   useEffect(() => {
     if (!context || redirectedRef.current) return;
 
-    const destination = context.availablePanels.editor.allowed
-      ? "edit"
-      : context.availablePanels.viewer.allowed
-        ? "view"
+    const destination =
+      context.defaultPanel === "editor" || context.defaultPanel === "viewer"
+        ? context.defaultPanel === "editor"
+          ? "edit"
+          : "view"
         : null;
 
     if (!destination) return;

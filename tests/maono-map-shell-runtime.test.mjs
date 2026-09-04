@@ -112,10 +112,24 @@ test("modal nativo de dados não é renderizado durante a hidratação", () => {
   assert.match(loadDataModalFactory, /\)\(HydrationSafeLoadDataModal\)/);
 });
 
-test("rota manage prioriza editor, cai para viewer e não considera create", () => {
-  assert.match(
-    mapManagementPage,
-    /const destination = context\.availablePanels\.editor\.allowed[\s\S]*\? "edit"[\s\S]*context\.availablePanels\.viewer\.allowed[\s\S]*\? "view"/,
+test("rota manage segue defaultPanel e não considera create", () => {
+  assert.match(mapManagementPage, /context\.defaultPanel === "editor"/);
+  assert.match(mapManagementPage, /context\.defaultPanel === "viewer"/);
+
+  const destinationStart = mapManagementPage.indexOf("const destination =");
+  const destinationEnd = mapManagementPage.indexOf(
+    "if (!destination)",
+    destinationStart,
+  );
+  assert.ok(destinationStart >= 0 && destinationEnd > destinationStart);
+
+  const destinationBlock = mapManagementPage.slice(
+    destinationStart,
+    destinationEnd,
+  );
+  assert.doesNotMatch(
+    destinationBlock,
+    /availablePanels\.(?:editor|viewer)\.allowed/,
   );
   assert.doesNotMatch(mapManagementPage, /availablePanels\.create\.allowed/);
   assert.match(mapManagementPage, /return <MapRedirectLoader \/>/);

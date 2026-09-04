@@ -70,11 +70,15 @@ const BLOCKED_MESSAGES: Record<string, string> = {
     "A área de criação de mapas ainda não está habilitada.",
   MAP_EDITOR_FORBIDDEN: "Você não possui permissão para editar este mapa.",
   MAP_VIEW_FORBIDDEN: "Você não possui permissão para visualizar este mapa.",
+  PROJECT_MAP_ROUTE_NOT_ASSIGNED:
+    "Este projeto está atribuído a outro modo de acesso ao mapa.",
   ORGANIZATION_PROJECT_LIMIT_REACHED:
     "A organização atingiu o limite de projetos.",
   ORGANIZATION_STORAGE_NOT_CONFIGURED:
     "O armazenamento da organização ainda não está pronto.",
   PROJECT_CREATE_FORBIDDEN: "Você não possui permissão para criar projetos.",
+  VIEWER_PROJECT_CREATE_FORBIDDEN:
+    "Usuários Viewer não podem criar novos projetos.",
   PROJECT_NOT_FOUND: "O projeto não foi encontrado neste contexto.",
 };
 
@@ -96,6 +100,7 @@ function legacyReadOnlyContext(): MapPanelContextValue {
     policyVersion: 0,
     mode: "viewer",
     requestedMode: "manage",
+    assignedMode: "viewer",
     defaultPanel: "viewer",
     availablePanels: {
       viewer: {
@@ -148,6 +153,9 @@ function legacyReadOnlyContext(): MapPanelContextValue {
       editMetadata: false,
       editProjectMetadata: false,
       updateThumbnail: false,
+      requestProjectChange: false,
+      reviewProjectChange: false,
+      applyProjectChange: false,
     },
     project: null,
     organization: null,
@@ -351,6 +359,7 @@ export function MapPanelAccessGate({
 
   if (state.status === "blocked" || state.status === "error") {
     const fallback = state.error?.details?.fallbackPanel;
+    const replacementRoute = state.error?.details?.replacementRoute;
 
     return (
       <main className="maono-map-gate">
@@ -362,7 +371,9 @@ export function MapPanelAccessGate({
           </strong>
           <span>{state.error?.message}</span>
           <div className="maono-map-gate__actions">
-            {fallback === "viewer" && projectSlug ? (
+            {replacementRoute ? (
+              <Link to={replacementRoute}>Abrir rota atribuída</Link>
+            ) : fallback === "viewer" && projectSlug ? (
               <Link to={`/projects/${encodeURIComponent(projectSlug)}/view`}>
                 Abrir visualizador
               </Link>

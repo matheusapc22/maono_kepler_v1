@@ -19,7 +19,7 @@ import {
   getSaveDeploymentMetadata,
   saveDeployResponseHeaders,
 } from "../../_lib/save-deploy-contract.js";
-import { requireSession } from "../../_lib/auth.js";
+import { normalizeRole, requireSession } from "../../_lib/auth.js";
 import { listProjectsForActiveOrganization } from "../../_lib/project-list.js";
 import {
   getActiveOrganizationId,
@@ -63,6 +63,14 @@ function publicSaveMessage(normalized, requestMethod) {
       : "Não foi possível criar o projeto.");
 }
 
+function assertViewerCannotCreate(user) {
+  if (normalizeRole(user?.role) !== "viewer") return;
+  const error = new Error("Usuários Viewer não podem criar novos projetos.");
+  error.status = 403;
+  error.code = "VIEWER_PROJECT_CREATE_FORBIDDEN";
+  throw error;
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -88,6 +96,8 @@ export async function onRequest(context) {
       const projects = await listProjectsForActiveOrganization(env, user);
       return jsonResponse({ ok: true, projects });
     }
+
+    assertViewerCannotCreate(user);
 
     // A flag pode impedir novas admissões durante rollout, mas nunca muda o
     // protocolo de leitura/save de projetos que já possuem lifecycle_state.

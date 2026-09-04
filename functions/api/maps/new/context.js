@@ -3,6 +3,7 @@ import {
   jsonResponse,
   methodNotAllowed,
 } from "../../../_lib/http.js";
+import { normalizeRole, requireSession } from "../../../_lib/auth.js";
 import { resolveNewMapCreateContext } from "../../../_lib/map-panel-service.js";
 import { ensureOrganizationStorage } from "../../../_lib/organization-storage.js";
 import {
@@ -51,18 +52,30 @@ async function reconcileBlockedOrganizationStorage(env, context) {
   }
 }
 
+function viewerCreateForbidden() {
+  const error = new Error("Usuários Viewer não podem criar novos projetos.");
+  error.status = 403;
+  error.code = "VIEWER_PROJECT_CREATE_FORBIDDEN";
+  return error;
+}
+
 export async function onRequest({ request, env }) {
   if (request.method !== "GET") {
     return methodNotAllowed(["GET"]);
   }
 
   try {
+    const user = await requireSession(env, request);
+    if (normalizeRole(user?.role) === "viewer") {
+      throw viewerCreateForbidden();
+    }
+
     const isochroneFeatureState = resolveIsochroneFeatureState(env);
     const runtimeEnv = withMapAnalysisRuntimeDefaults(env);
-    let context = await resolveNewMapCreateContext(runtimeEnv, request);
+    let context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
 
     if (await reconcileBlockedOrganizationStorage(runtimeEnv, context)) {
-      context = await resolveNewMapCreateContext(runtimeEnv, request);
+      context = await resolveNewMapCreateContext(runtimeEnv, request, { user });
     }
 
     return jsonResponse({
