@@ -3,13 +3,13 @@ import { ProjectChangeRequestApiError } from "./change-request-api";
 export type ReviewOperationProjection = {
   id: string;
   sequence: number;
-  type: "point.create";
+  type: "point.create" | "layer.style.update";
   version: number;
   label: string;
   focus: {
     latitude: number;
     longitude: number;
-  };
+  } | null;
   target: {
     layerId: string | null;
     dataId: string | null;
@@ -19,7 +19,7 @@ export type ReviewOperationProjection = {
     kind: "point";
     latitude: number;
     longitude: number;
-  };
+  } | null;
   properties: Record<string, unknown>;
 };
 
