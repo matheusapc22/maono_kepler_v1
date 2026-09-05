@@ -1,9 +1,11 @@
 const ANALYSIS_TYPES = new Set(["buffer.create", "isochrone.create"]);
 const ISOCHRONE_MODES = new Set(["drive_traffic", "drive", "bicycle", "walk"]);
-const MAX_BUFFER_RADIUS_METERS = 1_000_000;
-const MAX_ISOCHRONE_MINUTES = 240;
-const MAX_ISOCHRONE_RANGES = 12;
-const MAX_FEATURES = 10_000;
+const ISOCHRONE_TYPES = new Set(["time", "distance"]);
+const ISOCHRONE_MODE_SOURCES = new Set(["request", "profile", "default"]);
+const MAX_FEATURES = 500;
+const MAX_BUFFER_ITEMS = 100;
+const MAX_BUFFER_RANGES = 4;
+const MAX_ISOCHRONE_RANGES = 4;
 
 function analysisError(message, code = "CHANGE_REQUEST_OPERATION_INVALID", details = null, status = 400) {
   const error = new Error(message);
@@ -25,39 +27,12 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function finiteNumber(value, label) {
+function boundedNumber(value, minimum, maximum, label) {
   const number = Number(value);
-  if (!Number.isFinite(number)) {
+  if (!Number.isFinite(number) || number < minimum || number > maximum) {
     throw analysisError(`${label} inválido.`);
   }
   return number;
-}
-
-function coordinate(value, minimum, maximum, label) {
-  const number = finiteNumber(value, label);
-  if (number < minimum || number > maximum) {
-    throw analysisError(`${label} fora do intervalo permitido.`);
-  }
-  return number;
-}
-
-function assertOrigin(value) {
-  if (!isRecord(value)) {
-    throw analysisError("Origem da análise inválida.");
-  }
-  const kind = text(value.kind);
-  if (kind !== "point" && kind !== "feature") {
-    throw analysisError("Tipo de origem da análise inválido.");
-  }
-  coordinate(value.longitude, -180, 180, "Longitude da origem");
-  coordinate(value.latitude, -90, 90, "Latitude da origem");
-  if (kind === "feature") {
-    if (!text(value.dataId)) throw analysisError("Origem por feição sem dataId.");
-    const index = Number(value.featureIndex);
-    if (!Number.isInteger(index) || index < 0) {
-      throw analysisError("Índice da feição de origem inválido.");
-    }
-  }
 }
 
 function assertCoordinateTree(value, depth = 0) {
@@ -66,9 +41,11 @@ function assertCoordinateTree(value, depth = 0) {
   }
   if (value.every((item) => typeof item === "number")) {
     if (value.length < 2) throw analysisError("Coordenada GeoJSON incompleta.");
-    coordinate(value[0], -180, 180, "Longitude GeoJSON");
-    coordinate(value[1], -90, 90, "Latitude GeoJSON");
-    for (const item of value.slice(2)) finiteNumber(item, "Componente GeoJSON");
+    boundedNumber(value[0], -180, 180, "Longitude GeoJSON");
+    boundedNumber(value[1], -90, 90, "Latitude GeoJSON");
+    for (const item of value.slice(2)) {
+      if (!Number.isFinite(Number(item))) throw analysisError("Componente GeoJSON inválido.");
+    }
     return;
   }
   for (const child of value) assertCoordinateTree(child, depth + 1);
@@ -102,58 +79,74 @@ export function assertFrozenAnalysisGeoJson(value) {
   return value;
 }
 
-function assertCommonPayload(payload) {
+function assertCommonPayload(payload, kind) {
   if (!isRecord(payload)) throw analysisError("Payload de análise inválido.");
-  if (text(payload.targetMode) !== "new") {
-    throw analysisError("Análises Viewer v1 devem criar uma nova camada.");
+  if (payload.source !== "analysis" || payload.analysisKind !== kind) {
+    throw analysisError("Origem/tipo da análise inválidos.");
   }
-  for (const [key, label] of [
-    ["targetLayerId", "targetLayerId"],
-    ["targetDataId", "targetDataId"],
-    ["targetLabel", "targetLabel"],
-  ]) {
+  for (const key of ["targetLayerId", "targetDataId", "targetLabel"]) {
     const value = text(payload[key]);
-    if (!value || value.length > 200) {
-      throw analysisError(`${label} inválido.`);
-    }
+    if (!value || value.length > 200) throw analysisError(`${key} inválido.`);
   }
-  assertOrigin(payload.origin);
-  assertFrozenAnalysisGeoJson(payload.geometry);
+  if (!isRecord(payload.parameters)) throw analysisError("Parâmetros da análise inválidos.");
+  assertFrozenAnalysisGeoJson(payload.geojson);
+}
+
+function assertOrigin(origin) {
+  if (!isRecord(origin)) throw analysisError("Origem da análise inválida.");
+  boundedNumber(origin.latitude, -90, 90, "Latitude da origem");
+  boundedNumber(origin.longitude, -180, 180, "Longitude da origem");
 }
 
 export function assertBufferCreatePayload(payload) {
-  assertCommonPayload(payload);
-  const radius = finiteNumber(payload.radiusMeters, "Raio do Buffer");
-  if (radius <= 0 || radius > MAX_BUFFER_RADIUS_METERS) {
-    throw analysisError("Raio do Buffer fora do intervalo permitido.");
+  assertCommonPayload(payload, "buffer");
+  const items = payload.parameters.items;
+  if (!Array.isArray(items) || items.length < 1 || items.length > MAX_BUFFER_ITEMS) {
+    throw analysisError("Itens do Buffer inválidos.");
   }
-  if (payload.parameters != null && !isRecord(payload.parameters)) {
-    throw analysisError("Parâmetros do Buffer inválidos.");
+  for (const candidate of items) {
+    if (!isRecord(candidate)) throw analysisError("Item do Buffer inválido.");
+    assertOrigin(candidate.origin);
+    const unit = text(candidate.inputUnit);
+    if (unit !== "m" && unit !== "km") throw analysisError("Unidade do Buffer inválida.");
+    const ranges = candidate.ranges;
+    const rangesMeters = candidate.rangesMeters;
+    if (
+      !Array.isArray(ranges) ||
+      ranges.length < 1 ||
+      ranges.length > MAX_BUFFER_RANGES ||
+      !Array.isArray(rangesMeters) ||
+      rangesMeters.length !== ranges.length
+    ) {
+      throw analysisError("Faixas do Buffer inválidas.");
+    }
+    for (const value of ranges) boundedNumber(value, Number.EPSILON, 200_000, "Faixa do Buffer");
+    for (const value of rangesMeters) boundedNumber(value, Number.EPSILON, 200_000, "Raio do Buffer");
   }
 }
 
 export function assertIsochroneCreatePayload(payload) {
-  assertCommonPayload(payload);
-  if (!ISOCHRONE_MODES.has(text(payload.travelMode))) {
+  assertCommonPayload(payload, "isochrone");
+  assertOrigin(payload.parameters.origin);
+  const metadata = payload.parameters.metadata;
+  if (!isRecord(metadata)) throw analysisError("Metadados da isócrona inválidos.");
+  if (!text(metadata.provider) || text(metadata.provider).length > 80) {
+    throw analysisError("Provider da isócrona inválido.");
+  }
+  if (!ISOCHRONE_TYPES.has(text(metadata.type))) {
+    throw analysisError("Tipo da isócrona inválido.");
+  }
+  if (!ISOCHRONE_MODES.has(text(metadata.mode))) {
     throw analysisError("Modo de deslocamento da isócrona inválido.");
   }
-  if (text(payload.provider).toLowerCase() !== "mapbox") {
-    throw analysisError("Provider de isócrona não suportado nesta versão.");
+  if (!ISOCHRONE_MODE_SOURCES.has(text(metadata.mode_source))) {
+    throw analysisError("Origem do modo da isócrona inválida.");
   }
-  if (!Array.isArray(payload.minutes) || payload.minutes.length < 1 || payload.minutes.length > MAX_ISOCHRONE_RANGES) {
-    throw analysisError("Faixas de tempo da isócrona inválidas.");
+  const ranges = metadata.ranges;
+  if (!Array.isArray(ranges) || ranges.length < 1 || ranges.length > MAX_ISOCHRONE_RANGES) {
+    throw analysisError("Faixas da isócrona inválidas.");
   }
-  const seen = new Set();
-  for (const value of payload.minutes) {
-    const minutes = finiteNumber(value, "Tempo da isócrona");
-    if (minutes <= 0 || minutes > MAX_ISOCHRONE_MINUTES || seen.has(minutes)) {
-      throw analysisError("Faixa de tempo da isócrona fora do intervalo permitido.");
-    }
-    seen.add(minutes);
-  }
-  if (payload.requestParameters != null && !isRecord(payload.requestParameters)) {
-    throw analysisError("Parâmetros da isócrona inválidos.");
-  }
+  for (const value of ranges) boundedNumber(value, Number.EPSILON, 100_000, "Faixa da isócrona");
 }
 
 export function isFrozenAnalysisOperation(operation) {
@@ -162,8 +155,14 @@ export function isFrozenAnalysisOperation(operation) {
 
 export function validateFrozenAnalysisOperation(operation) {
   const type = text(operation?.type);
-  if (!ANALYSIS_TYPES.has(type) || Number(operation?.version) !== 1) {
+  if (!ANALYSIS_TYPES.has(type)) {
     throw analysisError("Operação de análise não suportada.", "CHANGE_REQUEST_OPERATION_UNSUPPORTED");
+  }
+  if (Number(operation?.version) !== 1) {
+    throw analysisError(
+      "Versão de operação de análise não suportada.",
+      "CHANGE_REQUEST_OPERATION_VERSION_UNSUPPORTED",
+    );
   }
   if (type === "buffer.create") assertBufferCreatePayload(operation.payload);
   else assertIsochroneCreatePayload(operation.payload);
@@ -206,13 +205,13 @@ function layerId(layer) {
 }
 
 function frozenGeoJsonDataset(payload) {
-  const geojson = payload.geometry;
-  const features = geojson.features;
+  const features = payload.geojson.features;
   const propertyKeys = [];
   const keySet = new Set();
   const samples = new Map();
   for (const feature of features) {
-    for (const [key, value] of Object.entries(isRecord(feature.properties) ? feature.properties : {})) {
+    const properties = isRecord(feature.properties) ? feature.properties : {};
+    for (const [key, value] of Object.entries(properties)) {
       if (!keySet.has(key)) {
         keySet.add(key);
         propertyKeys.push(key);
@@ -224,10 +223,13 @@ function frozenGeoJsonDataset(payload) {
     { name: "_geojson", format: "", type: "geojson", analyzerType: "GEOMETRY" },
     ...propertyKeys.map((key) => inferField(samples.get(key), key)),
   ];
-  const rows = features.map((feature) => [
-    cloneJson(feature.geometry),
-    ...propertyKeys.map((key) => cellValue(feature.properties?.[key])),
-  ]);
+  const rows = features.map((feature) => {
+    const properties = isRecord(feature.properties) ? feature.properties : {};
+    return [
+      cloneJson(feature.geometry),
+      ...propertyKeys.map((key) => cellValue(properties[key])),
+    ];
+  });
   return {
     version: "v1",
     data: {
@@ -241,6 +243,7 @@ function frozenGeoJsonDataset(payload) {
 }
 
 function frozenGeoJsonLayer(payload) {
+  const isBuffer = payload.analysisKind === "buffer";
   return {
     id: text(payload.targetLayerId),
     type: "geojson",
@@ -251,7 +254,7 @@ function frozenGeoJsonLayer(payload) {
       columns: { geojson: "_geojson" },
       isVisible: true,
       visConfig: {
-        opacity: 0.28,
+        opacity: isBuffer ? 0.2 : 0.28,
         filled: true,
         stroked: true,
         strokeColor: [183, 121, 31],
@@ -274,32 +277,34 @@ function frozenGeoJsonLayer(payload) {
   };
 }
 
+function operationFocus(payload) {
+  if (payload.analysisKind === "isochrone") return payload.parameters.origin;
+  return payload.parameters.items?.[0]?.origin || null;
+}
+
 function projection(operation, payload) {
-  const type = text(operation.type);
-  const origin = payload.origin;
-  const properties = type === "buffer.create"
+  const focus = operationFocus(payload);
+  const properties = payload.analysisKind === "buffer"
     ? {
-        radiusMeters: Number(payload.radiusMeters),
-        origin: cloneJson(origin),
-        parameters: cloneJson(payload.parameters || {}),
+        itemCount: payload.parameters.items.length,
+        items: cloneJson(payload.parameters.items),
       }
     : {
-        travelMode: text(payload.travelMode),
-        minutes: cloneJson(payload.minutes),
-        provider: text(payload.provider),
-        origin: cloneJson(origin),
-        requestParameters: cloneJson(payload.requestParameters || {}),
+        origin: cloneJson(payload.parameters.origin),
+        metadata: cloneJson(payload.parameters.metadata),
       };
   return {
     id: text(operation.id),
     sequence: Number(operation.sequence ?? 0),
-    type,
+    type: text(operation.type),
     version: 1,
     label: text(payload.targetLabel),
-    focus: {
-      latitude: Number(origin.latitude),
-      longitude: Number(origin.longitude),
-    },
+    focus: focus
+      ? {
+          latitude: Number(focus.latitude),
+          longitude: Number(focus.longitude),
+        }
+      : null,
     target: {
       layerId: text(payload.targetLayerId),
       dataId: text(payload.targetDataId),
@@ -307,7 +312,7 @@ function projection(operation, payload) {
     },
     overlay: {
       kind: "geojson",
-      geojson: cloneJson(payload.geometry),
+      geojson: cloneJson(payload.geojson),
     },
     properties,
   };
