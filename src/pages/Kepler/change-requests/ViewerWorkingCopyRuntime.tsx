@@ -108,6 +108,8 @@ export default function ViewerWorkingCopyRuntime({
   const captureBusyRef = useRef(false);
   const pendingProjectionAckRef = useRef(false);
   const untrackedLatchedRef = useRef(false);
+  const applyingOperationIdsRef = useRef(new Set<string>());
+  const appliedOperationIdsRef = useRef(new Set<string>());
 
   const baseLayerMeta = useMemo(() => {
     const result = new Map<string, { dataId: string | null; label: string }>();
@@ -181,6 +183,8 @@ export default function ViewerWorkingCopyRuntime({
     captureBusyRef.current = false;
     pendingProjectionAckRef.current = false;
     untrackedLatchedRef.current = false;
+    applyingOperationIdsRef.current.clear();
+    appliedOperationIdsRef.current.clear();
   }, [enabled, runtimeKey, state.layers, state.ready, store]);
 
   useEffect(() => {
@@ -198,6 +202,14 @@ export default function ViewerWorkingCopyRuntime({
     let projectedMutation = false;
 
     for (const operation of workingCopy.operations) {
+      if (
+        applyingOperationIdsRef.current.has(operation.id) ||
+        appliedOperationIdsRef.current.has(operation.id)
+      ) {
+        continue;
+      }
+
+      applyingOperationIdsRef.current.add(operation.id);
       try {
         const point = pointPayload(operation);
         if (point && text(point.targetMode).toLowerCase() === "new") {
@@ -236,6 +248,12 @@ export default function ViewerWorkingCopyRuntime({
           if (result.ok) {
             knownDataIds.add(dataId);
             projectedMutation = projectedMutation || result.changed;
+          } else {
+            console.warn("Viewer Working Copy replay could not project a point", {
+              operationId: operation.id,
+              code: result.code,
+              reason: result.reason,
+            });
           }
           continue;
         }
@@ -272,6 +290,13 @@ export default function ViewerWorkingCopyRuntime({
           if (result.ok) {
             knownDataIds.add(dataId);
             projectedMutation = projectedMutation || result.changed;
+          } else {
+            console.warn("Viewer Working Copy replay could not project an analysis", {
+              operationId: operation.id,
+              operationType: operation.type,
+              code: result.code,
+              reason: result.reason,
+            });
           }
           continue;
         }
@@ -284,6 +309,12 @@ export default function ViewerWorkingCopyRuntime({
             style.changes || {},
           );
           projectedMutation = projectedMutation || result.changed;
+          if (!result.ok) {
+            console.warn("Viewer Working Copy replay could not project a style", {
+              operationId: operation.id,
+              reason: result.error,
+            });
+          }
         }
       } catch (error) {
         // A persisted local operation must never take down the whole Viewer.
@@ -294,6 +325,12 @@ export default function ViewerWorkingCopyRuntime({
           operationType: operation.type,
           error,
         });
+      } finally {
+        applyingOperationIdsRef.current.delete(operation.id);
+        // Cada operação é materializada no máximo uma vez por runtimeKey.
+        // Falhas ficam isoladas nesta sessão para impedir loops de replay; um
+        // reload cria um novo runtime e oferece uma nova tentativa segura.
+        appliedOperationIdsRef.current.add(operation.id);
       }
     }
 
@@ -317,7 +354,8 @@ export default function ViewerWorkingCopyRuntime({
       !store ||
       !state.ready ||
       baseKeyRef.current !== runtimeKey ||
-      captureBusyRef.current
+      captureBusyRef.current ||
+      pendingProjectionAckRef.current
     ) {
       return;
     }
@@ -393,15 +431,14 @@ export default function ViewerWorkingCopyRuntime({
   ]);
 
   useEffect(() => {
-    if (
-      !enabled ||
-      !pendingProjectionAckRef.current ||
-      !state.hasUnsavedChanges
-    ) {
+    if (!enabled || !pendingProjectionAckRef.current) {
       return;
     }
+
     pendingProjectionAckRef.current = false;
-    if (!untrackedLatchedRef.current) markClean();
+    if (state.hasUnsavedChanges && !untrackedLatchedRef.current) {
+      markClean();
+    }
   }, [enabled, markClean, state.hasUnsavedChanges, state.save.revisionHash]);
 
   return null;
