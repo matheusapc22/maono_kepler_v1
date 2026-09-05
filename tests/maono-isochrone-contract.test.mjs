@@ -126,7 +126,7 @@ test("troca de projeto ou organização remove apenas preview ainda transitório
   assert.match(previewHook, /requestRef\.current\?\.abort\(\)/);
   assert.match(
     previewHook,
-    /if \(current\) \{[\s\S]*removeTransientLayer\(current\.dataId,\s*"isochrone"\)/,
+    /if \(current\)(?:\s*\{)?[\s\S]*removeTransientLayer\(current\.dataId,\s*"isochrone"\)/,
   );
   assert.match(previewHook, /resetMarkerRef\.current\(\)/);
 });
