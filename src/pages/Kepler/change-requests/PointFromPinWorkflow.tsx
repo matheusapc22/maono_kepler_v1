@@ -122,6 +122,28 @@ function styleSummary(payload: ViewerLayerStyleUpdatePayload) {
   return `${keys.length} ${keys.length === 1 ? "propriedade visual" : "propriedades visuais"}`;
 }
 
+function operationRecord(operation: ViewerChangeOperation) {
+  return operation.payload &&
+    typeof operation.payload === "object" &&
+    !Array.isArray(operation.payload)
+    ? (operation.payload as Record<string, unknown>)
+    : null;
+}
+
+function filterSnapshotLabel(value: unknown) {
+  const snapshot =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  if (!snapshot) return "Sem filtro";
+  const fields = Array.isArray(snapshot.fieldNames)
+    ? snapshot.fieldNames.map(String).filter(Boolean).join(", ")
+    : "Filtro";
+  const raw = snapshot.value;
+  const rendered = Array.isArray(raw) ? raw.map(String).join(" – ") : String(raw ?? "—");
+  return `${fields || "Filtro"}: ${rendered}`;
+}
+
 function operationDescriptor(operation: ViewerChangeOperation) {
   const point = pointPayload(operation);
   if (point) {
@@ -140,6 +162,44 @@ function operationDescriptor(operation: ViewerChangeOperation) {
       title: "Alterar estilo",
       label: style.targetLabel || style.targetLayerId,
       detail: styleSummary(style),
+    };
+  }
+
+  const payload = operationRecord(operation);
+  if (operation.type === "layer.visibility.update" && payload) {
+    return {
+      title: "Alterar visibilidade",
+      label: String(payload.targetLabel || payload.targetLayerId || "Camada"),
+      detail: `${payload.before === false ? "Oculta" : "Visível"} → ${payload.after === false ? "Oculta" : "Visível"}`,
+    };
+  }
+  if (operation.type === "persistent.filter.update" && payload) {
+    return {
+      title: "Alterar filtro",
+      label: filterSnapshotLabel(payload.after ?? payload.before),
+      detail: `${filterSnapshotLabel(payload.before)} → ${filterSnapshotLabel(payload.after)}`,
+    };
+  }
+  if (operation.type === "layer.order.update" && payload) {
+    const after = Array.isArray(payload.after) ? payload.after : [];
+    return {
+      title: "Reordenar camadas",
+      label: "Ordem das camadas",
+      detail: `${after.length} ${after.length === 1 ? "camada" : "camadas"}`,
+    };
+  }
+  if (operation.type === "buffer.create" && payload) {
+    return {
+      title: "Criar Buffer",
+      label: String(payload.targetLabel || "Buffer"),
+      detail: "Análise geoespacial proposta",
+    };
+  }
+  if (operation.type === "isochrone.create" && payload) {
+    return {
+      title: "Criar Isócrona",
+      label: String(payload.targetLabel || "Isócrona"),
+      detail: "Análise geoespacial proposta",
     };
   }
   return {
