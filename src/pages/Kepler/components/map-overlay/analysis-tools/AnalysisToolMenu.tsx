@@ -25,7 +25,11 @@ type AnalysisToolMenuProps = {
   onCancel: () => void;
 };
 
-function ToolGlyph({ kind }: { kind: "buffer" | "isochrone" | "geometry" }) {
+function ToolGlyph({
+  kind,
+}: {
+  kind: "buffer" | "isochrone" | "geometry" | "marker";
+}) {
   if (kind === "buffer") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -49,6 +53,15 @@ function ToolGlyph({ kind }: { kind: "buffer" | "isochrone" | "geometry" }) {
     );
   }
 
+  if (kind === "marker") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
+        <path d="M12 7v6M9 10h6" />
+      </svg>
+    );
+  }
+
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <circle cx="12" cy="12" r="9" />
@@ -63,8 +76,10 @@ export default function AnalysisToolMenu({
   canBuffer,
   canIsochrone,
   canGeometryFilter = false,
+  canPlaceMarker = false,
   onSelectTool,
   onStartPlacement,
+  onStartMarkerPlacement,
   onStartGeometryFilterDraw,
   onCancel,
 }: AnalysisToolMenuProps) {
@@ -172,6 +187,21 @@ export default function AnalysisToolMenu({
                 <span>
                   <strong>Desenhar área de filtragem</strong>
                   <small>Crie um polígono clicando no mapa</small>
+                </span>
+                <b aria-hidden="true">›</b>
+              </button>
+            ) : null}
+
+            {canPlaceMarker && onStartMarkerPlacement ? (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={onStartMarkerPlacement}
+              >
+                <ToolGlyph kind="marker" />
+                <span>
+                  <strong>Criar ponto</strong>
+                  <small>Escolher posição no mapa</small>
                 </span>
                 <b aria-hidden="true">›</b>
               </button>
