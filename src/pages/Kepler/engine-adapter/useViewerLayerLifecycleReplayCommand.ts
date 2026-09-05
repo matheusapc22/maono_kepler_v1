@@ -33,7 +33,7 @@ function keplerColumns(snapshot: ViewerLayerSnapshot) {
 function range(colors: string[], name: string | null) {
   return colors.length
     ? {
-        name: name || "Maõno",
+        name: `maono:${name || "custom"}`,
         type: "sequential",
         category: "Custom",
         colors: [...colors],
@@ -66,6 +66,11 @@ export function viewerLayerSnapshotToKeplerLayer(snapshot: ViewerLayerSnapshot) 
   if (colorRange) visConfig.colorRange = colorRange;
   if (strokeColorRange) visConfig.strokeColorRange = strokeColorRange;
 
+  const color = snapshot.visualChannels.color;
+  const strokeColor = snapshot.visualChannels.strokeColor;
+  const size = snapshot.visualChannels.size;
+  const height = snapshot.visualChannels.height;
+
   return {
     id: snapshot.id,
     type: snapshot.type,
@@ -76,16 +81,24 @@ export function viewerLayerSnapshotToKeplerLayer(snapshot: ViewerLayerSnapshot) 
       color: [...snapshot.style.color],
       columns: keplerColumns(snapshot),
       visConfig,
+      colorField: color.field,
+      colorScale: color.scale,
+      strokeColorField: strokeColor.field,
+      strokeColorScale: strokeColor.scale,
+      sizeField: size.field,
+      sizeScale: size.scale,
+      heightField: height.field,
+      heightScale: height.scale,
     },
     visualChannels: {
-      colorField: snapshot.visualChannels.color.field,
-      colorScale: snapshot.visualChannels.color.scale,
-      strokeColorField: snapshot.visualChannels.strokeColor.field,
-      strokeColorScale: snapshot.visualChannels.strokeColor.scale,
-      sizeField: snapshot.visualChannels.size.field,
-      sizeScale: snapshot.visualChannels.size.scale,
-      heightField: snapshot.visualChannels.height.field,
-      heightScale: snapshot.visualChannels.height.scale,
+      colorField: color.field,
+      colorScale: color.scale,
+      strokeColorField: strokeColor.field,
+      strokeColorScale: strokeColor.scale,
+      sizeField: size.field,
+      sizeScale: size.scale,
+      heightField: height.field,
+      heightScale: height.scale,
     },
   };
 }
@@ -132,7 +145,7 @@ export function useViewerLayerLifecycleReplayCommand() {
         dispatch(
           wrapTo(
             KEPLER_MAP_ID,
-            addLayer(viewerLayerSnapshotToKeplerLayer(snapshot)),
+            addLayer(viewerLayerSnapshotToKeplerLayer(snapshot) as any),
           ),
         );
         const nextOrder = moveToIndex(
