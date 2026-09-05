@@ -162,7 +162,7 @@ test("create de projeto existente é somente redirect de compatibilidade", () =>
 });
 
 test("sidebar contém ferramentas capability-aware, incluindo mapa base", () => {
-  for (const capability of ["openLayerPanel", "viewLayers", "viewMap", "createLayer"]) {
+  for (const capability of ["openLayerPanel", "viewLayers", "viewMap", "importData"]) {
     assert.match(sidebar, new RegExp(`capabilities\\.${capability}`));
   }
 

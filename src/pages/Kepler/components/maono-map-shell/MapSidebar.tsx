@@ -50,7 +50,7 @@ export default function MapSidebar({
   const canOpenBasemap = Boolean(
     basemapAvailable && capabilities.viewMap,
   );
-  const canImportData = capabilities.createLayer === true;
+  const canImportData = capabilities.importData === true;
   const loadingTitle = "Disponível quando o mapa terminar de carregar.";
 
   return (

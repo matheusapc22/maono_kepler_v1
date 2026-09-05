@@ -142,6 +142,63 @@ function validateOperation(operation: ViewerChangeOperation) {
   entry.validate(operation.payload);
 }
 
+function pointPayload(operation: ViewerChangeOperation) {
+  if (
+    operation.type !== "point.create" ||
+    !operation.payload ||
+    typeof operation.payload !== "object" ||
+    Array.isArray(operation.payload)
+  ) {
+    return null;
+  }
+  return operation.payload as Record<string, unknown>;
+}
+
+function text(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function temporaryPointTarget(
+  current: ViewerWorkingCopy,
+  operation: ViewerChangeOperation,
+): ViewerChangeOperation {
+  const payload = pointPayload(operation);
+  if (!payload) return clone(operation);
+
+  const currentLayerId = text(payload.targetLayerId);
+  const currentDataId = text(payload.targetDataId);
+  if (currentLayerId || currentDataId) return clone(operation);
+
+  const targetLabel = text(payload.targetLabel) || "Pontos adicionados";
+  const existingTarget = current.operations
+    .map(pointPayload)
+    .find((candidate) => {
+      if (!candidate || candidate.targetMode !== "new") return false;
+      return (
+        text(candidate.targetLayerId) &&
+        text(candidate.targetDataId) &&
+        text(candidate.targetLabel) === targetLabel
+      );
+    });
+
+  const groupId = crypto.randomUUID();
+  const targetLayerId =
+    text(existingTarget?.targetLayerId) || `tmp_layer_${groupId}`;
+  const targetDataId =
+    text(existingTarget?.targetDataId) || `tmp_data_${groupId}`;
+
+  return {
+    ...clone(operation),
+    payload: {
+      ...clone(payload),
+      targetLayerId,
+      targetDataId,
+      targetLabel,
+      targetMode: "new",
+    },
+  };
+}
+
 function assertBaseRevision(value: number) {
   if (!Number.isInteger(value) || value < 0) {
     throw new Error("WORKING_COPY_BASE_REVISION_INVALID");
@@ -204,9 +261,11 @@ export class ViewerWorkingCopyStore {
     if (current.operations.some((item) => item.id === operation.id)) {
       throw new Error("WORKING_COPY_OPERATION_ID_DUPLICATED");
     }
+    const normalizedOperation = temporaryPointTarget(current, operation);
+    validateOperation(normalizedOperation);
     const next = {
       ...current,
-      operations: [...current.operations, clone(operation)],
+      operations: [...current.operations, normalizedOperation],
       updatedAt: new Date().toISOString(),
     };
     await this.storage.put(next);

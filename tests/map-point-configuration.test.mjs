@@ -21,6 +21,7 @@ const [
   mapRuntime,
   mapNavigationEndpoint,
   newMapContextEndpoint,
+  mapCapabilities,
 ] = await Promise.all([
   readFile(
     new URL(
@@ -94,6 +95,13 @@ const [
   ),
   readFile(
     new URL("../functions/api/maps/new/context.js", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/map-panel/map-panel-capabilities.ts",
+      import.meta.url,
+    ),
     "utf8",
   ),
 ]);
@@ -251,13 +259,15 @@ test("submissão e preview continuam vinculados ao pendingPoint validado", () =>
   assert.match(controller, /type: "ANALYSIS_CREATED"/);
 });
 
-test("PR3 Viewer recebe paridade de edição local sem Add Data nem SAVE", () => {
+test("PR3 Viewer recebe paridade local, camada de pontos e bloqueia importação/SAVE", () => {
   const context = withWorkspaceEditingParity({
     mode: "viewer",
     capabilities: {
       previewBuffer: true,
       previewIsochrone: true,
       createLayer: false,
+      addData: false,
+      importData: true,
       saveMap: true,
     },
   });
@@ -268,6 +278,7 @@ test("PR3 Viewer recebe paridade de edição local sem Add Data nem SAVE", () =>
     "editStyle",
     "editLayerStyle",
     "createLayer",
+    "createPoint",
     "removeLayer",
     "duplicateLayer",
     "reorderLayers",
@@ -279,14 +290,15 @@ test("PR3 Viewer recebe paridade de edição local sem Add Data nem SAVE", () =>
   ]) {
     assert.equal(context.capabilities[capability], true, capability);
   }
-  assert.equal(context.capabilities.addData, false);
+  assert.equal(context.capabilities.addData, true);
+  assert.equal(context.capabilities.importData, false);
   assert.equal(context.capabilities.saveMap, false);
   assert.equal(context.capabilities.requestProjectChange, true);
   assert.equal(context.capabilities.editMetadata, false);
   assert.equal(context.capabilities.updateThumbnail, false);
 });
 
-test("PR3 Editor/Create preservam Add Data, SAVE e Pin independente de análise", () => {
+test("PR3 Editor/Create preservam importação, SAVE e Pin independente de análise", () => {
   for (const mode of ["editor", "create"]) {
     const context = withWorkspaceEditingParity({
       mode,
@@ -298,12 +310,19 @@ test("PR3 Editor/Create preservam Add Data, SAVE e Pin independente de análise"
     });
     assert.equal(context.capabilities.createLayer, true);
     assert.equal(context.capabilities.addData, true);
+    assert.equal(context.capabilities.importData, true);
+    assert.equal(context.capabilities.createPoint, true);
     assert.equal(context.capabilities.saveMap, true);
     assert.equal(context.capabilities.placeAnalysisMarker, true);
   }
   assert.match(mapNavigationEndpoint, /withWorkspaceEditingParity/);
   assert.match(newMapContextEndpoint, /withWorkspaceEditingParity/);
-  assert.match(mapRuntime, /context\?\.capabilities\.addData !== true/);
+  assert.match(mapRuntime, /context\?\.capabilities\.importData !== true/);
+});
+
+test("Add Data genérico permanece fail-closed por importData", () => {
+  assert.match(mapCapabilities, /command === "openAddDataModal" \? "importData" : capability/);
+  assert.match(mapCapabilities, /requiredCapability/);
 });
 
 test("PR3 Marker expõe Criar ponto e workflow usa posição atual do marcador", () => {

@@ -1,5 +1,7 @@
 import type { KeyboardEvent } from "react";
 
+import { useMapPanel } from "../../map-panel/MapPanelContext";
+
 export const MAONO_CREATE_POINT_FROM_MARKER_EVENT =
   "maono:create-point-from-marker";
 
@@ -48,7 +50,8 @@ export default function MarkerContextMenu({
   onClose,
   onRemove,
 }: MarkerContextMenuProps) {
-  if (!open) return null;
+  const { context } = useMapPanel();
+  const canCreatePoint = context?.capabilities.createPoint === true;
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Escape") return;
@@ -62,6 +65,22 @@ export default function MarkerContextMenu({
     onClose();
   }
 
+  if (!open) {
+    return canCreatePoint ? (
+      <div
+        className="maono-map-marker__menu"
+        role="group"
+        aria-label="Ação do Pin"
+        data-quick-action="create-point"
+      >
+        <button type="button" onClick={createPoint}>
+          <PointIcon />
+          Criar ponto
+        </button>
+      </div>
+    ) : null;
+  }
+
   return (
     <div
       className="maono-map-marker__menu"
@@ -69,10 +88,12 @@ export default function MarkerContextMenu({
       aria-label="Ações do marcador"
       onKeyDown={handleKeyDown}
     >
-      <button type="button" role="menuitem" onClick={createPoint}>
-        <PointIcon />
-        Criar ponto
-      </button>
+      {canCreatePoint ? (
+        <button type="button" role="menuitem" onClick={createPoint}>
+          <PointIcon />
+          Criar ponto
+        </button>
+      ) : null}
       <button type="button" role="menuitem" onClick={onRemove}>
         <TrashIcon />
         Remover marcador
