@@ -73,6 +73,18 @@ function validFilterType(value: unknown): value is ViewerPersistentFilterType {
   );
 }
 
+function validNumericRange(value: unknown): value is [number, number] {
+  if (!Array.isArray(value) || value.length !== 2) return false;
+  const [minimum, maximum] = value;
+  return (
+    typeof minimum === "number" &&
+    Number.isFinite(minimum) &&
+    typeof maximum === "number" &&
+    Number.isFinite(maximum) &&
+    minimum <= maximum
+  );
+}
+
 function stringList(value: unknown, maximum = 500) {
   if (!Array.isArray(value) || value.length > maximum) return null;
   const normalized = value.map((item) => text(item));
@@ -118,10 +130,7 @@ export function validateViewerFilterSnapshot(value: unknown) {
   }
   if (
     (source.type === "range" || source.type === "timeRange") &&
-    (!Array.isArray(normalizedValue) ||
-      normalizedValue.length !== 2 ||
-      normalizedValue.some((item) => typeof item !== "number" || !Number.isFinite(item)) ||
-      normalizedValue[0] > normalizedValue[1])
+    !validNumericRange(normalizedValue)
   ) {
     throw new Error("WORKING_COPY_OPERATION_INVALID");
   }
