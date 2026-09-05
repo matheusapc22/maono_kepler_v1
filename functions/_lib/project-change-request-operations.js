@@ -6,6 +6,10 @@ import {
   applyFrozenAnalysisOperation,
   isFrozenAnalysisOperation,
 } from "./project-change-request-analysis-operations.js";
+import {
+  applyPersistentVisualizationOperation,
+  isPersistentVisualizationOperation,
+} from "./project-change-request-visualization-operations.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -41,6 +45,10 @@ export function buildProjectChangeProposal({ baseConfig, operations }) {
     try {
       if (isFrozenAnalysisOperation(operation)) {
         projections.push(applyFrozenAnalysisOperation(config, operation));
+        continue;
+      }
+      if (isPersistentVisualizationOperation(operation)) {
+        projections.push(applyPersistentVisualizationOperation(config, operation));
         continue;
       }
       const result = buildCoreProjectChangeProposal({
