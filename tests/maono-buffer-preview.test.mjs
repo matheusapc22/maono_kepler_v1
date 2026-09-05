@@ -103,11 +103,13 @@ test("Buffer usa tooltip e legenda nativos do Kepler em vez de overlays paralelo
   assert.doesNotMatch(hook, /MapPopoverFactory|MapLegendPanelFactory/);
 });
 
-test("capability genérica controla a origem sem expor marcador avulso", () => {
+test("capability genérica controla a origem e criação de ponto permanece explicitamente gated", () => {
   assert.match(overlay, /placeAnalysisMarker/);
   assert.match(overlay, /analysisMarkerCapabilityEnabled/);
   assert.doesNotMatch(overlay, /disabled=\{!isochroneCapabilityEnabled\}/);
   assert.doesNotMatch(menu, /Adicionar marcador/);
-  assert.doesNotMatch(menu, /ToolGlyph kind="marker"/);
+  assert.match(menu, /\{canPlaceMarker && onStartMarkerPlacement \? \(/);
+  assert.match(menu, /onClick=\{onStartMarkerPlacement\}/);
+  assert.match(menu, /Criar ponto/);
   assert.match(overlay, /data-analysis-marker-state/);
 });

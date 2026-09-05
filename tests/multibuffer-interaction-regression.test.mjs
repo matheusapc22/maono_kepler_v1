@@ -96,11 +96,13 @@ test("segundo e próximos buffers substituem dados sem criar nova layer nem rece
   assert.doesNotMatch(updater, /addDataToMap/);
 });
 
-test("launcher de análise mantém apenas Isócrona e Buffer", () => {
+test("launcher de análise preserva Isócrona e Buffer e expõe Criar ponto apenas pelo gate explícito", () => {
   assert.match(menu, /Criar isócrona/);
   assert.match(menu, /Criar buffer/);
   assert.doesNotMatch(menu, /Adicionar marcador/);
-  assert.doesNotMatch(menu, /ToolGlyph kind="marker"/);
+  assert.match(menu, /\{canPlaceMarker && onStartMarkerPlacement \? \(/);
+  assert.match(menu, /onClick=\{onStartMarkerPlacement\}/);
+  assert.match(menu, /Criar ponto/);
 });
 
 test("Buffer não possui mais escolha Single/Multi e assume sessão multiorigem", () => {
