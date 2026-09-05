@@ -124,3 +124,29 @@ test("central loader owns the loading presentation and panel stays hidden until 
     "visual loading gate must not change map viewport geometry",
   );
 });
+
+test("visual timeout after hydration gets a late-render recovery window", () => {
+  const readiness = readFileSync(
+    new URL(
+      "../src/pages/Kepler/map-url-loader/map-visual-readiness.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const loader = readFileSync(
+    new URL("../src/pages/Kepler/map-url-loader/index.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(readiness, /MAONO_MAP_VISUAL_READY_EVENT/);
+  assert.match(readiness, /lateVisualRecoveryArmed/);
+  assert.match(readiness, /waitForMaonoMapLateVisualRecovery/);
+  assert.match(readiness, /markMaonoMapVisualReady\(true\)/);
+  assert.match(readiness, /currentMapRuntime\?\.triggerRepaint\?\.\(\)/);
+
+  const recoveryIndex = loader.indexOf("waitForMaonoMapLateVisualRecovery");
+  const terminalFailureIndex = loader.lastIndexOf("failActiveMapLoadTrace");
+  assert.ok(recoveryIndex >= 0);
+  assert.ok(terminalFailureIndex > recoveryIndex);
+  assert.match(loader, /if \(recovered\) \{[\s\S]*setError\(null\);[\s\S]*return;/);
+});

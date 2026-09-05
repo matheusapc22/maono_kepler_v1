@@ -20,6 +20,10 @@ import {
   type MapCanvasRect,
   type MarkerOrigin,
 } from "../components/map-overlay/marker-projection";
+import {
+  isMaonoMapVisualReady,
+  MAONO_MAP_VISUAL_READY_EVENT,
+} from "../map-url-loader/map-visual-readiness";
 import { submitProjectChangeRequest } from "./change-request-api";
 import ViewerWorkingCopyRuntime from "./ViewerWorkingCopyRuntime";
 import {
@@ -170,6 +174,8 @@ export default function PointFromPinWorkflow() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [baseMapVisualReady, setBaseMapVisualReady] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -291,6 +297,32 @@ export default function PointFromPinWorkflow() {
       window.removeEventListener("maono:map-runtime", refreshCanvasRect);
     };
   }, [refreshCanvasRect]);
+
+  useEffect(() => {
+    if (!viewerEnabled) {
+      setBaseMapVisualReady(false);
+      return undefined;
+    }
+
+    setBaseMapVisualReady(false);
+    const refreshVisualReady = () => {
+      setBaseMapVisualReady(engineState.ready && isMaonoMapVisualReady());
+    };
+    const handleVisualReady = () => {
+      if (engineState.ready) setBaseMapVisualReady(true);
+    };
+
+    window.addEventListener(MAONO_MAP_VISUAL_READY_EVENT, handleVisualReady);
+    refreshVisualReady();
+    return () => {
+      window.removeEventListener(MAONO_MAP_VISUAL_READY_EVENT, handleVisualReady);
+    };
+  }, [
+    baseRevision,
+    context?.project?.id,
+    engineState.ready,
+    viewerEnabled,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -476,12 +508,38 @@ export default function PointFromPinWorkflow() {
     );
   }
 
+  async function discardLocalChanges() {
+    if (!store || !workingCopy || submitting || discarding) return;
+    const confirmed = window.confirm(
+      "Descartar todas as alterações locais deste projeto? Esta ação não pode ser desfeita.",
+    );
+    if (!confirmed) return;
+
+    setDiscarding(true);
+    setSubmitError(null);
+    try {
+      await store.clear();
+      setWorkingCopy(null);
+      setSelectedIds([]);
+      setReason("");
+      setStale(false);
+      setDrawerOpen(false);
+      setToast("Alterações locais descartadas.");
+      window.setTimeout(() => window.location.reload(), 250);
+    } catch {
+      setSubmitError("Não foi possível descartar as alterações locais.");
+    } finally {
+      setDiscarding(false);
+    }
+  }
+
   async function submitSelected() {
     if (
       !store ||
       !workingCopy ||
       !context?.project?.slug ||
       submitting ||
+      discarding ||
       stale
     ) {
       return;
@@ -560,12 +618,13 @@ export default function PointFromPinWorkflow() {
       } => Boolean(item.payload && item.payload.targetMode !== "new"),
     );
   const untrackedViewerChanges = viewerEnabled && engineState.hasUnsavedChanges;
+  const viewerWorkspaceVisible = viewerEnabled && baseMapVisualReady;
 
   return createPortal(
     <>
       {viewerEnabled ? (
         <ViewerWorkingCopyRuntime
-          enabled={viewerEnabled}
+          enabled={viewerWorkspaceVisible}
           store={store}
           workingCopy={workingCopy}
           baseRevision={baseRevision}
@@ -573,7 +632,7 @@ export default function PointFromPinWorkflow() {
         />
       ) : null}
 
-      {viewerEnabled && canvasRect && engineState.viewport
+      {viewerWorkspaceVisible && canvasRect && engineState.viewport
         ? proposed.map(({ operation, payload }) => {
             const position = markerOriginToScreen(
               {
@@ -680,7 +739,7 @@ export default function PointFromPinWorkflow() {
         </div>
       ) : null}
 
-      {viewerEnabled && operations.length ? (
+      {viewerWorkspaceVisible && operations.length ? (
         <div className="maono-change-request__bar" role="status">
           <div className="maono-change-request__bar-copy">
             <strong>Alterações locais — não salvas</strong>
@@ -695,12 +754,16 @@ export default function PointFromPinWorkflow() {
         </div>
       ) : null}
 
-      {viewerEnabled && drawerOpen && workingCopy ? (
+      {viewerWorkspaceVisible && drawerOpen && workingCopy ? (
         <div
           className="maono-change-request__backdrop"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.currentTarget === event.target && !submitting) {
+            if (
+              event.currentTarget === event.target &&
+              !submitting &&
+              !discarding
+            ) {
               setDrawerOpen(false);
             }
           }}
@@ -718,7 +781,7 @@ export default function PointFromPinWorkflow() {
               </div>
               <button
                 type="button"
-                disabled={submitting}
+                disabled={submitting || discarding}
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Fechar"
               >
@@ -750,7 +813,7 @@ export default function PointFromPinWorkflow() {
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(operation.id)}
-                        disabled={submitting}
+                        disabled={submitting || discarding}
                         onChange={() => toggleSelected(operation.id)}
                       />
                       <span>
@@ -767,7 +830,7 @@ export default function PointFromPinWorkflow() {
                 <textarea
                   value={reason}
                   maxLength={2000}
-                  disabled={submitting}
+                  disabled={submitting || discarding}
                   onChange={(event) => setReason(event.target.value)}
                   placeholder="Explique por que estas alterações devem ser aplicadas."
                 />
@@ -782,7 +845,15 @@ export default function PointFromPinWorkflow() {
             <footer>
               <button
                 type="button"
-                disabled={submitting}
+                className="is-danger"
+                disabled={submitting || discarding}
+                onClick={() => void discardLocalChanges()}
+              >
+                {discarding ? "Descartando…" : "Descartar alterações locais"}
+              </button>
+              <button
+                type="button"
+                disabled={submitting || discarding}
                 onClick={() => setDrawerOpen(false)}
               >
                 Cancelar
@@ -792,6 +863,7 @@ export default function PointFromPinWorkflow() {
                 className="is-primary"
                 disabled={
                   submitting ||
+                  discarding ||
                   stale ||
                   untrackedViewerChanges ||
                   !selectedIds.length ||

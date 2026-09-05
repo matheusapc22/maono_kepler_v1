@@ -122,6 +122,13 @@
   font-weight: 700;
 }
 
+.maono-change-request__drawer button.is-danger {
+  margin-right: auto;
+  border-color: rgb(216 91 91 / 52%);
+  background: rgb(142 43 43 / 22%);
+  color: #ffb0b0;
+}
+
 .maono-point-dialog button:disabled,
 .maono-change-request__drawer button:disabled,
 .maono-change-request__bar button:disabled {
