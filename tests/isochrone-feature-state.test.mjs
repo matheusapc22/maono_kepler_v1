@@ -240,8 +240,10 @@ test("launcher de análise permanece visível e fail-closed pelas capabilities",
   assert.match(toolMenu, /canBuffer \?/);
   assert.match(toolMenu, /canIsochrone \?/);
   assert.match(toolMenu, /canGeometryFilter && onStartGeometryFilterDraw/);
+  assert.match(toolMenu, /canPlaceMarker && onStartMarkerPlacement/);
+  assert.match(toolMenu, /ToolGlyph kind="marker"/);
+  assert.match(toolMenu, /Criar ponto/);
   assert.doesNotMatch(toolMenu, /Adicionar marcador/);
-  assert.doesNotMatch(toolMenu, /ToolGlyph kind="marker"/);
   assert.doesNotMatch(
     overlay,
     /capabilities\?\.previewIsochrone && !isochrone\.preview \? \(/,
