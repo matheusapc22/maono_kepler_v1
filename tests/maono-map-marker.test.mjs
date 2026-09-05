@@ -16,8 +16,9 @@ const [overlay, markerHook, controller, placementCss] = await Promise.all([
   readFile(new URL("../src/pages/Kepler/components/map-overlay/map-placement-mode.css", import.meta.url), "utf8"),
 ]);
 
-const [markerContextMenu, mapSidebar, addLayerMenu] = await Promise.all([
+const [markerContextMenu, analysisToolMenu, mapSidebar, addLayerMenu] = await Promise.all([
   readFile(new URL("../src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/pages/Kepler/components/map-overlay/analysis-tools/AnalysisToolMenu.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/maono-map-shell/MapSidebar.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/pages/Kepler/components/maono-layer-panel/AddLayerMenu.tsx", import.meta.url), "utf8"),
 ]);
@@ -133,12 +134,23 @@ test("Viewer pode criar camada de pontos, mas não importar dados genéricos", (
   assert.match(pointWorkflow, /context\?\.capabilities\.addData === true/);
 });
 
-test("hotfix Point-from-Pin é capability explícita e Criar ponto fica visível após posicionar Pin", () => {
+test("hotfix Point-from-Pin é capability explícita e Criar ponto fica acessível pelo menu nas três rotas", () => {
   for (const mode of ["viewer", "editor", "create"]) {
     const context = withWorkspaceEditingParity({ mode, capabilities: {} });
     assert.equal(context.capabilities.createPoint, true, mode);
     assert.equal(context.capabilities.placeAnalysisMarker, true, mode);
   }
+
+  assert.match(overlay, /canPlaceMarker=\{analysisMarkerCapabilityEnabled\}/);
+  assert.match(overlay, /onStartMarkerPlacement=\{toolController\.startMarkerPlacement\}/);
+  assert.match(analysisToolMenu, /canPlaceMarker = false/);
+  assert.match(analysisToolMenu, /onStartMarkerPlacement/);
+  assert.match(analysisToolMenu, /\{canPlaceMarker && onStartMarkerPlacement \? \(/);
+  assert.match(analysisToolMenu, /onClick=\{onStartMarkerPlacement\}/);
+  assert.match(analysisToolMenu, /<ToolGlyph kind="marker" \/>/);
+  assert.match(analysisToolMenu, /Criar ponto/);
+  assert.match(analysisToolMenu, /Escolher posição no mapa/);
+
   assert.match(markerContextMenu, /capabilities\.createPoint === true/);
   assert.match(markerContextMenu, /if \(!open\)/);
   assert.match(markerContextMenu, /data-quick-action="create-point"/);
