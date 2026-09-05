@@ -5,10 +5,21 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { updateMap, wrapTo } from "@kepler.gl/actions";
+import { useDispatch, useSelector } from "react-redux";
 import { Link, useParams } from "react-router";
 
 import KeplerApp from "../index";
-import { getMaonoMapRuntime } from "../map-url-loader/map-visual-readiness";
+import {
+  markerOriginToScreen,
+  type MapCanvasRect,
+} from "../components/map-overlay/marker-projection";
+import {
+  KEPLER_MAP_ID,
+  normalizeKeplerViewport,
+  selectKeplerViewportState,
+} from "../engine-adapter/selectors";
+import type { MapViewportSummary } from "../engine-adapter/types";
 import {
   applyProjectChangeReview,
   changeProjectChangeReviewState,
@@ -30,11 +41,16 @@ function safeMessage(error: unknown) {
     : "Não foi possível concluir a operação de Review.";
 }
 
-function mapSurfaceRect() {
+function mapSurfaceRect(): MapCanvasRect | null {
   const node = document.querySelector<HTMLElement>(".maono-kepler-viewport");
   const rect = node?.getBoundingClientRect();
   if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-  return rect;
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
 }
 
 function operationSummary(operation: ReviewOperationProjection | null) {
@@ -52,82 +68,46 @@ function ReviewMarkerLayer({
   operations,
   selectedId,
   visible,
+  viewport,
 }: {
   operations: ReviewOperationProjection[];
   selectedId: string | null;
   visible: boolean;
+  viewport: MapViewportSummary | null;
 }) {
   const [points, setPoints] = useState<ProjectedPoint[]>([]);
-  const attachedRuntime = useRef<any>(null);
-  const detachRuntime = useRef<(() => void) | null>(null);
 
   const refresh = useCallback(() => {
-    if (!visible) {
+    if (!visible || !viewport) {
       setPoints([]);
       return;
     }
-    const map = getMaonoMapRuntime() as any;
     const rect = mapSurfaceRect();
-    if (!map?.project || !rect) return;
+    if (!rect) return;
     const next = operations.flatMap((operation) => {
       if (operation.overlay?.kind !== "point") return [];
-      try {
-        const projected = map.project([
-          operation.overlay.longitude,
-          operation.overlay.latitude,
-        ]);
-        const x = Number(projected?.x);
-        const y = Number(projected?.y);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return [];
-        return [
-          {
-            id: operation.id,
-            left: rect.left + x,
-            top: rect.top + y,
-          },
-        ];
-      } catch {
-        return [];
-      }
+      const position = markerOriginToScreen(
+        {
+          latitude: operation.overlay.latitude,
+          longitude: operation.overlay.longitude,
+        },
+        rect,
+        viewport,
+      );
+      return position
+        ? [{ id: operation.id, left: position.left, top: position.top }]
+        : [];
     });
     setPoints(next);
-  }, [operations, visible]);
+  }, [operations, viewport, visible]);
 
   useEffect(() => {
-    function attach() {
-      const map = getMaonoMapRuntime() as any;
-      if (attachedRuntime.current === map) {
-        refresh();
-        return;
-      }
-      detachRuntime.current?.();
-      detachRuntime.current = null;
-      attachedRuntime.current = map;
-      if (!map?.on || !map?.off) {
-        refresh();
-        return;
-      }
-      const handler = () => refresh();
-      for (const event of ["move", "zoom", "resize", "render"]) {
-        map.on(event, handler);
-      }
-      detachRuntime.current = () => {
-        for (const event of ["move", "zoom", "resize", "render"]) {
-          map.off(event, handler);
-        }
-      };
-      refresh();
-    }
-
-    attach();
-    window.addEventListener("maono:map-runtime", attach);
+    refresh();
     window.addEventListener("resize", refresh);
+    window.addEventListener("maono:map-runtime", refresh);
     return () => {
-      window.removeEventListener("maono:map-runtime", attach);
       window.removeEventListener("resize", refresh);
-      detachRuntime.current?.();
-      detachRuntime.current = null;
-      attachedRuntime.current = null;
+      window.removeEventListener("maono:map-runtime", refresh);
     };
   }, [refresh]);
 
@@ -152,6 +132,10 @@ function ReviewWorkspaceOverlay({
   projectSlug: string;
   changeRequestId: string;
 }) {
+  const dispatch = useDispatch();
+  const viewport = useSelector((state: any) =>
+    normalizeKeplerViewport(selectKeplerViewportState(state)),
+  );
   const [review, setReview] = useState<ProjectChangeReview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -204,17 +188,22 @@ function ReviewWorkspaceOverlay({
   const selected = operations[selectedIndex] || null;
   const summary = useMemo(() => operationSummary(selected), [selected]);
 
-  const focusOperation = useCallback((operation: ReviewOperationProjection | null) => {
-    if (!operation) return;
-    const map = getMaonoMapRuntime() as any;
-    if (!map?.flyTo) return;
-    const currentZoom = Number(map.getZoom?.() ?? 0);
-    map.flyTo({
-      center: [operation.focus.longitude, operation.focus.latitude],
-      zoom: Math.max(currentZoom, 12),
-      duration: 600,
-    });
-  }, []);
+  const focusOperation = useCallback(
+    (operation: ReviewOperationProjection | null) => {
+      if (!operation) return;
+      dispatch(
+        wrapTo(
+          KEPLER_MAP_ID,
+          updateMap({
+            longitude: operation.focus.longitude,
+            latitude: operation.focus.latitude,
+            zoom: Math.max(Number(viewport?.zoom ?? 0), 12),
+          }),
+        ),
+      );
+    },
+    [dispatch, viewport?.zoom],
+  );
 
   function selectIndex(next: number) {
     if (!operations.length) return;
@@ -288,6 +277,7 @@ function ReviewWorkspaceOverlay({
         operations={operations}
         selectedId={selected?.id || null}
         visible={compareMode === "after"}
+        viewport={viewport}
       />
 
       <aside className="maono-review-panel" aria-label="Review da solicitação">
