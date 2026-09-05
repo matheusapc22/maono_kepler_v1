@@ -58,9 +58,22 @@ function newLayerPointOperation(id) {
   };
 }
 
-test("registry inicial suporta somente point.create v1", () => {
-  assert.deepEqual(Object.keys(viewerOperationRegistry), ["point.create"]);
+function stylePayload(color = [220, 20, 20]) {
+  return {
+    targetLayerId: "buffer-layer",
+    targetDataId: "buffer-data",
+    targetLabel: "Buffer radial · 500 m",
+    changes: { fixedColor: color },
+  };
+}
+
+test("registry suporta point.create e layer.style.update v1", () => {
+  assert.deepEqual(Object.keys(viewerOperationRegistry), [
+    "point.create",
+    "layer.style.update",
+  ]);
   assert.equal(viewerOperationRegistry["point.create"].version, 1);
+  assert.equal(viewerOperationRegistry["layer.style.update"].version, 1);
 });
 
 test("working copy usa uma chave estável por organização/projeto/usuário", async () => {
@@ -105,6 +118,45 @@ test("Viewer agrupa múltiplos pontos na mesma nova camada temporária", async (
   const thirdPayload = third.operations.at(-1).payload;
   assert.equal(thirdPayload.targetLayerId, remainingPayload.targetLayerId);
   assert.equal(thirdPayload.targetDataId, remainingPayload.targetDataId);
+});
+
+test("style update é coalescido por camada e reversão remove a operação", async () => {
+  const storage = memoryStorage();
+  const store = new ViewerWorkingCopyStore(identity, storage);
+
+  const first = await store.upsertLayerStyleOperation(184, stylePayload([220, 20, 20]));
+  const firstOperation = first.operations[0];
+  assert.equal(first.operations.length, 1);
+  assert.equal(firstOperation.type, "layer.style.update");
+  assert.deepEqual(firstOperation.payload.changes.fixedColor, [220, 20, 20]);
+
+  const second = await store.upsertLayerStyleOperation(184, stylePayload([100, 30, 30]));
+  assert.equal(second.operations.length, 1);
+  assert.equal(second.operations[0].id, firstOperation.id);
+  assert.deepEqual(second.operations[0].payload.changes.fixedColor, [100, 30, 30]);
+
+  const reverted = await store.upsertLayerStyleOperation(184, {
+    ...stylePayload(),
+    changes: {},
+  });
+  assert.equal(reverted.operations.length, 0);
+});
+
+test("style update rejeita chaves e cores fora do contrato", async () => {
+  const storage = memoryStorage();
+  const store = new ViewerWorkingCopyStore(identity, storage);
+  await assert.rejects(
+    () =>
+      store.upsertLayerStyleOperation(184, {
+        ...stylePayload(),
+        changes: { internalReduxPatch: true },
+      }),
+    /WORKING_COPY_OPERATION_INVALID/,
+  );
+  await assert.rejects(
+    () => store.upsertLayerStyleOperation(184, stylePayload([300, 0, 0])),
+    /WORKING_COPY_OPERATION_INVALID/,
+  );
 });
 
 test("snapshot é cópia independente e não altera o valor persistido", async () => {
