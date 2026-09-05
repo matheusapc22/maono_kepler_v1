@@ -67,13 +67,17 @@ function stylePayload(color = [220, 20, 20]) {
   };
 }
 
-test("registry suporta point.create e layer.style.update v1", () => {
+test("registry suporta operações Viewer v1", () => {
   assert.deepEqual(Object.keys(viewerOperationRegistry), [
     "point.create",
     "layer.style.update",
+    "buffer.create",
+    "isochrone.create",
   ]);
   assert.equal(viewerOperationRegistry["point.create"].version, 1);
   assert.equal(viewerOperationRegistry["layer.style.update"].version, 1);
+  assert.equal(viewerOperationRegistry["buffer.create"].version, 1);
+  assert.equal(viewerOperationRegistry["isochrone.create"].version, 1);
 });
 
 test("working copy usa uma chave estável por organização/projeto/usuário", async () => {
@@ -178,7 +182,11 @@ test("não aceita operation id duplicado nem operação desconhecida", async () 
     /WORKING_COPY_OPERATION_ID_DUPLICATED/,
   );
   await assert.rejects(
-    () => store.appendOperation(184, { ...pointOperation("op-2"), type: "buffer.create" }),
+    () =>
+      store.appendOperation(184, {
+        ...pointOperation("op-2"),
+        type: "unsupported.operation",
+      }),
     /WORKING_COPY_OPERATION_UNSUPPORTED/,
   );
 });
