@@ -6,6 +6,7 @@ import {
 } from "react";
 import { useParams } from "react-router";
 
+import { requestViewerAnalysisOperation } from "../../change-requests/viewer-analysis-operation";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
 import { useMultiBufferDatasetUpdater } from "../../engine-adapter/multibuffer-dataset-updater";
 import {
@@ -111,7 +112,6 @@ export function useBufferPreview({
 
   useEffect(() => {
     if (!message || message.tone === "error") return undefined;
-
     const timeoutId = window.setTimeout(() => setMessage(null), 6_000);
     return () => window.clearTimeout(timeoutId);
   }, [message]);
@@ -125,7 +125,6 @@ export function useBufferPreview({
   useEffect(() => {
     if (!session) return;
     if (multiSessionRef.current?.id === session.id) return;
-
     multiSessionRef.current = createBufferSession(
       session.id,
       session.dataId || undefined,
@@ -135,16 +134,11 @@ export function useBufferPreview({
   useEffect(() => {
     if (previousScopeKeyRef.current === scopeKey) return;
     previousScopeKeyRef.current = scopeKey;
-
     requestRef.current?.abort();
     requestRef.current = null;
     setBusy(false);
-
     const current = previewRef.current;
-    if (current) {
-      commandsRef.current.removeTransientLayer(current.dataId, "buffer");
-    }
-
+    if (current) commandsRef.current.removeTransientLayer(current.dataId, "buffer");
     multiSessionRef.current = null;
     setPreview(null);
     setDialogOpen(false);
@@ -157,18 +151,13 @@ export function useBufferPreview({
     () => () => {
       requestRef.current?.abort();
       const current = previewRef.current;
-
-      if (current) {
-        commandsRef.current.removeTransientLayer(current.dataId, "buffer");
-      }
+      if (current) commandsRef.current.removeTransientLayer(current.dataId, "buffer");
     },
     [],
   );
 
   const openDialog = useCallback(() => {
-    if (!pendingPoint || !session || !capabilities?.previewBuffer) {
-      return;
-    }
+    if (!pendingPoint || !session || !capabilities?.previewBuffer) return;
     setError(null);
     setDialogOpen(true);
   }, [capabilities?.previewBuffer, pendingPoint, session]);
@@ -181,10 +170,7 @@ export function useBufferPreview({
 
   const generate = useCallback(
     async (input: BufferInput) => {
-      if (busy || !pendingPoint || !session || !capabilities?.previewBuffer) {
-        return;
-      }
-
+      if (busy || !pendingPoint || !session || !capabilities?.previewBuffer) return;
       requestRef.current?.abort();
       const controller = new AbortController();
       requestRef.current = controller;
@@ -211,7 +197,6 @@ export function useBufferPreview({
           },
           controller.signal,
         );
-
         const baseSession =
           multiSessionRef.current?.id === session.id
             ? multiSessionRef.current
@@ -245,13 +230,8 @@ export function useBufferPreview({
             },
             centerMap: false,
           });
-
           if (!added.ok || !added.value?.dataId) {
-            throw new Error(
-              added.ok
-                ? "O adaptador não retornou a camada da sessão de Buffer."
-                : added.reason,
-            );
+            throw new Error(added.ok ? "O adaptador não retornou a camada da sessão de Buffer." : added.reason);
           }
         } else {
           const updated = updateMultiBufferDataset({
@@ -259,16 +239,13 @@ export function useBufferPreview({
             label: "Buffer",
             geoJson: nextSession.geojson,
           });
-          if (!updated.ok) {
-            throw new Error(updated.reason);
-          }
+          if (!updated.ok) throw new Error(updated.reason);
         }
 
         multiSessionRef.current = nextSession;
         const nextPreview = sessionPreview(nextSession);
         setPreview(nextPreview);
         setDialogOpen(false);
-
         emitMapPanelTelemetry("map_multibuffer_item_confirmed", {
           mode: context?.mode ?? null,
           projectId: context?.project?.id ?? null,
@@ -283,7 +260,6 @@ export function useBufferPreview({
         });
       } catch (requestError) {
         if (isBufferAbortError(requestError)) return;
-
         const text = bufferErrorMessage(requestError);
         setError(text);
         emitMapPanelTelemetry("map_buffer_failed", {
@@ -292,46 +268,25 @@ export function useBufferPreview({
           organizationId: context?.organization?.id ?? null,
           source: "map-overlay",
           analysisType: "multi_radial_buffer",
-          code:
-            requestError &&
-            typeof requestError === "object" &&
-            "code" in requestError
-              ? String(requestError.code)
-              : "BUFFER_CLIENT_ERROR",
+          code: requestError && typeof requestError === "object" && "code" in requestError
+            ? String(requestError.code)
+            : "BUFFER_CLIENT_ERROR",
         });
       } finally {
-        if (requestRef.current === controller) {
-          requestRef.current = null;
-        }
+        if (requestRef.current === controller) requestRef.current = null;
         setBusy(false);
       }
     },
-    [
-      busy,
-      capabilities?.previewBuffer,
-      commands,
-      context?.mode,
-      context?.organization?.id,
-      context?.project?.id,
-      pendingPoint,
-      projectSlug,
-      session,
-      updateMultiBufferDataset,
-    ],
+    [busy, capabilities?.previewBuffer, commands, context?.mode, context?.organization?.id, context?.project?.id, pendingPoint, projectSlug, session, updateMultiBufferDataset],
   );
 
   const discard = useCallback(() => {
     if (!preview) return false;
-
     const result = commands.removeTransientLayer(preview.dataId, "buffer");
     if (!result.ok) {
-      setMessage({
-        tone: "error",
-        text: result.reason || "Não foi possível descartar a prévia.",
-      });
+      setMessage({ tone: "error", text: result.reason || "Não foi possível descartar a prévia." });
       return false;
     }
-
     emitMapPanelTelemetry("map_buffer_discarded", {
       mode: context?.mode ?? null,
       projectId: context?.project?.id ?? null,
@@ -346,28 +301,49 @@ export function useBufferPreview({
     multiSessionRef.current = null;
     setPreview(null);
     return true;
-  }, [
-    commands,
-    context?.mode,
-    context?.organization?.id,
-    context?.project?.id,
-    preview,
-  ]);
+  }, [commands, context?.mode, context?.organization?.id, context?.project?.id, preview]);
 
   const keep = useCallback(() => {
-    if (!preview || !capabilities?.persistBuffer) {
-      return false;
+    if (!preview || !capabilities?.persistBuffer) return false;
+
+    if (context?.mode === "viewer" && capabilities.requestProjectChange === true) {
+      const currentSession = multiSessionRef.current;
+      if (!currentSession || currentSession.dataId !== preview.dataId) {
+        setMessage({ tone: "error", text: "Não foi possível congelar o Buffer para a solicitação." });
+        return false;
+      }
+      void requestViewerAnalysisOperation({
+        type: "buffer.create",
+        payload: {
+          targetDataId: currentSession.dataId,
+          targetLayerId: `layer_${currentSession.dataId}`,
+          targetLabel: preview.label,
+          geojson: currentSession.geojson as unknown as Record<string, unknown>,
+          source: "analysis",
+          analysisKind: "buffer",
+          parameters: {
+            sessionId: currentSession.id,
+            items: currentSession.items,
+          },
+        },
+      }).then((result) => {
+        if (!result.ok) {
+          setMessage({ tone: "error", text: result.message || "Não foi possível adicionar o Buffer às alterações locais." });
+          return;
+        }
+        multiSessionRef.current = null;
+        setPreview(null);
+        resetMarkerRef.current();
+        setMessage({ tone: "success", text: "Buffer adicionado às alterações locais. Use Solicitar salvamento para enviar." });
+      });
+      return true;
     }
 
     const result = commands.markLayerPersistent(preview.dataId, "buffer");
     if (!result.ok) {
-      setMessage({
-        tone: "error",
-        text: result.reason || "Não foi possível manter o Buffer no mapa.",
-      });
+      setMessage({ tone: "error", text: result.reason || "Não foi possível manter o Buffer no mapa." });
       return false;
     }
-
     emitMapPanelTelemetry("map_buffer_kept", {
       mode: context?.mode ?? null,
       projectId: context?.project?.id ?? null,
@@ -382,19 +358,9 @@ export function useBufferPreview({
     multiSessionRef.current = null;
     setPreview(null);
     resetMarkerRef.current();
-    setMessage({
-      tone: "success",
-      text: "Buffer mantido no mapa. Salve o projeto para gravar as alterações.",
-    });
+    setMessage({ tone: "success", text: "Buffer mantido no mapa. Salve o projeto para gravar as alterações." });
     return true;
-  }, [
-    capabilities?.persistBuffer,
-    commands,
-    context?.mode,
-    context?.organization?.id,
-    context?.project?.id,
-    preview,
-  ]);
+  }, [capabilities?.persistBuffer, capabilities?.requestProjectChange, commands, context?.mode, context?.organization?.id, context?.project?.id, preview]);
 
   return {
     dialogOpen,
