@@ -22,6 +22,47 @@ function memoryStorage() {
   };
 }
 
+function controlledWriteStorage() {
+  const values = new Map();
+  let blockNextPut = false;
+  let resolveWriteStarted = null;
+  let releaseBlockedWrite = null;
+
+  const storage = {
+    async get(key) {
+      const value = values.get(key);
+      return value ? structuredClone(value) : null;
+    },
+    async put(value) {
+      if (blockNextPut) {
+        blockNextPut = false;
+        resolveWriteStarted?.();
+        await new Promise((resolve) => {
+          releaseBlockedWrite = resolve;
+        });
+      }
+      values.set(value.key, structuredClone(value));
+    },
+    async delete(key) {
+      values.delete(key);
+    },
+  };
+
+  return {
+    storage,
+    blockNextPut() {
+      blockNextPut = true;
+      return new Promise((resolve) => {
+        resolveWriteStarted = resolve;
+      });
+    },
+    releasePut() {
+      releaseBlockedWrite?.();
+      releaseBlockedWrite = null;
+    },
+  };
+}
+
 const identity = {
   organizationId: 7,
   projectId: 42,
@@ -220,6 +261,31 @@ test("completeSubmission remove apenas selecionadas e rotaciona submissionKey", 
   const afterAll = await store.completeSubmission(["op-2"]);
   assert.equal(afterAll, null);
   assert.equal(await store.load(), null);
+});
+
+test("clear é terminal e vence uma gravação de estilo já em voo", async () => {
+  const controlled = controlledWriteStorage();
+  const store = new ViewerWorkingCopyStore(identity, controlled.storage);
+  await store.appendOperation(184, pointOperation("op-race"));
+
+  const writeStarted = controlled.blockNextPut();
+  const styleWrite = store.upsertLayerStyleOperation(
+    184,
+    stylePayload([100, 30, 30]),
+  );
+  await writeStarted;
+
+  const clearing = store.clear();
+  controlled.releasePut();
+  await Promise.all([styleWrite, clearing]);
+
+  assert.equal(store.writable, false);
+  assert.equal(await controlled.storage.get(store.key), null);
+  assert.equal(await store.load(), null);
+  await assert.rejects(
+    () => store.upsertLayerStyleOperation(184, stylePayload()),
+    (error) => error.code === "WORKING_COPY_WRITE_CANCELLED",
+  );
 });
 
 test("removeOperation e clear mantêm lifecycle mínimo", async () => {
