@@ -18,8 +18,8 @@ export type ViewerFilterPrimitive = string | number | boolean | null;
 
 export type ViewerPersistentFilterSnapshot = {
   id: string;
-  dataIds: string[];
-  fieldNames: string[];
+  dataIds: [string];
+  fieldNames: [string];
   type: ViewerPersistentFilterType;
   value: ViewerFilterPrimitive | ViewerFilterPrimitive[];
   enabled: boolean;
@@ -102,10 +102,12 @@ export function validateViewerFilterSnapshot(value: unknown) {
   }
   const dataIds = stringList(source.dataIds, 20);
   const fieldNames = stringList(source.fieldNames, 20);
+  // V1 é propositalmente single-dataset/single-field. O adapter atual bloqueia
+  // edição segura de filtros sincronizados; tratá-los como suportados aqui
+  // causaria replay parcial e uma Change Request enganosa.
   if (
-    !dataIds?.length ||
-    !fieldNames?.length ||
-    dataIds.length !== fieldNames.length ||
+    dataIds?.length !== 1 ||
+    fieldNames?.length !== 1 ||
     typeof source.enabled !== "boolean"
   ) {
     throw new Error("WORKING_COPY_OPERATION_INVALID");
@@ -179,9 +181,8 @@ export function snapshotViewerPersistentFilter(
     !filter.compatible ||
     !validFilterType(filter.type) ||
     !text(logicalId) ||
-    !filter.dataIds.length ||
-    !filter.fieldNames.length ||
-    filter.dataIds.length !== filter.fieldNames.length
+    filter.dataIds.length !== 1 ||
+    filter.fieldNames.length !== 1
   ) {
     return null;
   }
@@ -189,8 +190,8 @@ export function snapshotViewerPersistentFilter(
   if (value === null && filter.value !== null) return null;
   const snapshot: ViewerPersistentFilterSnapshot = {
     id: logicalId,
-    dataIds: [...filter.dataIds],
-    fieldNames: [...filter.fieldNames],
+    dataIds: [filter.dataIds[0]],
+    fieldNames: [filter.fieldNames[0]],
     type: filter.type,
     value: value as ViewerPersistentFilterSnapshot["value"],
     enabled: filter.enabled,
