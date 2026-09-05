@@ -15,6 +15,10 @@ import {
   isFrozenAnalysisOperation,
   validateFrozenAnalysisOperation,
 } from "./project-change-request-analysis-operations.js";
+import {
+  isPersistentVisualizationOperation,
+  validatePersistentVisualizationOperation,
+} from "./project-change-request-visualization-operations.js";
 
 const MAX_OPERATIONS = 100;
 const MAX_OPERATION_JSON_BYTES = 256 * 1024;
@@ -47,11 +51,11 @@ function baseRevision(value) {
   return revision;
 }
 
-function normalizeAnalysisOperation(operation, index) {
+function normalizedExtendedOperation(operation, index, validate) {
   if (!operation || typeof operation !== "object" || Array.isArray(operation)) {
     throw error("Operação inválida.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
   }
-  validateFrozenAnalysisOperation(operation);
+  validate(operation);
   const normalized = {
     id: text(operation.id || `op-${index + 1}`, { required: true, maxLength: 120 }),
     type: String(operation.type).trim(),
@@ -63,6 +67,14 @@ function normalizeAnalysisOperation(operation, index) {
     throw error("Operação excede o limite permitido.", 413, "CHANGE_REQUEST_OPERATION_TOO_LARGE");
   }
   return normalized;
+}
+
+function normalizeAnalysisOperation(operation, index) {
+  return normalizedExtendedOperation(operation, index, validateFrozenAnalysisOperation);
+}
+
+function normalizeVisualizationOperation(operation, index) {
+  return normalizedExtendedOperation(operation, index, validatePersistentVisualizationOperation);
 }
 
 export function normalizeAnalysisAwareChangeRequestSubmission(input) {
@@ -84,6 +96,9 @@ export function normalizeAnalysisAwareChangeRequestSubmission(input) {
     operations: operations.map((operation, index) => {
       if (isFrozenAnalysisOperation(operation)) {
         return normalizeAnalysisOperation(operation, index);
+      }
+      if (isPersistentVisualizationOperation(operation)) {
+        return normalizeVisualizationOperation(operation, index);
       }
       return normalizeChangeRequestSubmission({
         baseRevision: revision,

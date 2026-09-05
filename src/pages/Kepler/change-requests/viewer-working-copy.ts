@@ -1,3 +1,15 @@
+import {
+  validateViewerLayerOrderPayload,
+  validateViewerLayerVisibilityPayload,
+  validateViewerPersistentFilterPayload,
+} from "./viewer-persistent-visualization.ts";
+export type {
+  ViewerLayerOrderUpdatePayload,
+  ViewerLayerVisibilityUpdatePayload,
+  ViewerPersistentFilterSnapshot,
+  ViewerPersistentFilterUpdatePayload,
+} from "./viewer-persistent-visualization.ts";
+
 export type ViewerChangeOperation = {
   id: string;
   type: string;
@@ -270,6 +282,18 @@ export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryE
     "layer.style.update": Object.freeze({
       version: 1,
       validate: validateLayerStyleUpdate,
+    }),
+    "layer.visibility.update": Object.freeze({
+      version: 1,
+      validate: validateViewerLayerVisibilityPayload,
+    }),
+    "persistent.filter.update": Object.freeze({
+      version: 1,
+      validate: validateViewerPersistentFilterPayload,
+    }),
+    "layer.order.update": Object.freeze({
+      version: 1,
+      validate: validateViewerLayerOrderPayload,
     }),
     "buffer.create": Object.freeze({
       version: 1,
