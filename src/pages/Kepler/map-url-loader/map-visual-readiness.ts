@@ -21,6 +21,8 @@ type StoreLike = {
 type MapRuntimeLike = {
   isStyleLoaded?: () => boolean;
   triggerRepaint?: () => void;
+  on?: (event: string, handler: () => void) => void;
+  off?: (event: string, handler: () => void) => void;
 };
 
 type DeckRuntimeLike = {
@@ -58,6 +60,7 @@ let lastMapRenderStyleLoaded = false;
 let pendingVisualReadiness = 0;
 let mapVisualReady = false;
 let lateVisualRecoveryArmed = false;
+let releaseLateRecoveryMapObserver: (() => void) | null = null;
 
 const mapRuntimeListeners = new Set<() => void>();
 const deckRuntimeListeners = new Set<() => void>();
@@ -196,7 +199,13 @@ export function inspectMapHydrationState(
   };
 }
 
+function clearLateRecoveryMapObserver() {
+  releaseLateRecoveryMapObserver?.();
+  releaseLateRecoveryMapObserver = null;
+}
+
 function resetVisualReadyState() {
+  clearLateRecoveryMapObserver();
   mapVisualReady = false;
   lateVisualRecoveryArmed = false;
 }
@@ -205,6 +214,7 @@ function markMaonoMapVisualReady(lateRecovery: boolean) {
   if (mapVisualReady) return;
   mapVisualReady = true;
   lateVisualRecoveryArmed = false;
+  clearLateRecoveryMapObserver();
   visualReadyListeners.forEach((listener) => listener());
   if (typeof window !== "undefined") {
     window.dispatchEvent(
@@ -218,6 +228,23 @@ function markMaonoMapVisualReady(lateRecovery: boolean) {
   }
 }
 
+function attachLateRecoveryMapObserver() {
+  clearLateRecoveryMapObserver();
+  const map = currentMapRuntime;
+  if (!lateVisualRecoveryArmed || !map || typeof map.on !== "function") {
+    return;
+  }
+
+  const handleRender = () => {
+    if (!lateVisualRecoveryArmed) return;
+    if (map.isStyleLoaded?.() !== true) return;
+    markMaonoMapVisualReady(true);
+  };
+  map.on("render", handleRender);
+  releaseLateRecoveryMapObserver = () => map.off?.("render", handleRender);
+  map.triggerRepaint?.();
+}
+
 export function isMaonoMapVisualReady() {
   return mapVisualReady;
 }
@@ -227,7 +254,7 @@ export function registerMaonoMapRuntime(value: unknown) {
     value && typeof value === "object" ? (value as MapRuntimeLike) : null;
   mapRuntimeListeners.forEach((listener) => listener());
   if (lateVisualRecoveryArmed) {
-    currentMapRuntime?.triggerRepaint?.();
+    attachLateRecoveryMapObserver();
   }
 }
 
@@ -486,6 +513,7 @@ export function waitForMaonoMapLateVisualRecovery({
       resolve(mapVisualReady);
     }, timeoutMs);
 
+    attachLateRecoveryMapObserver();
     currentDeckRuntime?.redraw?.("maono-late-visual-recovery");
     currentMapRuntime?.triggerRepaint?.();
 
@@ -530,6 +558,7 @@ export async function waitForMaonoMapVisualReadiness({
       latestSnapshot.missingDatasetIds.length === 0;
     controller.abort();
     if (lateVisualRecoveryArmed) {
+      attachLateRecoveryMapObserver();
       currentDeckRuntime?.redraw?.("maono-late-visual-recovery-arm");
       currentMapRuntime?.triggerRepaint?.();
     }
