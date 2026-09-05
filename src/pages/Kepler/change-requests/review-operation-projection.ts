@@ -1,4 +1,10 @@
 import type {
+  ViewerLayerCreatePayload,
+  ViewerLayerDuplicatePayload,
+  ViewerLayerRemovePayload,
+  ViewerLayerSnapshot,
+} from "./viewer-layer-lifecycle";
+import type {
   ProjectChangeReview,
   ReviewOperationProjection,
   ReviewSourceOperation,
@@ -79,6 +85,32 @@ function styleSnapshotFromLayer(layer: Record<string, any>): StyleSnapshot {
     pointRadius: visConfig.radius ?? null,
     clusterRadius: visConfig.clusterRadius ?? null,
     heatmapRadius: visConfig.heatmapRadius ?? null,
+  };
+}
+
+function styleSnapshotFromLifecycle(layer: ViewerLayerSnapshot): StyleSnapshot {
+  return {
+    fixedColor: [...layer.style.color] as Rgb,
+    opacity: layer.style.opacity,
+    fillEnabled: layer.style.fillEnabled,
+    strokeEnabled: layer.style.strokeEnabled,
+    strokeColor: [...layer.style.strokeColor] as Rgb,
+    strokeOpacity: layer.style.strokeOpacity,
+    strokeWidth: layer.style.strokeWidth,
+    pointRadius: layer.style.pointRadius,
+    clusterRadius: layer.style.clusterRadius,
+    heatmapRadius: layer.style.heatmapRadius,
+  };
+}
+
+function virtualLayerFromLifecycle(layer: ViewerLayerSnapshot): VirtualLayer {
+  return {
+    id: layer.id,
+    dataId: layer.dataIds[0] || null,
+    label: layer.label,
+    type: layer.type,
+    visible: layer.isVisible,
+    style: styleSnapshotFromLifecycle(layer),
   };
 }
 
@@ -167,6 +199,99 @@ function projectionBase(
     sequence: Number(operation.sequence ?? 0),
     type,
     version: Number(operation.version || 1),
+  };
+}
+
+function lifecyclePayload<T>(operation: ReviewSourceOperation): T {
+  const payload = record(operation.payload);
+  if (!payload) throw new Error(`Payload inválido em ${operation.type}.`);
+  return payload as T;
+}
+
+function projectLifecycle(
+  operation: ReviewSourceOperation,
+  layers: Map<string, VirtualLayer>,
+): ReviewOperationProjection {
+  if (operation.type === "layer.create") {
+    const payload = lifecyclePayload<ViewerLayerCreatePayload>(operation);
+    if (layers.has(payload.layer.id)) {
+      throw new Error(`A camada ${payload.layer.id} já existe na revisão-base.`);
+    }
+    layers.set(payload.layer.id, virtualLayerFromLifecycle(payload.layer));
+    return {
+      ...projectionBase(operation, "layer.create"),
+      label: payload.layer.label,
+      focus: null,
+      target: {
+        layerId: payload.layer.id,
+        dataId: payload.layer.dataIds[0] || null,
+        label: payload.layer.label,
+      },
+      overlay: null,
+      properties: {
+        before: null,
+        after: clone(payload.layer),
+        beforeLabel: "Camada inexistente",
+        afterLabel: payload.layer.label,
+        insertIndex: payload.insertIndex,
+      },
+    };
+  }
+
+  if (operation.type === "layer.duplicate") {
+    const payload = lifecyclePayload<ViewerLayerDuplicatePayload>(operation);
+    if (!layers.has(payload.sourceLayerId)) {
+      throw new Error(`A camada ${payload.sourceLayerId} não existe para duplicação.`);
+    }
+    if (layers.has(payload.layer.id)) {
+      throw new Error(`A camada ${payload.layer.id} já existe na revisão-base.`);
+    }
+    layers.set(payload.layer.id, virtualLayerFromLifecycle(payload.layer));
+    return {
+      ...projectionBase(operation, "layer.duplicate"),
+      label: payload.layer.label,
+      focus: null,
+      target: {
+        layerId: payload.layer.id,
+        dataId: payload.layer.dataIds[0] || null,
+        label: payload.layer.label,
+      },
+      overlay: null,
+      properties: {
+        source: clone(payload.source),
+        sourceLayerId: payload.sourceLayerId,
+        before: null,
+        after: clone(payload.layer),
+        beforeLabel: "Camada inexistente",
+        afterLabel: payload.layer.label,
+        insertIndex: payload.insertIndex,
+      },
+    };
+  }
+
+  const payload = lifecyclePayload<ViewerLayerRemovePayload>(operation);
+  const layer = layers.get(payload.targetLayerId);
+  if (!layer) {
+    throw new Error(`A camada ${payload.targetLayerId} não existe para remoção.`);
+  }
+  layers.delete(payload.targetLayerId);
+  return {
+    ...projectionBase(operation, "layer.remove"),
+    label: payload.before.label || layer.label,
+    focus: null,
+    target: {
+      layerId: payload.targetLayerId,
+      dataId: payload.before.dataIds[0] || layer.dataId,
+      label: payload.before.label || layer.label,
+    },
+    overlay: null,
+    properties: {
+      before: clone(payload.before),
+      after: null,
+      beforeLabel: payload.before.label || layer.label,
+      afterLabel: "Camada removida",
+      previousIndex: payload.previousIndex,
+    },
   };
 }
 
@@ -380,6 +505,13 @@ export function buildReviewOperationProjections(
       (left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0),
     )
     .map((operation) => {
+      if (
+        operation.type === "layer.create" ||
+        operation.type === "layer.duplicate" ||
+        operation.type === "layer.remove"
+      ) {
+        return projectLifecycle(operation, layers);
+      }
       if (operation.type === "point.create") return projectPoint(operation, layers);
       if (operation.type === "layer.style.update") {
         return projectStyle(operation, layers);
