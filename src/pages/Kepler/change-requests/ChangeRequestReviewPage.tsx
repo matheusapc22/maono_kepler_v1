@@ -6,8 +6,12 @@ import {
   useState,
 } from "react";
 import {
+  addFilter as addKeplerFilter,
   layerConfigChange,
   layerVisConfigChange,
+  removeFilter as removeKeplerFilter,
+  reorderLayer as reorderKeplerLayer,
+  setFilter,
   updateMap,
   wrapTo,
 } from "@kepler.gl/actions";
@@ -21,10 +25,12 @@ import {
 } from "../components/map-overlay/marker-projection";
 import {
   KEPLER_MAP_ID,
+  collectionToArray,
   findRawLayer,
   normalizeKeplerViewport,
   readValue,
   selectKeplerViewportState,
+  selectKeplerVisState,
 } from "../engine-adapter/selectors";
 import type { MapViewportSummary } from "../engine-adapter/types";
 import {
@@ -55,6 +61,21 @@ type StyleSnapshot = Partial<{
   clusterRadius: number | null;
   heatmapRadius: number | null;
 }>;
+
+type PersistentFilterSnapshot = {
+  id: string;
+  dataIds: string[];
+  fieldNames: string[];
+  type: string;
+  value: unknown;
+  enabled: boolean;
+};
+
+const PERSISTENT_VISUAL_TYPES = new Set<ReviewOperationProjection["type"]>([
+  "layer.visibility.update",
+  "persistent.filter.update",
+  "layer.order.update",
+]);
 
 function safeMessage(error: unknown) {
   return error instanceof Error
@@ -91,6 +112,9 @@ function styleSnapshot(
 
 function operationTitle(type: ReviewOperationProjection["type"]) {
   if (type === "layer.style.update") return "Alterar estilo";
+  if (type === "layer.visibility.update") return "Alterar visibilidade";
+  if (type === "persistent.filter.update") return "Alterar filtro";
+  if (type === "layer.order.update") return "Reordenar camadas";
   if (type === "buffer.create") return "Criar Buffer";
   if (type === "isochrone.create") return "Criar Isócrona";
   return "Criar ponto";
@@ -99,15 +123,24 @@ function operationTitle(type: ReviewOperationProjection["type"]) {
 function operationSummary(operation: ReviewOperationProjection | null) {
   if (!operation) return null;
   const style = operation.type === "layer.style.update";
+  const persistentVisual = PERSISTENT_VISUAL_TYPES.has(operation.type);
+  const properties = record(operation.properties) || {};
   return {
     type: operation.type,
     title: operationTitle(operation.type),
     target:
       operation.target.label || operation.target.layerId || "Camada de destino",
     focus: operation.focus,
-    properties: style ? [] : Object.entries(operation.properties || {}),
+    properties: style || persistentVisual ? [] : Object.entries(operation.properties || {}),
     before: style ? styleSnapshot(operation, "before") : null,
     after: style ? styleSnapshot(operation, "after") : null,
+    persistentVisual,
+    beforeLabel: persistentVisual
+      ? String(properties.beforeLabel ?? displayPersistentValue(properties.before))
+      : null,
+    afterLabel: persistentVisual
+      ? String(properties.afterLabel ?? displayPersistentValue(properties.after))
+      : null,
   };
 }
 
@@ -117,6 +150,24 @@ function displayStyleValue(value: unknown) {
   }
   if (typeof value === "boolean") return value ? "Sim" : "Não";
   if (value === null || value === undefined) return "—";
+  return String(value);
+}
+
+function displayPersistentValue(value: unknown) {
+  if (value === null || value === undefined) return "Sem configuração";
+  if (Array.isArray(value)) return value.map(String).join(" → ");
+  if (typeof value === "boolean") return value ? "Ativo" : "Inativo";
+  const source = record(value);
+  if (source) {
+    const fields = Array.isArray(source.fieldNames)
+      ? source.fieldNames.map(String).join(", ")
+      : "Filtro";
+    const raw = source.value;
+    const rendered = Array.isArray(raw)
+      ? raw.map(String).join(" – ")
+      : String(raw ?? "—");
+    return `${fields}: ${rendered}`;
+  }
   return String(value);
 }
 
@@ -184,6 +235,97 @@ function applyReviewStyleSnapshot(
       ),
     );
   }
+}
+
+function filterSnapshotForMode(
+  operation: ReviewOperationProjection,
+  mode: "before" | "after",
+): PersistentFilterSnapshot | null {
+  if (operation.type !== "persistent.filter.update") return null;
+  const properties = record(operation.properties);
+  const snapshot = record(properties?.[mode]);
+  if (!snapshot) return null;
+  const dataIds = Array.isArray(snapshot.dataIds) ? snapshot.dataIds.map(String) : [];
+  const fieldNames = Array.isArray(snapshot.fieldNames) ? snapshot.fieldNames.map(String) : [];
+  if (!String(snapshot.id || "").trim() || dataIds.length !== 1 || fieldNames.length !== 1) {
+    return null;
+  }
+  return {
+    id: String(snapshot.id),
+    dataIds,
+    fieldNames,
+    type: String(snapshot.type || ""),
+    value: snapshot.value,
+    enabled: snapshot.enabled !== false,
+  };
+}
+
+function rawFilterIndex(rootState: unknown, filterId: string) {
+  const visState = selectKeplerVisState(rootState);
+  const filters = collectionToArray(readValue(visState, "filters"));
+  return filters.findIndex((filter) => String(readValue(filter, "id") || "") === filterId);
+}
+
+function applyReviewPersistentVisualization(
+  dispatch: ReturnType<typeof useDispatch>,
+  rootState: unknown,
+  operation: ReviewOperationProjection,
+  mode: "before" | "after",
+  filterIndexes: Map<string, number>,
+) {
+  const properties = record(operation.properties) || {};
+
+  if (operation.type === "layer.visibility.update" && operation.target.layerId) {
+    const layer = findRawLayer(rootState, operation.target.layerId);
+    const visible = properties[mode];
+    if (!layer || typeof visible !== "boolean") return;
+    dispatch(
+      wrapTo(
+        KEPLER_MAP_ID,
+        layerConfigChange(layer, { isVisible: visible }),
+      ),
+    );
+    return;
+  }
+
+  if (operation.type === "layer.order.update") {
+    const ids = properties[mode];
+    if (!Array.isArray(ids) || !ids.length || !ids.every((id) => typeof id === "string")) {
+      return;
+    }
+    dispatch(wrapTo(KEPLER_MAP_ID, reorderKeplerLayer(ids)));
+    return;
+  }
+
+  if (operation.type !== "persistent.filter.update") return;
+
+  const snapshot = filterSnapshotForMode(operation, mode);
+  const otherMode = mode === "before" ? "after" : "before";
+  const otherSnapshot = filterSnapshotForMode(operation, otherMode);
+  const filterId = snapshot?.id || otherSnapshot?.id || "";
+  let index = filterIndexes.get(operation.id) ?? (filterId ? rawFilterIndex(rootState, filterId) : -1);
+
+  if (!snapshot) {
+    if (index >= 0) {
+      dispatch(wrapTo(KEPLER_MAP_ID, removeKeplerFilter(index)));
+      filterIndexes.delete(operation.id);
+    }
+    return;
+  }
+
+  if (index < 0) {
+    const filters = collectionToArray(
+      readValue(selectKeplerVisState(rootState), "filters"),
+    );
+    index = filters.length;
+    dispatch(wrapTo(KEPLER_MAP_ID, addKeplerFilter(snapshot.dataIds[0])));
+    filterIndexes.set(operation.id, index);
+  }
+
+  dispatch(wrapTo(KEPLER_MAP_ID, setFilter(index, "dataId", snapshot.dataIds[0], 0)));
+  dispatch(wrapTo(KEPLER_MAP_ID, setFilter(index, "name", snapshot.fieldNames[0], 0)));
+  dispatch(wrapTo(KEPLER_MAP_ID, setFilter(index, "value", snapshot.value)));
+  dispatch(wrapTo(KEPLER_MAP_ID, setFilter(index, "enabled", snapshot.enabled)));
 }
 
 function ReviewMarkerLayer({
@@ -269,6 +411,7 @@ function ReviewWorkspaceOverlay({
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
   const startedRef = useRef(false);
+  const reviewFilterIndexesRef = useRef(new Map<string, number>());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -311,7 +454,15 @@ function ReviewWorkspaceOverlay({
   useEffect(() => {
     if (!operations.length) return;
     for (const operation of operations) {
-      applyReviewStyleSnapshot(dispatch, store.getState(), operation, compareMode);
+      const rootState = store.getState();
+      applyReviewStyleSnapshot(dispatch, rootState, operation, compareMode);
+      applyReviewPersistentVisualization(
+        dispatch,
+        rootState,
+        operation,
+        compareMode,
+        reviewFilterIndexesRef.current,
+      );
     }
   }, [compareMode, dispatch, operations, store]);
 
@@ -542,6 +693,17 @@ function ReviewWorkspaceOverlay({
                       ) : (
                         <span>Sem diferença visual efetiva.</span>
                       )}
+                    </div>
+                  ) : summary.persistentVisual ? (
+                    <div className="maono-review-properties">
+                      <div>
+                        <small>Antes</small>
+                        <span>{summary.beforeLabel || "—"}</span>
+                      </div>
+                      <div>
+                        <small>Depois</small>
+                        <span>{summary.afterLabel || "—"}</span>
+                      </div>
                     </div>
                   ) : (
                     <div className="maono-review-properties">
