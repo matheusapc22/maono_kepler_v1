@@ -66,6 +66,23 @@ test("Viewer captura estilo na Working Copy e drawer descreve a operação", () 
   assert.match(workflow, /Cor fixa alterada/);
 });
 
+test("Working Copy só é reprojetada depois do readiness visual do mapa-base", () => {
+  assert.match(workflow, /MAONO_MAP_VISUAL_READY_EVENT/);
+  assert.match(workflow, /isMaonoMapVisualReady\(\)/);
+  assert.match(workflow, /const viewerWorkspaceVisible = viewerEnabled && baseMapVisualReady/);
+  assert.match(workflow, /enabled=\{viewerWorkspaceVisible\}/);
+  assert.match(workflow, /viewerWorkspaceVisible && operations\.length/);
+});
+
+test("Viewer pode descartar explicitamente Working Copy persistida", () => {
+  assert.match(workflow, /async function discardLocalChanges\(\)/);
+  assert.match(workflow, /window\.confirm\(/);
+  assert.match(workflow, /await store\.clear\(\)/);
+  assert.match(workflow, /Descartar alterações locais/);
+  assert.match(workflow, /Alterações locais descartadas\./);
+  assert.match(workflow, /window\.setTimeout\(\(\) => window\.location\.reload\(\), 250\)/);
+});
+
 test("submit não faz silent return para mutação sem contrato", () => {
   assert.match(
     workflow,
