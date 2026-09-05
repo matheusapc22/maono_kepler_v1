@@ -273,11 +273,11 @@ export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryE
     }),
     "buffer.create": Object.freeze({
       version: 1,
-      validate: (payload) => validateAnalysisCreate(payload, "buffer"),
+      validate: (payload: unknown) => validateAnalysisCreate(payload, "buffer"),
     }),
     "isochrone.create": Object.freeze({
       version: 1,
-      validate: (payload) => validateAnalysisCreate(payload, "isochrone"),
+      validate: (payload: unknown) => validateAnalysisCreate(payload, "isochrone"),
     }),
   });
 
