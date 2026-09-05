@@ -141,12 +141,16 @@ async function loadProjectConfig(
     recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
 
     if (changeRequestId && "review" in loaded) {
-      materializeProjectChangeReviewProjections(
+      const projected = materializeProjectChangeReviewProjections(
         projectSlug,
         changeRequestId,
         loaded.review,
         savedConfig,
       );
+      loaded.review.proposal = {
+        operationCount: projected.length,
+        operations: projected,
+      };
     }
 
     if (loaded.sizeBytes >= LARGE_CONFIG_UI_YIELD_BYTES) {
