@@ -7,6 +7,7 @@ import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
+import { getProjectChangeReview } from "../change-requests/review-api";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 import {
   failActiveMapLoadTrace,
@@ -102,8 +103,31 @@ function throwIfLoadAborted(signal: AbortSignal) {
     : new DOMException("Aborted", "AbortError");
 }
 
+async function loadReviewBaseProjectConfig(
+  projectSlug: string,
+  changeRequestId: string,
+  signal: AbortSignal,
+) {
+  const review = await getProjectChangeReview(projectSlug, changeRequestId);
+  throwIfLoadAborted(signal);
+  if (String(review.project.slug) !== String(projectSlug)) {
+    throw new Error("A revisão solicitada não pertence a este projeto.");
+  }
+  const serialized = JSON.stringify(review.base.config);
+  const fallbackSizeBytes = new TextEncoder().encode(serialized).byteLength;
+  return {
+    projectId: review.project.id,
+    revision: review.base.revision,
+    schemaVersion:
+      review.base.schemaVersion ?? review.proposal?.schemaVersion ?? 1,
+    sizeBytes: review.base.sizeBytes ?? fallbackSizeBytes,
+    config: review.base.config,
+  };
+}
+
 async function loadProjectConfig(
   projectSlug: string,
+  changeRequestId: string | undefined,
   dispatch: any,
   store: {
     getState: () => unknown;
@@ -118,10 +142,12 @@ async function loadProjectConfig(
   try {
     const activeTrace = getActiveMapLoadTrace();
     recordMapLoadEvent("CONFIG_REQUESTED");
-    const loaded = await loadProjectConfigStream(projectSlug, signal, {
-      correlationId: activeTrace?.correlationId ?? null,
-      onAttempt: recordActiveMapLoadTransportAttempt,
-    });
+    const loaded = changeRequestId
+      ? await loadReviewBaseProjectConfig(projectSlug, changeRequestId, signal)
+      : await loadProjectConfigStream(projectSlug, signal, {
+          correlationId: activeTrace?.correlationId ?? null,
+          onAttempt: recordActiveMapLoadTransportAttempt,
+        });
 
     const traceContext = {
       projectId: loaded.projectId,
@@ -160,7 +186,7 @@ async function loadProjectConfig(
         config: loadedConfig.config,
         options: {
           centerMap: false,
-          readOnly: readOnly,
+          readOnly,
         },
       }),
     );
@@ -186,7 +212,10 @@ const MapUrlLoader = connectStore(
     currentModal: unknown;
     dispatch: any;
   }) => {
-    const { projectSlug } = useParams();
+    const { projectSlug, changeRequestId } = useParams<{
+      projectSlug?: string;
+      changeRequestId?: string;
+    }>();
     const { context } = useMapPanel();
     const store = useStore();
     const loadedProjectRef = useRef<string | null>(null);
@@ -208,6 +237,7 @@ const MapUrlLoader = connectStore(
 
       const contextKey = [
         projectSlug,
+        changeRequestId ?? "head",
         context?.organization?.id ?? "none",
         context?.version ?? 0,
         context?.mode ?? "unknown",
@@ -222,10 +252,11 @@ const MapUrlLoader = connectStore(
 
       loadProjectConfig(
         projectSlug,
+        changeRequestId,
         dispatch,
         store,
         controller.signal,
-        context?.mode === "viewer",
+        context?.mode === "viewer" || Boolean(changeRequestId),
       ).catch((err) => {
         if (controller.signal.aborted) return;
 
@@ -274,6 +305,7 @@ const MapUrlLoader = connectStore(
         loadPointClusterState(undefined);
       };
     }, [
+      changeRequestId,
       context?.mode,
       context?.organization?.id,
       context?.version,
