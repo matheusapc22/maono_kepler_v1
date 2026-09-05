@@ -5,8 +5,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { updateMap, wrapTo } from "@kepler.gl/actions";
-import { useDispatch, useSelector } from "react-redux";
+import {
+  layerConfigChange,
+  layerVisConfigChange,
+  updateMap,
+  wrapTo,
+} from "@kepler.gl/actions";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import { Link, useParams } from "react-router";
 
 import KeplerApp from "../index";
@@ -16,7 +21,9 @@ import {
 } from "../components/map-overlay/marker-projection";
 import {
   KEPLER_MAP_ID,
+  findRawLayer,
   normalizeKeplerViewport,
+  readValue,
   selectKeplerViewportState,
 } from "../engine-adapter/selectors";
 import type { MapViewportSummary } from "../engine-adapter/types";
@@ -34,6 +41,19 @@ type ProjectedPoint = {
   left: number;
   top: number;
 };
+
+type StyleSnapshot = Partial<{
+  fixedColor: number[] | null;
+  opacity: number | null;
+  fillEnabled: boolean | null;
+  strokeEnabled: boolean | null;
+  strokeColor: number[] | null;
+  strokeOpacity: number | null;
+  strokeWidth: number | null;
+  pointRadius: number | null;
+  clusterRadius: number | null;
+  heatmapRadius: number | null;
+}>;
 
 function safeMessage(error: unknown) {
   return error instanceof Error
@@ -53,15 +73,106 @@ function mapSurfaceRect(): MapCanvasRect | null {
   };
 }
 
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function styleSnapshot(
+  operation: ReviewOperationProjection,
+  mode: "before" | "after",
+): StyleSnapshot | null {
+  if (operation.type !== "layer.style.update") return null;
+  const properties = record(operation.properties);
+  return record(properties?.[mode]) as StyleSnapshot | null;
+}
+
 function operationSummary(operation: ReviewOperationProjection | null) {
   if (!operation) return null;
+  const style = operation.type === "layer.style.update";
   return {
-    title: operation.type === "point.create" ? "Criar ponto" : operation.type,
-    target: operation.target.label || operation.target.layerId || "Camada de destino",
-    latitude: operation.focus.latitude,
-    longitude: operation.focus.longitude,
-    properties: Object.entries(operation.properties || {}),
+    type: operation.type,
+    title: style ? "Alterar estilo" : "Criar ponto",
+    target:
+      operation.target.label || operation.target.layerId || "Camada de destino",
+    focus: operation.focus,
+    properties: style ? [] : Object.entries(operation.properties || {}),
+    before: style ? styleSnapshot(operation, "before") : null,
+    after: style ? styleSnapshot(operation, "after") : null,
   };
+}
+
+function displayStyleValue(value: unknown) {
+  if (Array.isArray(value) && value.length === 3) {
+    return `rgb(${value.join(", ")})`;
+  }
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
+  if (value === null || value === undefined) return "—";
+  return String(value);
+}
+
+function styleRows(before: StyleSnapshot | null, after: StyleSnapshot | null) {
+  const keys = Array.from(
+    new Set([...Object.keys(before || {}), ...Object.keys(after || {})]),
+  );
+  return keys.filter(
+    (key) =>
+      JSON.stringify((before as Record<string, unknown> | null)?.[key]) !==
+      JSON.stringify((after as Record<string, unknown> | null)?.[key]),
+  );
+}
+
+function applyReviewStyleSnapshot(
+  dispatch: ReturnType<typeof useDispatch>,
+  rootState: unknown,
+  operation: ReviewOperationProjection,
+  mode: "before" | "after",
+) {
+  if (operation.type !== "layer.style.update" || !operation.target.layerId) {
+    return;
+  }
+  const snapshot = styleSnapshot(operation, mode);
+  if (!snapshot) return;
+  const layer = findRawLayer(rootState, operation.target.layerId);
+  if (!layer) return;
+
+  if (Array.isArray(snapshot.fixedColor)) {
+    dispatch(
+      wrapTo(
+        KEPLER_MAP_ID,
+        layerConfigChange(layer, { color: snapshot.fixedColor }),
+      ),
+    );
+  }
+
+  const visPatch: Record<string, unknown> = {};
+  if (snapshot.opacity != null) visPatch.opacity = snapshot.opacity;
+  if (snapshot.fillEnabled != null) visPatch.filled = snapshot.fillEnabled;
+  if (snapshot.strokeEnabled != null) {
+    const layerType = String(readValue(layer, "type") || "").toLowerCase();
+    visPatch[layerType === "point" ? "outline" : "stroked"] =
+      snapshot.strokeEnabled;
+  }
+  if (Array.isArray(snapshot.strokeColor)) {
+    visPatch.strokeColor = snapshot.strokeColor;
+  }
+  if (snapshot.strokeOpacity != null) {
+    visPatch.strokeOpacity = snapshot.strokeOpacity;
+  }
+  if (snapshot.strokeWidth != null) visPatch.thickness = snapshot.strokeWidth;
+  if (snapshot.pointRadius != null) visPatch.radius = snapshot.pointRadius;
+  if (snapshot.clusterRadius != null) {
+    visPatch.clusterRadius = snapshot.clusterRadius;
+  }
+  if (snapshot.heatmapRadius != null) {
+    visPatch.heatmapRadius = snapshot.heatmapRadius;
+  }
+  if (Object.keys(visPatch).length) {
+    dispatch(
+      wrapTo(KEPLER_MAP_ID, layerVisConfigChange(layer, visPatch)),
+    );
+  }
 }
 
 function ReviewMarkerLayer({
@@ -133,6 +244,7 @@ function ReviewWorkspaceOverlay({
   changeRequestId: string;
 }) {
   const dispatch = useDispatch();
+  const store = useStore();
   const viewport = useSelector((state: any) =>
     normalizeKeplerViewport(selectKeplerViewportState(state)),
   );
@@ -185,12 +297,19 @@ function ReviewWorkspaceOverlay({
     setSelectedIndex((current) => Math.min(current, operations.length - 1));
   }, [operations.length]);
 
+  useEffect(() => {
+    if (!operations.length) return;
+    for (const operation of operations) {
+      applyReviewStyleSnapshot(dispatch, store.getState(), operation, compareMode);
+    }
+  }, [compareMode, dispatch, operations, store]);
+
   const selected = operations[selectedIndex] || null;
   const summary = useMemo(() => operationSummary(selected), [selected]);
 
   const focusOperation = useCallback(
     (operation: ReviewOperationProjection | null) => {
-      if (!operation) return;
+      if (!operation?.focus) return;
       dispatch(
         wrapTo(
           KEPLER_MAP_ID,
@@ -262,7 +381,11 @@ function ReviewWorkspaceOverlay({
     } catch (actionError) {
       setError(safeMessage(actionError));
       try {
-        setReview(await getProjectChangeReview(projectSlug, changeRequestId, { force: true }));
+        setReview(
+          await getProjectChangeReview(projectSlug, changeRequestId, {
+            force: true,
+          }),
+        );
       } catch {
         // Mantém o erro principal; refresh é best-effort.
       }
@@ -270,6 +393,10 @@ function ReviewWorkspaceOverlay({
       setBusy(false);
     }
   }
+
+  const changedStyleKeys = summary
+    ? styleRows(summary.before, summary.after)
+    : [];
 
   return (
     <>
@@ -318,7 +445,9 @@ function ReviewWorkspaceOverlay({
               <div className="maono-review-conflict" role="alert">
                 <strong>Conflito de revisão</strong>
                 <span>{review.conflict.message}</span>
-                <small>A aplicação automática foi bloqueada para não sobrescrever alterações mais recentes.</small>
+                <small>
+                  A aplicação automática foi bloqueada para não sobrescrever alterações mais recentes.
+                </small>
               </div>
             ) : null}
 
@@ -368,23 +497,59 @@ function ReviewWorkspaceOverlay({
                 <div className="maono-review-operation__details">
                   <h2>{summary.title}</h2>
                   <span>Camada: {summary.target}</span>
-                  <span>Lat: {summary.latitude.toFixed(6)}</span>
-                  <span>Lng: {summary.longitude.toFixed(6)}</span>
-                  <div className="maono-review-properties">
-                    {summary.properties.length ? (
-                      summary.properties.map(([key, value]) => (
-                        <div key={key}>
-                          <small>{key}</small>
-                          <span>{typeof value === "object" ? JSON.stringify(value) : String(value ?? "")}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <span>Sem atributos adicionais.</span>
-                    )}
-                  </div>
-                  <button type="button" onClick={() => focusOperation(selected)}>
-                    Focar no mapa
-                  </button>
+                  {summary.focus ? (
+                    <>
+                      <span>Lat: {summary.focus.latitude.toFixed(6)}</span>
+                      <span>Lng: {summary.focus.longitude.toFixed(6)}</span>
+                    </>
+                  ) : null}
+
+                  {summary.type === "layer.style.update" ? (
+                    <div className="maono-review-properties">
+                      {changedStyleKeys.length ? (
+                        changedStyleKeys.map((key) => (
+                          <div key={key}>
+                            <small>{key}</small>
+                            <span>
+                              Antes: {displayStyleValue(
+                                (summary.before as Record<string, unknown> | null)?.[key],
+                              )}
+                            </span>
+                            <span>
+                              Depois: {displayStyleValue(
+                                (summary.after as Record<string, unknown> | null)?.[key],
+                              )}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <span>Sem diferença visual efetiva.</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="maono-review-properties">
+                      {summary.properties.length ? (
+                        summary.properties.map(([key, value]) => (
+                          <div key={key}>
+                            <small>{key}</small>
+                            <span>
+                              {typeof value === "object"
+                                ? JSON.stringify(value)
+                                : String(value ?? "")}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <span>Sem atributos adicionais.</span>
+                      )}
+                    </div>
+                  )}
+
+                  {summary.focus ? (
+                    <button type="button" onClick={() => focusOperation(selected)}>
+                      Focar no mapa
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </section>
@@ -422,13 +587,17 @@ function ReviewWorkspaceOverlay({
         ) : null}
       </aside>
 
-      {toast ? <div className="maono-review-toast" role="status">{toast}</div> : null}
+      {toast ? (
+        <div className="maono-review-toast" role="status">{toast}</div>
+      ) : null}
 
       {rejectOpen ? (
         <div className="maono-review-dialog-backdrop" role="presentation">
           <section className="maono-review-dialog" role="dialog" aria-modal="true">
             <h2>Rejeitar solicitação</h2>
-            <p>Informe o motivo. O conteúdo enviado pelo Viewer permanecerá imutável.</p>
+            <p>
+              Informe o motivo. O conteúdo enviado pelo Viewer permanecerá imutável.
+            </p>
             <textarea
               autoFocus
               maxLength={2000}
@@ -437,7 +606,11 @@ function ReviewWorkspaceOverlay({
               placeholder="Motivo da rejeição"
             />
             <div>
-              <button type="button" disabled={busy} onClick={() => setRejectOpen(false)}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setRejectOpen(false)}
+              >
                 Cancelar
               </button>
               <button
