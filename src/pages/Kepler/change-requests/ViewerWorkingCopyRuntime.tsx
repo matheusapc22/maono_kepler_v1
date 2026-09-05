@@ -265,20 +265,28 @@ async function persistCompactedOperations(
   current: ViewerWorkingCopy,
   compacted: ViewerChangeOperation[],
 ) {
-  let next: ViewerWorkingCopy | null = current;
-  const compactedById = new Map(compacted.map((operation) => [operation.id, operation]));
-  for (const operation of current.operations) {
-    const replacement = compactedById.get(operation.id);
-    if (!replacement || JSON.stringify(replacement) !== JSON.stringify(operation)) {
-      next = await store.removeOperation(operation.id);
-    }
+  let firstDifference = 0;
+  const sharedLength = Math.min(current.operations.length, compacted.length);
+  while (
+    firstDifference < sharedLength &&
+    JSON.stringify(current.operations[firstDifference]) ===
+      JSON.stringify(compacted[firstDifference])
+  ) {
+    firstDifference += 1;
   }
-  const remainingIds = new Set((next?.operations || []).map((operation) => operation.id));
-  for (const operation of compacted) {
-    if (!remainingIds.has(operation.id)) {
-      next = await store.appendOperation(baseRevision, operation);
-      remainingIds.add(operation.id);
-    }
+  if (
+    firstDifference === current.operations.length &&
+    firstDifference === compacted.length
+  ) {
+    return current;
+  }
+
+  let next: ViewerWorkingCopy | null = current;
+  for (let index = current.operations.length - 1; index >= firstDifference; index -= 1) {
+    next = await store.removeOperation(current.operations[index].id);
+  }
+  for (let index = firstDifference; index < compacted.length; index += 1) {
+    next = await store.appendOperation(baseRevision, compacted[index]);
   }
   return next;
 }
