@@ -5,9 +5,7 @@ import {
   PROJECT_MAP_ROUTE_MODES,
   resolveEffectiveProjectMapRoute,
 } from "./project-map-route-policy.js";
-import {
-  ensureProjectChangeRequestSchema,
-} from "./project-change-requests.js";
+import { ensureProjectChangeRequestSchema } from "./project-change-requests.js";
 import { getProjectConfigRevision } from "./project-config-revisions.js";
 import { resolveMapConfigRepository } from "./map-config-repository-factory.js";
 import {
@@ -20,7 +18,9 @@ import {
   buildProjectChangeProposal,
   isProjectChangeOperationConflict,
 } from "./project-change-request-operations.js";
+import { createProjectConfigRevisionDirectDescriptor } from "./project-config-revision-direct-delivery.js";
 
+const REVIEW_CONTRACT_VERSION = 2;
 const REVIEW_ACTIVE_STATUSES = new Set([
   "submitted",
   "under_review",
@@ -56,6 +56,14 @@ function getDb(env) {
 
 function text(value) {
   return String(value ?? "").trim();
+}
+
+function correlationId(request) {
+  return (
+    request?.headers?.get("X-Correlation-Id")?.trim() ||
+    request?.headers?.get("X-Request-Id")?.trim() ||
+    crypto.randomUUID()
+  );
 }
 
 function projectContext(project) {
@@ -193,7 +201,7 @@ async function requireReviewerChangeRequest(
   return { ...context, db, row, operations };
 }
 
-async function readVerifiedBaseRevision(env, project, revision) {
+async function baseRevisionLedger(env, project, revision) {
   const ledger = await getProjectConfigRevision(env, project.id, revision);
   if (!ledger || ledger.status !== "READY") {
     throw reviewError(
@@ -203,7 +211,11 @@ async function readVerifiedBaseRevision(env, project, revision) {
       { baseRevision: revision },
     );
   }
+  return ledger;
+}
 
+async function readVerifiedBaseRevisionForApply(env, project, revision) {
+  const ledger = await baseRevisionLedger(env, project, revision);
   const repository = resolveMapConfigRepository(env);
   const stored = await repository.getRevision({
     project,
@@ -248,40 +260,20 @@ function revisionConflict(row, project) {
   };
 }
 
-async function buildWorkspace(env, context) {
+async function buildWorkspace(env, request, context) {
   const baseRevision = Number(context.row.base_revision || 0);
-  const base = await readVerifiedBaseRevision(env, context.project, baseRevision);
-  let proposal = null;
-  let proposalConflict = null;
-
-  try {
-    const built = buildProjectChangeProposal({
-      baseConfig: base.config,
-      operations: context.operations,
-    });
-    const artifact = await buildProjectConfigArtifact(built.config);
-    proposal = {
-      checksum: artifact.checksum,
-      sizeBytes: artifact.sizeBytes,
-      schemaName: artifact.schemaName,
-      schemaVersion: artifact.schemaVersion,
-      operationCount: built.operationCount,
-      operations: built.projections,
-    };
-  } catch (error) {
-    if (!isProjectChangeOperationConflict(error)) throw error;
-    proposalConflict = {
-      code: error.code,
-      message: error.message,
-      details: error.details || null,
-    };
-  }
-
-  const concurrencyConflict = revisionConflict(context.row, context.project);
-  const conflict = proposalConflict || concurrencyConflict;
+  const ledger = await baseRevisionLedger(env, context.project, baseRevision);
+  const delivery = await createProjectConfigRevisionDirectDescriptor(env, {
+    project: context.project,
+    ledger,
+    revision: baseRevision,
+    correlationId: correlationId(request),
+  });
+  const conflict = revisionConflict(context.row, context.project);
   const status = context.row.status;
 
   return {
+    contractVersion: REVIEW_CONTRACT_VERSION,
     changeRequest: publicChangeRequest(context.row),
     project: {
       id: context.project.id,
@@ -291,11 +283,12 @@ async function buildWorkspace(env, context) {
     },
     base: {
       revision: baseRevision,
-      sizeBytes: Number(base.ledger?.size_bytes || 0),
-      schemaVersion: Number(base.ledger?.schema_version || 0),
-      config: base.config,
+      sizeBytes: Number(ledger.size_bytes || delivery.sizeBytes || 0),
+      schemaName: String(ledger.schema_name || delivery.schemaName || "legacy-kepler"),
+      schemaVersion: Number(ledger.schema_version || delivery.schemaVersion || 1),
+      delivery,
     },
-    proposal,
+    operations: context.operations,
     conflict,
     permissions: {
       canApprove:
@@ -377,11 +370,22 @@ async function safeTicketEvent(db, row, actor, eventType, metadata = {}) {
       )
       .run();
   } catch (error) {
-    console.warn("[Maono change request review] Falha ao registrar evento do ticket:", error?.message || error);
+    console.warn(
+      "[Maono change request review] Falha ao registrar evento do ticket:",
+      error?.message || error,
+    );
   }
 }
 
-async function safeAudit(env, request, row, actor, action, metadata = {}, result = "success") {
+async function safeAudit(
+  env,
+  request,
+  row,
+  actor,
+  action,
+  metadata = {},
+  result = "success",
+) {
   try {
     await recordAuditLog(env, {
       actorUserId: actor?.id ?? null,
@@ -400,7 +404,10 @@ async function safeAudit(env, request, row, actor, action, metadata = {}, result
       request,
     });
   } catch (error) {
-    console.warn("[Maono change request review] Falha de auditoria:", error?.message || error);
+    console.warn(
+      "[Maono change request review] Falha de auditoria:",
+      error?.message || error,
+    );
   }
 }
 
@@ -408,11 +415,22 @@ async function ensureUnderReview(env, request, context) {
   let row = context.row;
   if (row.status !== "submitted") return row;
   const updated = await transitionStatus(context.db, row, "submitted", "under_review");
-  row = updated || await reloadRow(context.db, row);
+  row = updated || (await reloadRow(context.db, row));
   if (updated && row?.status === "under_review") {
     await Promise.all([
-      safeTicketEvent(context.db, row, context.user, "project.change_request.review_started"),
-      safeAudit(env, request, row, context.user, "project.change_request.review_started"),
+      safeTicketEvent(
+        context.db,
+        row,
+        context.user,
+        "project.change_request.review_started",
+      ),
+      safeAudit(
+        env,
+        request,
+        row,
+        context.user,
+        "project.change_request.review_started",
+      ),
     ]);
   }
   return row;
@@ -420,7 +438,11 @@ async function ensureUnderReview(env, request, context) {
 
 async function ensureApproved(env, request, context) {
   let row = await ensureUnderReview(env, request, context);
-  if (row.status === "approved" || row.status === "applying" || row.status === "applied") {
+  if (
+    row.status === "approved" ||
+    row.status === "applying" ||
+    row.status === "applied"
+  ) {
     return row;
   }
   if (row.status !== "under_review") {
@@ -432,11 +454,22 @@ async function ensureApproved(env, request, context) {
     );
   }
   const updated = await transitionStatus(context.db, row, "under_review", "approved");
-  row = updated || await reloadRow(context.db, row);
+  row = updated || (await reloadRow(context.db, row));
   if (updated && row?.status === "approved") {
     await Promise.all([
-      safeTicketEvent(context.db, row, context.user, "project.change_request.approved"),
-      safeAudit(env, request, row, context.user, "project.change_request.approved"),
+      safeTicketEvent(
+        context.db,
+        row,
+        context.user,
+        "project.change_request.approved",
+      ),
+      safeAudit(
+        env,
+        request,
+        row,
+        context.user,
+        "project.change_request.approved",
+      ),
     ]);
   }
   return row;
@@ -449,13 +482,19 @@ async function markConflict(env, request, context, row, error, details = {}) {
     ["under_review", "approved", "applying"],
     "conflict",
   );
-  const current = updated || await reloadRow(context.db, row);
+  const current = updated || (await reloadRow(context.db, row));
   if (!updated && current?.status !== "conflict") return current;
   await Promise.all([
-    safeTicketEvent(context.db, current || row, context.user, "project.change_request.conflict", {
-      code: error?.code || "CHANGE_REQUEST_REVIEW_CONFLICT",
-      ...details,
-    }),
+    safeTicketEvent(
+      context.db,
+      current || row,
+      context.user,
+      "project.change_request.conflict",
+      {
+        code: error?.code || "CHANGE_REQUEST_REVIEW_CONFLICT",
+        ...details,
+      },
+    ),
     safeAudit(
       env,
       request,
@@ -471,7 +510,7 @@ async function markConflict(env, request, context, row, error, details = {}) {
 
 export async function getProjectChangeRequestReview(env, request, slug, requestId) {
   const context = await requireReviewerChangeRequest(env, request, slug, requestId);
-  return buildWorkspace(env, context);
+  return buildWorkspace(env, request, context);
 }
 
 export async function reviewProjectChangeRequestAction(
@@ -486,21 +525,21 @@ export async function reviewProjectChangeRequestAction(
 
   if (action === "start") {
     context.row = await ensureUnderReview(env, request, context);
-    return buildWorkspace(env, context);
+    return buildWorkspace(env, request, context);
   }
 
   if (action === "approve") {
-    const workspace = await buildWorkspace(env, context);
-    if (workspace.conflict) {
+    const conflict = revisionConflict(context.row, context.project);
+    if (conflict) {
       throw reviewError(
-        workspace.conflict.message,
+        conflict.message,
         409,
-        workspace.conflict.code,
-        workspace.conflict,
+        conflict.code,
+        conflict,
       );
     }
     context.row = await ensureApproved(env, request, context);
-    return buildWorkspace(env, context);
+    return buildWorkspace(env, request, context);
   }
 
   if (action === "reject") {
@@ -526,7 +565,7 @@ export async function reviewProjectChangeRequestAction(
       ["submitted", "under_review"],
       "rejected",
     );
-    context.row = updated || await reloadRow(context.db, context.row);
+    context.row = updated || (await reloadRow(context.db, context.row));
     if (context.row?.status !== "rejected") {
       throw reviewError(
         "A solicitação mudou enquanto a rejeição era processada.",
@@ -537,15 +576,24 @@ export async function reviewProjectChangeRequestAction(
     }
     if (updated) {
       await Promise.all([
-        safeTicketEvent(context.db, context.row, context.user, "project.change_request.rejected", {
-          comment: comment.slice(0, 2000),
-        }),
-        safeAudit(env, request, context.row, context.user, "project.change_request.rejected", {
-          commentPresent: true,
-        }),
+        safeTicketEvent(
+          context.db,
+          context.row,
+          context.user,
+          "project.change_request.rejected",
+          { comment: comment.slice(0, 2000) },
+        ),
+        safeAudit(
+          env,
+          request,
+          context.row,
+          context.user,
+          "project.change_request.rejected",
+          { commentPresent: true },
+        ),
       ]);
     }
-    return buildWorkspace(env, context);
+    return buildWorkspace(env, request, context);
   }
 
   throw reviewError(
@@ -563,7 +611,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
 
   if (context.row.status === "applied") {
     return {
-      workspace: await buildWorkspace(env, context),
+      workspace: await buildWorkspace(env, request, context),
       appliedRevision: Number(context.project.config_revision || 0),
       idempotent: true,
       projectIdentity: {
@@ -590,7 +638,11 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   }
 
   const baseRevision = Number(context.row.base_revision || 0);
-  const base = await readVerifiedBaseRevision(env, context.project, baseRevision);
+  const base = await readVerifiedBaseRevisionForApply(
+    env,
+    context.project,
+    baseRevision,
+  );
   let proposal;
   try {
     proposal = buildProjectChangeProposal({
@@ -628,10 +680,18 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
 
   context.row = await ensureApproved(env, request, context);
   if (context.row.status === "approved") {
-    const updated = await transitionStatus(context.db, context.row, "approved", "applying");
-    context.row = updated || await reloadRow(context.db, context.row);
+    const updated = await transitionStatus(
+      context.db,
+      context.row,
+      "approved",
+      "applying",
+    );
+    context.row = updated || (await reloadRow(context.db, context.row));
   }
-  if (context.row?.status !== "applying" && context.row?.status !== "applied") {
+  if (
+    context.row?.status !== "applying" &&
+    context.row?.status !== "applied"
+  ) {
     throw reviewError(
       "A solicitação mudou enquanto a aplicação era iniciada.",
       409,
@@ -641,7 +701,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   }
   if (context.row.status === "applied") {
     return {
-      workspace: await buildWorkspace(env, context),
+      workspace: await buildWorkspace(env, request, context),
       appliedRevision: Number(context.project.config_revision || 0),
       idempotent: true,
       projectIdentity: {
@@ -652,12 +712,21 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   }
 
   await Promise.all([
-    safeTicketEvent(context.db, context.row, context.user, "project.change_request.applying", {
-      proposalChecksum: artifact.checksum,
-    }),
-    safeAudit(env, request, context.row, context.user, "project.change_request.apply_started", {
-      proposalChecksum: artifact.checksum,
-    }),
+    safeTicketEvent(
+      context.db,
+      context.row,
+      context.user,
+      "project.change_request.applying",
+      { proposalChecksum: artifact.checksum },
+    ),
+    safeAudit(
+      env,
+      request,
+      context.row,
+      context.user,
+      "project.change_request.apply_started",
+      { proposalChecksum: artifact.checksum },
+    ),
   ]);
 
   let saved;
@@ -696,7 +765,9 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     ) {
       await markConflict(env, request, context, context.row, error, {
         baseRevision,
-        currentRevision: Number(error?.details?.currentConfigRevision ?? currentRevision),
+        currentRevision: Number(
+          error?.details?.currentConfigRevision ?? currentRevision,
+        ),
       });
       throw reviewError(
         "O projeto mudou enquanto a solicitação era aplicada.",
@@ -704,7 +775,9 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
         "CHANGE_REQUEST_REVIEW_CONFLICT",
         {
           baseRevision,
-          currentRevision: Number(error?.details?.currentConfigRevision ?? currentRevision),
+          currentRevision: Number(
+            error?.details?.currentConfigRevision ?? currentRevision,
+          ),
         },
       );
     }
@@ -730,10 +803,8 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     "applying",
     "applied",
   );
-  context.row = appliedTransition || await reloadRow(context.db, context.row);
+  context.row = appliedTransition || (await reloadRow(context.db, context.row));
   if (context.row?.status !== "applied") {
-    // A revisão já pode estar publicada. Manter erro retryable permite finalizar
-    // o workflow sem gerar N+2; saveVersionedProjectConfig recupera N+1 por checksum.
     throw reviewError(
       "A revisão foi publicada, mas a finalização do Review não foi confirmada.",
       503,
@@ -748,25 +819,37 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
 
   if (appliedTransition) {
     await Promise.all([
-      safeTicketEvent(context.db, context.row, context.user, "project.change_request.applied", {
-        appliedRevision: saved.revision,
-        proposalChecksum: artifact.checksum,
-        operationCount: context.operations.length,
-      }),
-      safeAudit(env, request, context.row, context.user, "project.change_request.applied", {
-        appliedRevision: saved.revision,
-        proposalChecksum: artifact.checksum,
-        operationCount: context.operations.length,
-      }),
+      safeTicketEvent(
+        context.db,
+        context.row,
+        context.user,
+        "project.change_request.applied",
+        {
+          appliedRevision: saved.revision,
+          proposalChecksum: artifact.checksum,
+          operationCount: context.operations.length,
+        },
+      ),
+      safeAudit(
+        env,
+        request,
+        context.row,
+        context.user,
+        "project.change_request.applied",
+        {
+          appliedRevision: saved.revision,
+          proposalChecksum: artifact.checksum,
+          operationCount: context.operations.length,
+        },
+      ),
     ]);
   }
 
-  // Recarrega o projeto para que o response reflita o novo HEAD sem trocar identidade.
   const refreshedProject = await getAuthorizedProject(env, context.user, slug);
   if (refreshedProject) context.project = refreshedProject;
 
   return {
-    workspace: await buildWorkspace(env, context),
+    workspace: await buildWorkspace(env, request, context),
     appliedRevision: saved.revision,
     idempotent: Boolean(saved.idempotent),
     projectIdentity: {
