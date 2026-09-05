@@ -20,6 +20,7 @@ import {
   expectedDatasetIdsFromRuntimeDatasets,
   expectedLayerIdsFromRuntimeConfig,
   isMapVisualReadinessError,
+  waitForMaonoMapLateVisualRecovery,
   waitForMaonoMapVisualReadiness,
 } from "./map-visual-readiness.ts";
 import {
@@ -250,17 +251,34 @@ const MapUrlLoader = connectStore(
       loadedProjectRef.current = contextKey;
       setError(null);
 
-      loadProjectConfig(
+      void loadProjectConfig(
         projectSlug,
         changeRequestId,
         dispatch,
         store,
         controller.signal,
         context?.mode === "viewer" || Boolean(changeRequestId),
-      ).catch((err) => {
+      ).catch(async (err) => {
         if (controller.signal.aborted) return;
 
         const visualReadinessFailure = isMapVisualReadinessError(err);
+        if (visualReadinessFailure) {
+          let recovered = false;
+          try {
+            recovered = await waitForMaonoMapLateVisualRecovery({
+              signal: controller.signal,
+            });
+          } catch {
+            if (controller.signal.aborted) return;
+          }
+
+          if (controller.signal.aborted) return;
+          if (recovered) {
+            setError(null);
+            return;
+          }
+        }
+
         const hydrationFailure = isSavedConfigHydrationError(err);
         const transportFailure = isMapConfigStreamError(err);
         failActiveMapLoadTrace({
