@@ -67,17 +67,115 @@ function stylePayload(color = [220, 20, 20]) {
   };
 }
 
+function visualizationOperation(type, payload, id = `op-${type}`) {
+  return {
+    id,
+    type,
+    version: 1,
+    payload,
+    createdAt: "2026-09-05T20:30:00.000Z",
+  };
+}
+
+function filterSnapshot(id = "filter-1", value = [10, 20]) {
+  return {
+    id,
+    dataIds: ["data-existing"],
+    fieldNames: ["score"],
+    type: "range",
+    value,
+    enabled: true,
+  };
+}
+
 test("registry suporta operações Viewer v1", () => {
   assert.deepEqual(Object.keys(viewerOperationRegistry), [
     "point.create",
     "layer.style.update",
+    "layer.visibility.update",
+    "persistent.filter.update",
+    "layer.order.update",
     "buffer.create",
     "isochrone.create",
   ]);
-  assert.equal(viewerOperationRegistry["point.create"].version, 1);
-  assert.equal(viewerOperationRegistry["layer.style.update"].version, 1);
-  assert.equal(viewerOperationRegistry["buffer.create"].version, 1);
-  assert.equal(viewerOperationRegistry["isochrone.create"].version, 1);
+  for (const type of Object.keys(viewerOperationRegistry)) {
+    assert.equal(viewerOperationRegistry[type].version, 1);
+  }
+});
+
+test("working copy aceita somente visualizações persistíveis saneadas", async () => {
+  const storage = memoryStorage();
+  const store = new ViewerWorkingCopyStore(identity, storage);
+  await store.appendOperation(
+    184,
+    visualizationOperation("layer.visibility.update", {
+      targetLayerId: "layer-existing",
+      targetDataId: "data-existing",
+      targetLabel: "Leads",
+      before: true,
+      after: false,
+    }),
+  );
+  await store.appendOperation(
+    184,
+    visualizationOperation("persistent.filter.update", {
+      filterId: "filter-1",
+      before: filterSnapshot("filter-1", [0, 100]),
+      after: filterSnapshot("filter-1", [10, 20]),
+    }),
+  );
+  await store.appendOperation(
+    184,
+    visualizationOperation("layer.order.update", {
+      before: ["layer-a", "layer-b"],
+      after: ["layer-b", "layer-a"],
+    }),
+  );
+  assert.deepEqual(
+    (await store.load()).operations.map((operation) => operation.type),
+    ["layer.visibility.update", "persistent.filter.update", "layer.order.update"],
+  );
+
+  await assert.rejects(
+    () =>
+      store.appendOperation(
+        184,
+        visualizationOperation("layer.visibility.update", {
+          targetLayerId: "layer-existing",
+          targetDataId: "data-existing",
+          targetLabel: "Leads",
+          before: true,
+          after: true,
+        }, "op-invalid-visibility"),
+      ),
+    /WORKING_COPY_OPERATION_INVALID/,
+  );
+  await assert.rejects(
+    () =>
+      store.appendOperation(
+        184,
+        visualizationOperation("persistent.filter.update", {
+          filterId: "filter-x",
+          before: null,
+          after: {
+            ...filterSnapshot("filter-x"),
+            value: { internalReduxPatch: true },
+          },
+        }, "op-invalid-filter"),
+      ),
+    /WORKING_COPY_OPERATION_INVALID/,
+  );
+  await assert.rejects(
+    () =>
+      store.appendOperation(
+        184,
+        visualizationOperation("layer.order.update", {
+          before: ["layer-a", "layer-b"],
+          after: ["layer-b", "layer-b"],
+        }, "op-invalid-order"),
+      ),
+    /WORKING_COPY_OPERATION_INVALID/,
+  );
 });
 
 test("working copy usa uma chave estável por organização/projeto/usuário", async () => {
