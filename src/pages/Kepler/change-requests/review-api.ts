@@ -84,6 +84,10 @@ export type ProjectChangeReview = {
     };
   };
   operations: ReviewSourceOperation[];
+  proposal?: {
+    operationCount: number;
+    operations: ReviewOperationProjection[];
+  } | null;
   conflict: {
     code: string;
     message: string;
@@ -166,6 +170,39 @@ function assertSupportedContract(review: ProjectChangeReview) {
   return review;
 }
 
+function sameOperationSet(left: ProjectChangeReview, right: ProjectChangeReview) {
+  return (
+    Number(left.base.revision) === Number(right.base.revision) &&
+    left.operations.length === right.operations.length &&
+    left.operations.every(
+      (operation, index) => operation.id === right.operations[index]?.id,
+    )
+  );
+}
+
+function carryClientProjection(
+  previous: ProjectChangeReview | null,
+  next: ProjectChangeReview,
+) {
+  if (
+    previous?.proposal?.operations?.length &&
+    sameOperationSet(previous, next)
+  ) {
+    next.proposal = previous.proposal;
+  }
+  return next;
+}
+
+async function cachedReview(key: string) {
+  const current = reviewCache.get(key);
+  if (!current) return null;
+  try {
+    return await current;
+  } catch {
+    return null;
+  }
+}
+
 export function invalidateProjectChangeReview(
   projectSlug: string,
   changeRequestId: string,
@@ -212,6 +249,8 @@ export async function changeProjectChangeReviewState(
   changeRequestId: string,
   input: { action: "start" | "approve" | "reject"; comment?: string },
 ) {
+  const key = cacheKey(projectSlug, changeRequestId);
+  const previous = await cachedReview(key);
   const response = await fetch(`${itemUrl(projectSlug, changeRequestId)}/review`, {
     method: "POST",
     credentials: "include",
@@ -226,8 +265,11 @@ export async function changeProjectChangeReviewState(
       { code: "CHANGE_REQUEST_REVIEW_PAYLOAD_MISSING" },
     );
   }
-  const review = assertSupportedContract(payload.review);
-  reviewCache.set(cacheKey(projectSlug, changeRequestId), Promise.resolve(review));
+  const review = carryClientProjection(
+    previous,
+    assertSupportedContract(payload.review),
+  );
+  reviewCache.set(key, Promise.resolve(review));
   return review;
 }
 
@@ -235,6 +277,8 @@ export async function applyProjectChangeReview(
   projectSlug: string,
   changeRequestId: string,
 ) {
+  const key = cacheKey(projectSlug, changeRequestId);
+  const previous = await cachedReview(key);
   const response = await fetch(`${itemUrl(projectSlug, changeRequestId)}/apply`, {
     method: "POST",
     credentials: "include",
@@ -247,8 +291,11 @@ export async function applyProjectChangeReview(
       { code: "CHANGE_REQUEST_APPLY_PAYLOAD_MISSING" },
     );
   }
-  const review = assertSupportedContract(payload.review);
-  reviewCache.set(cacheKey(projectSlug, changeRequestId), Promise.resolve(review));
+  const review = carryClientProjection(
+    previous,
+    assertSupportedContract(payload.review),
+  );
+  reviewCache.set(key, Promise.resolve(review));
   return {
     review,
     appliedRevision: Number(payload.appliedRevision),
