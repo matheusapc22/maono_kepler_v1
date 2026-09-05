@@ -132,6 +132,9 @@ function filterSnapshot(id = "filter-1", value = [10, 20]) {
 test("registry suporta operações Viewer v1", () => {
   assert.deepEqual(Object.keys(viewerOperationRegistry), [
     "point.create",
+    "layer.create",
+    "layer.duplicate",
+    "layer.remove",
     "layer.style.update",
     "layer.visibility.update",
     "persistent.filter.update",
