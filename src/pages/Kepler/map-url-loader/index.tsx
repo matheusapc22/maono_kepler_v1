@@ -7,7 +7,9 @@ import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
-import { getProjectChangeReview } from "../change-requests/review-api";
+import { loadReviewBaseProjectConfig } from "../change-requests/review-base-config-client";
+import { cacheProjectChangeReviewProjection } from "../change-requests/review-api";
+import { materializeProjectChangeReviewProjections } from "../change-requests/review-operation-projection";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 import {
   failActiveMapLoadTrace,
@@ -104,28 +106,6 @@ function throwIfLoadAborted(signal: AbortSignal) {
     : new DOMException("Aborted", "AbortError");
 }
 
-async function loadReviewBaseProjectConfig(
-  projectSlug: string,
-  changeRequestId: string,
-  signal: AbortSignal,
-) {
-  const review = await getProjectChangeReview(projectSlug, changeRequestId);
-  throwIfLoadAborted(signal);
-  if (String(review.project.slug) !== String(projectSlug)) {
-    throw new Error("A revisão solicitada não pertence a este projeto.");
-  }
-  const serialized = JSON.stringify(review.base.config);
-  const fallbackSizeBytes = new TextEncoder().encode(serialized).byteLength;
-  return {
-    projectId: review.project.id,
-    revision: review.base.revision,
-    schemaVersion:
-      review.base.schemaVersion ?? review.proposal?.schemaVersion ?? 1,
-    sizeBytes: review.base.sizeBytes ?? fallbackSizeBytes,
-    config: review.base.config,
-  };
-}
-
 async function loadProjectConfig(
   projectSlug: string,
   changeRequestId: string | undefined,
@@ -160,6 +140,22 @@ async function loadProjectConfig(
     const savedConfig = loaded.config;
     validateSavedKeplerConfig(savedConfig);
     recordMapLoadEvent("CONFIG_VALIDATED", traceContext);
+
+    if (changeRequestId && "review" in loaded) {
+      const projected = materializeProjectChangeReviewProjections(
+        loaded.review,
+        savedConfig,
+      );
+      loaded.review.proposal = {
+        operationCount: projected.length,
+        operations: projected,
+      };
+      cacheProjectChangeReviewProjection(
+        projectSlug,
+        changeRequestId,
+        projected,
+      );
+    }
 
     if (loaded.sizeBytes >= LARGE_CONFIG_UI_YIELD_BYTES) {
       await yieldToBrowser(signal);
