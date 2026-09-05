@@ -18,6 +18,7 @@ import {
   MAONO_VIEWER_ANALYSIS_OPERATION_EVENT,
 } from "./viewer-analysis-operation";
 import {
+  isWorkingCopyWriteCancelled,
   ViewerWorkingCopyStore,
   type ViewerAnalysisCreatePayload,
   type ViewerChangeOperation,
@@ -124,11 +125,18 @@ export default function ViewerWorkingCopyRuntime({
   }, [state.layers]);
 
   useEffect(() => {
-    if (!enabled || !store) return undefined;
+    if (!enabled || !store || !store.writable) return undefined;
 
     const handleAnalysisOperation = (event: Event) => {
       if (!isViewerAnalysisOperationEvent(event)) return;
       const { request, respond } = event.detail;
+      if (!store.writable) {
+        respond({
+          ok: false,
+          message: "As alterações locais estão sendo descartadas.",
+        });
+        return;
+      }
       const operation: ViewerChangeOperation = {
         id: `op_${crypto.randomUUID()}`,
         type: request.type,
@@ -140,6 +148,13 @@ export default function ViewerWorkingCopyRuntime({
       void store
         .appendOperation(baseRevision, operation)
         .then((next) => {
+          if (!store.writable) {
+            respond({
+              ok: false,
+              message: "As alterações locais estão sendo descartadas.",
+            });
+            return;
+          }
           onWorkingCopyChange(next);
           untrackedLatchedRef.current = false;
           pendingProjectionAckRef.current = false;
@@ -149,8 +164,9 @@ export default function ViewerWorkingCopyRuntime({
         .catch((error) => {
           respond({
             ok: false,
-            message:
-              (error as { code?: string })?.code === "WORKING_COPY_BASE_REVISION_STALE"
+            message: isWorkingCopyWriteCancelled(error)
+              ? "As alterações locais estão sendo descartadas."
+              : (error as { code?: string })?.code === "WORKING_COPY_BASE_REVISION_STALE"
                 ? "O projeto mudou desde o início destas alterações locais."
                 : "Não foi possível guardar a análise no workspace local.",
           });
@@ -170,7 +186,13 @@ export default function ViewerWorkingCopyRuntime({
   }, [baseRevision, enabled, markClean, onWorkingCopyChange, store]);
 
   useEffect(() => {
-    if (!enabled || !store || !state.ready || baseKeyRef.current === runtimeKey) {
+    if (
+      !enabled ||
+      !store ||
+      !store.writable ||
+      !state.ready ||
+      baseKeyRef.current === runtimeKey
+    ) {
       return;
     }
 
@@ -191,6 +213,7 @@ export default function ViewerWorkingCopyRuntime({
     if (
       !enabled ||
       !store ||
+      !store.writable ||
       !workingCopy ||
       !state.ready ||
       baseKeyRef.current !== runtimeKey
@@ -352,6 +375,7 @@ export default function ViewerWorkingCopyRuntime({
     if (
       !enabled ||
       !store ||
+      !store.writable ||
       !state.ready ||
       baseKeyRef.current !== runtimeKey ||
       captureBusyRef.current ||
@@ -399,6 +423,7 @@ export default function ViewerWorkingCopyRuntime({
       let next = workingCopy;
       try {
         for (const { layer, changes } of pending) {
+          if (!store.writable) return;
           const metadata = baseLayerMeta.get(layer.id) || {
             dataId: layer.dataIds[0] || null,
             label: layer.label,
@@ -410,8 +435,13 @@ export default function ViewerWorkingCopyRuntime({
             changes,
           });
         }
+        if (!store.writable) return;
         onWorkingCopyChange(next);
         if (!untrackedLatchedRef.current) markClean();
+      } catch (error) {
+        if (!isWorkingCopyWriteCancelled(error)) {
+          console.warn("Viewer Working Copy style capture failed", { error });
+        }
       } finally {
         captureBusyRef.current = false;
       }
