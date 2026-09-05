@@ -42,7 +42,7 @@ function reduce(initial, ...actions) {
   return actions.reduce(mapToolReducer, initial);
 }
 
-test("S02.01 cria AnalysisToolMenu acessível e separado do marcador", () => {
+test("S02.01 cria AnalysisToolMenu acessível e separado do marcador genérico", () => {
   assert.match(menu, /function AnalysisToolMenu|export default function AnalysisToolMenu/);
   assert.match(menu, /role="menu"/);
   assert.match(menu, /aria-label="Adicionar análise"/);
@@ -97,15 +97,19 @@ test("S02.04 submenu Isócrona é extensível e não solicita parâmetros espaci
   );
 });
 
-test("menu respeita capabilities de Buffer/Isócrona/Geometria e não oferece marcador avulso", () => {
+test("menu respeita capabilities de Buffer/Isócrona/Geometria e expõe Criar ponto somente pelo gate explícito", () => {
   assert.match(menu, /canBuffer \?/);
   assert.match(menu, /canIsochrone \?/);
   assert.match(menu, /canGeometryFilter && onStartGeometryFilterDraw/);
   assert.doesNotMatch(menu, /Adicionar marcador/);
-  assert.doesNotMatch(menu, /ToolGlyph kind="marker"/);
+  assert.match(menu, /\{canPlaceMarker && onStartMarkerPlacement \? \(/);
+  assert.match(menu, /onClick=\{onStartMarkerPlacement\}/);
+  assert.match(menu, /Criar ponto/);
   assert.match(overlay, /canBuffer=\{bufferCapabilityEnabled\}/);
   assert.match(overlay, /canIsochrone=\{isochroneCapabilityEnabled\}/);
   assert.match(overlay, /canGeometryFilter=\{geometryFilterCapabilityEnabled\}/);
+  assert.match(overlay, /canPlaceMarker=\{analysisMarkerCapabilityEnabled\}/);
+  assert.match(overlay, /onStartMarkerPlacement=\{toolController\.startMarkerPlacement\}/);
   assert.match(overlay, /analysisMarkerCapabilityEnabled/);
 });
 
