@@ -75,6 +75,21 @@ test("captura de alterações não roda enquanto replay aguarda estabilização"
   );
 });
 
+test("Viewer captura e reprojeta visibilidade, filtro persistente e ordem", () => {
+  assert.match(runtime, /layer\.visibility\.update/);
+  assert.match(runtime, /persistent\.filter\.update/);
+  assert.match(runtime, /layer\.order\.update/);
+  assert.match(runtime, /commands\.setLayerVisibility/);
+  assert.match(runtime, /commands\.addFilter/);
+  assert.match(runtime, /commands\.bindFilterField/);
+  assert.match(runtime, /commands\.setFilterValue/);
+  assert.match(runtime, /commands\.setFilterEnabled/);
+  assert.match(runtime, /commands\.removeFilter/);
+  assert.match(runtime, /commands\.reorderLayer/);
+  assert.doesNotMatch(runtime, /updateViewport\(/);
+  assert.doesNotMatch(runtime, /setTooltipEnabled\(/);
+});
+
 test("camada temporária projetada não vira target existente de outro point.create", () => {
   assert.match(workflow, /layer\.id\.startsWith\("tmp_layer_"\)/);
   assert.match(workflow, /dataId\?\.startsWith\("tmp_data_"\)/);
@@ -119,6 +134,9 @@ test("submit não faz silent return para mutação sem contrato", () => {
 test("Review aceita projeções das operações suportadas e mostra Antes/Depois", () => {
   assert.match(reviewApi, /"point\.create"/);
   assert.match(reviewApi, /"layer\.style\.update"/);
+  assert.match(reviewApi, /"layer\.visibility\.update"/);
+  assert.match(reviewApi, /"persistent\.filter\.update"/);
+  assert.match(reviewApi, /"layer\.order\.update"/);
   assert.match(reviewApi, /"buffer\.create"/);
   assert.match(reviewApi, /"isochrone\.create"/);
   assert.match(reviewApi, /focus:[\s\S]*\| null/);
