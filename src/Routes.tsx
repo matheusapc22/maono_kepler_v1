@@ -23,6 +23,9 @@ const AdminPage = lazy(() => import("./pages/Admin"));
 const MapManagementPage = lazy(
   () => import("./pages/Kepler/map-panel/MapManagementPage"),
 );
+const ChangeRequestReviewPage = lazy(
+  () => import("./pages/Kepler/change-requests/ChangeRequestReviewPage"),
+);
 
 const RouteLoading: React.FC = () => (
   <main className="mm-loading-screen" aria-busy="true">
@@ -199,6 +202,15 @@ const AppRoutes: React.FC = () => {
         element={
           <WithSuspense>
             <KeplerApp />
+          </WithSuspense>
+        }
+      />
+
+      <Route
+        path="/projects/:projectSlug/review/:changeRequestId"
+        element={
+          <WithSuspense>
+            <ChangeRequestReviewPage />
           </WithSuspense>
         }
       />
