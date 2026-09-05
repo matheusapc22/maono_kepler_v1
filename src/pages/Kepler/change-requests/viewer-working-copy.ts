@@ -6,6 +6,26 @@ export type ViewerChangeOperation = {
   createdAt: string;
 };
 
+export type ViewerLayerStyleChanges = Partial<{
+  fixedColor: [number, number, number];
+  opacity: number;
+  fillEnabled: boolean;
+  strokeEnabled: boolean;
+  strokeColor: [number, number, number];
+  strokeOpacity: number;
+  strokeWidth: number;
+  pointRadius: number;
+  clusterRadius: number;
+  heatmapRadius: number;
+}>;
+
+export type ViewerLayerStyleUpdatePayload = {
+  targetLayerId: string;
+  targetDataId: string | null;
+  targetLabel: string;
+  changes: ViewerLayerStyleChanges;
+};
+
 export type ViewerWorkingCopy = {
   key: string;
   organizationId: string;
@@ -38,11 +58,35 @@ type OperationRegistryEntry = {
   validate(payload: unknown): void;
 };
 
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function text(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function validRgb(value: unknown) {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((channel) => {
+      const number = Number(channel);
+      return Number.isFinite(number) && number >= 0 && number <= 255;
+    })
+  );
+}
+
+function validBoundedNumber(value: unknown, minimum: number, maximum: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= minimum && number <= maximum;
+}
+
 function validatePointCreate(payload: unknown) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new Error("WORKING_COPY_OPERATION_INVALID");
-  }
-  const source = payload as Record<string, unknown>;
+  const source = record(payload);
+  if (!source) throw new Error("WORKING_COPY_OPERATION_INVALID");
   const latitude = Number(source.latitude);
   const longitude = Number(source.longitude);
   if (
@@ -57,9 +101,58 @@ function validatePointCreate(payload: unknown) {
   }
 }
 
+function validateLayerStyleUpdate(payload: unknown) {
+  const source = record(payload);
+  const changes = record(source?.changes);
+  if (!source || !text(source.targetLayerId) || !changes || !Object.keys(changes).length) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
+
+  const allowed = new Set([
+    "fixedColor",
+    "opacity",
+    "fillEnabled",
+    "strokeEnabled",
+    "strokeColor",
+    "strokeOpacity",
+    "strokeWidth",
+    "pointRadius",
+    "clusterRadius",
+    "heatmapRadius",
+  ]);
+  if (Object.keys(changes).some((key) => !allowed.has(key))) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
+  if ("fixedColor" in changes && !validRgb(changes.fixedColor)) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
+  if ("strokeColor" in changes && !validRgb(changes.strokeColor)) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
+  for (const key of ["opacity", "strokeOpacity"] as const) {
+    if (key in changes && !validBoundedNumber(changes[key], 0, 1)) {
+      throw new Error("WORKING_COPY_OPERATION_INVALID");
+    }
+  }
+  for (const key of ["strokeWidth", "pointRadius", "clusterRadius", "heatmapRadius"] as const) {
+    if (key in changes && !validBoundedNumber(changes[key], 0, 500)) {
+      throw new Error("WORKING_COPY_OPERATION_INVALID");
+    }
+  }
+  for (const key of ["fillEnabled", "strokeEnabled"] as const) {
+    if (key in changes && typeof changes[key] !== "boolean") {
+      throw new Error("WORKING_COPY_OPERATION_INVALID");
+    }
+  }
+}
+
 export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryEntry>> =
   Object.freeze({
     "point.create": Object.freeze({ version: 1, validate: validatePointCreate }),
+    "layer.style.update": Object.freeze({
+      version: 1,
+      validate: validateLayerStyleUpdate,
+    }),
   });
 
 const DB_NAME = "maono-map-workspace";
@@ -143,19 +236,8 @@ function validateOperation(operation: ViewerChangeOperation) {
 }
 
 function pointPayload(operation: ViewerChangeOperation) {
-  if (
-    operation.type !== "point.create" ||
-    !operation.payload ||
-    typeof operation.payload !== "object" ||
-    Array.isArray(operation.payload)
-  ) {
-    return null;
-  }
-  return operation.payload as Record<string, unknown>;
-}
-
-function text(value: unknown) {
-  return String(value ?? "").trim();
+  if (operation.type !== "point.create") return null;
+  return record(operation.payload);
 }
 
 function temporaryPointTarget(
@@ -182,10 +264,8 @@ function temporaryPointTarget(
     });
 
   const groupId = crypto.randomUUID();
-  const targetLayerId =
-    text(existingTarget?.targetLayerId) || `tmp_layer_${groupId}`;
-  const targetDataId =
-    text(existingTarget?.targetDataId) || `tmp_data_${groupId}`;
+  const targetLayerId = text(existingTarget?.targetLayerId) || `tmp_layer_${groupId}`;
+  const targetDataId = text(existingTarget?.targetDataId) || `tmp_data_${groupId}`;
 
   return {
     ...clone(operation),
@@ -266,6 +346,46 @@ export class ViewerWorkingCopyStore {
     const next = {
       ...current,
       operations: [...current.operations, normalizedOperation],
+      updatedAt: new Date().toISOString(),
+    };
+    await this.storage.put(next);
+    return clone(next);
+  }
+
+  async upsertLayerStyleOperation(
+    baseRevision: number,
+    payload: ViewerLayerStyleUpdatePayload,
+  ) {
+    const current = await this.ensure(baseRevision);
+    const layerId = text(payload.targetLayerId);
+    if (!layerId) throw new Error("WORKING_COPY_OPERATION_INVALID");
+    const existingIndex = current.operations.findIndex((operation) => {
+      const source = record(operation.payload);
+      return operation.type === "layer.style.update" && text(source?.targetLayerId) === layerId;
+    });
+    const changes = record(payload.changes) || {};
+
+    let operations = [...current.operations];
+    if (!Object.keys(changes).length) {
+      if (existingIndex < 0) return clone(current);
+      operations.splice(existingIndex, 1);
+    } else {
+      const existing = existingIndex >= 0 ? operations[existingIndex] : null;
+      const operation: ViewerChangeOperation = {
+        id: existing?.id || `op_${crypto.randomUUID()}`,
+        type: "layer.style.update",
+        version: 1,
+        payload: clone(payload),
+        createdAt: existing?.createdAt || new Date().toISOString(),
+      };
+      validateOperation(operation);
+      if (existingIndex >= 0) operations[existingIndex] = operation;
+      else operations.push(operation);
+    }
+
+    const next = {
+      ...current,
+      operations,
       updatedAt: new Date().toISOString(),
     };
     await this.storage.put(next);
