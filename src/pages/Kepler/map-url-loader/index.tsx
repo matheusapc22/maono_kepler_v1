@@ -143,8 +143,6 @@ async function loadProjectConfig(
 
     if (changeRequestId && "review" in loaded) {
       const projected = materializeProjectChangeReviewProjections(
-        projectSlug,
-        changeRequestId,
         loaded.review,
         savedConfig,
       );
