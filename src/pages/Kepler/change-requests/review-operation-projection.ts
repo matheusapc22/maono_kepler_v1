@@ -4,37 +4,6 @@ import type {
   ReviewSourceOperation,
 } from "./review-api";
 
-export const REVIEW_PROJECTIONS_READY_EVENT =
-  "maono:review-projections-ready";
-
-const projectionCache = new Map<string, ReviewOperationProjection[]>();
-
-function cacheKey(projectSlug: string, changeRequestId: string) {
-  return `${projectSlug}:${changeRequestId}`;
-}
-
-export function getReviewOperationProjections(
-  projectSlug: string,
-  changeRequestId: string,
-) {
-  return projectionCache.get(cacheKey(projectSlug, changeRequestId)) || [];
-}
-
-function publishReviewOperationProjections(
-  projectSlug: string,
-  changeRequestId: string,
-  operations: ReviewOperationProjection[],
-) {
-  projectionCache.set(cacheKey(projectSlug, changeRequestId), operations);
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent(REVIEW_PROJECTIONS_READY_EVENT, {
-        detail: { projectSlug, changeRequestId },
-      }),
-    );
-  }
-}
-
 function record(value: unknown): Record<string, any> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, any>)
@@ -49,12 +18,14 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+type Rgb = [number, number, number];
+
 type StyleSnapshot = Partial<{
-  fixedColor: [number, number, number] | null;
+  fixedColor: Rgb | null;
   opacity: number | null;
   fillEnabled: boolean | null;
   strokeEnabled: boolean | null;
-  strokeColor: [number, number, number] | null;
+  strokeColor: Rgb | null;
   strokeOpacity: number | null;
   strokeWidth: number | null;
   pointRadius: number | null;
@@ -71,6 +42,19 @@ type VirtualLayer = {
   style: StyleSnapshot;
 };
 
+function rgb(value: unknown): Rgb | null {
+  if (!Array.isArray(value) || value.length !== 3) return null;
+  const channels = value.map(Number);
+  if (
+    channels.some(
+      (channel) => !Number.isFinite(channel) || channel < 0 || channel > 255,
+    )
+  ) {
+    return null;
+  }
+  return [channels[0], channels[1], channels[2]];
+}
+
 function layerDataId(layer: Record<string, any>) {
   const raw = layer?.config?.dataId ?? layer?.dataId;
   if (Array.isArray(raw)) return text(raw[0]) || null;
@@ -82,16 +66,14 @@ function styleSnapshotFromLayer(layer: Record<string, any>): StyleSnapshot {
   const visConfig = record(config.visConfig) || {};
   const layerType = text(layer.type).toLowerCase();
   return {
-    fixedColor: Array.isArray(config.color) ? clone(config.color) : null,
+    fixedColor: rgb(config.color),
     opacity: visConfig.opacity ?? null,
     fillEnabled: visConfig.filled ?? null,
     strokeEnabled:
       layerType === "point"
         ? visConfig.outline ?? null
         : visConfig.stroked ?? null,
-    strokeColor: Array.isArray(visConfig.strokeColor)
-      ? clone(visConfig.strokeColor)
-      : null,
+    strokeColor: rgb(visConfig.strokeColor),
     strokeOpacity: visConfig.strokeOpacity ?? null,
     strokeWidth: visConfig.thickness ?? visConfig.strokeWidth ?? null,
     pointRadius: visConfig.radius ?? null,
@@ -233,7 +215,8 @@ function projectAnalysis(
   const kind = text(payload.analysisKind);
   const layerId = text(payload.targetLayerId) || null;
   const dataId = text(payload.targetDataId) || null;
-  const label = text(payload.targetLabel) || (kind === "buffer" ? "Buffer" : "Isócrona");
+  const label =
+    text(payload.targetLabel) || (kind === "buffer" ? "Buffer" : "Isócrona");
   if (layerId) {
     layers.set(layerId, {
       id: layerId,
@@ -247,7 +230,9 @@ function projectAnalysis(
   const origin =
     kind === "isochrone"
       ? record(parameters.origin)
-      : record(Array.isArray(parameters.items) ? parameters.items[0]?.origin : null);
+      : record(
+          Array.isArray(parameters.items) ? parameters.items[0]?.origin : null,
+        );
   const properties =
     kind === "buffer"
       ? {
@@ -287,7 +272,9 @@ function projectStyle(
   const layerId = text(payload.targetLayerId);
   const layer = layers.get(layerId);
   if (!layer) {
-    throw new Error(`A camada ${layerId || "de estilo"} não existe na revisão-base.`);
+    throw new Error(
+      `A camada ${layerId || "de estilo"} não existe na revisão-base.`,
+    );
   }
   const before = clone(layer.style);
   const after = applyStyleChanges(before, changes);
@@ -351,7 +338,9 @@ function projectPersistent(
       focus: null,
       target: {
         layerId: null,
-        dataId: Array.isArray(target.dataIds) ? text(target.dataIds[0]) || null : null,
+        dataId: Array.isArray(target.dataIds)
+          ? text(target.dataIds[0]) || null
+          : null,
         label: fields.join(", ") || "Filtro persistente",
       },
       overlay: null,
@@ -387,11 +376,18 @@ export function buildReviewOperationProjections(
 ): ReviewOperationProjection[] {
   const layers = baseLayers(baseConfig);
   return [...operations]
-    .sort((left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0))
+    .sort(
+      (left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0),
+    )
     .map((operation) => {
       if (operation.type === "point.create") return projectPoint(operation, layers);
-      if (operation.type === "layer.style.update") return projectStyle(operation, layers);
-      if (operation.type === "buffer.create" || operation.type === "isochrone.create") {
+      if (operation.type === "layer.style.update") {
+        return projectStyle(operation, layers);
+      }
+      if (
+        operation.type === "buffer.create" ||
+        operation.type === "isochrone.create"
+      ) {
         return projectAnalysis(operation, layers);
       }
       if (
@@ -406,15 +402,8 @@ export function buildReviewOperationProjections(
 }
 
 export function materializeProjectChangeReviewProjections(
-  projectSlug: string,
-  changeRequestId: string,
   review: ProjectChangeReview,
   baseConfig: unknown,
 ) {
-  const operations = buildReviewOperationProjections(
-    baseConfig,
-    review.operations,
-  );
-  publishReviewOperationProjections(projectSlug, changeRequestId, operations);
-  return operations;
+  return buildReviewOperationProjections(baseConfig, review.operations);
 }
