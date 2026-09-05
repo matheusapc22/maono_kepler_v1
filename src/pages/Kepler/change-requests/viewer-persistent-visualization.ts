@@ -102,7 +102,12 @@ export function validateViewerFilterSnapshot(value: unknown) {
   }
   const dataIds = stringList(source.dataIds, 20);
   const fieldNames = stringList(source.fieldNames, 20);
-  if (!dataIds?.length || !fieldNames?.length || typeof source.enabled !== "boolean") {
+  if (
+    !dataIds?.length ||
+    !fieldNames?.length ||
+    dataIds.length !== fieldNames.length ||
+    typeof source.enabled !== "boolean"
+  ) {
     throw new Error("WORKING_COPY_OPERATION_INVALID");
   }
   const normalizedValue = cloneValue(source.value);
@@ -113,7 +118,8 @@ export function validateViewerFilterSnapshot(value: unknown) {
     (source.type === "range" || source.type === "timeRange") &&
     (!Array.isArray(normalizedValue) ||
       normalizedValue.length !== 2 ||
-      normalizedValue.some((item) => typeof item !== "number" || !Number.isFinite(item)))
+      normalizedValue.some((item) => typeof item !== "number" || !Number.isFinite(item)) ||
+      normalizedValue[0] > normalizedValue[1])
   ) {
     throw new Error("WORKING_COPY_OPERATION_INVALID");
   }
@@ -174,7 +180,8 @@ export function snapshotViewerPersistentFilter(
     !validFilterType(filter.type) ||
     !text(logicalId) ||
     !filter.dataIds.length ||
-    !filter.fieldNames.length
+    !filter.fieldNames.length ||
+    filter.dataIds.length !== filter.fieldNames.length
   ) {
     return null;
   }
