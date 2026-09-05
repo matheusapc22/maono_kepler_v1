@@ -36,7 +36,17 @@ export type ReviewOperationProjection = {
   properties: Record<string, unknown>;
 };
 
+export type ReviewSourceOperation = {
+  id: string;
+  sequence: number;
+  type: ReviewOperationProjection["type"];
+  version: number;
+  payload: unknown;
+  createdAt?: string;
+};
+
 export type ProjectChangeReview = {
+  contractVersion: 2;
   changeRequest: {
     id: string;
     organizationId: number;
@@ -59,18 +69,21 @@ export type ProjectChangeReview = {
   };
   base: {
     revision: number;
-    config: Record<string, unknown>;
-    sizeBytes?: number;
-    schemaVersion?: number;
-  };
-  proposal: {
-    checksum: string;
     sizeBytes: number;
-    schemaName: string;
-    schemaVersion: number;
-    operationCount: number;
-    operations: ReviewOperationProjection[];
-  } | null;
+    schemaName?: string;
+    schemaVersion?: number;
+    delivery: {
+      transport: "direct";
+      downloadUrl: string;
+      projectId: number;
+      revision: number;
+      sizeBytes: number;
+      schemaName: string;
+      schemaVersion: number;
+      correlationId: string | null;
+    };
+  };
+  operations: ReviewSourceOperation[];
   conflict: {
     code: string;
     message: string;
@@ -127,6 +140,32 @@ async function parseResponse(response: Response): Promise<ApiPayload> {
   return payload;
 }
 
+function assertSupportedContract(review: ProjectChangeReview) {
+  if (review.contractVersion !== 2) {
+    throw new ProjectChangeRequestApiError(
+      "O backend retornou uma versão de Review incompatível com este frontend.",
+      {
+        code: "CHANGE_REQUEST_REVIEW_CONTRACT_UNSUPPORTED",
+        status: 409,
+        details: { contractVersion: review.contractVersion },
+      },
+    );
+  }
+  if (
+    review.base.delivery.transport !== "direct" ||
+    Number(review.base.delivery.revision) !== Number(review.base.revision)
+  ) {
+    throw new ProjectChangeRequestApiError(
+      "O descriptor da revisão-base é incompatível com o Review.",
+      {
+        code: "CHANGE_REQUEST_BASE_DESCRIPTOR_INVALID",
+        status: 409,
+      },
+    );
+  }
+  return review;
+}
+
 export function invalidateProjectChangeReview(
   projectSlug: string,
   changeRequestId: string,
@@ -157,7 +196,7 @@ export function getProjectChangeReview(
           { code: "CHANGE_REQUEST_REVIEW_PAYLOAD_MISSING" },
         );
       }
-      return payload.review;
+      return assertSupportedContract(payload.review);
     })
     .catch((error) => {
       reviewCache.delete(key);
@@ -187,8 +226,9 @@ export async function changeProjectChangeReviewState(
       { code: "CHANGE_REQUEST_REVIEW_PAYLOAD_MISSING" },
     );
   }
-  reviewCache.set(cacheKey(projectSlug, changeRequestId), Promise.resolve(payload.review));
-  return payload.review;
+  const review = assertSupportedContract(payload.review);
+  reviewCache.set(cacheKey(projectSlug, changeRequestId), Promise.resolve(review));
+  return review;
 }
 
 export async function applyProjectChangeReview(
@@ -207,9 +247,10 @@ export async function applyProjectChangeReview(
       { code: "CHANGE_REQUEST_APPLY_PAYLOAD_MISSING" },
     );
   }
-  reviewCache.set(cacheKey(projectSlug, changeRequestId), Promise.resolve(payload.review));
+  const review = assertSupportedContract(payload.review);
+  reviewCache.set(cacheKey(projectSlug, changeRequestId), Promise.resolve(review));
   return {
-    review: payload.review,
+    review,
     appliedRevision: Number(payload.appliedRevision),
     idempotent: Boolean(payload.idempotent),
     projectIdentity: payload.projectIdentity || null,
