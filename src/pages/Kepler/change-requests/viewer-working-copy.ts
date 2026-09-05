@@ -2,13 +2,13 @@ import {
   validateViewerLayerOrderPayload,
   validateViewerLayerVisibilityPayload,
   validateViewerPersistentFilterPayload,
-} from "./viewer-persistent-visualization";
+} from "./viewer-persistent-visualization.ts";
 export type {
   ViewerLayerOrderUpdatePayload,
   ViewerLayerVisibilityUpdatePayload,
   ViewerPersistentFilterSnapshot,
   ViewerPersistentFilterUpdatePayload,
-} from "./viewer-persistent-visualization";
+} from "./viewer-persistent-visualization.ts";
 
 export type ViewerChangeOperation = {
   id: string;
