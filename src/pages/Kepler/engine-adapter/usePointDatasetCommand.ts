@@ -176,8 +176,10 @@ export function usePointDatasetCommand() {
 
       try {
         if (input.target.createNew) {
-          const dataId = `maono_pin_points_${crypto.randomUUID()}`;
-          const layerId = `layer_${dataId}`;
+          const explicitDataId = String(input.target.dataId || "").trim();
+          const explicitLayerId = String(input.target.layerId || "").trim();
+          const dataId = explicitDataId || `maono_pin_points_${crypto.randomUUID()}`;
+          const layerId = explicitLayerId || `layer_${dataId}`;
           const headers = [
             "latitude",
             "longitude",
@@ -284,6 +286,22 @@ export function usePointDatasetCommand() {
             "COMMAND_INVALID",
             "A camada selecionada não possui os campos geográficos esperados.",
           );
+        }
+
+        const idField = String(input.target.fieldMap.id || "").trim();
+        const idIndex = idField ? headers.indexOf(idField) : -1;
+        if (
+          idIndex >= 0 &&
+          input.tempId &&
+          reader.allIndexes.some(
+            (rowIndex) => String(reader.valueAt(rowIndex, idIndex) ?? "") === input.tempId,
+          )
+        ) {
+          return {
+            ok: true,
+            changed: false,
+            value: { dataId, layerId: input.target.layerId },
+          };
         }
 
         const rows = reader.allIndexes.map((rowIndex) =>
