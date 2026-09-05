@@ -333,6 +333,26 @@ async function reloadRow(db, row) {
   return loadChangeRequest(db, row.project_id, row.id);
 }
 
+async function loadPublishedProposalHead(db, row) {
+  return db
+    .prepare(
+      `SELECT id, slug, config_revision, config_checksum
+         FROM projects
+        WHERE id = ? AND organization_id = ?
+        LIMIT 1`,
+    )
+    .bind(row.project_id, row.organization_id)
+    .first();
+}
+
+function isSamePublishedProposal(head, baseRevision, checksum) {
+  return Boolean(
+    head &&
+      Number(head.config_revision || 0) === Number(baseRevision) + 1 &&
+      text(head.config_checksum).toLowerCase() === text(checksum).toLowerCase(),
+  );
+}
+
 async function safeTicketEvent(db, row, actor, eventType, metadata = {}) {
   if (!row.ticket_id) return;
   try {
@@ -389,7 +409,7 @@ async function ensureUnderReview(env, request, context) {
   if (row.status !== "submitted") return row;
   const updated = await transitionStatus(context.db, row, "submitted", "under_review");
   row = updated || await reloadRow(context.db, row);
-  if (row?.status === "under_review") {
+  if (updated && row?.status === "under_review") {
     await Promise.all([
       safeTicketEvent(context.db, row, context.user, "project.change_request.review_started"),
       safeAudit(env, request, row, context.user, "project.change_request.review_started"),
@@ -413,7 +433,7 @@ async function ensureApproved(env, request, context) {
   }
   const updated = await transitionStatus(context.db, row, "under_review", "approved");
   row = updated || await reloadRow(context.db, row);
-  if (row?.status === "approved") {
+  if (updated && row?.status === "approved") {
     await Promise.all([
       safeTicketEvent(context.db, row, context.user, "project.change_request.approved"),
       safeAudit(env, request, row, context.user, "project.change_request.approved"),
@@ -430,6 +450,7 @@ async function markConflict(env, request, context, row, error, details = {}) {
     "conflict",
   );
   const current = updated || await reloadRow(context.db, row);
+  if (!updated && current?.status !== "conflict") return current;
   await Promise.all([
     safeTicketEvent(context.db, current || row, context.user, "project.change_request.conflict", {
       code: error?.code || "CHANGE_REQUEST_REVIEW_CONFLICT",
@@ -514,14 +535,16 @@ export async function reviewProjectChangeRequestAction(
         { status: context.row?.status || null },
       );
     }
-    await Promise.all([
-      safeTicketEvent(context.db, context.row, context.user, "project.change_request.rejected", {
-        comment: comment.slice(0, 2000),
-      }),
-      safeAudit(env, request, context.row, context.user, "project.change_request.rejected", {
-        commentPresent: true,
-      }),
-    ]);
+    if (updated) {
+      await Promise.all([
+        safeTicketEvent(context.db, context.row, context.user, "project.change_request.rejected", {
+          comment: comment.slice(0, 2000),
+        }),
+        safeAudit(env, request, context.row, context.user, "project.change_request.rejected", {
+          commentPresent: true,
+        }),
+      ]);
+    }
     return buildWorkspace(env, context);
   }
 
@@ -543,6 +566,10 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
       workspace: await buildWorkspace(env, context),
       appliedRevision: Number(context.project.config_revision || 0),
       idempotent: true,
+      projectIdentity: {
+        id: context.project.id,
+        slug: context.project.slug,
+      },
     };
   }
   if (REVIEW_TERMINAL_STATUSES.has(context.row.status)) {
@@ -617,6 +644,10 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
       workspace: await buildWorkspace(env, context),
       appliedRevision: Number(context.project.config_revision || 0),
       idempotent: true,
+      projectIdentity: {
+        id: context.project.id,
+        slug: context.project.slug,
+      },
     };
   }
 
@@ -642,9 +673,26 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
       markPreviewPending: true,
     });
   } catch (error) {
+    let recoveredConcurrentApply = false;
+    if (error?.code === "PROJECT_CONFIG_REVISION_CONFLICT") {
+      const publishedHead = await loadPublishedProposalHead(context.db, context.row);
+      if (isSamePublishedProposal(publishedHead, baseRevision, artifact.checksum)) {
+        context.project = {
+          ...context.project,
+          config_revision: Number(publishedHead.config_revision),
+        };
+        saved = {
+          revision: baseRevision + 1,
+          idempotent: true,
+        };
+        recoveredConcurrentApply = true;
+      }
+    }
+
     if (
-      error?.code === "PROJECT_CONFIG_REVISION_CONFLICT" ||
-      error?.code === "PROJECT_CONFIG_LIFECYCLE_CONFLICT"
+      !recoveredConcurrentApply &&
+      (error?.code === "PROJECT_CONFIG_REVISION_CONFLICT" ||
+        error?.code === "PROJECT_CONFIG_LIFECYCLE_CONFLICT")
     ) {
       await markConflict(env, request, context, context.row, error, {
         baseRevision,
@@ -661,21 +709,28 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
       );
     }
 
-    await safeAudit(
-      env,
-      request,
-      context.row,
-      context.user,
-      "project.change_request.apply_failed",
-      { code: error?.code || "PROJECT_CHANGE_REQUEST_APPLY_FAILED" },
-      "error",
-    );
-    // Mantém `applying`: retry posterior reutiliza o pipeline idempotente de save.
-    throw error;
+    if (!recoveredConcurrentApply) {
+      await safeAudit(
+        env,
+        request,
+        context.row,
+        context.user,
+        "project.change_request.apply_failed",
+        { code: error?.code || "PROJECT_CHANGE_REQUEST_APPLY_FAILED" },
+        "error",
+      );
+      // Mantém `applying`: retry posterior reutiliza o pipeline idempotente de save.
+      throw error;
+    }
   }
 
-  const applied = await transitionStatus(context.db, context.row, "applying", "applied");
-  context.row = applied || await reloadRow(context.db, context.row);
+  const appliedTransition = await transitionStatus(
+    context.db,
+    context.row,
+    "applying",
+    "applied",
+  );
+  context.row = appliedTransition || await reloadRow(context.db, context.row);
   if (context.row?.status !== "applied") {
     // A revisão já pode estar publicada. Manter erro retryable permite finalizar
     // o workflow sem gerar N+2; saveVersionedProjectConfig recupera N+1 por checksum.
@@ -691,18 +746,20 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     );
   }
 
-  await Promise.all([
-    safeTicketEvent(context.db, context.row, context.user, "project.change_request.applied", {
-      appliedRevision: saved.revision,
-      proposalChecksum: artifact.checksum,
-      operationCount: context.operations.length,
-    }),
-    safeAudit(env, request, context.row, context.user, "project.change_request.applied", {
-      appliedRevision: saved.revision,
-      proposalChecksum: artifact.checksum,
-      operationCount: context.operations.length,
-    }),
-  ]);
+  if (appliedTransition) {
+    await Promise.all([
+      safeTicketEvent(context.db, context.row, context.user, "project.change_request.applied", {
+        appliedRevision: saved.revision,
+        proposalChecksum: artifact.checksum,
+        operationCount: context.operations.length,
+      }),
+      safeAudit(env, request, context.row, context.user, "project.change_request.applied", {
+        appliedRevision: saved.revision,
+        proposalChecksum: artifact.checksum,
+        operationCount: context.operations.length,
+      }),
+    ]);
+  }
 
   // Recarrega o projeto para que o response reflita o novo HEAD sem trocar identidade.
   const refreshedProject = await getAuthorizedProject(env, context.user, slug);
