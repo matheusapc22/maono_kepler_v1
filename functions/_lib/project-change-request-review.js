@@ -235,6 +235,7 @@ async function readVerifiedBaseRevision(env, project, revision) {
 function revisionConflict(row, project) {
   const baseRevision = Number(row.base_revision || 0);
   const currentRevision = Number(project.config_revision || 0);
+  if (row.status === "applied") return null;
   if (currentRevision === baseRevision) return null;
   if (row.status === "applying" && currentRevision === baseRevision + 1) {
     return null;
@@ -290,6 +291,8 @@ async function buildWorkspace(env, context) {
     },
     base: {
       revision: baseRevision,
+      sizeBytes: Number(base.ledger?.size_bytes || 0),
+      schemaVersion: Number(base.ledger?.schema_version || 0),
       config: base.config,
     },
     proposal,
