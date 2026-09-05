@@ -2,8 +2,10 @@ import { readJsonBody } from "../../../_lib/organizations.js";
 import {
   listOwnProjectChangeRequests,
   projectChangeRequestErrorResponse,
-  submitProjectChangeRequest,
 } from "../../../_lib/project-change-requests.js";
+import {
+  submitAnalysisAwareProjectChangeRequest,
+} from "../../../_lib/project-change-request-analysis-submission.js";
 
 function routeSlug(params) {
   const value = params?.slug;
@@ -37,7 +39,7 @@ export async function onRequestGet({ env, request, params }) {
 
 export async function onRequestPost({ env, request, params }) {
   try {
-    const result = await submitProjectChangeRequest(
+    const result = await submitAnalysisAwareProjectChangeRequest(
       env,
       request,
       routeSlug(params),
