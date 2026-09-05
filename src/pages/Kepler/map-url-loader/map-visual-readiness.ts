@@ -4,6 +4,8 @@ import {
   selectKeplerVisState,
 } from "../engine-adapter/selectors.ts";
 
+export const MAONO_MAP_VISUAL_READY_EVENT = "maono:map-visual-ready";
+
 export type MapVisualReadinessPhase =
   | "waiting-layers"
   | "waiting-datasets"
@@ -47,16 +49,20 @@ export type MapVisualReadinessError = Error & {
 };
 
 const DEFAULT_VISUAL_READY_TIMEOUT_MS = 45_000;
+const DEFAULT_LATE_VISUAL_RECOVERY_TIMEOUT_MS = 30_000;
 
 let currentMapRuntime: MapRuntimeLike | null = null;
 let currentDeckRuntime: DeckRuntimeLike | null = null;
 let mapRenderGeneration = 0;
 let lastMapRenderStyleLoaded = false;
 let pendingVisualReadiness = 0;
+let mapVisualReady = false;
+let lateVisualRecoveryArmed = false;
 
 const mapRuntimeListeners = new Set<() => void>();
 const deckRuntimeListeners = new Set<() => void>();
 const mapRenderListeners = new Set<() => void>();
+const visualReadyListeners = new Set<() => void>();
 
 function uniqueIds(values: unknown[]) {
   return Array.from(
@@ -190,22 +196,55 @@ export function inspectMapHydrationState(
   };
 }
 
+function resetVisualReadyState() {
+  mapVisualReady = false;
+  lateVisualRecoveryArmed = false;
+}
+
+function markMaonoMapVisualReady(lateRecovery: boolean) {
+  if (mapVisualReady) return;
+  mapVisualReady = true;
+  lateVisualRecoveryArmed = false;
+  visualReadyListeners.forEach((listener) => listener());
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(MAONO_MAP_VISUAL_READY_EVENT, {
+        detail: {
+          lateRecovery,
+          renderGeneration: mapRenderGeneration,
+        },
+      }),
+    );
+  }
+}
+
+export function isMaonoMapVisualReady() {
+  return mapVisualReady;
+}
+
 export function registerMaonoMapRuntime(value: unknown) {
   currentMapRuntime =
     value && typeof value === "object" ? (value as MapRuntimeLike) : null;
   mapRuntimeListeners.forEach((listener) => listener());
+  if (lateVisualRecoveryArmed) {
+    currentMapRuntime?.triggerRepaint?.();
+  }
 }
 
 export function registerMaonoDeckRuntime(value: unknown) {
   currentDeckRuntime =
     value && typeof value === "object" ? (value as DeckRuntimeLike) : null;
   deckRuntimeListeners.forEach((listener) => listener());
+  if (lateVisualRecoveryArmed) {
+    currentDeckRuntime?.redraw?.("maono-late-visual-recovery-runtime");
+  }
 }
 
 export function resetMaonoMapVisualReadinessRuntime() {
   currentMapRuntime = null;
   currentDeckRuntime = null;
   lastMapRenderStyleLoaded = false;
+  resetVisualReadyState();
   mapRuntimeListeners.forEach((listener) => listener());
   deckRuntimeListeners.forEach((listener) => listener());
 }
@@ -219,6 +258,8 @@ export function getMaonoMapVisualReadinessDiagnostics() {
     deckRuntimeListenerCount: deckRuntimeListeners.size,
     mapRenderListenerCount: mapRenderListeners.size,
     mapRenderGeneration,
+    mapVisualReady,
+    lateVisualRecoveryArmed,
   };
 }
 
@@ -230,6 +271,9 @@ export function notifyMaonoMapRender({
   mapRenderGeneration += 1;
   lastMapRenderStyleLoaded = styleLoaded;
   mapRenderListeners.forEach((listener) => listener());
+  if (lateVisualRecoveryArmed && styleLoaded) {
+    markMaonoMapVisualReady(true);
+  }
 }
 
 export function isMaonoMapVisualReadinessPending() {
@@ -403,6 +447,52 @@ export function isMapVisualReadinessError(
   );
 }
 
+export function waitForMaonoMapLateVisualRecovery({
+  signal,
+  timeoutMs = DEFAULT_LATE_VISUAL_RECOVERY_TIMEOUT_MS,
+}: {
+  signal: AbortSignal;
+  timeoutMs?: number;
+}) {
+  if (mapVisualReady) return Promise.resolve(true);
+  if (!lateVisualRecoveryArmed) return Promise.resolve(false);
+
+  return new Promise<boolean>((resolve, reject) => {
+    let timeoutId = 0;
+
+    const cleanup = () => {
+      visualReadyListeners.delete(handleReady);
+      signal.removeEventListener("abort", handleAbort);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+    const handleReady = () => {
+      cleanup();
+      resolve(true);
+    };
+    const handleAbort = () => {
+      cleanup();
+      reject(abortError());
+    };
+
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+
+    visualReadyListeners.add(handleReady);
+    signal.addEventListener("abort", handleAbort, { once: true });
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+      resolve(mapVisualReady);
+    }, timeoutMs);
+
+    currentDeckRuntime?.redraw?.("maono-late-visual-recovery");
+    currentMapRuntime?.triggerRepaint?.();
+
+    if (mapVisualReady) handleReady();
+  });
+}
+
 export async function waitForMaonoMapVisualReadiness({
   store,
   expectedLayerIds,
@@ -428,11 +518,21 @@ export async function waitForMaonoMapVisualReadiness({
     expectedDatasetIds,
   );
 
+  resetVisualReadyState();
+
   const handleParentAbort = () => controller.abort();
   signal.addEventListener("abort", handleParentAbort, { once: true });
   const timeoutId = window.setTimeout(() => {
     timedOut = true;
+    lateVisualRecoveryArmed =
+      latestSnapshot.ready &&
+      latestSnapshot.missingLayerIds.length === 0 &&
+      latestSnapshot.missingDatasetIds.length === 0;
     controller.abort();
+    if (lateVisualRecoveryArmed) {
+      currentDeckRuntime?.redraw?.("maono-late-visual-recovery-arm");
+      currentMapRuntime?.triggerRepaint?.();
+    }
   }, timeoutMs);
 
   pendingVisualReadiness += 1;
@@ -497,6 +597,7 @@ export async function waitForMaonoMapVisualReadiness({
       missingLayerIds: [],
       missingDatasetIds: [],
     };
+    markMaonoMapVisualReady(false);
 
     const endedAt =
       typeof performance !== "undefined" && typeof performance.now === "function"
