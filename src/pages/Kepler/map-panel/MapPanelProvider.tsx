@@ -331,7 +331,6 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
           organizationId: resolvedContext.organization?.id ?? null,
           defaultPanel: resolvedContext.defaultPanel,
           policyVersion: resolvedContext.policyVersion,
-          reviewWorkspace,
         });
       })
       .catch((error: MapPanelApiError) => {
