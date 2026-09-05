@@ -4,7 +4,7 @@ import {
   reorderLayer as reorderKeplerLayer,
   wrapTo,
 } from "@kepler.gl/actions";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useDispatch, useStore } from "react-redux";
 
 import type { ViewerLayerSnapshot } from "../change-requests/viewer-layer-lifecycle.ts";
@@ -186,5 +186,5 @@ export function useViewerLayerLifecycleReplayCommand() {
     [dispatch, store],
   );
 
-  return { restore, remove };
+  return useMemo(() => ({ restore, remove }), [remove, restore]);
 }
