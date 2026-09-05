@@ -170,14 +170,7 @@ test("create seguido de remove compacta lifecycle e operações dependentes", ()
     operations,
     "layer-new",
   );
-  assert.deepEqual(
-    compacted.map((item) => item.type),
-    ["layer.order.update"],
-  );
-  assert.deepEqual(compacted[0].payload, {
-    before: ["layer-a", "layer-b"],
-    after: ["layer-a", "layer-b"],
-  });
+  assert.deepEqual(compacted, []);
 });
 
 test("remove de layer da revisão-base não é compactado", () => {
