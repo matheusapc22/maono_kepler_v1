@@ -42,7 +42,8 @@ const [previewHook, contextMenu, overlay, markerHook, controller] = await Promis
 
 test("S05.01 isócrona recebe pendingPoint do novo controller", () => {
   assert.match(previewHook, /pendingPoint:\s*MapToolPoint \| null/);
-  assert.match(previewHook, /origin:\s*pendingPoint/);
+  assert.match(previewHook, /const origin = \{\s*\.\.\.pendingPoint\s*\}/);
+  assert.match(previewHook, /requestIsochrone\([\s\S]*?\borigin,/);
   assert.doesNotMatch(previewHook, /MarkerOrigin/);
   assert.match(overlay, /const analysisPendingPoint = toolController\.pendingPoint/);
   assert.match(overlay, /useIsochronePreview\(\{[\s\S]*pendingPoint:\s*analysisPendingPoint/);
