@@ -15,7 +15,7 @@ import {
   isochroneErrorMessage,
   requestIsochrone,
   type IsochroneMode,
-  type IsochroneResponse,
+  type IsochroneResult,
   type IsochroneType,
 } from "../../map-panel/isochrone-api";
 import type { MapToolPoint } from "./analysis-tools/map-tool-state";
@@ -24,7 +24,7 @@ export type IsochronePreviewState = {
   dataId: string;
   label: string;
   origin: MapToolPoint;
-  metadata: IsochroneResponse["metadata"];
+  metadata: IsochroneResult["metadata"];
   geojson: Record<string, unknown>;
 };
 
