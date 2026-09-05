@@ -72,6 +72,9 @@ type PersistentFilterSnapshot = {
 };
 
 const PERSISTENT_VISUAL_TYPES = new Set<ReviewOperationProjection["type"]>([
+  "layer.create",
+  "layer.duplicate",
+  "layer.remove",
   "layer.visibility.update",
   "persistent.filter.update",
   "layer.order.update",
@@ -111,6 +114,9 @@ function styleSnapshot(
 }
 
 function operationTitle(type: ReviewOperationProjection["type"]) {
+  if (type === "layer.create") return "Criar camada";
+  if (type === "layer.duplicate") return "Duplicar camada";
+  if (type === "layer.remove") return "Remover camada";
   if (type === "layer.style.update") return "Alterar estilo";
   if (type === "layer.visibility.update") return "Alterar visibilidade";
   if (type === "persistent.filter.update") return "Alterar filtro";

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useKeplerEngineAdapter } from "../engine-adapter";
+import type { MapLayerSummary } from "../engine-adapter/types";
 import {
   type PointDatasetTarget,
   usePointDatasetCommand,
 } from "../engine-adapter/usePointDatasetCommand";
+import { useViewerLayerLifecycleReplayCommand } from "../engine-adapter/useViewerLayerLifecycleReplayCommand";
 import {
   applyViewerLayerStyleChanges,
   diffViewerLayerStyle,
@@ -17,6 +19,16 @@ import {
   isViewerAnalysisOperationEvent,
   MAONO_VIEWER_ANALYSIS_OPERATION_EVENT,
 } from "./viewer-analysis-operation";
+import {
+  compactViewerOperationsForLocalLayerRemoval,
+  inferViewerDuplicateSource,
+  snapshotViewerLifecycleLayer,
+  viewerLifecycleCreatedLayerId,
+  type ViewerLayerCreatePayload,
+  type ViewerLayerDuplicatePayload,
+  type ViewerLayerRemovePayload,
+  type ViewerLayerSnapshot,
+} from "./viewer-layer-lifecycle";
 import {
   snapshotViewerPersistentFilter,
   viewerJsonEqual,
@@ -58,6 +70,11 @@ type PointPayload = {
   };
 };
 
+type LifecycleCommand =
+  | "createLayerFromDataset"
+  | "duplicateLayer"
+  | "removeLayer";
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -66,6 +83,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function text(value: unknown) {
   return String(value ?? "").trim();
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function pointPayload(operation: ViewerChangeOperation): PointPayload | null {
@@ -111,6 +132,30 @@ function orderPayload(
 ): ViewerLayerOrderUpdatePayload | null {
   return operation.type === "layer.order.update"
     ? (asRecord(operation.payload) as ViewerLayerOrderUpdatePayload | null)
+    : null;
+}
+
+function layerCreatePayload(
+  operation: ViewerChangeOperation,
+): ViewerLayerCreatePayload | null {
+  return operation.type === "layer.create"
+    ? (asRecord(operation.payload) as ViewerLayerCreatePayload | null)
+    : null;
+}
+
+function layerDuplicatePayload(
+  operation: ViewerChangeOperation,
+): ViewerLayerDuplicatePayload | null {
+  return operation.type === "layer.duplicate"
+    ? (asRecord(operation.payload) as ViewerLayerDuplicatePayload | null)
+    : null;
+}
+
+function layerRemovePayload(
+  operation: ViewerChangeOperation,
+): ViewerLayerRemovePayload | null {
+  return operation.type === "layer.remove"
+    ? (asRecord(operation.payload) as ViewerLayerRemovePayload | null)
     : null;
 }
 
@@ -163,8 +208,36 @@ function locallyCreatedLayerIds(workingCopy: ViewerWorkingCopy | null) {
     }
     const analysis = analysisPayload(operation);
     if (analysis && text(analysis.targetLayerId)) ids.add(text(analysis.targetLayerId));
+    const lifecycleId = viewerLifecycleCreatedLayerId(operation);
+    if (lifecycleId) ids.add(lifecycleId);
   }
   return ids;
+}
+
+function lifecycleStyleSnapshot(snapshot: ViewerLayerSnapshot): ViewerLayerStyleSnapshot {
+  return {
+    color: [...snapshot.style.color] as [number, number, number],
+    opacity: snapshot.style.opacity,
+    fillEnabled: snapshot.style.fillEnabled,
+    strokeEnabled: snapshot.style.strokeEnabled,
+    strokeColor: [...snapshot.style.strokeColor] as [number, number, number],
+    strokeOpacity: snapshot.style.strokeOpacity,
+    strokeWidth: snapshot.style.strokeWidth,
+    pointRadius: snapshot.style.pointRadius,
+    clusterRadius: snapshot.style.clusterRadius,
+    heatmapRadius: snapshot.style.heatmapRadius,
+  };
+}
+
+function insertLayerId(order: string[], layerId: string, insertIndex: number) {
+  const next = order.filter((id) => id !== layerId);
+  const index = Math.max(0, Math.min(Number(insertIndex), next.length));
+  next.splice(index, 0, layerId);
+  return next;
+}
+
+function cloneLayerMap(layers: MapLayerSummary[]) {
+  return new Map(layers.map((layer) => [layer.id, clone(layer)]));
 }
 
 async function replaceViewerOperation(
@@ -186,6 +259,38 @@ async function replaceViewerOperation(
   });
 }
 
+async function persistCompactedOperations(
+  store: ViewerWorkingCopyStore,
+  baseRevision: number,
+  current: ViewerWorkingCopy,
+  compacted: ViewerChangeOperation[],
+) {
+  let firstDifference = 0;
+  const sharedLength = Math.min(current.operations.length, compacted.length);
+  while (
+    firstDifference < sharedLength &&
+    JSON.stringify(current.operations[firstDifference]) ===
+      JSON.stringify(compacted[firstDifference])
+  ) {
+    firstDifference += 1;
+  }
+  if (
+    firstDifference === current.operations.length &&
+    firstDifference === compacted.length
+  ) {
+    return current;
+  }
+
+  let next: ViewerWorkingCopy | null = current;
+  for (let index = current.operations.length - 1; index >= firstDifference; index -= 1) {
+    next = await store.removeOperation(current.operations[index].id);
+  }
+  for (let index = firstDifference; index < compacted.length; index += 1) {
+    next = await store.appendOperation(baseRevision, compacted[index]);
+  }
+  return next;
+}
+
 export default function ViewerWorkingCopyRuntime({
   enabled,
   store,
@@ -195,15 +300,21 @@ export default function ViewerWorkingCopyRuntime({
 }: Props) {
   const { commands, markClean, state } = useKeplerEngineAdapter();
   const createDatasetPoint = usePointDatasetCommand();
+  const lifecycleReplay = useViewerLayerLifecycleReplayCommand();
+  const [lifecycleSignal, setLifecycleSignal] = useState(0);
   const runtimeKey = `${store?.key || "none"}:${baseRevision}`;
   const baseKeyRef = useRef("");
   const baseStylesRef = useRef(new Map<string, ViewerLayerStyleSnapshot>());
   const baseVisibilityRef = useRef(new Map<string, boolean>());
   const baseFiltersRef = useRef(new Map<string, ViewerPersistentFilterSnapshot>());
   const baseOrderRef = useRef<string[]>([]);
+  const lastLayerStateRef = useRef(new Map<string, MapLayerSummary>());
+  const pendingLifecycleBeforeRef = useRef(new Map<string, MapLayerSummary>());
+  const pendingLifecycleCommandRef = useRef<LifecycleCommand | null>(null);
   const filterIndexAliasRef = useRef(new Map<number, string>());
   const filterRuntimeAliasRef = useRef(new Map<string, string>());
   const captureBusyRef = useRef(false);
+  const lifecycleCaptureBusyRef = useRef(false);
   const pendingProjectionAckRef = useRef(false);
   const untrackedLatchedRef = useRef(false);
   const applyingOperationIdsRef = useRef(new Set<string>());
@@ -283,6 +394,29 @@ export default function ViewerWorkingCopyRuntime({
   }, [baseRevision, enabled, markClean, onWorkingCopyChange, store]);
 
   useEffect(() => {
+    if (!enabled || !store || !store.writable) return undefined;
+    const handleTelemetry = (event: Event) => {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+      if (detail?.event !== "map_panel_command_executed") return;
+      const command = String(detail.command || "") as LifecycleCommand;
+      if (
+        command !== "createLayerFromDataset" &&
+        command !== "duplicateLayer" &&
+        command !== "removeLayer"
+      ) {
+        return;
+      }
+      pendingLifecycleBeforeRef.current = new Map(lastLayerStateRef.current);
+      pendingLifecycleCommandRef.current = command;
+      setLifecycleSignal((current) => current + 1);
+    };
+    window.addEventListener("maono:map-panel-telemetry", handleTelemetry);
+    return () => {
+      window.removeEventListener("maono:map-panel-telemetry", handleTelemetry);
+    };
+  }, [enabled, store]);
+
+  useEffect(() => {
     if (
       !enabled ||
       !store ||
@@ -311,9 +445,13 @@ export default function ViewerWorkingCopyRuntime({
       }),
     );
     baseOrderRef.current = state.layers.map((layer) => layer.id);
+    lastLayerStateRef.current = cloneLayerMap(state.layers);
+    pendingLifecycleBeforeRef.current.clear();
+    pendingLifecycleCommandRef.current = null;
     filterIndexAliasRef.current.clear();
     filterRuntimeAliasRef.current.clear();
     captureBusyRef.current = false;
+    lifecycleCaptureBusyRef.current = false;
     pendingProjectionAckRef.current = false;
     untrackedLatchedRef.current = false;
     applyingOperationIdsRef.current.clear();
@@ -345,6 +483,83 @@ export default function ViewerWorkingCopyRuntime({
 
       applyingOperationIdsRef.current.add(operation.id);
       try {
+        const createdLayer = layerCreatePayload(operation);
+        if (createdLayer) {
+          const result = lifecycleReplay.restore(
+            createdLayer.layer,
+            createdLayer.insertIndex,
+          );
+          projectedMutation = projectedMutation || (result.ok && result.changed);
+          if (result.ok) {
+            baseOrderRef.current = insertLayerId(
+              baseOrderRef.current,
+              createdLayer.layer.id,
+              createdLayer.insertIndex,
+            );
+            baseStylesRef.current.set(
+              createdLayer.layer.id,
+              lifecycleStyleSnapshot(createdLayer.layer),
+            );
+            baseVisibilityRef.current.set(
+              createdLayer.layer.id,
+              createdLayer.layer.isVisible,
+            );
+          } else {
+            console.warn("Viewer Working Copy replay could not restore a created layer", {
+              operationId: operation.id,
+              reason: result.reason,
+            });
+          }
+          continue;
+        }
+
+        const duplicatedLayer = layerDuplicatePayload(operation);
+        if (duplicatedLayer) {
+          const result = lifecycleReplay.restore(
+            duplicatedLayer.layer,
+            duplicatedLayer.insertIndex,
+          );
+          projectedMutation = projectedMutation || (result.ok && result.changed);
+          if (result.ok) {
+            baseOrderRef.current = insertLayerId(
+              baseOrderRef.current,
+              duplicatedLayer.layer.id,
+              duplicatedLayer.insertIndex,
+            );
+            baseStylesRef.current.set(
+              duplicatedLayer.layer.id,
+              lifecycleStyleSnapshot(duplicatedLayer.layer),
+            );
+            baseVisibilityRef.current.set(
+              duplicatedLayer.layer.id,
+              duplicatedLayer.layer.isVisible,
+            );
+          } else {
+            console.warn("Viewer Working Copy replay could not restore a duplicated layer", {
+              operationId: operation.id,
+              reason: result.reason,
+            });
+          }
+          continue;
+        }
+
+        const removedLayer = layerRemovePayload(operation);
+        if (removedLayer) {
+          const result = lifecycleReplay.remove(removedLayer.targetLayerId);
+          projectedMutation = projectedMutation || (result.ok && result.changed);
+          if (result.ok) {
+            baseOrderRef.current = baseOrderRef.current.filter(
+              (id) => id !== removedLayer.targetLayerId,
+            );
+          } else {
+            console.warn("Viewer Working Copy replay could not remove a layer", {
+              operationId: operation.id,
+              reason: result.reason,
+            });
+          }
+          continue;
+        }
+
         const point = pointPayload(operation);
         if (point && text(point.targetMode).toLowerCase() === "new") {
           const dataId = text(point.targetDataId);
@@ -534,9 +749,6 @@ export default function ViewerWorkingCopyRuntime({
           }
         }
       } catch (error) {
-        // A persisted local operation must never take down the whole Viewer.
-        // Invalid operations are sanitized on load; this guard also contains
-        // adapter/runtime failures during projection.
         console.warn("Viewer Working Copy replay ignored an operation", {
           operationId: operation.id,
           operationType: operation.type,
@@ -544,9 +756,6 @@ export default function ViewerWorkingCopyRuntime({
         });
       } finally {
         applyingOperationIdsRef.current.delete(operation.id);
-        // Cada operação é materializada no máximo uma vez por runtimeKey.
-        // Falhas ficam isoladas nesta sessão para impedir loops de replay; um
-        // reload cria um novo runtime e oferece uma nova tentativa segura.
         appliedOperationIdsRef.current.add(operation.id);
       }
     }
@@ -558,6 +767,7 @@ export default function ViewerWorkingCopyRuntime({
     commands,
     createDatasetPoint,
     enabled,
+    lifecycleReplay,
     runtimeKey,
     state.datasets,
     state.filters,
@@ -573,7 +783,168 @@ export default function ViewerWorkingCopyRuntime({
       !store.writable ||
       !state.ready ||
       baseKeyRef.current !== runtimeKey ||
+      lifecycleCaptureBusyRef.current
+    ) {
+      return;
+    }
+
+    const command = pendingLifecycleCommandRef.current;
+    if (!command) {
+      lastLayerStateRef.current = cloneLayerMap(state.layers);
+      return;
+    }
+
+    const beforeMap = pendingLifecycleBeforeRef.current;
+    const currentMap = cloneLayerMap(state.layers);
+    const added = state.layers.filter((layer) => !beforeMap.has(layer.id));
+    const removed = Array.from(beforeMap.values()).filter(
+      (layer) => !currentMap.has(layer.id),
+    );
+
+    const expectedDiff =
+      command === "removeLayer"
+        ? removed.length === 1 && added.length === 0
+        : added.length === 1 && removed.length === 0;
+    if (!expectedDiff) {
+      return;
+    }
+
+    pendingLifecycleCommandRef.current = null;
+    lifecycleCaptureBusyRef.current = true;
+    const currentOrder = state.layers.map((layer) => layer.id);
+
+    void (async () => {
+      let next = workingCopy;
+      try {
+        if (command === "createLayerFromDataset") {
+          const layer = added[0];
+          const snapshot = snapshotViewerLifecycleLayer(layer);
+          if (!snapshot) throw new Error("WORKING_COPY_LAYER_LIFECYCLE_UNSUPPORTED");
+          const insertIndex = currentOrder.indexOf(layer.id);
+          next = await store.appendOperation(baseRevision, {
+            id: `op_${crypto.randomUUID()}`,
+            type: "layer.create",
+            version: 1,
+            payload: {
+              layer: snapshot,
+              insertIndex,
+            } satisfies ViewerLayerCreatePayload,
+            createdAt: new Date().toISOString(),
+          });
+          baseStylesRef.current.set(layer.id, lifecycleStyleSnapshot(snapshot));
+          baseVisibilityRef.current.set(layer.id, snapshot.isVisible);
+          baseOrderRef.current = [...currentOrder];
+        } else if (command === "duplicateLayer") {
+          const layer = added[0];
+          const snapshot = snapshotViewerLifecycleLayer(layer);
+          const insertIndex = currentOrder.indexOf(layer.id);
+          const source = snapshot
+            ? inferViewerDuplicateSource(
+                Array.from(beforeMap.values()),
+                layer,
+                insertIndex,
+              )
+            : null;
+          if (!snapshot || !source) {
+            throw new Error("WORKING_COPY_LAYER_DUPLICATE_SOURCE_UNRESOLVED");
+          }
+          next = await store.appendOperation(baseRevision, {
+            id: `op_${crypto.randomUUID()}`,
+            type: "layer.duplicate",
+            version: 1,
+            payload: {
+              sourceLayerId: source.id,
+              source,
+              layer: snapshot,
+              insertIndex,
+            } satisfies ViewerLayerDuplicatePayload,
+            createdAt: new Date().toISOString(),
+          });
+          baseStylesRef.current.set(layer.id, lifecycleStyleSnapshot(snapshot));
+          baseVisibilityRef.current.set(layer.id, snapshot.isVisible);
+          baseOrderRef.current = [...currentOrder];
+        } else {
+          const layer = removed[0];
+          const snapshot = snapshotViewerLifecycleLayer(layer);
+          if (!snapshot) throw new Error("WORKING_COPY_LAYER_LIFECYCLE_UNSUPPORTED");
+          const previousOrder = Array.from(beforeMap.values())
+            .sort((left, right) => left.order - right.order)
+            .map((candidate) => candidate.id);
+          const previousIndex = previousOrder.indexOf(layer.id);
+          const compacted = workingCopy
+            ? compactViewerOperationsForLocalLayerRemoval(
+                workingCopy.operations,
+                layer.id,
+              )
+            : [];
+          const bornLocally = Boolean(
+            workingCopy?.operations.some(
+              (operation) => viewerLifecycleCreatedLayerId(operation) === layer.id,
+            ),
+          );
+          if (bornLocally && workingCopy) {
+            next = await persistCompactedOperations(
+              store,
+              baseRevision,
+              workingCopy,
+              compacted,
+            );
+          } else {
+            next = await store.appendOperation(baseRevision, {
+              id: `op_${crypto.randomUUID()}`,
+              type: "layer.remove",
+              version: 1,
+              payload: {
+                targetLayerId: layer.id,
+                before: snapshot,
+                previousIndex,
+              } satisfies ViewerLayerRemovePayload,
+              createdAt: new Date().toISOString(),
+            });
+          }
+          baseOrderRef.current = [...currentOrder];
+        }
+
+        onWorkingCopyChange(next);
+        untrackedLatchedRef.current = false;
+        markClean();
+      } catch (error) {
+        if (!isWorkingCopyWriteCancelled(error)) {
+          console.warn("Viewer Working Copy layer lifecycle capture failed", {
+            command,
+            error,
+          });
+        }
+        untrackedLatchedRef.current = true;
+      } finally {
+        lastLayerStateRef.current = currentMap;
+        pendingLifecycleBeforeRef.current.clear();
+        lifecycleCaptureBusyRef.current = false;
+      }
+    })();
+  }, [
+    baseRevision,
+    enabled,
+    lifecycleSignal,
+    markClean,
+    onWorkingCopyChange,
+    runtimeKey,
+    state.layers,
+    state.ready,
+    store,
+    workingCopy,
+  ]);
+
+  useEffect(() => {
+    if (
+      !enabled ||
+      !store ||
+      !store.writable ||
+      !state.ready ||
+      baseKeyRef.current !== runtimeKey ||
       captureBusyRef.current ||
+      lifecycleCaptureBusyRef.current ||
+      pendingLifecycleCommandRef.current ||
       pendingProjectionAckRef.current
     ) {
       return;
@@ -704,6 +1075,7 @@ export default function ViewerWorkingCopyRuntime({
       !pendingFilters.length &&
       !pendingOrder
     ) {
+      lastLayerStateRef.current = cloneLayerMap(state.layers);
       return;
     }
 
@@ -782,6 +1154,7 @@ export default function ViewerWorkingCopyRuntime({
           console.warn("Viewer Working Copy visualization capture failed", { error });
         }
       } finally {
+        lastLayerStateRef.current = cloneLayerMap(state.layers);
         captureBusyRef.current = false;
       }
     })();
@@ -806,10 +1179,11 @@ export default function ViewerWorkingCopyRuntime({
     }
 
     pendingProjectionAckRef.current = false;
+    lastLayerStateRef.current = cloneLayerMap(state.layers);
     if (state.hasUnsavedChanges && !untrackedLatchedRef.current) {
       markClean();
     }
-  }, [enabled, markClean, state.hasUnsavedChanges, state.save.revisionHash]);
+  }, [enabled, markClean, state.hasUnsavedChanges, state.layers, state.save.revisionHash]);
 
   return null;
 }

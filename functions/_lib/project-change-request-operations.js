@@ -7,6 +7,10 @@ import {
   isFrozenAnalysisOperation,
 } from "./project-change-request-analysis-operations.js";
 import {
+  applyLayerLifecycleOperation,
+  isLayerLifecycleOperation,
+} from "./project-change-request-layer-lifecycle-operations.js";
+import {
   applyPersistentVisualizationOperation,
   isPersistentVisualizationOperation,
 } from "./project-change-request-visualization-operations.js";
@@ -45,6 +49,10 @@ export function buildProjectChangeProposal({ baseConfig, operations }) {
     try {
       if (isFrozenAnalysisOperation(operation)) {
         projections.push(applyFrozenAnalysisOperation(config, operation));
+        continue;
+      }
+      if (isLayerLifecycleOperation(operation)) {
+        projections.push(applyLayerLifecycleOperation(config, operation));
         continue;
       }
       if (isPersistentVisualizationOperation(operation)) {
