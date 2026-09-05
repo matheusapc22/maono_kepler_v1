@@ -34,6 +34,7 @@ import {
   type ProjectChangeReview,
   type ReviewOperationProjection,
 } from "./review-api";
+import { ReviewAnalysisGeometryLayer } from "./ReviewAnalysisGeometryLayer";
 import "./review-workspace.css";
 
 type ProjectedPoint = {
@@ -88,12 +89,19 @@ function styleSnapshot(
   return record(properties?.[mode]) as StyleSnapshot | null;
 }
 
+function operationTitle(type: ReviewOperationProjection["type"]) {
+  if (type === "layer.style.update") return "Alterar estilo";
+  if (type === "buffer.create") return "Criar Buffer";
+  if (type === "isochrone.create") return "Criar Isócrona";
+  return "Criar ponto";
+}
+
 function operationSummary(operation: ReviewOperationProjection | null) {
   if (!operation) return null;
   const style = operation.type === "layer.style.update";
   return {
     type: operation.type,
-    title: style ? "Alterar estilo" : "Criar ponto",
+    title: operationTitle(operation.type),
     target:
       operation.target.label || operation.target.layerId || "Camada de destino",
     focus: operation.focus,
@@ -404,6 +412,12 @@ function ReviewWorkspaceOverlay({
   return (
     <>
       <ReviewMarkerLayer
+        operations={operations}
+        selectedId={selected?.id || null}
+        visible={compareMode === "after"}
+        viewport={viewport}
+      />
+      <ReviewAnalysisGeometryLayer
         operations={operations}
         selectedId={selected?.id || null}
         visible={compareMode === "after"}
