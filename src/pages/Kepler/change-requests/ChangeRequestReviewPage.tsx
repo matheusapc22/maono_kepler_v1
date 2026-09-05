@@ -43,11 +43,11 @@ type ProjectedPoint = {
 };
 
 type StyleSnapshot = Partial<{
-  fixedColor: number[] | null;
+  fixedColor: [number, number, number] | null;
   opacity: number | null;
   fillEnabled: boolean | null;
   strokeEnabled: boolean | null;
-  strokeColor: number[] | null;
+  strokeColor: [number, number, number] | null;
   strokeOpacity: number | null;
   strokeWidth: number | null;
   pointRadius: number | null;
@@ -137,7 +137,7 @@ function applyReviewStyleSnapshot(
   const layer = findRawLayer(rootState, operation.target.layerId);
   if (!layer) return;
 
-  if (Array.isArray(snapshot.fixedColor)) {
+  if (snapshot.fixedColor) {
     dispatch(
       wrapTo(
         KEPLER_MAP_ID,
@@ -154,7 +154,7 @@ function applyReviewStyleSnapshot(
     visPatch[layerType === "point" ? "outline" : "stroked"] =
       snapshot.strokeEnabled;
   }
-  if (Array.isArray(snapshot.strokeColor)) {
+  if (snapshot.strokeColor) {
     visPatch.strokeColor = snapshot.strokeColor;
   }
   if (snapshot.strokeOpacity != null) {
@@ -170,7 +170,10 @@ function applyReviewStyleSnapshot(
   }
   if (Object.keys(visPatch).length) {
     dispatch(
-      wrapTo(KEPLER_MAP_ID, layerVisConfigChange(layer, visPatch)),
+      wrapTo(
+        KEPLER_MAP_ID,
+        layerVisConfigChange(layer, visPatch as Parameters<typeof layerVisConfigChange>[1]),
+      ),
     );
   }
 }
