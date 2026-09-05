@@ -51,6 +51,30 @@ test("Viewer materializa point.create targetMode=new com IDs temporários estáv
   assert.match(pointCommand, /return \{\s*ok: true,\s*changed: false/s);
 });
 
+test("replay da Working Copy é idempotente por operação e runtime", () => {
+  assert.match(runtime, /applyingOperationIdsRef/);
+  assert.match(runtime, /appliedOperationIdsRef/);
+  assert.match(
+    runtime,
+    /applyingOperationIdsRef\.current\.has\(operation\.id\)[\s\S]*appliedOperationIdsRef\.current\.has\(operation\.id\)/,
+  );
+  assert.match(runtime, /applyingOperationIdsRef\.current\.add\(operation\.id\)/);
+  assert.match(runtime, /appliedOperationIdsRef\.current\.add\(operation\.id\)/);
+  assert.match(runtime, /applyingOperationIdsRef\.current\.clear\(\)/);
+  assert.match(runtime, /appliedOperationIdsRef\.current\.clear\(\)/);
+});
+
+test("captura de alterações não roda enquanto replay aguarda estabilização", () => {
+  assert.match(
+    runtime,
+    /captureBusyRef\.current \|\|[\s\S]*pendingProjectionAckRef\.current/,
+  );
+  assert.match(
+    runtime,
+    /if \(!enabled \|\| !pendingProjectionAckRef\.current\)[\s\S]*pendingProjectionAckRef\.current = false/,
+  );
+});
+
 test("camada temporária projetada não vira target existente de outro point.create", () => {
   assert.match(workflow, /layer\.id\.startsWith\("tmp_layer_"\)/);
   assert.match(workflow, /dataId\?\.startsWith\("tmp_data_"\)/);
