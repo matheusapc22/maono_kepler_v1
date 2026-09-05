@@ -308,6 +308,7 @@ export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryE
 const DB_NAME = "maono-map-workspace";
 const DB_VERSION = 1;
 const STORE_NAME = "viewerWorkingCopies";
+const WRITE_CANCELLED_CODE = "WORKING_COPY_WRITE_CANCELLED";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -337,13 +338,29 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
+function transactionDone(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () =>
+      reject(transaction.error || new Error("WORKING_COPY_INDEXEDDB_TRANSACTION_ABORTED"));
+    transaction.onerror = () =>
+      reject(transaction.error || new Error("WORKING_COPY_INDEXEDDB_TRANSACTION_FAILED"));
+  });
+}
+
 async function withStore<T>(
   mode: IDBTransactionMode,
   action: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
   const db = await openWorkingCopyDb();
   try {
-    return await requestResult(action(db.transaction(STORE_NAME, mode).objectStore(STORE_NAME)));
+    const transaction = db.transaction(STORE_NAME, mode);
+    const request = action(transaction.objectStore(STORE_NAME));
+    const [result] = await Promise.all([
+      requestResult(request),
+      transactionDone(transaction),
+    ]);
+    return result;
   } finally {
     db.close();
   }
@@ -446,6 +463,19 @@ function staleError(baseRevision: number, currentRevision: number) {
   });
 }
 
+function writeCancelledError() {
+  return Object.assign(new Error(WRITE_CANCELLED_CODE), {
+    code: WRITE_CANCELLED_CODE,
+  });
+}
+
+export function isWorkingCopyWriteCancelled(error: unknown) {
+  return (
+    (error as { code?: string } | null)?.code === WRITE_CANCELLED_CODE ||
+    (error instanceof Error && error.message === WRITE_CANCELLED_CODE)
+  );
+}
+
 function sanitizePersistedWorkingCopy(
   value: unknown,
   key: string,
@@ -501,6 +531,8 @@ export class ViewerWorkingCopyStore {
   readonly key: string;
   private readonly identity: ReturnType<typeof normalizeIdentity>;
   private readonly storage: ViewerWorkingCopyStorage;
+  private writesDisabled = false;
+  private readonly pendingWrites = new Set<Promise<void>>();
 
   constructor(
     identity: ViewerWorkingCopyIdentity,
@@ -511,8 +543,29 @@ export class ViewerWorkingCopyStore {
     this.key = workingCopyKey(identity);
   }
 
+  get writable() {
+    return !this.writesDisabled;
+  }
+
+  private assertWritable() {
+    if (!this.writable) throw writeCancelledError();
+  }
+
+  private async persist(value: ViewerWorkingCopy) {
+    this.assertWritable();
+    const write = this.storage.put(value);
+    this.pendingWrites.add(write);
+    try {
+      await write;
+    } finally {
+      this.pendingWrites.delete(write);
+    }
+  }
+
   async load() {
+    if (!this.writable) return null;
     const raw = await this.storage.get(this.key);
+    if (!this.writable) return null;
     if (!raw) return null;
     const sanitized = sanitizePersistedWorkingCopy(raw, this.key, this.identity);
     if (!sanitized) {
@@ -520,14 +573,16 @@ export class ViewerWorkingCopyStore {
       return null;
     }
     if (JSON.stringify(raw) !== JSON.stringify(sanitized)) {
-      await this.storage.put(sanitized);
+      await this.persist(sanitized);
     }
     return clone(sanitized);
   }
 
   async ensure(baseRevision: number): Promise<ViewerWorkingCopy> {
+    this.assertWritable();
     assertBaseRevision(baseRevision);
     const existing = await this.load();
+    this.assertWritable();
     if (existing) {
       if (existing.baseRevision !== baseRevision) {
         throw staleError(existing.baseRevision, baseRevision);
@@ -545,13 +600,15 @@ export class ViewerWorkingCopyStore {
       createdAt: now,
       updatedAt: now,
     };
-    await this.storage.put(value);
+    await this.persist(value);
     return clone(value);
   }
 
   async appendOperation(baseRevision: number, operation: ViewerChangeOperation) {
+    this.assertWritable();
     validateOperation(operation);
     const current = await this.ensure(baseRevision);
+    this.assertWritable();
     if (current.operations.some((item) => item.id === operation.id)) {
       throw new Error("WORKING_COPY_OPERATION_ID_DUPLICATED");
     }
@@ -562,7 +619,7 @@ export class ViewerWorkingCopyStore {
       operations: [...current.operations, normalizedOperation],
       updatedAt: new Date().toISOString(),
     };
-    await this.storage.put(next);
+    await this.persist(next);
     return clone(next);
   }
 
@@ -570,7 +627,9 @@ export class ViewerWorkingCopyStore {
     baseRevision: number,
     payload: ViewerLayerStyleUpdatePayload,
   ) {
+    this.assertWritable();
     const current = await this.ensure(baseRevision);
+    this.assertWritable();
     const layerId = text(payload.targetLayerId);
     if (!layerId) throw new Error("WORKING_COPY_OPERATION_INVALID");
     const existingIndex = current.operations.findIndex((operation) => {
@@ -602,24 +661,28 @@ export class ViewerWorkingCopyStore {
       operations,
       updatedAt: new Date().toISOString(),
     };
-    await this.storage.put(next);
+    await this.persist(next);
     return clone(next);
   }
 
   async removeOperation(operationId: string) {
+    this.assertWritable();
     const current = await this.load();
+    this.assertWritable();
     if (!current) return null;
     const next = {
       ...current,
       operations: current.operations.filter((item) => item.id !== operationId),
       updatedAt: new Date().toISOString(),
     };
-    await this.storage.put(next);
+    await this.persist(next);
     return clone(next);
   }
 
   async completeSubmission(operationIds: string[]) {
+    this.assertWritable();
     const current = await this.load();
+    this.assertWritable();
     if (!current) return null;
     const submitted = new Set(operationIds.map(String));
     const operations = current.operations.filter((item) => !submitted.has(item.id));
@@ -636,7 +699,7 @@ export class ViewerWorkingCopyStore {
       submissionKey: crypto.randomUUID(),
       updatedAt: new Date().toISOString(),
     };
-    await this.storage.put(next);
+    await this.persist(next);
     return clone(next);
   }
 
@@ -645,8 +708,13 @@ export class ViewerWorkingCopyStore {
     return current ? clone(current) : null;
   }
 
-  clear() {
-    return this.storage.delete(this.key);
+  async clear() {
+    this.writesDisabled = true;
+    const pending = [...this.pendingWrites];
+    if (pending.length) {
+      await Promise.allSettled(pending);
+    }
+    await this.storage.delete(this.key);
   }
 
   async assertCurrentRevision(currentRevision: number) {
