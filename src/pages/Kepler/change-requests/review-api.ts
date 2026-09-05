@@ -6,6 +6,9 @@ export type ReviewOperationProjection = {
   type:
     | "point.create"
     | "layer.style.update"
+    | "layer.visibility.update"
+    | "persistent.filter.update"
+    | "layer.order.update"
     | "buffer.create"
     | "isochrone.create";
   version: number;
