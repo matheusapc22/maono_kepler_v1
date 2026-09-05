@@ -1,8 +1,19 @@
 import {
+  validateViewerLayerCreatePayload,
+  validateViewerLayerDuplicatePayload,
+  validateViewerLayerRemovePayload,
+} from "./viewer-layer-lifecycle.ts";
+import {
   validateViewerLayerOrderPayload,
   validateViewerLayerVisibilityPayload,
   validateViewerPersistentFilterPayload,
 } from "./viewer-persistent-visualization.ts";
+export type {
+  ViewerLayerCreatePayload,
+  ViewerLayerDuplicatePayload,
+  ViewerLayerRemovePayload,
+  ViewerLayerSnapshot,
+} from "./viewer-layer-lifecycle.ts";
 export type {
   ViewerLayerOrderUpdatePayload,
   ViewerLayerVisibilityUpdatePayload,
@@ -279,6 +290,18 @@ function validateAnalysisCreate(payload: unknown, kind: "buffer" | "isochrone") 
 export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryEntry>> =
   Object.freeze({
     "point.create": Object.freeze({ version: 1, validate: validatePointCreate }),
+    "layer.create": Object.freeze({
+      version: 1,
+      validate: validateViewerLayerCreatePayload,
+    }),
+    "layer.duplicate": Object.freeze({
+      version: 1,
+      validate: validateViewerLayerDuplicatePayload,
+    }),
+    "layer.remove": Object.freeze({
+      version: 1,
+      validate: validateViewerLayerRemovePayload,
+    }),
     "layer.style.update": Object.freeze({
       version: 1,
       validate: validateLayerStyleUpdate,
