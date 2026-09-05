@@ -5,6 +5,9 @@ export type ReviewOperationProjection = {
   sequence: number;
   type:
     | "point.create"
+    | "layer.create"
+    | "layer.duplicate"
+    | "layer.remove"
     | "layer.style.update"
     | "layer.visibility.update"
     | "persistent.filter.update"
