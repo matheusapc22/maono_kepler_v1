@@ -88,7 +88,7 @@ test("flags frontend customizadas são opt-in e desligadas por padrão", () => {
 test("sidebar usa capabilities sem replicar modos ou a subfunção Filtros", () => {
   assert.match(source.runtime, /context\?\.capabilities\.openLayerPanel/);
   assert.match(source.sidebar, /capabilities\.viewLayers/);
-  assert.match(source.sidebar, /capabilities\.createLayer/);
+  assert.match(source.sidebar, /capabilities\.importData/);
   assert.match(source.runtime, /context\.capabilities\.viewFilters/);
   assert.doesNotMatch(source.sidebar, /capabilities\.viewFilters/);
   assert.doesNotMatch(source.sidebar, /context\.availablePanels/);
