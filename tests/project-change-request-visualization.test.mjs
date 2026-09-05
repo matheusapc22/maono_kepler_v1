@@ -280,6 +280,7 @@ test("target divergente vira conflito e não aplica parcialmente", () => {
 
   const conflictingOrder = orderUpdate();
   conflictingOrder.payload.before = ["layer-b", "layer-a"];
+  conflictingOrder.payload.after = ["layer-a", "layer-b"];
   assert.throws(
     () =>
       buildProjectChangeProposal({
