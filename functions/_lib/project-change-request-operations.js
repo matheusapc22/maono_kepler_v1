@@ -392,10 +392,116 @@ function applyPointCreate(config, operation) {
   return pointCreateProjection(operation, payload);
 }
 
+function ensureLayerConfig(layer) {
+  if (!isRecord(layer.config)) layer.config = {};
+  return layer.config;
+}
+
+function ensureLayerVisConfig(layer) {
+  const config = ensureLayerConfig(layer);
+  if (!isRecord(config.visConfig)) config.visConfig = {};
+  return config.visConfig;
+}
+
+function styleSnapshot(layer) {
+  const config = ensureLayerConfig(layer);
+  const visConfig = ensureLayerVisConfig(layer);
+  return {
+    fixedColor: Array.isArray(config.color) ? cloneJson(config.color) : null,
+    opacity: visConfig.opacity ?? null,
+    fillEnabled: visConfig.filled ?? null,
+    strokeEnabled: text(layer.type).toLowerCase() === "point"
+      ? visConfig.outline ?? null
+      : visConfig.stroked ?? null,
+    strokeColor: Array.isArray(visConfig.strokeColor)
+      ? cloneJson(visConfig.strokeColor)
+      : null,
+    strokeOpacity: visConfig.strokeOpacity ?? null,
+    strokeWidth: visConfig.thickness ?? visConfig.strokeWidth ?? null,
+    pointRadius: visConfig.radius ?? null,
+    clusterRadius: visConfig.clusterRadius ?? null,
+    heatmapRadius: visConfig.heatmapRadius ?? null,
+  };
+}
+
+function applyStylePatch(layer, changes) {
+  const config = ensureLayerConfig(layer);
+  const visConfig = ensureLayerVisConfig(layer);
+  if ("fixedColor" in changes) config.color = cloneJson(changes.fixedColor);
+  if ("opacity" in changes) visConfig.opacity = Number(changes.opacity);
+  if ("fillEnabled" in changes) visConfig.filled = Boolean(changes.fillEnabled);
+  if ("strokeEnabled" in changes) {
+    const property = text(layer.type).toLowerCase() === "point" ? "outline" : "stroked";
+    visConfig[property] = Boolean(changes.strokeEnabled);
+  }
+  if ("strokeColor" in changes) visConfig.strokeColor = cloneJson(changes.strokeColor);
+  if ("strokeOpacity" in changes) visConfig.strokeOpacity = Number(changes.strokeOpacity);
+  if ("strokeWidth" in changes) visConfig.thickness = Number(changes.strokeWidth);
+  if ("pointRadius" in changes) visConfig.radius = Number(changes.pointRadius);
+  if ("clusterRadius" in changes) visConfig.clusterRadius = Number(changes.clusterRadius);
+  if ("heatmapRadius" in changes) visConfig.heatmapRadius = Number(changes.heatmapRadius);
+}
+
+function applyLayerStyleUpdate(config, operation) {
+  const payload = isRecord(operation.payload) ? operation.payload : null;
+  const layerId = text(payload?.targetLayerId);
+  if (!payload || !layerId || !isRecord(payload.changes)) {
+    throw operationError(
+      "Payload de layer.style.update inválido.",
+      "CHANGE_REQUEST_OPERATION_INVALID",
+      { operationId: operation.id },
+      400,
+    );
+  }
+  const layer = findLayer(config, layerId);
+  if (!layer) {
+    throw operationError(
+      "A camada de estilo não existe mais na revisão-base/proposta.",
+      "CHANGE_REQUEST_OPERATION_TARGET_MISSING",
+      { operationId: operation.id, layerId },
+    );
+  }
+  const dataId = text(payload.targetDataId);
+  if (dataId && !layerDataIds(layer).includes(dataId)) {
+    throw operationError(
+      "A camada de estilo não referencia o dataset esperado.",
+      "CHANGE_REQUEST_OPERATION_TARGET_INVALID",
+      { operationId: operation.id, layerId, dataId },
+    );
+  }
+
+  const before = styleSnapshot(layer);
+  applyStylePatch(layer, payload.changes);
+  const after = styleSnapshot(layer);
+  return {
+    id: text(operation.id),
+    sequence: Number(operation.sequence ?? 0),
+    type: "layer.style.update",
+    version: 1,
+    label: text(payload.targetLabel) || text(layer?.config?.label) || layerId,
+    focus: null,
+    target: {
+      layerId,
+      dataId: dataId || layerDataIds(layer)[0] || null,
+      label: text(payload.targetLabel) || text(layer?.config?.label) || layerId,
+    },
+    overlay: null,
+    properties: {
+      before,
+      after,
+      changes: cloneJson(payload.changes),
+    },
+  };
+}
+
 export const PROJECT_CHANGE_OPERATION_APPLIERS = Object.freeze({
   "point.create": Object.freeze({
     version: 1,
     apply: applyPointCreate,
+  }),
+  "layer.style.update": Object.freeze({
+    version: 1,
+    apply: applyLayerStyleUpdate,
   }),
 });
 

@@ -60,8 +60,26 @@ function normalizeBaseRevision(value) {
   return revision;
 }
 
+function isRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function validRgb(value) {
+  return Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((channel) => {
+      const number = Number(channel);
+      return Number.isFinite(number) && number >= 0 && number <= 255;
+    });
+}
+
+function validBoundedNumber(value, minimum, maximum) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= minimum && number <= maximum;
+}
+
 function assertPointCreatePayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+  if (!isRecord(payload)) {
     throw domainError("Payload de point.create inválido.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
   }
   const latitude = Number(payload.latitude);
@@ -78,8 +96,58 @@ function assertPointCreatePayload(payload) {
   }
 }
 
+function assertLayerStyleUpdatePayload(payload) {
+  if (!isRecord(payload) || !normalizeText(payload.targetLayerId, { required: true, maxLength: 200 })) {
+    throw domainError("Payload de layer.style.update inválido.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+  }
+  if (!isRecord(payload.changes) || Object.keys(payload.changes).length === 0) {
+    throw domainError("layer.style.update exige ao menos uma alteração visual.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+  }
+
+  const allowed = new Set([
+    "fixedColor",
+    "opacity",
+    "fillEnabled",
+    "strokeEnabled",
+    "strokeColor",
+    "strokeOpacity",
+    "strokeWidth",
+    "pointRadius",
+    "clusterRadius",
+    "heatmapRadius",
+  ]);
+  if (Object.keys(payload.changes).some((key) => !allowed.has(key))) {
+    throw domainError("layer.style.update contém propriedade não suportada.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+  }
+  if ("fixedColor" in payload.changes && !validRgb(payload.changes.fixedColor)) {
+    throw domainError("Cor fixa inválida.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+  }
+  if ("strokeColor" in payload.changes && !validRgb(payload.changes.strokeColor)) {
+    throw domainError("Cor de contorno inválida.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+  }
+  for (const key of ["opacity", "strokeOpacity"]) {
+    if (key in payload.changes && !validBoundedNumber(payload.changes[key], 0, 1)) {
+      throw domainError("Opacidade inválida.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+    }
+  }
+  for (const key of ["strokeWidth", "pointRadius", "clusterRadius", "heatmapRadius"]) {
+    if (key in payload.changes && !validBoundedNumber(payload.changes[key], 0, 500)) {
+      throw domainError("Valor visual fora do intervalo permitido.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+    }
+  }
+  for (const key of ["fillEnabled", "strokeEnabled"]) {
+    if (key in payload.changes && typeof payload.changes[key] !== "boolean") {
+      throw domainError("Flag visual inválida.", 400, "CHANGE_REQUEST_OPERATION_INVALID");
+    }
+  }
+}
+
 export const PROJECT_CHANGE_OPERATION_REGISTRY = Object.freeze({
   "point.create": Object.freeze({ version: 1, validate: assertPointCreatePayload }),
+  "layer.style.update": Object.freeze({
+    version: 1,
+    validate: assertLayerStyleUpdatePayload,
+  }),
 });
 
 function normalizeOperation(operation, index) {

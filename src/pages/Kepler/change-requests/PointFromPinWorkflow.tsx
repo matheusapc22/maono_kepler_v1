@@ -21,9 +21,11 @@ import {
   type MarkerOrigin,
 } from "../components/map-overlay/marker-projection";
 import { submitProjectChangeRequest } from "./change-request-api";
+import ViewerWorkingCopyRuntime from "./ViewerWorkingCopyRuntime";
 import {
   ViewerWorkingCopyStore,
   type ViewerChangeOperation,
+  type ViewerLayerStyleUpdatePayload,
   type ViewerWorkingCopy,
 } from "./viewer-working-copy";
 import "./point-from-pin.css";
@@ -45,6 +47,7 @@ type PointOperationPayload = {
   targetLayerId: string | null;
   targetDataId: string | null;
   targetLabel: string;
+  targetMode?: "new";
   fieldMap: PointDatasetTarget["fieldMap"];
   properties: {
     name: string;
@@ -64,10 +67,7 @@ function normalizedFieldName(value: string) {
     .toLowerCase();
 }
 
-function optionalField(
-  fields: Array<{ name: string }>,
-  candidates: string[],
-) {
+function optionalField(fields: Array<{ name: string }>, candidates: string[]) {
   const wanted = new Set(candidates.map(normalizedFieldName));
   return (
     fields.find((field) => wanted.has(normalizedFieldName(field.name)))?.name ??
@@ -105,10 +105,44 @@ function pointPayload(operation: ViewerChangeOperation) {
   return payload;
 }
 
-function operationLabel(operation: ViewerChangeOperation) {
-  const payload = pointPayload(operation);
-  if (!payload) return "Alteração local";
-  return payload.properties.name || "Novo ponto";
+function stylePayload(operation: ViewerChangeOperation) {
+  if (operation.type !== "layer.style.update") return null;
+  const payload = operation.payload as ViewerLayerStyleUpdatePayload | null;
+  return payload?.targetLayerId ? payload : null;
+}
+
+function styleSummary(payload: ViewerLayerStyleUpdatePayload) {
+  const keys = Object.keys(payload.changes || {});
+  if (keys.length === 1 && keys[0] === "fixedColor") return "Cor fixa alterada";
+  if (keys.length === 1 && keys[0] === "opacity") return "Opacidade alterada";
+  return `${keys.length} ${keys.length === 1 ? "propriedade visual" : "propriedades visuais"}`;
+}
+
+function operationDescriptor(operation: ViewerChangeOperation) {
+  const point = pointPayload(operation);
+  if (point) {
+    return {
+      title: "Criar ponto",
+      label: point.properties.name || "Novo ponto",
+      detail:
+        point.targetMode === "new"
+          ? `Nova camada: ${point.targetLabel || "Pontos adicionados"}`
+          : point.targetLabel || "Camada de destino",
+    };
+  }
+  const style = stylePayload(operation);
+  if (style) {
+    return {
+      title: "Alterar estilo",
+      label: style.targetLabel || style.targetLayerId,
+      detail: styleSummary(style),
+    };
+  }
+  return {
+    title: "Alteração local",
+    label: operation.type,
+    detail: "Operação da Working Copy",
+  };
 }
 
 export default function PointFromPinWorkflow() {
@@ -140,12 +174,18 @@ export default function PointFromPinWorkflow() {
   const [toast, setToast] = useState<string | null>(null);
 
   const targets = useMemo<PointTargetOption[]>(() => {
-    const datasets = new Map(engineState.datasets.map((dataset) => [dataset.id, dataset]));
+    const datasets = new Map(
+      engineState.datasets.map((dataset) => [dataset.id, dataset]),
+    );
     const compatible: PointTargetOption[] = engineState.layers.flatMap((layer) => {
       const dataId = layer.dataIds[0] ?? null;
       const dataset = dataId ? datasets.get(dataId) : null;
       const managedType = layer.structure.managedType || layer.type;
+      const temporaryProjection =
+        layer.id.startsWith("tmp_layer_") ||
+        Boolean(dataId?.startsWith("tmp_data_"));
       if (
+        temporaryProjection ||
         !dataId ||
         !dataset ||
         layer.dataIds.length !== 1 ||
@@ -166,9 +206,24 @@ export default function PointFromPinWorkflow() {
           fieldMap: {
             latitude: layer.columns.latitude,
             longitude: layer.columns.longitude,
-            name: optionalField(dataset.fields, ["name", "nome", "title", "titulo", "título"]),
-            type: optionalField(dataset.fields, ["type", "tipo", "category", "categoria"]),
-            description: optionalField(dataset.fields, ["description", "descricao", "descrição"]),
+            name: optionalField(dataset.fields, [
+              "name",
+              "nome",
+              "title",
+              "titulo",
+              "título",
+            ]),
+            type: optionalField(dataset.fields, [
+              "type",
+              "tipo",
+              "category",
+              "categoria",
+            ]),
+            description: optionalField(dataset.fields, [
+              "description",
+              "descricao",
+              "descrição",
+            ]),
             id: optionalField(dataset.fields, ["maono_point_id"]),
           },
         },
@@ -251,7 +306,9 @@ export default function PointFromPinWorkflow() {
         setStale(Boolean(value && value.baseRevision !== baseRevision));
       })
       .catch(() => {
-        if (!cancelled) setSubmitError("Não foi possível restaurar as alterações locais.");
+        if (!cancelled) {
+          setSubmitError("Não foi possível restaurar as alterações locais.");
+        }
       });
 
     return () => {
@@ -329,7 +386,7 @@ export default function PointFromPinWorkflow() {
     if (!target) {
       setDialogError(
         viewerEnabled
-          ? "Não há camada de pontos existente disponível para receber a proposta."
+          ? "Não há camada de pontos disponível para receber a proposta."
           : "Selecione uma camada para receber o ponto.",
       );
       return;
@@ -374,7 +431,7 @@ export default function PointFromPinWorkflow() {
         setToast("Ponto adicionado às alterações locais do Viewer.");
         closeDialog();
       } catch (error) {
-        if ((error as any)?.code === "WORKING_COPY_BASE_REVISION_STALE") {
+        if ((error as { code?: string })?.code === "WORKING_COPY_BASE_REVISION_STALE") {
           setStale(true);
           setDialogError("O projeto mudou desde o início destas alterações locais.");
         } else {
@@ -425,9 +482,14 @@ export default function PointFromPinWorkflow() {
       !workingCopy ||
       !context?.project?.slug ||
       submitting ||
-      stale ||
-      engineState.hasUnsavedChanges
+      stale
     ) {
+      return;
+    }
+    if (engineState.hasUnsavedChanges) {
+      setSubmitError(
+        "Existe uma alteração no mapa que ainda não pôde ser convertida em solicitação. Revise a alteração antes de enviar.",
+      );
       return;
     }
     const selected = workingCopy.operations.filter((operation) =>
@@ -462,8 +524,9 @@ export default function PointFromPinWorkflow() {
           ? "Solicitação enviada e chamado criado para revisão."
           : "Solicitação enviada para revisão.",
       );
+      window.setTimeout(() => window.location.reload(), 450);
     } catch (error) {
-      const code = String((error as any)?.code || "");
+      const code = String((error as { code?: string })?.code || "");
       if (
         code === "WORKING_COPY_BASE_REVISION_STALE" ||
         code === "CHANGE_REQUEST_BASE_REVISION_STALE"
@@ -490,13 +553,26 @@ export default function PointFromPinWorkflow() {
   const operations = workingCopy?.operations || [];
   const proposed = operations
     .map((operation) => ({ operation, payload: pointPayload(operation) }))
-    .filter((item): item is { operation: ViewerChangeOperation; payload: PointOperationPayload } =>
-      Boolean(item.payload),
+    .filter(
+      (item): item is {
+        operation: ViewerChangeOperation;
+        payload: PointOperationPayload;
+      } => Boolean(item.payload && item.payload.targetMode !== "new"),
     );
   const untrackedViewerChanges = viewerEnabled && engineState.hasUnsavedChanges;
 
   return createPortal(
     <>
+      {viewerEnabled ? (
+        <ViewerWorkingCopyRuntime
+          enabled={viewerEnabled}
+          store={store}
+          workingCopy={workingCopy}
+          baseRevision={baseRevision}
+          onWorkingCopyChange={setWorkingCopy}
+        />
+      ) : null}
+
       {viewerEnabled && canvasRect && engineState.viewport
         ? proposed.map(({ operation, payload }) => {
             const position = markerOriginToScreen(
@@ -583,11 +659,6 @@ export default function PointFromPinWorkflow() {
                 <span>Lng: {dialogOrigin.longitude.toFixed(6)}</span>
                 {selectedTarget ? <span>Camada: {selectedTarget.label}</span> : null}
               </div>
-              {viewerEnabled && !targets.length ? (
-                <p className="maono-point-dialog__error" role="alert">
-                  Um Editor precisa adicionar uma fonte de pontos antes que o Viewer possa propor pontos nesta versão.
-                </p>
-              ) : null}
               {dialogError ? (
                 <p className="maono-point-dialog__error" role="alert">
                   {dialogError}
@@ -667,13 +738,13 @@ export default function PointFromPinWorkflow() {
               ) : null}
               {untrackedViewerChanges ? (
                 <p className="maono-change-request__warning" role="alert">
-                  Existem outras alterações locais do mapa que ainda não possuem contrato de Change Request. O envio fica bloqueado para evitar perda silenciosa.
+                  Existe uma alteração no mapa que ainda não pôde ser convertida em solicitação. O envio fica bloqueado para evitar perda silenciosa.
                 </p>
               ) : null}
 
               <div className="maono-change-request__operations">
                 {workingCopy.operations.map((operation) => {
-                  const payload = pointPayload(operation);
+                  const descriptor = operationDescriptor(operation);
                   return (
                     <label key={operation.id} className="maono-change-request__operation">
                       <input
@@ -683,8 +754,8 @@ export default function PointFromPinWorkflow() {
                         onChange={() => toggleSelected(operation.id)}
                       />
                       <span>
-                        <strong>Criar ponto — {operationLabel(operation)}</strong>
-                        <span>{payload?.targetLabel || "Camada de destino"}</span>
+                        <strong>{descriptor.title} — {descriptor.label}</strong>
+                        <span>{descriptor.detail}</span>
                       </span>
                     </label>
                   );

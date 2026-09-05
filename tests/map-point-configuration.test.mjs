@@ -351,6 +351,7 @@ test("PR3 Viewer serializa point.create enquanto Editor/Create atualizam somente
 
 test("PR3 bloqueia submit Viewer se houver mutação local não serializada", () => {
   assert.match(pointWorkflow, /untrackedViewerChanges = viewerEnabled && engineState\.hasUnsavedChanges/);
-  assert.match(pointWorkflow, /ainda não possuem contrato de Change Request/);
+  assert.match(pointWorkflow, /ainda não pôde ser convertida em solicitação/);
+  assert.match(pointWorkflow, /envio fica bloqueado para evitar perda silenciosa/);
   assert.match(pointWorkflow, /untrackedViewerChanges \|\|/);
 });
