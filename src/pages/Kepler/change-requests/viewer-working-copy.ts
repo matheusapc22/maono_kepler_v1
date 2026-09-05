@@ -26,6 +26,16 @@ export type ViewerLayerStyleUpdatePayload = {
   changes: ViewerLayerStyleChanges;
 };
 
+export type ViewerAnalysisCreatePayload = {
+  targetDataId: string;
+  targetLayerId: string;
+  targetLabel: string;
+  geojson: Record<string, unknown>;
+  source: "analysis";
+  analysisKind: "buffer" | "isochrone";
+  parameters: Record<string, unknown>;
+};
+
 export type ViewerWorkingCopy = {
   key: string;
   organizationId: string;
@@ -68,6 +78,10 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function validIsoDate(value: unknown) {
+  return typeof value === "string" && value.length <= 64 && Number.isFinite(Date.parse(value));
+}
+
 function validRgb(value: unknown) {
   return (
     Array.isArray(value) &&
@@ -82,6 +96,44 @@ function validRgb(value: unknown) {
 function validBoundedNumber(value: unknown, minimum: number, maximum: number) {
   const number = Number(value);
   return Number.isFinite(number) && number >= minimum && number <= maximum;
+}
+
+function validCoordinatePair(value: unknown) {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    validBoundedNumber(value[0], -180, 180) &&
+    validBoundedNumber(value[1], -90, 90)
+  );
+}
+
+function validateGeometryCoordinates(value: unknown, depth = 0): boolean {
+  if (depth > 8 || !Array.isArray(value) || !value.length) return false;
+  if (typeof value[0] === "number") return validCoordinatePair(value);
+  return value.every((item) => validateGeometryCoordinates(item, depth + 1));
+}
+
+function validateAnalysisGeoJson(value: unknown) {
+  const collection = record(value);
+  if (!collection || collection.type !== "FeatureCollection" || !Array.isArray(collection.features)) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
+  if (collection.features.length < 1 || collection.features.length > 500) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
+  for (const candidate of collection.features) {
+    const feature = record(candidate);
+    const geometry = record(feature?.geometry);
+    if (
+      !feature ||
+      feature.type !== "Feature" ||
+      !geometry ||
+      !["Polygon", "MultiPolygon"].includes(String(geometry.type)) ||
+      !validateGeometryCoordinates(geometry.coordinates)
+    ) {
+      throw new Error("WORKING_COPY_OPERATION_INVALID");
+    }
+  }
 }
 
 function validatePointCreate(payload: unknown) {
@@ -146,12 +198,86 @@ function validateLayerStyleUpdate(payload: unknown) {
   }
 }
 
+function validateAnalysisCreate(payload: unknown, kind: "buffer" | "isochrone") {
+  const source = record(payload);
+  const parameters = record(source?.parameters);
+  if (
+    !source ||
+    source.source !== "analysis" ||
+    source.analysisKind !== kind ||
+    !text(source.targetDataId) ||
+    !text(source.targetLayerId) ||
+    !text(source.targetLabel) ||
+    !parameters
+  ) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
+  validateAnalysisGeoJson(source.geojson);
+
+  if (kind === "buffer") {
+    const items = parameters.items;
+    if (!Array.isArray(items) || !items.length || items.length > 100) {
+      throw new Error("WORKING_COPY_OPERATION_INVALID");
+    }
+    for (const itemValue of items) {
+      const item = record(itemValue);
+      const origin = record(item?.origin);
+      const ranges = item?.ranges;
+      const rangesMeters = item?.rangesMeters;
+      if (
+        !item ||
+        !origin ||
+        !validBoundedNumber(origin.latitude, -90, 90) ||
+        !validBoundedNumber(origin.longitude, -180, 180) ||
+        !["m", "km"].includes(text(item.inputUnit)) ||
+        !Array.isArray(ranges) ||
+        !ranges.length ||
+        ranges.length > 4 ||
+        ranges.some((range) => !validBoundedNumber(range, Number.EPSILON, 200_000)) ||
+        !Array.isArray(rangesMeters) ||
+        rangesMeters.length !== ranges.length ||
+        rangesMeters.some((range) => !validBoundedNumber(range, Number.EPSILON, 200_000))
+      ) {
+        throw new Error("WORKING_COPY_OPERATION_INVALID");
+      }
+    }
+  } else {
+    const origin = record(parameters.origin);
+    const metadata = record(parameters.metadata);
+    const ranges = metadata?.ranges;
+    if (
+      !origin ||
+      !validBoundedNumber(origin.latitude, -90, 90) ||
+      !validBoundedNumber(origin.longitude, -180, 180) ||
+      !metadata ||
+      !text(metadata.provider) ||
+      !["time", "distance"].includes(text(metadata.type)) ||
+      !["drive_traffic", "drive", "bicycle", "walk"].includes(text(metadata.mode)) ||
+      !["request", "profile", "default"].includes(text(metadata.mode_source)) ||
+      !Array.isArray(ranges) ||
+      !ranges.length ||
+      ranges.length > 4 ||
+      ranges.some((range) => !validBoundedNumber(range, Number.EPSILON, 100_000))
+    ) {
+      throw new Error("WORKING_COPY_OPERATION_INVALID");
+    }
+  }
+}
+
 export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryEntry>> =
   Object.freeze({
     "point.create": Object.freeze({ version: 1, validate: validatePointCreate }),
     "layer.style.update": Object.freeze({
       version: 1,
       validate: validateLayerStyleUpdate,
+    }),
+    "buffer.create": Object.freeze({
+      version: 1,
+      validate: (payload: unknown) => validateAnalysisCreate(payload, "buffer"),
+    }),
+    "isochrone.create": Object.freeze({
+      version: 1,
+      validate: (payload: unknown) => validateAnalysisCreate(payload, "isochrone"),
     }),
   });
 
@@ -227,6 +353,9 @@ function workingCopyKey(identity: ViewerWorkingCopyIdentity) {
 }
 
 function validateOperation(operation: ViewerChangeOperation) {
+  if (!operation || !text(operation.id) || !text(operation.type) || !validIsoDate(operation.createdAt)) {
+    throw new Error("WORKING_COPY_OPERATION_INVALID");
+  }
   const entry = viewerOperationRegistry[operation.type];
   if (!entry) throw new Error("WORKING_COPY_OPERATION_UNSUPPORTED");
   if (operation.version !== entry.version) {
@@ -293,6 +422,57 @@ function staleError(baseRevision: number, currentRevision: number) {
   });
 }
 
+function sanitizePersistedWorkingCopy(
+  value: unknown,
+  key: string,
+  identity: ReturnType<typeof normalizeIdentity>,
+): ViewerWorkingCopy | null {
+  const source = record(value);
+  if (
+    !source ||
+    source.schemaVersion !== 1 ||
+    text(source.key) !== key ||
+    text(source.organizationId) !== identity.organizationId ||
+    text(source.projectId) !== identity.projectId ||
+    text(source.projectSlug) !== identity.projectSlug ||
+    text(source.userId) !== identity.userId ||
+    !Number.isInteger(Number(source.baseRevision)) ||
+    Number(source.baseRevision) < 0 ||
+    !text(source.submissionKey) ||
+    !Array.isArray(source.operations) ||
+    !validIsoDate(source.createdAt) ||
+    !validIsoDate(source.updatedAt)
+  ) {
+    return null;
+  }
+
+  const seenIds = new Set<string>();
+  const operations: ViewerChangeOperation[] = [];
+  for (const candidate of source.operations) {
+    try {
+      const operation = clone(candidate as ViewerChangeOperation);
+      validateOperation(operation);
+      if (seenIds.has(operation.id)) continue;
+      seenIds.add(operation.id);
+      operations.push(operation);
+    } catch {
+      // IndexedDB is a persistence boundary. Unsupported/corrupt operations are
+      // discarded instead of being allowed to crash the Viewer during replay.
+    }
+  }
+
+  return {
+    key,
+    ...identity,
+    baseRevision: Number(source.baseRevision),
+    submissionKey: text(source.submissionKey),
+    operations,
+    schemaVersion: 1,
+    createdAt: String(source.createdAt),
+    updatedAt: String(source.updatedAt),
+  };
+}
+
 export class ViewerWorkingCopyStore {
   readonly key: string;
   private readonly identity: ReturnType<typeof normalizeIdentity>;
@@ -307,8 +487,18 @@ export class ViewerWorkingCopyStore {
     this.key = workingCopyKey(identity);
   }
 
-  load() {
-    return this.storage.get(this.key);
+  async load() {
+    const raw = await this.storage.get(this.key);
+    if (!raw) return null;
+    const sanitized = sanitizePersistedWorkingCopy(raw, this.key, this.identity);
+    if (!sanitized) {
+      await this.storage.delete(this.key);
+      return null;
+    }
+    if (JSON.stringify(raw) !== JSON.stringify(sanitized)) {
+      await this.storage.put(sanitized);
+    }
+    return clone(sanitized);
   }
 
   async ensure(baseRevision: number): Promise<ViewerWorkingCopy> {

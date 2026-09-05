@@ -14,7 +14,12 @@ import {
   type ViewerLayerStyleSnapshot,
 } from "./viewer-layer-style";
 import {
+  isViewerAnalysisOperationEvent,
+  MAONO_VIEWER_ANALYSIS_OPERATION_EVENT,
+} from "./viewer-analysis-operation";
+import {
   ViewerWorkingCopyStore,
+  type ViewerAnalysisCreatePayload,
   type ViewerChangeOperation,
   type ViewerLayerStyleUpdatePayload,
   type ViewerWorkingCopy,
@@ -68,6 +73,14 @@ function stylePayload(
     : null;
 }
 
+function analysisPayload(
+  operation: ViewerChangeOperation,
+): ViewerAnalysisCreatePayload | null {
+  return operation.type === "buffer.create" || operation.type === "isochrone.create"
+    ? (asRecord(operation.payload) as ViewerAnalysisCreatePayload | null)
+    : null;
+}
+
 function existingStyleOperation(
   workingCopy: ViewerWorkingCopy | null,
   layerId: string,
@@ -109,6 +122,52 @@ export default function ViewerWorkingCopyRuntime({
   }, [state.layers]);
 
   useEffect(() => {
+    if (!enabled || !store) return undefined;
+
+    const handleAnalysisOperation = (event: Event) => {
+      if (!isViewerAnalysisOperationEvent(event)) return;
+      const { request, respond } = event.detail;
+      const operation: ViewerChangeOperation = {
+        id: `op_${crypto.randomUUID()}`,
+        type: request.type,
+        version: 1,
+        payload: request.payload,
+        createdAt: new Date().toISOString(),
+      };
+
+      void store
+        .appendOperation(baseRevision, operation)
+        .then((next) => {
+          onWorkingCopyChange(next);
+          untrackedLatchedRef.current = false;
+          pendingProjectionAckRef.current = false;
+          markClean();
+          respond({ ok: true, operation });
+        })
+        .catch((error) => {
+          respond({
+            ok: false,
+            message:
+              (error as { code?: string })?.code === "WORKING_COPY_BASE_REVISION_STALE"
+                ? "O projeto mudou desde o início destas alterações locais."
+                : "Não foi possível guardar a análise no workspace local.",
+          });
+        });
+    };
+
+    window.addEventListener(
+      MAONO_VIEWER_ANALYSIS_OPERATION_EVENT,
+      handleAnalysisOperation,
+    );
+    return () => {
+      window.removeEventListener(
+        MAONO_VIEWER_ANALYSIS_OPERATION_EVENT,
+        handleAnalysisOperation,
+      );
+    };
+  }, [baseRevision, enabled, markClean, onWorkingCopyChange, store]);
+
+  useEffect(() => {
     if (!enabled || !store || !state.ready || baseKeyRef.current === runtimeKey) {
       return;
     }
@@ -139,55 +198,102 @@ export default function ViewerWorkingCopyRuntime({
     let projectedMutation = false;
 
     for (const operation of workingCopy.operations) {
-      const point = pointPayload(operation);
-      if (point && text(point.targetMode).toLowerCase() === "new") {
-        const dataId = text(point.targetDataId);
-        const layerId = text(point.targetLayerId);
-        const latitude = Number(point.latitude);
-        const longitude = Number(point.longitude);
-        const fieldMap = point.fieldMap;
-        if (
-          !dataId ||
-          !layerId ||
-          !fieldMap ||
-          !Number.isFinite(latitude) ||
-          !Number.isFinite(longitude)
-        ) {
+      try {
+        const point = pointPayload(operation);
+        if (point && text(point.targetMode).toLowerCase() === "new") {
+          const dataId = text(point.targetDataId);
+          const layerId = text(point.targetLayerId);
+          const latitude = Number(point.latitude);
+          const longitude = Number(point.longitude);
+          const fieldMap = point.fieldMap;
+          if (
+            !dataId ||
+            !layerId ||
+            !fieldMap ||
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+          ) {
+            continue;
+          }
+
+          const result = createDatasetPoint({
+            target: {
+              dataId,
+              layerId,
+              label: text(point.targetLabel) || "Pontos adicionados",
+              fieldMap,
+              createNew: !knownDataIds.has(dataId),
+            },
+            latitude,
+            longitude,
+            tempId: text(point.tempId),
+            properties: {
+              name: text(point.properties?.name) || "Novo ponto",
+              type: text(point.properties?.type),
+              description: text(point.properties?.description),
+            },
+          });
+          if (result.ok) {
+            knownDataIds.add(dataId);
+            projectedMutation = projectedMutation || result.changed;
+          }
           continue;
         }
 
-        const result = createDatasetPoint({
-          target: {
+        const analysis = analysisPayload(operation);
+        if (analysis) {
+          const dataId = text(analysis.targetDataId);
+          if (!dataId || knownDataIds.has(dataId)) continue;
+          const isBuffer = operation.type === "buffer.create";
+          const result = commands.addGeoJsonLayer({
             dataId,
-            layerId,
-            label: text(point.targetLabel) || "Pontos adicionados",
-            fieldMap,
-            createNew: !knownDataIds.has(dataId),
-          },
-          latitude,
-          longitude,
-          tempId: text(point.tempId),
-          properties: {
-            name: text(point.properties?.name) || "Novo ponto",
-            type: text(point.properties?.type),
-            description: text(point.properties?.description),
-          },
-        });
-        if (result.ok) {
-          knownDataIds.add(dataId);
+            label: text(analysis.targetLabel) || (isBuffer ? "Buffer" : "Isócrona"),
+            geoJson: analysis.geojson,
+            color: [197, 160, 89],
+            strokeColor: [183, 121, 31],
+            opacity: isBuffer ? 0.2 : 0.28,
+            transient: true,
+            analysisKind: isBuffer ? "buffer" : "isochrone",
+            presentation: isBuffer
+              ? {
+                  tooltipFields: [
+                    "analysis_label",
+                    "radius_label",
+                    "origin_latitude",
+                    "origin_longitude",
+                    "maono_buffer_item_id",
+                  ],
+                  legendField: "radius_label",
+                  legendPalette: ["#FFF8E7", "#F1D28A", "#D69E2E", "#B7791F"],
+                }
+              : undefined,
+            centerMap: false,
+          });
+          if (result.ok) {
+            knownDataIds.add(dataId);
+            projectedMutation = projectedMutation || result.changed;
+          }
+          continue;
+        }
+
+        const style = stylePayload(operation);
+        if (style && text(style.targetLayerId)) {
+          const result = applyViewerLayerStyleChanges(
+            commands,
+            text(style.targetLayerId),
+            style.changes || {},
+          );
           projectedMutation = projectedMutation || result.changed;
         }
-        continue;
-      }
-
-      const style = stylePayload(operation);
-      if (style && text(style.targetLayerId)) {
-        const result = applyViewerLayerStyleChanges(
-          commands,
-          text(style.targetLayerId),
-          style.changes || {},
-        );
-        projectedMutation = projectedMutation || result.changed;
+      } catch (error) {
+        // A persisted local operation must never take down the whole Viewer.
+        // Invalid operations are sanitized on load; this guard also contains
+        // adapter/runtime failures during projection.
+        console.warn("Viewer Working Copy replay ignored an operation", {
+          operationId: operation.id,
+          operationType: operation.type,
+          error,
+        });
       }
     }
 

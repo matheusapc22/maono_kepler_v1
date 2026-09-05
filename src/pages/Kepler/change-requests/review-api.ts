@@ -3,7 +3,11 @@ import { ProjectChangeRequestApiError } from "./change-request-api";
 export type ReviewOperationProjection = {
   id: string;
   sequence: number;
-  type: "point.create" | "layer.style.update";
+  type:
+    | "point.create"
+    | "layer.style.update"
+    | "buffer.create"
+    | "isochrone.create";
   version: number;
   label: string;
   focus: {
@@ -15,11 +19,17 @@ export type ReviewOperationProjection = {
     dataId: string | null;
     label: string;
   };
-  overlay: {
-    kind: "point";
-    latitude: number;
-    longitude: number;
-  } | null;
+  overlay:
+    | {
+        kind: "point";
+        latitude: number;
+        longitude: number;
+      }
+    | {
+        kind: "geojson";
+        geojson: Record<string, unknown>;
+      }
+    | null;
   properties: Record<string, unknown>;
 };
 

@@ -92,8 +92,11 @@ test("submit não faz silent return para mutação sem contrato", () => {
   assert.match(workflow, /window\.location\.reload\(\)/);
 });
 
-test("Review aceita style projection nullable e mostra Antes/Depois", () => {
-  assert.match(reviewApi, /"point\.create" \| "layer\.style\.update"/);
+test("Review aceita projeções das operações suportadas e mostra Antes/Depois", () => {
+  assert.match(reviewApi, /"point\.create"/);
+  assert.match(reviewApi, /"layer\.style\.update"/);
+  assert.match(reviewApi, /"buffer\.create"/);
+  assert.match(reviewApi, /"isochrone\.create"/);
   assert.match(reviewApi, /focus:[\s\S]*\| null/);
   assert.match(reviewApi, /overlay:[\s\S]*\| null/);
   assert.match(reviewPage, /Alterar estilo/);

@@ -6,6 +6,7 @@ import {
 } from "react";
 import { useParams } from "react-router";
 
+import { requestViewerAnalysisOperation } from "../../change-requests/viewer-analysis-operation";
 import { useKeplerEngineAdapter } from "../../engine-adapter";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
 import { useMapPanel } from "../../map-panel/MapPanelContext";
@@ -14,6 +15,7 @@ import {
   isochroneErrorMessage,
   requestIsochrone,
   type IsochroneMode,
+  type IsochroneResult,
   type IsochroneType,
 } from "../../map-panel/isochrone-api";
 import type { MapToolPoint } from "./analysis-tools/map-tool-state";
@@ -21,6 +23,9 @@ import type { MapToolPoint } from "./analysis-tools/map-tool-state";
 export type IsochronePreviewState = {
   dataId: string;
   label: string;
+  origin: MapToolPoint;
+  metadata: IsochroneResult["metadata"];
+  geojson: Record<string, unknown>;
 };
 
 export type IsochroneOverlayMessage = {
@@ -81,7 +86,6 @@ export function useIsochronePreview({
 
   useEffect(() => {
     if (!message || message.tone === "error") return undefined;
-
     const timeoutId = window.setTimeout(() => setMessage(null), 6_000);
     return () => window.clearTimeout(timeoutId);
   }, [message]);
@@ -95,16 +99,11 @@ export function useIsochronePreview({
   useEffect(() => {
     if (previousScopeKeyRef.current === scopeKey) return;
     previousScopeKeyRef.current = scopeKey;
-
     requestRef.current?.abort();
     requestRef.current = null;
     setBusy(false);
-
     const current = previewRef.current;
-    if (current) {
-      commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
-    }
-
+    if (current) commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
     setPreview(null);
     setDialogOpen(false);
     setError(null);
@@ -116,10 +115,7 @@ export function useIsochronePreview({
     () => () => {
       requestRef.current?.abort();
       const current = previewRef.current;
-
-      if (current) {
-        commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
-      }
+      if (current) commandsRef.current.removeTransientLayer(current.dataId, "isochrone");
     },
     [],
   );
@@ -138,15 +134,7 @@ export function useIsochronePreview({
 
   const generate = useCallback(
     async (input: IsochroneInput) => {
-      if (
-        busy ||
-        !pendingPoint ||
-        !capabilities?.previewIsochrone ||
-        preview
-      ) {
-        return;
-      }
-
+      if (busy || !pendingPoint || !capabilities?.previewIsochrone || preview) return;
       requestRef.current?.abort();
       const controller = new AbortController();
       requestRef.current = controller;
@@ -164,10 +152,11 @@ export function useIsochronePreview({
       });
 
       try {
+        const origin = { ...pendingPoint };
         const result = await requestIsochrone(
           {
             projectSlug: projectSlug || null,
-            origin: pendingPoint,
+            origin,
             type: input.type,
             mode: input.mode,
             ranges: input.ranges,
@@ -185,18 +174,16 @@ export function useIsochronePreview({
           analysisKind: "isochrone",
           centerMap: true,
         });
-
         if (!added.ok || !added.value?.dataId) {
-          throw new Error(
-            added.ok
-              ? "O adaptador não retornou a camada de prévia."
-              : added.reason,
-          );
+          throw new Error(added.ok ? "O adaptador não retornou a camada de prévia." : added.reason);
         }
 
         setPreview({
           dataId: added.value.dataId,
           label,
+          origin,
+          metadata: result.metadata,
+          geojson: result.geojson,
         });
         setDialogOpen(false);
         emitMapPanelTelemetry("map_isochrone_previewed", {
@@ -211,7 +198,6 @@ export function useIsochronePreview({
         });
       } catch (requestError) {
         if (isIsochroneAbortError(requestError)) return;
-
         const text = isochroneErrorMessage(requestError);
         setError(text);
         emitMapPanelTelemetry("map_isochrone_failed", {
@@ -219,45 +205,25 @@ export function useIsochronePreview({
           projectId: context?.project?.id ?? null,
           organizationId: context?.organization?.id ?? null,
           source: "map-overlay",
-          code:
-            requestError &&
-            typeof requestError === "object" &&
-            "code" in requestError
-              ? String(requestError.code)
-              : "ISOCHRONE_CLIENT_ERROR",
+          code: requestError && typeof requestError === "object" && "code" in requestError
+            ? String(requestError.code)
+            : "ISOCHRONE_CLIENT_ERROR",
         });
       } finally {
-        if (requestRef.current === controller) {
-          requestRef.current = null;
-        }
+        if (requestRef.current === controller) requestRef.current = null;
         setBusy(false);
       }
     },
-    [
-      busy,
-      capabilities?.previewIsochrone,
-      commands,
-      context?.mode,
-      context?.organization?.id,
-      context?.project?.id,
-      pendingPoint,
-      preview,
-      projectSlug,
-    ],
+    [busy, capabilities?.previewIsochrone, commands, context?.mode, context?.organization?.id, context?.project?.id, pendingPoint, preview, projectSlug],
   );
 
   const discard = useCallback(() => {
     if (!preview) return false;
-
     const result = commands.removeTransientLayer(preview.dataId, "isochrone");
     if (!result.ok) {
-      setMessage({
-        tone: "error",
-        text: result.reason || "Não foi possível descartar a prévia.",
-      });
+      setMessage({ tone: "error", text: result.reason || "Não foi possível descartar a prévia." });
       return false;
     }
-
     emitMapPanelTelemetry("map_isochrone_discarded", {
       mode: context?.mode ?? null,
       projectId: context?.project?.id ?? null,
@@ -267,29 +233,43 @@ export function useIsochronePreview({
     setPreview(null);
     onMarkerReset();
     return true;
-  }, [
-    commands,
-    context?.mode,
-    context?.organization?.id,
-    context?.project?.id,
-    onMarkerReset,
-    preview,
-  ]);
+  }, [commands, context?.mode, context?.organization?.id, context?.project?.id, onMarkerReset, preview]);
 
   const keep = useCallback(() => {
-    if (!preview || !capabilities?.persistIsochrone) {
-      return false;
+    if (!preview || !capabilities?.persistIsochrone) return false;
+
+    if (context?.mode === "viewer" && capabilities.requestProjectChange === true) {
+      void requestViewerAnalysisOperation({
+        type: "isochrone.create",
+        payload: {
+          targetDataId: preview.dataId,
+          targetLayerId: `layer_${preview.dataId}`,
+          targetLabel: preview.label,
+          geojson: preview.geojson,
+          source: "analysis",
+          analysisKind: "isochrone",
+          parameters: {
+            origin: preview.origin,
+            metadata: preview.metadata,
+          },
+        },
+      }).then((result) => {
+        if (!result.ok) {
+          setMessage({ tone: "error", text: result.message || "Não foi possível adicionar a isócrona às alterações locais." });
+          return;
+        }
+        setPreview(null);
+        resetMarkerRef.current();
+        setMessage({ tone: "success", text: "Isócrona adicionada às alterações locais. Use Solicitar salvamento para enviar." });
+      });
+      return true;
     }
 
     const result = commands.markLayerPersistent(preview.dataId, "isochrone");
     if (!result.ok) {
-      setMessage({
-        tone: "error",
-        text: result.reason || "Não foi possível manter a isócrona no mapa.",
-      });
+      setMessage({ tone: "error", text: result.reason || "Não foi possível manter a isócrona no mapa." });
       return false;
     }
-
     emitMapPanelTelemetry("map_isochrone_kept", {
       mode: context?.mode ?? null,
       projectId: context?.project?.id ?? null,
@@ -298,19 +278,9 @@ export function useIsochronePreview({
     });
     setPreview(null);
     resetMarkerRef.current();
-    setMessage({
-      tone: "success",
-      text: "Isócrona mantida no mapa. Salve o projeto para gravar as alterações.",
-    });
+    setMessage({ tone: "success", text: "Isócrona mantida no mapa. Salve o projeto para gravar as alterações." });
     return true;
-  }, [
-    capabilities?.persistIsochrone,
-    commands,
-    context?.mode,
-    context?.organization?.id,
-    context?.project?.id,
-    preview,
-  ]);
+  }, [capabilities?.persistIsochrone, capabilities?.requestProjectChange, commands, context?.mode, context?.organization?.id, context?.project?.id, preview]);
 
   return {
     dialogOpen,
