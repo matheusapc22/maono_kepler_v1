@@ -22,11 +22,16 @@ import type {
   MapNavigationMode,
 } from "./types";
 
+function isReviewWorkspace(pathname: string) {
+  return /\/projects\/[^/]+\/review\/[^/]+\/?$/.test(pathname);
+}
+
 function requestedMode(pathname: string): MapNavigationMode {
   if (pathname === "/maps/new/create") return "create";
   if (pathname.endsWith("/create")) return "create";
   if (pathname.endsWith("/view")) return "viewer";
   if (pathname.endsWith("/edit")) return "editor";
+  if (isReviewWorkspace(pathname)) return "editor";
   return "manage";
 }
 
@@ -93,6 +98,42 @@ function isBlockedError(error: MapPanelApiError) {
   const status = Number(error?.status || 0);
 
   return status >= 400 && status < 500;
+}
+
+function reviewReadOnlyContext(context: MapPanelContextValue): MapPanelContextValue {
+  return {
+    ...context,
+    capabilities: {
+      ...context.capabilities,
+      configureTooltips: false,
+      placeAnalysisMarker: false,
+      createPoint: false,
+      previewIsochrone: false,
+      previewBuffer: false,
+      persistIsochrone: false,
+      persistBuffer: false,
+      removeIsochrone: false,
+      editLayers: false,
+      editStyle: false,
+      editLayerStyle: false,
+      createLayer: false,
+      addData: false,
+      importData: false,
+      removeLayer: false,
+      duplicateLayer: false,
+      reorderLayers: false,
+      manageFilters: false,
+      editFilters: false,
+      saveMap: false,
+      openCreateWorkspace: false,
+      createProject: false,
+      initializeMap: false,
+      editMetadata: false,
+      editProjectMetadata: false,
+      updateThumbnail: false,
+      requestProjectChange: false,
+    },
+  };
 }
 
 function legacyReadOnlyContext(): MapPanelContextValue {
@@ -191,6 +232,7 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
     projectSlug?: string;
     refreshToken: number;
   } | null>(null);
+  const reviewWorkspace = isReviewWorkspace(location.pathname);
   const mode = requestedMode(location.pathname);
   const organizationKey = activeOrganizationKey(activeOrganization, user);
   const isNewMap = location.pathname === "/maps/new/create";
@@ -274,17 +316,22 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        const resolvedContext = reviewWorkspace
+          ? reviewReadOnlyContext(context)
+          : context;
+
         setState({
           status: "ready",
-          context,
+          context: resolvedContext,
           error: null,
         });
         emitMapPanelTelemetry("map_panel_opened", {
-          mode: context.mode,
-          projectId: context.project?.id ?? null,
-          organizationId: context.organization?.id ?? null,
-          defaultPanel: context.defaultPanel,
-          policyVersion: context.policyVersion,
+          mode: resolvedContext.mode,
+          projectId: resolvedContext.project?.id ?? null,
+          organizationId: resolvedContext.organization?.id ?? null,
+          defaultPanel: resolvedContext.defaultPanel,
+          policyVersion: resolvedContext.policyVersion,
+          reviewWorkspace,
         });
       })
       .catch((error: MapPanelApiError) => {
@@ -297,7 +344,14 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
       });
 
     return () => controller.abort();
-  }, [isNewMap, mode, organizationKey, projectSlug, refreshToken]);
+  }, [
+    isNewMap,
+    mode,
+    organizationKey,
+    projectSlug,
+    refreshToken,
+    reviewWorkspace,
+  ]);
 
   const refresh = useCallback(() => {
     setRefreshToken((current) => current + 1);
