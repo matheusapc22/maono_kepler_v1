@@ -186,7 +186,7 @@ async function loadProjectConfig(
         config: loadedConfig.config,
         options: {
           centerMap: false,
-          readOnly,
+          readOnly: readOnly,
         },
       }),
     );
