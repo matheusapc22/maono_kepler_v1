@@ -8,6 +8,7 @@ import Spinner from "../../../components/Spinner";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
 import { loadReviewBaseProjectConfig } from "../change-requests/review-base-config-client";
+import { cacheProjectChangeReviewProjection } from "../change-requests/review-api";
 import { materializeProjectChangeReviewProjections } from "../change-requests/review-operation-projection";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 import {
@@ -151,6 +152,11 @@ async function loadProjectConfig(
         operationCount: projected.length,
         operations: projected,
       };
+      cacheProjectChangeReviewProjection(
+        projectSlug,
+        changeRequestId,
+        projected,
+      );
     }
 
     if (loaded.sizeBytes >= LARGE_CONFIG_UI_YIELD_BYTES) {
