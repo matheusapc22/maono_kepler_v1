@@ -16,6 +16,10 @@ import {
   validateFrozenAnalysisOperation,
 } from "./project-change-request-analysis-operations.js";
 import {
+  isLayerLifecycleOperation,
+  validateLayerLifecycleOperation,
+} from "./project-change-request-layer-lifecycle-operations.js";
+import {
   isPersistentVisualizationOperation,
   validatePersistentVisualizationOperation,
 } from "./project-change-request-visualization-operations.js";
@@ -73,6 +77,10 @@ function normalizeAnalysisOperation(operation, index) {
   return normalizedExtendedOperation(operation, index, validateFrozenAnalysisOperation);
 }
 
+function normalizeLifecycleOperation(operation, index) {
+  return normalizedExtendedOperation(operation, index, validateLayerLifecycleOperation);
+}
+
 function normalizeVisualizationOperation(operation, index) {
   return normalizedExtendedOperation(operation, index, validatePersistentVisualizationOperation);
 }
@@ -96,6 +104,9 @@ export function normalizeAnalysisAwareChangeRequestSubmission(input) {
     operations: operations.map((operation, index) => {
       if (isFrozenAnalysisOperation(operation)) {
         return normalizeAnalysisOperation(operation, index);
+      }
+      if (isLayerLifecycleOperation(operation)) {
+        return normalizeLifecycleOperation(operation, index);
       }
       if (isPersistentVisualizationOperation(operation)) {
         return normalizeVisualizationOperation(operation, index);
