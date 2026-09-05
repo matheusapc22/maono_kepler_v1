@@ -1,6 +1,6 @@
+import { ProjectChangeRequestApiError } from "./change-request-api";
 import {
   getProjectChangeReview,
-  ProjectChangeRequestApiError,
   type ProjectChangeReview,
 } from "./review-api";
 
@@ -201,7 +201,7 @@ export async function loadReviewBaseProjectConfig(
         schemaVersion: review.base.schemaVersion ?? 1,
         sizeBytes: review.base.delivery.sizeBytes,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       if (signal.aborted) throw error;
       lastError = error;
       const retryable =
