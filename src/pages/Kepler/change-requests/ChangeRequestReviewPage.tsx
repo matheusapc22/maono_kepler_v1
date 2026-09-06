@@ -7,12 +7,17 @@ import {
 } from "react";
 import {
   addFilter as addKeplerFilter,
+  interactionConfigChange,
   layerConfigChange,
+  layerTypeChange,
   layerVisConfigChange,
+  layerVisualChannelConfigChange,
   removeFilter as removeKeplerFilter,
   reorderLayer as reorderKeplerLayer,
   setFilter,
+  updateLayerBlending,
   updateMap,
+  updateOverlayBlending,
   wrapTo,
 } from "@kepler.gl/actions";
 import { useDispatch, useSelector, useStore } from "react-redux";
@@ -23,16 +28,19 @@ import {
   markerOriginToScreen,
   type MapCanvasRect,
 } from "../components/map-overlay/marker-projection";
+import { keplerColumnsFromSnapshot } from "../engine-adapter/layer-management";
 import {
   KEPLER_MAP_ID,
   collectionToArray,
+  findRawDataset,
   findRawLayer,
+  normalizeKeplerDatasets,
   normalizeKeplerViewport,
   readValue,
   selectKeplerViewportState,
   selectKeplerVisState,
 } from "../engine-adapter/selectors";
-import type { MapViewportSummary } from "../engine-adapter/types";
+import type { MapLayerColumns, MapViewportSummary } from "../engine-adapter/types";
 import {
   applyProjectChangeReview,
   changeProjectChangeReviewState,
@@ -75,9 +83,12 @@ const PERSISTENT_VISUAL_TYPES = new Set<ReviewOperationProjection["type"]>([
   "layer.create",
   "layer.duplicate",
   "layer.remove",
+  "layer.definition.update",
   "layer.visibility.update",
   "persistent.filter.update",
   "layer.order.update",
+  "tooltip.config.update",
+  "map.blending.update",
 ]);
 
 function safeMessage(error: unknown) {
@@ -98,10 +109,14 @@ function mapSurfaceRect(): MapCanvasRect | null {
   };
 }
 
-function record(value: unknown): Record<string, unknown> | null {
+function record(value: unknown): Record<string, any> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? (value as Record<string, any>)
     : null;
+}
+
+function text(value: unknown) {
+  return String(value ?? "").trim();
 }
 
 function styleSnapshot(
@@ -118,9 +133,12 @@ function operationTitle(type: ReviewOperationProjection["type"]) {
   if (type === "layer.duplicate") return "Duplicar camada";
   if (type === "layer.remove") return "Remover camada";
   if (type === "layer.style.update") return "Alterar estilo";
+  if (type === "layer.definition.update") return "Alterar configuração da camada";
   if (type === "layer.visibility.update") return "Alterar visibilidade";
   if (type === "persistent.filter.update") return "Alterar filtro";
   if (type === "layer.order.update") return "Reordenar camadas";
+  if (type === "tooltip.config.update") return "Alterar tooltip";
+  if (type === "map.blending.update") return "Alterar composição visual";
   if (type === "buffer.create") return "Criar Buffer";
   if (type === "isochrone.create") return "Criar Isócrona";
   return "Criar ponto";
@@ -167,8 +185,9 @@ function displayPersistentValue(value: unknown) {
   if (source) {
     const fields = Array.isArray(source.fieldNames)
       ? source.fieldNames.map(String).join(", ")
-      : "Filtro";
+      : "Configuração";
     const raw = source.value;
+    if (raw === undefined) return fields;
     const rendered = Array.isArray(raw)
       ? raw.map(String).join(" – ")
       : String(raw ?? "—");
@@ -334,6 +353,209 @@ function applyReviewPersistentVisualization(
   dispatch(wrapTo(KEPLER_MAP_ID, setFilter(index, "enabled", snapshot.enabled)));
 }
 
+function rawDatasetField(rootState: unknown, dataId: string, fieldName: string) {
+  if (!dataId || !fieldName) return null;
+  const dataset = findRawDataset(rootState, dataId);
+  const fields = collectionToArray<any>(
+    readValue(dataset, "fields") ?? readValue(readValue(dataset, "data"), "fields"),
+  );
+  return (
+    fields.find(
+      (field) => String(readValue(field, "name") || "") === fieldName,
+    ) || null
+  );
+}
+
+function mapColumns(rootState: unknown, dataId: string, value: unknown) {
+  const source = record(value) || {};
+  const visState = selectKeplerVisState(rootState);
+  const dataset = normalizeKeplerDatasets(readValue(visState, "datasets")).find(
+    (candidate) => candidate.id === dataId,
+  );
+  if (!dataset) return null;
+  const columns: MapLayerColumns = {
+    latitude: text(source.latitude) || null,
+    longitude: text(source.longitude) || null,
+    geojson: text(source.geojson) || null,
+    altitude: text(source.altitude) || null,
+  };
+  return keplerColumnsFromSnapshot(columns, dataset);
+}
+
+function applyReviewCoverageMutation(
+  dispatch: ReturnType<typeof useDispatch>,
+  rootState: unknown,
+  operation: ReviewOperationProjection,
+  mode: "before" | "after",
+) {
+  const properties = record(operation.properties) || {};
+  const snapshot = record(properties[mode]);
+  if (!snapshot) return;
+
+  if (operation.type === "layer.definition.update" && operation.target.layerId) {
+    const layer = findRawLayer(rootState, operation.target.layerId);
+    if (!layer) return;
+    const type = text(snapshot.type).toLowerCase();
+    const dataIds = Array.isArray(snapshot.dataIds) ? snapshot.dataIds.map(String) : [];
+    const dataId = text(dataIds[0]);
+    if (type && String(readValue(layer, "type") || "").toLowerCase() !== type) {
+      dispatch(wrapTo(KEPLER_MAP_ID, layerTypeChange(layer, type as any)));
+    }
+
+    const configPatch: Record<string, unknown> = {};
+    if (dataId) configPatch.dataId = dataId;
+    if (text(snapshot.label)) configPatch.label = text(snapshot.label);
+    const columns = dataId ? mapColumns(rootState, dataId, snapshot.columns) : null;
+    if (columns) configPatch.columns = columns;
+    if (Object.keys(configPatch).length) {
+      dispatch(wrapTo(KEPLER_MAP_ID, layerConfigChange(layer, configPatch)));
+    }
+
+    const colorFieldName = text(snapshot.colorField);
+    const colorField = colorFieldName
+      ? rawDatasetField(rootState, dataId, colorFieldName)
+      : null;
+    dispatch(
+      wrapTo(
+        KEPLER_MAP_ID,
+        layerVisualChannelConfigChange(
+          layer,
+          {
+            colorField,
+            ...(colorField && text(snapshot.colorScale)
+              ? { colorScale: text(snapshot.colorScale) }
+              : {}),
+          } as any,
+          "color",
+        ),
+      ),
+    );
+
+    const strokeFieldName = text(snapshot.strokeColorField);
+    const strokeField = strokeFieldName
+      ? rawDatasetField(rootState, dataId, strokeFieldName)
+      : null;
+    if (strokeFieldName || snapshot.strokeColorField === null) {
+      dispatch(
+        wrapTo(
+          KEPLER_MAP_ID,
+          layerVisualChannelConfigChange(
+            layer,
+            {
+              strokeColorField: strokeField,
+              ...(strokeField && text(snapshot.strokeColorScale)
+                ? { strokeColorScale: text(snapshot.strokeColorScale) }
+                : {}),
+            } as any,
+            "strokeColor",
+          ),
+        ),
+      );
+    }
+
+    const radiusFieldName = text(snapshot.radiusField);
+    const radiusField = radiusFieldName
+      ? rawDatasetField(rootState, dataId, radiusFieldName)
+      : null;
+    if (radiusFieldName || snapshot.radiusField === null) {
+      const key = type === "geojson" ? "radiusField" : "sizeField";
+      const channel = type === "geojson" ? "radius" : "size";
+      dispatch(
+        wrapTo(
+          KEPLER_MAP_ID,
+          layerVisualChannelConfigChange(
+            layer,
+            { [key]: radiusField } as any,
+            channel,
+          ),
+        ),
+      );
+    }
+
+    const visPatch: Record<string, unknown> = {};
+    const colorPalette = Array.isArray(snapshot.colorPalette)
+      ? snapshot.colorPalette.map(String)
+      : [];
+    if (colorPalette.length >= 2) {
+      visPatch.colorRange = {
+        name: `maono:${text(snapshot.colorPaletteId) || "custom"}`,
+        type: "sequential",
+        category: "Maõno",
+        colors: colorPalette,
+      };
+    }
+    const strokePalette = Array.isArray(snapshot.strokeColorPalette)
+      ? snapshot.strokeColorPalette.map(String)
+      : [];
+    if (strokePalette.length >= 2) {
+      visPatch.strokeColorRange = {
+        name: `maono:${text(snapshot.strokeColorPaletteId) || "custom"}`,
+        type: "sequential",
+        category: "Maõno",
+        colors: strokePalette,
+      };
+    }
+    if (Array.isArray(snapshot.radiusRange) && snapshot.radiusRange.length === 2) {
+      visPatch.radiusRange = snapshot.radiusRange.map(Number);
+    }
+    if (Object.keys(visPatch).length) {
+      dispatch(
+        wrapTo(
+          KEPLER_MAP_ID,
+          layerVisConfigChange(layer, visPatch as Parameters<typeof layerVisConfigChange>[1]),
+        ),
+      );
+    }
+    return;
+  }
+
+  if (operation.type === "tooltip.config.update") {
+    const visState = selectKeplerVisState(rootState);
+    const interactionConfig = readValue(visState, "interactionConfig");
+    const tooltip = readValue(interactionConfig, "tooltip");
+    const tooltipConfig = readValue(tooltip, "config") || {};
+    const rawFields = record(snapshot.fieldsByDataset) || {};
+    const fieldsToShow = Object.fromEntries(
+      Object.entries(rawFields).map(([dataId, values]) => [
+        dataId,
+        Array.isArray(values)
+          ? values.flatMap((value) => {
+              const item = record(value);
+              const name = text(item?.name);
+              return name
+                ? [{ name, format: item?.format == null ? null : String(item.format) }]
+                : [];
+            })
+          : [],
+      ]),
+    );
+    dispatch(
+      wrapTo(
+        KEPLER_MAP_ID,
+        interactionConfigChange({
+          ...(typeof tooltip?.toJS === "function" ? tooltip.toJS() : tooltip || {}),
+          id: String(readValue(tooltip, "id") ?? "tooltip"),
+          enabled: snapshot.enabled !== false,
+          config: {
+            ...(typeof tooltipConfig?.toJS === "function"
+              ? tooltipConfig.toJS()
+              : tooltipConfig),
+            fieldsToShow,
+          },
+        }),
+      ),
+    );
+    return;
+  }
+
+  if (operation.type === "map.blending.update") {
+    const layers = text(snapshot.layers);
+    const overlays = text(snapshot.overlays);
+    if (layers) dispatch(wrapTo(KEPLER_MAP_ID, updateLayerBlending(layers as any)));
+    if (overlays) dispatch(wrapTo(KEPLER_MAP_ID, updateOverlayBlending(overlays as any)));
+  }
+}
+
 function ReviewMarkerLayer({
   operations,
   selectedId,
@@ -469,6 +691,7 @@ function ReviewWorkspaceOverlay({
         compareMode,
         reviewFilterIndexesRef.current,
       );
+      applyReviewCoverageMutation(dispatch, store.getState(), operation, compareMode);
     }
   }, [compareMode, dispatch, operations, store]);
 
