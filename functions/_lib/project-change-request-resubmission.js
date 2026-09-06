@@ -1,5 +1,6 @@
 import { requireSession } from "./auth.js";
 import { publicRequestLifecycle } from "./project-change-request-lifecycle.js";
+import { isChangeRequestResubmissionSchemaReady } from "./project-change-request-stack-readiness.js";
 import {
   buildChangeRequestSubmissionHash,
   ensureProjectChangeRequestSchema,
@@ -68,13 +69,9 @@ async function requireViewerProject(env, request, slug) {
 
 export async function ensureChangeRequestResubmissionSchema(env) {
   await ensureProjectChangeRequestSchema(env);
-  const columns = await getDb(env)
-    .prepare("PRAGMA table_info(project_change_requests)")
-    .all();
-  const names = new Set((columns?.results || []).map((column) => column.name));
-  if (!names.has("resubmitted_from_request_id")) {
+  if (!(await isChangeRequestResubmissionSchemaReady(env))) {
     throw domainError(
-      "A migration 0023_change_request_resubmissions.sql precisa ser aplicada antes de usar resubmissões.",
+      "A migration 0023_change_request_resubmissions.sql precisa ser aplicada integralmente antes de usar resubmissões.",
       503,
       "CHANGE_REQUEST_RESUBMISSION_SCHEMA_OUTDATED",
     );
