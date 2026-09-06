@@ -1,0 +1,52 @@
+name: PR147 Preview QA configuration
+
+on:
+  push:
+    branches: [ops/change-request-147-preview-config]
+    paths:
+      - .github/workflows/pr147-preview-config.yml
+      - docs/operations/pr147-preview-qa-config.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-request-d1-rollout
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Preview environment fail-closed and verify binding
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/maono-kepler-v1"
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+
+          before="$(curl --fail-with-body --silent --show-error "$api" -H "$auth")"
+          before_db="$(jq -r '.result.deployment_configs.preview.d1_databases.DB.id // empty' <<<"$before")"
+          prod_db="$(jq -r '.result.deployment_configs.production.d1_databases.DB.id // empty' <<<"$before")"
+          test -n "$before_db" && test "$before_db" = "$prod_db"
+
+          response="$(curl --fail-with-body --silent --show-error -X PATCH "$api" \
+            -H "$auth" -H 'Content-Type: application/json' \
+            --data-binary @docs/operations/pr147-preview-qa-config.json)"
+          jq -e '.success == true' <<<"$response" >/dev/null
+
+          after="$(curl --fail-with-body --silent --show-error "$api" -H "$auth")"
+          after_db="$(jq -r '.result.deployment_configs.preview.d1_databases.DB.id // empty' <<<"$after")"
+          test "$after_db" = "$before_db" && test "$after_db" = "$prod_db"
+          jq -e '
+            .result.deployment_configs.preview.env_vars.MAONO_RUNTIME_ENV.value == "preview" and
+            .result.deployment_configs.preview.env_vars.MAONO_PREVIEW_MUTATIONS_ENABLED.value == "false" and
+            .result.deployment_configs.preview.env_vars.MAONO_PREVIEW_QA_ORG_ID.value == "9" and
+            .result.deployment_configs.preview.env_vars.MAONO_PREVIEW_QA_ORG_SLUG.value == "maono-preview-qa"
+          ' <<<"$after" >/dev/null
+          echo 'Preview QA environment configured fail-closed; DB binding preserved.'
