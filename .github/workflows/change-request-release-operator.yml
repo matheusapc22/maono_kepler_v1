@@ -72,11 +72,23 @@ jobs:
     needs: authorize
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      release_sha: ${{ steps.pin.outputs.sha }}
     steps:
       - name: Checkout audited release branch
         uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_REF }}
+
+      - name: Pin audited release SHA
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Validated release SHA: $sha" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -116,11 +128,20 @@ jobs:
       MAONO_ACCEPTANCE_QA_PROJECT_SLUG: ${{ inputs.qa_project_slug }}
       MAONO_RELEASE_GATE_APPLY_STALE_MINUTES: ${{ inputs.stale_apply_minutes }}
       WRANGLER_SEND_METRICS: "false"
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
     steps:
-      - name: Checkout audited release branch
+      - name: Checkout validated release SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Refuse release branch drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -153,11 +174,20 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       MAONO_PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
       MAONO_PRODUCTION_BASE_URL: ${{ inputs.production_base_url }}
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
     steps:
-      - name: Checkout audited release branch
+      - name: Checkout validated release SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Refuse release branch drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
 
       - name: Setup Node
         uses: actions/setup-node@v4
