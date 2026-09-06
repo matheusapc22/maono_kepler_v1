@@ -9,9 +9,13 @@ on:
       - ".github/workflows/change-request-production-acceptance.yml"
       - "functions/_lib/project-change-request-*.js"
       - "functions/api/health.js"
+      - "scripts/operations/change-request-release-migrations.mjs"
       - "scripts/operations/change-request-release-observability.mjs"
+      - "scripts/preview/change-request-qa-identity-preflight.mjs"
       - "scripts/preview/change-request-production-acceptance.mjs"
+      - "tests/change-request-release-migrations.test.mjs"
       - "tests/change-request-release-gate.test.mjs"
+      - "tests/change-request-qa-identity-preflight.test.mjs"
       - "tests/viewer-request-tracking-runtime.test.mjs"
       - "docs/operations/change-request-production-release-gate.md"
   workflow_dispatch:
@@ -64,7 +68,9 @@ jobs:
       - name: Validate release gate contracts
         run: >-
           node --test
+          tests/change-request-release-migrations.test.mjs
           tests/change-request-release-gate.test.mjs
+          tests/change-request-qa-identity-preflight.test.mjs
           tests/viewer-request-tracking-runtime.test.mjs
           tests/project-change-request-lifecycle.test.mjs
           tests/change-request-large-apply.test.mjs
@@ -102,6 +108,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Verify distinct Viewer and Reviewer identities
+        run: node scripts/preview/change-request-qa-identity-preflight.mjs
 
       - name: Pre-acceptance observability
         env:
