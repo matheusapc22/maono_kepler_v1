@@ -8,6 +8,11 @@ import {
   validateViewerLayerVisibilityPayload,
   validateViewerPersistentFilterPayload,
 } from "./viewer-persistent-visualization.ts";
+import {
+  validateViewerLayerDefinitionPayload,
+  validateViewerMapBlendingPayload,
+  validateViewerTooltipPayload,
+} from "./viewer-persistent-mutations.ts";
 export type {
   ViewerLayerCreatePayload,
   ViewerLayerDuplicatePayload,
@@ -20,6 +25,14 @@ export type {
   ViewerPersistentFilterSnapshot,
   ViewerPersistentFilterUpdatePayload,
 } from "./viewer-persistent-visualization.ts";
+export type {
+  ViewerLayerDefinitionSnapshot,
+  ViewerLayerDefinitionUpdatePayload,
+  ViewerMapBlendingSnapshot,
+  ViewerMapBlendingUpdatePayload,
+  ViewerTooltipConfigUpdatePayload,
+  ViewerTooltipSnapshot,
+} from "./viewer-persistent-mutations.ts";
 
 export type ViewerChangeOperation = {
   id: string;
@@ -306,6 +319,10 @@ export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryE
       version: 1,
       validate: validateLayerStyleUpdate,
     }),
+    "layer.definition.update": Object.freeze({
+      version: 1,
+      validate: validateViewerLayerDefinitionPayload,
+    }),
     "layer.visibility.update": Object.freeze({
       version: 1,
       validate: validateViewerLayerVisibilityPayload,
@@ -317,6 +334,14 @@ export const viewerOperationRegistry: Readonly<Record<string, OperationRegistryE
     "layer.order.update": Object.freeze({
       version: 1,
       validate: validateViewerLayerOrderPayload,
+    }),
+    "tooltip.config.update": Object.freeze({
+      version: 1,
+      validate: validateViewerTooltipPayload,
+    }),
+    "map.blending.update": Object.freeze({
+      version: 1,
+      validate: validateViewerMapBlendingPayload,
     }),
     "buffer.create": Object.freeze({
       version: 1,
