@@ -3,7 +3,7 @@ name: Change Request D1 rollout preflight
 on:
   workflow_dispatch:
   push:
-    branches: [feat/change-requests-ticket-lifecycle]
+    branches: [feat/change-requests-ticket-lifecycle, ops/change-request-0021-rollout]
     paths:
       - .github/workflows/change-request-d1-preflight.yml
       - scripts/operations/change-request-d1-preflight.mjs
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   preflight:
-    if: github.repository == 'matheusapc22/maono_kepler_v1' && github.ref == 'refs/heads/feat/change-requests-ticket-lifecycle'
+    if: github.repository == 'matheusapc22/maono_kepler_v1' && (github.ref == 'refs/heads/feat/change-requests-ticket-lifecycle' || github.ref == 'refs/heads/ops/change-request-0021-rollout')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -25,9 +25,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify D1 target and migration ledger (read-only)
+      - name: Validate lifecycle invariants before remote access
+        run: node --test tests/project-change-request-lifecycle.test.mjs
+      - name: Verify D1 target and execute explicitly selected rollout
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MAONO_APPLY_0021: ${{ github.ref == 'refs/heads/ops/change-request-0021-rollout' }}
           WRANGLER_SEND_METRICS: 'false'
         run: node scripts/operations/change-request-d1-preflight.mjs
