@@ -1,0 +1,168 @@
+name: Change Request release operator
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Etapa operacional permitida"
+        required: true
+        type: choice
+        options:
+          - acceptance
+          - closure
+      confirmation:
+        description: "Acceptance: RUN_QA_CHANGE_REQUEST_ACCEPTANCE | Closure: VERIFY_QA_CHANGE_REQUEST_CLOSED"
+        required: true
+        type: string
+      preview_base_url:
+        description: "Origin HTTPS do deployment Preview integrado"
+        required: true
+        type: string
+      production_base_url:
+        description: "Origin HTTPS de Production"
+        required: true
+        type: string
+      qa_project_slug:
+        description: "Somente acceptance: projeto descartável qa-smoke-* em Maõno Preview QA"
+        required: false
+        type: string
+      stale_apply_minutes:
+        description: "Idade máxima tolerada para Change Request em applying"
+        required: false
+        default: "30"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-request-d1-rollout
+  cancel-in-progress: false
+
+env:
+  RELEASE_REF: ops/change-request-release-acceptance
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate explicit operator confirmation
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          QA_PROJECT_SLUG: ${{ inputs.qa_project_slug }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            acceptance)
+              test "$CONFIRMATION" = "RUN_QA_CHANGE_REQUEST_ACCEPTANCE"
+              [[ "$QA_PROJECT_SLUG" =~ ^qa-smoke-[a-z0-9-]{3,80}$ ]]
+              ;;
+            closure)
+              test "$CONFIRMATION" = "VERIFY_QA_CHANGE_REQUEST_CLOSED"
+              ;;
+            *)
+              exit 2
+              ;;
+          esac
+
+  validate:
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout audited release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Validate release contracts
+        run: >-
+          node --test
+          tests/change-request-release-gate.test.mjs
+          tests/change-request-release-closure.test.mjs
+          tests/project-change-request-lifecycle.test.mjs
+          tests/change-request-large-apply.test.mjs
+          tests/project-change-request-resubmission.test.mjs
+
+      - name: Preview safety remains fail-closed
+        run: node scripts/preview/assert-preview-safety.mjs
+
+      - name: Build audited release branch
+        run: npm run build
+
+  acceptance:
+    if: inputs.mode == 'acceptance'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MAONO_PREVIEW_VIEWER_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_VIEWER_SESSION_COOKIE }}
+      MAONO_PREVIEW_REVIEWER_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_REVIEWER_SESSION_COOKIE }}
+      MAONO_PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
+      MAONO_PRODUCTION_BASE_URL: ${{ inputs.production_base_url }}
+      MAONO_ACCEPTANCE_QA_PROJECT_SLUG: ${{ inputs.qa_project_slug }}
+      MAONO_RELEASE_GATE_APPLY_STALE_MINUTES: ${{ inputs.stale_apply_minutes }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Checkout audited release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pre-acceptance observability
+        env:
+          MAONO_RELEASE_GATE_PHASE: pre
+          MAONO_REQUIRE_PREVIEW_MUTATIONS_ENABLED: "true"
+        run: node scripts/operations/change-request-release-observability.mjs
+
+      - name: Authenticated Viewer and Reviewer acceptance
+        run: node scripts/preview/change-request-production-acceptance.mjs
+
+      - name: Post-acceptance observability
+        if: success()
+        env:
+          MAONO_RELEASE_GATE_PHASE: post
+          MAONO_REQUIRE_PREVIEW_MUTATIONS_ENABLED: "true"
+        run: node scripts/operations/change-request-release-observability.mjs
+
+  closure:
+    if: inputs.mode == 'closure'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MAONO_PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
+      MAONO_PRODUCTION_BASE_URL: ${{ inputs.production_base_url }}
+    steps:
+      - name: Checkout audited release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify Preview returned fail-closed
+        run: node scripts/operations/change-request-release-closure.mjs
