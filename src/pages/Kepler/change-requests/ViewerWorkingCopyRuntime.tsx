@@ -25,13 +25,12 @@ type Props = {
  */
 export default function ViewerWorkingCopyRuntime(props: Props) {
   const coordinatedStore = coordinateViewerWorkingCopyStore(props.store);
-  const coordinatedProps = { ...props, store: coordinatedStore };
 
   return (
     <>
-      <ViewerWorkingCopyRuntimeLegacy {...coordinatedProps} />
-      <ViewerPersistentMutationRuntime {...coordinatedProps} />
-      <ViewerRequestTrackingRuntime {...coordinatedProps} />
+      <ViewerWorkingCopyRuntimeLegacy {...props} store={coordinatedStore} />
+      <ViewerPersistentMutationRuntime {...props} store={coordinatedStore} />
+      <ViewerRequestTrackingRuntime {...props} store={coordinatedStore} />
     </>
   );
 }
