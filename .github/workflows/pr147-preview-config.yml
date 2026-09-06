@@ -2,7 +2,7 @@ name: PR147 Preview QA configuration
 
 on:
   push:
-    branches: [ops/change-request-147-preview-config]
+    branches: [feat/change-requests-ticket-lifecycle]
     paths:
       - .github/workflows/pr147-preview-config.yml
       - docs/operations/pr147-preview-qa-config.json
