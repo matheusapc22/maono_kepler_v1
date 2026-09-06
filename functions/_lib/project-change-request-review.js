@@ -1,3 +1,4 @@
+import { ensureChangeRequestLifecycleSchema, publicRequestLifecycle, transitionRequestLifecycle } from "./project-change-request-lifecycle.js";
 import { requireSession } from "./auth.js";
 import { can, recordAuditLog } from "./permissions.js";
 import { getAuthorizedProject } from "./projects.js";
@@ -78,6 +79,7 @@ function projectContext(project) {
 
 function publicChangeRequest(row, operations = undefined) {
   const result = {
+    ...publicRequestLifecycle(row),
     id: row.id,
     organizationId: Number(row.organization_id),
     projectId: Number(row.project_id),
@@ -306,20 +308,8 @@ async function buildWorkspace(env, request, context) {
   };
 }
 
-async function transitionStatus(db, row, fromStatuses, nextStatus) {
-  const expected = Array.isArray(fromStatuses) ? fromStatuses : [fromStatuses];
-  if (row.status === nextStatus) return row;
-  if (!expected.includes(row.status)) return null;
-  const placeholders = expected.map(() => "?").join(", ");
-  return db
-    .prepare(
-      `UPDATE project_change_requests
-          SET status = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND project_id = ? AND status IN (${placeholders})
-        RETURNING *`,
-    )
-    .bind(nextStatus, row.id, row.project_id, ...expected)
-    .first();
+async function transitionStatus(db, row, fromStatuses, nextStatus, options = {}) {
+  return transitionRequestLifecycle(db, row, fromStatuses, nextStatus, options);
 }
 
 async function reloadRow(db, row) {
@@ -344,37 +334,6 @@ function isSamePublishedProposal(head, baseRevision, checksum) {
       Number(head.config_revision || 0) === Number(baseRevision) + 1 &&
       text(head.config_checksum).toLowerCase() === text(checksum).toLowerCase(),
   );
-}
-
-async function safeTicketEvent(db, row, actor, eventType, metadata = {}) {
-  if (!row.ticket_id) return;
-  try {
-    await db
-      .prepare(
-        `INSERT INTO ticket_events (
-           organization_id, ticket_id, event_type, actor_user_id, metadata
-         ) VALUES (?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        row.organization_id,
-        row.ticket_id,
-        eventType,
-        actor?.id ?? null,
-        JSON.stringify({
-          source: "project_change_request_review",
-          changeRequestId: row.id,
-          projectId: row.project_id,
-          baseRevision: Number(row.base_revision || 0),
-          ...metadata,
-        }),
-      )
-      .run();
-  } catch (error) {
-    console.warn(
-      "[Maono change request review] Falha ao registrar evento do ticket:",
-      error?.message || error,
-    );
-  }
 }
 
 async function safeAudit(
@@ -414,24 +373,16 @@ async function safeAudit(
 async function ensureUnderReview(env, request, context) {
   let row = context.row;
   if (row.status !== "submitted") return row;
-  const updated = await transitionStatus(context.db, row, "submitted", "under_review");
+  const updated = await transitionStatus(context.db, row, "submitted", "under_review", { actor: context.user });
   row = updated || (await reloadRow(context.db, row));
   if (updated && row?.status === "under_review") {
-    await Promise.all([
-      safeTicketEvent(
-        context.db,
-        row,
-        context.user,
-        "project.change_request.review_started",
-      ),
-      safeAudit(
-        env,
-        request,
-        row,
-        context.user,
-        "project.change_request.review_started",
-      ),
-    ]);
+    await safeAudit(
+      env,
+      request,
+      row,
+      context.user,
+      "project.change_request.review_started",
+    );
   }
   return row;
 }
@@ -453,24 +404,19 @@ async function ensureApproved(env, request, context) {
       { status: row.status },
     );
   }
-  const updated = await transitionStatus(context.db, row, "under_review", "approved");
+  const updated = await transitionStatus(context.db, row, "under_review", "approved", { actor: context.user, feedback: context.decisionFeedback });
   row = updated || (await reloadRow(context.db, row));
   if (updated && row?.status === "approved") {
-    await Promise.all([
-      safeTicketEvent(
-        context.db,
-        row,
-        context.user,
-        "project.change_request.approved",
-      ),
-      safeAudit(
-        env,
-        request,
-        row,
-        context.user,
-        "project.change_request.approved",
-      ),
-    ]);
+    await safeAudit(
+      env,
+      request,
+      row,
+      context.user,
+      "project.change_request.approved",
+    );
+  }
+  if (!["approved", "applying", "applied"].includes(row?.status)) {
+    throw reviewError("A solicitação mudou durante a aprovação.", 409, "CHANGE_REQUEST_REVIEW_STATE_CONFLICT");
   }
   return row;
 }
@@ -481,30 +427,19 @@ async function markConflict(env, request, context, row, error, details = {}) {
     row,
     ["under_review", "approved", "applying"],
     "conflict",
+    { actor: context.user },
   );
   const current = updated || (await reloadRow(context.db, row));
-  if (!updated && current?.status !== "conflict") return current;
-  await Promise.all([
-    safeTicketEvent(
-      context.db,
-      current || row,
-      context.user,
-      "project.change_request.conflict",
-      {
-        code: error?.code || "CHANGE_REQUEST_REVIEW_CONFLICT",
-        ...details,
-      },
-    ),
-    safeAudit(
-      env,
-      request,
-      current || row,
-      context.user,
-      "project.change_request.conflict",
-      { code: error?.code || "CHANGE_REQUEST_REVIEW_CONFLICT", ...details },
-      "conflict",
-    ),
-  ]);
+  if (!updated) return current;
+  await safeAudit(
+    env,
+    request,
+    current || row,
+    context.user,
+    "project.change_request.conflict",
+    { code: error?.code || "CHANGE_REQUEST_REVIEW_CONFLICT", ...details },
+    "conflict",
+  );
   return current;
 }
 
@@ -522,6 +457,8 @@ export async function reviewProjectChangeRequestAction(
 ) {
   const action = text(input?.action).toLowerCase();
   const context = await requireReviewerChangeRequest(env, request, slug, requestId);
+  await ensureChangeRequestLifecycleSchema(env);
+  context.decisionFeedback = text(input?.comment) || null;
 
   if (action === "start") {
     context.row = await ensureUnderReview(env, request, context);
@@ -529,6 +466,10 @@ export async function reviewProjectChangeRequestAction(
   }
 
   if (action === "approve") {
+    if (context.row.decision === "approved" && input?.comment != null &&
+        (context.row.feedback || "") !== text(input.comment)) {
+      throw reviewError("A aprovação já foi registrada com outro feedback.", 409, "CHANGE_REQUEST_DECISION_CONFLICT");
+    }
     const conflict = revisionConflict(context.row, context.project);
     if (conflict) {
       throw reviewError(
@@ -551,6 +492,9 @@ export async function reviewProjectChangeRequestAction(
         "CHANGE_REQUEST_REJECTION_REASON_REQUIRED",
       );
     }
+    if (context.row.status === "rejected" && context.row.feedback === comment) {
+      return buildWorkspace(env, request, context);
+    }
     if (!["submitted", "under_review"].includes(context.row.status)) {
       throw reviewError(
         "A solicitação não está em estado compatível com rejeição.",
@@ -564,9 +508,10 @@ export async function reviewProjectChangeRequestAction(
       context.row,
       ["submitted", "under_review"],
       "rejected",
+      { actor: context.user, feedback: comment },
     );
     context.row = updated || (await reloadRow(context.db, context.row));
-    if (context.row?.status !== "rejected") {
+    if (context.row?.status !== "rejected" || context.row.feedback !== comment) {
       throw reviewError(
         "A solicitação mudou enquanto a rejeição era processada.",
         409,
@@ -575,23 +520,14 @@ export async function reviewProjectChangeRequestAction(
       );
     }
     if (updated) {
-      await Promise.all([
-        safeTicketEvent(
-          context.db,
-          context.row,
-          context.user,
-          "project.change_request.rejected",
-          { comment: comment.slice(0, 2000) },
-        ),
-        safeAudit(
-          env,
-          request,
-          context.row,
-          context.user,
-          "project.change_request.rejected",
-          { commentPresent: true },
-        ),
-      ]);
+      await safeAudit(
+        env,
+        request,
+        context.row,
+        context.user,
+        "project.change_request.rejected",
+        { commentPresent: true },
+      );
     }
     return buildWorkspace(env, request, context);
   }
@@ -608,11 +544,12 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   const context = await requireReviewerChangeRequest(env, request, slug, requestId, {
     apply: true,
   });
+  await ensureChangeRequestLifecycleSchema(env);
 
   if (context.row.status === "applied") {
     return {
       workspace: await buildWorkspace(env, request, context),
-      appliedRevision: Number(context.project.config_revision || 0),
+      appliedRevision: context.row.applied_revision == null ? null : Number(context.row.applied_revision),
       idempotent: true,
       projectIdentity: {
         id: context.project.id,
@@ -685,6 +622,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
       context.row,
       "approved",
       "applying",
+      { actor: context.user },
     );
     context.row = updated || (await reloadRow(context.db, context.row));
   }
@@ -702,7 +640,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   if (context.row.status === "applied") {
     return {
       workspace: await buildWorkspace(env, request, context),
-      appliedRevision: Number(context.project.config_revision || 0),
+      appliedRevision: context.row.applied_revision == null ? null : Number(context.row.applied_revision),
       idempotent: true,
       projectIdentity: {
         id: context.project.id,
@@ -711,23 +649,14 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     };
   }
 
-  await Promise.all([
-    safeTicketEvent(
-      context.db,
-      context.row,
-      context.user,
-      "project.change_request.applying",
-      { proposalChecksum: artifact.checksum },
-    ),
-    safeAudit(
-      env,
-      request,
-      context.row,
-      context.user,
-      "project.change_request.apply_started",
-      { proposalChecksum: artifact.checksum },
-    ),
-  ]);
+  await safeAudit(
+    env,
+    request,
+    context.row,
+    context.user,
+    "project.change_request.apply_started",
+    { proposalChecksum: artifact.checksum },
+  );
 
   let saved;
   try {
@@ -784,13 +713,13 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
 
     if (!recoveredConcurrentApply) {
       await safeAudit(
-        env,
-        request,
-        context.row,
-        context.user,
-        "project.change_request.apply_failed",
-        { code: error?.code || "PROJECT_CHANGE_REQUEST_APPLY_FAILED" },
-        "error",
+      env,
+      request,
+      context.row,
+      context.user,
+      "project.change_request.apply_failed",
+      { code: error?.code || "PROJECT_CHANGE_REQUEST_APPLY_FAILED" },
+      "error",
       );
       // Mantém `applying`: retry posterior reutiliza o pipeline idempotente de save.
       throw error;
@@ -802,6 +731,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     context.row,
     "applying",
     "applied",
+    { actor: context.user, appliedRevision: saved.revision },
   );
   context.row = appliedTransition || (await reloadRow(context.db, context.row));
   if (context.row?.status !== "applied") {
@@ -818,31 +748,18 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   }
 
   if (appliedTransition) {
-    await Promise.all([
-      safeTicketEvent(
-        context.db,
-        context.row,
-        context.user,
-        "project.change_request.applied",
-        {
-          appliedRevision: saved.revision,
-          proposalChecksum: artifact.checksum,
-          operationCount: context.operations.length,
-        },
-      ),
-      safeAudit(
-        env,
-        request,
-        context.row,
-        context.user,
-        "project.change_request.applied",
-        {
-          appliedRevision: saved.revision,
-          proposalChecksum: artifact.checksum,
-          operationCount: context.operations.length,
-        },
-      ),
-    ]);
+    await safeAudit(
+      env,
+      request,
+      context.row,
+      context.user,
+      "project.change_request.applied",
+      {
+        appliedRevision: saved.revision,
+        proposalChecksum: artifact.checksum,
+        operationCount: context.operations.length,
+      },
+    );
   }
 
   const refreshedProject = await getAuthorizedProject(env, context.user, slug);

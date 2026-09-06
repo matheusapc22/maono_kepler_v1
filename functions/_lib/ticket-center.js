@@ -1,3 +1,4 @@
+import { getCanonicalTicketRequest, ticketStatusForRequest } from "./project-change-request-lifecycle.js";
 import {
   appendOrganizationBinaryUpload,
   buildStoredFileName,
@@ -861,6 +862,7 @@ export async function getTicketDetails(env, organizationId, ticketId) {
 
   return {
     ticket: publicTicket(row),
+    lifecycleManaged: Boolean(await getCanonicalTicketRequest(env, organizationId, ticketId)),
     attachments: await listTicketAttachments(env, organizationId, ticketId),
     events: await listTicketEvents(env, organizationId, ticketId),
     assignees: await listTicketAssignees(env, organizationId),
@@ -1090,6 +1092,13 @@ export async function updateTicket(
 ) {
   const current = await getTicketOrThrow(env, organizationId, ticketId);
   const patch = validateTicketPatchPayload(payload);
+  if (patch.status) {
+    const linkedRequest = await getCanonicalTicketRequest(env, organizationId, ticketId);
+    if (linkedRequest && patch.status !== ticketStatusForRequest(linkedRequest.status)) {
+      throw apiError("A situação deste chamado é controlada pelo Review da solicitação.", 409,
+        "TICKET_CHANGE_REQUEST_LIFECYCLE_MANAGED");
+    }
+  }
 
   if (Object.prototype.hasOwnProperty.call(patch, "assignedTo")) {
     await validateAssignee(env, organizationId, patch.assignedTo);
@@ -1112,7 +1121,15 @@ export async function updateTicket(
     updates.closed_at = null;
   }
 
-  await updateRow(env, "organization_tickets", ticketId, updates);
+  try {
+    await updateRow(env, "organization_tickets", ticketId, updates);
+  } catch (error) {
+    if (String(error?.message || "").includes("TICKET_CHANGE_REQUEST_LIFECYCLE_MANAGED")) {
+      throw apiError("A solicitação mudou enquanto o chamado era atualizado. Recarregue o chamado.", 409,
+        "TICKET_CHANGE_REQUEST_LIFECYCLE_MANAGED");
+    }
+    throw error;
+  }
 
   const events = [];
   if (patch.status && changed(current.status, patch.status)) {

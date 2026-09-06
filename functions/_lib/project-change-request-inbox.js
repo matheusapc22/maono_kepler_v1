@@ -1,3 +1,4 @@
+import { publicRequestLifecycle } from "./project-change-request-lifecycle.js";
 import { getDb, tableExists } from "./organizations.js";
 import { CHANGE_REQUEST_STATUSES } from "./project-change-requests.js";
 import { requireReviewerProject } from "./project-change-request-review.js";
@@ -62,7 +63,7 @@ export async function listEditorProjectChangeRequests(env, request, slug, option
 export async function getTicketReviewLink(env, request, organizationId, ticketId) {
   if (!(await tableExists(env, "project_change_requests"))) return null;
   const row = await getDb(env).prepare(`
-    SELECT r.id, r.status, p.slug
+    SELECT r.*, p.slug
       FROM project_change_requests r
       INNER JOIN projects p ON p.id = r.project_id
         AND p.organization_id = r.organization_id
@@ -75,5 +76,5 @@ export async function getTicketReviewLink(env, request, organizationId, ticketId
     if ([403, 404].includes(Number(error.status || error.statusCode))) return null;
     throw error;
   }
-  return { id: row.id, status: row.status, reviewUrl: reviewPath(row.slug, row.id) };
+  return { ...publicRequestLifecycle(row), id: row.id, status: row.status, reviewUrl: reviewPath(row.slug, row.id) };
 }

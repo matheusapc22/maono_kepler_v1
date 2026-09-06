@@ -818,6 +818,12 @@ function ReviewWorkspaceOverlay({
           </Link>
         </header>
 
+        {review?.changeRequest.decision ? (
+          <div className="maono-review-panel__state">
+            <strong>{review.changeRequest.decision === "approved" ? "Aprovada" : "Rejeitada"}</strong>
+            <span>{review.changeRequest.feedback || "Sem feedback registrado."}</span>
+          </div>
+        ) : null}
         {loading ? (
           <div className="maono-review-panel__state" role="status">
             <strong>Carregando revisão-base</strong>

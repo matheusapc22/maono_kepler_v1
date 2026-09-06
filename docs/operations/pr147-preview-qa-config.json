@@ -1,0 +1,24 @@
+{
+  "deployment_configs": {
+    "preview": {
+      "env_vars": {
+        "MAONO_RUNTIME_ENV": {
+          "type": "plain_text",
+          "value": "preview"
+        },
+        "MAONO_PREVIEW_MUTATIONS_ENABLED": {
+          "type": "plain_text",
+          "value": "false"
+        },
+        "MAONO_PREVIEW_QA_ORG_ID": {
+          "type": "plain_text",
+          "value": "9"
+        },
+        "MAONO_PREVIEW_QA_ORG_SLUG": {
+          "type": "plain_text",
+          "value": "maono-preview-qa"
+        }
+      }
+    }
+  }
+}

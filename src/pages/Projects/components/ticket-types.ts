@@ -1,3 +1,4 @@
+import type { RequestLifecycle } from "../../Kepler/change-requests/change-request-api";
 export type TicketViewMode = "list" | "kanban" | "calendar";
 
 export type TicketStatus =
@@ -113,7 +114,8 @@ export type TicketListResponse = {
 };
 
 export type TicketDetailResponse = {
-  changeRequest?: { id: string; status: string; reviewUrl: string } | null;
+  lifecycleManaged?: boolean;
+  changeRequest?: RequestLifecycle & { id: string; status: string; reviewUrl: string } | null;
   ok: boolean;
   ticket: Ticket;
   attachments: TicketAttachment[];

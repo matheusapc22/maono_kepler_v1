@@ -1,3 +1,4 @@
+import type { RequestLifecycle } from "./change-request-api";
 import { ProjectChangeRequestApiError } from "./change-request-api";
 
 export type ReviewOperationProjection = {
@@ -48,7 +49,7 @@ type ClientProposal = {
 
 export type ProjectChangeReview = {
   contractVersion: 2;
-  changeRequest: {
+  changeRequest: RequestLifecycle & {
     id: string;
     organizationId: number;
     projectId: number;

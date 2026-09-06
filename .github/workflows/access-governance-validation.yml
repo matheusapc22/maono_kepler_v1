@@ -30,6 +30,7 @@ on:
       - "migrations/0012_access_delegation_policy.sql"
       - "migrations/0015_project_preview_lifecycle.sql"
       - "migrations/0018_project_lifecycle.sql"
+      - "migrations/0021_change_request_lifecycle.sql"
       - "docs/architecture/S03-project-lifecycle.md"
       - "docs/architecture/S04-map-config-repository.md"
       - "docs/architecture/S05-atomic-project-revisions.md"
