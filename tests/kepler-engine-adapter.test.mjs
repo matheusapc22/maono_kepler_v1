@@ -1052,6 +1052,7 @@ test("comandos distinguem no-op, mapa ausente, conflito e operação não suport
         editLayers: true,
         configureTooltips: true,
         removeLayer: true,
+        importData: true,
       },
       context: null,
       setSelectedLayerId(layerId) {

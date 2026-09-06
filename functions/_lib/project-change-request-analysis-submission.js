@@ -23,6 +23,10 @@ import {
   isPersistentVisualizationOperation,
   validatePersistentVisualizationOperation,
 } from "./project-change-request-visualization-operations.js";
+import {
+  isPersistentViewerMutationOperation,
+  validatePersistentViewerMutationOperation,
+} from "./project-change-request-persistent-mutation-operations.js";
 
 const MAX_OPERATIONS = 100;
 const MAX_OPERATION_JSON_BYTES = 256 * 1024;
@@ -85,6 +89,14 @@ function normalizeVisualizationOperation(operation, index) {
   return normalizedExtendedOperation(operation, index, validatePersistentVisualizationOperation);
 }
 
+function normalizePersistentMutationOperation(operation, index) {
+  return normalizedExtendedOperation(
+    operation,
+    index,
+    validatePersistentViewerMutationOperation,
+  );
+}
+
 export function normalizeAnalysisAwareChangeRequestSubmission(input) {
   const source = input && typeof input === "object" ? input : {};
   const revision = baseRevision(source.baseRevision);
@@ -110,6 +122,9 @@ export function normalizeAnalysisAwareChangeRequestSubmission(input) {
       }
       if (isPersistentVisualizationOperation(operation)) {
         return normalizeVisualizationOperation(operation, index);
+      }
+      if (isPersistentViewerMutationOperation(operation)) {
+        return normalizePersistentMutationOperation(operation, index);
       }
       return normalizeChangeRequestSubmission({
         baseRevision: revision,

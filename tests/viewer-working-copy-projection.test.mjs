@@ -2,10 +2,32 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [runtime, workflow, pointCommand, reviewPage, reviewApi] = await Promise.all([
+const [
+  runtimeComposition,
+  runtime,
+  persistentRuntime,
+  workflow,
+  pointCommand,
+  reviewPage,
+  reviewApi,
+] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/change-requests/ViewerWorkingCopyRuntime.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/change-requests/ViewerWorkingCopyRuntimeLegacy.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/change-requests/ViewerPersistentMutationRuntime.tsx",
       import.meta.url,
     ),
     "utf8",
@@ -40,6 +62,22 @@ const [runtime, workflow, pointCommand, reviewPage, reviewApi] = await Promise.a
   ),
 ]);
 
+test("runtime composto monta legado e cobertura persistente sobre a mesma Working Copy", () => {
+  assert.match(runtimeComposition, /ViewerWorkingCopyRuntimeLegacy/);
+  assert.match(runtimeComposition, /ViewerPersistentMutationRuntime/);
+  assert.match(runtimeComposition, /<ViewerWorkingCopyRuntimeLegacy \{\.\.\.props\} \/>/);
+  assert.match(runtimeComposition, /<ViewerPersistentMutationRuntime \{\.\.\.props\} \/>/);
+  assert.match(runtime, /untrackedLatchedRef/);
+  assert.match(runtime, /pendingProjectionAckRef/);
+  assert.match(persistentRuntime, /replayingRef/);
+  assert.match(persistentRuntime, /appliedOperationIdsRef/);
+  assert.match(persistentRuntime, /persistentAckUpdatedAtRef/);
+  assert.match(persistentRuntime, /sessionMutationPendingRef/);
+  assert.match(persistentRuntime, /layer\.definition\.update/);
+  assert.match(persistentRuntime, /tooltip\.config\.update/);
+  assert.match(persistentRuntime, /map\.blending\.update/);
+});
+
 test("Viewer materializa point.create targetMode=new com IDs temporários estáveis", () => {
   assert.match(runtime, /targetMode\)\.toLowerCase\(\) === "new"/);
   assert.match(runtime, /targetDataId/);
@@ -62,6 +100,9 @@ test("replay da Working Copy é idempotente por operação e runtime", () => {
   assert.match(runtime, /appliedOperationIdsRef\.current\.add\(operation\.id\)/);
   assert.match(runtime, /applyingOperationIdsRef\.current\.clear\(\)/);
   assert.match(runtime, /appliedOperationIdsRef\.current\.clear\(\)/);
+  assert.match(persistentRuntime, /appliedOperationIdsRef\.current\.has\(operation\.id\)/);
+  assert.match(persistentRuntime, /appliedOperationIdsRef\.current\.add\(operation\.id\)/);
+  assert.match(persistentRuntime, /appliedOperationIdsRef\.current\.clear\(\)/);
 });
 
 test("captura de alterações não roda enquanto replay aguarda estabilização", () => {
@@ -72,6 +113,10 @@ test("captura de alterações não roda enquanto replay aguarda estabilização"
   assert.match(
     runtime,
     /if \(!enabled \|\| !pendingProjectionAckRef\.current\)[\s\S]*pendingProjectionAckRef\.current = false/,
+  );
+  assert.match(
+    persistentRuntime,
+    /captureBusyRef\.current \|\|[\s\S]*replayingRef\.current/,
   );
 });
 
@@ -88,6 +133,21 @@ test("Viewer captura e reprojeta visibilidade, filtro persistente e ordem", () =
   assert.match(runtime, /commands\.reorderLayer/);
   assert.doesNotMatch(runtime, /updateViewport\(/);
   assert.doesNotMatch(runtime, /setTooltipEnabled\(/);
+});
+
+test("runtime persistente reconhece sessão e só limpa dirty após captura/ack reconhecido", () => {
+  assert.match(
+    persistentRuntime,
+    /state\.hasUnsavedChanges && sessionMutationPendingRef\.current[\s\S]*sessionMutationPendingRef\.current = false;[\s\S]*markClean\(\)/,
+  );
+  assert.match(
+    persistentRuntime,
+    /persistentAckUpdatedAtRef\.current = next\?\.updatedAt \|\| null;[\s\S]*markClean\(\)/,
+  );
+  assert.match(
+    persistentRuntime,
+    /persistentAckUpdatedAtRef\.current !== null[\s\S]*current !== previous[\s\S]*markClean\(\)/,
+  );
 });
 
 test("camada temporária projetada não vira target existente de outro point.create", () => {
@@ -134,9 +194,12 @@ test("submit não faz silent return para mutação sem contrato", () => {
 test("Review aceita projeções das operações suportadas e mostra Antes/Depois", () => {
   assert.match(reviewApi, /"point\.create"/);
   assert.match(reviewApi, /"layer\.style\.update"/);
+  assert.match(reviewApi, /"layer\.definition\.update"/);
   assert.match(reviewApi, /"layer\.visibility\.update"/);
   assert.match(reviewApi, /"persistent\.filter\.update"/);
   assert.match(reviewApi, /"layer\.order\.update"/);
+  assert.match(reviewApi, /"tooltip\.config\.update"/);
+  assert.match(reviewApi, /"map\.blending\.update"/);
   assert.match(reviewApi, /"buffer\.create"/);
   assert.match(reviewApi, /"isochrone\.create"/);
   assert.match(reviewApi, /focus:[\s\S]*\| null/);

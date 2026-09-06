@@ -10,6 +10,7 @@ const [
   reviewApi,
   reviewBaseClient,
   reviewProjection,
+  reviewProjectionCore,
   reviewService,
   directDelivery,
   reviewEndpoint,
@@ -45,6 +46,13 @@ const [
   readFile(
     new URL(
       "../src/pages/Kepler/change-requests/review-operation-projection.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/change-requests/review-operation-projection-core.ts",
       import.meta.url,
     ),
     "utf8",
@@ -172,12 +180,15 @@ test("P0 large-map: GET/POST de Review são control plane e não materializam Ma
 
 test("P0 large-map: projeções Before/After são produzidas no navegador sem clone do MapConfig inteiro", () => {
   assert.match(reviewProjection, /buildReviewOperationProjections/);
-  assert.match(reviewProjection, /baseLayers\(baseConfig\)/);
-  assert.match(reviewProjection, /projectStyle/);
-  assert.match(reviewProjection, /newPointStyle/);
-  assert.match(reviewProjection, /newAnalysisStyle/);
-  assert.match(reviewProjection, /layer\.style = clone\(after\)/);
+  assert.match(reviewProjection, /buildCoreReviewOperationProjections/);
+  assert.match(reviewProjection, /projectCoverageOperation/);
+  assert.match(reviewProjectionCore, /baseLayers\(baseConfig\)/);
+  assert.match(reviewProjectionCore, /projectStyle/);
+  assert.match(reviewProjectionCore, /newPointStyle/);
+  assert.match(reviewProjectionCore, /newAnalysisStyle/);
+  assert.match(reviewProjectionCore, /layer\.style = clone\(after\)/);
   assert.doesNotMatch(reviewProjection, /clone\(baseConfig\)/);
+  assert.doesNotMatch(reviewProjectionCore, /clone\(baseConfig\)/);
   assert.match(reviewApi, /projectionCache/);
   assert.match(reviewApi, /cacheProjectChangeReviewProjection/);
 });

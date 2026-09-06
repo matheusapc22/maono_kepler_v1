@@ -14,6 +14,10 @@ import {
   applyPersistentVisualizationOperation,
   isPersistentVisualizationOperation,
 } from "./project-change-request-visualization-operations.js";
+import {
+  applyPersistentViewerMutationOperation,
+  isPersistentViewerMutationOperation,
+} from "./project-change-request-persistent-mutation-operations.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -57,6 +61,10 @@ export function buildProjectChangeProposal({ baseConfig, operations }) {
       }
       if (isPersistentVisualizationOperation(operation)) {
         projections.push(applyPersistentVisualizationOperation(config, operation));
+        continue;
+      }
+      if (isPersistentViewerMutationOperation(operation)) {
+        projections.push(applyPersistentViewerMutationOperation(config, operation));
         continue;
       }
       const result = buildCoreProjectChangeProposal({
