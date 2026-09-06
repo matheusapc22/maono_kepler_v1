@@ -8,10 +8,11 @@ on:
         required: true
         type: choice
         options:
+          - migrate
           - acceptance
           - closure
       confirmation:
-        description: "Acceptance: RUN_QA_CHANGE_REQUEST_ACCEPTANCE | Closure: VERIFY_QA_CHANGE_REQUEST_CLOSED"
+        description: "Migrate: APPLY_CHANGE_REQUEST_0021_0023 | Acceptance: RUN_QA_CHANGE_REQUEST_ACCEPTANCE | Closure: VERIFY_QA_CHANGE_REQUEST_CLOSED"
         required: true
         type: string
       preview_base_url:
@@ -23,7 +24,7 @@ on:
         required: true
         type: string
       qa_project_slug:
-        description: "Somente acceptance: projeto descartável qa-smoke-* em Maõno Preview QA"
+        description: "Migrate/acceptance: projeto descartável qa-smoke-* em Maõno Preview QA"
         required: false
         type: string
       stale_apply_minutes:
@@ -56,6 +57,10 @@ jobs:
         run: |
           set -euo pipefail
           case "$MODE" in
+            migrate)
+              test "$CONFIRMATION" = "APPLY_CHANGE_REQUEST_0021_0023"
+              [[ "$QA_PROJECT_SLUG" =~ ^qa-smoke-[a-z0-9-]{3,80}$ ]]
+              ;;
             acceptance)
               test "$CONFIRMATION" = "RUN_QA_CHANGE_REQUEST_ACCEPTANCE"
               [[ "$QA_PROJECT_SLUG" =~ ^qa-smoke-[a-z0-9-]{3,80}$ ]]
@@ -101,8 +106,10 @@ jobs:
       - name: Validate release contracts
         run: >-
           node --test
+          tests/change-request-release-migrations.test.mjs
           tests/change-request-release-gate.test.mjs
           tests/change-request-release-closure.test.mjs
+          tests/change-request-qa-identity-preflight.test.mjs
           tests/viewer-request-tracking-runtime.test.mjs
           tests/project-change-request-lifecycle.test.mjs
           tests/change-request-large-apply.test.mjs
@@ -113,6 +120,42 @@ jobs:
 
       - name: Build audited release branch
         run: npm run build
+
+  migrate:
+    if: inputs.mode == 'migrate'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MAONO_PREVIEW_VIEWER_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_VIEWER_SESSION_COOKIE }}
+      MAONO_PREVIEW_REVIEWER_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_REVIEWER_SESSION_COOKIE }}
+      MAONO_PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
+      MAONO_ACCEPTANCE_QA_PROJECT_SLUG: ${{ inputs.qa_project_slug }}
+      WRANGLER_SEND_METRICS: "false"
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+    steps:
+      - name: Checkout validated release SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Refuse release branch drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply isolated 0021-0023 release migrations
+        run: node scripts/operations/change-request-release-migrations.mjs
 
   acceptance:
     if: inputs.mode == 'acceptance'
@@ -148,6 +191,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Verify distinct Viewer and Reviewer identities
+        run: node scripts/preview/change-request-qa-identity-preflight.mjs
 
       - name: Pre-acceptance observability
         env:
