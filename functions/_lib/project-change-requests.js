@@ -1,3 +1,4 @@
+import { LIFECYCLE_TRANSITIONS, publicRequestLifecycle } from "./project-change-request-lifecycle.js";
 import { requireSession } from "./auth.js";
 import { getDb, jsonResponse, tableExists } from "./organizations.js";
 import { can, recordAuditLog } from "./permissions.js";
@@ -18,16 +19,7 @@ export const CHANGE_REQUEST_STATUSES = Object.freeze([
   "superseded",
 ]);
 
-export const CHANGE_REQUEST_TRANSITIONS = Object.freeze({
-  submitted: ["under_review", "rejected", "superseded"],
-  under_review: ["approved", "rejected", "conflict"],
-  approved: ["applying"],
-  applying: ["applied", "conflict"],
-  rejected: [],
-  conflict: [],
-  applied: [],
-  superseded: [],
-});
+export const CHANGE_REQUEST_TRANSITIONS = LIFECYCLE_TRANSITIONS;
 
 const MAX_OPERATIONS = 100;
 const MAX_OPERATION_JSON_BYTES = 256 * 1024;
@@ -271,6 +263,7 @@ async function requireChangeRequestProject(env, request, slug, { viewerOnly = fa
 
 function publicChangeRequest(row, operations = undefined) {
   const result = {
+    ...publicRequestLifecycle(row),
     id: row.id,
     organizationId: Number(row.organization_id),
     projectId: Number(row.project_id),

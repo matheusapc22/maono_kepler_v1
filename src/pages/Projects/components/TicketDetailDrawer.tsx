@@ -42,6 +42,7 @@ type TicketDetailDrawerProps = {
 
 const EVENT_LABELS: Record<string, string> = {
   "ticket.created": "Chamado criado",
+  "project.change_request.lifecycle_changed": "Solicitação atualizada",
   "ticket.status.changed": "Situação alterada",
   "ticket.assigned": "Atendente alterado",
   "ticket.due.changed": "Prazo alterado",
@@ -138,7 +139,7 @@ export default function TicketDetailDrawer({
     setSaveError(null);
     try {
       await onUpdate({
-        status,
+        ...(detail?.lifecycleManaged ? {} : { status }),
         priority: priority as typeof ticket.priority,
         category: category as typeof ticket.category,
         dueAt: dateInputToIso(dueDate),
@@ -216,6 +217,11 @@ export default function TicketDetailDrawer({
               </div>
 
               <p>{ticket.description}</p>
+              {detail.lifecycleManaged ? <p>A situação deste chamado acompanha a solicitação de alteração.</p> : null}
+              {detail.changeRequest?.decision ? <p>
+                <strong>{detail.changeRequest.decision === "approved" ? "Aprovada" : "Rejeitada"}</strong>
+                {detail.changeRequest.feedback ? ` — ${detail.changeRequest.feedback}` : " — Sem feedback registrado."}
+              </p> : null}
               {detail.changeRequest ? (
                 <Link className="ticket-primary-action" to={detail.changeRequest.reviewUrl}>
                   Abrir Review
@@ -257,6 +263,7 @@ export default function TicketDetailDrawer({
                   <label>
                     <span>Situação</span>
                     <select
+                      disabled={detail.lifecycleManaged}
                       value={status}
                       onChange={(event) =>
                         setStatus(event.target.value as TicketStatus)
