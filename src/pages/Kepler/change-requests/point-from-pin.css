@@ -289,3 +289,117 @@
     flex-direction: column;
   }
 }
+
+/*
+ * Viewer: as alterações locais deixam de ocupar a faixa inferior do mapa.
+ * O mesmo botão já ligado a openDrawer() vira um controle compacto alinhado
+ * abaixo do Pin da toolbar nativa (toolbar bottom 112px + gap 9px).
+ */
+.maono-change-request__bar {
+  left: auto;
+  right: 24px;
+  bottom: 55px;
+  transform: none;
+  display: block;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.maono-change-request__bar-copy {
+  display: none;
+}
+
+.maono-change-request__bar > button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid #c5a059;
+  border-radius: 14px;
+  color: #f1d28a;
+  background:
+    linear-gradient(145deg, rgba(27, 36, 50, 0.98), rgba(6, 9, 14, 0.99));
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.05),
+    0 0 16px rgba(197, 160, 89, 0.22),
+    0 12px 28px rgba(0, 0, 0, 0.48);
+  cursor: pointer;
+  font-size: 0;
+  animation: maono-change-request-attention 2s ease-in-out infinite;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* Ícone de envio: seta para cima entrando em uma bandeja. */
+.maono-change-request__bar > button::before {
+  position: absolute;
+  right: 15px;
+  bottom: 11px;
+  left: 15px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 3px 3px;
+  content: "";
+}
+
+.maono-change-request__bar > button::after {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  left: 0;
+  content: "↑";
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.maono-change-request__bar > button:hover:not(:disabled),
+.maono-change-request__bar > button:focus-visible {
+  transform: translateY(-1px) scale(1.04);
+  border-color: #f1d28a;
+  box-shadow:
+    inset 0 1px rgba(241, 210, 138, 0.16),
+    0 0 26px rgba(197, 160, 89, 0.36),
+    0 14px 30px rgba(0, 0, 0, 0.52);
+}
+
+.maono-change-request__bar > button:focus-visible {
+  outline: 2px solid #f1d28a;
+  outline-offset: 3px;
+}
+
+@keyframes maono-change-request-attention {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px rgba(255, 255, 255, 0.05),
+      0 0 10px rgba(197, 160, 89, 0.16),
+      0 12px 28px rgba(0, 0, 0, 0.48);
+  }
+
+  50% {
+    box-shadow:
+      inset 0 1px rgba(241, 210, 138, 0.14),
+      0 0 27px rgba(197, 160, 89, 0.42),
+      0 14px 30px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maono-change-request__bar > button {
+    animation: none;
+  }
+}
