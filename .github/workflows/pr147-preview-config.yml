@@ -1,6 +1,7 @@
 name: PR147 Preview QA configuration
 
 on:
+  workflow_dispatch:
   push:
     branches: [feat/change-requests-ticket-lifecycle]
     paths:
@@ -16,6 +17,7 @@ concurrency:
 
 jobs:
   configure:
+    if: github.ref == 'refs/heads/feat/change-requests-ticket-lifecycle'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
