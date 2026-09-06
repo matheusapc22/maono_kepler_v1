@@ -3,7 +3,7 @@ name: Change Request D1 rollout preflight
 on:
   workflow_dispatch:
   push:
-    branches: [feat/change-requests-ticket-lifecycle, ops/change-request-0021-rollout]
+    branches: [feat/change-requests-ticket-lifecycle, ops/change-request-0021-rollout, ops/change-request-147-qa-seed]
     paths:
       - .github/workflows/change-request-d1-preflight.yml
       - scripts/operations/change-request-d1-preflight.mjs
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   preflight:
-    if: github.repository == 'matheusapc22/maono_kepler_v1' && (github.ref == 'refs/heads/feat/change-requests-ticket-lifecycle' || github.ref == 'refs/heads/ops/change-request-0021-rollout')
+    if: github.repository == 'matheusapc22/maono_kepler_v1' && (github.ref == 'refs/heads/feat/change-requests-ticket-lifecycle' || github.ref == 'refs/heads/ops/change-request-0021-rollout' || github.ref == 'refs/heads/ops/change-request-147-qa-seed')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -32,6 +32,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MAONO_PREVIEW_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_SESSION_COOKIE }}
+          MAONO_SEED_QA: ${{ github.ref == 'refs/heads/ops/change-request-147-qa-seed' }}
           MAONO_APPLY_0021: ${{ github.ref == 'refs/heads/ops/change-request-0021-rollout' }}
           WRANGLER_SEND_METRICS: 'false'
         run: node scripts/operations/change-request-d1-preflight.mjs

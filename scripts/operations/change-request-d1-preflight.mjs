@@ -54,6 +54,28 @@ try {
   // Only known migration filenames are reported; no row/user data is logged.
   const applied = migrations.some(row => row.name === '0021_change_request_lifecycle.sql');
   record(`Migration 0021 recorded as applied: ${applied}; total remote migrations: ${migrations.length}.`);
+  if (process.env.MAONO_SEED_QA === 'true') {
+    if (process.env.GITHUB_REF !== 'refs/heads/ops/change-request-147-qa-seed') throw new Error('QA seed requires its dedicated operations branch');
+    const userBefore = query("SELECT id,role FROM users WHERE email='matheusapc22@gmail.com'");
+    if (userBefore.length !== 1 || userBefore[0].role !== 'super_admin') throw new Error('Authorized existing Super Admin not found');
+    const generated = spawnSync('node',['scripts/preview/build-production-qa-seed.mjs','--user-email=matheusapc22@gmail.com'],{encoding:'utf8'});
+    if (generated.status !== 0 || createHash('sha256').update(generated.stdout).digest('hex') !== 'b568a451bba867aa47fbb6b19c66381068323ad1ed6a4da356785bcc136ba0b0') throw new Error('Seed differs from reviewed SQL');
+    // D1 import owns the transaction; explicit SQLite BEGIN/COMMIT are unsupported.
+    const file = join(directory,'reviewed-qa-seed.sql');
+    writeFileSync(file,generated.stdout.replace(/^BEGIN TRANSACTION;\n/m,'').replace(/^COMMIT;\n/m,''));
+    const seeded = spawnSync('npx',['--yes','wrangler@4.113.0','d1','execute','DB','--remote','--config',config,'--file',file,'--yes','--json'], {
+      encoding:'utf8',env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},maxBuffer:4*1024*1024,
+    });
+    if (seeded.status !== 0) throw new Error('QA seed command failed; raw output suppressed; inspect state before retry');
+    const organizations = query("SELECT id,name,slug,dropbox_root_path,storage_status FROM organizations WHERE slug='maono-preview-qa'");
+    if (organizations.length !== 1 || organizations[0].name !== 'Maõno Preview QA' || organizations[0].dropbox_root_path !== '/Apps/MaonoKepler/preview/qa') throw new Error('QA organization post-seed validation failed');
+    const memberships = query("SELECT ou.organization_id,ou.access_level FROM organization_users ou JOIN organizations o ON o.id=ou.organization_id JOIN users u ON u.id=ou.user_id WHERE o.slug='maono-preview-qa' AND u.email='matheusapc22@gmail.com'");
+    if (memberships.length !== 1 || memberships[0].organization_id !== organizations[0].id || memberships[0].access_level !== 'owner') throw new Error('QA membership post-seed validation failed');
+    const userAfter = query("SELECT id,role FROM users WHERE email='matheusapc22@gmail.com'");
+    if (JSON.stringify(userBefore) !== JSON.stringify(userAfter)) throw new Error('Global user role changed unexpectedly');
+    record(`QA seed verified: one expected organization, one owner membership, global Super Admin unchanged. MAONO_PREVIEW_QA_ORG_ID=${organizations[0].id}.`);
+    record('No migration applied. Preview variables must retain mutations=false until isolation tests pass.');
+  }
   const qaOrganizations = query("SELECT COUNT(*) AS count FROM organizations WHERE slug='maono-preview-qa'");
   record(`Dedicated QA organization exists: ${Number(qaOrganizations[0].count) === 1}; QA session supplied to runner: ${Boolean(process.env.MAONO_PREVIEW_SESSION_COOKIE)}.`);
   if (process.env.MAONO_APPLY_0021 === 'true') {
