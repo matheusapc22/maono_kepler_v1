@@ -136,6 +136,49 @@ async function loadOwnedRequest(db, projectId, userId, requestId) {
     .first();
 }
 
+async function loadRequestByIdempotency(
+  db,
+  organizationId,
+  userId,
+  idempotencyKey,
+) {
+  return db
+    .prepare(
+      `SELECT r.*,
+              (SELECT COUNT(*) FROM project_change_operations o
+                WHERE o.change_request_id = r.id) AS operation_count
+       FROM project_change_requests r
+       WHERE r.organization_id = ? AND r.requested_by_user_id = ? AND r.idempotency_key = ?
+       LIMIT 1`,
+    )
+    .bind(organizationId, userId, idempotencyKey)
+    .first();
+}
+
+function assertMatchingResubmissionReplay(existing, submissionHash, sourceId) {
+  if (
+    existing.submission_hash !== submissionHash ||
+    existing.resubmitted_from_request_id !== sourceId
+  ) {
+    throw domainError(
+      "A Idempotency-Key já foi utilizada com outro conteúdo ou outra solicitação de origem.",
+      409,
+      "CHANGE_REQUEST_IDEMPOTENCY_KEY_REUSED",
+    );
+  }
+}
+
+async function replayResult(db, existing) {
+  return {
+    status: 200,
+    replayed: true,
+    changeRequest: publicTrackingRequest(
+      existing,
+      await loadOperations(db, existing.id),
+    ),
+  };
+}
+
 async function safeAudit(env, event) {
   try {
     await recordAuditLog(env, event);
@@ -216,37 +259,16 @@ export async function resubmitProjectChangeRequest(
   }
 
   const submissionHash = await buildChangeRequestSubmissionHash(project.id, submission);
-  const existing = await db
-    .prepare(
-      `SELECT r.*,
-              (SELECT COUNT(*) FROM project_change_operations o
-                WHERE o.change_request_id = r.id) AS operation_count
-       FROM project_change_requests r
-       WHERE r.organization_id = ? AND r.requested_by_user_id = ? AND r.idempotency_key = ?
-       LIMIT 1`,
-    )
-    .bind(project.organization_id, user.id, idempotencyKey)
-    .first();
+  const existing = await loadRequestByIdempotency(
+    db,
+    project.organization_id,
+    user.id,
+    idempotencyKey,
+  );
 
   if (existing) {
-    if (
-      existing.submission_hash !== submissionHash ||
-      existing.resubmitted_from_request_id !== source.id
-    ) {
-      throw domainError(
-        "A Idempotency-Key já foi utilizada com outro conteúdo ou outra solicitação de origem.",
-        409,
-        "CHANGE_REQUEST_IDEMPOTENCY_KEY_REUSED",
-      );
-    }
-    return {
-      status: 200,
-      replayed: true,
-      changeRequest: publicTrackingRequest(
-        existing,
-        await loadOperations(db, existing.id),
-      ),
-    };
+    assertMatchingResubmissionReplay(existing, submissionHash, source.id);
+    return replayResult(db, existing);
   }
 
   if (!RESUBMITTABLE_STATUSES.has(source.status)) {
@@ -359,7 +381,40 @@ export async function resubmitProjectChangeRequest(
       ),
   ];
 
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (writeError) {
+    // Duas correções podem atravessar os mesmos pre-checks simultaneamente.
+    // O índice UNIQUE de 0023 continua sendo a autoridade no D1. Após uma
+    // colisão, convertemos o erro de constraint em replay idempotente ou em
+    // conflito de domínio, sem mascarar falhas de escrita não relacionadas.
+    const concurrentReplay = await loadRequestByIdempotency(
+      db,
+      project.organization_id,
+      user.id,
+      idempotencyKey,
+    );
+    if (concurrentReplay) {
+      assertMatchingResubmissionReplay(
+        concurrentReplay,
+        submissionHash,
+        source.id,
+      );
+      return replayResult(db, concurrentReplay);
+    }
+
+    const racedSource = await loadOwnedRequest(db, project.id, user.id, source.id);
+    if (racedSource?.resubmitted_to_request_id) {
+      throw domainError(
+        "Esta solicitação já possui uma resubmissão.",
+        409,
+        "CHANGE_REQUEST_ALREADY_RESUBMITTED",
+        { changeRequestId: racedSource.resubmitted_to_request_id },
+      );
+    }
+
+    throw writeError;
+  }
 
   const row = await loadOwnedRequest(db, project.id, user.id, changeRequestId);
   const operations = await loadOperations(db, changeRequestId);
