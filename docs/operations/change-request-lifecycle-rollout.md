@@ -82,3 +82,9 @@ Resultado remoto validado: exatamente uma organização Maõno Preview QA / maon
 Próxima configuração preparada em `pr147-preview-qa-config.json`: somente ambiente Preview, quatro variáveis, mutations=false. O token disponibilizado tem Pages Read; a API de atualização de projeto requer Pages Write (Cloudflare Pages Edit no painel): https://developers.cloudflare.com/api/resources/pages/subresources/projects/methods/edit/ . Não houve ampliação de privilégio nem tentativa de contornar essa permissão. Nenhuma variável Pages foi alterada. Após Pages Edit autorizado pelo operador, preservar todas as demais configurações/bindings e verificar por leitura antes de novo Preview e testes fail-closed.
 
 A sessão de aplicação esperada pelo smoke é o header Cookie no formato `maono_session=<valor>`. O login `/api/auth/login` valida a senha e emite a sessão; token D1 e CF_Authorization não substituem essa sessão. Não criar sessões diretamente no D1. Esse gate será tratado depois da configuração/deploy, seguindo a ordem solicitada.
+
+## Desenvolvimento stacked autorizado; rollout suspenso
+
+Por instrução do usuário, continuar PRs 2, 3 e 4 como branches dependentes, sem merge. O acceptance autenticado da #147, a migration 0021, o deploy pós-merge e o release gate continuam PENDENTES. Não habilitar mutações QA, não fabricar sessão, não executar branches operacionais de migration/seed/configuração durante esta etapa. CI local ou de PR não substitui esses gates. Retomar pelo acceptance da #147 quando a sessão estiver disponível.
+
+Hardening local da #147: trigger impede troca/limpeza indevida do autor canônico da decisão, preservando ON DELETE SET NULL quando o usuário é removido. Teste específico incluído. A 0021 ainda não aplicada foi atualizada, assim como seu checksum esperado no script de rollout; exige revisão do novo checksum antes de execução futura.

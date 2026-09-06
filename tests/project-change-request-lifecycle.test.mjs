@@ -149,3 +149,16 @@ test('health reports the lifecycle gate as failed when synchronization is unavai
   assert.equal(result.ok, false);
   assert.equal(result.checks.changeRequestLifecycleReady, false);
 });
+
+
+test('decision attribution cannot be rewritten or cleared, but supports actor deletion', async t => {
+  const f = fixture(t);
+  f.database.exec("INSERT INTO users(id,name,email,role,password_hash) VALUES(2,'Reviewer','reviewer@test','editor','x')");
+  await f.change('rejected', { actor: { id: 2 }, feedback: 'Revise' });
+  assert.throws(() => f.database.exec("UPDATE project_change_requests SET decided_by_user_id=1 WHERE id='cr-1'"), /DECISION_IMMUTABLE/);
+  assert.throws(() => f.database.exec("UPDATE project_change_requests SET decided_by_user_id=NULL WHERE id='cr-1'"), /DECISION_IMMUTABLE/);
+  f.database.exec('DELETE FROM users WHERE id=2');
+  assert.equal(f.row().decided_by_user_id, null);
+  assert.equal(f.row().feedback, 'Revise');
+  assert.equal(f.row().lifecycle_version, 1);
+});

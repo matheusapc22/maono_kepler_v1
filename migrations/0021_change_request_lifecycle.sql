@@ -51,8 +51,13 @@ WHERE EXISTS (SELECT 1 FROM project_change_requests r WHERE r.ticket_id = organi
   AND r.organization_id = organization_tickets.organization_id);
 
 CREATE TRIGGER trg_change_request_lifecycle_guard
-BEFORE UPDATE OF status, lifecycle_version, decision, feedback, decided_at, applied_revision ON project_change_requests
+BEFORE UPDATE OF status, lifecycle_version, decision, feedback, decided_by_user_id, decided_at, applied_revision ON project_change_requests
 BEGIN
+  -- Preserve attribution; FK ON DELETE SET NULL remains allowed after user deletion.
+  SELECT CASE WHEN NEW.decided_by_user_id IS NOT OLD.decided_by_user_id
+    AND (OLD.decision IS NOT NULL OR NEW.status = OLD.status)
+    AND (NEW.decided_by_user_id IS NOT NULL OR EXISTS (SELECT 1 FROM users WHERE id = OLD.decided_by_user_id))
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_DECISION_IMMUTABLE') END;
   SELECT CASE WHEN NEW.status <> OLD.status AND NOT (
     (OLD.status = 'submitted' AND NEW.status IN ('under_review','rejected','superseded')) OR
     (OLD.status = 'under_review' AND NEW.status IN ('approved','rejected','conflict')) OR

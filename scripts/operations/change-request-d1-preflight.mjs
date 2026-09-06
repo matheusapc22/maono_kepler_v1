@@ -82,7 +82,7 @@ try {
     if (!qaReady || !process.env.MAONO_PREVIEW_SESSION_COOKIE) throw new Error('Authenticated QA acceptance must be available before opening the incompatible-writer migration window');
     if (process.env.GITHUB_REF !== 'refs/heads/ops/change-request-0021-rollout') throw new Error('Apply requires the dedicated rollout branch');
     const migration = 'migrations/0021_change_request_lifecycle.sql';
-    if (createHash('sha256').update(readFileSync(migration)).digest('hex') !== 'd22adb6de0e6f38b9d0100ee4517ce4689b7c9ca96da0d3942d4f6b9c2a1ba2f') throw new Error('Migration checksum differs from reviewed 0021');
+    if (createHash('sha256').update(readFileSync(migration)).digest('hex') !== '96399c9e5ad98e3dbf5cb5adfdcfb3afe268d5ae683a68721a9cc24a7febd78a') throw new Error('Migration checksum differs from reviewed 0021');
     if (!applied) {
       const columns = query('PRAGMA table_info(project_change_requests)');
       if (columns.some(row => row.name === 'lifecycle_version')) throw new Error('Partial migration detected; refusing to reapply');
