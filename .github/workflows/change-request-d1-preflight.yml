@@ -36,3 +36,5 @@ jobs:
           MAONO_APPLY_0021: ${{ github.ref == 'refs/heads/ops/change-request-0021-rollout' }}
           WRANGLER_SEND_METRICS: 'false'
         run: node scripts/operations/change-request-d1-preflight.mjs
+
+# Authorized one-time QA seed activation for PR 147.
