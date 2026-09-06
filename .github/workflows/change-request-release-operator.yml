@@ -115,6 +115,14 @@ jobs:
           tests/change-request-large-apply.test.mjs
           tests/project-change-request-resubmission.test.mjs
 
+      - name: Syntax-check release operators
+        run: |
+          node --check scripts/operations/change-request-release-migrations.mjs
+          node --check scripts/operations/change-request-release-observability.mjs
+          node --check scripts/operations/change-request-release-closure.mjs
+          node --check scripts/preview/change-request-qa-identity-preflight.mjs
+          node --check scripts/preview/change-request-production-acceptance.mjs
+
       - name: Preview safety remains fail-closed
         run: node scripts/preview/assert-preview-safety.mjs
 
