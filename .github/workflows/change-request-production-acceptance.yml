@@ -18,6 +18,7 @@ on:
       - "tests/change-request-qa-identity-preflight.test.mjs"
       - "tests/viewer-request-tracking-runtime.test.mjs"
       - "docs/operations/change-request-production-release-gate.md"
+      - "docs/operations/change-request-release-runbook.md"
   workflow_dispatch:
     inputs:
       confirmation:
@@ -75,6 +76,13 @@ jobs:
           tests/project-change-request-lifecycle.test.mjs
           tests/change-request-large-apply.test.mjs
           tests/project-change-request-resubmission.test.mjs
+
+      - name: Syntax-check release operators
+        run: |
+          node --check scripts/operations/change-request-release-migrations.mjs
+          node --check scripts/operations/change-request-release-observability.mjs
+          node --check scripts/preview/change-request-qa-identity-preflight.mjs
+          node --check scripts/preview/change-request-production-acceptance.mjs
 
       - name: Preview safety remains fail-closed
         run: node scripts/preview/assert-preview-safety.mjs
