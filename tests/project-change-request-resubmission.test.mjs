@@ -45,10 +45,23 @@ test("retry idempotente valida também a origem e stale revision preserva corre�
   const stateGate = service.indexOf("RESUBMITTABLE_STATUSES.has", existing);
   const revisionGate = service.indexOf("const currentRevision", stateGate);
   assert.ok(existing >= 0 && stateGate > existing && revisionGate > stateGate);
-  assert.match(service, /existing\.resubmitted_from_request_id !== source\.id/);
+  assert.match(service, /assertMatchingResubmissionReplay\(existing, submissionHash, source\.id\)/);
   assert.match(service, /CHANGE_REQUEST_IDEMPOTENCY_KEY_REUSED/);
   assert.match(service, /CHANGE_REQUEST_BASE_REVISION_STALE/);
   assert.match(resubmitEndpoint, /Idempotency-Key|resubmitProjectChangeRequest/);
+});
+
+test("corridas de resubmissão convergem para replay ou conflito de domínio", () => {
+  const batch = service.indexOf("await db.batch(statements)");
+  const concurrentReplay = service.indexOf("const concurrentReplay", batch);
+  const racedSource = service.indexOf("const racedSource", concurrentReplay);
+  assert.ok(batch >= 0 && concurrentReplay > batch && racedSource > concurrentReplay);
+  assert.match(service, /catch \(writeError\)/);
+  assert.match(service, /loadRequestByIdempotency\(/);
+  assert.match(service, /return replayResult\(db, concurrentReplay\)/);
+  assert.match(service, /racedSource\?\.resubmitted_to_request_id/);
+  assert.match(service, /CHANGE_REQUEST_ALREADY_RESUBMITTED/);
+  assert.match(service, /throw writeError/);
 });
 
 test("Viewer mostra lifecycle/feedback e exige seleção explícita quando há Working Copy existente", () => {
