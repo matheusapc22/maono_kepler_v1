@@ -80,8 +80,22 @@ Uma falha em qualquer ponto bloqueia o release; o workflow não altera migration
 
 ## Fechamento da janela
 
-Depois do acceptance, `MAONO_PREVIEW_MUTATIONS_ENABLED` deve voltar para `false` e a configuração deve ser verificada por leitura. O gate só pode ser declarado concluído depois dessa confirmação, dos checks do SHA integrado e da observabilidade posterior. Se a automação não tiver uma forma segura de restaurar e verificar a variável sem substituir outras configurações de Pages, essa troca permanece uma ação operacional explícita e não deve ser contornada.
+Depois do acceptance e da observabilidade `post`, o operador deve restaurar `MAONO_PREVIEW_MUTATIONS_ENABLED=false` usando o mecanismo seguro já aprovado para Pages. A automação não tenta alterar essa variável nem substituir a configuração completa de Pages.
+
+Em seguida, `.github/workflows/change-request-production-closure.yml` deve ser disparado sobre a branch operacional `ops/change-request-release-acceptance` com a confirmação exata `VERIFY_QA_CHANGE_REQUEST_CLOSED`. Esse gate é somente leitura e não usa sessões QA. Ele confirma:
+
+- `MAONO_PREVIEW_MUTATIONS_ENABLED=false` explicitamente na configuração de Pages;
+- `/api/health` do Preview reportando `previewMutationsEnabled=false`;
+- readiness das migrations 0021/0022/0023 no Preview e Production;
+- binding de Preview e Production ainda apontando para o D1 auditado `maono_maps`;
+- nenhuma mutação remota executada pelo próprio gate de fechamento.
+
+O release só pode ser declarado concluído depois do acceptance, da observabilidade posterior, da restauração manual do kill switch e do gate de fechamento read-only aprovado. Nenhum desses passos pode ser omitido ou convertido em sucesso por fallback.
+
+## Disponibilidade de `workflow_dispatch`
+
+Os workflows mutáveis/read-only de release só ficam disponíveis para disparo manual quando sua definição estiver presente na default branch do repositório. Antes da janela de rollout, deve existir um mecanismo operacional revisado na default branch que permita selecionar a branch `ops/change-request-release-acceptance` sem copiar credenciais nem enfraquecer os `if` de confirmação. Preparar esse bootstrap é permitido; executá-lo antes dos gates anteriores não é.
 
 ## Situação atual
 
-A PR 4 pode ser desenvolvida e validada localmente/por CI enquanto os gates anteriores permanecem pendentes. O acceptance remoto continua **BLOQUEADO** até existir transferência segura das sessões QA e até o rollout controlado das migrations 0021/0022/0023. Esse bloqueio não deve ser enfraquecido para fazer o workflow passar.
+A PR 4 pode ser desenvolvida e validada localmente/por CI enquanto os gates anteriores permanecem pendentes. O acceptance remoto continua **BLOQUEADO** até existir transferência segura das sessões QA e até o rollout controlado das migrations 0021/0022/0023. O gate de fechamento está programado, mas só deve ser usado depois da restauração explícita de `MAONO_PREVIEW_MUTATIONS_ENABLED=false`. Esses bloqueios não devem ser enfraquecidos para fazer workflows passarem.
