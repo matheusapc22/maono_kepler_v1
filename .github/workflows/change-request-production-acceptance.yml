@@ -1,0 +1,118 @@
+name: Change Request production acceptance
+
+on:
+  pull_request:
+    branches:
+      - mano_kepler_v1
+      - feat/viewer-request-tracking
+    paths:
+      - ".github/workflows/change-request-production-acceptance.yml"
+      - "functions/_lib/project-change-request-*.js"
+      - "functions/api/health.js"
+      - "scripts/operations/change-request-release-observability.mjs"
+      - "scripts/preview/change-request-production-acceptance.mjs"
+      - "tests/change-request-release-gate.test.mjs"
+      - "docs/operations/change-request-production-release-gate.md"
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Digite RUN_QA_CHANGE_REQUEST_ACCEPTANCE para abrir o gate mutável de QA"
+        required: true
+        type: string
+      preview_base_url:
+        description: "Origin HTTPS do deployment Preview integrado"
+        required: true
+        type: string
+      production_base_url:
+        description: "Origin HTTPS de Production"
+        required: true
+        type: string
+      qa_project_slug:
+        description: "Projeto descartável qa-smoke-* dentro de Maõno Preview QA"
+        required: true
+        type: string
+      stale_apply_minutes:
+        description: "Idade máxima tolerada para Change Request em applying"
+        required: false
+        default: "30"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-request-production-acceptance
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Validate release gate contracts
+        run: >-
+          node --test
+          tests/change-request-release-gate.test.mjs
+          tests/project-change-request-lifecycle.test.mjs
+          tests/change-request-large-apply.test.mjs
+          tests/project-change-request-resubmission.test.mjs
+
+      - name: Preview safety remains fail-closed
+        run: node scripts/preview/assert-preview-safety.mjs
+
+      - name: Build
+        run: npm run build
+
+  acceptance:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/ops/change-request-release-acceptance' &&
+      inputs.confirmation == 'RUN_QA_CHANGE_REQUEST_ACCEPTANCE'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MAONO_PREVIEW_VIEWER_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_VIEWER_SESSION_COOKIE }}
+      MAONO_PREVIEW_REVIEWER_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_REVIEWER_SESSION_COOKIE }}
+      MAONO_PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
+      MAONO_PRODUCTION_BASE_URL: ${{ inputs.production_base_url }}
+      MAONO_ACCEPTANCE_QA_PROJECT_SLUG: ${{ inputs.qa_project_slug }}
+      MAONO_RELEASE_GATE_APPLY_STALE_MINUTES: ${{ inputs.stale_apply_minutes }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Checkout audited release branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pre-acceptance observability
+        env:
+          MAONO_RELEASE_GATE_PHASE: pre
+          MAONO_REQUIRE_PREVIEW_MUTATIONS_ENABLED: "true"
+        run: node scripts/operations/change-request-release-observability.mjs
+
+      - name: Authenticated Viewer and Reviewer acceptance
+        run: node scripts/preview/change-request-production-acceptance.mjs
+
+      - name: Post-acceptance observability
+        if: success()
+        env:
+          MAONO_RELEASE_GATE_PHASE: post
+          MAONO_REQUIRE_PREVIEW_MUTATIONS_ENABLED: "true"
+        run: node scripts/operations/change-request-release-observability.mjs
