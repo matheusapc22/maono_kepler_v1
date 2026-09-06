@@ -1,3 +1,4 @@
+import { getTicketReviewLink } from "../../../../_lib/project-change-request-inbox.js";
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import {
   getOrganizationOrThrow,
@@ -58,10 +59,11 @@ export async function onRequestGet({ env, request, params }) {
     await ensureTicketCenterSchema(env);
     await migrateLegacyTickets(env, organizationId, user.id);
 
-    return jsonResponse({
-      ok: true,
-      ...(await getTicketDetails(env, organizationId, ticketId)),
-    });
+    const detail = await getTicketDetails(env, organizationId, ticketId);
+    const changeRequest = await getTicketReviewLink(env, request, organizationId, ticketId);
+    const response = jsonResponse({ ok: true, ...detail, changeRequest });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     return ticketCenterErrorResponse(error, request);
   }

@@ -125,7 +125,7 @@ async function loadOperations(db, requestId) {
   });
 }
 
-async function requireReviewerProject(env, request, slug, { apply = false } = {}) {
+export async function requireReviewerProject(env, request, slug, { apply = false } = {}) {
   await ensureProjectChangeRequestSchema(env);
   const user = await requireSession(env, request);
   const project = await getAuthorizedProject(env, user, slug);
