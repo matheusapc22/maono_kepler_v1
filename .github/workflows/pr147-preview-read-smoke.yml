@@ -1,0 +1,30 @@
+name: PR147 Preview read smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/change-requests-ticket-lifecycle]
+    paths:
+      - .github/workflows/pr147-preview-read-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-request-d1-rollout
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: github.repository == 'matheusapc22/maono_kepler_v1' && github.ref == 'refs/heads/feat/change-requests-ticket-lifecycle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify deployed Preview health, runtime and D1 read
+        env:
+          MAONO_PREVIEW_BASE_URL: https://feat-change-requests-ticket.maono-kepler-v1.pages.dev
+        run: node scripts/preview/smoke-preview.mjs
