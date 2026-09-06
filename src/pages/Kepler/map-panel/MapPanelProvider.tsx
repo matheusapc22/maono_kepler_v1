@@ -136,6 +136,22 @@ function reviewReadOnlyContext(context: MapPanelContextValue): MapPanelContextVa
   };
 }
 
+function viewerPresentationContext(
+  context: MapPanelContextValue,
+): MapPanelContextValue {
+  if (context.mode !== "viewer") return context;
+
+  return {
+    ...context,
+    capabilities: {
+      ...context.capabilities,
+      // A rota Viewer apenas consome a configuração de tooltip já salva.
+      // O editor de tooltip não faz parte da experiência de somente leitura.
+      configureTooltips: false,
+    },
+  };
+}
+
 function legacyReadOnlyContext(): MapPanelContextValue {
   return {
     policyVersion: 0,
@@ -316,9 +332,10 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const resolvedContext = reviewWorkspace
+        const routedContext = reviewWorkspace
           ? reviewReadOnlyContext(context)
           : context;
+        const resolvedContext = viewerPresentationContext(routedContext);
 
         setState({
           status: "ready",
