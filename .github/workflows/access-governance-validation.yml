@@ -34,6 +34,7 @@ on:
       - "migrations/0015_project_preview_lifecycle.sql"
       - "migrations/0018_project_lifecycle.sql"
       - "migrations/0021_change_request_lifecycle.sql"
+      - "migrations/0023_change_request_resubmissions.sql"
       - "docs/architecture/S03-project-lifecycle.md"
       - "docs/architecture/S04-map-config-repository.md"
       - "docs/architecture/S05-atomic-project-revisions.md"
@@ -116,6 +117,7 @@ jobs:
           tests/access-delegation.test.mjs
           tests/admin-user-manager-delegation-map.test.mjs
           tests/cloudflare-build-chunking.test.mjs
+          tests/project-change-request-resubmission.test.mjs
 
       - name: GATE A — Foundation stability
         shell: bash
