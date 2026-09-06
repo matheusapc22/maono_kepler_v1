@@ -1,5 +1,6 @@
 import ViewerPersistentMutationRuntime from "./ViewerPersistentMutationRuntime.tsx";
 import ViewerWorkingCopyRuntimeLegacy from "./ViewerWorkingCopyRuntimeLegacy.tsx";
+import { coordinateViewerWorkingCopyStore } from "./viewer-working-copy-coordinator.ts";
 import type {
   ViewerWorkingCopy,
   ViewerWorkingCopyStore,
@@ -21,10 +22,12 @@ type Props = {
  * Both share the same immutable Working Copy boundary.
  */
 export default function ViewerWorkingCopyRuntime(props: Props) {
+  const coordinatedStore = coordinateViewerWorkingCopyStore(props.store);
+
   return (
     <>
-      <ViewerWorkingCopyRuntimeLegacy {...props} />
-      <ViewerPersistentMutationRuntime {...props} />
+      <ViewerWorkingCopyRuntimeLegacy {...props} store={coordinatedStore} />
+      <ViewerPersistentMutationRuntime {...props} store={coordinatedStore} />
     </>
   );
 }
