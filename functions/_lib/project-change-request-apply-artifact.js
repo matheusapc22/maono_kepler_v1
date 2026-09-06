@@ -3,9 +3,10 @@ import { getDb, tableExists } from './organizations.js';
 export async function isChangeRequestApplyArtifactSchemaReady(env) {
   if (!(await tableExists(env, 'project_change_request_apply_artifacts'))) return false;
   const db = getDb(env);
-  const columns = await db.prepare('PRAGMA table_info(project_change_request_apply_artifacts)').all();
-  const names = new Set((columns?.results || []).map(column => column.name));
-  if (!['change_request_id','checksum','size_bytes','base_revision','created_at'].every(name => names.has(name))) return false;
+  const columns = await db.prepare(`SELECT COUNT(*) AS count
+    FROM pragma_table_info('project_change_request_apply_artifacts')
+    WHERE name IN ('change_request_id','checksum','size_bytes','base_revision','created_at')`).first();
+  if (Number(columns?.count) !== 5) return false;
   const trigger = await db.prepare(`SELECT COUNT(*) AS count FROM sqlite_master
     WHERE type='trigger' AND name='trg_change_request_apply_artifact_immutable'`).first();
   return Number(trigger?.count) === 1;
