@@ -41,8 +41,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: change-request-production-acceptance
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'release' || github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
