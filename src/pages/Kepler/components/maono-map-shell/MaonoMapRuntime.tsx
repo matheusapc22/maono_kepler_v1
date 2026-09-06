@@ -4,7 +4,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import { useSession } from "../../../../auth/session";
 import PointFromPinWorkflow from "../../change-requests/PointFromPinWorkflow";
@@ -340,6 +340,14 @@ export default function MaonoMapRuntime({
       }
     >
       {children}
+      {context.mode === "editor" && context.project?.slug ? (
+        <Link
+          to={`/projects/${encodeURIComponent(context.project.slug)}/requests`}
+          style={{ position: "fixed", right: 24, bottom: 55, zIndex: 10020,
+            padding: "12px 16px", borderRadius: 10, background: "#11151b",
+            color: "#f1d28a", border: "1px solid #c5a059" }}
+        >Solicitações</Link>
+      ) : null}
       {customMapOverlayEnabled ? (
         <>
           <MapOverlayControls />

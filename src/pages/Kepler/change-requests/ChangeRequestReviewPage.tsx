@@ -810,6 +810,9 @@ function ReviewWorkspaceOverlay({
             <small>Review workspace</small>
             <h1>{review?.project.name || "Revisão de alteração"}</h1>
           </div>
+          <Link to={`/projects/${encodeURIComponent(projectSlug)}/requests`}>
+            Solicitações
+          </Link>
           <Link to={`/projects/${encodeURIComponent(projectSlug)}/edit`}>
             Voltar ao projeto
           </Link>

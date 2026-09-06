@@ -23,6 +23,9 @@ const AdminPage = lazy(() => import("./pages/Admin"));
 const MapManagementPage = lazy(
   () => import("./pages/Kepler/map-panel/MapManagementPage"),
 );
+const EditorRequestInboxPage = lazy(
+  () => import("./pages/Kepler/change-requests/EditorRequestInboxPage"),
+);
 const ChangeRequestReviewPage = lazy(
   () => import("./pages/Kepler/change-requests/ChangeRequestReviewPage"),
 );
@@ -204,6 +207,11 @@ const AppRoutes: React.FC = () => {
             <KeplerApp />
           </WithSuspense>
         }
+      />
+
+      <Route
+        path="/projects/:projectSlug/requests"
+        element={<WithSuspense><EditorRequestInboxPage /></WithSuspense>}
       />
 
       <Route

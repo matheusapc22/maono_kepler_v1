@@ -1,0 +1,17 @@
+.maono-editor-inbox { min-height: 100vh; padding: clamp(20px, 4vw, 56px); background: #11151b; color: #f5f2eb; }
+.maono-editor-inbox header, .maono-editor-inbox nav, .maono-editor-inbox__filters { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.maono-editor-inbox h1 { margin: 6px 0; font-size: 26px; }
+.maono-editor-inbox h2 { margin: 8px 0; font-size: 18px; }
+.maono-editor-inbox small { color: #c5a059; }
+.maono-editor-inbox a { color: #f1d28a; }
+.maono-editor-inbox button, .maono-editor-inbox select { border: 1px solid #c5a059; border-radius: 8px; padding: 10px 14px; background: #1a2029; color: #f5f2eb; }
+.maono-editor-inbox button { cursor: pointer; }
+.maono-editor-inbox button:disabled { opacity: .5; cursor: default; }
+.maono-editor-inbox :focus-visible { outline: 2px solid #f1d28a; outline-offset: 3px; }
+.maono-editor-inbox__list { list-style: none; margin: 24px 0; padding: 0; display: grid; gap: 12px; }
+.maono-editor-inbox__list li { padding: 20px; border: 1px solid rgb(197 160 89 / 32%); border-radius: 12px; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.maono-editor-inbox__list li > div { min-width: 0; }
+.maono-editor-inbox__list p { overflow-wrap: anywhere; white-space: pre-wrap; }
+.maono-editor-inbox__list a { flex-shrink: 0; }
+.maono-editor-inbox__pagination { margin-top: 24px; }
+@media (max-width: 640px) { .maono-editor-inbox__list li { align-items: flex-start; flex-direction: column; } }

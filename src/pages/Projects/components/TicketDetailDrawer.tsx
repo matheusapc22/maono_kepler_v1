@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { useEffect, useRef, useState } from "react";
 
 import TicketAttachmentList from "./TicketAttachmentList";
@@ -215,6 +216,11 @@ export default function TicketDetailDrawer({
               </div>
 
               <p>{ticket.description}</p>
+              {detail.changeRequest ? (
+                <Link className="ticket-primary-action" to={detail.changeRequest.reviewUrl}>
+                  Abrir Review
+                </Link>
+              ) : null}
 
               <dl>
                 <div>

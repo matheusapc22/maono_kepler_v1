@@ -113,6 +113,7 @@ export type TicketListResponse = {
 };
 
 export type TicketDetailResponse = {
+  changeRequest?: { id: string; status: string; reviewUrl: string } | null;
   ok: boolean;
   ticket: Ticket;
   attachments: TicketAttachment[];
