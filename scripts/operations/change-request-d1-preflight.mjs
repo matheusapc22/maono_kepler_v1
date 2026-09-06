@@ -26,12 +26,14 @@ try {
   const database = matches[0];
   record('Configured account authenticated; unique D1 maono_maps found.');
   let bindingConfirmed = false;
+  let qaReady = false;
   try {
     const project = await api('pages/projects/maono-kepler-v1');
     const production = project.deployment_configs?.production?.d1_databases?.DB?.id;
     const preview = project.deployment_configs?.preview?.d1_databases?.DB?.id;
     bindingConfirmed = production === database.uuid;
     const qa = project.deployment_configs?.preview?.env_vars || {};
+    qaReady = Boolean(qa.MAONO_PREVIEW_QA_ORG_ID?.value) && qa.MAONO_PREVIEW_MUTATIONS_ENABLED?.value === 'true';
     record(`Preview QA configuration: organization configured ${Boolean(qa.MAONO_PREVIEW_QA_ORG_ID?.value)}, mutations enabled ${qa.MAONO_PREVIEW_MUTATIONS_ENABLED?.value === 'true'}.`);
     record(`Production DB binding matches maono_maps: ${bindingConfirmed}; preview matches: ${preview === database.uuid}.`);
   } catch (error) {
@@ -52,7 +54,10 @@ try {
   // Only known migration filenames are reported; no row/user data is logged.
   const applied = migrations.some(row => row.name === '0021_change_request_lifecycle.sql');
   record(`Migration 0021 recorded as applied: ${applied}; total remote migrations: ${migrations.length}.`);
+  const qaOrganizations = query("SELECT COUNT(*) AS count FROM organizations WHERE slug='maono-preview-qa'");
+  record(`Dedicated QA organization exists: ${Number(qaOrganizations[0].count) === 1}; QA session supplied to runner: ${Boolean(process.env.MAONO_PREVIEW_SESSION_COOKIE)}.`);
   if (process.env.MAONO_APPLY_0021 === 'true') {
+    if (!qaReady || !process.env.MAONO_PREVIEW_SESSION_COOKIE) throw new Error('Authenticated QA acceptance must be available before opening the incompatible-writer migration window');
     if (process.env.GITHUB_REF !== 'refs/heads/ops/change-request-0021-rollout') throw new Error('Apply requires the dedicated rollout branch');
     const migration = 'migrations/0021_change_request_lifecycle.sql';
     if (createHash('sha256').update(readFileSync(migration)).digest('hex') !== 'd22adb6de0e6f38b9d0100ee4517ce4689b7c9ca96da0d3942d4f6b9c2a1ba2f') throw new Error('Migration checksum differs from reviewed 0021');
