@@ -1,4 +1,17 @@
-import { tableExists } from './organizations.js';
+import { getDb, tableExists } from './organizations.js';
+
+export async function isChangeRequestApplyArtifactSchemaReady(env) {
+  if (!(await tableExists(env, 'project_change_request_apply_artifacts'))) return false;
+  const db = getDb(env);
+  const columns = await db.prepare(`SELECT COUNT(*) AS count
+    FROM pragma_table_info('project_change_request_apply_artifacts')
+    WHERE name IN ('change_request_id','checksum','size_bytes','base_revision','created_at')`).first();
+  if (Number(columns?.count) !== 5) return false;
+  const trigger = await db.prepare(`SELECT COUNT(*) AS count FROM sqlite_master
+    WHERE type='trigger' AND name='trg_change_request_apply_artifact_immutable'`).first();
+  return Number(trigger?.count) === 1;
+}
+
 export function readChangeRequestApplyArtifact(request, row) {
   const checksum = String(request.headers.get('X-Maono-Config-Checksum') || '').toLowerCase();
   const sizeBytes = Number(request.headers.get('X-Maono-Config-Size'));
@@ -11,7 +24,7 @@ export function readChangeRequestApplyArtifact(request, row) {
   return { checksum, sizeBytes, baseRevision };
 }
 export async function claimChangeRequestApplyArtifact(env, db, row, artifact) {
-  if (!(await tableExists(env, 'project_change_request_apply_artifacts'))) throw Object.assign(new Error('Migration 0022 required'), {code:'CHANGE_REQUEST_APPLY_SCHEMA_OUTDATED',status:503});
+  if (!(await isChangeRequestApplyArtifactSchemaReady(env))) throw Object.assign(new Error('Migration 0022 required'), {code:'CHANGE_REQUEST_APPLY_SCHEMA_OUTDATED',status:503});
   await db.prepare(`INSERT INTO project_change_request_apply_artifacts(change_request_id,checksum,size_bytes,base_revision)
     VALUES(?,?,?,?) ON CONFLICT(change_request_id) DO NOTHING`).bind(row.id,artifact.checksum,artifact.sizeBytes,artifact.baseRevision).run();
   const claimed = await db.prepare('SELECT * FROM project_change_request_apply_artifacts WHERE change_request_id=?').bind(row.id).first();

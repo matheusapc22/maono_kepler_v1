@@ -1,4 +1,6 @@
+import { isChangeRequestApplyArtifactSchemaReady } from "../_lib/project-change-request-apply-artifact.js";
 import { isChangeRequestLifecycleSchemaReady } from "../_lib/project-change-request-lifecycle.js";
+import { isChangeRequestResubmissionSchemaReady } from "../_lib/project-change-request-stack-readiness.js";
 import { jsonResponse, errorResponse, methodNotAllowed } from "../_lib/http.js";
 import { publicRuntimeDiagnostics } from "../_lib/runtime-environment.js";
 
@@ -17,12 +19,16 @@ export async function onRequest(context) {
       dropboxRefreshToken: Boolean(env.DROPBOX_REFRESH_TOKEN),
       databaseReachable: false,
       changeRequestLifecycleReady: false,
+      changeRequestApplyArtifactReady: false,
+      changeRequestResubmissionReady: false,
     };
 
     if (env.DB) {
       await env.DB.prepare("SELECT 1 AS ok").first();
       checks.databaseReachable = true;
       checks.changeRequestLifecycleReady = await isChangeRequestLifecycleSchemaReady(env);
+      checks.changeRequestApplyArtifactReady = await isChangeRequestApplyArtifactSchemaReady(env);
+      checks.changeRequestResubmissionReady = await isChangeRequestResubmissionSchemaReady(env);
     }
 
     const ok = Object.values(checks).every(Boolean);
