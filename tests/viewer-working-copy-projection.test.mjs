@@ -65,8 +65,18 @@ const [
 test("runtime composto monta legado e cobertura persistente sobre a mesma Working Copy", () => {
   assert.match(runtimeComposition, /ViewerWorkingCopyRuntimeLegacy/);
   assert.match(runtimeComposition, /ViewerPersistentMutationRuntime/);
-  assert.match(runtimeComposition, /<ViewerWorkingCopyRuntimeLegacy \{\.\.\.props\} \/>/);
-  assert.match(runtimeComposition, /<ViewerPersistentMutationRuntime \{\.\.\.props\} \/>/);
+  assert.match(
+    runtimeComposition,
+    /const coordinatedStore = coordinateViewerWorkingCopyStore\(props\.store\)/,
+  );
+  assert.match(
+    runtimeComposition,
+    /<ViewerWorkingCopyRuntimeLegacy \{\.\.\.props\} store=\{coordinatedStore\} \/>/,
+  );
+  assert.match(
+    runtimeComposition,
+    /<ViewerPersistentMutationRuntime \{\.\.\.props\} store=\{coordinatedStore\} \/>/,
+  );
   assert.match(runtime, /untrackedLatchedRef/);
   assert.match(runtime, /pendingProjectionAckRef/);
   assert.match(persistentRuntime, /replayingRef/);
