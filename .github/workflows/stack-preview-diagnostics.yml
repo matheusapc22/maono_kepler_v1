@@ -1,0 +1,42 @@
+name: Stacked Preview diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [refactor/change-request-large-apply]
+    paths: [.github/workflows/stack-preview-diagnostics.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read Pages build outcome without changing deployment or D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'JS'
+          const root = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/pages/projects/maono-kepler-v1`;
+          async function get(path) {
+            const r = await fetch(root + path, {headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`}});
+            if(!r.ok) throw new Error(`Pages diagnostic HTTP ${r.status}`);
+            const data = await r.json();
+            if(!data.success) throw new Error('Pages diagnostic request rejected');
+            return data.result;
+          }
+          const deployment = await get('/deployments/55fcb20f-8c06-4c39-a042-2786d6c344ad');
+          if(deployment.environment !== 'preview') throw new Error('Unexpected deployment environment');
+          // Never print configuration, environment variables or raw build logs.
+          for(const stage of deployment.stages || []) console.log(JSON.stringify({stage:stage.name,status:stage.status}));
+          const logs = await get('/deployments/55fcb20f-8c06-4c39-a042-2786d6c344ad/history/logs');
+          const lines = (logs.data || []).map(x=>String(x.line || x.message || ''));
+          const signatures = [/error TS\d+/g, /Could not resolve/g, /out of memory/gi, /heap limit/gi, /Failed to compile/gi, /Build exceeded/gi, /exceeded.*limit/gi, /No matching export/g];
+          for(const signature of signatures) console.log(JSON.stringify({signature:signature.source,count:lines.filter(x=>signature.test(x)).length}));
+          // Compiler locations and error codes contain no runtime credentials.
+          for(const line of lines) {
+            const ts = line.match(/([\w./-]+\.tsx?)\((\d+),(\d+)\): error (TS\d+)/);
+            if(ts) console.log(JSON.stringify({file:ts[1],line:ts[2],column:ts[3],code:ts[4]}));
+          }
+          console.log(JSON.stringify({logLines:lines.length}));
+          JS
