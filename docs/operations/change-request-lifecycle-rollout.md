@@ -32,12 +32,19 @@ Esperado: cinco objetos presentes e zero divergências. Feedback histórico não
 
 `GET /api/health`: `checks.changeRequestLifecycleReady === true`. A verificação inclui todos os campos e os quatro triggers, não apenas existência da tabela. CI e Cloudflare devem estar verdes no SHA mesclado. Em uma organização de QA autorizada, verificar rejeição com feedback e repetição, aprovação, Ticket sincronizado e imutabilidade dos estados terminais.
 
-## Bloqueio externo verificado nesta execução
+## Retomada com Repository Secrets — 2026-09-06
 
-Etapa bloqueada: aplicação/validação remota da migration, antes de merge e pós-merge da PR 1.
+O workflow `change-request-d1-preflight.yml` usa exclusivamente `secrets.CLOUDFLARE_API_TOKEN` e `secrets.CLOUDFLARE_ACCOUNT_ID` no runner. A execução controlada na branch da PR é somente leitura; `workflow_dispatch` fica disponível após registro na base. Não há aplicação automática por push ou PR.
 
-Evidências: o ambiente não contém `CLOUDFLARE_API_TOKEN`, `CF_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` nem `CLOUDFLARE_D1_DATABASE_ID`. Não há configuração autenticada Wrangler disponível. A busca de plugins por Cloudflare não retornou integração. O repositório tem workflows de validação, mas nenhum workflow de aplicação de migrations; os arquivos Wrangler versionados são configurações locais/exemplos. O conector GitHub permite PR/CI/merge, mas não dá acesso ao banco D1.
+Execução inicial: https://github.com/matheusapc22/maono_kepler_v1/actions/runs/34035297692
 
-Ações: sincronização da base e confirmação do deploy; inspeção de workflows/configurações; verificação apenas da presença das variáveis (nenhum segredo foi impresso); descoberta de integrações; implementação de migration, testes SQLite e health check para o rollout. Nenhuma alteração remota de banco foi tentada sem acesso autenticado.
+- Autenticação D1 aprovada; exatamente um banco `maono_maps` na conta configurada.
+- Ledger remoto contém 17 migrations; `0021_change_request_lifecycle.sql` não consta como aplicada.
+- Tabela `project_change_requests` presente; journal e quatro triggers da 0021 ausentes.
+- API Pages `pages/projects/maono-kepler-v1` retorna HTTP 403. O token D1 não permite confirmar o binding atual de produção. Nenhuma escrita remota realizada.
 
-Menor ação humana: disponibilizar acesso autenticado ao Cloudflare/D1 por configuração segura do ambiente, permitindo coordenar a migration e o deploy. Alternativamente, um operador pode aplicar somente 0021 no D1 alvo durante a janela combinada e fornecer o resultado das consultas acima, para que o merge/deploy e sua verificação sejam retomados. Não enviar tokens no chat.
+Gate bloqueado: confirmação inequívoca do ambiente alvo, anterior à aplicação da migration da PR #147. Menor ação humana: conceder ao mesmo token `Account / Cloudflare Pages / Read` na conta já autorizada e atualizar o Repository Secret se necessário; alternativamente fornecer evidência do binding Production `DB` no painel do projeto, com nome e UUID do D1 (sem token nem Account ID). O workflow pode então ser reexecutado. Não ampliar para Pages Write.
+
+Esse 403 é da API administrativa Pages, não do endpoint HTTP do preview. A verificação HTTP do preview é executada separadamente, sem enviar credenciais D1, e registra apenas status/redirecionamento e readiness. A permissão Pages Read não substitui eventual autorização Cloudflare Access.
+
+Após confirmar binding: verificar novamente ledger/schema, preparar aplicação isolada da 0021 e coordenar a janela de writers descrita acima. Não mesclar #147 nem iniciar PR 2 enquanto esses gates estiverem pendentes.

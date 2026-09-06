@@ -50,6 +50,17 @@ try {
   record(`Migration 0021 recorded as applied: ${applied}; total remote migrations: ${migrations.length}.`);
   const schema = query("SELECT name FROM sqlite_master WHERE name IN ('project_change_requests','project_change_request_events','trg_change_request_lifecycle_guard','trg_change_request_lifecycle_sync','trg_change_request_lifecycle_created','trg_ticket_change_request_status_guard')");
   record(`Lifecycle schema objects present: ${schema.map(row => row.name).join(', ')}.`);
+  try {
+    const health = await fetch('https://8ef07e75.maono-kepler-v1.pages.dev/api/health', {redirect:'manual'});
+    const location = health.headers.get('location') || '';
+    let accessRedirect = false;
+    try { accessRedirect = new URL(location).hostname.endsWith('.cloudflareaccess.com'); } catch {}
+    record(`Preview HTTP health status: ${health.status}; Cloudflare Access redirect: ${accessRedirect}. No D1 credential was sent to the preview.`);
+    if (health.ok) {
+      const body = await health.json();
+      record(`Preview lifecycle readiness: ${body.checks?.changeRequestLifecycleReady === true}.`);
+    }
+  } catch { record('Preview HTTP health request unavailable from runner; D1 verification is independent.'); }
   if (!bindingConfirmed) throw new Error('Target environment binding unverified: Pages project read access or independently audited binding evidence required');
   record('Read-only target preflight passed. No migration was applied by this workflow.');
 } finally {
