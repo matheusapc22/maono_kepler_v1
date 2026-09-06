@@ -1,3 +1,5 @@
+import { isLargeProjectConfigRequest, INLINE_CONFIG_HARD_LIMIT_BYTES, saveLargeProjectConfigStream } from './project-large-config-save.js';
+import { readChangeRequestApplyArtifact, claimChangeRequestApplyArtifact } from './project-change-request-apply-artifact.js';
 import { ensureChangeRequestLifecycleSchema, publicRequestLifecycle, transitionRequestLifecycle } from "./project-change-request-lifecycle.js";
 import { requireSession } from "./auth.js";
 import { can, recordAuditLog } from "./permissions.js";
@@ -218,6 +220,8 @@ async function baseRevisionLedger(env, project, revision) {
 
 async function readVerifiedBaseRevisionForApply(env, project, revision) {
   const ledger = await baseRevisionLedger(env, project, revision);
+  if (Number(ledger.size_bytes) > INLINE_CONFIG_HARD_LIMIT_BYTES) throw reviewError(
+    'Atualize a página para aplicar este MapConfig pelo transporte em blocos.', 413, 'CHANGE_REQUEST_LARGE_APPLY_REQUIRED');
   const repository = resolveMapConfigRepository(env);
   const stored = await repository.getRevision({
     project,
@@ -575,28 +579,34 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   }
 
   const baseRevision = Number(context.row.base_revision || 0);
-  const base = await readVerifiedBaseRevisionForApply(
-    env,
-    context.project,
-    baseRevision,
-  );
+  const streaming = isLargeProjectConfigRequest(request);
   let proposal;
-  try {
-    proposal = buildProjectChangeProposal({
-      baseConfig: base.config,
-      operations: context.operations,
-    });
-  } catch (error) {
-    if (isProjectChangeOperationConflict(error)) {
-      context.row = await ensureUnderReview(env, request, context);
-      await markConflict(env, request, context, context.row, error, {
-        currentRevision: Number(context.project.config_revision || 0),
+  let artifact;
+  if (streaming) {
+    artifact = readChangeRequestApplyArtifact(request, context.row);
+  } else {
+    const base = await readVerifiedBaseRevisionForApply(
+      env,
+      context.project,
+      baseRevision,
+    );
+    try {
+      proposal = buildProjectChangeProposal({
+        baseConfig: base.config,
+        operations: context.operations,
       });
+    } catch (error) {
+      if (isProjectChangeOperationConflict(error)) {
+        context.row = await ensureUnderReview(env, request, context);
+        await markConflict(env, request, context, context.row, error, {
+          currentRevision: Number(context.project.config_revision || 0),
+        });
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const artifact = await buildProjectConfigArtifact(proposal.config);
+    artifact = await buildProjectConfigArtifact(proposal.config);
+  }
   const currentRevision = Number(context.project.config_revision || 0);
   const recoveryAttempt =
     context.row.status === "applying" && currentRevision === baseRevision + 1;
@@ -615,6 +625,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     throw conflict;
   }
 
+  if (streaming) await claimChangeRequestApplyArtifact(env, context.db, context.row, artifact);
   context.row = await ensureApproved(env, request, context);
   if (context.row.status === "approved") {
     const updated = await transitionStatus(
@@ -660,7 +671,9 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
 
   let saved;
   try {
-    saved = await saveVersionedProjectConfig(env, {
+    saved = streaming ? await saveLargeProjectConfigStream(env, {
+      request, project: context.project, user: context.user, expectedContentHash: artifact.checksum, allowSmall: true,
+    }) : await saveVersionedProjectConfig(env, {
       project: context.project,
       config: proposal.config,
       expectedConfigRevision: baseRevision,

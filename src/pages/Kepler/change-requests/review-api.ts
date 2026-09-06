@@ -285,7 +285,12 @@ export async function applyProjectChangeReview(
   changeRequestId: string,
 ) {
   const key = cacheKey(projectSlug, changeRequestId);
+  // Dynamic import avoids a module-initialization cycle with the base loader.
+  const { prepareReviewApplyArtifact } = await import('./review-apply-artifact');
+  const current = await getProjectChangeReview(projectSlug, changeRequestId, { force: true });
+  const artifact = current.changeRequest.status === 'applied' ? null : await prepareReviewApplyArtifact(projectSlug, changeRequestId);
   const response = await fetch(`${itemUrl(projectSlug, changeRequestId)}/apply`, {
+    ...(artifact || {}),
     method: "POST",
     credentials: "include",
     cache: "no-store",

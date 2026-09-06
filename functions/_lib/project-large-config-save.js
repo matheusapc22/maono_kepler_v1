@@ -82,7 +82,7 @@ export function assertInlineProjectConfigRequestSize(request) {
   return true;
 }
 
-function validateLargeSaveHeaders(request) {
+function validateLargeSaveHeaders(request, allowSmall = false) {
   if (!isLargeProjectConfigRequest(request)) {
     throw saveError(
       "Contrato de save grande não informado.",
@@ -123,7 +123,7 @@ function validateLargeSaveHeaders(request) {
       { field: "version" },
     );
   }
-  if (declaredSize <= LARGE_CONFIG_THRESHOLD_BYTES) {
+  if (!allowSmall && declaredSize <= LARGE_CONFIG_THRESHOLD_BYTES) {
     throw saveError(
       "Payload não requer o modo de save grande.",
       400,
@@ -392,7 +392,7 @@ function assertExpectedRevisionBeforeStreaming(project, expectedRevision) {
 
 export async function saveLargeProjectConfigStream(
   env,
-  { request, project, user, saveTrace = null },
+  { request, project, user, saveTrace = null, expectedContentHash = null, allowSmall = false },
 ) {
   if (!request?.body || typeof request.body.getReader !== "function") {
     throw saveError(
@@ -409,7 +409,7 @@ export async function saveLargeProjectConfigStream(
     );
   }
 
-  const manifest = validateLargeSaveHeaders(request);
+  const manifest = validateLargeSaveHeaders(request, allowSmall);
   assertExpectedRevisionBeforeStreaming(project, manifest.expectedRevision);
 
   const nextRevision = manifest.expectedRevision + 1;
@@ -512,6 +512,9 @@ export async function saveLargeProjectConfigStream(
       blockDigests.push(await dropboxContentHashBlockDigest(finalBlock));
     }
     const contentHash = await dropboxContentHashFromBlockDigestsHex(blockDigests);
+    if (expectedContentHash && contentHash !== expectedContentHash) {
+      throw saveError('O conteúdo recebido não corresponde ao artefato do Apply.', 409, 'CHANGE_REQUEST_APPLY_CHECKSUM_MISMATCH');
+    }
     const artifact = {
       checksum: contentHash,
       contentHash,
