@@ -16,6 +16,8 @@ on:
       - "tests/save-*.test.mjs"
       - "tests/dropbox-*.test.mjs"
       - "tests/project-large-save.test.mjs"
+      - "tests/change-request-large-apply.test.mjs"
+      - "functions/_lib/project-change-request-*.js"
       - "tests/project-large-legacy-lifecycle.test.mjs"
       - "tests/project-config-stream-watchdog.test.mjs"
       - "tests/project-config-revision-recycle.test.mjs"
@@ -56,3 +58,6 @@ jobs:
 
       - name: Validate unpublished revision recycling
         run: node --test tests/project-config-revision-recycle.test.mjs
+
+      - name: Validate Change Request streaming apply
+        run: node --test tests/change-request-large-apply.test.mjs

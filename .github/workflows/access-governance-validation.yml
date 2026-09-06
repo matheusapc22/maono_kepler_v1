@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - mano_kepler_v1
+      - feat/change-requests-ticket-lifecycle
+      - refactor/change-request-large-apply
+      - feat/viewer-request-tracking
     paths:
       - "functions/_middleware.js"
       - "functions/_lib/access-governance.js"
