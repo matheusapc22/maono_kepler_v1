@@ -136,9 +136,12 @@ test("registry suporta operações Viewer v1", () => {
     "layer.duplicate",
     "layer.remove",
     "layer.style.update",
+    "layer.definition.update",
     "layer.visibility.update",
     "persistent.filter.update",
     "layer.order.update",
+    "tooltip.config.update",
+    "map.blending.update",
     "buffer.create",
     "isochrone.create",
   ]);
