@@ -69,3 +69,16 @@ Motivo: abrir agora a janela de incompatibilidade dos writers antigos, sem poder
 Ação mínima para o aceite: disponibilizar a organização e conta QA do roteiro `production-db-preview-testing.md`, configurar em Preview `MAONO_RUNTIME_ENV=preview`, `MAONO_PREVIEW_QA_ORG_ID` com o ID dessa organização e `MAONO_PREVIEW_QA_ORG_SLUG=maono-preview-qa`; habilitar `MAONO_PREVIEW_MUTATIONS_ENABLED=true` apenas após validar o isolamento previsto no roteiro. Armazenar a sessão dessa conta QA em `MAONO_PREVIEW_SESSION_COOKIE` nos Repository Secrets, nunca no chat. Não alterar permissões de organizações reais nem desligar a política de Preview.
 
 PR #147 permanece draft e não mesclada; PRs 2–4 não iniciadas. Nenhuma migration nem escrita de domínio remota foi executada nesta retomada.
+
+
+## Seed QA concluído — 2026-09-06
+
+Autorização explícita: usuário existente `matheusapc22@gmail.com` como QA temporário, mantendo Super Admin global. SQL gerado pelo builder existente e revisado; SHA256 `b568a451bba867aa47fbb6b19c66381068323ad1ed6a4da356785bcc136ba0b0`. Repetição local confirmou idempotência, organização real intacta e perfil global intacto.
+
+Execução controlada de produção: https://github.com/matheusapc22/maono_kepler_v1/actions/runs/34037524339 — sucesso. A branch operacional de seed não ativa `MAONO_APPLY_0021`. Para a importação D1, apenas BEGIN/COMMIT explícitos são removidos do SQL revisado; o importador controla a transação. Os SELECTs de validação são executados novamente após a importação.
+
+Resultado remoto validado: exatamente uma organização Maõno Preview QA / maono-preview-qa com root `/Apps/MaonoKepler/preview/qa`; exatamente um vínculo owner do usuário autorizado; id e role global do usuário inalterados. `MAONO_PREVIEW_QA_ORG_ID=9`. Ledger: 17 migrations; 0021 pendente.
+
+Próxima configuração preparada em `pr147-preview-qa-config.json`: somente ambiente Preview, quatro variáveis, mutations=false. O token disponibilizado tem Pages Read; a API de atualização de projeto requer Pages Write (Cloudflare Pages Edit no painel): https://developers.cloudflare.com/api/resources/pages/subresources/projects/methods/edit/ . Não houve ampliação de privilégio nem tentativa de contornar essa permissão. Nenhuma variável Pages foi alterada. Após Pages Edit autorizado pelo operador, preservar todas as demais configurações/bindings e verificar por leitura antes de novo Preview e testes fail-closed.
+
+A sessão de aplicação esperada pelo smoke é o header Cookie no formato `maono_session=<valor>`. O login `/api/auth/login` valida a senha e emite a sessão; token D1 e CF_Authorization não substituem essa sessão. Não criar sessões diretamente no D1. Esse gate será tratado depois da configuração/deploy, seguindo a ordem solicitada.
