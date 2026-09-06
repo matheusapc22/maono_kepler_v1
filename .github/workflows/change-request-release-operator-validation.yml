@@ -1,0 +1,29 @@
+name: Change Request release operator validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/change-request-release-operator.yml"
+      - ".github/workflows/change-request-release-operator-validation.yml"
+      - "tests/change-request-release-operator.test.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate operator contract
+        run: node --test tests/change-request-release-operator.test.mjs
