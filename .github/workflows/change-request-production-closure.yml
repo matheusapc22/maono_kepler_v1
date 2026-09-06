@@ -1,0 +1,77 @@
+name: Change Request production closure
+
+on:
+  pull_request:
+    branches:
+      - mano_kepler_v1
+      - feat/viewer-request-tracking
+    paths:
+      - ".github/workflows/change-request-production-closure.yml"
+      - "scripts/operations/change-request-release-closure.mjs"
+      - "tests/change-request-release-closure.test.mjs"
+      - "docs/operations/change-request-production-release-gate.md"
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Digite VERIFY_QA_CHANGE_REQUEST_CLOSED para verificar o fechamento fail-closed"
+        required: true
+        type: string
+      preview_base_url:
+        description: "Origin HTTPS do deployment Preview integrado"
+        required: true
+        type: string
+      production_base_url:
+        description: "Origin HTTPS de Production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-request-production-closure-${{ github.event_name == 'workflow_dispatch' && 'release' || github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate closure contract
+        run: node --test tests/change-request-release-closure.test.mjs
+
+      - name: Validate closure script syntax
+        run: node --check scripts/operations/change-request-release-closure.mjs
+
+  closure:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/ops/change-request-release-acceptance' &&
+      inputs.confirmation == 'VERIFY_QA_CHANGE_REQUEST_CLOSED'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MAONO_PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
+      MAONO_PRODUCTION_BASE_URL: ${{ inputs.production_base_url }}
+    steps:
+      - name: Checkout audited release branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify Preview returned fail-closed
+        run: node scripts/operations/change-request-release-closure.mjs
