@@ -8,6 +8,7 @@ import {
   mapToolReducer,
 } from "../src/pages/Kepler/components/map-overlay/analysis-tools/map-tool-state.ts";
 import { withWorkspaceEditingParity } from "../functions/_lib/project-map-workspace-capabilities.js";
+import { authorizeMapPanelCommand } from "../src/pages/Kepler/map-panel/map-panel-capabilities.ts";
 
 const [
   overlay,
@@ -321,7 +322,22 @@ test("PR3 Editor/Create preservam importação, SAVE e Pin independente de anál
 });
 
 test("Add Data genérico permanece fail-closed por importData", () => {
-  assert.match(mapCapabilities, /command === "openAddDataModal" \? "importData" : capability/);
+  const denied = authorizeMapPanelCommand(
+    { createLayer: true, importData: false },
+    "openAddDataModal",
+    "createLayer",
+  );
+  assert.equal(denied.ok, false);
+  assert.equal(denied.code, "CAPABILITY_DENIED");
+  assert.equal(denied.capability, "importData");
+
+  const allowed = authorizeMapPanelCommand(
+    { createLayer: false, importData: true },
+    "openAddDataModal",
+    "createLayer",
+  );
+  assert.equal(allowed.ok, true);
+
   assert.match(mapCapabilities, /requiredCapability/);
 });
 
