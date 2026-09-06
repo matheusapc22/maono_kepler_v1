@@ -1,7 +1,7 @@
+export { KeplerEngineAdapterProvider } from "./KeplerEngineAdapterProvider.tsx";
 export {
-  KeplerEngineAdapterProvider,
-  useKeplerEngineAdapter,
-} from "./KeplerEngineAdapterProvider.tsx";
+  useViewerAwareKeplerEngineAdapter as useKeplerEngineAdapter,
+} from "./useViewerAwareKeplerEngineAdapter.ts";
 export { createKeplerEngineCommands } from "./commands.ts";
 export {
   datasetFieldKind,
