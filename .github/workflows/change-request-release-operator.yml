@@ -103,6 +103,7 @@ jobs:
           node --test
           tests/change-request-release-gate.test.mjs
           tests/change-request-release-closure.test.mjs
+          tests/viewer-request-tracking-runtime.test.mjs
           tests/project-change-request-lifecycle.test.mjs
           tests/change-request-large-apply.test.mjs
           tests/project-change-request-resubmission.test.mjs
