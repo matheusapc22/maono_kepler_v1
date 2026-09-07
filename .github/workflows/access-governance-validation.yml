@@ -34,6 +34,7 @@ on:
       - "migrations/0015_project_preview_lifecycle.sql"
       - "migrations/0018_project_lifecycle.sql"
       - "migrations/0021_change_request_lifecycle.sql"
+      - "migrations/0022_change_request_apply_artifacts.sql"
       - "migrations/0023_change_request_resubmissions.sql"
       - "docs/architecture/S03-project-lifecycle.md"
       - "docs/architecture/S04-map-config-repository.md"
@@ -43,7 +44,9 @@ on:
       - "docs/architecture/GATE-A-foundation-stable.md"
       - "docs/architecture/macro-c/**"
       - "docs/operations/production-db-preview-testing.md"
+      - "docs/operations/change-request-production-release-gate.md"
       - "scripts/macro-c-gate.mjs"
+      - "scripts/operations/change-request-release-observability.mjs"
       - "scripts/preview/**"
       - "tests/fixtures/maps/**"
       - "tests/macro-c-*.test.mjs"
@@ -68,6 +71,7 @@ on:
       - "tests/access-delegation.test.mjs"
       - "tests/admin-user-manager-delegation-map.test.mjs"
       - "tests/cloudflare-build-chunking.test.mjs"
+      - "tests/change-request-release-gate.test.mjs"
       - "tests/map-config-*.test.mjs"
       - "tests/map-load-*.test.mjs"
       - "tests/project-*.test.mjs"
@@ -75,6 +79,7 @@ on:
       - "tests/result-types.test.mjs"
       - "tests/api-error-client.test.mjs"
       - ".github/workflows/access-governance-validation.yml"
+      - ".github/workflows/change-request-production-acceptance.yml"
   workflow_dispatch:
 
 permissions:
@@ -118,6 +123,7 @@ jobs:
           tests/admin-user-manager-delegation-map.test.mjs
           tests/cloudflare-build-chunking.test.mjs
           tests/project-change-request-resubmission.test.mjs
+          tests/change-request-release-gate.test.mjs
 
       - name: GATE A — Foundation stability
         shell: bash
