@@ -1,3 +1,4 @@
+import { previewOrigin, assertReleaseHealth } from './change-request-release-contracts.mjs';
 import { appendFileSync } from 'node:fs';
 
 const account = String(process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
@@ -45,6 +46,7 @@ async function checkHealth(baseUrl, expectedRuntime, { requirePreviewClosed = fa
   });
   if (!response.ok) throw new Error(`${expectedRuntime} health returned HTTP ${response.status}`);
   const body = await response.json();
+  assertReleaseHealth(response, body, expectedRuntime, { mutations: requirePreviewClosed ? false : undefined });
   if (body?.runtime?.runtime !== expectedRuntime) {
     throw new Error(`${expectedRuntime} health reported an unexpected runtime`);
   }
@@ -95,7 +97,7 @@ try {
   }
   record('Cloudflare Pages configuration confirms MAONO_PREVIEW_MUTATIONS_ENABLED=false.');
 
-  const previewBaseUrl = normalizeBaseUrl(process.env.MAONO_PREVIEW_BASE_URL, 'MAONO_PREVIEW_BASE_URL');
+  const previewBaseUrl = previewOrigin(process.env.MAONO_PREVIEW_BASE_URL);
   const productionBaseUrl = normalizeBaseUrl(process.env.MAONO_PRODUCTION_BASE_URL, 'MAONO_PRODUCTION_BASE_URL');
   await checkHealth(previewBaseUrl, 'preview', { requirePreviewClosed: true });
   await checkHealth(productionBaseUrl, 'production');

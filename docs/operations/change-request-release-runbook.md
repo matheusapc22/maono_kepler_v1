@@ -14,7 +14,7 @@ Este roteiro fecha o stack `#147 -> #149 -> #150 -> #151` sem enfraquecer os gat
 
 Antes de abrir a janela de rollout, preparar no `Maõno Preview QA`:
 
-1. Um projeto descartável cujo slug seja `qa-smoke-*`.
+1. Um projeto descartável cujo slug seja `qa-smoke-*`, com MapConfig persistido de **90 a 100 MiB** (deixar margem para a operação nova). Preparar o Golden com `scripts/preview/build-golden-project.mjs`, preservar seu manifesto (SHA-256, tamanho, feature count, bbox e geometria) e usar o pipeline normal de save. Arquivo pequeno não pode aprovar o release gate.
 2. Uma identidade QA **Viewer** distinta, com role efetiva `viewer` e acesso `viewer` ao projeto.
 3. Uma identidade QA **Reviewer/Editor** distinta, não Viewer, com acesso efetivo `editor`, `write` ou `owner` ao mesmo projeto e capacidade de Review/Apply.
 4. Salvar somente no GitHub Actions os cookies das duas sessões, no formato `maono_session=<valor>`:
@@ -26,7 +26,7 @@ A validação de release consulta `/api/session` e bloqueia se os dois cookies f
 
 ## Bootstrap do operador
 
-A PR #152 contém somente o dispatcher operacional da default branch. Depois de CI/Preview verdes, ela pode ser mesclada em `main` sem incorporar o stack funcional em `mano_kepler_v1`.
+A PR #152 foi integrada em `main` no commit `6bc000ed46cc2c4f91ad1bc1e3e11166aadecc74`; seu Cloudflare pós-merge está verde. O workflow `Change Request release operator` está registrado e ativo (ID `351962225`), com `workflow_dispatch` na default branch. Ela contém somente o dispatcher operacional da default branch. Depois de CI/Preview verdes, ela pode ser mesclada em `main` sem incorporar o stack funcional em `mano_kepler_v1`.
 
 O dispatcher `Change Request release operator` só possui execução manual e trabalha sobre uma branch operacional fixa. Ele captura o SHA da branch, executa testes + build, e os jobs remotos recusam continuar se a branch se mover depois da validação.
 
@@ -54,6 +54,8 @@ O job de migration:
 
 - exige Preview fail-closed (`mutations=false`);
 - valida os dois usuários QA antes de tocar no D1;
+- verifica os SHA-256 fixados das três migrations antes de qualquer comando remoto; nomes do ledger D1 não são evidência de checksum;
+- confirma que o Preview pertence ao projeto Pages auditado, foi implantado com sucesso e corresponde ao SHA validado **antes de enviar cookies**;
 - confirma bindings Preview/Production para o mesmo `maono_maps`;
 - recusa migration se houver Change Request em `applying`;
 - aceita somente um prefixo consistente de ledger 0021 -> 0022 -> 0023;
@@ -76,6 +78,10 @@ Depois das migrations ficarem verdes:
    - `mode = acceptance`
    - `confirmation = RUN_QA_CHANGE_REQUEST_ACCEPTANCE`
    - os mesmos URLs e `qa_project_slug`.
+
+O pre/post-acceptance exige readiness integral 0021/0022/0023 no Preview integrado e no D1. Production ainda executa o código anterior: aqui são obrigatórios identidade/runtime, D1 acessível e configuração Dropbox. A readiness **integral de Production continua obrigatória na fase 5**, após #151. Exigi-la antes do primeiro merge criava uma dependência circular; não é considerado aceite de Production.
+
+O transporte do MapConfig usa `/config-stream` com revisão esperada, headers, contagem exata de bytes e checksum do artefato persistido após Apply. A rota legada `/config` não é usada pelo acceptance, pois materializa JSON no Worker. Todo parse ocorre no runner. O tamanho de 90–100 MiB é verificado no ledger, no stream e no artefato final. Falha ou truncamento de stream interrompe o gate, sem retry automático.
 
 Esse gate executa, com usuários distintos:
 
@@ -171,3 +177,18 @@ Interromper o rollout imediatamente se ocorrer qualquer um destes pontos:
 - health sem readiness integral depois do deploy correspondente.
 
 Nesses casos não alterar gates para fazê-los passar e não fabricar estado no D1.
+
+## Auditoria da preparação — 2026-09-07
+
+| PR | HEAD auditado | Base atual | Futuro destino |
+| --- | --- | --- | --- |
+| #147 | `927aebe1f118a94674e6d29185492bf4a171e666` | `mano_kepler_v1` | manter |
+| #149 | `6d8c273379b386b238cc17fe20764b2aa8927bc5` | `feat/change-requests-ticket-lifecycle` | `mano_kepler_v1`, só após #147 |
+| #150 | `926bfd13d9a6cb9c5cd15cf10b4827e646776c3e` | `refactor/change-request-large-apply` | `mano_kepler_v1`, só após #149 |
+| #151 | HEAD atualizado desta PR, a fixar após CI | `feat/viewer-request-tracking` | `mano_kepler_v1`, só após #150 |
+
+Os pares consecutivos foram confirmados como `ahead`, com zero commits atrás; nenhuma thread bloqueante de review. Usar merge commits preserva a ancestralidade para os retargets. Não retargetar o stack para `main`: ela hospeda o dispatcher, enquanto o código funcional segue em `mano_kepler_v1` (HEAD anterior ao rollout `69dbd8fdcfb6efc6408958b877e1cb2cd7a04142`). Reconfirmar a branch Production no Pages ao abrir a janela.
+
+Os workflows manuais de acceptance/closure compartilham agora `change-request-d1-rollout` com o dispatcher e migrations, impedindo sobreposição entre entradas operacionais. Nenhum é disparado automaticamente por esta revisão.
+
+Permanecem gates reais: sessões Viewer/Reviewer distintas; prova fail-closed autenticada da #147; janela sem writers antigos; migrations; Golden persistido e seu manifesto; acceptance remoto e limites de CPU/memória/HTTP observados no Cloudflare; restauração mutations=false; deploy de cada merge; closure final. Testes locais e CI não substituem essas evidências. Não foram aplicadas migrations nem criada a branch operacional nesta auditoria.

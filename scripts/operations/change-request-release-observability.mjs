@@ -1,3 +1,4 @@
+import { previewOrigin, assertReleaseHealth, assertLargeAcceptanceSize } from './change-request-release-contracts.mjs';
 import {
   appendFileSync,
   mkdtempSync,
@@ -109,22 +110,25 @@ async function checkHealth(baseUrl, expectedRuntime, { requireMutations = false 
   });
   if (!response.ok) throw new Error(`${expectedRuntime} health returned HTTP ${response.status}`);
   const body = await response.json();
+  assertReleaseHealth(response, body, expectedRuntime, { stack: expectedRuntime === 'preview' });
   if (body?.runtime?.runtime !== expectedRuntime) {
     throw new Error(`${expectedRuntime} health reported an unexpected runtime`);
   }
-  for (const key of [
+  // Production still runs the pre-stack writer during pre-merge acceptance.
+  // Full Production stack readiness remains mandatory in release closure.
+  for (const key of (expectedRuntime === 'production' ? ['dbBinding', 'databaseReachable'] : [
     'dbBinding',
     'databaseReachable',
     'changeRequestLifecycleReady',
     'changeRequestApplyArtifactReady',
     'changeRequestResubmissionReady',
-  ]) {
+  ])) {
     if (body?.checks?.[key] !== true) throw new Error(`${expectedRuntime} health gate failed: ${key}`);
   }
   if (requireMutations && body?.runtime?.previewMutationsEnabled !== true) {
     throw new Error('Preview mutations are not enabled for authenticated QA acceptance');
   }
-  record(`${expectedRuntime} health confirms D1 + 0021/0022/0023 readiness${requireMutations ? ' and QA mutations enabled' : ''}.`);
+  record(`${expectedRuntime} health confirms required readiness for this rollout phase${requireMutations ? ' and QA mutations enabled' : ''}.`);
 }
 
 const directory = mkdtempSync(join(tmpdir(), 'maono-change-request-release-'));
@@ -264,12 +268,13 @@ try {
     if (!/^qa-smoke-[a-z0-9-]{3,80}$/.test(qaProjectSlug)) {
       throw new Error('Acceptance project must be a disposable qa-smoke-* project');
     }
-    const projects = query(`SELECT p.id,p.config_revision,o.slug AS organization_slug
+    const projects = query(`SELECT p.id,p.config_revision,p.config_size_bytes,o.slug AS organization_slug
       FROM projects p JOIN organizations o ON o.id=p.organization_id
       WHERE p.slug=${sqlLiteral(qaProjectSlug)} LIMIT 2`);
     if (projects.length !== 1 || projects[0].organization_slug !== 'maono-preview-qa') {
       throw new Error('Acceptance project must exist uniquely inside Maõno Preview QA');
     }
+    assertLargeAcceptanceSize(Number(projects[0].config_size_bytes));
     if (phase === 'pre') {
       appendEnv('MAONO_ACCEPTANCE_BASE_REVISION', Number(projects[0].config_revision || 0));
       appendEnv('MAONO_ACCEPTANCE_PROJECT_ID', Number(projects[0].id));
@@ -277,7 +282,7 @@ try {
     record(`Disposable QA project scope verified for ${phase}-acceptance observability.`);
   }
 
-  const previewBaseUrl = normalizeBaseUrl(process.env.MAONO_PREVIEW_BASE_URL, 'MAONO_PREVIEW_BASE_URL');
+  const previewBaseUrl = previewOrigin(process.env.MAONO_PREVIEW_BASE_URL);
   const productionBaseUrl = normalizeBaseUrl(process.env.MAONO_PRODUCTION_BASE_URL, 'MAONO_PRODUCTION_BASE_URL');
   await checkHealth(previewBaseUrl, 'preview', { requireMutations: requirePreviewMutations });
   await checkHealth(productionBaseUrl, 'production');
@@ -292,7 +297,7 @@ try {
     }
     const rows = query(`SELECT source.status AS source_status, child.status AS child_status,
         child.resubmitted_from_request_id, child.base_revision, child.applied_revision,
-        artifact.checksum, ticket.status AS ticket_status
+        artifact.checksum, artifact.size_bytes, ticket.status AS ticket_status
       FROM project_change_requests source
       JOIN project_change_requests child ON child.id=${sqlLiteral(childId)} AND child.resubmitted_from_request_id=source.id
       JOIN project_change_request_apply_artifacts artifact ON artifact.change_request_id=child.id
@@ -305,6 +310,7 @@ try {
         row.ticket_status !== 'closed') {
       throw new Error('Post-acceptance lineage/apply evidence did not match the expected canonical state');
     }
+    assertLargeAcceptanceSize(Number(row.size_bytes));
     record('Post-acceptance D1 evidence confirms rejected parent, applied resubmission, immutable artifact and closed Ticket.');
   }
 

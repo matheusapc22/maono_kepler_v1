@@ -1,3 +1,4 @@
+import { verifyPreviewDeployment, previewOrigin } from '../operations/change-request-release-contracts.mjs';
 import { appendFileSync } from 'node:fs';
 
 const baseUrl = normalizeBaseUrl(process.env.MAONO_PREVIEW_BASE_URL);
@@ -20,14 +21,7 @@ if (viewerCookie === reviewerCookie) {
 }
 
 function normalizeBaseUrl(value) {
-  const url = new URL(String(value || '').trim());
-  if (url.protocol !== 'https:' || url.username || url.password) {
-    throw new Error('MAONO_PREVIEW_BASE_URL must be an HTTPS origin without embedded credentials');
-  }
-  url.pathname = '/';
-  url.search = '';
-  url.hash = '';
-  return url.toString().replace(/\/$/, '');
+  return previewOrigin(value);
 }
 
 function normalizeCookie(value, name) {
@@ -67,6 +61,8 @@ async function loadSession(cookie, label) {
   }
   return { user: body.user, project };
 }
+
+await verifyPreviewDeployment(baseUrl);
 
 const [viewer, reviewer] = await Promise.all([
   loadSession(viewerCookie, 'Viewer'),

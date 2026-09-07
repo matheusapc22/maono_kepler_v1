@@ -1,3 +1,4 @@
+import './change-request-release-contracts.test.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -30,7 +31,7 @@ test('remote acceptance cannot run from push or an arbitrary branch', () => {
   assert.match(workflow, /github\.ref == 'refs\/heads\/ops\/change-request-release-acceptance'/);
   assert.match(workflow, /inputs\.confirmation == 'RUN_QA_CHANGE_REQUEST_ACCEPTANCE'/);
   assert.match(workflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
-  assert.match(workflow, /github\.event_name == 'workflow_dispatch' && 'release'/);
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch' && 'change-request-d1-rollout'/);
 });
 
 test('remote acceptance requires distinct Viewer and Reviewer session secrets', () => {

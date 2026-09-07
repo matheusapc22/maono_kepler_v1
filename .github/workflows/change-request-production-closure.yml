@@ -6,6 +6,9 @@ on:
       - mano_kepler_v1
       - feat/viewer-request-tracking
     paths:
+      - "scripts/operations/change-request-release-contracts.mjs"
+      - "scripts/preview/change-request-acceptance-stream.mjs"
+      - "tests/change-request-release-contracts.test.mjs"
       - ".github/workflows/change-request-production-closure.yml"
       - "scripts/operations/change-request-release-closure.mjs"
       - "tests/change-request-release-closure.test.mjs"
@@ -29,7 +32,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: change-request-production-closure-${{ github.event_name == 'workflow_dispatch' && 'release' || github.event.pull_request.number }}
+  group: ${{ github.event_name == 'workflow_dispatch' && 'change-request-d1-rollout' || format('{0}-{1}', github.workflow, github.event.pull_request.number) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

@@ -6,6 +6,9 @@ on:
       - mano_kepler_v1
       - feat/viewer-request-tracking
     paths:
+      - "scripts/operations/change-request-release-contracts.mjs"
+      - "scripts/preview/change-request-acceptance-stream.mjs"
+      - "tests/change-request-release-contracts.test.mjs"
       - ".github/workflows/change-request-production-acceptance.yml"
       - "functions/_lib/project-change-request-*.js"
       - "functions/api/health.js"
@@ -47,7 +50,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'release' || github.event.pull_request.number }}
+  group: ${{ github.event_name == 'workflow_dispatch' && 'change-request-d1-rollout' || format('{0}-{1}', github.workflow, github.event.pull_request.number) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -135,3 +138,35 @@ jobs:
           MAONO_RELEASE_GATE_PHASE: post
           MAONO_REQUIRE_PREVIEW_MUTATIONS_ENABLED: "true"
         run: node scripts/operations/change-request-release-observability.mjs
+
+  configuration:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Audit Pages target configuration read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'JS'
+          const root = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}`;
+          async function read(path) {
+            const r = await fetch(root + path, {redirect:'manual',headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`}});
+            if(!r.ok) throw new Error(`Read-only Pages audit failed: HTTP ${r.status}`);
+            const data = await r.json();
+            if(!data.success) throw new Error('Read-only Pages audit rejected');
+            return data.result;
+          }
+          const pages = await read('/pages/projects/maono-kepler-v1');
+          const databases = (await read('/d1/database?per_page=100')).filter(db=>db.name==='maono_maps');
+          if(databases.length!==1) throw new Error('Expected unique maono_maps D1');
+          for(const environment of ['production','preview']) {
+            if(pages.deployment_configs?.[environment]?.d1_databases?.DB?.id!==databases[0].uuid) throw new Error('D1 binding drift');
+          }
+          if(pages.production_branch!=='mano_kepler_v1') throw new Error('Production branch differs from the functional stack target');
+          const vars=pages.deployment_configs.preview.env_vars;
+          if(vars.MAONO_RUNTIME_ENV?.value!=='preview' || vars.MAONO_PREVIEW_MUTATIONS_ENABLED?.value!=='false' ||
+             vars.MAONO_PREVIEW_QA_ORG_SLUG?.value!=='maono-preview-qa' || vars.MAONO_PREVIEW_QA_ORG_ID?.value!=='9') throw new Error('Preview is not in the expected fail-closed QA configuration');
+          console.log('Read-only audit: Production branch mano_kepler_v1; Preview runtime preview; mutations=false; QA scope and both maono_maps bindings verified.');
+          JS

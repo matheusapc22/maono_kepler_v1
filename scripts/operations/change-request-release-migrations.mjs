@@ -1,3 +1,4 @@
+import { verifyPreviewDeployment, previewOrigin, verifyMigrationChecksums, assertReleaseHealth } from './change-request-release-contracts.mjs';
 import {
   appendFileSync,
   copyFileSync,
@@ -69,16 +70,7 @@ if (viewerCookie === reviewerCookie) {
 }
 
 function normalizeBaseUrl(value, label) {
-  const raw = String(value || '').trim();
-  if (!raw) throw new Error(`${label} is required`);
-  const url = new URL(raw);
-  if (url.protocol !== 'https:' || url.username || url.password) {
-    throw new Error(`${label} must be an HTTPS origin without embedded credentials`);
-  }
-  url.pathname = '/';
-  url.search = '';
-  url.hash = '';
-  return url.toString().replace(/\/$/, '');
+  return previewOrigin(value);
 }
 
 function normalizeCookie(value, name) {
@@ -144,6 +136,8 @@ function hasAll(set, values) {
   return values.every(value => set.has(value));
 }
 
+verifyMigrationChecksums();
+
 const directory = mkdtempSync(join(tmpdir(), 'maono-change-request-migrations-'));
 try {
   const databases = await cloudflareApi('d1/database?per_page=100');
@@ -171,7 +165,11 @@ try {
   if (mutations !== 'false') {
     throw new Error('Migration gate requires MAONO_PREVIEW_MUTATIONS_ENABLED=false');
   }
+  const beforeHealth = await fetch(`${previewBaseUrl}/api/health`, { redirect: 'manual' });
+  assertReleaseHealth(beforeHealth, await beforeHealth.json(), 'preview', { stack: false, mutations: false });
   record('Bindings and fail-closed Preview configuration verified before migration.');
+
+  await verifyPreviewDeployment(previewBaseUrl);
 
   const [viewerSession, reviewerSession] = await Promise.all([
     readSession(viewerCookie, 'Viewer'),
@@ -413,6 +411,7 @@ try {
     throw new Error(`Preview health returned HTTP ${health.status} after migrations`);
   }
   const body = await health.json();
+  assertReleaseHealth(health, body, 'preview', { mutations: false });
   for (const key of [
     'changeRequestLifecycleReady',
     'changeRequestApplyArtifactReady',

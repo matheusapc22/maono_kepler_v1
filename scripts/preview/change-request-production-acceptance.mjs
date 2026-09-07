@@ -1,3 +1,5 @@
+import { readAcceptanceConfig } from './change-request-acceptance-stream.mjs';
+import { verifyPreviewDeployment, previewOrigin, assertLargeAcceptanceSize } from '../operations/change-request-release-contracts.mjs';
 import { appendFileSync } from 'node:fs';
 import { buildProjectChangeProposal } from '../../functions/_lib/project-change-request-operations.js';
 import { dropboxContentHashHex } from '../../functions/_lib/dropbox-content-hash.js';
@@ -20,14 +22,7 @@ if (viewerCookie === reviewerCookie) {
 }
 
 function normalizeBaseUrl(value) {
-  const url = new URL(String(value || '').trim());
-  if (url.protocol !== 'https:' || url.username || url.password) {
-    throw new Error('MAONO_PREVIEW_BASE_URL must be an HTTPS origin without embedded credentials');
-  }
-  url.pathname = '/';
-  url.search = '';
-  url.hash = '';
-  return url.toString().replace(/\/$/, '');
+  return previewOrigin(value);
 }
 
 function normalizeCookie(value, name) {
@@ -89,6 +84,8 @@ function requestPath(requestId, suffix = '') {
 function findTracked(items, id) {
   return (Array.isArray(items) ? items : []).find(item => item?.id === id) || null;
 }
+
+await verifyPreviewDeployment(baseUrl);
 
 const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
 const sourceKey = `qa-release-source-${suffix}`;
@@ -252,19 +249,19 @@ if (!Number.isInteger(lifecycleVersion) || lifecycleVersion < 1) {
 }
 record('Reviewer start/approve flow is canonical and approval retry is idempotent.');
 
-const configResult = await api(`/api/projects/${encodeURIComponent(projectSlug)}/config`, {
-  cookie: reviewerCookie,
-});
-const baseConfig = configResult.payload?.config;
-if (!baseConfig || typeof baseConfig !== 'object' || Array.isArray(baseConfig)) {
-  throw new Error('QA project base MapConfig is unavailable');
-}
+const streamedBase = await readAcceptanceConfig({ origin: baseUrl, slug: projectSlug, revision: baseRevision, cookie: reviewerCookie });
+let baseConfig;
+try { baseConfig = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(streamedBase.bytes)); }
+catch { throw new Error('QA project config-stream is not valid UTF-8 JSON'); }
+if (!baseConfig || typeof baseConfig !== 'object' || Array.isArray(baseConfig)) throw new Error('QA base MapConfig must be an object');
+record(`Pinned config-stream delivered ${streamedBase.bytes.byteLength} bytes in the runner.`);
 const proposal = buildProjectChangeProposal({
   baseConfig,
   operations: [correctedOperation],
 });
 const serialized = JSON.stringify(proposal.config);
 const bytes = new TextEncoder().encode(serialized);
+assertLargeAcceptanceSize(bytes.byteLength);
 const checksum = await dropboxContentHashHex(bytes);
 const configVersion = String(proposal.config?.version || '').trim();
 if (!configVersion || !/^[a-f0-9]{64}$/.test(checksum)) {
@@ -302,7 +299,11 @@ applyResult = await api(requestPath(childId, '/apply'), {
 if (applyResult.payload?.idempotent !== true || Number(applyResult.payload?.appliedRevision) !== appliedRevision) {
   throw new Error('Streaming Apply retry did not return the canonical applied revision');
 }
-record('Streaming Apply published exactly one revision and retry is idempotent.');
+const persisted = await readAcceptanceConfig({ origin: baseUrl, slug: projectSlug, revision: appliedRevision, cookie: reviewerCookie });
+if (persisted.bytes.byteLength !== bytes.byteLength || persisted.checksum !== checksum) {
+  throw new Error('Persisted config-stream bytes differ from the accepted Apply artifact');
+}
+record('Streaming Apply published exactly one large revision; persisted bytes/hash and idempotent retry verified.');
 
 tracking = await api(`${collectionPath()}/tracking?limit=50`, { cookie: viewerCookie });
 const appliedTracked = findTracked(tracking.payload?.items, childId);
