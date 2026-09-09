@@ -17,6 +17,11 @@ export type SerializedSaveRequest = {
   totalDurationMs: number;
 };
 
+export type SerializedMapConfigTransport = SerializedSaveRequest & {
+  large: boolean;
+  expectedConfigRevision: number;
+};
+
 export type SaveResponseDiagnostics = {
   saveId: string;
   correlationId: string;
@@ -117,6 +122,46 @@ export function beginClientSaveAttempt(operation: SaveOperation): ClientSaveAtte
   };
 }
 
+export function serializeMapConfigTransport(
+  attempt: ClientSaveAttempt,
+  config: unknown,
+  expectedConfigRevision: number,
+  serializeStartedAt = attempt.startedAt,
+): SerializedMapConfigTransport {
+  LARGE_SAVE_REGISTRY.delete(attempt);
+
+  if (!Number.isInteger(expectedConfigRevision) || expectedConfigRevision < 0) {
+    throw new Error("A revisão esperada do projeto é inválida para o transporte do MapConfig.");
+  }
+
+  const body = JSON.stringify(config);
+  if (typeof body !== "string") {
+    throw new Error("Não foi possível serializar a configuração do projeto.");
+  }
+
+  const payloadBytes = measureUtf8PayloadBytes(body);
+  const large = payloadBytes > MAONO_LARGE_SAVE_THRESHOLD_BYTES;
+  if (large) {
+    assertLargeConfigShape(config);
+    LARGE_SAVE_REGISTRY.set(attempt, {
+      expectedConfigRevision,
+      payloadBytes,
+      configVersion: String((config as any).version).slice(0, 80),
+      datasetCount: (config as any).datasets.length,
+    });
+  }
+
+  const completedAt = nowMs();
+  return {
+    body,
+    payloadBytes,
+    large,
+    expectedConfigRevision,
+    serializeDurationMs: Math.max(0, Math.round(completedAt - serializeStartedAt)),
+    totalDurationMs: Math.max(0, Math.round(completedAt - attempt.startedAt)),
+  };
+}
+
 function prepareLargeUpdateBody(
   attempt: ClientSaveAttempt,
   payload: unknown,
@@ -125,29 +170,16 @@ function prepareLargeUpdateBody(
     return null;
   }
 
-  const config = payload.config;
-  const body = JSON.stringify(config);
-  if (typeof body !== "string") {
-    throw new Error("Não foi possível serializar a configuração do projeto.");
-  }
-  const payloadBytes = measureUtf8PayloadBytes(body);
-  if (payloadBytes <= MAONO_LARGE_SAVE_THRESHOLD_BYTES) {
-    return null;
-  }
-
-  assertLargeConfigShape(config);
   const expectedConfigRevision = Number(payload.expectedConfigRevision);
-  if (!Number.isInteger(expectedConfigRevision) || expectedConfigRevision < 0) {
-    throw new Error("A revisão esperada do projeto é inválida para o save grande.");
-  }
-
-  LARGE_SAVE_REGISTRY.set(attempt, {
+  const serialized = serializeMapConfigTransport(
+    attempt,
+    payload.config,
     expectedConfigRevision,
-    payloadBytes,
-    configVersion: String((config as any).version).slice(0, 80),
-    datasetCount: (config as any).datasets.length,
-  });
-  return { body, payloadBytes };
+  );
+
+  return serialized.large
+    ? { body: serialized.body, payloadBytes: serialized.payloadBytes }
+    : null;
 }
 
 export function serializeSaveRequest(
