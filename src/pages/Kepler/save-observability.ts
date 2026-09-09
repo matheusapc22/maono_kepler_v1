@@ -203,8 +203,11 @@ export function serializeSaveRequest(
   };
 }
 
-export function buildSaveRequestHeaders(attempt: ClientSaveAttempt) {
-  const large = LARGE_SAVE_REGISTRY.get(attempt);
+export function buildSaveRequestHeaders(
+  attempt: ClientSaveAttempt,
+  options: { forceJson?: boolean } = {},
+) {
+  const large = options.forceJson ? undefined : LARGE_SAVE_REGISTRY.get(attempt);
   return {
     "Content-Type": large
       ? "application/vnd.maono.map-config+json"
