@@ -39,6 +39,31 @@ test("select real preserva interação sobre superfície visual escura sincroniz
   assert.match(styles, /:has\(select:hover:not\(:disabled\)\)/);
 });
 
+test("valor do perfil fica centralizado e contido dentro do controle", () => {
+  assert.match(
+    styles,
+    /admin-membership-level-surface[\s\S]*height: 52px !important/,
+  );
+  assert.match(
+    styles,
+    /admin-membership-level-surface[\s\S]*min-height: 52px !important/,
+  );
+  assert.match(
+    styles,
+    /admin-membership-level-surface[\s\S]*display: grid !important/,
+  );
+  assert.match(
+    styles,
+    /admin-membership-level-surface[\s\S]*align-items: center !important/,
+  );
+  assert.match(
+    styles,
+    /admin-membership-level-surface[\s\S]*line-height: 20px !important/,
+  );
+  assert.match(styles, /white-space: nowrap/);
+  assert.match(styles, /text-overflow: ellipsis/);
+});
+
 test("estado disabled continua visualmente diferenciado sem reexpor face nativa", () => {
   assert.match(
     styles,
