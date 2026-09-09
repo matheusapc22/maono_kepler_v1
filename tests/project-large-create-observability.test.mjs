@@ -74,7 +74,7 @@ test("auditoria Large CREATE registra metadados operacionais, nunca o MapConfig 
 });
 
 test("middleware registra falha com estágio/provider sem logar corpo do MapConfig", () => {
-  assert.match(middlewareSource, /action:\s*"project_create_stream"/);
+  assert.match(middlewareSource, /operation === "create"[\s\S]{0,160}"project_create_stream"/);
   assert.match(middlewareSource, /correlationId/);
   assert.match(middlewareSource, /saveId:\s*trace\.saveId/);
   assert.match(middlewareSource, /code:\s*normalized\.code/);
