@@ -12,6 +12,7 @@ type MapPanelTelemetryDetails = {
   category?: string | null;
   component?: string | null;
   operation?: "create" | "update" | null;
+  transport?: "inline" | "stream" | null;
   status?: string | null;
   stage?: string | null;
   saveId?: string | null;

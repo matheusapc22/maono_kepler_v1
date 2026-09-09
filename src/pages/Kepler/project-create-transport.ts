@@ -3,7 +3,7 @@ import {
   serializeMapConfigTransport,
   type ClientSaveAttempt,
   type SerializedMapConfigTransport,
-} from "./save-observability";
+} from "./save-observability.ts";
 
 type LegacyPreview = {
   dataUrl: string;

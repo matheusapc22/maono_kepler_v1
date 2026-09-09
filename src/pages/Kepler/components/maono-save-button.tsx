@@ -40,6 +40,10 @@ import {
   serializeSaveRequest,
   type ClientSaveAttempt,
 } from "../save-observability";
+import {
+  executeProjectCreateFlow,
+  ProjectCreateFlowError,
+} from "../project-create-flow";
 
 const CREATION_KEY_PREFIX = "maono.project-create.idempotency";
 const ASYNC_THUMBNAIL_ENABLED =
@@ -760,6 +764,7 @@ const MaonoSaveButton: React.FC = () => {
     let failureTelemetryEmitted = false;
     let payloadBytes: number | null = null;
     let serializeDurationMs: number | null = null;
+    let transport: "inline" | "stream" | null = null;
 
     setCreationDraft(input);
     operationInFlightRef.current = true;
@@ -788,117 +793,116 @@ const MaonoSaveButton: React.FC = () => {
       const idempotencyKey = getOrCreateCreationKey(
         activeOrganizationId,
       );
-      const serialized = serializeSaveRequest(attempt, {
+
+      const result = await executeProjectCreateFlow({
+        attempt,
         name: input.name,
         description: input.description,
         organizationId: activeOrganizationId,
         idempotencyKey,
         config,
-        ...(legacy
-          ? {
-              thumbnailDataUrl: legacy.dataUrl,
-              thumbnailCapture: {
-                method: legacy.method,
-                diagnostics: legacy.diagnostics.join(" | "),
-              },
-            }
-          : {}),
+        legacy,
+        onPrepared(prepared) {
+          payloadBytes = prepared.configPayloadBytes;
+          serializeDurationMs = prepared.serializeDurationMs;
+          transport = prepared.large ? "stream" : "inline";
+          emitSaveTelemetry("map_save_serialized", {
+            mode: context?.mode ?? null,
+            organizationId:
+              context?.organization?.id ?? activeOrganizationId,
+            operation: "create",
+            saveId: attempt.saveId,
+            correlationId: attempt.correlationId,
+            payloadBytes,
+            serializeDurationMs,
+            expectedRevision: 0,
+            transport,
+          });
+        },
+        onStage(stage) {
+          setCreationStage(stage);
+        },
       });
-      payloadBytes = serialized.payloadBytes;
-      serializeDurationMs = serialized.serializeDurationMs;
-      emitSaveTelemetry("map_save_serialized", {
+
+      setCreationStage("success");
+      clearCreationKey(activeOrganizationId);
+
+      emitSaveTelemetry("map_save_succeeded", {
         mode: context?.mode ?? null,
         organizationId: context?.organization?.id ?? activeOrganizationId,
+        policyVersion: context?.policyVersion ?? null,
         operation: "create",
-        saveId: attempt.saveId,
-        correlationId: attempt.correlationId,
+        saveId: result.diagnostics.saveId,
+        correlationId: result.diagnostics.correlationId,
         payloadBytes,
         serializeDurationMs,
+        durationMs: clientSaveTotalDurationMs(attempt),
         expectedRevision: 0,
+        candidateRevision: result.revision,
+        httpStatus: result.response.status,
+        serverTiming: result.diagnostics.serverTiming,
+        transport: result.transport,
       });
-
-      setCreationStage("creating_record");
-      const response = await fetch("/api/projects", {
-        method: "POST",
-        credentials: "include",
-        headers: buildSaveRequestHeaders(attempt),
-        body: serialized.body,
-      });
-      const responseDiagnostics = readSaveResponseDiagnostics(response, attempt);
-      const data =
-        (await readJsonResponse(response)) as ProjectWriteResponse;
-
-      if (
-        !response.ok ||
-        data?.ok === false ||
-        !data?.project?.slug
-      ) {
+      finishPendingMapSave("success");
+      enqueuePreview(result.createdSlug, result.revision, config);
+      navigate(
+        `/projects/${encodeURIComponent(result.createdSlug)}/edit`,
+        { replace: true },
+      );
+    } catch (error) {
+      if (error instanceof ProjectCreateFlowError) {
         failureTelemetryEmitted = true;
+        const data = error.data as ProjectWriteResponse;
         emitSaveTelemetry("map_save_failed", {
           mode: context?.mode ?? null,
-          organizationId: context?.organization?.id ?? activeOrganizationId,
+          organizationId:
+            context?.organization?.id ?? activeOrganizationId,
           operation: "create",
-          saveId: responseDiagnostics.saveId,
-          correlationId: responseDiagnostics.correlationId,
-          payloadBytes,
-          serializeDurationMs,
+          saveId: error.diagnostics.saveId,
+          correlationId: error.diagnostics.correlationId,
+          payloadBytes:
+            error.prepared.configPayloadBytes ?? payloadBytes,
+          serializeDurationMs:
+            error.prepared.serializeDurationMs ?? serializeDurationMs,
           durationMs: clientSaveTotalDurationMs(attempt),
           expectedRevision: 0,
-          stage: data?.error?.details?.stage ?? null,
+          stage: data?.error?.details?.stage ?? error.stage,
           code: data?.error?.code ?? "PROJECT_CREATION_FAILED",
           category: data?.error?.category ?? null,
           retryable:
             typeof data?.error?.retryable === "boolean"
               ? data.error.retryable
               : data?.error?.details?.retryable ?? null,
-          httpStatus: response.status,
+          httpStatus: error.response.status,
           provider: data?.error?.details?.provider ?? null,
           providerStatus: data?.error?.details?.providerStatus ?? null,
-          serverTiming: responseDiagnostics.serverTiming,
+          serverTiming: error.diagnostics.serverTiming,
+          transport:
+            error.prepared.large ? "stream" : "inline",
         });
-        if (response.status === 403) {
+        if (error.response.status === 403) {
           refresh();
         }
-        const failedStage = normalizeCreationStage(
-          data?.error?.details?.stage,
+        setCreationFailedStage(
+          normalizeCreationStage(error.stage),
         );
-        setCreationFailedStage(failedStage);
-        throw new Error(getCreationResponseError(response, data));
+        const failure = getCreationResponseError(
+          error.response,
+          data,
+        );
+        setCreationStage("error");
+        setCreationError(failure);
+        finishPendingMapSave("error", failure);
+        return;
       }
 
-      setCreationStage("success");
-      clearCreationKey(activeOrganizationId);
-
-      const createdSlug = data.project.slug;
-      const revision = resolveConfigRevision(data);
-      emitSaveTelemetry("map_save_succeeded", {
-        mode: context?.mode ?? null,
-        organizationId: context?.organization?.id ?? activeOrganizationId,
-        policyVersion: context?.policyVersion ?? null,
-        operation: "create",
-        saveId: responseDiagnostics.saveId,
-        correlationId: responseDiagnostics.correlationId,
-        payloadBytes,
-        serializeDurationMs,
-        durationMs: clientSaveTotalDurationMs(attempt),
-        expectedRevision: 0,
-        candidateRevision: revision,
-        httpStatus: response.status,
-        serverTiming: responseDiagnostics.serverTiming,
-      });
-      finishPendingMapSave("success");
-      enqueuePreview(createdSlug, revision, config);
-      navigate(
-        `/projects/${encodeURIComponent(createdSlug)}/edit`,
-        { replace: true },
-      );
-    } catch (error) {
       if (!failureTelemetryEmitted) {
         emitClientSaveFailure(attempt, error, {
           mode: context?.mode ?? null,
           organizationId: context?.organization?.id ?? activeOrganizationId,
           payloadBytes,
           serializeDurationMs,
+          transport,
         });
       }
       const failure = getSaveFailureMessage(error);

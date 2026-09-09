@@ -12,8 +12,16 @@ import {
   beginClientSaveAttempt,
   buildSaveRequestHeaders,
   measureUtf8PayloadBytes,
+  serializeMapConfigTransport,
   serializeSaveRequest,
 } from "../src/pages/Kepler/save-observability.ts";
+import {
+  prepareProjectCreateTransport,
+} from "../src/pages/Kepler/project-create-transport.ts";
+import {
+  executeProjectCreateFlow,
+  ProjectCreateFlowError,
+} from "../src/pages/Kepler/project-create-flow.ts";
 
 function captureSaveLogs() {
   const originalInfo = console.info;
@@ -28,6 +36,35 @@ function captureSaveLogs() {
       console.error = originalError;
     },
   };
+}
+
+function largeConfig(extraBytes = 1024) {
+  return {
+    version: "v1",
+    config: { visState: { layers: [] } },
+    datasets: [
+      {
+        info: { id: "dataset-large" },
+        data: {
+          id: "dataset-large",
+          fields: [],
+          rows: [["x".repeat(8 * 1024 * 1024 + extraBytes)]],
+        },
+      },
+    ],
+  };
+}
+
+function jsonResponse(body, init = {}) {
+  return new Response(JSON.stringify(body), {
+    status: init.status ?? 200,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Maono-Save-Id": init.saveId ?? "save_test_response",
+      "X-Correlation-Id": init.correlationId ?? "corr_test_response",
+      ...(init.headers || {}),
+    },
+  });
 }
 
 test("cada tentativa lógica recebe saveId e correlationId estáveis na request", () => {
@@ -85,6 +122,267 @@ test("payloadBytes mede bytes UTF-8 reais e o mesmo body é enviado", async () =
   });
   const parsed = await readSaveJsonBody(request, trace);
   assert.deepEqual(parsed, payload);
+});
+
+test("CREATE classifica MapConfig grande uma vez e separa metadata do corpo streaming", () => {
+  const attempt = beginClientSaveAttempt("create");
+  const config = largeConfig();
+  const idempotencyKey = "project-create:test-large-123456";
+  const prepared = prepareProjectCreateTransport(attempt, {
+    name: "Projeto grande",
+    description: "Teste",
+    organizationId: 9,
+    idempotencyKey,
+    config,
+    legacy: null,
+  });
+
+  assert.equal(prepared.large, true);
+  assert.equal(
+    prepared.configPayloadBytes,
+    Buffer.byteLength(prepared.configBody, "utf8"),
+  );
+  assert.ok(Buffer.byteLength(prepared.requestBody, "utf8") < 4096);
+  assert.doesNotMatch(prepared.requestBody, /dataset-large.{1000}/s);
+
+  const metadata = JSON.parse(prepared.requestBody);
+  assert.equal(metadata.largeConfig, true);
+  assert.equal(metadata.idempotencyKey, idempotencyKey);
+  assert.equal(metadata.configMetadata.sizeBytes, prepared.configPayloadBytes);
+  assert.equal(metadata.configMetadata.datasetCount, 1);
+
+  const postHeaders = buildSaveRequestHeaders(attempt, { forceJson: true });
+  assert.equal(postHeaders["Content-Type"], "application/json");
+  assert.equal(postHeaders["X-Maono-Large-Config"], undefined);
+
+  const streamHeaders = buildSaveRequestHeaders(attempt);
+  assert.equal(streamHeaders["X-Maono-Large-Config"], "1");
+  assert.equal(streamHeaders["X-Maono-Expected-Revision"], "0");
+  assert.equal(
+    Number(streamHeaders["X-Maono-Config-Size"]),
+    prepared.configPayloadBytes,
+  );
+
+  const direct = serializeMapConfigTransport(attempt, config, 0);
+  assert.equal(direct.large, true);
+});
+
+test("CREATE inline mantém uma única request e só conclui quando ACTIVE", async () => {
+  const attempt = beginClientSaveAttempt("create");
+  const calls = [];
+  const stages = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return jsonResponse(
+      {
+        ok: true,
+        status: "active",
+        configRevision: 1,
+        project: {
+          slug: "projeto-inline",
+          active: true,
+          configRevision: 1,
+          lifecycle: { state: "ACTIVE" },
+        },
+      },
+      { status: 201 },
+    );
+  };
+
+  const result = await executeProjectCreateFlow({
+    attempt,
+    name: "Projeto inline",
+    description: "Pequeno",
+    organizationId: 9,
+    idempotencyKey: "project-create:inline-123456",
+    config: { version: "v1", config: {}, datasets: [] },
+    legacy: null,
+    fetchImpl,
+    onStage: (stage) => stages.push(stage),
+  });
+
+  assert.equal(result.transport, "inline");
+  assert.equal(result.createdSlug, "projeto-inline");
+  assert.equal(result.revision, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/projects");
+  assert.equal(calls[0].init.method, "POST");
+  assert.deepEqual(stages, ["creating_record", "finalizing"]);
+  const postBody = JSON.parse(calls[0].init.body);
+  assert.equal(postBody.config.version, "v1");
+});
+
+test("CREATE grande faz POST metadata-first e PUT do mesmo corpo/config com a mesma chave", async () => {
+  const attempt = beginClientSaveAttempt("create");
+  const calls = [];
+  const stages = [];
+  const idempotencyKey = "project-create:stream-123456";
+  const config = largeConfig(2048);
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    if (calls.length === 1) {
+      return jsonResponse(
+        {
+          ok: true,
+          status: "pending",
+          configRevision: 0,
+          project: {
+            slug: "projeto-stream",
+            active: false,
+            configRevision: 0,
+            lifecycle: { state: "PREPARING_STORAGE" },
+          },
+        },
+        { status: 202 },
+      );
+    }
+    return jsonResponse(
+      {
+        ok: true,
+        status: "active",
+        operation: "create",
+        transport: "stream",
+        configRevision: 1,
+        lifecycle: { state: "ACTIVE" },
+        project: {
+          slug: "projeto-stream",
+          active: true,
+          configRevision: 1,
+          lifecycle: { state: "ACTIVE" },
+        },
+      },
+      { status: 201 },
+    );
+  };
+
+  const result = await executeProjectCreateFlow({
+    attempt,
+    name: "Projeto stream",
+    description: "Grande",
+    organizationId: 9,
+    idempotencyKey,
+    config,
+    legacy: null,
+    fetchImpl,
+    onStage: (stage) => stages.push(stage),
+  });
+
+  assert.equal(result.transport, "stream");
+  assert.equal(result.revision, 1);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, "/api/projects");
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init.headers["X-Maono-Large-Config"], undefined);
+  const metadata = JSON.parse(calls[0].init.body);
+  assert.equal(metadata.largeConfig, true);
+  assert.equal(metadata.idempotencyKey, idempotencyKey);
+
+  assert.equal(calls[1].url, "/api/projects/projeto-stream/config");
+  assert.equal(calls[1].init.method, "PUT");
+  assert.equal(calls[1].init.headers["X-Maono-Creation-Key"], idempotencyKey);
+  assert.equal(calls[1].init.headers["X-Maono-Large-Config"], "1");
+  assert.equal(calls[1].init.body, result.prepared.configBody);
+  assert.deepEqual(stages, [
+    "creating_record",
+    "preparing_files",
+    "finalizing",
+  ]);
+});
+
+test("retry após commit perdido não reenvia o MapConfig se POST idempotente já retorna ACTIVE", async () => {
+  const attempt = beginClientSaveAttempt("create");
+  const calls = [];
+  const config = largeConfig(3072);
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return jsonResponse(
+      {
+        ok: true,
+        status: "active",
+        idempotent: true,
+        configRevision: 1,
+        project: {
+          slug: "projeto-recuperado",
+          active: true,
+          configRevision: 1,
+          lifecycle: { state: "ACTIVE" },
+        },
+      },
+      { status: 200 },
+    );
+  };
+
+  const result = await executeProjectCreateFlow({
+    attempt,
+    name: "Projeto recuperado",
+    description: "Retry",
+    organizationId: 9,
+    idempotencyKey: "project-create:retry-123456",
+    config,
+    legacy: null,
+    fetchImpl,
+  });
+
+  assert.equal(result.transport, "stream");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/projects");
+});
+
+test("falha no PUT streaming conserva estágio e contexto para retry seguro", async () => {
+  const attempt = beginClientSaveAttempt("create");
+  const idempotencyKey = "project-create:failure-123456";
+  let call = 0;
+  const fetchImpl = async (url, init) => {
+    call += 1;
+    if (call === 1) {
+      return jsonResponse(
+        {
+          ok: true,
+          status: "pending",
+          project: {
+            slug: "projeto-falha",
+            active: false,
+            lifecycle: { state: "PREPARING_STORAGE" },
+          },
+        },
+        { status: 202 },
+      );
+    }
+    assert.equal(init.headers["X-Maono-Creation-Key"], idempotencyKey);
+    return jsonResponse(
+      {
+        ok: false,
+        error: {
+          code: "MAP_CONFIG_STORAGE_UNAVAILABLE",
+          category: "STORAGE",
+          retryable: true,
+          message: "Dropbox indisponível",
+          details: { stage: "WRITE", retryable: true },
+        },
+      },
+      { status: 503 },
+    );
+  };
+
+  await assert.rejects(
+    executeProjectCreateFlow({
+      attempt,
+      name: "Projeto falha",
+      description: "Retry seguro",
+      organizationId: 9,
+      idempotencyKey,
+      config: largeConfig(4096),
+      legacy: null,
+      fetchImpl,
+    }),
+    (error) => {
+      assert.ok(error instanceof ProjectCreateFlowError);
+      assert.equal(error.stage, "preparing_files");
+      assert.equal(error.data.error.code, "MAP_CONFIG_STORAGE_UNAVAILABLE");
+      assert.equal(error.prepared.large, true);
+      return true;
+    },
+  );
 });
 
 test("trace registra os sete estágios oficiais em ordem e publica Server-Timing", async () => {
