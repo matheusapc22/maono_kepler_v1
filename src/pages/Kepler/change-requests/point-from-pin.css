@@ -403,3 +403,13 @@
     animation: none;
   }
 }
+
+/*
+ * Pausa de produto — 2026-09-09.
+ * O fluxo atual de solicitação seletiva do Viewer fica preservado no código,
+ * porém sem ponto de entrada na interface. A retomada será feita com o modelo
+ * simplificado de solicitação do GeoJSON completo, não por operação.
+ */
+.maono-change-request__bar {
+  display: none !important;
+}
