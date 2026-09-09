@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const componentPath = new URL(
-  "../src/pages/Admin/components/AdminUserManager.tsx",
+  "../src/pages/Admin/components/AdminUserManagerLegacy.tsx",
   import.meta.url,
 );
 

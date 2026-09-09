@@ -5,7 +5,9 @@ import test from "node:test";
 const adminUser = await readFile(new URL("../functions/api/admin/users/[id].js", import.meta.url), "utf8");
 const organizationUser = await readFile(new URL("../functions/api/organizations/[id]/users/[userId].js", import.meta.url), "utf8");
 const membership = await readFile(new URL("../functions/api/admin/users/[id]/organizations/[organizationId].js", import.meta.url), "utf8");
-const adminUi = await readFile(new URL("../src/pages/Admin/components/AdminUserManager.tsx", import.meta.url), "utf8");
+const adminUiShell = await readFile(new URL("../src/pages/Admin/components/AdminUserManager.tsx", import.meta.url), "utf8");
+const adminUiLegacy = await readFile(new URL("../src/pages/Admin/components/AdminUserManagerLegacy.tsx", import.meta.url), "utf8");
+const adminUi = `${adminUiShell}\n${adminUiLegacy}`;
 
 test("alterações de senha usam hash e invalidam sessões", () => {
   assert.match(adminUser, /hashPassword\(password\)/);
