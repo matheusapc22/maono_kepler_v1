@@ -1,0 +1,570 @@
+.admin-user-manager-enhanced {
+  --admin-org-bg: #08131f;
+  --admin-org-surface: #0d1926;
+  --admin-org-surface-hover: #111f2e;
+  --admin-org-border: #2b3a4b;
+  --admin-org-border-strong: #3c5167;
+  --admin-org-text: #f3f6fa;
+  --admin-org-text-secondary: #9eabb9;
+  --admin-org-text-muted: #718096;
+  --admin-org-gold: #f8bf3c;
+  --admin-org-gold-hover: #ffc94f;
+  --admin-org-green: #43df78;
+  --admin-org-green-bg: rgba(25, 160, 82, 0.14);
+  --admin-org-green-border: rgba(52, 211, 103, 0.28);
+  display: contents;
+}
+
+.admin-user-manager-enhanced .admin-user-modal {
+  padding: 24px;
+  background: rgba(2, 7, 13, 0.76);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.admin-user-manager-enhanced
+  .admin-user-dialog:not(.compact):not(.delegation-policy-dialog) {
+  width: min(1264px, calc(100vw - 48px));
+  max-height: min(944px, calc(100vh - 48px));
+  border: 1px solid var(--admin-org-border);
+  border-radius: 18px;
+  background: linear-gradient(
+    145deg,
+    rgba(15, 27, 42, 0.985),
+    rgba(7, 18, 30, 0.995)
+  );
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.015);
+  overflow: hidden;
+}
+
+.admin-user-manager-enhanced
+  .admin-user-dialog:not(.compact):not(.delegation-policy-dialog)
+  > header {
+  min-height: 132px;
+  padding: 26px 32px;
+  border-bottom: 1px solid var(--admin-org-border);
+  background: linear-gradient(
+    180deg,
+    rgba(18, 31, 46, 0.9),
+    rgba(10, 22, 34, 0.82)
+  );
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-title {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-areas:
+    "icon eyebrow"
+    "icon name"
+    "icon meta";
+  column-gap: 18px;
+  align-items: center;
+  min-width: 0;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-title::before {
+  content: "✦";
+  grid-area: icon;
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(248, 191, 60, 0.25);
+  border-radius: 50%;
+  color: var(--admin-org-gold);
+  background: rgba(248, 191, 60, 0.1);
+  font-size: 24px;
+  box-shadow: inset 0 0 22px rgba(248, 191, 60, 0.04);
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-title > span {
+  grid-area: eyebrow;
+  color: var(--admin-org-gold);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-title > h3 {
+  grid-area: name;
+  margin: 5px 0 2px;
+  color: var(--admin-org-text);
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-title > p {
+  grid-area: meta;
+  margin: 0;
+  color: var(--admin-org-text-secondary);
+  font-size: 14px;
+}
+
+.admin-user-manager-enhanced
+  .admin-user-dialog:not(.compact):not(.delegation-policy-dialog)
+  > header
+  > button[aria-label="Fechar"] {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--admin-org-border-strong);
+  border-radius: 10px;
+  color: #d8e0e8;
+  background: rgba(255, 255, 255, 0.015);
+  font-size: 24px;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.admin-user-manager-enhanced
+  .admin-user-dialog:not(.compact):not(.delegation-policy-dialog)
+  > header
+  > button[aria-label="Fechar"]:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.055);
+  border-color: #65778b;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-body {
+  min-height: 0;
+  padding: 22px 30px 18px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #536273 transparent;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-body::-webkit-scrollbar-thumb {
+  background: #536273;
+  border-radius: 8px;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-tabs {
+  gap: 10px;
+  padding: 7px;
+  border: 1px solid var(--admin-org-border);
+  border-radius: 14px;
+  background: rgba(7, 18, 30, 0.62);
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-tabs > button {
+  min-height: 67px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--admin-org-text-secondary);
+  background: transparent;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-tabs > button:hover {
+  color: var(--admin-org-text);
+  border-color: rgba(60, 81, 103, 0.72);
+  background: rgba(17, 31, 46, 0.7);
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-tabs > button.active {
+  color: var(--admin-org-gold);
+  border-color: rgba(220, 167, 47, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(248, 191, 60, 0.13),
+    rgba(248, 191, 60, 0.055)
+  );
+  box-shadow: inset 0 0 18px rgba(248, 191, 60, 0.035);
+}
+
+.admin-user-manager-enhanced .admin-user-dialog-tabs > button small {
+  color: inherit;
+  opacity: 0.68;
+}
+
+.admin-user-manager-enhanced .admin-user-management-panel {
+  overflow: visible;
+  border: 1px solid var(--admin-org-border);
+  border-radius: 16px;
+  background: rgba(8, 19, 31, 0.6);
+}
+
+.admin-user-manager-enhanced .admin-user-management-panel > header {
+  padding: 22px 24px;
+  border-bottom: 1px solid rgba(43, 58, 75, 0.82);
+  background: rgba(13, 25, 38, 0.48);
+}
+
+.admin-user-manager-enhanced .admin-user-management-panel > header h4 {
+  color: var(--admin-org-text);
+  font-size: 18px;
+}
+
+.admin-user-manager-enhanced .admin-user-management-panel > header p {
+  max-width: 760px;
+  color: var(--admin-org-text-secondary);
+}
+
+/* Organization assignment cards */
+.admin-user-manager-enhanced .admin-organization-membership-row {
+  min-height: 118px;
+  margin: 14px 18px;
+  padding: 22px 24px;
+  display: grid;
+  grid-template-columns:
+    minmax(300px, 1.1fr)
+    minmax(280px, 0.85fr)
+    minmax(132px, auto);
+  align-items: center;
+  gap: 26px;
+  border: 1px solid #29394a;
+  border-radius: 14px;
+  background: linear-gradient(
+    145deg,
+    rgba(15, 30, 45, 0.96),
+    rgba(10, 23, 36, 0.98)
+  );
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.admin-user-manager-enhanced .admin-organization-membership-row:hover {
+  border-color: #3c5269;
+  background: linear-gradient(
+    145deg,
+    rgba(18, 35, 52, 0.98),
+    rgba(11, 26, 40, 0.98)
+  );
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.admin-user-manager-enhanced .admin-membership-switch {
+  position: relative;
+  min-width: 0;
+  display: block;
+  cursor: default;
+}
+
+.admin-user-manager-enhanced
+  .admin-membership-switch
+  > input[type="checkbox"] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.admin-user-manager-enhanced .admin-membership-switch > span {
+  position: relative;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding-left: 88px;
+}
+
+.admin-user-manager-enhanced .admin-membership-switch > span::before {
+  content: "◇";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid #35485e;
+  border-radius: 11px;
+  color: #b7c4d5;
+  background: #182638;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.admin-user-manager-enhanced .admin-membership-switch strong {
+  color: var(--admin-org-text);
+  font-size: 17px;
+  font-weight: 680;
+  line-height: 1.25;
+}
+
+.admin-user-manager-enhanced .admin-membership-switch small {
+  color: #8897a8;
+  font-size: 13px;
+}
+
+.admin-user-manager-enhanced .admin-membership-level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #ccd5df;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.admin-user-manager-enhanced .admin-membership-level::after {
+  content: "⌄";
+  position: absolute;
+  right: 17px;
+  bottom: 13px;
+  color: #9eabb9;
+  font-size: 18px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.admin-user-manager-enhanced .admin-membership-level select {
+  width: 100%;
+  height: 52px;
+  padding: 0 46px 0 16px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid #40566d;
+  border-radius: 10px;
+  outline: none;
+  color: #f2f5f8 !important;
+  background: #0e1c2a !important;
+  color-scheme: dark;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+
+.admin-user-manager-enhanced .admin-membership-level select:focus-visible {
+  border-color: #8b7440;
+  box-shadow: 0 0 0 3px rgba(248, 191, 60, 0.08);
+}
+
+.admin-user-manager-enhanced .admin-membership-level select:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  border-color: #2c3c4d;
+  color: #7d8b99 !important;
+  background: #0b1722 !important;
+}
+
+.admin-user-manager-enhanced .admin-membership-level select option {
+  color: #f2f5f8;
+  background: #0e1c2a;
+}
+
+/* The visible status is now the single explicit grant/revoke affordance. */
+.admin-user-manager-enhanced .admin-membership-state[role="button"] {
+  min-width: 132px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 17px;
+  border: 1px solid #304257;
+  border-radius: 22px;
+  color: #a9b7c6;
+  background: #142334;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.admin-user-manager-enhanced .admin-membership-state[role="button"]::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border: 2px solid #708197;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.admin-user-manager-enhanced
+  .admin-membership-state[role="button"]:hover:not([aria-disabled="true"]) {
+  color: #dce4ec;
+  border-color: #52677d;
+  background: #192b3e;
+}
+
+.admin-user-manager-enhanced
+  .admin-membership-state[role="button"]:focus-visible {
+  outline: none;
+  border-color: var(--admin-org-gold);
+  box-shadow: 0 0 0 3px rgba(248, 191, 60, 0.12);
+}
+
+.admin-user-manager-enhanced
+  .admin-membership-state.active[role="button"],
+.admin-user-manager-enhanced
+  .admin-membership-state[data-access="true"][role="button"] {
+  color: #55e486;
+  border-color: var(--admin-org-green-border);
+  background: var(--admin-org-green-bg);
+}
+
+.admin-user-manager-enhanced
+  .admin-membership-state.active[role="button"]::before,
+.admin-user-manager-enhanced
+  .admin-membership-state[data-access="true"][role="button"]::before {
+  border-color: #45dc78;
+  background: #45dc78;
+  box-shadow: 0 0 10px rgba(69, 220, 120, 0.45);
+}
+
+.admin-user-manager-enhanced
+  .admin-membership-state[role="button"][aria-disabled="true"] {
+  opacity: 0.52;
+  cursor: wait;
+}
+
+.admin-user-manager-enhanced .admin-memberships-status {
+  margin: 18px;
+  padding: 18px 20px;
+  border: 1px dashed #33485d;
+  border-radius: 12px;
+  color: var(--admin-org-text-secondary);
+  background: rgba(13, 25, 38, 0.52);
+}
+
+/* Existing persistence is immediate; tell the truth in the sticky action area. */
+.admin-user-manager-enhanced .admin-user-section-actions {
+  position: sticky;
+  bottom: -18px;
+  z-index: 8;
+  min-height: 86px;
+  margin-top: 4px;
+  padding: 18px 0 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border-top: 1px solid var(--admin-org-border);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 20, 32, 0.91),
+    rgba(8, 20, 32, 0.995) 34%
+  );
+  backdrop-filter: blur(8px);
+}
+
+.admin-user-manager-enhanced .admin-user-section-actions::before {
+  content: "ⓘ  Alterações de vínculo e perfil são aplicadas imediatamente.";
+  color: var(--admin-org-text-secondary);
+  font-size: 13px;
+}
+
+.admin-user-manager-enhanced .admin-user-section-actions .mm-btn.primary {
+  min-height: 52px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 10px;
+  color: #151718;
+  background: linear-gradient(135deg, #ffcf58, #f5b92c);
+  box-shadow: 0 8px 24px rgba(238, 177, 40, 0.18);
+  font-weight: 750;
+}
+
+.admin-user-manager-enhanced .admin-user-section-actions .mm-btn.primary:hover {
+  filter: brightness(1.04);
+}
+
+@media (max-width: 900px) {
+  .admin-user-manager-enhanced .admin-user-modal {
+    padding: 12px;
+  }
+
+  .admin-user-manager-enhanced
+    .admin-user-dialog:not(.compact):not(.delegation-policy-dialog) {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .admin-user-manager-enhanced
+    .admin-user-dialog:not(.compact):not(.delegation-policy-dialog)
+    > header {
+    min-height: 104px;
+    padding: 20px;
+  }
+
+  .admin-user-manager-enhanced .admin-user-dialog-title {
+    grid-template-columns: 48px minmax(0, 1fr);
+    column-gap: 13px;
+  }
+
+  .admin-user-manager-enhanced .admin-user-dialog-title::before {
+    width: 48px;
+    height: 48px;
+    font-size: 19px;
+  }
+
+  .admin-user-manager-enhanced .admin-user-dialog-body {
+    padding: 16px;
+  }
+
+  .admin-user-manager-enhanced .admin-user-dialog-tabs {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-user-manager-enhanced .admin-organization-membership-row {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin: 12px;
+    padding: 20px;
+  }
+
+  .admin-user-manager-enhanced .admin-membership-state[role="button"] {
+    width: 100%;
+  }
+
+  .admin-user-manager-enhanced .admin-user-section-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-manager-enhanced .admin-user-section-actions .mm-btn.primary {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-user-manager-enhanced .admin-user-dialog-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-manager-enhanced .admin-user-dialog-title > p {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
