@@ -9,6 +9,7 @@ import {
 
 import AdminUserManagerLegacy from "./AdminUserManagerLegacy";
 import "./admin-user-manager-enhancement.css";
+import "./admin-user-manager-polish.css";
 
 type AdminUserManagerProps = ComponentProps<typeof AdminUserManagerLegacy>;
 
