@@ -27,6 +27,12 @@ import {
   isLargeProjectConfigRequest,
   saveLargeProjectConfigStream,
 } from "../../../_lib/project-large-config-save.js";
+import {
+  authorizeLargeProjectCreation,
+  finalizeLargeProjectCreation,
+  hasLargeCreationContext,
+  markLargeProjectCreationFailed,
+} from "../../../_lib/project-large-creation.js";
 import { saveLargeLegacyProjectConfigStream } from "../../../_lib/project-large-legacy-config-save.js";
 
 function decodeProjectSlug(value) {
@@ -121,17 +127,28 @@ async function loadPersistenceContext(env, request, params) {
   return { user, project, slug };
 }
 
-async function auditLargeSave(env, request, user, project, result, metadata = {}) {
+async function auditLargeSave(
+  env,
+  request,
+  user,
+  project,
+  result,
+  metadata = {},
+) {
   if (!user || !project) return;
+  const operation = metadata.operation === "create" ? "create" : "update";
   await recordAuditLog(env, {
     actorUserId: user?.id,
     organizationId: organizationId(project),
     projectId: project?.id ?? null,
-    action: "projects.config.save.large_stream",
+    action:
+      operation === "create"
+        ? "project_create_stream"
+        : "projects.config.save.large_stream",
     resourceType: "project",
     resourceId: project?.slug ?? project?.id ?? null,
     result,
-    metadata,
+    metadata: { ...metadata, operation },
     request,
   });
 }
@@ -191,10 +208,16 @@ export async function onRequest(context) {
     }
   }
 
-  const trace = createSaveTrace({ request, correlationId, operation: "update" });
+  const creationRequest = hasLargeCreationContext(request);
+  const trace = createSaveTrace({
+    request,
+    correlationId,
+    operation: creationRequest ? "create" : "update",
+  });
   let user = null;
   let project = null;
   let slug = null;
+  let creationKey = null;
 
   try {
     user = await requireSession(env, request);
@@ -206,41 +229,73 @@ export async function onRequest(context) {
       throw error;
     }
 
-    project = await getAuthorizedProject(env, user, slug);
-    if (!project) {
-      const error = new Error("Projeto não encontrado ou sem permissão de acesso.");
-      error.status = 404;
-      error.code = "PROJECT_NOT_FOUND";
-      throw error;
+    if (creationRequest) {
+      const creation = await authorizeLargeProjectCreation(
+        env,
+        request,
+        user,
+        slug,
+      );
+      project = creation.project;
+      creationKey = creation.idempotencyKey;
+    } else {
+      project = await getAuthorizedProject(env, user, slug);
+      if (!project) {
+        const error = new Error("Projeto não encontrado ou sem permissão de acesso.");
+        error.status = 404;
+        error.code = "PROJECT_NOT_FOUND";
+        throw error;
+      }
+      assertProjectPersistenceRoute(user, project);
+      project = await hydrateLifecycleProject(env, project);
+
+      const decision = await can(env, user, "project.save", {
+        project,
+        projectId: project.id,
+        projectSlug: project.slug ?? slug,
+        organizationId: organizationId(project),
+      });
+      if (!decision.allowed) {
+        const error = new Error("Acesso negado.");
+        error.status = 403;
+        error.code = "FORBIDDEN";
+        error.details = {
+          permission: "project.save",
+          reason: decision.reason || "DENY_BY_DEFAULT",
+        };
+        throw error;
+      }
     }
-    assertProjectPersistenceRoute(user, project);
-    project = await hydrateLifecycleProject(env, project);
+
     trace.updateContext({
       projectId: project.id,
       organizationId: organizationId(project),
     });
-
-    const decision = await can(env, user, "project.save", {
-      project,
-      projectId: project.id,
-      projectSlug: project.slug ?? slug,
-      organizationId: organizationId(project),
-    });
-    if (!decision.allowed) {
-      const error = new Error("Acesso negado.");
-      error.status = 403;
-      error.code = "FORBIDDEN";
-      error.details = {
-        permission: "project.save",
-        reason: decision.reason || "DENY_BY_DEFAULT",
-      };
-      throw error;
-    }
-
     deployment = await assertSaveDeployCompatibility(env, request);
 
     let saved;
-    if (!isLifecycleManagedProject(project)) {
+    if (creationRequest) {
+      saved = await saveLargeProjectConfigStream(env, {
+        request,
+        project,
+        user,
+        saveTrace: trace,
+        operation: "create",
+        allowedLifecycleStates: [
+          PROJECT_LIFECYCLE_STATES.PREPARING_STORAGE,
+          PROJECT_LIFECYCLE_STATES.CONFIG_READY,
+          PROJECT_LIFECYCLE_STATES.ACTIVE,
+        ],
+        expectedLifecycleState: PROJECT_LIFECYCLE_STATES.PREPARING_STORAGE,
+        syncOrganizationFile: false,
+        afterPublish: async ({ project: publishedProject, artifact }) =>
+          finalizeLargeProjectCreation(env, request, user, {
+            project: publishedProject,
+            artifact,
+            idempotencyKey: creationKey,
+          }),
+      });
+    } else if (!isLifecycleManagedProject(project)) {
       saved = await saveLargeLegacyProjectConfigStream(env, {
         request,
         project,
@@ -266,7 +321,7 @@ export async function onRequest(context) {
     const sizeBytes = Number(saved.artifact?.sizeBytes || 0);
 
     trace.updateContext({ candidateRevision: configRevision, payloadBytes: sizeBytes });
-    trace.finishSuccess({ httpStatus: 200 });
+    trace.finishSuccess({ httpStatus: creationRequest ? 201 : 200 });
 
     await auditLargeSave(env, request, user, updatedProject, "success", {
       correlationId,
@@ -277,11 +332,13 @@ export async function onRequest(context) {
       checksumAlgorithm: saved.artifact?.checksumAlgorithm ?? null,
       idempotent: Boolean(saved.idempotent),
       promotedFromLegacy: Boolean(saved.promotedFromLegacy),
+      operation: creationRequest ? "create" : "update",
     }).catch(() => null);
 
     return jsonResponse(
       {
         ok: true,
+        status: creationRequest ? "active" : undefined,
         idempotent: Boolean(saved.idempotent),
         project: projectResponse(updatedProject, configRevision),
         lifecycle: publicProjectLifecycle(updatedProject),
@@ -297,19 +354,34 @@ export async function onRequest(context) {
         preview: null,
         previewError: null,
         transport: "stream",
+        operation: creationRequest ? "create" : "update",
         promotedFromLegacy: Boolean(saved.promotedFromLegacy),
       },
-      { headers: combineHeaders(trace, deployment) },
+      {
+        status: creationRequest ? 201 : 200,
+        headers: combineHeaders(trace, deployment),
+      },
     );
   } catch (error) {
     const normalized = normalizeMaonoError(error, {
-      defaultCode: "PROJECT_CONFIG_LARGE_SAVE_FAILED",
+      defaultCode: creationRequest
+        ? "PROJECT_CREATE_LARGE_FAILED"
+        : "PROJECT_CONFIG_LARGE_SAVE_FAILED",
       correlationId,
     });
     trace.fail(normalized, {
       stage: normalized?.details?.stage ?? trace.currentStage ?? "WRITE",
       httpStatus: normalized.status,
     });
+
+    if (creationRequest && project && creationKey) {
+      await markLargeProjectCreationFailed(env, request, user, {
+        project,
+        idempotencyKey: creationKey,
+        error: normalized,
+        stage: normalized?.details?.stage ?? trace.currentStage ?? "WRITE",
+      }).catch(() => null);
+    }
 
     await auditLargeSave(env, request, user, project, "error", {
       correlationId,
@@ -319,6 +391,7 @@ export async function onRequest(context) {
       retryable: normalized.retryable,
       stage: normalized?.details?.stage ?? trace.currentStage ?? null,
       transport: "stream",
+      operation: creationRequest ? "create" : "update",
     }).catch(() => null);
 
     return errorResponseFromError(normalized, {
@@ -326,7 +399,9 @@ export async function onRequest(context) {
       headers: combineHeaders(trace, deployment),
       publicMessage:
         Number(normalized.status || 500) >= 500
-          ? "Não foi possível salvar a configuração grande do projeto."
+          ? creationRequest
+            ? "Não foi possível concluir a criação do projeto grande. A tentativa pode ser retomada com segurança."
+            : "Não foi possível salvar a configuração grande do projeto."
           : undefined,
     });
   }
