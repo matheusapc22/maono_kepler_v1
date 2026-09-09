@@ -1,0 +1,88 @@
+name: Large CREATE validation
+
+on:
+  pull_request:
+    paths:
+      - "functions/api/projects/**"
+      - "functions/_lib/dropbox-client.js"
+      - "functions/_lib/dropbox-large-upload.js"
+      - "functions/_lib/project-config-integrity.js"
+      - "functions/_lib/project-large-config-save.js"
+      - "functions/_lib/project-large-creation.js"
+      - "functions/_lib/projects.js"
+      - "functions/_lib/runtime-environment.js"
+      - "src/pages/Kepler/project-create-flow.ts"
+      - "src/pages/Kepler/project-create-transport.ts"
+      - "src/pages/Kepler/save-observability.ts"
+      - "src/pages/Kepler/components/maono-save-button.tsx"
+      - "scripts/large-create/**"
+      - "tests/project-large-create-*.test.mjs"
+      - "tests/large-create-preview-operator.test.mjs"
+      - "tests/project-creation-metadata.test.mjs"
+      - "tests/project-large-save.test.mjs"
+      - ".github/workflows/large-create-validation.yml"
+      - ".github/workflows/large-create-preview-acceptance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: hardening-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Large CREATE hardening suite
+        run: >-
+          node --experimental-strip-types --test
+          tests/project-large-create-hardening.test.mjs
+          tests/project-large-create-failures.test.mjs
+          tests/project-large-create-regression.test.mjs
+          tests/project-large-create-observability.test.mjs
+          tests/large-create-preview-operator.test.mjs
+
+      - name: Existing CREATE and SAVE regression suite
+        run: >-
+          node --experimental-strip-types --test
+          tests/project-creation-metadata.test.mjs
+          tests/project-large-save.test.mjs
+
+      - name: Syntax-check Preview acceptance operator
+        run: |
+          node --check scripts/large-create/build-large-create-fixture.mjs
+          node --check scripts/large-create/preview-acceptance.mjs
+
+      - name: Build application
+        run: npm run build
+
+  stress-94mib:
+    name: stress-94mib
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LARGE_CREATE_STRESS_MIB: "94"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prove 90-100 MiB fixture classification without inline envelope
+        run: >-
+          node --max-old-space-size=2048 --experimental-strip-types --test
+          tests/project-large-create-90mib.test.mjs

@@ -50,5 +50,9 @@ export function publicRuntimeDiagnostics(env = {}) {
         ? arePreviewMutationsEnabled(env)
         : false,
     previewQaOrganizationConfigured: Boolean(previewQaOrganizationId(env)),
+    largeCreateStreamEnabled: normalizeBoolean(
+      env?.PROJECT_CREATE_LARGE_STREAM_V1,
+      false,
+    ),
   };
 }
