@@ -130,10 +130,6 @@ export function serializeMapConfigTransport(
 ): SerializedMapConfigTransport {
   LARGE_SAVE_REGISTRY.delete(attempt);
 
-  if (!Number.isInteger(expectedConfigRevision) || expectedConfigRevision < 0) {
-    throw new Error("A revisão esperada do projeto é inválida para o transporte do MapConfig.");
-  }
-
   const body = JSON.stringify(config);
   if (typeof body !== "string") {
     throw new Error("Não foi possível serializar a configuração do projeto.");
@@ -142,6 +138,9 @@ export function serializeMapConfigTransport(
   const payloadBytes = measureUtf8PayloadBytes(body);
   const large = payloadBytes > MAONO_LARGE_SAVE_THRESHOLD_BYTES;
   if (large) {
+    if (!Number.isInteger(expectedConfigRevision) || expectedConfigRevision < 0) {
+      throw new Error("A revisão esperada do projeto é inválida para o transporte do MapConfig.");
+    }
     assertLargeConfigShape(config);
     LARGE_SAVE_REGISTRY.set(attempt, {
       expectedConfigRevision,
