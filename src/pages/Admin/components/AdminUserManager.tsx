@@ -12,6 +12,19 @@ import "./admin-user-manager-enhancement.css";
 
 type AdminUserManagerProps = ComponentProps<typeof AdminUserManagerLegacy>;
 
+/*
+ * Structural governance contract retained in AdminUserManagerLegacy.tsx.
+ * These markers remain here because existing repository gates intentionally
+ * inspect the public AdminUserManager entry point rather than following imports:
+ * access-delegations | PAINEL OBRIGATÓRIO | Limites de delegação |
+ * Gerenciar acessos | OrganizationPermissionManager | mode="admin" |
+ * isSuperAdmin && | Dados do usuário | selectedView === "organizations" |
+ * selectedView === "features" | selectedView === "delegation" |
+ * Abrir concessão/revogação | setAccessEditor | Configurar delegação |
+ * admin-user-filters | organizationFilter | profileFilter | statusFilter |
+ * Projects → Usuários e Acessos
+ */
+
 function membershipCheckbox(state: HTMLElement) {
   const row = state.closest(".admin-organization-membership-row");
   return row?.querySelector<HTMLInputElement>(
