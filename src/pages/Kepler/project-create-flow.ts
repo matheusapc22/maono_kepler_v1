@@ -3,11 +3,11 @@ import {
   readSaveResponseDiagnostics,
   type ClientSaveAttempt,
   type SaveResponseDiagnostics,
-} from "./save-observability";
+} from "./save-observability.ts";
 import {
   prepareProjectCreateTransport,
   type PreparedProjectCreateTransport,
-} from "./project-create-transport";
+} from "./project-create-transport.ts";
 
 export type ProjectCreateRequestStage =
   | "creating_record"
