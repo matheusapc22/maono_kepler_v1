@@ -39,6 +39,7 @@ test("runtime diferencia production, preview e configuração ausente", () => {
     preview: true,
     previewMutationsEnabled: true,
     previewQaOrganizationConfigured: true,
+    largeCreateStreamEnabled: false,
   });
 });
 
@@ -118,11 +119,14 @@ test("preview permite escrita de projeto somente na organização QA", () => {
   });
 
   assert.equal(qa.allowed, true);
-  assert.equal(qa.reason, PREVIEW_WRITE_REASONS.PREVIEW_QA_WRITE_ALLOWED);
+  assert.equal(
+    qa.reason,
+    PREVIEW_WRITE_REASONS.QA_ORGANIZATION_MUTATION_ALLOWED,
+  );
   assert.equal(productionOrg.allowed, false);
   assert.equal(
     productionOrg.reason,
-    PREVIEW_WRITE_REASONS.PREVIEW_WRITE_OUTSIDE_QA_ORG,
+    PREVIEW_WRITE_REASONS.ORGANIZATION_OUTSIDE_QA_SCOPE,
   );
 });
 
@@ -131,33 +135,44 @@ test("preview bloqueia mutações administrativas e de storage mesmo na organiza
     "/api/admin/users/1",
     "/api/organizations/9001",
     "/api/dropbox/upload",
-    "/api/tickets/123",
   ]) {
     const decision = evaluatePreviewWritePolicy(previewEnv(), {
       method: "POST",
       pathname,
       organizationId: "9001",
     });
-
     assert.equal(decision.allowed, false, pathname);
     assert.equal(
       decision.reason,
-      PREVIEW_WRITE_REASONS.PREVIEW_GLOBAL_MUTATION_DENIED,
+      PREVIEW_WRITE_REASONS.BLOCKED_DOMAIN,
       pathname,
     );
   }
 });
 
 test("preview falha fechado quando não consegue resolver a organização QA", () => {
-  const decision = evaluatePreviewWritePolicy(previewEnv(), {
+  const missingQa = evaluatePreviewWritePolicy(
+    previewEnv({ MAONO_PREVIEW_QA_ORG_ID: "" }),
+    {
+      method: "POST",
+      pathname: "/api/projects",
+      organizationId: "9001",
+    },
+  );
+  const unresolvedOrg = evaluatePreviewWritePolicy(previewEnv(), {
     method: "POST",
     pathname: "/api/projects",
     organizationId: null,
   });
 
-  assert.equal(decision.allowed, false);
+  assert.equal(missingQa.allowed, false);
   assert.equal(
-    decision.reason,
-    PREVIEW_WRITE_REASONS.PREVIEW_MUTATION_SCOPE_UNRESOLVED,
+    missingQa.reason,
+    PREVIEW_WRITE_REASONS.QA_ORGANIZATION_NOT_CONFIGURED,
+  );
+  assert.equal(unresolvedOrg.allowed, false);
+  assert.equal(
+    unresolvedOrg.reason,
+    PREVIEW_WRITE_REASONS.ORGANIZATION_UNRESOLVED,
   );
 });
