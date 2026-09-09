@@ -1,0 +1,148 @@
+/* Final visual overrides for the Super Admin user-management modal.
+ * Kept separate so the mature API/permission implementation remains untouched.
+ */
+
+/*
+ * Windows/browser native rendering can repaint the collapsed <select> face
+ * white even when background declarations win the CSS cascade. Keep the real
+ * select as the interactive control, but make its collapsed face transparent
+ * above a synchronized dark surface. This preserves focus, keyboard, dropdown
+ * and onChange semantics while making the dark presentation deterministic.
+ */
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level,
+.admin-user-manager-enhanced .admin-membership-level {
+  position: relative !important;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level::after,
+.admin-user-manager-enhanced .admin-membership-level::after {
+  display: none !important;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level-surface,
+.admin-user-manager-enhanced .admin-membership-level-surface {
+  position: relative !important;
+  z-index: 1 !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  height: 52px !important;
+  min-height: 52px !important;
+  margin: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  padding: 0 46px 0 16px !important;
+  overflow: hidden;
+  border: 1px solid #40566d;
+  border-radius: 10px;
+  color: #f4f1e8;
+  background: #0e1c2a;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px !important;
+  text-indent: 0 !important;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level-surface::after,
+.admin-user-manager-enhanced .admin-membership-level-surface::after {
+  content: "⌄";
+  position: absolute;
+  right: 17px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9eabb9;
+  font-size: 18px;
+  line-height: 1;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level-surface[data-disabled="true"],
+.admin-user-manager-enhanced .admin-membership-level-surface[data-disabled="true"] {
+  color: #7d8b99;
+  background: #0b1722;
+  border-color: #2c3c4d;
+  opacity: 0.58;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level select,
+.admin-user-manager-enhanced .admin-membership-level select {
+  position: absolute !important;
+  z-index: 2 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 52px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  appearance: auto !important;
+  -webkit-appearance: menulist !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level select:disabled,
+.admin-user-manager-enhanced .admin-membership-level select:disabled {
+  opacity: 0 !important;
+  cursor: not-allowed !important;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level:has(select:hover:not(:disabled)) .admin-membership-level-surface,
+.admin-user-manager-enhanced .admin-membership-level:has(select:hover:not(:disabled)) .admin-membership-level-surface {
+  background: #122235;
+  border-color: #58718a;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level:has(select:focus-visible) .admin-membership-level-surface,
+.admin-user-manager-enhanced .admin-membership-level:has(select:focus-visible) .admin-membership-level-surface {
+  border-color: #d6a84f;
+  box-shadow: 0 0 0 3px rgba(248, 191, 60, 0.12);
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced footer.admin-user-section-actions > button.mm-btn.primary {
+  min-height: 54px;
+  padding: 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #f4bc39 !important;
+  border-radius: 12px !important;
+  color: #141618 !important;
+  background: linear-gradient(135deg, #ffd35f 0%, #f5b92c 100%) !important;
+  background-color: #f5b92c !important;
+  box-shadow: 0 10px 26px rgba(238, 177, 40, 0.24) !important;
+  font-weight: 800;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced footer.admin-user-section-actions > button.mm-btn.primary::before {
+  content: "✓";
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced footer.admin-user-section-actions > button.mm-btn.primary:hover {
+  color: #111315 !important;
+  background: linear-gradient(135deg, #ffdd75 0%, #ffc443 100%) !important;
+  background-color: #ffc443 !important;
+  border-color: #ffd15d !important;
+  box-shadow: 0 12px 30px rgba(238, 177, 40, 0.3) !important;
+}
+
+:root .maono-admin-page .admin-user-manager-enhanced footer.admin-user-section-actions > button.mm-btn.primary:focus-visible {
+  outline: 2px solid rgba(255, 211, 95, 0.92) !important;
+  outline-offset: 3px;
+}
