@@ -26,6 +26,14 @@ const createPanelUrl = new URL(
   "../src/pages/Kepler/components/project-create-panel.tsx",
   import.meta.url,
 );
+const createFlowUrl = new URL(
+  "../src/pages/Kepler/project-create-flow.ts",
+  import.meta.url,
+);
+const createTransportUrl = new URL(
+  "../src/pages/Kepler/project-create-transport.ts",
+  import.meta.url,
+);
 const packageUrl = new URL("../package.json", import.meta.url);
 
 const [
@@ -35,6 +43,8 @@ const [
   creationService,
   saveButton,
   createPanel,
+  createFlow,
+  createTransport,
   packageSource,
 ] = await Promise.all([
   readFile(adminIndexUrl, "utf8"),
@@ -43,6 +53,8 @@ const [
   readFile(creationServiceUrl, "utf8"),
   readFile(saveButtonUrl, "utf8"),
   readFile(createPanelUrl, "utf8"),
+  readFile(createFlowUrl, "utf8"),
+  readFile(createTransportUrl, "utf8"),
   readFile(packageUrl, "utf8"),
 ]);
 
@@ -204,7 +216,7 @@ test("mapa existente mantém PUT de config com optimistic concurrency", () => {
   assert.match(saveButton, /void refresh\(\)/);
 });
 
-test("criação serializa uma vez e não captura no caminho crítico", () => {
+test("criação serializa o mapa uma vez e delega a classificação de transporte", () => {
   const create = functionBlock(saveButton, "handleCreateProject");
   assert.equal(
     (create.match(/serializeProjectConfig\(mapState\)/g) || []).length,
@@ -214,44 +226,90 @@ test("criação serializa uma vez e não captura no caminho crítico", () => {
     (create.match(/captureProjectThumbnail\(/g) || []).length,
     0,
   );
-  assert.match(create, /enqueuePreview\(createdSlug, revision, config\)/);
+  assert.match(create, /executeProjectCreateFlow\(/);
+  assert.match(create, /idempotencyKey,/);
+  assert.match(create, /config,/);
+  assert.match(create, /legacy,/);
+  assert.match(
+    create,
+    /enqueuePreview\(result\.createdSlug, result\.revision, config\)/,
+  );
   assert.match(saveButton, /operationInFlightRef\.current/);
 });
 
-test("criação confirma JSON antes de enfileirar preview", () => {
+test("criação escolhe inline ou metadata-first + streaming sem duplicar o JSON do MapConfig", () => {
   const create = functionBlock(saveButton, "handleCreateProject");
   const legacyCapture = functionBlock(saveButton, "legacyCapture");
 
-  assert.match(create, /fetch\("\/api\/projects"/);
-  assert.match(create, /method:\s*"POST"/);
-  assert.match(create, /idempotencyKey,/);
-  assert.match(create, /config,/);
+  assert.match(create, /executeProjectCreateFlow\(/);
+  assert.match(createTransport, /serializeMapConfigTransport\(attempt, config, 0\)/);
+  assert.equal(
+    (createTransport.match(/serializeMapConfigTransport\(attempt, config, 0\)/g) || []).length,
+    1,
+  );
+  assert.match(createTransport, /largeConfig:\s*true/);
+  assert.match(createTransport, /configMetadata:/);
+  assert.match(createTransport, /appendRawConfigToJsonEnvelope/);
+
+  assert.match(createFlow, /fetchImpl\("\/api\/projects"/);
+  assert.match(createFlow, /method:\s*"POST"/);
+  assert.match(createFlow, /forceJson:\s*true/);
+  assert.match(
+    createFlow,
+    /`\/api\/projects\/\$\{encodeURIComponent\(slug\)\}\/config`/,
+  );
+  assert.match(createFlow, /method:\s*"PUT"/);
+  assert.match(createFlow, /"X-Maono-Creation-Key":\s*idempotencyKey/);
+  assert.match(createFlow, /body:\s*prepared\.configBody/);
+  assert.match(createFlow, /prepared\.large && !isProjectCreationActive\(finalData\)/);
+  assert.match(createFlow, /if \(!isProjectCreationActive\(finalData\)\)/);
+
   assert.match(create, /const legacy = await legacyCapture\(config\)/);
-  assert.match(create, /thumbnailDataUrl:\s*legacy\.dataUrl/);
   assert.match(
     legacyCapture,
     /if \(ASYNC_THUMBNAIL_ENABLED\) \{\s*return null;/,
   );
-  assert.ok(
-    create.indexOf("!response.ok") <
-      create.indexOf("enqueuePreview(createdSlug, revision, config)"),
-  );
 });
 
-test("sucesso redireciona para a rota do projeto criado", () => {
+test("sucesso só redireciona após o fluxo confirmar ACTIVE", () => {
+  const create = functionBlock(saveButton, "handleCreateProject");
+  const execute = functionBlock(createFlow, "executeProjectCreateFlow");
+
   assert.match(saveButton, /useNavigate\(\)/);
   assert.match(
     saveButton,
-    /`\/projects\/\$\{encodeURIComponent\(createdSlug\)\}\/edit`/,
+    /`\/projects\/\$\{encodeURIComponent\(result\.createdSlug\)\}\/edit`/,
   );
   assert.match(saveButton, /\{\s*replace:\s*true\s*\}/);
+  assert.match(execute, /if \(!isProjectCreationActive\(finalData\)\)/);
+  assert.ok(
+    create.indexOf("executeProjectCreateFlow") <
+      create.indexOf("navigate("),
+  );
+  assert.ok(
+    create.indexOf("clearCreationKey(activeOrganizationId)") <
+      create.indexOf("navigate("),
+  );
 });
 
-test("retry reutiliza idempotency key da organização", () => {
+test("retry reutiliza idempotency key e só limpa a chave após ACTIVE", () => {
+  const create = functionBlock(saveButton, "handleCreateProject");
   assert.match(saveButton, /window\.sessionStorage\.getItem/);
   assert.match(saveButton, /window\.sessionStorage\.setItem/);
   assert.match(saveButton, /getOrCreateCreationKey/);
   assert.match(saveButton, /clearCreationKey/);
+  assert.ok(
+    create.indexOf("const idempotencyKey = getOrCreateCreationKey") <
+      create.indexOf("executeProjectCreateFlow"),
+  );
+  assert.ok(
+    create.indexOf("executeProjectCreateFlow") <
+      create.indexOf("clearCreationKey(activeOrganizationId)"),
+  );
+  assert.match(
+    createFlow,
+    /prepared\.large && !isProjectCreationActive\(finalData\)/,
+  );
 });
 
 test("painel valida título e descrição sem campo de slug", () => {
