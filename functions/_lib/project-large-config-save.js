@@ -390,9 +390,32 @@ function assertExpectedRevisionBeforeStreaming(project, expectedRevision) {
   }
 }
 
+function normalizeLifecycleStates(value) {
+  const states = Array.isArray(value) && value.length
+    ? value
+    : [PROJECT_LIFECYCLE_STATES.ACTIVE];
+  return states;
+}
+
+async function runAfterPublish(afterPublish, context) {
+  if (typeof afterPublish !== "function") return context.project;
+  const result = await afterPublish(context);
+  return result?.project || result || context.project;
+}
+
 export async function saveLargeProjectConfigStream(
   env,
-  { request, project, user, saveTrace = null },
+  {
+    request,
+    project,
+    user,
+    saveTrace = null,
+    operation = "update",
+    allowedLifecycleStates = [PROJECT_LIFECYCLE_STATES.ACTIVE],
+    expectedLifecycleState = PROJECT_LIFECYCLE_STATES.ACTIVE,
+    syncOrganizationFile = true,
+    afterPublish = null,
+  },
 ) {
   if (!request?.body || typeof request.body.getReader !== "function") {
     throw saveError(
@@ -408,8 +431,23 @@ export async function saveLargeProjectConfigStream(
       "MAP_CONFIG_STORAGE_CONTEXT_INVALID",
     );
   }
+  if (!new Set(["create", "update"]).has(operation)) {
+    throw saveError(
+      "Operação de persistência de MapConfig inválida.",
+      400,
+      "PROJECT_CONFIG_WRITE_OPERATION_INVALID",
+    );
+  }
 
   const manifest = validateLargeSaveHeaders(request);
+  if (operation === "create" && manifest.expectedRevision !== 0) {
+    throw saveError(
+      "A criação inicial deve publicar exatamente a revisão 1.",
+      409,
+      "PROJECT_CREATION_REVISION_INVALID",
+      { expectedRevision: manifest.expectedRevision },
+    );
+  }
   assertExpectedRevisionBeforeStreaming(project, manifest.expectedRevision);
 
   const nextRevision = manifest.expectedRevision + 1;
@@ -537,15 +575,25 @@ export async function saveLargeProjectConfigStream(
       contentType: artifact.contentType,
       actorUserId: user?.id ?? null,
       transitionId: saveTrace?.saveId ?? null,
-      allowedLifecycleStates: [PROJECT_LIFECYCLE_STATES.ACTIVE],
+      allowedLifecycleStates: normalizeLifecycleStates(allowedLifecycleStates),
     });
 
     if (reservation.alreadyPublished) {
       publicationCompleted = true;
-      return {
+      currentStage = "FINALIZE";
+      const finalProject = await runAfterPublish(afterPublish, {
+        env,
+        operation,
         project: reservation.project,
+        artifact,
         revision: nextRevision,
-        revisionHead: revisionHead(reservation.project, artifact, nextRevision),
+        ledger: reservation.revision,
+        idempotent: true,
+      });
+      return {
+        project: finalProject,
+        revision: nextRevision,
+        revisionHead: revisionHead(finalProject, artifact, nextRevision),
         artifact,
         ledger: reservation.revision,
         transitionId: saveTrace?.saveId ?? null,
@@ -553,6 +601,7 @@ export async function saveLargeProjectConfigStream(
         idempotent: true,
         auxiliaryWarnings: [],
         transport: "stream",
+        operation,
       };
     }
 
@@ -600,20 +649,29 @@ export async function saveLargeProjectConfigStream(
       revision: nextRevision,
       actor: { id: user?.id ?? null, name: user?.name || "Usuário" },
       markPreviewPending: true,
-      expectedLifecycleState: PROJECT_LIFECYCLE_STATES.ACTIVE,
+      expectedLifecycleState,
     });
     publicationCompleted = true;
 
-    const organizationFileWarning = await updateLinkedOrganizationFile(
+    const organizationFileWarning = syncOrganizationFile
+      ? await updateLinkedOrganizationFile(env, updatedProject, artifact)
+      : null;
+
+    currentStage = "FINALIZE";
+    const finalProject = await runAfterPublish(afterPublish, {
       env,
-      updatedProject,
+      operation,
+      project: updatedProject,
       artifact,
-    );
+      revision: nextRevision,
+      ledger: ready,
+      idempotent: Boolean(reservation.idempotent),
+    });
 
     return {
-      project: updatedProject,
+      project: finalProject,
       revision: nextRevision,
-      revisionHead: revisionHead(updatedProject, artifact, nextRevision),
+      revisionHead: revisionHead(finalProject, artifact, nextRevision),
       artifact,
       ledger: ready,
       transitionId: saveTrace?.saveId ?? null,
@@ -621,6 +679,7 @@ export async function saveLargeProjectConfigStream(
       idempotent: Boolean(reservation.idempotent),
       auxiliaryWarnings: organizationFileWarning ? [organizationFileWarning] : [],
       transport: "stream",
+      operation,
     };
   } catch (error) {
     if (reservation && !publicationCompleted) {
@@ -640,6 +699,7 @@ export async function saveLargeProjectConfigStream(
         ...(error.details || {}),
         stage: error?.details?.stage || currentStage,
         transport: "stream",
+        operation,
         bytesReceived: totalBytes,
       };
     }
