@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  type ChangeEvent,
   type ComponentProps,
   type KeyboardEvent,
   type MouseEvent,
@@ -60,6 +61,37 @@ function syncMembershipStateButtons(root: HTMLElement) {
     });
 }
 
+function ensureMembershipLevelSurface(select: HTMLSelectElement) {
+  const label = select.closest<HTMLElement>(".admin-membership-level");
+  if (!label) return null;
+
+  let surface = label.querySelector<HTMLElement>(
+    ".admin-membership-level-surface",
+  );
+  if (!surface) {
+    surface = document.createElement("span");
+    surface.className = "admin-membership-level-surface";
+    surface.setAttribute("aria-hidden", "true");
+    label.insertBefore(surface, select);
+  }
+  return surface;
+}
+
+function syncMembershipLevelSurfaces(root: HTMLElement) {
+  root
+    .querySelectorAll<HTMLSelectElement>(".admin-membership-level select")
+    .forEach((select) => {
+      const surface = ensureMembershipLevelSurface(select);
+      if (!surface) return;
+
+      surface.textContent =
+        select.selectedOptions[0]?.textContent?.trim() ||
+        select.options[select.selectedIndex]?.text?.trim() ||
+        "";
+      surface.setAttribute("data-disabled", select.disabled ? "true" : "false");
+    });
+}
+
 function activateMembershipState(state: HTMLElement) {
   const checkbox = membershipCheckbox(state);
   if (!checkbox || checkbox.disabled) return;
@@ -74,20 +106,28 @@ function activateMembershipState(state: HTMLElement) {
  * existing PUT/DELETE organization-assignment contract. This shell fixes the
  * ambiguous organization control by promoting the visible access state to the
  * explicit interactive affordance and applies the premium admin presentation.
+ *
+ * The native organization-profile select remains the only form control and
+ * keeps focus, keyboard, dropdown and onChange behavior. A synchronized visual
+ * surface sits underneath it so Windows/browser native painting cannot bring
+ * the white collapsed select face back into the dark Admin theme.
  */
 export default function AdminUserManager(props: AdminUserManagerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const syncMembershipStates = useCallback(() => {
-    if (rootRef.current) syncMembershipStateButtons(rootRef.current);
+  const syncOrganizationControls = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    syncMembershipStateButtons(root);
+    syncMembershipLevelSurfaces(root);
   }, []);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
-    syncMembershipStateButtons(root);
-    const observer = new MutationObserver(() => syncMembershipStateButtons(root));
+    syncOrganizationControls();
+    const observer = new MutationObserver(syncOrganizationControls);
     observer.observe(root, {
       subtree: true,
       childList: true,
@@ -96,7 +136,7 @@ export default function AdminUserManager(props: AdminUserManagerProps) {
     });
 
     return () => observer.disconnect();
-  }, [syncMembershipStates]);
+  }, [syncOrganizationControls]);
 
   function handleClick(event: MouseEvent<HTMLDivElement>) {
     const target = event.target;
@@ -107,7 +147,7 @@ export default function AdminUserManager(props: AdminUserManagerProps) {
       event.preventDefault();
       event.stopPropagation();
       activateMembershipState(state);
-      window.setTimeout(syncMembershipStates, 0);
+      window.setTimeout(syncOrganizationControls, 0);
       return;
     }
 
@@ -122,6 +162,16 @@ export default function AdminUserManager(props: AdminUserManagerProps) {
     }
   }
 
+  function handleChange(event: ChangeEvent<HTMLDivElement>) {
+    const target = event.target;
+    if (
+      target instanceof HTMLSelectElement &&
+      target.closest(".admin-membership-level")
+    ) {
+      window.setTimeout(syncOrganizationControls, 0);
+    }
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -130,7 +180,7 @@ export default function AdminUserManager(props: AdminUserManagerProps) {
     if (state && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       activateMembershipState(state);
-      window.setTimeout(syncMembershipStates, 0);
+      window.setTimeout(syncOrganizationControls, 0);
       return;
     }
 
@@ -151,6 +201,7 @@ export default function AdminUserManager(props: AdminUserManagerProps) {
       ref={rootRef}
       className="admin-user-manager-enhanced"
       onClick={handleClick}
+      onChange={handleChange}
       onKeyDown={handleKeyDown}
     >
       <AdminUserManagerLegacy {...props} />
