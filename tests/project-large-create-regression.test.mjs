@@ -165,14 +165,17 @@ test("projeto lifecycle-managed não é publicável antes de ACTIVE", () => {
   );
 });
 
-test("arquivo da organização só vira ACTIVE durante finalização, depois da revisão publicada", () => {
-  const finalizeStart = largeCreationSource.indexOf("export async function finalizeLargeProjectCreation");
-  const finalize = largeCreationSource.slice(finalizeStart);
+test("arquivo da organização só vira ACTIVE pela rotina de finalização, após revisão publicada", () => {
+  const helperStart = largeCreationSource.indexOf("async function activateOrganizationFile");
+  const helperEnd = largeCreationSource.indexOf("export async function finalizeLargeProjectCreation", helperStart);
+  const helper = largeCreationSource.slice(helperStart, helperEnd);
+  const finalize = largeCreationSource.slice(helperEnd);
   const published = finalize.indexOf("ensurePublishedInitialRevision");
-  const file = finalize.indexOf("activateOrganizationFile");
-  const fileSql = finalize.indexOf("status = 'ACTIVE'", file);
+  const file = finalize.indexOf("activateOrganizationFile(env");
 
+  assert.ok(helperStart >= 0);
+  assert.match(helper, /status = 'ACTIVE'/);
+  assert.match(helper, /active = 1/);
   assert.ok(published >= 0);
   assert.ok(file > published);
-  assert.ok(fileSql > file);
 });
