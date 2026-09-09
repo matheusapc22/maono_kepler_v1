@@ -84,11 +84,18 @@ function syncMembershipLevelSurfaces(root: HTMLElement) {
       const surface = ensureMembershipLevelSurface(select);
       if (!surface) return;
 
-      surface.textContent =
+      const selectedLabel =
         select.selectedOptions[0]?.textContent?.trim() ||
         select.options[select.selectedIndex]?.text?.trim() ||
         "";
-      surface.setAttribute("data-disabled", select.disabled ? "true" : "false");
+      if (surface.textContent !== selectedLabel) {
+        surface.textContent = selectedLabel;
+      }
+
+      const disabled = select.disabled ? "true" : "false";
+      if (surface.getAttribute("data-disabled") !== disabled) {
+        surface.setAttribute("data-disabled", disabled);
+      }
     });
 }
 
