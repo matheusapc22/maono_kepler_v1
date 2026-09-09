@@ -17,9 +17,11 @@ on:
       - "src/pages/Kepler/components/maono-save-button.tsx"
       - "scripts/large-create/**"
       - "tests/project-large-create-*.test.mjs"
+      - "tests/large-create-preview-operator.test.mjs"
       - "tests/project-creation-metadata.test.mjs"
       - "tests/project-large-save.test.mjs"
       - ".github/workflows/large-create-validation.yml"
+      - ".github/workflows/large-create-preview-acceptance.yml"
   workflow_dispatch:
 
 permissions:
@@ -49,6 +51,7 @@ jobs:
           tests/project-large-create-failures.test.mjs
           tests/project-large-create-regression.test.mjs
           tests/project-large-create-observability.test.mjs
+          tests/large-create-preview-operator.test.mjs
 
       - name: Existing CREATE and SAVE regression suite
         run: >-
