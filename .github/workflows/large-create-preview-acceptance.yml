@@ -1,0 +1,117 @@
+name: Large CREATE Preview acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Digite RUN_LARGE_CREATE_PREVIEW_ACCEPTANCE"
+        required: true
+        type: string
+      preview_base_url:
+        description: "Origin HTTPS do deployment Preview integrado"
+        required: true
+        type: string
+      release_ref:
+        description: "Branch/ref de produto já validada"
+        required: true
+        type: string
+      target_mib:
+        description: "Tamanho da fixture (90-100 MiB)"
+        required: true
+        default: "94"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: large-create-preview-acceptance
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate explicit operator confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
+          TARGET_MIB: ${{ inputs.target_mib }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "RUN_LARGE_CREATE_PREVIEW_ACCEPTANCE"
+          [[ "$PREVIEW_BASE_URL" =~ ^https://[A-Za-z0-9.-]+\.pages\.dev/?$ ]]
+          node -e 'const n=Number(process.argv[1]); if (!Number.isFinite(n) || n < 90 || n > 100) process.exit(2)' "$TARGET_MIB"
+
+  validate:
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - name: Checkout requested release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+
+      - name: Pin audited release SHA
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Validated release SHA: $sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate acceptance runner contracts
+        run: |
+          node --check scripts/large-create/build-large-create-fixture.mjs
+          node --check scripts/large-create/preview-acceptance.mjs
+          node --experimental-strip-types --test tests/project-large-create-observability.test.mjs tests/project-large-create-regression.test.mjs
+
+  acceptance:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+      RELEASE_REF: ${{ inputs.release_ref }}
+      MAONO_PREVIEW_BASE_URL: ${{ inputs.preview_base_url }}
+      MAONO_PREVIEW_CREATOR_SESSION_COOKIE: ${{ secrets.MAONO_PREVIEW_CREATOR_SESSION_COOKIE }}
+      MAONO_LARGE_CREATE_ACCEPTANCE_CONFIRMATION: ${{ inputs.confirmation }}
+      MAONO_ACCEPTANCE_QA_ORG_ID: "9"
+      MAONO_ACCEPTANCE_QA_ORG_SLUG: "maono-preview-qa"
+      MAONO_LARGE_CREATE_TARGET_MIB: ${{ inputs.target_mib }}
+    steps:
+      - name: Checkout validated release SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Refuse release ref drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
+          if [[ "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            current="$RELEASE_REF"
+          fi
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run authenticated 90-100 MiB Preview acceptance
+        run: node --max-old-space-size=2048 --experimental-strip-types scripts/large-create/preview-acceptance.mjs
