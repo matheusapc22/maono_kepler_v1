@@ -224,28 +224,57 @@ async function main() {
   assert.equal(replay.data?.project?.slug, createdProject.slug);
   assert.equal(Number(replay.data?.configRevision), 1);
 
-  const configResponse = await fetch(
-    `${baseUrl}/api/projects/${encodeURIComponent(createdProject.slug)}/config-stream`,
+  // O frontend de produção mantém o Worker fora do data plane para MapConfigs
+  // grandes: primeiro obtém um descriptor autenticado e depois baixa diretamente
+  // do storage. O acceptance precisa validar exatamente esse caminho, não o proxy
+  // legado /config-stream sem delivery=direct.
+  const descriptor = await fetchJson(
+    `${baseUrl}/api/projects/${encodeURIComponent(createdProject.slug)}/config-stream?delivery=direct`,
     {
       headers: cookieHeaders(sessionCookie, {
         "X-Maono-Expected-Config-Revision": "1",
       }),
     },
   );
-  if (!configResponse.ok) {
-    const text = await configResponse.text();
-    throw new Error(`config-stream falhou: HTTP ${configResponse.status} ${text.slice(0, 300)}`);
-  }
-  assert.equal(configResponse.headers.get("X-Maono-Config-Transport"), "stream");
-  assert.equal(configResponse.headers.get("X-Maono-Config-Revision"), "1");
+  assertOk(descriptor.response, descriptor.data, "config-stream direct descriptor");
+  assert.equal(descriptor.data?.transport, "direct");
+  assert.equal(descriptor.response.headers.get("X-Maono-Config-Transport"), "direct");
+  assert.equal(Number(descriptor.data?.revision), 1);
+  assert.equal(Number(descriptor.data?.sizeBytes), fixture.sizeBytes);
   assert.equal(
-    Number(configResponse.headers.get("X-Maono-Config-Size")),
+    Number(descriptor.response.headers.get("X-Maono-Config-Size")),
     fixture.sizeBytes,
   );
+
+  const downloadUrl = String(descriptor.data?.downloadUrl || "").trim();
+  const directUrl = new URL(downloadUrl);
+  assert.equal(directUrl.protocol, "https:", "descriptor deve fornecer download HTTPS");
+
+  const configResponse = await fetch(directUrl, {
+    method: "GET",
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  if (!configResponse.ok) {
+    const text = await configResponse.text();
+    throw new Error(`download direto falhou: HTTP ${configResponse.status} ${text.slice(0, 300)}`);
+  }
+
+  const directContentLength = Number(configResponse.headers.get("content-length") || 0);
+  if (directContentLength > 0) {
+    assert.equal(directContentLength, fixture.sizeBytes);
+  }
   const downloaded = new Uint8Array(await configResponse.arrayBuffer());
   assert.equal(downloaded.byteLength, fixture.sizeBytes);
   const downloadedSha256 = createHash("sha256").update(downloaded).digest("hex");
-  assert.equal(downloadedSha256, localSha256, "config-stream deve devolver exatamente a fixture publicada");
+  assert.equal(
+    downloadedSha256,
+    localSha256,
+    "download direto deve devolver exatamente a fixture publicada",
+  );
 
   process.stdout.write(`${JSON.stringify({
     ok: true,
@@ -258,6 +287,7 @@ async function main() {
     targetMiB: fixture.targetMiB,
     revision: 1,
     transport: "stream",
+    readTransport: "direct",
     sha256: localSha256,
     idempotentReplay: true,
     cleanupRequired: true,

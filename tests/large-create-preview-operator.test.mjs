@@ -47,3 +47,14 @@ test("runner exige runtime Preview, QA org, feature flag e mutations abertas", (
   assert.match(runner, /EXPECTED_QA_ORG_SLUG/);
   assert.match(runner, /permissions\.has\("project\.create"\)/);
 });
+
+test("runner valida a revisão publicada pelo mesmo delivery direct usado pelo frontend", () => {
+  assert.match(runner, /config-stream\?delivery=direct/);
+  assert.match(runner, /X-Maono-Expected-Config-Revision/);
+  assert.match(runner, /X-Maono-Config-Transport"\),\s*"direct"/);
+  assert.match(runner, /credentials:\s*"omit"/);
+  assert.match(runner, /referrerPolicy:\s*"no-referrer"/);
+  assert.match(runner, /downloaded\.byteLength,\s*fixture\.sizeBytes/);
+  assert.match(runner, /downloadedSha256,\s*localSha256/);
+  assert.match(runner, /readTransport:\s*"direct"/);
+});
