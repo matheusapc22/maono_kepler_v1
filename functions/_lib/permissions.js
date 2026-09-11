@@ -96,7 +96,7 @@ const EDITOR_NATIVE_PROJECT_PERSISTENCE_PERMISSIONS = new Set([
   "project.map.edit",
 ]);
 
-const EDITOR_PROJECT_SAVE_ACCESS_LEVELS = new Set(["editor", "write"]);
+const EDITOR_PROJECT_SAVE_ACCESS_LEVELS = new Set(["editor", "write", "owner"]);
 
 const PROJECT_CONTEXT_PERMISSIONS = new Set([
   "project.view",
