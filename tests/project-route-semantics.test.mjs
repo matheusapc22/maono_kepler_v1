@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { can } from "../functions/_lib/permissions.js";
+
 const urls = {
   routes: new URL("../src/Routes.tsx", import.meta.url),
   management: new URL(
@@ -44,6 +46,18 @@ const urls = {
     "../functions/_lib/map-panel-service.js",
     import.meta.url,
   ),
+  permissions: new URL(
+    "../functions/_lib/permissions.js",
+    import.meta.url,
+  ),
+  largeCreate: new URL(
+    "../functions/_lib/project-large-creation.js",
+    import.meta.url,
+  ),
+  inlineCreate: new URL(
+    "../functions/_lib/project-creation-lifecycle-service.js",
+    import.meta.url,
+  ),
 };
 
 const sources = Object.fromEntries(
@@ -51,6 +65,89 @@ const sources = Object.fromEntries(
     Object.entries(urls).map(async ([key, url]) => [key, await readFile(url, "utf8")]),
   ),
 );
+
+function makePermissionEnv({ accessLevel = "owner", deniedPermission = null } = {}) {
+  const rowsFor = (sql, params) => {
+    if (sql.includes("FROM user_permission_denials")) {
+      const permission = params?.[2];
+      return deniedPermission === permission ? [{ id: 1 }] : [];
+    }
+
+    if (sql.includes("FROM user_permissions")) {
+      return [];
+    }
+
+    if (sql.includes("FROM role_permissions")) {
+      return [];
+    }
+
+    if (sql.includes("FROM organization_users")) {
+      return [{
+        organization_id: 9,
+        user_id: 77,
+        access_level: "editor",
+        role: null,
+        active: 1,
+      }];
+    }
+
+    if (sql.includes("FROM user_projects")) {
+      return accessLevel
+        ? [{ user_id: 77, project_id: 404, access_level: accessLevel }]
+        : [];
+    }
+
+    return [];
+  };
+
+  return {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...params) {
+            return {
+              async all() {
+                return { results: rowsFor(sql, params) };
+              },
+              async run() {
+                return { success: true, meta: { changes: 0 } };
+              },
+            };
+          },
+          async all() {
+            return { results: rowsFor(sql, []) };
+          },
+          async run() {
+            return { success: true, meta: { changes: 0 } };
+          },
+        };
+      },
+    },
+  };
+}
+
+const projectContext = {
+  scopeType: "project",
+  projectId: 404,
+  projectSlug: "teste-4",
+  organizationId: 9,
+  project: {
+    id: 404,
+    slug: "teste-4",
+    name: "Teste 4",
+    organization_id: 9,
+    active: 1,
+  },
+};
+
+function editorUser(role = "editor") {
+  return {
+    id: 77,
+    name: "Editor QA",
+    role,
+    activeOrganizationId: 9,
+  };
+}
 
 test("novo projeto permanece exclusivo de /maps/new/create", () => {
   assert.match(
@@ -167,6 +264,74 @@ test("resolver de rota força role Viewer e normaliza legado para Editor", () =>
   );
   assert.match(sources.routePolicy, /EDITOR_ACCESS_LEVELS = new Set\(\["editor", "write", "owner"\]\)/);
   assert.match(sources.routePolicy, /if \(role === "super_admin"\)[\s\S]*PROJECT_MAP_ROUTE_MODES\.EDITOR/);
+});
+
+test("owner de projeto criado também é nível persistente válido para role Editor", () => {
+  assert.match(
+    sources.permissions,
+    /EDITOR_PROJECT_SAVE_ACCESS_LEVELS = new Set\(\["editor", "write", "owner"\]\)/,
+  );
+  assert.match(
+    sources.largeCreate,
+    /VALUES \(\?, \?, 'owner'\)[\s\S]*ON CONFLICT\(user_id, project_id\)/,
+  );
+  assert.match(
+    sources.inlineCreate,
+    /VALUES \(\?, \?, 'owner'\)[\s\S]*ON CONFLICT\(user_id, project_id\)/,
+  );
+});
+
+test("Editor criador com access_level owner pode visualizar, editar mapa e salvar", async () => {
+  const env = makePermissionEnv({ accessLevel: "owner" });
+  const user = editorUser();
+
+  for (const permission of ["project.view", "project.map.edit", "project.save"]) {
+    const decision = await can(env, user, permission, projectContext);
+    assert.equal(decision.allowed, true, permission);
+  }
+});
+
+test("access_level editor e write preservam persistência nativa do Editor", async () => {
+  for (const accessLevel of ["editor", "write"]) {
+    const env = makePermissionEnv({ accessLevel });
+    for (const permission of ["project.map.edit", "project.save"]) {
+      const decision = await can(env, editorUser(), permission, projectContext);
+      assert.equal(decision.allowed, true, `${accessLevel}:${permission}`);
+    }
+  }
+});
+
+test("Viewer não ganha persistência direta mesmo se existir vínculo owner legado", async () => {
+  const env = makePermissionEnv({ accessLevel: "owner" });
+  const viewer = editorUser("viewer");
+
+  assert.equal((await can(env, viewer, "project.view", projectContext)).allowed, true);
+  assert.equal((await can(env, viewer, "project.map.edit", projectContext)).allowed, false);
+  assert.equal((await can(env, viewer, "project.save", projectContext)).allowed, false);
+});
+
+test("negação explícita continua prevalecendo sobre ownership do projeto", async () => {
+  const env = makePermissionEnv({
+    accessLevel: "owner",
+    deniedPermission: "project.save",
+  });
+
+  const decision = await can(env, editorUser(), "project.save", projectContext);
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, "USER_PERMISSION_EXPLICITLY_DENIED");
+});
+
+test("sem vínculo em user_projects não há acesso implícito ao projeto", async () => {
+  const env = makePermissionEnv({ accessLevel: null });
+
+  assert.equal(
+    (await can(env, editorUser(), "project.view", projectContext)).allowed,
+    false,
+  );
+  assert.equal(
+    (await can(env, editorUser(), "project.save", projectContext)).allowed,
+    false,
+  );
 });
 
 test("modo Viewer bloqueia persistência direta antes dos endpoints de escrita", () => {
