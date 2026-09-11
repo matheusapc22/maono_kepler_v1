@@ -1,0 +1,56 @@
+/* =========================================================
+   MAÕNO — FILTERS PORTAL (escopo correto)
+   #maono-kepler-filters-root é o ROOT do portal
+   ========================================================= */
+
+/* root do portal ocupa tudo */
+#maono-kepler-filters-root {
+  height: 100%;
+  min-height: 0;
+}
+
+/* wrapper que a factory injeta dentro do root */
+#maono-kepler-filters-root > .maono-kepler-override {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* garante scroll/altura no conteúdo */
+#maono-kepler-filters-root > .maono-kepler-override > div {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* esconder botão Add Data interno (fallback seguro) */
+#maono-kepler-filters-root button.add-data-button {
+  display: none !important;
+}
+
+/* 🚀 A NOVA ARMA OFICIAL: Oculta o painel nativo do Kepler via CSS para preservar a Legenda e o Zoom */
+div[class*="side-panel--container"],
+.kepler-gl__side-panel {
+  display: none !important;
+  width: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Opcional: Ajusta a posição da legenda e controles se eles ficarem muito colados na borda */
+.map-control {
+  margin-top: 20px !important;
+}
+
+/* 🚀 A TÁTICA SNIPER: Oculta EXCLUSIVAMENTE o painel esquerdo nativo do Kepler */
+div[class*="side-panel--container"] {
+  display: none !important;
+  width: 0 !important;
+  padding: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Garante que a área do mapa se expanda 100% cobrindo o buraco do painel */
+.kepler-gl .map-container {
+  width: 100% !important;
+}
