@@ -89,6 +89,7 @@ test('unauthenticated, Viewer and another organization cannot access inbox', asy
 test('ticket link uses stored relation and checks project access', async t => {
   const f = fixture(t);
   assert.deepEqual(await getTicketReviewLink(f.env, f.request(), 1, 100), {
+    lifecycleVersion: 0, decision: null, feedback: null, decidedByUserId: null, decidedAt: null, appliedRevision: null,
     id: 'cr-1', status: 'submitted', reviewUrl: '/projects/mapa/review/cr-1',
   });
   assert.equal(await getTicketReviewLink(f.env, f.request(), 1, 200), null);

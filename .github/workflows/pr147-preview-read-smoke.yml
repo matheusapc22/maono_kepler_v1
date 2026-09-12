@@ -1,0 +1,60 @@
+name: PR147 Preview read smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/change-requests-ticket-lifecycle]
+    paths:
+      - .github/workflows/pr147-preview-read-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-request-d1-rollout
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: github.repository == 'matheusapc22/maono_kepler_v1' && github.ref == 'refs/heads/feat/change-requests-ticket-lifecycle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MAONO_PREVIEW_BASE_URL: https://feat-change-requests-ticket.maono-kepler-v1.pages.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify deployed Preview health, runtime and D1 read
+        run: node scripts/preview/smoke-preview.mjs
+      - name: Prove fail-closed write isolation with kill switch disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$MAONO_PREVIEW_BASE_URL"
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+
+          # A QA-scoped mutation must be stopped by the kill switch before
+          # authentication or handler execution. This proves no domain write
+          # can reach D1 while MAONO_PREVIEW_MUTATIONS_ENABLED=false.
+          status="$(curl --silent --show-error --output "$tmp" --write-out '%{http_code}' \
+            -X POST "$base/api/projects" \
+            -H 'Accept: application/json' \
+            -H 'Content-Type: application/json' \
+            --data '{}')"
+          test "$status" = '403'
+          jq -e '.error.code == "PREVIEW_MUTATIONS_DISABLED"' "$tmp" >/dev/null
+
+          # Global/admin writes must also fail closed. With the kill switch off,
+          # the canonical reason remains PREVIEW_MUTATIONS_DISABLED.
+          status="$(curl --silent --show-error --output "$tmp" --write-out '%{http_code}' \
+            -X POST "$base/api/organizations" \
+            -H 'Accept: application/json' \
+            -H 'Content-Type: application/json' \
+            --data '{}')"
+          test "$status" = '403'
+          jq -e '.error.code == "PREVIEW_MUTATIONS_DISABLED"' "$tmp" >/dev/null
+
+          echo 'Preview kill switch blocks QA-scoped and global domain writes before handlers.'

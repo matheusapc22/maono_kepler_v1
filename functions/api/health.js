@@ -1,3 +1,4 @@
+import { isChangeRequestLifecycleSchemaReady } from "../_lib/project-change-request-lifecycle.js";
 import { jsonResponse, errorResponse, methodNotAllowed } from "../_lib/http.js";
 import { publicRuntimeDiagnostics } from "../_lib/runtime-environment.js";
 
@@ -15,11 +16,13 @@ export async function onRequest(context) {
       dropboxAppSecret: Boolean(env.DROPBOX_APP_SECRET),
       dropboxRefreshToken: Boolean(env.DROPBOX_REFRESH_TOKEN),
       databaseReachable: false,
+      changeRequestLifecycleReady: false,
     };
 
     if (env.DB) {
       await env.DB.prepare("SELECT 1 AS ok").first();
       checks.databaseReachable = true;
+      checks.changeRequestLifecycleReady = await isChangeRequestLifecycleSchemaReady(env);
     }
 
     const ok = Object.values(checks).every(Boolean);

@@ -1,6 +1,15 @@
 import type { ViewerChangeOperation } from "./viewer-working-copy";
 
-export type ProjectChangeRequest = {
+export type RequestLifecycle = {
+  lifecycleVersion: number;
+  decision: "approved" | "rejected" | null;
+  feedback: string | null;
+  decidedByUserId: number | null;
+  decidedAt: string | null;
+  appliedRevision: number | null;
+};
+
+export type ProjectChangeRequest = RequestLifecycle & {
   id: string;
   organizationId: number;
   projectId: number;
