@@ -122,3 +122,22 @@ A funcionalidade só é considerada encerrada quando:
 - testes de timeout, integridade, quota/lifecycle e regressões verdes;
 - Preview mutations restauradas para `false`;
 - Production ativada de forma controlada e smoke final verde.
+
+## Estado pós-rollout — 2026-09-12
+
+P0 **Criar e persistir novos projetos grandes** encerrado dentro do escopo validado.
+
+Evidências de fechamento:
+
+- acceptance remoto com fixture de aproximadamente 94 MiB concluiu CREATE até `ACTIVE`, revision 1 e replay idempotente;
+- leitura da revisão publicada passou a ser validada pelo mesmo delivery `direct` usado pelo frontend;
+- correção de ownership do criador permite reabrir e persistir projetos já criados sem backfill de D1;
+- smoke real em Production foi concluído e o projeto grande foi reaberto, editado e salvo novamente com persistência confirmada.
+
+Estado operacional após o fechamento:
+
+- manter `PROJECT_CREATE_LARGE_STREAM_V1=true` em Production como comportamento ativo;
+- preservar `PROJECT_CREATE_LARGE_STREAM_V1=false` como kill switch operacional, sem rollback de banco;
+- manter `MAONO_PREVIEW_MUTATIONS_ENABLED=false` fora de janelas QA explícitas;
+- o projeto `qa-smoke-large-create-20260911154238` pode ser removido pela rotina administrativa segura, pois a evidência durável permanece no histórico de rollout/PRs e testes;
+- novos incidentes de SAVE devem ser tratados como regressões ou novos bugs, sem reabrir automaticamente este P0.
