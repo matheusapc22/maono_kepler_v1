@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildBaseline,
   compareWithBaseline,
   scanText,
   summarize,
@@ -40,19 +41,49 @@ test("não classifica copy de produto sem diagnóstico técnico", () => {
   assert.equal(findings.length, 0);
 });
 
+test("baseline automático inclui apenas regras high-signal", () => {
+  const summary = summarize([
+    { rule: "raw-error-message", file: "src/a.tsx", line: 1, snippet: "error.message" },
+    { rule: "implementation-copy", file: "src/a.tsx", line: 2, snippet: "dataset" },
+  ]);
+  const baseline = buildBaseline(summary);
+  assert.equal(baseline.byFile["src/a.tsx::raw-error-message"], 1);
+  assert.equal(baseline.byFile["src/a.tsx::implementation-copy"], undefined);
+});
+
 test("ratchet permite redução de dívida", () => {
   const summary = { byFile: { "src/a.tsx::raw-error-message": 1 } };
-  const baseline = { byFile: { "src/a.tsx::raw-error-message": 2 } };
+  const baseline = {
+    version: 2,
+    rules: ["raw-error-message"],
+    byFile: { "src/a.tsx::raw-error-message": 2 },
+  };
   assert.deepEqual(compareWithBaseline(summary, baseline), []);
 });
 
-test("ratchet falha quando um sink aumenta ou surge em arquivo novo", () => {
+test("ratchet falha quando um sink high-signal aumenta ou surge em arquivo novo", () => {
   const summary = summarize([
     { rule: "raw-error-message", file: "src/a.tsx", line: 1, snippet: "error.message" },
     { rule: "raw-error-message", file: "src/a.tsx", line: 2, snippet: "error.message" },
     { rule: "raw-response-text", file: "src/new.ts", line: 3, snippet: "response.text()" },
   ]);
-  const baseline = { byFile: { "src/a.tsx::raw-error-message": 1 } };
+  const baseline = {
+    version: 2,
+    rules: ["raw-error-message", "raw-response-text", "diagnostic-id"],
+    byFile: { "src/a.tsx::raw-error-message": 1 },
+  };
   const regressions = compareWithBaseline(summary, baseline);
   assert.equal(regressions.length, 2);
+});
+
+test("vocabulário de implementação permanece review-only e não quebra ratchet", () => {
+  const summary = summarize([
+    { rule: "implementation-copy", file: "src/new.tsx", line: 1, snippet: "dataset" },
+  ]);
+  const baseline = {
+    version: 2,
+    rules: ["raw-error-message", "raw-response-text", "diagnostic-id"],
+    byFile: {},
+  };
+  assert.deepEqual(compareWithBaseline(summary, baseline), []);
 });
