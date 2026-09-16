@@ -8,6 +8,12 @@ const ROOT = process.cwd();
 const SOURCE_ROOT = path.join(ROOT, "src");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
+export const RATCHET_RULES = [
+  "raw-error-message",
+  "raw-response-text",
+  "diagnostic-id",
+];
+
 export const RULES = [
   {
     id: "raw-error-message",
@@ -26,7 +32,7 @@ export const RULES = [
   },
   {
     id: "implementation-copy",
-    description: "Vocabulário de implementação encontrado em string/linha de frontend",
+    description: "Vocabulário de implementação encontrado em string/linha de frontend; regra de descoberta, não gate automático",
     pattern: /\b(?:API|backend|storage|Worker|descriptor|bytes|body|JSON|schema|runtime|Kepler|dataset(?:s)?|layer(?:s)?)\b/gi,
   },
 ];
@@ -108,10 +114,34 @@ function readBaseline(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
+function ruleFromKey(key) {
+  return key.slice(key.lastIndexOf("::") + 2);
+}
+
+export function buildBaseline(summary) {
+  const allowed = new Set(RATCHET_RULES);
+  const byFile = Object.fromEntries(
+    Object.entries(summary.byFile ?? {}).filter(([key]) => allowed.has(ruleFromKey(key))),
+  );
+  return {
+    version: 2,
+    generatedFrom: "phase0",
+    rules: RATCHET_RULES,
+    byFile,
+  };
+}
+
 export function compareWithBaseline(summary, baseline) {
   const regressions = [];
   const expected = baseline?.byFile ?? {};
-  const actual = summary.byFile ?? {};
+  const rules = new Set(
+    Array.isArray(baseline?.rules) && baseline.rules.length
+      ? baseline.rules
+      : RATCHET_RULES,
+  );
+  const actual = Object.fromEntries(
+    Object.entries(summary.byFile ?? {}).filter(([key]) => rules.has(ruleFromKey(key))),
+  );
   const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
 
   for (const key of [...keys].sort()) {
@@ -124,9 +154,10 @@ export function compareWithBaseline(summary, baseline) {
 
 function printHuman(findings, summary) {
   console.log(`# Product Reliability / UX error-sink audit`);
-  console.log(`Total findings: ${summary.total}`);
+  console.log(`Total candidate findings: ${summary.total}`);
   for (const [rule, count] of Object.entries(summary.byRule)) {
-    console.log(`- ${rule}: ${count}`);
+    const gate = RATCHET_RULES.includes(rule) ? "ratchet" : "review-only";
+    console.log(`- ${rule}: ${count} (${gate})`);
   }
   console.log("\nFindings:");
   for (const finding of findings) {
@@ -153,6 +184,7 @@ function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     sourceRoot: "src",
+    ratchetRules: RATCHET_RULES,
     rules: RULES.map(({ id, description }) => ({ id, description })),
     summary,
     findings,
@@ -163,7 +195,7 @@ function main() {
     fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
     fs.writeFileSync(
       baselinePath,
-      `${JSON.stringify({ version: 1, generatedFrom: "phase0", byFile: summary.byFile }, null, 2)}\n`,
+      `${JSON.stringify(buildBaseline(summary), null, 2)}\n`,
       "utf8",
     );
     console.log(`Baseline gravado em ${path.relative(ROOT, baselinePath)}`);
@@ -176,13 +208,13 @@ function main() {
     const baseline = readBaseline(path.resolve(ROOT, args.baseline));
     const regressions = compareWithBaseline(summary, baseline);
     if (regressions.length > 0) {
-      console.error("\nNovos sinks/regressões acima do baseline:");
+      console.error("\nNovos sinks/regressões high-signal acima do baseline:");
       for (const regression of regressions) {
         console.error(`- ${regression.key}: ${regression.before} -> ${regression.now}`);
       }
       process.exitCode = 1;
     } else {
-      console.log("\nRatchet OK: nenhum sink aumentou acima do baseline.");
+      console.log("\nRatchet OK: nenhum sink high-signal aumentou acima do baseline.");
     }
   }
 }
