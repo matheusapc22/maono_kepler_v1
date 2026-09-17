@@ -10,6 +10,10 @@ const exportsSource = await readFile(
   new URL("../src/pages/Projects/components/ExportsSection.tsx", import.meta.url),
   "utf8",
 );
+const documentsSource = await readFile(
+  new URL("../src/pages/Projects/components/DocumentsSection.tsx", import.meta.url),
+  "utf8",
+);
 
 test("catálogo cobre códigos e categorias prioritários sem provider na copy", () => {
   for (const code of [
@@ -53,4 +57,21 @@ test("Exportações usa o normalizador central em vez de requestError.message", 
   assert.match(exportsSource, /normalizeUserError/);
   assert.match(exportsSource, /setError\(normalizeUserError\(requestError\)\.message\)/);
   assert.doesNotMatch(exportsSource, /requestError\.message/);
+});
+
+test("Documentos normaliza erros sem expor diagnósticos técnicos", () => {
+  assert.match(documentsSource, /normalizeUserError\(error\)/);
+  assert.match(
+    documentsSource,
+    /formatSupportReference\(presentation\.supportReference\)/,
+  );
+
+  assert.doesNotMatch(documentsSource, /payload\?\.code/);
+  assert.doesNotMatch(documentsSource, /payload\?\.stage/);
+  assert.doesNotMatch(documentsSource, /payload\?\.requestId/);
+  assert.doesNotMatch(documentsSource, /`código \$\{/);
+  assert.doesNotMatch(documentsSource, /`etapa \$\{/);
+  assert.doesNotMatch(documentsSource, /`requisição \$\{/);
+  assert.doesNotMatch(documentsSource, /Dropbox/i);
+  assert.doesNotMatch(documentsSource, /Cloudflare D1/i);
 });
