@@ -3,6 +3,7 @@ import {
   buildClientApiError,
   buildHttpApiError,
 } from "./api-transport";
+import { getXhrErrorReference } from "./error-contract";
 
 export type FileTransferProgress = {
   loaded: number;
@@ -40,45 +41,32 @@ function parseJsonSafely(text: string): unknown {
   }
 }
 
-function xhrReference(xhr: XMLHttpRequest): string | undefined {
-  return (
-    xhr.getResponseHeader("X-Correlation-Id") ||
-    xhr.getResponseHeader("X-Request-Id") ||
-    undefined
+function buildTransferHttpError(xhr: XMLHttpRequest, payload: unknown) {
+  return buildHttpApiError(
+    xhr.status,
+    payload,
+    {},
+    getXhrErrorReference(xhr),
   );
 }
 
-function buildTransferHttpError(
-  xhr: XMLHttpRequest,
-  payload: unknown,
-  stage: "file.upload" | "file.download",
-) {
-  return buildHttpApiError(xhr.status, payload, {
-    stage,
-    correlationId: xhrReference(xhr),
-  });
-}
-
-function buildTransferNetworkError(stage: "file.upload" | "file.download") {
+function buildTransferNetworkError() {
   return buildClientApiError({
     status: 503,
     code: "INFRASTRUCTURE_NETWORK_FAILURE",
     category: "INFRASTRUCTURE",
     retryable: true,
-    stage,
   });
 }
 
-function buildTransferAbortError(stage: "file.upload" | "file.download") {
+function buildTransferAbortError(
+  code: "DOCUMENT_UPLOAD_ABORTED" | "DOCUMENT_DOWNLOAD_ABORTED",
+) {
   return buildClientApiError({
     status: 0,
-    code:
-      stage === "file.upload"
-        ? "DOCUMENT_UPLOAD_ABORTED"
-        : "DOCUMENT_DOWNLOAD_ABORTED",
+    code,
     category: "STORAGE",
     retryable: false,
-    stage,
   });
 }
 
@@ -125,11 +113,11 @@ export function uploadOrganizationFileWithProgress(
     };
 
     xhr.onerror = () => {
-      reject(buildTransferNetworkError("file.upload"));
+      reject(buildTransferNetworkError());
     };
 
     xhr.onabort = () => {
-      reject(buildTransferAbortError("file.upload"));
+      reject(buildTransferAbortError("DOCUMENT_UPLOAD_ABORTED"));
     };
 
     xhr.onload = () => {
@@ -142,19 +130,22 @@ export function uploadOrganizationFileWithProgress(
         }
 
         reject(
-          buildClientApiError({
-            status: 502,
-            code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
-            category: "INFRASTRUCTURE",
-            retryable: true,
-            stage: "file.upload",
-            correlationId: xhrReference(xhr),
-          }),
+          buildHttpApiError(
+            502,
+            payload,
+            {
+              status: 502,
+              code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
+              category: "INFRASTRUCTURE",
+              retryable: true,
+            },
+            getXhrErrorReference(xhr),
+          ),
         );
         return;
       }
 
-      reject(buildTransferHttpError(xhr, payload, "file.upload"));
+      reject(buildTransferHttpError(xhr, payload));
     };
 
     xhr.send(formData);
@@ -181,11 +172,11 @@ export function downloadOrganizationFileWithProgress(
     };
 
     xhr.onerror = () => {
-      reject(buildTransferNetworkError("file.download"));
+      reject(buildTransferNetworkError());
     };
 
     xhr.onabort = () => {
-      reject(buildTransferAbortError("file.download"));
+      reject(buildTransferAbortError("DOCUMENT_DOWNLOAD_ABORTED"));
     };
 
     xhr.onload = async () => {
@@ -210,7 +201,7 @@ export function downloadOrganizationFileWithProgress(
       }
 
       const payload = parseJsonSafely(await responseBlob.text());
-      reject(buildTransferHttpError(xhr, payload, "file.download"));
+      reject(buildTransferHttpError(xhr, payload));
     };
 
     xhr.send();
