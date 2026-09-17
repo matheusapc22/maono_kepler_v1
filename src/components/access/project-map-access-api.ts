@@ -1,3 +1,8 @@
+import {
+  buildClientApiError,
+  requestJson,
+} from "../../lib/api-transport";
+
 export type ProjectMapRouteMode = "viewer" | "editor";
 
 export type ProjectMapRouteAccess = {
@@ -22,32 +27,38 @@ export type ProjectMapAccessPolicy = {
   };
 };
 
+type ProjectMapAccessResponse = ProjectMapAccessPolicy & {
+  ok?: boolean;
+};
+
 async function requestPolicy(
   organizationId: number | string,
   userId: number | string,
   init?: RequestInit,
 ): Promise<ProjectMapAccessPolicy> {
-  const response = await fetch(
+  const payload = await requestJson<ProjectMapAccessResponse>(
     `/api/organizations/${encodeURIComponent(String(organizationId))}/users/${encodeURIComponent(String(userId))}/map-access`,
     {
-      credentials: "include",
       cache: "no-store",
       ...init,
-      headers: {
-        ...(init?.body ? { "Content-Type": "application/json" } : {}),
-        ...(init?.headers || {}),
-      },
     },
   );
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.ok) {
-    const error = new Error(
-      payload?.error || "Não foi possível atualizar o acesso ao mapa.",
-    );
-    (error as Error & { code?: string }).code = payload?.code;
-    throw error;
+
+  if (
+    payload?.ok === false ||
+    !payload?.target ||
+    !Array.isArray(payload.projectRoutes) ||
+    !payload?.create
+  ) {
+    throw buildClientApiError({
+      status: 502,
+      code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
+      category: "INFRASTRUCTURE",
+      retryable: true,
+    });
   }
-  return payload as ProjectMapAccessPolicy;
+
+  return payload;
 }
 
 export function loadProjectMapAccessPolicy(
