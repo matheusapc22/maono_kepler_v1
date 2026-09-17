@@ -14,6 +14,13 @@ export const RATCHET_RULES = [
   "diagnostic-id",
 ];
 
+const RULE_EXCLUDED_FILES = {
+  "diagnostic-id": new Set([
+    "src/lib/error-contract.ts",
+    "src/lib/user-error-catalog.ts",
+  ]),
+};
+
 export const RULES = [
   {
     id: "raw-error-message",
@@ -56,6 +63,15 @@ function compactSnippet(line) {
   return line.trim().replace(/\s+/g, " ").slice(0, 220);
 }
 
+function normalizedPath(relativePath) {
+  return relativePath.replaceAll(path.sep, "/");
+}
+
+function ruleExcludedForFile(ruleId, relativePath) {
+  const exclusions = RULE_EXCLUDED_FILES[ruleId];
+  return exclusions?.has(normalizedPath(relativePath)) === true;
+}
+
 export function scanText(text, relativePath = "fixture.tsx") {
   const findings = [];
   const lines = text.split(/\r?\n/);
@@ -66,12 +82,13 @@ export function scanText(text, relativePath = "fixture.tsx") {
     if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) continue;
 
     for (const rule of RULES) {
+      if (ruleExcludedForFile(rule.id, relativePath)) continue;
       rule.pattern.lastIndex = 0;
       if (!rule.pattern.test(line)) continue;
 
       findings.push({
         rule: rule.id,
-        file: relativePath.replaceAll(path.sep, "/"),
+        file: normalizedPath(relativePath),
         line: index + 1,
         snippet: compactSnippet(line),
       });
