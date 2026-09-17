@@ -3,6 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  buildApiError,
+  parseResponseJson,
+} from "../src/lib/api-transport.ts";
+import { normalizeUserError } from "../src/lib/user-error-catalog.ts";
+import {
   SessionRequestTimeoutError,
   classifySessionResponse,
   fetchSessionResponseWithRetry,
@@ -97,6 +102,73 @@ test("404 e 409 preservam estado conhecido e não simulam logout", () => {
     disposition: "preserve",
     health: "degraded",
   });
+});
+
+test("401/403/404/409 usam catálogo e nunca promovem mensagem remota", async () => {
+  const cases = [
+    {
+      status: 401,
+      code: "AUTH_SESSION_EXPIRED",
+      expected: "Entre novamente para continuar.",
+    },
+    {
+      status: 403,
+      code: "ORGANIZATION_ACCESS_DENIED",
+      expected: "Você não possui acesso a esta organização.",
+    },
+    {
+      status: 404,
+      code: "ORGANIZATION_NOT_FOUND",
+      expected: "A organização selecionada não está disponível.",
+    },
+    {
+      status: 409,
+      code: "ORGANIZATION_INACTIVE",
+      expected: "A organização selecionada está inativa.",
+    },
+  ];
+
+  for (const entry of cases) {
+    const response = jsonResponse(entry.status, {
+      error: {
+        code: entry.code,
+        message: "REMOTE_BODY_MUST_NOT_REACH_UI",
+        correlationId: `raw-${entry.status}`,
+      },
+    });
+    const parsed = await parseResponseJson(response);
+    assert.equal(parsed.valid, true);
+
+    const apiFailure = buildApiError(response, parsed.data);
+    const presentation = normalizeUserError(apiFailure);
+
+    assert.equal(apiFailure.status, entry.status);
+    assert.equal(presentation.message, entry.expected);
+    assert.doesNotMatch(
+      presentation.message,
+      /REMOTE_BODY_MUST_NOT_REACH_UI|raw-\d+/,
+    );
+  }
+});
+
+test("HTML ou texto inesperado não pode virar mensagem pública", async () => {
+  const response = new Response(
+    "<html><body>worker upstream secret failure</body></html>",
+    {
+      status: 503,
+      headers: { "Content-Type": "text/html" },
+    },
+  );
+  const parsed = await parseResponseJson(response);
+
+  assert.equal(parsed.valid, false);
+  assert.equal(parsed.data, null);
+
+  const apiFailure = buildApiError(response, null);
+  const presentation = normalizeUserError(apiFailure);
+
+  assert.equal(presentation.message, "Tente novamente em alguns instantes.");
+  assert.doesNotMatch(presentation.message, /worker|upstream|secret|html/i);
 });
 
 test("429 executa retry e termina degradado sem invalidar sessão", async () => {
