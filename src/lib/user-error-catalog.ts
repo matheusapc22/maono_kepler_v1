@@ -27,12 +27,18 @@ type UserErrorTemplate = Omit<
   retryable?: boolean;
 };
 
+const INVALID_CREDENTIALS_PRESENTATION: UserErrorTemplate = {
+  title: "Não foi possível entrar",
+  message: "E-mail ou senha incorretos.",
+  severity: "warning",
+};
+
 const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
-  AUTH_INVALID_CREDENTIALS: {
-    title: "Não foi possível entrar",
-    message: "E-mail ou senha incorretos.",
-    severity: "warning",
-  },
+  AUTH_INVALID_CREDENTIALS: INVALID_CREDENTIALS_PRESENTATION,
+
+  // Compatibilidade temporária com deploys anteriores à PRH-02A.
+  INVALID_CREDENTIALS: INVALID_CREDENTIALS_PRESENTATION,
+
   AUTH_SESSION_REQUIRED: {
     title: "Sessão necessária",
     message: "Entre novamente para continuar.",
@@ -40,6 +46,12 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
     action: "login",
   },
   AUTH_SESSION_EXPIRED: {
+    title: "Sua sessão expirou",
+    message: "Entre novamente para continuar.",
+    severity: "warning",
+    action: "login",
+  },
+  UNAUTHORIZED: {
     title: "Sua sessão expirou",
     message: "Entre novamente para continuar.",
     severity: "warning",
@@ -53,6 +65,21 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
   PERMISSION_DENIED: {
     title: "Ação não permitida",
     message: "Você não possui permissão para realizar esta ação.",
+    severity: "warning",
+  },
+  ORGANIZATION_ACCESS_DENIED: {
+    title: "Ação não permitida",
+    message: "Você não possui acesso a esta organização.",
+    severity: "warning",
+  },
+  ORGANIZATION_NOT_FOUND: {
+    title: "Organização indisponível",
+    message: "A organização selecionada não está disponível.",
+    severity: "warning",
+  },
+  ORGANIZATION_INACTIVE: {
+    title: "Organização indisponível",
+    message: "A organização selecionada está inativa.",
     severity: "warning",
   },
   PERMISSION_PROJECT_SAVE_DENIED: {
@@ -70,6 +97,11 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
     message: "Recarregue o mapa antes de salvar novamente.",
     severity: "warning",
     action: "reload",
+  },
+  PROJECT_METADATA_VERSION_CONFLICT: {
+    title: "O projeto foi atualizado",
+    message: "Carregue a versão atual antes de salvar novamente.",
+    severity: "warning",
   },
   PERFORMANCE_PAYLOAD_TOO_LARGE: {
     title: "Limite excedido",

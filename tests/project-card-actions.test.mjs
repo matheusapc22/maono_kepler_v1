@@ -148,8 +148,11 @@ test("drawer protege alterações não salvas", () => {
 });
 
 test("conflito não sobrescreve e oferece carregar versão atual", () => {
-  assert.match(panelSource, /error\.status === 409/);
-  assert.match(panelSource, /setConflictProject\(error\.currentProject\)/);
+  assert.match(panelSource, /requestFailure\.status === 409/);
+  assert.match(
+    panelSource,
+    /setConflictProject\(requestFailure\.currentProject\)/,
+  );
   assert.match(panelSource, />\s*Carregar versão atual\s*</);
   assert.match(panelSource, /loadConflictVersion/);
 });

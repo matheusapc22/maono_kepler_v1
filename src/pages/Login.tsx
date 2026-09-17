@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import LoginPageBackground from "../assets/images/login-background-maono.webp";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
+import { normalizeUserError } from "../lib/user-error-catalog";
 import "./login.css";
 
 const LOGIN_BACKGROUND_URL =
@@ -104,12 +105,8 @@ const LoginPage: React.FC = () => {
     try {
       await login(email, password);
       navigate(next, { replace: true });
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Não foi possível fazer login.",
-      );
+    } catch (loginFailure) {
+      setError(normalizeUserError(loginFailure).message);
     } finally {
       setSubmitting(false);
     }

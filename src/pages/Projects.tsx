@@ -15,6 +15,7 @@ import {
   type MaonoUser,
 } from "../auth/session";
 import { ProjectsPageSkeleton } from "../components/loading/Skeleton";
+import { normalizeUserError } from "../lib/user-error-catalog";
 import ProjectsSidebar, {
   type ProjectSidebarSection,
 } from "./ProjectsSidebar";
@@ -377,8 +378,11 @@ const ProjectsPage: React.FC = () => {
         }
 
         setProjectItems(projects);
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+      } catch (requestFailure) {
+        if (
+          requestFailure instanceof DOMException &&
+          requestFailure.name === "AbortError"
+        ) {
           return;
         }
 
@@ -389,11 +393,7 @@ const ProjectsPage: React.FC = () => {
           return;
         }
 
-        setProjectsError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível carregar os projetos.",
-        );
+        setProjectsError(normalizeUserError(requestFailure).message);
       } finally {
         if (
           requestId === projectsRequestIdRef.current &&
@@ -500,16 +500,12 @@ const ProjectsPage: React.FC = () => {
 
         return updated;
       });
-    } catch (error) {
+    } catch (requestFailure) {
       if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
         return;
       }
 
-      setProjectsError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível atualizar favorito.",
-      );
+      setProjectsError(normalizeUserError(requestFailure).message);
     } finally {
       if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
         return;

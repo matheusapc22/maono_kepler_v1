@@ -8,8 +8,6 @@
   ],
   "byFile": {
     "src/auth/session.tsx::diagnostic-id": 10,
-    "src/auth/session.tsx::raw-error-message": 3,
-    "src/auth/session.tsx::raw-response-text": 1,
     "src/components/access/OrganizationPermissionManager.tsx::raw-error-message": 1,
     "src/components/access/ProjectMapAccessManager.tsx::raw-error-message": 1,
     "src/dropbox-sync-ui.ts::raw-error-message": 1,
@@ -65,10 +63,8 @@
     "src/pages/Kepler/save-observability.ts::raw-error-message": 1,
     "src/pages/Kepler/thumbnail/capture-thumbnail.ts::raw-error-message": 1,
     "src/pages/Kepler/thumbnail/thumbnail-api.ts::raw-response-text": 1,
-    "src/pages/Login.tsx::raw-error-message": 1,
     "src/pages/Login/index.tsx::raw-error-message": 1,
     "src/pages/Projects.tsx::diagnostic-id": 4,
-    "src/pages/Projects.tsx::raw-error-message": 2,
     "src/pages/Projects/components/DocumentsSection.tsx::diagnostic-id": 7,
     "src/pages/Projects/components/DocumentsSection.tsx::raw-error-message": 1,
     "src/pages/Projects/components/ExportsSection.tsx::raw-error-message": 2,
@@ -76,7 +72,6 @@
     "src/pages/Projects/components/NewTicketPopover.tsx::diagnostic-id": 4,
     "src/pages/Projects/components/OrganizationSection.tsx::raw-error-message": 1,
     "src/pages/Projects/components/ProjectMetadataPanel.tsx::diagnostic-id": 4,
-    "src/pages/Projects/components/ProjectMetadataPanel.tsx::raw-error-message": 3,
     "src/pages/Projects/components/RoadmapSection.tsx::diagnostic-id": 1,
     "src/pages/Projects/components/RoadmapSection.tsx::raw-error-message": 1,
     "src/pages/Projects/components/TicketErrorNotice.tsx::diagnostic-id": 5,
@@ -85,8 +80,6 @@
     "src/pages/Projects/components/UsersAccessOverviewSection.tsx::raw-error-message": 1,
     "src/pages/Projects/components/roadmap-api.ts::diagnostic-id": 4,
     "src/pages/Projects/components/tickets-api.ts::diagnostic-id": 18,
-    "src/pages/Projects/components/tickets-api.ts::raw-error-message": 2,
-    "src/pages/Projects/projects-api.ts::raw-error-message": 2,
-    "src/pages/Projects/projects-api.ts::raw-response-text": 1
+    "src/pages/Projects/components/tickets-api.ts::raw-error-message": 2
   }
 }
