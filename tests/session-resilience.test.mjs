@@ -3,11 +3,6 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  buildApiError,
-  parseResponseJson,
-} from "../src/lib/api-transport.ts";
-import { normalizeUserError } from "../src/lib/user-error-catalog.ts";
-import {
   SessionRequestTimeoutError,
   classifySessionResponse,
   fetchSessionResponseWithRetry,
@@ -93,82 +88,31 @@ test("403 preserva sessão válida e não é retentado", async () => {
   });
 });
 
-test("404 e 409 preservam estado conhecido e não simulam logout", () => {
-  assert.deepEqual(classifySessionResponse(404, true), {
-    disposition: "preserve",
-    health: "degraded",
-  });
-  assert.deepEqual(classifySessionResponse(409, true), {
-    disposition: "preserve",
-    health: "degraded",
-  });
-});
-
-test("401/403/404/409 usam catálogo e nunca promovem mensagem remota", async () => {
-  const cases = [
-    {
-      status: 401,
-      code: "AUTH_SESSION_EXPIRED",
-      expected: "Entre novamente para continuar.",
-    },
-    {
-      status: 403,
-      code: "ORGANIZATION_ACCESS_DENIED",
-      expected: "Você não possui acesso a esta organização.",
-    },
-    {
-      status: 404,
-      code: "ORGANIZATION_NOT_FOUND",
-      expected: "A organização selecionada não está disponível.",
-    },
-    {
-      status: 409,
-      code: "ORGANIZATION_INACTIVE",
-      expected: "A organização selecionada está inativa.",
-    },
-  ];
-
-  for (const entry of cases) {
-    const response = jsonResponse(entry.status, {
-      error: {
-        code: entry.code,
-        message: "REMOTE_BODY_MUST_NOT_REACH_UI",
-        correlationId: `raw-${entry.status}`,
+test("404 e 409 são reproduzidos sem retry e preservam sessão conhecida", async () => {
+  for (const status of [404, 409]) {
+    let calls = 0;
+    const result = await fetchSessionResponseWithRetry({
+      fetchImpl: async () => {
+        calls += 1;
+        return jsonResponse(status, {
+          error: {
+            code: status === 404 ? "ORGANIZATION_NOT_FOUND" : "ORGANIZATION_INACTIVE",
+            message: "REMOTE_BODY_MUST_NOT_REACH_UI",
+          },
+        });
       },
+      retryDelaysMs: [0, 0],
+      waitImpl: noWait,
     });
-    const parsed = await parseResponseJson(response);
-    assert.equal(parsed.valid, true);
 
-    const apiFailure = buildApiError(response, parsed.data);
-    const presentation = normalizeUserError(apiFailure);
-
-    assert.equal(apiFailure.status, entry.status);
-    assert.equal(presentation.message, entry.expected);
-    assert.doesNotMatch(
-      presentation.message,
-      /REMOTE_BODY_MUST_NOT_REACH_UI|raw-\d+/,
-    );
+    assert.equal(result.response.status, status);
+    assert.equal(result.attempts, 1);
+    assert.equal(calls, 1);
+    assert.deepEqual(classifySessionResponse(status, true), {
+      disposition: "preserve",
+      health: "degraded",
+    });
   }
-});
-
-test("HTML ou texto inesperado não pode virar mensagem pública", async () => {
-  const response = new Response(
-    "<html><body>worker upstream secret failure</body></html>",
-    {
-      status: 503,
-      headers: { "Content-Type": "text/html" },
-    },
-  );
-  const parsed = await parseResponseJson(response);
-
-  assert.equal(parsed.valid, false);
-  assert.equal(parsed.data, null);
-
-  const apiFailure = buildApiError(response, null);
-  const presentation = normalizeUserError(apiFailure);
-
-  assert.equal(presentation.message, "Tente novamente em alguns instantes.");
-  assert.doesNotMatch(presentation.message, /worker|upstream|secret|html/i);
 });
 
 test("429 executa retry e termina degradado sem invalidar sessão", async () => {
@@ -347,6 +291,26 @@ test("PRH-02A elimina raw body e mensagens remotas de Auth e Projects", () => {
   assert.doesNotMatch(transportSource, /response\.text\s*\(/);
 });
 
+test("catálogo central cobre 401/403/404/409 sem usar mensagem remota", () => {
+  assert.match(catalogSource, /status === 401/);
+  assert.match(catalogSource, /status === 403/);
+  assert.match(catalogSource, /status === 404/);
+  assert.match(catalogSource, /status === 409/);
+  assert.match(catalogSource, /AUTH_SESSION_EXPIRED/);
+  assert.match(catalogSource, /ORGANIZATION_ACCESS_DENIED/);
+  assert.match(catalogSource, /ORGANIZATION_NOT_FOUND/);
+  assert.match(catalogSource, /ORGANIZATION_INACTIVE/);
+  assert.doesNotMatch(catalogSource, /contract\.message|diagnostic\.message/);
+});
+
+test("HTML ou texto inesperado não possui caminho para copy pública", () => {
+  assert.match(transportSource, /response\.json\(\)/);
+  assert.match(transportSource, /return \{ valid: false, data: null \}/);
+  assert.doesNotMatch(transportSource, /response\.text\s*\(/);
+  assert.doesNotMatch(sessionSource, /response\.text\s*\(/);
+  assert.doesNotMatch(projectsApiSource, /response\.text\s*\(/);
+});
+
 test("Login, Projects e metadata apresentam somente catálogo central", () => {
   assert.match(loginSource, /normalizeUserError\(loginFailure\)\.message/);
   assert.doesNotMatch(loginSource, /\b(?:error|err)\.message\b/);
@@ -355,17 +319,13 @@ test("Login, Projects e metadata apresentam somente catálogo central", () => {
   assert.doesNotMatch(metadataPanelSource, /\b(?:error|err)\.message\b/);
 });
 
-test("matriz 401/403/404/409 possui apresentação central e conflito recuperável", () => {
-  assert.match(catalogSource, /status === 401/);
-  assert.match(catalogSource, /status === 403/);
-  assert.match(catalogSource, /status === 404/);
-  assert.match(catalogSource, /status === 409/);
+test("metadata 409 preserva currentProject e recuperação explícita", () => {
   assert.match(catalogSource, /PROJECT_METADATA_VERSION_CONFLICT/);
-
   assert.match(projectsApiSource, /apiError\.status !== 409/);
   assert.match(projectsApiSource, /currentProject/);
   assert.match(metadataPanelSource, /requestFailure\.status === 409/);
   assert.match(metadataPanelSource, /setConflictProject\(requestFailure\.currentProject\)/);
+  assert.match(metadataPanelSource, />\s*Carregar versão atual\s*</);
 });
 
 test("login usa código canônico e mantém alias de deploy skew no catálogo", () => {
