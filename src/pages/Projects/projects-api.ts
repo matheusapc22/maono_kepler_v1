@@ -3,7 +3,10 @@ import type {
   MaonoProject,
   ProjectActor,
 } from "../../auth/session";
-import { ApiError } from "../../lib/error-contract";
+import {
+  ApiError,
+  apiErrorDiagnostic,
+} from "../../lib/error-contract";
 import {
   buildClientApiError,
   requestJson,
@@ -70,18 +73,15 @@ export class ProjectMetadataApiError extends ApiError {
   readonly currentProject: ProjectMetadata | null;
 
   constructor(baseError: ApiError, currentProject: ProjectMetadata | null = null) {
-    super(
-      {
-        status: baseError.status,
-        code: baseError.code,
-        category: baseError.category,
-        retryable: baseError.retryable,
-        correlationId: baseError.correlationId,
-        details: baseError.details,
-      },
-      baseError.payload,
-      baseError.message,
-    );
+    const diagnostic = apiErrorDiagnostic(baseError) ?? {
+      status: baseError.status,
+      code: baseError.code,
+      category: baseError.category,
+      retryable: baseError.retryable,
+      details: baseError.details,
+    };
+
+    super(diagnostic, baseError.payload, baseError.message);
     this.name = "ProjectMetadataApiError";
     this.currentProject = currentProject;
   }
