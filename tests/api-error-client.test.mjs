@@ -2,43 +2,48 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const source = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+const apiSource = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+const contractSource = await readFile(new URL("../src/lib/error-contract.ts", import.meta.url), "utf8");
+const catalogSource = await readFile(new URL("../src/lib/user-error-catalog.ts", import.meta.url), "utf8");
 const saveButtonSource = await readFile(
   new URL("../src/pages/Kepler/components/maono-save-button.tsx", import.meta.url),
   "utf8",
 );
 
-test("ApiError do frontend preserva taxonomia S06", () => {
-  assert.match(source, /export type ErrorCategory =/);
-  for (const category of [
-    "AUTH",
-    "PERMISSION",
-    "PROJECT",
-    "MAP_CONFIG",
-    "STORAGE",
-    "PERFORMANCE",
-    "SPATIAL",
-    "ENGINE",
-    "INFRASTRUCTURE",
-  ]) {
-    assert.match(source, new RegExp(`"${category}"`));
-  }
-  assert.match(source, /category\?: ErrorCategory/);
-  assert.match(source, /retryable: boolean/);
-  assert.match(source, /correlationId\?: string/);
-  assert.match(source, /X-Correlation-Id/);
-  assert.match(source, /getErrorContract\(data\)/);
+test("ApiError do frontend preserva taxonomia técnica sem depender de raw body", () => {
+  assert.match(apiSource, /getApiErrorContract/);
+  assert.match(apiSource, /normalizeUserError/);
+  assert.match(apiSource, /X-Correlation-Id/);
+  assert.match(contractSource, /export type ErrorCategory =/);
+  assert.match(contractSource, /class ApiError extends Error/);
+  assert.match(contractSource, /retryable: boolean/);
+  assert.match(contractSource, /correlationId\?: string/);
+  assert.doesNotMatch(apiSource, /response\.text\s*\(/);
+  assert.doesNotMatch(apiSource, /res\.text\s*\(/);
 });
 
-test("save do Kepler não esconde falha STORAGE/INFRASTRUCTURE em mensagem 5xx", () => {
-  assert.match(saveButtonSource, /getErrorReference/);
-  assert.match(saveButtonSource, /category === "STORAGE"/);
-  assert.match(saveButtonSource, /category === "INFRASTRUCTURE"/);
-  assert.match(saveButtonSource, /category === "MAP_CONFIG"/);
+test("transporte compartilhado converte falha de rede em erro tipado seguro", () => {
+  assert.match(apiSource, /INFRASTRUCTURE_NETWORK_FAILURE/);
+  assert.match(apiSource, /fetchWithNetworkGuard/);
+  assert.match(apiSource, /buildClientApiError/);
+  assert.doesNotMatch(apiSource, /Failed to fetch|NetworkError|load failed/i);
+});
+
+test("catálogo de apresentação não usa mensagem remota como fallback", () => {
+  assert.match(catalogSource, /normalizeUserError/);
+  assert.match(catalogSource, /CODE_PRESENTATIONS/);
+  assert.match(catalogSource, /CATEGORY_PRESENTATIONS/);
+  assert.match(catalogSource, /FALLBACK_PRESENTATION/);
+  assert.match(catalogSource, /formatSupportReference/);
+  assert.doesNotMatch(catalogSource, /return\s+error\.message/);
+  assert.doesNotMatch(catalogSource, /return\s+requestError\.message/);
+});
+
+test("SAVE deixa de ter obrigação de expor correlationId na copy", () => {
   assert.match(saveButtonSource, /correlationId/);
-  assert.match(saveButtonSource, /ID \$\{correlationId\}/);
+  assert.match(saveButtonSource, /emitSaveTelemetry/);
   assert.doesNotMatch(
-    saveButtonSource,
-    /if \(response\.status >= 500\) \{\s*return "Não foi possível salvar agora\. Tente novamente em alguns instantes\.";/,
+    apiSource,
+    /Erro HTTP \$\{status\}/,
   );
 });

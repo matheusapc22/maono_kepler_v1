@@ -8,6 +8,7 @@ import {
   listOrganizationExports,
   type OrganizationExport,
 } from "../../../lib/api";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 
 type ExportsSectionProps = {
   user?: AccessControlUser | null;
@@ -69,11 +70,7 @@ export default function ExportsSection({
       const response = await listOrganizationExports(organizationId);
       setExportsList(response.exports ?? []);
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível carregar exportações.",
-      );
+      setError(normalizeUserError(requestError).message);
     } finally {
       if (background) setRefreshing(false);
       else setInitialLoading(false);
@@ -96,11 +93,7 @@ export default function ExportsSection({
       setForm(INITIAL_FORM);
       await loadExports({ background: true });
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Não foi possível solicitar a exportação.",
-      );
+      setError(normalizeUserError(requestError).message);
     } finally {
       setCreating(false);
     }
