@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
-import { createRoadmap, createRoadmapTask, createTaskComment, deleteRoadmapTask, getRoadmap, listRoadmaps, listTaskComments, RoadmapApiError, updateRoadmapTask } from "./roadmap-api";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
+import { createRoadmap, createRoadmapTask, createTaskComment, deleteRoadmapTask, getRoadmap, listRoadmaps, listTaskComments, updateRoadmapTask } from "./roadmap-api";
 import { DEFAULT_ROADMAP_FILTERS, ROADMAP_PRIORITY_LABELS, ROADMAP_STATUS_LABELS, type RoadmapBundle, type RoadmapComment, type RoadmapFilters, type RoadmapScale, type RoadmapSummary, type RoadmapTask, type RoadmapTaskStatus, type RoadmapView } from "./roadmap-types";
 
 type Props = { user?: AccessControlUser | null; organizationId?: number | string | null; organizationName?: string | null };
@@ -9,7 +10,7 @@ const DAY = 86400000;
 const today = () => new Date().toISOString().slice(0, 10);
 const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 const person = (task: RoadmapTask) => task.assigneeName || "Não atribuído";
-const errorText = (error: unknown) => error instanceof RoadmapApiError && error.requestId ? `${error.message} Referência: ${error.requestId}` : error instanceof Error ? error.message : "Não foi possível concluir.";
+const errorText = (error: unknown) => normalizeUserError(error).message || "Não foi possível concluir.";
 
 function timelineDays(start: string, end: string) { return Math.max(1, Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY) + 1); }
 function position(value: string, start: string, total: number) { return Math.max(0, Math.min(100, (Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY) / total) * 100)); }
