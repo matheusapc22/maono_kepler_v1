@@ -1,4 +1,8 @@
 import type { OrganizationFile } from "./api";
+import {
+  buildClientApiError,
+  buildHttpApiError,
+} from "./api-transport";
 
 export type FileTransferProgress = {
   loaded: number;
@@ -18,26 +22,6 @@ export type FileDownloadResponse = {
   contentType: string | null;
 };
 
-type ApiErrorPayload = {
-  error?: unknown;
-  message?: unknown;
-  code?: unknown;
-};
-
-class FileTransferError extends Error {
-  status: number;
-  code?: string;
-  payload: unknown;
-
-  constructor(message: string, status: number, payload: unknown, code?: string) {
-    super(message);
-    this.name = "FileTransferError";
-    this.status = status;
-    this.code = code;
-    this.payload = payload;
-  }
-}
-
 function pathSegment(value: number | string): string {
   return encodeURIComponent(String(value));
 }
@@ -52,56 +36,50 @@ function parseJsonSafely(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
-    return text;
+    return null;
   }
 }
 
-function getErrorMessage(payload: unknown, status: number): string {
-  if (typeof payload === "string" && payload.trim()) return payload;
-
-  if (payload && typeof payload === "object") {
-    const data = payload as ApiErrorPayload;
-
-    if (typeof data.error === "string" && data.error.trim()) {
-      return data.error;
-    }
-
-    if (
-      data.error &&
-      typeof data.error === "object" &&
-      "message" in data.error &&
-      typeof (data.error as { message?: unknown }).message === "string"
-    ) {
-      return (data.error as { message: string }).message;
-    }
-
-    if (typeof data.message === "string" && data.message.trim()) {
-      return data.message;
-    }
-  }
-
-  return `Erro HTTP ${status}`;
+function xhrReference(xhr: XMLHttpRequest): string | undefined {
+  return (
+    xhr.getResponseHeader("X-Correlation-Id") ||
+    xhr.getResponseHeader("X-Request-Id") ||
+    undefined
+  );
 }
 
-function getErrorCode(payload: unknown): string | undefined {
-  if (!payload || typeof payload !== "object") return undefined;
+function buildTransferHttpError(
+  xhr: XMLHttpRequest,
+  payload: unknown,
+  stage: "file.upload" | "file.download",
+) {
+  return buildHttpApiError(xhr.status, payload, {
+    stage,
+    correlationId: xhrReference(xhr),
+  });
+}
 
-  const data = payload as ApiErrorPayload;
+function buildTransferNetworkError(stage: "file.upload" | "file.download") {
+  return buildClientApiError({
+    status: 503,
+    code: "INFRASTRUCTURE_NETWORK_FAILURE",
+    category: "INFRASTRUCTURE",
+    retryable: true,
+    stage,
+  });
+}
 
-  if (typeof data.code === "string" && data.code.trim()) {
-    return data.code;
-  }
-
-  if (
-    data.error &&
-    typeof data.error === "object" &&
-    "code" in data.error &&
-    typeof (data.error as { code?: unknown }).code === "string"
-  ) {
-    return (data.error as { code: string }).code;
-  }
-
-  return undefined;
+function buildTransferAbortError(stage: "file.upload" | "file.download") {
+  return buildClientApiError({
+    status: 0,
+    code:
+      stage === "file.upload"
+        ? "DOCUMENT_UPLOAD_ABORTED"
+        : "DOCUMENT_DOWNLOAD_ABORTED",
+    category: "STORAGE",
+    retryable: false,
+    stage,
+  });
 }
 
 function getFileNameFromContentDisposition(header: string | null): string | null {
@@ -147,43 +125,36 @@ export function uploadOrganizationFileWithProgress(
     };
 
     xhr.onerror = () => {
-      reject(
-        new FileTransferError(
-          "Falha de rede durante o envio do documento.",
-          0,
-          { code: "UPLOAD_NETWORK_ERROR", stage: "file.upload" },
-          "UPLOAD_NETWORK_ERROR",
-        ),
-      );
+      reject(buildTransferNetworkError("file.upload"));
     };
 
     xhr.onabort = () => {
-      reject(
-        new FileTransferError(
-          "O envio do documento foi cancelado.",
-          0,
-          { code: "UPLOAD_ABORTED", stage: "file.upload" },
-          "UPLOAD_ABORTED",
-        ),
-      );
+      reject(buildTransferAbortError("file.upload"));
     };
 
     xhr.onload = () => {
       const payload = parseJsonSafely(xhr.responseText || "");
 
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(payload as OrganizationFileUploadResponse);
+        if (payload && typeof payload === "object") {
+          resolve(payload as OrganizationFileUploadResponse);
+          return;
+        }
+
+        reject(
+          buildClientApiError({
+            status: 502,
+            code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
+            category: "INFRASTRUCTURE",
+            retryable: true,
+            stage: "file.upload",
+            correlationId: xhrReference(xhr),
+          }),
+        );
         return;
       }
 
-      reject(
-        new FileTransferError(
-          getErrorMessage(payload, xhr.status),
-          xhr.status,
-          payload,
-          getErrorCode(payload),
-        ),
-      );
+      reject(buildTransferHttpError(xhr, payload, "file.upload"));
     };
 
     xhr.send(formData);
@@ -210,29 +181,16 @@ export function downloadOrganizationFileWithProgress(
     };
 
     xhr.onerror = () => {
-      reject(
-        new FileTransferError(
-          "Falha de rede durante o download do documento.",
-          0,
-          { code: "DOWNLOAD_NETWORK_ERROR", stage: "file.download" },
-          "DOWNLOAD_NETWORK_ERROR",
-        ),
-      );
+      reject(buildTransferNetworkError("file.download"));
     };
 
     xhr.onabort = () => {
-      reject(
-        new FileTransferError(
-          "O download do documento foi cancelado.",
-          0,
-          { code: "DOWNLOAD_ABORTED", stage: "file.download" },
-          "DOWNLOAD_ABORTED",
-        ),
-      );
+      reject(buildTransferAbortError("file.download"));
     };
 
     xhr.onload = async () => {
-      const responseBlob = xhr.response instanceof Blob ? xhr.response : new Blob();
+      const responseBlob =
+        xhr.response instanceof Blob ? xhr.response : new Blob();
 
       if (xhr.status >= 200 && xhr.status < 300) {
         onProgress?.({
@@ -252,14 +210,7 @@ export function downloadOrganizationFileWithProgress(
       }
 
       const payload = parseJsonSafely(await responseBlob.text());
-      reject(
-        new FileTransferError(
-          getErrorMessage(payload, xhr.status),
-          xhr.status,
-          payload,
-          getErrorCode(payload),
-        ),
-      );
+      reject(buildTransferHttpError(xhr, payload, "file.download"));
     };
 
     xhr.send();
