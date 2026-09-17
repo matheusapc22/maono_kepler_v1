@@ -33,6 +33,17 @@ test("detecta identificadores operacionais e vocabulário de implementação", (
   assert.ok(findings.some((item) => item.rule === "implementation-copy"));
 });
 
+test("kernel técnico pode preservar identificadores sem ser classificado como UI leak", () => {
+  const findings = scanText(
+    `const correlationId = contract.correlationId;`,
+    "src/lib/error-contract.ts",
+  );
+  assert.equal(
+    findings.some((item) => item.rule === "diagnostic-id"),
+    false,
+  );
+});
+
 test("não classifica copy de produto sem diagnóstico técnico", () => {
   const findings = scanText(
     `setError("Não foi possível concluir esta ação. Tente novamente.");`,
