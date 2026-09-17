@@ -126,7 +126,7 @@ export async function onRequest(context) {
       return errorResponse(
         "Credenciais inválidas.",
         401,
-        "INVALID_CREDENTIALS",
+        "AUTH_INVALID_CREDENTIALS",
       );
     }
 
@@ -137,7 +137,7 @@ export async function onRequest(context) {
       return errorResponse(
         "Credenciais inválidas.",
         401,
-        "INVALID_CREDENTIALS",
+        "AUTH_INVALID_CREDENTIALS",
       );
     }
 
