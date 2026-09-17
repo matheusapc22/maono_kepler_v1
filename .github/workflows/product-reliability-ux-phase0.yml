@@ -1,0 +1,78 @@
+name: Product Reliability UX Phase 0
+
+on:
+  push:
+    branches:
+      - "audit/product-reliability-ux-phase0"
+    paths:
+      - "src/**"
+      - "scripts/audit-user-error-sinks.mjs"
+      - "scripts/audit-user-error-sinks.test.mjs"
+      - "scripts/user-error-sink-baseline.json"
+      - ".github/workflows/product-reliability-ux-phase0.yml"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    branches:
+      - "mano_kepler_v1"
+    paths:
+      - "src/**"
+      - "scripts/audit-user-error-sinks.mjs"
+      - "scripts/audit-user-error-sinks.test.mjs"
+      - "scripts/user-error-sink-baseline.json"
+      - ".github/workflows/product-reliability-ux-phase0.yml"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase0-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Validate audit scanner
+        run: node --test scripts/audit-user-error-sinks.test.mjs
+
+      - name: Capture current error-sink inventory
+        run: |
+          node scripts/audit-user-error-sinks.mjs --json > phase0-error-sinks.json
+          node scripts/audit-user-error-sinks.mjs --write-baseline phase0-generated-baseline.json > phase0-error-sinks.txt
+          cat phase0-error-sinks.txt
+          cat phase0-generated-baseline.json
+
+      - name: Enforce ratchet when baseline exists
+        shell: bash
+        run: |
+          if [ -f scripts/user-error-sink-baseline.json ]; then
+            node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json
+          else
+            echo "Phase 0 bootstrap: committed baseline not created yet."
+          fi
+
+      - name: Build application
+        run: npm run build
+
+      - name: Upload audit inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-reliability-ux-phase0-${{ github.sha }}
+          path: |
+            phase0-error-sinks.json
+            phase0-generated-baseline.json
+          if-no-files-found: error
+          retention-days: 30
