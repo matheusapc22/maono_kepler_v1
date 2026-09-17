@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 import {
   fetchProjectMetadata,
   ProjectMetadataApiError,
@@ -174,8 +175,8 @@ const ProjectMetadataPanel: React.FC<ProjectMetadataPanelProps> = ({
       }
 
       applyMetadata(nextMetadata);
-    } catch (error) {
-      if (isAbortError(error)) {
+    } catch (requestFailure) {
+      if (isAbortError(requestFailure)) {
         return;
       }
 
@@ -184,11 +185,7 @@ const ProjectMetadataPanel: React.FC<ProjectMetadataPanelProps> = ({
       }
 
       setStatus("error");
-      setNotice(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar as informações do projeto.",
-      );
+      setNotice(normalizeUserError(requestFailure).message);
     } finally {
       if (requestId === requestSequenceRef.current) {
         requestControllerRef.current = null;
@@ -410,23 +407,19 @@ const ProjectMetadataPanel: React.FC<ProjectMetadataPanelProps> = ({
         successTimerRef.current = null;
         onClose();
       }, 700);
-    } catch (error) {
+    } catch (requestFailure) {
       if (
-        error instanceof ProjectMetadataApiError &&
-        error.status === 409
+        requestFailure instanceof ProjectMetadataApiError &&
+        requestFailure.status === 409
       ) {
-        setConflictProject(error.currentProject);
+        setConflictProject(requestFailure.currentProject);
         setStatus("conflict");
-        setNotice(error.message);
+        setNotice(normalizeUserError(requestFailure).message);
         return;
       }
 
       setStatus("error");
-      setNotice(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível salvar as informações do projeto.",
-      );
+      setNotice(normalizeUserError(requestFailure).message);
     }
   }
 
