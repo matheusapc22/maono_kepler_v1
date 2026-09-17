@@ -71,6 +71,8 @@ export function buildApiError(
   const contract = getApiErrorContract(data);
   const status = Number(overrides.status ?? response.status ?? 500);
   const diagnostic: ApiErrorDiagnostic = {
+    ...contract,
+    ...overrides,
     status,
     code: overrides.code ?? contract.code,
     category:
@@ -81,11 +83,6 @@ export function buildApiError(
       overrides.retryable ??
       contract.retryable ??
       inferRetryableFromStatus(status),
-    correlationId:
-      overrides.correlationId ??
-      contract.correlationId ??
-      response.headers.get("X-Correlation-Id") ??
-      undefined,
     details: overrides.details ?? contract.details,
   };
   const presentation = normalizeUserError(diagnostic);
