@@ -63,13 +63,13 @@ export async function parseResponseJson(
   }
 }
 
-export function buildApiError(
-  response: Response,
+export function buildHttpApiError(
+  statusValue: number,
   data: unknown,
   overrides: Partial<ApiErrorDiagnostic> = {},
 ): ApiError {
   const contract = getApiErrorContract(data);
-  const status = Number(overrides.status ?? response.status ?? 500);
+  const status = Number(overrides.status ?? statusValue ?? 500);
   const diagnostic: ApiErrorDiagnostic = {
     ...contract,
     ...overrides,
@@ -88,6 +88,24 @@ export function buildApiError(
   const presentation = normalizeUserError(diagnostic);
 
   return new ApiError(diagnostic, data, presentation.message);
+}
+
+export function buildApiError(
+  response: Response,
+  data: unknown,
+  overrides: Partial<ApiErrorDiagnostic> = {},
+): ApiError {
+  const contract = getApiErrorContract(data);
+  const headerReference =
+    response.headers.get("X-Correlation-Id") ||
+    response.headers.get("X-Request-Id") ||
+    undefined;
+
+  return buildHttpApiError(response.status, data, {
+    ...overrides,
+    correlationId:
+      overrides.correlationId ?? contract.correlationId ?? headerReference,
+  });
 }
 
 export function buildClientApiError(
