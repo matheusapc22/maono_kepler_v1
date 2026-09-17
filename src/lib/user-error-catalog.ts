@@ -103,6 +103,16 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
     message: "Carregue a versão atual antes de salvar novamente.",
     severity: "warning",
   },
+  DOCUMENT_UPLOAD_ABORTED: {
+    title: "Envio cancelado",
+    message: "O envio do documento foi cancelado.",
+    severity: "info",
+  },
+  DOCUMENT_DOWNLOAD_ABORTED: {
+    title: "Download cancelado",
+    message: "O download do documento foi cancelado.",
+    severity: "info",
+  },
   PERFORMANCE_PAYLOAD_TOO_LARGE: {
     title: "Limite excedido",
     message: "Os dados enviados excedem o limite permitido para esta operação.",
