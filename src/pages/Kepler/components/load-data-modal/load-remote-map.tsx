@@ -11,6 +11,7 @@ import { Button } from "@kepler.gl/components";
 import { FormattedMessage } from "@kepler.gl/localization";
 
 import { CORS_LINK } from "../../constants/default-settings";
+import { normalizeUserError } from "../../../../lib/user-error-catalog";
 
 const propTypes = {
   onLoadRemoteMap: PropTypes.func.isRequired,
@@ -72,7 +73,11 @@ export const StyledErrorDescription = styled.div`
 const Error = ({ error, url }) => (
   <StyledError>
     <StyledErrorDescription>{url}</StyledErrorDescription>
-    <StyledErrorDescription>{error.message}</StyledErrorDescription>
+    <StyledErrorDescription>
+      {error?.code === "INVALID_URL"
+        ? "Informe uma URL válida."
+        : normalizeUserError(error).message}
+    </StyledErrorDescription>
   </StyledError>
 );
 
@@ -88,7 +93,7 @@ class LoadRemoteMap extends Component {
   onMapUrlChange = (e) => {
     this.setState({
       dataUrl: e.target.value,
-      error: !validateUrl(e.target.value) ? { message: "Incorrect URL" } : null,
+      error: !validateUrl(e.target.value) ? { code: "INVALID_URL" } : null,
     });
   };
 
