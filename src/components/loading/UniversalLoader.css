@@ -1,0 +1,134 @@
+:root {
+  --maono-loader-size-inline: 18px;
+  --maono-loader-size-compact: 28px;
+  --maono-loader-size-page: 46px;
+  --maono-loader-thickness-inline: 2px;
+  --maono-loader-thickness-compact: 3px;
+  --maono-loader-thickness-page: 4px;
+  --maono-loader-duration: 1.05s;
+}
+
+.mm-universal-loader {
+  --maono-loader-size: var(--maono-loader-size-page);
+  --maono-loader-thickness: var(--maono-loader-thickness-page);
+  position: relative;
+  display: inline-grid;
+  width: var(--maono-loader-size);
+  height: var(--maono-loader-size);
+  flex: 0 0 auto;
+  place-items: center;
+  isolation: isolate;
+  pointer-events: none;
+}
+
+.mm-universal-loader--inline {
+  --maono-loader-size: var(--maono-loader-size-inline);
+  --maono-loader-thickness: var(--maono-loader-thickness-inline);
+}
+
+.mm-universal-loader--compact {
+  --maono-loader-size: var(--maono-loader-size-compact);
+  --maono-loader-thickness: var(--maono-loader-thickness-compact);
+}
+
+.mm-universal-loader--page {
+  --maono-loader-size: var(--maono-loader-size-page);
+  --maono-loader-thickness: var(--maono-loader-thickness-page);
+}
+
+.mm-universal-loader::after {
+  position: absolute;
+  z-index: -1;
+  left: 17%;
+  right: 17%;
+  bottom: -7%;
+  height: 12%;
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse at center,
+    var(--maono-accent-glow-strong) 0%,
+    var(--maono-accent-glow) 44%,
+    transparent 74%
+  );
+  filter: blur(3.5px);
+  opacity: 0.72;
+  transform: translateY(3px) scaleX(1.08);
+  content: "";
+}
+
+.mm-universal-loader__ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 12deg,
+      transparent 0deg 54deg,
+      rgb(var(--maono-accent-rgb) / 0.52) 72deg,
+      var(--maono-accent-muted) 118deg,
+      var(--maono-accent) 184deg,
+      var(--maono-accent-bright) 244deg,
+      var(--maono-accent-text) 274deg,
+      var(--maono-accent-strong) 316deg,
+      transparent 352deg 360deg
+    );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--maono-loader-thickness) - 0.5px),
+    #000 calc(100% - var(--maono-loader-thickness))
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--maono-loader-thickness) - 0.5px),
+    #000 calc(100% - var(--maono-loader-thickness))
+  );
+  filter:
+    drop-shadow(0 1px 0 rgb(255 255 255 / 0.18))
+    drop-shadow(0 5px 5px rgb(0 0 0 / 0.38))
+    drop-shadow(0 0 5px var(--maono-accent-glow));
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  animation: maono-universal-loader-spin var(--maono-loader-duration) linear infinite;
+  will-change: transform;
+}
+
+.mm-loading-overlay {
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  cursor: progress;
+  background: transparent;
+}
+
+.mm-loading-overlay--viewport {
+  position: fixed;
+  inset: 0;
+}
+
+.mm-loading-overlay--container {
+  position: absolute;
+  inset: 0;
+}
+
+@keyframes maono-universal-loader-spin {
+  from {
+    transform: perspective(140px) rotateX(7deg) rotateZ(0deg);
+  }
+
+  to {
+    transform: perspective(140px) rotateX(7deg) rotateZ(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-universal-loader__ring {
+    animation: none;
+    transform: perspective(140px) rotateX(7deg) rotateZ(26deg);
+  }
+
+  .mm-universal-loader::after {
+    opacity: 0.56;
+  }
+}
