@@ -28,7 +28,7 @@ type ProjectCreatePanelProps = {
   initialName?: string;
   initialDescription?: string;
   busy: boolean;
-  stage: ProjectCreationStage;
+  phase: ProjectCreationStage;
   failedStage?: Exclude<
     ProjectCreationStage,
     "ready" | "success" | "error"
@@ -64,11 +64,11 @@ const STEPS = [
   },
 ] as const;
 
-function effectiveStage(
-  stage: ProjectCreationStage,
+function effectivePhase(
+  phase: ProjectCreationStage,
   failedStage: ProjectCreatePanelProps["failedStage"],
 ) {
-  return stage === "error" ? failedStage || "creating_record" : stage;
+  return phase === "error" ? failedStage || "creating_record" : phase;
 }
 
 const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
@@ -77,7 +77,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
   initialName = "",
   initialDescription = "",
   busy,
-  stage,
+  phase,
   failedStage = null,
   error = null,
   onClose,
@@ -96,10 +96,10 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
 
   const normalizedName = name.trim().replace(/\s+/g, " ");
   const normalizedDescription = description.trim();
-  const activeStage = effectiveStage(stage, failedStage);
+  const activePhase = effectivePhase(phase, failedStage);
   const activeIndex = useMemo(
-    () => STEPS.findIndex((step) => step.id === activeStage),
-    [activeStage],
+    () => STEPS.findIndex((step) => step.id === activePhase),
+    [activePhase],
   );
 
   useEffect(() => {
@@ -319,7 +319,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
                 minLength={3}
                 maxLength={120}
                 value={name}
-                disabled={busy || stage === "error"}
+                disabled={busy || phase === "error"}
                 onChange={(event) => {
                   setName(event.target.value);
                   setValidationError(null);
@@ -338,7 +338,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
                 rows={6}
                 maxLength={1000}
                 value={description}
-                disabled={busy || stage === "error"}
+                disabled={busy || phase === "error"}
                 onChange={(event) => {
                   setDescription(event.target.value);
                   setValidationError(null);
@@ -360,7 +360,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
             ) : null}
           </form>
 
-          {stage !== "ready" ? (
+          {phase !== "ready" ? (
             <section
               aria-label="Progresso da criação"
               className="mt-6 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
@@ -369,7 +369,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
                 Progresso
               </h3>
 
-              {stage === "capturing" ? (
+              {phase === "capturing" ? (
                 <p
                   role="status"
                   className="mt-3 text-sm font-semibold text-emerald-200"
@@ -381,15 +381,15 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
               <ol className="mt-4 grid gap-3">
                 {STEPS.map((step, index) => {
                   const completed =
-                    stage === "success" ||
-                    (stage !== "error" &&
+                    phase === "success" ||
+                    (phase !== "error" &&
                       activeIndex >= 0 &&
                       index < activeIndex);
                   const active =
-                    stage !== "success" &&
+                    phase !== "success" &&
                     index === activeIndex;
                   const failed =
-                    stage === "error" &&
+                    phase === "error" &&
                     index === activeIndex;
 
                   return (
@@ -449,7 +449,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
           >
             {busy
               ? "Criando projeto…"
-              : stage === "error"
+              : phase === "error"
                 ? "Tentar novamente"
                 : "Criar e salvar projeto"}
           </button>
