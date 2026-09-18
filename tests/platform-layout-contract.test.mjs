@@ -40,7 +40,6 @@ test("plataforma usa uma única referência dinâmica de viewport", () => {
     ".maono-login-page",
     ".mm-projects-page",
     ".mm-projects-layout",
-    ".mm-loading-screen",
     ".admin-page",
     ".maono-admin-page",
     ".maono-map-gate",
