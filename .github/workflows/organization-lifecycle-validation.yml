@@ -1,0 +1,62 @@
+name: Organization lifecycle validation
+
+on:
+  push:
+    branches:
+      - "feat/prh-05-*"
+    paths:
+      - "functions/_lib/organization-lifecycle.js"
+      - "functions/_lib/organization-storage.js"
+      - "functions/api/admin/organizations/**"
+      - "migrations/0009_organization_storage_invariant.sql"
+      - "tests/organization-lifecycle*.test.mjs"
+      - "tests/organization-storage*.test.mjs"
+      - "tests/dropbox-resilience*.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-lifecycle-validation.yml"
+  pull_request:
+    branches:
+      - mano_kepler_v1
+    paths:
+      - "functions/_lib/organization-lifecycle.js"
+      - "functions/_lib/organization-storage.js"
+      - "functions/api/admin/organizations/**"
+      - "migrations/0009_organization_storage_invariant.sql"
+      - "tests/organization-lifecycle*.test.mjs"
+      - "tests/organization-storage*.test.mjs"
+      - "tests/dropbox-resilience*.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-lifecycle-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  organization-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Organization lifecycle suite
+        run: npm run test:organization-lifecycle
+
+      - name: Organization storage regression
+        run: npm run test:organization-storage
+
+      - name: Dropbox resilience regression
+        run: npm run test:dropbox-resilience
+
+      - name: Build application
+        run: npm run build

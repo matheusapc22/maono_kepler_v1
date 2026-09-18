@@ -1,29 +1,15 @@
 import {
-  errorResponse,
+  errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
   readJsonBody,
 } from "../../../_lib/http.js";
+import { getOrCreateCorrelationId } from "../../../_lib/maono-error.js";
 import {
-  ensureDropboxFolder,
-  normalizeDropboxFolderPath,
-} from "../../../_lib/dropbox.js";
+  createOrganizationLifecycle,
+} from "../../../_lib/organization-lifecycle.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import { logAudit } from "../../../_lib/projects.js";
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
-
-function normalizeSlug(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 async function requireGlobalAdminPanelAccess(env, request, action) {
   return requirePermission(
@@ -87,100 +73,9 @@ async function listOrganizations(env, { includeInactive = false } = {}) {
   return results || [];
 }
 
-async function createOrganization(env, body) {
-  const name = normalizeText(body?.name);
-  const slug = normalizeSlug(body?.slug || name);
-  const description = normalizeText(body?.description);
-  const active = body?.active === false ? 0 : 1;
-  const requestedPath = normalizeText(
-    body?.dropboxRootPath || body?.dropbox_root_path,
-  );
-  const dropboxRootPath = normalizeDropboxFolderPath(
-    requestedPath || `/projects/${slug}`,
-  );
-
-  if (!name) {
-    return {
-      error: errorResponse(
-        "Informe o nome da organização.",
-        400,
-        "ORGANIZATION_NAME_REQUIRED",
-      ),
-    };
-  }
-
-  if (!slug) {
-    return {
-      error: errorResponse(
-        "Informe um identificador válido para a organização.",
-        400,
-        "ORGANIZATION_SLUG_REQUIRED",
-      ),
-    };
-  }
-
-  if (!dropboxRootPath || !dropboxRootPath.startsWith("/projects/")) {
-    return {
-      error: errorResponse(
-        "A pasta da organização deve ficar dentro de /projects. Exemplo: /projects/cliente-a.",
-        400,
-        "ORGANIZATION_PATH_INVALID",
-      ),
-    };
-  }
-
-  // Invariante: antes de uma organização ser persistida como ativa, a raiz e
-  // a subpasta de documentos precisam existir fisicamente no Dropbox.
-  if (active) {
-    await ensureDropboxFolder(env, `${dropboxRootPath}/documents`);
-  }
-
-  const checkedAt = new Date().toISOString();
-
-  try {
-    const organization = await env.DB.prepare(
-      `INSERT INTO organizations (
-        name,
-        slug,
-        description,
-        dropbox_root_path,
-        active,
-        storage_status,
-        storage_error,
-        storage_checked_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
-      RETURNING *`,
-    )
-      .bind(
-        name,
-        slug,
-        description || null,
-        dropboxRootPath,
-        active,
-        active ? "READY" : "DISABLED",
-        checkedAt,
-      )
-      .first();
-
-    return { organization };
-  } catch (error) {
-    if (String(error.message || "").includes("UNIQUE")) {
-      return {
-        error: errorResponse(
-          "Já existe uma organização com este identificador ou pasta Dropbox.",
-          409,
-          "ORGANIZATION_EXISTS",
-        ),
-      };
-    }
-
-    throw error;
-  }
-}
-
 export async function onRequest(context) {
   const { request, env } = context;
+  const correlationId = getOrCreateCorrelationId(request);
 
   try {
     if (request.method === "GET") {
@@ -195,11 +90,18 @@ export async function onRequest(context) {
         url.searchParams.get("includeInactive") === "true";
       const organizations = await listOrganizations(env, { includeInactive });
 
-      return jsonResponse({
-        ok: true,
-        scope: "global",
-        organizations: organizations.map(publicOrganization),
-      });
+      return jsonResponse(
+        {
+          ok: true,
+          scope: "global",
+          organizations: organizations.map(publicOrganization),
+        },
+        {
+          headers: {
+            "X-Correlation-Id": correlationId,
+          },
+        },
+      );
     }
 
     if (request.method === "POST") {
@@ -210,20 +112,22 @@ export async function onRequest(context) {
       );
 
       const body = await readJsonBody(request);
-      const { organization, error } = await createOrganization(env, body);
-
-      if (error) {
-        return error;
-      }
+      const lifecycle = await createOrganizationLifecycle(env, body, {
+        correlationId,
+      });
+      const organization = lifecycle.organization;
 
       await logAudit(env, {
         userId: user.id,
         action: "admin.organizations.create",
         details: {
+          correlationId,
           organizationId: organization.id,
           slug: organization.slug,
           active: Boolean(organization.active),
-          storageProvisioned: Boolean(organization.active),
+          lifecycleCreated: lifecycle.created,
+          lifecycleResumed: lifecycle.resumed,
+          storageReady: lifecycle.storageReady,
           storageStatus: organization.storage_status || null,
         },
       });
@@ -232,17 +136,28 @@ export async function onRequest(context) {
         {
           ok: true,
           organization: publicOrganization(organization),
+          lifecycle: {
+            created: lifecycle.created,
+            resumed: lifecycle.resumed,
+            storageReady: lifecycle.storageReady,
+          },
         },
-        { status: 201 },
+        {
+          status: lifecycle.created ? 201 : 200,
+          headers: {
+            "X-Correlation-Id": correlationId,
+          },
+        },
       );
     }
 
-    return methodNotAllowed(["GET", "POST"]);
+    return methodNotAllowed(["GET", "POST"], { correlationId });
   } catch (error) {
-    return errorResponse(
-      error.message,
-      error.status || 500,
-      error.code || "ADMIN_ORGANIZATIONS_ERROR",
-    );
+    return errorResponseFromError(error, {
+      correlationId,
+      defaultCode: "ADMIN_ORGANIZATIONS_ERROR",
+      publicMessage:
+        error?.publicMessage || "Não foi possível concluir a operação com organizações.",
+    });
   }
 }

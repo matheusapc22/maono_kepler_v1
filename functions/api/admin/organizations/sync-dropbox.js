@@ -1,4 +1,15 @@
-import { errorResponse, jsonResponse, methodNotAllowed } from "../../../_lib/http.js";
+import {
+  errorResponse,
+  errorResponseFromError,
+  jsonResponse,
+  methodNotAllowed,
+} from "../../../_lib/http.js";
+import { getOrCreateCorrelationId } from "../../../_lib/maono-error.js";
+import {
+  createOrganizationLifecycle,
+  normalizeOrganizationSlug,
+  updateOrganizationLifecycle,
+} from "../../../_lib/organization-lifecycle.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import {
   listDropboxFolder,
@@ -10,16 +21,6 @@ const DEFAULT_PROJECTS_ROOT = "/projects";
 
 function normalizeText(value) {
   return String(value || "").trim();
-}
-
-function normalizeSlug(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function inferFileType(fileName) {
@@ -57,6 +58,18 @@ function titleFromFolderName(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function stableFolderSuffix(value) {
+  let hash = 2166136261;
+  const text = String(value || "");
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36).slice(0, 7);
+}
+
 async function requireGlobalAdminPanelAccess(env, request, action) {
   return requirePermission(
     env,
@@ -87,6 +100,8 @@ function publicOrganization(
     description: row.description,
     active: Boolean(row.active),
     dropboxRootConfigured: Boolean(row.dropbox_root_path),
+    storageStatus: row.storage_status || null,
+    storageReady: row.storage_status === "READY",
     syncStatus,
     filesSynced,
     projectsLinked,
@@ -95,19 +110,8 @@ function publicOrganization(
   };
 }
 
-async function upsertOrganizationFromFolder(env, folderEntry) {
-  const folderName = normalizeText(folderEntry.name);
-  const folderPath = normalizeDropboxFolderPath(
-    folderEntry.path_display || folderEntry.path_lower,
-  );
-  const slug = normalizeSlug(folderName);
-  const name = titleFromFolderName(folderName);
-
-  if (!folderName || !folderPath || !slug) {
-    return null;
-  }
-
-  const existingByPath = await env.DB.prepare(
+async function findOrganizationByPath(env, folderPath) {
+  return env.DB.prepare(
     `SELECT *
      FROM organizations
      WHERE dropbox_root_path = ?
@@ -115,60 +119,89 @@ async function upsertOrganizationFromFolder(env, folderEntry) {
   )
     .bind(folderPath)
     .first();
+}
 
-  if (existingByPath) {
-    const updated = await env.DB.prepare(
-      `UPDATE organizations
-       SET active = 1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-       RETURNING *`,
-    )
-      .bind(existingByPath.id)
-      .first();
-
-    return {
-      organization: updated,
-      status: existingByPath.active ? "already_exists" : "reactivated",
-    };
-  }
-
-  const existingBySlug = await env.DB.prepare(
-    `SELECT id
+async function findOrganizationBySlug(env, slug) {
+  return env.DB.prepare(
+    `SELECT *
      FROM organizations
      WHERE slug = ?
      LIMIT 1`,
   )
     .bind(slug)
     .first();
+}
 
-  const finalSlug = existingBySlug ? `${slug}-${Date.now().toString(36)}` : slug;
+async function upsertOrganizationFromFolder(
+  env,
+  folderEntry,
+  correlationId,
+) {
+  const folderName = normalizeText(folderEntry.name);
+  const folderPath = normalizeDropboxFolderPath(
+    folderEntry.path_display || folderEntry.path_lower,
+  );
+  const baseSlug = normalizeOrganizationSlug(folderName);
+  const name = titleFromFolderName(folderName);
 
-  const created = await env.DB.prepare(
-    `INSERT INTO organizations (
+  if (!folderName || !folderPath || !baseSlug) {
+    return null;
+  }
+
+  const existingByPath = await findOrganizationByPath(env, folderPath);
+
+  if (existingByPath) {
+    const lifecycle = await updateOrganizationLifecycle(
+      env,
+      existingByPath.id,
+      {
+        name: existingByPath.name || name,
+        slug: existingByPath.slug,
+        description: existingByPath.description,
+        dropboxRootPath: folderPath,
+        active: true,
+      },
+      { correlationId },
+    );
+
+    return {
+      organization: lifecycle.organization,
+      status: existingByPath.active ? "already_exists" : "reactivated",
+      storageReady: lifecycle.storageReady,
+      storagePending: lifecycle.storagePending,
+    };
+  }
+
+  const existingBySlug = await findOrganizationBySlug(env, baseSlug);
+  const finalSlug = existingBySlug
+    ? `${baseSlug}-${stableFolderSuffix(folderPath)}`
+    : baseSlug;
+
+  const lifecycle = await createOrganizationLifecycle(
+    env,
+    {
       name,
-      slug,
-      description,
-      dropbox_root_path,
-      active
-    )
-    VALUES (?, ?, ?, ?, 1)
-    RETURNING *`,
-  )
-    .bind(
-      name,
-      finalSlug,
-      "Organização importada automaticamente do Dropbox.",
-      folderPath,
-    )
-    .first();
+      slug: finalSlug,
+      description: "Organização importada automaticamente do Dropbox.",
+      dropboxRootPath: folderPath,
+      active: true,
+    },
+    { correlationId },
+  );
 
   return {
-    organization: created,
-    status: "created",
+    organization: lifecycle.organization,
+    status: lifecycle.created ? "created" : "resumed",
+    storageReady: lifecycle.storageReady,
+    storagePending: lifecycle.storagePending,
   };
 }
 
-async function linkExistingProjectsToOrganizationFile(env, organization, file) {
+async function linkExistingProjectsToOrganizationFile(
+  env,
+  organization,
+  file,
+) {
   const { results } = await env.DB.prepare(
     `SELECT id
      FROM projects
@@ -271,7 +304,11 @@ async function upsertOrganizationFileFromDropboxEntry(
     .first();
 
   const projectsLinked = savedFile
-    ? await linkExistingProjectsToOrganizationFile(env, organization, savedFile)
+    ? await linkExistingProjectsToOrganizationFile(
+        env,
+        organization,
+        savedFile,
+      )
     : 0;
 
   return {
@@ -281,7 +318,10 @@ async function upsertOrganizationFileFromDropboxEntry(
 }
 
 async function syncFilesForOrganization(env, organization) {
-  const dropbox = await listDropboxFolder(env, organization.dropbox_root_path);
+  const dropbox = await listDropboxFolder(
+    env,
+    organization.dropbox_root_path,
+  );
   const files = (dropbox.entries || []).filter(
     (entry) => entry[".tag"] === "file",
   );
@@ -310,10 +350,11 @@ async function syncFilesForOrganization(env, organization) {
 
 export async function onRequest(context) {
   const { request, env } = context;
+  const correlationId = getOrCreateCorrelationId(request);
   let auditUserId = null;
 
   if (request.method !== "POST") {
-    return methodNotAllowed(["POST"]);
+    return methodNotAllowed(["POST"], { correlationId });
   }
 
   try {
@@ -334,6 +375,8 @@ export async function onRequest(context) {
         "A sincronização só é permitida dentro de /projects.",
         400,
         "DROPBOX_SYNC_ROOT_INVALID",
+        null,
+        { correlationId },
       );
     }
 
@@ -341,6 +384,7 @@ export async function onRequest(context) {
       userId: user.id,
       action: "admin.organizations.sync_dropbox.start",
       details: {
+        correlationId,
         rootPathConfigured: Boolean(rootPath),
       },
     });
@@ -352,65 +396,101 @@ export async function onRequest(context) {
     const synced = [];
     let filesSyncedTotal = 0;
     let projectsLinkedTotal = 0;
+    let pendingOrganizations = 0;
 
     for (const folder of folders) {
-      const result = await upsertOrganizationFromFolder(env, folder);
+      const result = await upsertOrganizationFromFolder(
+        env,
+        folder,
+        correlationId,
+      );
 
-      if (result?.organization) {
-        const { filesSynced, projectsLinked } =
-          await syncFilesForOrganization(env, result.organization);
+      if (!result?.organization) continue;
 
-        filesSyncedTotal += filesSynced;
-        projectsLinkedTotal += projectsLinked;
+      let filesSynced = 0;
+      let projectsLinked = 0;
+      let syncStatus = result.status;
 
-        synced.push(
-          publicOrganization(
-            result.organization,
-            result.status,
-            filesSynced,
-            projectsLinked,
-          ),
+      if (result.storageReady) {
+        const fileSync = await syncFilesForOrganization(
+          env,
+          result.organization,
         );
+        filesSynced = fileSync.filesSynced;
+        projectsLinked = fileSync.projectsLinked;
+      } else {
+        pendingOrganizations += 1;
+        syncStatus = "storage_pending";
       }
+
+      filesSyncedTotal += filesSynced;
+      projectsLinkedTotal += projectsLinked;
+
+      synced.push(
+        publicOrganization(
+          result.organization,
+          syncStatus,
+          filesSynced,
+          projectsLinked,
+        ),
+      );
     }
 
     await logAudit(env, {
       userId: user.id,
       action: "admin.organizations.sync_dropbox.success",
       details: {
+        correlationId,
         rootPathConfigured: Boolean(rootPath),
         foldersFound: folders.length,
         organizationsSynced: synced.length,
+        pendingOrganizations,
         filesSynced: filesSyncedTotal,
         projectsLinked: projectsLinkedTotal,
       },
     });
 
-    return jsonResponse({
-      ok: true,
-      rootPathConfigured: Boolean(rootPath),
-      foldersFound: folders.length,
-      organizationsSynced: synced.length,
-      filesSynced: filesSyncedTotal,
-      projectsLinked: projectsLinkedTotal,
-      organizations: synced,
-    });
+    return jsonResponse(
+      {
+        ok: true,
+        rootPathConfigured: Boolean(rootPath),
+        foldersFound: folders.length,
+        organizationsSynced: synced.length,
+        pendingOrganizations,
+        filesSynced: filesSyncedTotal,
+        projectsLinked: projectsLinkedTotal,
+        organizations: synced,
+      },
+      {
+        headers: {
+          "X-Correlation-Id": correlationId,
+        },
+      },
+    );
   } catch (error) {
     if (auditUserId) {
       await logAudit(env, {
         userId: auditUserId,
         action: "admin.organizations.sync_dropbox.failure",
         details: {
-          errorCode: error.code || "ADMIN_ORGANIZATIONS_SYNC_DROPBOX_ERROR",
+          correlationId,
+          errorCode:
+            error.code || "ADMIN_ORGANIZATIONS_SYNC_DROPBOX_ERROR",
           status: error.status || 500,
         },
       });
     }
 
-    return errorResponse(
-      error.message,
-      error.status || 500,
-      error.code || "ADMIN_ORGANIZATIONS_SYNC_DROPBOX_ERROR",
-    );
+    return errorResponseFromError(error, {
+      correlationId,
+      defaultCode: "ADMIN_ORGANIZATIONS_SYNC_DROPBOX_ERROR",
+      publicMessage:
+        error?.publicMessage || "Não foi possível sincronizar as organizações do Dropbox.",
+    });
   }
 }
+
+export const __organizationSyncTesting = Object.freeze({
+  stableFolderSuffix,
+  upsertOrganizationFromFolder,
+});

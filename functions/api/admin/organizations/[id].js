@@ -1,30 +1,20 @@
 import {
   errorResponse,
+  errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
   readJsonBody,
 } from "../../../_lib/http.js";
+import { getOrCreateCorrelationId } from "../../../_lib/maono-error.js";
+import {
+  getOrganizationLifecycleById,
+  updateOrganizationLifecycle,
+} from "../../../_lib/organization-lifecycle.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import {
   deleteDropboxPath,
-  ensureDropboxFolder,
-  normalizeDropboxFolderPath,
 } from "../../../_lib/dropbox.js";
 import { logAudit } from "../../../_lib/projects.js";
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
-
-function normalizeSlug(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 function normalizePositiveInteger(value) {
   const numberValue = Number(value);
@@ -78,139 +68,16 @@ function publicOrganization(row) {
   };
 }
 
-async function getOrganizationById(env, organizationId) {
-  return env.DB.prepare(
-    `SELECT *
-     FROM organizations
-     WHERE id = ?
-     LIMIT 1`,
-  )
-    .bind(organizationId)
-    .first();
-}
-
-async function updateOrganization(env, organizationId, body) {
-  const current = await getOrganizationById(env, organizationId);
-
-  if (!current) {
-    return {
-      error: errorResponse(
-        "Organização não encontrada.",
-        404,
-        "ORGANIZATION_NOT_FOUND",
-      ),
-    };
-  }
-
-  const name = normalizeText(body?.name ?? current.name);
-  const slug = normalizeSlug(body?.slug ?? current.slug);
-  const description = normalizeText(body?.description ?? current.description);
-  const active =
-    body?.active === false
-      ? 0
-      : body?.active === true
-        ? 1
-        : Number(current.active || 0);
-
-  const requestedPath = normalizeText(
-    body?.dropboxRootPath ??
-      body?.dropbox_root_path ??
-      current.dropbox_root_path,
-  );
-  const dropboxRootPath = normalizeDropboxFolderPath(
-    requestedPath || `/projects/${slug || `organization-${organizationId}`}`,
-  );
-
-  if (!name) {
-    return {
-      error: errorResponse(
-        "Informe o nome da organização.",
-        400,
-        "ORGANIZATION_NAME_REQUIRED",
-      ),
-    };
-  }
-
-  if (!slug) {
-    return {
-      error: errorResponse(
-        "Informe um identificador válido para a organização.",
-        400,
-        "ORGANIZATION_SLUG_REQUIRED",
-      ),
-    };
-  }
-
-  if (!dropboxRootPath || !dropboxRootPath.startsWith("/projects/")) {
-    return {
-      error: errorResponse(
-        "A pasta da organização deve ficar dentro de /projects. Exemplo: /projects/cliente-a.",
-        400,
-        "ORGANIZATION_PATH_INVALID",
-      ),
-    };
-  }
-
-  // Uma organização só pode ser salva/reativada como ativa depois que sua
-  // raiz e a subpasta de documentos estiverem disponíveis no Dropbox.
-  if (active) {
-    await ensureDropboxFolder(env, `${dropboxRootPath}/documents`);
-  }
-
-  try {
-    const updated = await env.DB.prepare(
-      `UPDATE organizations
-       SET
-        name = ?,
-        slug = ?,
-        description = ?,
-        dropbox_root_path = ?,
-        active = ?,
-        storage_status = ?,
-        storage_error = NULL,
-        storage_checked_at = ?,
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-       RETURNING *`,
-    )
-      .bind(
-        name,
-        slug,
-        description || null,
-        dropboxRootPath,
-        active,
-        active ? "READY" : "DISABLED",
-        new Date().toISOString(),
-        organizationId,
-      )
-      .first();
-
-    return { organization: updated };
-  } catch (error) {
-    if (String(error.message || "").includes("UNIQUE")) {
-      return {
-        error: errorResponse(
-          "Já existe outra organização com este identificador ou pasta Dropbox.",
-          409,
-          "ORGANIZATION_EXISTS",
-        ),
-      };
-    }
-
-    throw error;
-  }
-}
-
 async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
-  const current = await getOrganizationById(env, organizationId);
+  const current = await getOrganizationLifecycleById(env, organizationId);
 
   if (!current) {
     return {
-      error: errorResponse(
-        "Organização não encontrada.",
-        404,
-        "ORGANIZATION_NOT_FOUND",
-      ),
+      error: {
+        message: "Organização não encontrada.",
+        status: 404,
+        code: "ORGANIZATION_NOT_FOUND",
+      },
     };
   }
 
@@ -225,11 +92,12 @@ async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
 
   if (linkedProjects?.total > 0) {
     return {
-      error: errorResponse(
-        "Esta organização possui projetos ativos. Desative ou remova os projetos antes de excluir a organização.",
-        409,
-        "ORGANIZATION_HAS_ACTIVE_PROJECTS",
-      ),
+      error: {
+        message:
+          "Esta organização possui projetos ativos. Desative ou remova os projetos antes de excluir a organização.",
+        status: 409,
+        code: "ORGANIZATION_HAS_ACTIVE_PROJECTS",
+      },
     };
   }
 
@@ -279,6 +147,7 @@ async function deleteOrganization(env, organizationId, hardDeleteDropbox) {
 
 export async function onRequest(context) {
   const { request, env, params } = context;
+  const correlationId = getOrCreateCorrelationId(request);
 
   try {
     const organizationId = normalizePositiveInteger(params.id);
@@ -288,6 +157,8 @@ export async function onRequest(context) {
         "ID da organização inválido.",
         400,
         "ORGANIZATION_ID_INVALID",
+        null,
+        { correlationId },
       );
     }
 
@@ -299,20 +170,32 @@ export async function onRequest(context) {
         "admin.organizations.view",
       );
 
-      const organization = await getOrganizationById(env, organizationId);
+      const organization = await getOrganizationLifecycleById(
+        env,
+        organizationId,
+      );
 
       if (!organization) {
         return errorResponse(
           "Organização não encontrada.",
           404,
           "ORGANIZATION_NOT_FOUND",
+          null,
+          { correlationId },
         );
       }
 
-      return jsonResponse({
-        ok: true,
-        organization: publicOrganization(organization),
-      });
+      return jsonResponse(
+        {
+          ok: true,
+          organization: publicOrganization(organization),
+        },
+        {
+          headers: {
+            "X-Correlation-Id": correlationId,
+          },
+        },
+      );
     }
 
     if (request.method === "PUT" || request.method === "PATCH") {
@@ -324,30 +207,44 @@ export async function onRequest(context) {
       );
 
       const body = await readJsonBody(request);
-      const { organization, error } = await updateOrganization(
+      const lifecycle = await updateOrganizationLifecycle(
         env,
         organizationId,
         body,
+        { correlationId },
       );
-
-      if (error) return error;
+      const organization = lifecycle.organization;
 
       await logAudit(env, {
         userId: user.id,
         action: "admin.organizations.update",
         details: {
+          correlationId,
           organizationId,
           slug: organization.slug,
           active: Boolean(organization.active),
           dropboxRootConfigured: Boolean(organization.dropbox_root_path),
+          storageReady: lifecycle.storageReady,
+          storagePending: lifecycle.storagePending,
           storageStatus: organization.storage_status || null,
         },
       });
 
-      return jsonResponse({
-        ok: true,
-        organization: publicOrganization(organization),
-      });
+      return jsonResponse(
+        {
+          ok: true,
+          organization: publicOrganization(organization),
+          lifecycle: {
+            storageReady: lifecycle.storageReady,
+            storagePending: lifecycle.storagePending,
+          },
+        },
+        {
+          headers: {
+            "X-Correlation-Id": correlationId,
+          },
+        },
+      );
     }
 
     if (request.method === "DELETE") {
@@ -360,10 +257,26 @@ export async function onRequest(context) {
 
       const url = new URL(request.url);
       const hardDeleteDropbox = url.searchParams.get("dropbox") === "true";
-      const { organization, dropboxDeleted, dropboxAlreadyMissing, error } =
-        await deleteOrganization(env, organizationId, hardDeleteDropbox);
+      const {
+        organization,
+        dropboxDeleted,
+        dropboxAlreadyMissing,
+        error,
+      } = await deleteOrganization(
+        env,
+        organizationId,
+        hardDeleteDropbox,
+      );
 
-      if (error) return error;
+      if (error) {
+        return errorResponse(
+          error.message,
+          error.status,
+          error.code,
+          null,
+          { correlationId },
+        );
+      }
 
       await logAudit(env, {
         userId: user.id,
@@ -371,6 +284,7 @@ export async function onRequest(context) {
           ? "admin.organizations.delete_dropbox"
           : "admin.organizations.deactivate",
         details: {
+          correlationId,
           organizationId,
           slug: organization.slug,
           hardDeleteDropbox,
@@ -379,19 +293,30 @@ export async function onRequest(context) {
         },
       });
 
-      return jsonResponse({
-        ok: true,
-        dropboxDeleted,
-        dropboxAlreadyMissing,
-      });
+      return jsonResponse(
+        {
+          ok: true,
+          dropboxDeleted,
+          dropboxAlreadyMissing,
+        },
+        {
+          headers: {
+            "X-Correlation-Id": correlationId,
+          },
+        },
+      );
     }
 
-    return methodNotAllowed(["GET", "PUT", "PATCH", "DELETE"]);
-  } catch (error) {
-    return errorResponse(
-      error.message,
-      error.status || 500,
-      error.code || "ADMIN_ORGANIZATION_ERROR",
+    return methodNotAllowed(
+      ["GET", "PUT", "PATCH", "DELETE"],
+      { correlationId },
     );
+  } catch (error) {
+    return errorResponseFromError(error, {
+      correlationId,
+      defaultCode: "ADMIN_ORGANIZATION_ERROR",
+      publicMessage:
+        error?.publicMessage || "Não foi possível concluir a operação com a organização.",
+    });
   }
 }

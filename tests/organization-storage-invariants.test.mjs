@@ -106,7 +106,14 @@ function createFakeEnv(initialRows, { columns = STORAGE_COLUMNS } = {}) {
           normalized.includes("SET dropbox_root_path = ?") &&
           normalized.includes("storage_status = 'PENDING'")
         ) {
-          const [rootPath, claimAt, updatedAt, organizationId, staleBefore] = args;
+          const [
+            rootPath,
+            claimAt,
+            updatedAt,
+            organizationId,
+            revalidateReady,
+            staleBefore,
+          ] = args;
           const row = rows.get(Number(organizationId));
           if (!row || !activeValue(row.active)) return null;
 
@@ -114,12 +121,19 @@ function createFakeEnv(initialRows, { columns = STORAGE_COLUMNS } = {}) {
           const checkedAt = String(row.storage_checked_at || "");
           const checkedAtMs = Date.parse(checkedAt);
           const staleBeforeMs = Date.parse(staleBefore);
+          const known = ["READY", "PENDING", "ERROR", "DISABLED"].includes(status);
           const canClaim =
             !status ||
-            status !== "PENDING" ||
-            !checkedAt ||
-            !Number.isFinite(checkedAtMs) ||
-            checkedAtMs < staleBeforeMs;
+            !known ||
+            status === "ERROR" ||
+            status === "DISABLED" ||
+            (status === "READY" &&
+              (Boolean(String(row.storage_error || "").trim()) ||
+                Number(revalidateReady) === 1)) ||
+            (status === "PENDING" &&
+              (!checkedAt ||
+                !Number.isFinite(checkedAtMs) ||
+                checkedAtMs < staleBeforeMs));
 
           if (!canClaim) return null;
 
@@ -285,6 +299,64 @@ test("claim recente impede provisionamento concorrente duplicado", async () => {
   const completed = await first;
   assert.equal(completed.ready, true);
   assert.equal(env.__rows.get(1).storage_status, "READY");
+});
+
+test("READY saudável não reprovisiona storage por padrão", async () => {
+  const now = Date.parse("2026-09-18T12:00:00.000Z");
+  const env = createFakeEnv([
+    organization({
+      storage_status: "READY",
+      storage_error: null,
+      storage_checked_at: new Date(now - 5_000).toISOString(),
+    }),
+  ]);
+  let providerCalls = 0;
+
+  const result = await ensureOrganizationStorage(
+    env,
+    clone(env.__rows.get(1)),
+    {
+      nowFn: () => now,
+      ensureFolder: async () => {
+        providerCalls += 1;
+      },
+      correlationId: "corr-prh05-ready-noop",
+    },
+  );
+
+  assert.equal(providerCalls, 0);
+  assert.equal(result.ready, true);
+  assert.equal(result.claimed, false);
+  assert.equal(env.__rows.get(1).storage_status, "READY");
+});
+
+test("READY pode ser revalidado explicitamente quando necessário", async () => {
+  const now = Date.parse("2026-09-18T12:00:00.000Z");
+  const env = createFakeEnv([
+    organization({
+      storage_status: "READY",
+      storage_error: null,
+      storage_checked_at: new Date(now - 5_000).toISOString(),
+    }),
+  ]);
+  let providerCalls = 0;
+
+  const result = await ensureOrganizationStorage(
+    env,
+    clone(env.__rows.get(1)),
+    {
+      nowFn: () => now,
+      ensureFolder: async () => {
+        providerCalls += 1;
+      },
+      revalidateReady: true,
+      correlationId: "corr-prh05-ready-revalidate",
+    },
+  );
+
+  assert.equal(providerCalls, 1);
+  assert.equal(result.ready, true);
+  assert.equal(result.claimed, true);
 });
 
 test("PENDING expirado pode ser retomado e convergir para READY", async () => {

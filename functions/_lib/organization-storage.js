@@ -240,6 +240,7 @@ async function claimOrganizationStorage(
     rootPath,
     claimAt,
     staleBefore,
+    revalidateReady,
   },
 ) {
   return getDb(env)
@@ -255,10 +256,23 @@ async function claimOrganizationStorage(
          AND (
            storage_status IS NULL
            OR TRIM(storage_status) = ''
-           OR UPPER(TRIM(storage_status)) <> 'PENDING'
-           OR storage_checked_at IS NULL
-           OR julianday(storage_checked_at) IS NULL
-           OR julianday(storage_checked_at) < julianday(?)
+           OR UPPER(TRIM(storage_status)) NOT IN ('READY', 'PENDING', 'ERROR', 'DISABLED')
+           OR UPPER(TRIM(storage_status)) IN ('ERROR', 'DISABLED')
+           OR (
+             UPPER(TRIM(storage_status)) = 'READY'
+             AND (
+               (storage_error IS NOT NULL AND TRIM(storage_error) <> '')
+               OR ? = 1
+             )
+           )
+           OR (
+             UPPER(TRIM(storage_status)) = 'PENDING'
+             AND (
+               storage_checked_at IS NULL
+               OR julianday(storage_checked_at) IS NULL
+               OR julianday(storage_checked_at) < julianday(?)
+             )
+           )
          )
        RETURNING *`,
     )
@@ -267,6 +281,7 @@ async function claimOrganizationStorage(
       claimAt,
       claimAt,
       organizationId,
+      revalidateReady ? 1 : 0,
       staleBefore,
     )
     .first();
@@ -315,6 +330,7 @@ export async function ensureOrganizationStorage(
     nowFn = Date.now,
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
     ensureFolder = ensureDropboxFolder,
+    revalidateReady = false,
   } = {},
 ) {
   if (!organization?.id) {
@@ -375,6 +391,7 @@ export async function ensureOrganizationStorage(
     rootPath,
     claimAt,
     staleBefore,
+    revalidateReady,
   });
 
   if (!claimed) {
