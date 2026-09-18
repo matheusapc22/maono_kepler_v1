@@ -10,6 +10,8 @@ import {
 import { PERMISSION } from "../access-control/permissions";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
+import { parseJsonResponse } from "../lib/api-transport";
+import { normalizeUserError } from "../lib/user-error-catalog";
 
 type AdminUser = {
   id: number;
@@ -68,12 +70,6 @@ type ApiPayload = {
   [key: string]: any;
 };
 
-type ApiError = Error & {
-  status?: number;
-  code?: string;
-  payload?: unknown;
-};
-
 const EMPTY_ORG_FORM = {
   name: "",
   slug: "",
@@ -95,35 +91,10 @@ const selectStyle: React.CSSProperties = {
 };
 
 async function readJson(response: Response) {
-  const text = await response.text();
-  let data: ApiPayload | null = null;
-
-  if (text) {
-    try {
-      data = JSON.parse(text) as ApiPayload;
-    } catch {
-      data = {
-        ok: false,
-        message: text,
-      };
-    }
+  const data = await parseJsonResponse<ApiPayload>(response);
+  if (data?.ok === false) {
+    throw new Error("Não foi possível concluir a operação administrativa.");
   }
-
-  if (!response.ok || data?.ok === false) {
-    const message =
-      data?.error?.message ||
-      data?.message ||
-      (response.status === 403
-        ? "Acesso negado para a área administrativa."
-        : "Erro na requisição.");
-
-    const error = new Error(message) as ApiError;
-    error.status = response.status;
-    error.code = data?.error?.code;
-    error.payload = data;
-    throw error;
-  }
-
   return data || {};
 }
 
@@ -330,7 +301,7 @@ const AdminFilesPage: React.FC = () => {
       setOrganizationFiles([]);
       setDropboxEntries([]);
       setOrganizationUsers([]);
-      setError(err instanceof Error ? err.message : "Erro ao carregar organização.");
+      setError(normalizeUserError(err).message);
     } finally {
       setLoadingDetails(false);
     }
@@ -429,7 +400,7 @@ const AdminFilesPage: React.FC = () => {
       resetOrgForm();
       await refreshOrganizations(savedOrganization?.id || selectedOrganizationId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao salvar organização.");
+      setError(normalizeUserError(err).message);
     } finally {
       setSavingOrganization(false);
     }
@@ -459,7 +430,7 @@ const AdminFilesPage: React.FC = () => {
       }
       await refreshOrganizations(selectedOrganizationId === organization.id ? null : selectedOrganizationId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao excluir organização.");
+      setError(normalizeUserError(err).message);
     }
   }
 
@@ -498,7 +469,7 @@ const AdminFilesPage: React.FC = () => {
       await refreshOrganizationDetails(selectedOrganizationId);
       await refreshOrganizations(selectedOrganizationId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao enviar arquivo.");
+      setError(normalizeUserError(err).message);
     } finally {
       setSavingFile(false);
     }
@@ -539,7 +510,7 @@ const AdminFilesPage: React.FC = () => {
         await refreshOrganizations(selectedOrganizationId);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao transformar arquivo em projeto.");
+      setError(normalizeUserError(err).message);
     } finally {
       setTransformingFileId(null);
     }
@@ -567,7 +538,7 @@ const AdminFilesPage: React.FC = () => {
         await refreshOrganizations(selectedOrganizationId);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao excluir arquivo.");
+      setError(normalizeUserError(err).message);
     }
   }
 
@@ -598,7 +569,7 @@ const AdminFilesPage: React.FC = () => {
       await refreshOrganizationDetails(selectedOrganizationId);
       await refreshOrganizations(selectedOrganizationId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao vincular usuário.");
+      setError(normalizeUserError(err).message);
     } finally {
       setSavingOrgUser(false);
     }
@@ -627,7 +598,7 @@ const AdminFilesPage: React.FC = () => {
         await refreshOrganizations(selectedOrganizationId);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao remover usuário da organização.");
+      setError(normalizeUserError(err).message);
     }
   }
 
