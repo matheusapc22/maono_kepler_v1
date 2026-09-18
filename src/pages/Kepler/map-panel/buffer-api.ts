@@ -404,16 +404,11 @@ export function bufferErrorMessage(error: unknown) {
     return "O serviço de buffers está temporariamente indisponível.";
   }
 
-  if (
-    error instanceof TypeError &&
-    /fetch|network|load failed/i.test(error.message)
-  ) {
+  if (error instanceof TypeError) {
     return "Não foi possível conectar ao serviço de buffers.";
   }
 
-  return error instanceof Error && error.message.trim()
-    ? error.message
-    : "Não foi possível gerar os buffers.";
+  return "Não foi possível gerar os buffers.";
 }
 
 export async function requestBuffer(
