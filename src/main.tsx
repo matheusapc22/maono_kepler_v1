@@ -9,7 +9,8 @@ import "./pages/Admin/maono-admin-accent.css";
 import "./pages/maono-login-accent.css";
 import "./index.css";
 import "./platform-layout.css";
-import "./components/loading/Skeleton.css";\nimport "./components/loading/UniversalLoader.css";
+import "./components/loading/Skeleton.css";
+import "./components/loading/UniversalLoader.css";
 import "./fallback-ui-styles";
 import "./auto-project-id";
 import "./dropbox-sync-ui";
@@ -17,7 +18,8 @@ import App from "./App.tsx";
 import { Provider } from "react-redux";
 import store from "./store";
 import { BrowserRouter } from "react-router";
-import { SessionProvider } from "./auth/session";\nimport { LoadingProvider } from "./components/loading";
+import { SessionProvider } from "./auth/session";
+import { LoadingProvider } from "./components/loading";
 import { installMapLoadObservability } from "./pages/Kepler/observability/map-load-runtime";
 
 function enableWebglScreenshotReadback() {
