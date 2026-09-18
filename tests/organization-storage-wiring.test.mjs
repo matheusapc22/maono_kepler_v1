@@ -38,7 +38,7 @@ test("PRH-04 reutiliza migration 0009 sem criar segunda taxonomia de estado", ()
 test("claim é atômico e conclusão usa compare-and-set pelo checked_at", () => {
   assert.match(
     storageSource,
-    /storage_status = 'PENDING'[\s\S]*storage_checked_at < \?/,
+    /storage_status = 'PENDING'[\s\S]*julianday\(storage_checked_at\) < julianday\(\?\)/,
   );
   assert.match(
     storageSource,
@@ -55,8 +55,8 @@ test("repair é cursorizado e seleciona apenas estados inconsistentes", () => {
   assert.match(storageSource, /limit \+ 1/);
   assert.match(storageSource, /hasMore/);
   assert.match(storageSource, /nextCursor/);
-  assert.match(storageSource, /storage_status\) IN \('ERROR', 'DISABLED'\)/);
-  assert.match(storageSource, /storage_status\) = 'PENDING'/);
+  assert.match(storageSource, /storage_status\)\) IN \('ERROR', 'DISABLED'\)/);
+  assert.match(storageSource, /storage_status\)\) = 'PENDING'/);
 });
 
 test("endpoint propaga correlationId e não devolve mensagem técnica crua", () => {
