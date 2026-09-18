@@ -115,6 +115,13 @@ function safeFailureCode(cause) {
   return "ORGANIZATION_STORAGE_PROVISION_FAILED";
 }
 
+function storageCauseRetryable(cause) {
+  if (typeof cause?.retryable === "boolean") return cause.retryable;
+
+  const status = Number(cause?.status || cause?.dropboxStatus || 0);
+  return status === 429 || status >= 500 || cause instanceof TypeError;
+}
+
 function storageResult({
   organization,
   rootPath,
@@ -461,7 +468,7 @@ export async function ensureOrganizationStorage(
       {
         cause,
         correlationId: operationCorrelationId,
-        retryable: cause?.retryable !== false,
+        retryable: storageCauseRetryable(cause),
         details: {
           providerCode: failureCode,
           statePersisted: Boolean(updated),
@@ -650,6 +657,7 @@ export const __organizationStorageTesting = Object.freeze({
   MAX_REPAIR_BATCH,
   normalizeStorageStatus,
   isPendingClaimFresh,
+  storageCauseRetryable,
   normalizeLimit,
   normalizeAfterId,
 });
