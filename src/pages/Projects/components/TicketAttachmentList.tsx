@@ -85,7 +85,7 @@ export default function TicketAttachmentList({
       await uploadTicketAttachment(organizationId, ticket.id, file, {
         signal: controller.signal,
         onProgress: setUploadProgress,
-        onStage: setUploadStage,
+        onPhase: setUploadStage,
       });
       onChanged();
     } catch (requestError) {
