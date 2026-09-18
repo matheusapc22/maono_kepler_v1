@@ -1,3 +1,19 @@
+import {
+  buildApiError,
+  buildClientApiError,
+  buildHttpApiError,
+  parseResponseJson,
+  requestJson,
+} from "../../../lib/api-transport";
+import {
+  ApiError,
+  apiErrorDiagnostic,
+  getXhrErrorReference,
+  isApiError,
+  type ApiErrorDiagnostic,
+} from "../../../lib/error-contract";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
+
 import type {
   CreateTicketPayload,
   Ticket,
@@ -8,34 +24,16 @@ import type {
   UpdateTicketPayload,
 } from "./ticket-types";
 
-type RequestOptions = RequestInit & {
-  signal?: AbortSignal;
-};
-
 type UploadOptions = {
   signal?: AbortSignal;
   onProgress?: (progress: number) => void;
-  onStage?: (stage: "uploading" | "finalizing") => void;
+  onPhase?: (phase: "uploading" | "finalizing") => void;
 };
 
-export class TicketApiError extends Error {
-  status?: number;
-  code?: string;
-  requestId?: string;
-  stage?: string;
-
-  constructor(
-    message: string,
-    options: {
-      status?: number;
-      code?: string;
-      requestId?: string;
-      stage?: string;
-    } = {},
-  ) {
-    super(message);
+export class TicketApiError extends ApiError {
+  constructor(diagnostic: ApiErrorDiagnostic, payload: unknown = null) {
+    super(diagnostic, payload, normalizeUserError(diagnostic).message);
     this.name = "TicketApiError";
-    Object.assign(this, options);
   }
 }
 
@@ -44,8 +42,23 @@ export function toTicketApiError(
   fallback = "Não foi possível concluir a operação.",
 ) {
   if (error instanceof TicketApiError) return error;
-  if (error instanceof Error) return new TicketApiError(error.message);
-  return new TicketApiError(fallback);
+
+  if (isApiError(error)) {
+    const diagnostic = apiErrorDiagnostic(error);
+    if (diagnostic) {
+      return new TicketApiError(diagnostic, error.payload);
+    }
+  }
+
+  return new TicketApiError(
+    {
+      status: 0,
+      code: "TICKET_CLIENT_ERROR",
+      category: "INFRASTRUCTURE",
+      retryable: false,
+    },
+    { fallback },
+  );
 }
 
 function pathSegment(value: number | string) {
@@ -57,45 +70,10 @@ function ticketsPath(organizationId: number | string) {
 }
 
 async function responseError(response: Response) {
-  let message = `A requisição falhou (${response.status}).`;
-  let code: string | undefined;
-  let requestId = response.headers.get("X-Request-Id") || undefined;
-  let stage: string | undefined;
-
-  try {
-    const payload = await response.json();
-    if (typeof payload?.error === "string") message = payload.error;
-    else if (typeof payload?.error?.message === "string") {
-      message = payload.error.message;
-    }
-    code = payload?.code || payload?.error?.code;
-    requestId = payload?.requestId || requestId;
-    stage = payload?.stage;
-  } catch {
-    // Mantém a mensagem HTTP segura.
-  }
-
-  return new TicketApiError(message, {
-    status: response.status,
-    code,
-    requestId,
-    stage,
-  });
-}
-
-async function requestJson<T>(url: string, options: RequestOptions = {}) {
-  const response = await fetch(url, {
-    credentials: "include",
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-  });
-
-  if (!response.ok) throw await responseError(response);
-  return (await response.json()) as T;
+  const parsed = await parseResponseJson(response);
+  return toTicketApiError(
+    buildApiError(response, parsed.valid ? parsed.data : null),
+  );
 }
 
 export function listTickets(
@@ -216,7 +194,7 @@ function uploadAttachmentChunk(
 
     xhr.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable) return;
-      options.onStage?.("uploading");
+      options.onPhase?.("uploading");
       options.onProgress?.(
         Math.max(
           0,
@@ -230,17 +208,15 @@ function uploadAttachmentChunk(
 
     xhr.upload.addEventListener("load", () => {
       if (offset + chunk.size >= totalSize) {
-        options.onStage?.("finalizing");
+        options.onPhase?.("finalizing");
       }
     });
 
     xhr.addEventListener("load", () => {
       cleanup();
       let payload: Partial<UploadChunkResponse> & {
-        error?: string | { message?: string };
+        error?: unknown;
         code?: string;
-        requestId?: string;
-        stage?: string;
       } = {};
       try {
         payload = JSON.parse(xhr.responseText || "{}");
@@ -257,30 +233,29 @@ function uploadAttachmentChunk(
         return;
       }
 
-      const message =
-        typeof payload.error === "string"
-          ? payload.error
-          : payload.error?.message ||
-            "Não foi possível enviar uma parte do arquivo.";
-      const requestId =
-        payload.requestId || xhr.getResponseHeader("X-Request-Id") || undefined;
       reject(
-        new TicketApiError(message, {
-          status: xhr.status,
-          code: payload.code,
-          requestId,
-          stage: payload.stage,
-        }),
+        toTicketApiError(
+          buildHttpApiError(
+            xhr.status,
+            payload,
+            {},
+            getXhrErrorReference(xhr),
+          ),
+        ),
       );
     });
 
     xhr.addEventListener("error", () => {
       cleanup();
       reject(
-        new TicketApiError("Falha de rede durante o envio do arquivo.", {
-          code: "TICKET_UPLOAD_NETWORK_ERROR",
-          stage: "attachment.chunk",
-        }),
+        toTicketApiError(
+          buildClientApiError({
+            status: 503,
+            code: "TICKET_UPLOAD_NETWORK_ERROR",
+            category: "INFRASTRUCTURE",
+            retryable: true,
+          }),
+        ),
       );
     });
 
@@ -322,7 +297,7 @@ export async function uploadTicketAttachment(
   try {
     while (offset < file.size) {
       const end = Math.min(file.size, offset + chunkSize);
-      options.onStage?.("uploading");
+      options.onPhase?.("uploading");
       const response = await uploadAttachmentChunk(
         `${basePath}/${pathSegment(attachmentId)}`,
         file.slice(offset, end),
