@@ -111,11 +111,14 @@ function createFakeEnv(initialRows, { columns = STORAGE_COLUMNS } = {}) {
 
           const status = String(row.storage_status || "").trim().toUpperCase();
           const checkedAt = String(row.storage_checked_at || "");
+          const checkedAtMs = Date.parse(checkedAt);
+          const staleBeforeMs = Date.parse(staleBefore);
           const canClaim =
             !status ||
             status !== "PENDING" ||
             !checkedAt ||
-            checkedAt < staleBefore;
+            !Number.isFinite(checkedAtMs) ||
+            checkedAtMs < staleBeforeMs;
 
           if (!canClaim) return null;
 
