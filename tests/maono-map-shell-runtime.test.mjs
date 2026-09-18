@@ -24,6 +24,7 @@ const [
   loadDataModalFactory,
   mapManagementPage,
   mapManagementCss,
+  preparedMapDestination,
   layoutDebug,
   backButton,
   mapPanelProvider,
@@ -47,6 +48,7 @@ const [
   source("factories/load-data-modal.ts"),
   source("map-panel/MapManagementPage.tsx"),
   source("map-panel/map-management-page.css"),
+  source("map-panel/prepare-project-map-destination.ts"),
   source("components/maono-map-shell/map-layout-debug.ts"),
   source("components/back-to-projects-button.tsx"),
   source("map-panel/MapPanelProvider.tsx"),
@@ -113,35 +115,39 @@ test("modal nativo de dados não é renderizado durante a hidratação", () => {
 });
 
 test("rota manage segue defaultPanel e não considera create", () => {
-  assert.match(mapManagementPage, /context\.defaultPanel === "editor"/);
-  assert.match(mapManagementPage, /context\.defaultPanel === "viewer"/);
-
-  const destinationStart = mapManagementPage.indexOf("const destination =");
-  const destinationEnd = mapManagementPage.indexOf(
-    "if (!destination)",
-    destinationStart,
+  assert.match(
+    mapManagementPage,
+    /prepareProjectMapDestination\([\s\S]*projectSlug/,
   );
-  assert.ok(destinationStart >= 0 && destinationEnd > destinationStart);
-
-  const destinationBlock = mapManagementPage.slice(
-    destinationStart,
-    destinationEnd,
+  assert.match(mapManagementPage, /\{ replace: true \}/);
+  assert.match(
+    preparedMapDestination,
+    /context\.defaultPanel === "editor"[\s\S]*context\.defaultPanel === "viewer"/,
+  );
+  assert.match(
+    preparedMapDestination,
+    /context\.assignedMode === "editor"[\s\S]*context\.assignedMode === "viewer"/,
+  );
+  assert.match(
+    preparedMapDestination,
+    /context\.availablePanels\[mode\]\.allowed/,
   );
   assert.doesNotMatch(
-    destinationBlock,
-    /availablePanels\.(?:editor|viewer)\.allowed/,
+    preparedMapDestination,
+    /availablePanels\.create\.allowed/,
   );
-  assert.doesNotMatch(mapManagementPage, /availablePanels\.create\.allowed/);
-  assert.match(mapManagementPage, /return <MapRedirectLoader \/>/);
-  assert.match(mapManagementPage, /\{ replace: true \}/);
+  assert.doesNotMatch(mapManagementPage, /MapRedirectLoader/);
   assert.doesNotMatch(mapManagementPage, /Abrir editor/);
   assert.doesNotMatch(mapManagementPage, /Abrir visualizador/);
   assert.doesNotMatch(mapManagementPage, /Gerenciar mapa/);
-  assert.doesNotMatch(mapManagementPage, /Escolha como deseja abrir este projeto/);
-  assert.match(mapManagementCss, /\.maono-map-management__spinner/);
-  assert.match(mapManagementCss, /border-top-color:\s*#c5a059/i);
-  assert.match(mapManagementCss, /height:\s*76px/);
-  assert.match(mapManagementCss, /width:\s*76px/);
+  assert.doesNotMatch(
+    mapManagementPage,
+    /Escolha como deseja abrir este projeto/,
+  );
+  assert.doesNotMatch(
+    mapManagementCss,
+    /\.maono-map-management__spinner/,
+  );
 });
 
 test("create de projeto existente é somente redirect de compatibilidade", () => {
