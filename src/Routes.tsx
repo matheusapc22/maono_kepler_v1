@@ -4,10 +4,10 @@ import { Navigate, Routes, Route, useLocation, useParams } from "react-router";
 
 import { normalizeRole } from "./access-control/roles";
 import { useSession } from "./auth/session";
+import { LoadingOverlay } from "./components/loading";
 import {
   AdminPageSkeleton,
   ProjectsPageSkeleton,
-  Skeleton,
 } from "./components/loading/Skeleton";
 import {
   getCloudProvider,
@@ -30,23 +30,19 @@ const ChangeRequestReviewPage = lazy(
   () => import("./pages/Kepler/change-requests/ChangeRequestReviewPage"),
 );
 
-const RouteLoading: React.FC = () => (
-  <main className="mm-loading-screen" aria-busy="true">
-    <div className="mm-skeleton-stack" style={{ width: "min(360px, 82vw)" }}>
-      <Skeleton width="58%" height={24} />
-      <Skeleton width="100%" height={12} />
-      <Skeleton width="82%" height={12} />
-    </div>
-    <span className="mm-sr-only" role="status">
-      Carregando página.
-    </span>
-  </main>
+const RouteSuspenseFallback: React.FC = () => (
+  <LoadingOverlay
+    active
+    scope="viewport"
+    loaderSize="page"
+    accessibleLabel="Carregando página"
+  />
 );
 
 const WithSuspense: React.FC<{
   children: React.ReactNode;
   fallback?: React.ReactNode;
-}> = ({ children, fallback = <RouteLoading /> }) => (
+}> = ({ children, fallback = <RouteSuspenseFallback /> }) => (
   <Suspense fallback={fallback}>{children}</Suspense>
 );
 
@@ -211,7 +207,11 @@ const AppRoutes: React.FC = () => {
 
       <Route
         path="/projects/:projectSlug/requests"
-        element={<WithSuspense><EditorRequestInboxPage /></WithSuspense>}
+        element={
+          <WithSuspense>
+            <EditorRequestInboxPage />
+          </WithSuspense>
+        }
       />
 
       <Route
@@ -251,10 +251,38 @@ const AppRoutes: React.FC = () => {
 
       <Route path="/map" element={<Navigate to="/maps/new/create" replace />} />
 
-      <Route path="(:id)" element={<KeplerApp />} />
-      <Route path="map/:provider" element={<KeplerApp />} />
-      <Route path="demo/map" element={<KeplerApp />} />
-      <Route path="demo/map/:provider" element={<KeplerApp />} />
+      <Route
+        path="(:id)"
+        element={
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
+        }
+      />
+      <Route
+        path="map/:provider"
+        element={
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
+        }
+      />
+      <Route
+        path="demo/map"
+        element={
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
+        }
+      />
+      <Route
+        path="demo/map/:provider"
+        element={
+          <WithSuspense>
+            <KeplerApp />
+          </WithSuspense>
+        }
+      />
 
       <Route path="*" element={<NotFound />} />
     </Routes>

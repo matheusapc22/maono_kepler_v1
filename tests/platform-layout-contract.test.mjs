@@ -40,7 +40,6 @@ test("plataforma usa uma única referência dinâmica de viewport", () => {
     ".maono-login-page",
     ".mm-projects-page",
     ".mm-projects-layout",
-    ".mm-loading-screen",
     ".admin-page",
     ".maono-admin-page",
     ".maono-map-gate",
@@ -61,6 +60,8 @@ test("boot inicial usa a mesma estratégia 100vh com upgrade para 100dvh", () =>
     boot,
     /\.mm-boot-screen\s*\{[\s\S]*min-height:\s*var\(--mm-boot-viewport-height\)/,
   );
+  assert.match(boot, /\.mm-boot-loader\s*\{[\s\S]*width:\s*var\(--mm-boot-loader-size\)/);
+  assert.match(boot, /\.mm-boot-loader__ring\s*\{[\s\S]*conic-gradient/);
 });
 
 test("painel é overlay opaco e mantém a barreira visual da PR 106", () => {
