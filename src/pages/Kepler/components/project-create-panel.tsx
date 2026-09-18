@@ -371,17 +371,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
 
               <ol className="mt-4 grid gap-3">
                 {STEPS.map((step, index) => {
-                  const completed =
-                    phase === "success" ||
-                    (phase !== "error" &&
-                      activeIndex >= 0 &&
-                      index < activeIndex);
-                  const active =
-                    phase !== "success" &&
-                    index === activeIndex;
-                  const failed =
-                    phase === "error" &&
-                    index === activeIndex;
+                  const failed = index === activeIndex;
 
                   return (
                     <li
@@ -392,24 +382,18 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
                         aria-hidden="true"
                         className={[
                           "grid h-7 w-7 flex-none place-items-center rounded-full border text-xs font-black",
-                          completed
-                            ? "border-emerald-300 bg-emerald-500 text-slate-950"
-                            : failed
-                              ? "border-red-300 bg-red-900 text-red-100"
-                              : active
-                                ? "border-emerald-300 bg-emerald-950 text-emerald-200"
-                                : "border-white/20 bg-slate-950 text-slate-400",
+                          failed
+                            ? "border-red-300 bg-red-900 text-red-100"
+                            : "border-white/20 bg-slate-950 text-slate-400",
                         ].join(" ")}
                       >
-                        {completed ? "✓" : failed ? "!" : index + 1}
+                        {failed ? "!" : index + 1}
                       </span>
                       <span
                         className={
-                          completed || active
-                            ? "font-bold text-white"
-                            : failed
-                              ? "font-bold text-red-100"
-                              : "text-slate-400"
+                          failed
+                            ? "font-bold text-red-100"
+                            : "text-slate-400"
                         }
                       >
                         {step.label}
