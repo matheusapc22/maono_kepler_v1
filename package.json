@@ -40,7 +40,8 @@
     "test:macro-c-gate": "node scripts/macro-c-gate.mjs",
     "test:organization-storage": "node --test tests/organization-storage-invariants.test.mjs tests/organization-storage-wiring.test.mjs",
     "test:organization-lifecycle": "node --test tests/organization-lifecycle.test.mjs tests/organization-lifecycle-wiring.test.mjs",
-    "test:organization-readiness": "node --test tests/organization-storage-readiness.test.mjs tests/organization-storage-readiness-wiring.test.mjs tests/organization-storage-recovery.test.mjs"
+    "test:organization-readiness": "node --test tests/organization-storage-readiness.test.mjs tests/organization-storage-readiness-wiring.test.mjs tests/organization-storage-recovery.test.mjs",
+    "test:organization-drift": "node --test tests/organization-storage-drift.test.mjs tests/organization-storage-drift-wiring.test.mjs tests/organization-storage-recovery-operator.test.mjs"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

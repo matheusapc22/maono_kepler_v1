@@ -51,3 +51,33 @@ Definir `MAONO_STORAGE_RECOVERY_KILL_SWITCH=true`. O handler retorna antes do ac
 ## Limites de escopo
 
 A PRH-06 não ativa o cron em Production automaticamente, não executa migration e não toca no rollout de Change Requests #147/#149/#150/#151 ou migrations 0021/0022/0023.
+
+
+## Extensão PRH-07 — ativação e physical drift
+
+A PRH-07 adiciona o operador `Organization storage recovery operator` e o inventário D1 × Dropbox.
+
+### Migration obrigatória
+
+Os modos `deploy_dry_run` e `deploy_apply` dependem de `migrations/0009_organization_storage_invariant.sql` aplicada no D1 alvo. O operador exige a confirmação literal:
+
+`MIGRATION_0009_APPLIED_TO_TARGET_D1`
+
+Build verde, Preview verde ou merge não substituem essa confirmação/evidência.
+
+### Operador
+
+Modos:
+
+- `validate`: apenas valida código/testes;
+- `deploy_disabled`: publica baseline disabled;
+- `deploy_dry_run`: exige migration 0009 confirmada;
+- `deploy_apply`: exige migration 0009 confirmada e secrets Dropbox.
+
+O workflow sempre publica uma configuração disabled antes de um modo mutável.
+
+### Inventário e backfill
+
+Consulte `docs/ops/organization-storage-drift-backfill.md`.
+
+O inventário é report-only por padrão. Orphans e paths legados nunca são adotados, renomeados ou excluídos automaticamente.
