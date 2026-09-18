@@ -8,6 +8,11 @@ import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import { useSession } from "../../../auth/session";
 import {
+  buildApiError,
+  parseResponseJson,
+} from "../../../lib/api-transport";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
+import {
   captureProjectThumbnail,
   serializeProjectConfig,
 } from "../thumbnail/capture-thumbnail";
@@ -95,94 +100,35 @@ type ProjectWriteResponse = {
 };
 
 async function readJsonResponse(response: Response): Promise<any> {
-  const text = await response.text();
+  const parsed = await parseResponseJson(response);
 
-  if (!text.trim()) {
-    return null;
+  if (parsed.valid) {
+    return parsed.data;
   }
 
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {
-      ok: false,
-      error: {
-        message: "A API retornou uma resposta inesperada.",
-        code: "INVALID_JSON_RESPONSE",
-        category: "INFRASTRUCTURE",
-        retryable: true,
-        correlationId: response.headers.get("X-Correlation-Id") || undefined,
-      },
-    };
-  }
+  return {
+    ok: false,
+    error: {
+      code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
+      category: "INFRASTRUCTURE",
+      retryable: true,
+    },
+  };
 }
 
-function getBackendErrorMessage(data: any) {
-  const message = data?.error?.message || data?.message;
-  return typeof message === "string" ? message.trim() : "";
-}
-
-function getErrorReference(data: any) {
-  const code = typeof data?.error?.code === "string" ? data.error.code.trim() : "";
-  const category = typeof data?.error?.category === "string" ? data.error.category.trim() : "";
-  const correlationId =
-    typeof data?.error?.correlationId === "string"
-      ? data.error.correlationId.trim()
-      : "";
-  const parts = [category, code].filter(Boolean).join("/");
-  if (!parts && !correlationId) return "";
-  return ` (${parts || "ERRO"}${correlationId ? ` • ID ${correlationId}` : ""})`;
-}
-
-function getSaveErrorMessage(response: Response, data: any) {
-  const reference = getErrorReference(data);
-  const category = data?.error?.category as ErrorCategory | undefined;
-  const retryable = data?.error?.retryable === true;
-
-  if (response.status === 401) {
-    return `Sua sessão expirou. Entre novamente para salvar o projeto.${reference}`;
-  }
-
-  if (response.status === 403) {
-    return `Você não tem permissão para salvar alterações permanentes neste projeto.${reference}`;
-  }
-
-  if (response.status === 409) {
-    return `O projeto foi alterado em outro lugar. Recarregue o mapa antes de salvar novamente.${reference}`;
-  }
-
-  if (response.status === 404) {
-    return `Projeto não encontrado ou sem permissão de acesso.${reference}`;
-  }
-
-  if (response.status >= 500) {
-    if (category === "STORAGE") {
-      return `${retryable ? "O armazenamento está temporariamente indisponível. Tente novamente em alguns instantes." : "O armazenamento recusou o salvamento e requer verificação."}${reference}`;
-    }
-    if (category === "INFRASTRUCTURE") {
-      return `${retryable ? "A infraestrutura está temporariamente indisponível. Tente novamente em alguns instantes." : "A infraestrutura não conseguiu concluir o salvamento."}${reference}`;
-    }
-    if (category === "MAP_CONFIG") {
-      return `${getBackendErrorMessage(data) || "A configuração do mapa não pôde ser salva."}${reference}`;
-    }
-    return `${getBackendErrorMessage(data) || "Não foi possível salvar agora."}${reference}`;
-  }
-
-  return `${getBackendErrorMessage(data) || "Não foi possível salvar o projeto."}${reference}`;
+function userErrorMessage(error: unknown) {
+  const presentation = normalizeUserError(error);
+  return presentation.supportReference
+    ? `${presentation.message} Referência: ${presentation.supportReference}.`
+    : presentation.message;
 }
 
 function getSaveFailureMessage(error: unknown) {
-  const message = error instanceof Error ? error.message.trim() : "";
+  return userErrorMessage(error);
+}
 
-  if (!message) {
-    return "Erro ao salvar projeto.";
-  }
-
-  if (/failed to fetch|networkerror|load failed/i.test(message)) {
-    return "Não foi possível conectar à API para salvar o projeto. (INFRASTRUCTURE/INFRASTRUCTURE_NETWORK_FAILURE)";
-  }
-
-  return message;
+function getResponseFailureMessage(response: Response, data: unknown) {
+  return userErrorMessage(buildApiError(response, data));
 }
 
 function emitSaveTelemetry(
@@ -684,7 +630,7 @@ const MaonoSaveButton: React.FC = () => {
             expectedRevision: expectedConfigRevision,
           });
         }
-        throw new Error(getSaveErrorMessage(response, data));
+        throw buildApiError(response, data);
       }
 
       const revision = resolveConfigRevision(data);
@@ -886,7 +832,7 @@ const MaonoSaveButton: React.FC = () => {
         setCreationFailedStage(
           normalizeCreationStage(error.stage),
         );
-        const failure = getCreationResponseError(
+        const failure = getResponseFailureMessage(
           error.response,
           data,
         );
