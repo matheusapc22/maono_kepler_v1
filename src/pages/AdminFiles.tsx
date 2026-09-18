@@ -316,7 +316,7 @@ const AdminFilesPage: React.FC = () => {
   useEffect(() => {
     if (!loading && authenticated && canAccessAdmin) {
       refreshOrganizations().catch((err) =>
-        setError(err instanceof Error ? err.message : "Erro ao carregar organizações."),
+        setError(normalizeUserError(err).message),
       );
     }
 
