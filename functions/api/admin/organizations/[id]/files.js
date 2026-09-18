@@ -1,5 +1,6 @@
 import {
   errorResponse,
+  errorResponseFromError,
   jsonResponse,
   methodNotAllowed,
 } from "../../../../_lib/http.js";
@@ -10,6 +11,11 @@ import {
   uploadDropboxTextFile,
 } from "../../../../_lib/dropbox.js";
 import { logAudit } from "../../../../_lib/projects.js";
+import { getOrCreateCorrelationId } from "../../../../_lib/maono-error.js";
+import {
+  publicOrganizationStorageReadiness,
+  requireOrganizationStorageReady,
+} from "../../../../_lib/organization-storage-readiness.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -110,7 +116,10 @@ async function getOrganization(env, organizationId) {
       name,
       slug,
       dropbox_root_path,
-      active
+      active,
+      storage_status,
+      storage_error,
+      storage_checked_at
      FROM organizations
      WHERE id = ?
      LIMIT 1`,
@@ -215,6 +224,7 @@ async function upsertOrganizationFile(env, organization, file, requestedName) {
 
 export async function onRequest(context) {
   const { request, env, params } = context;
+  const correlationId = getOrCreateCorrelationId(request);
 
   try {
     if (request.method !== "GET" && request.method !== "POST") {
@@ -258,6 +268,13 @@ export async function onRequest(context) {
       );
     }
 
+    const storage = requireOrganizationStorageReady(organization, {
+      operation:
+        request.method === "POST"
+          ? "admin.organization_files.upload.readiness"
+          : "admin.organization_files.list.readiness",
+    });
+
     if (request.method === "GET") {
       const files = await listOrganizationFiles(env, organizationId);
       const dropbox = await listDropboxFolder(
@@ -272,6 +289,7 @@ export async function onRequest(context) {
           name: organization.name,
           slug: organization.slug,
           active: Boolean(organization.active),
+          storage: publicOrganizationStorageReadiness(storage),
         },
         files: files.map(publicOrganizationFile),
         dropboxEntries: (dropbox.entries || []).map(publicAdminDropboxEntry),
@@ -311,24 +329,30 @@ export async function onRequest(context) {
           fileName: savedFile.file_name,
           fileType: savedFile.file_type,
           sizeBytes: savedFile.size_bytes,
+          correlationId,
         },
       });
 
       return jsonResponse(
         {
           ok: true,
+          storage: publicOrganizationStorageReadiness(storage),
           file: publicOrganizationFile(savedFile),
         },
-        { status: 201 },
+        {
+          status: 201,
+          headers: { "X-Correlation-Id": correlationId },
+        },
       );
     }
 
     return methodNotAllowed(["GET", "POST"]);
   } catch (error) {
-    return errorResponse(
-      error.message,
-      error.status || 500,
-      error.code || "ADMIN_ORGANIZATION_FILES_ERROR",
-    );
+    return errorResponseFromError(error, {
+      correlationId,
+      defaultCode: "ADMIN_ORGANIZATION_FILES_ERROR",
+      publicMessage:
+        error?.publicMessage || "Não foi possível acessar os arquivos da organização.",
+    });
   }
 }

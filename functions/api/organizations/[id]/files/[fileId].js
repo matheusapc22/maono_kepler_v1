@@ -17,6 +17,9 @@ import {
   recordOrganizationFileAudit,
 } from "../../../../_lib/organization-files.js";
 import { requireProjectGeoJsonAccess } from "../../../../_lib/geojson-access.js";
+import {
+  requireOrganizationStorageReady,
+} from "../../../../_lib/organization-storage-readiness.js";
 
 export async function onRequest(context) {
   if (context.request.method === "DELETE") return onRequestDelete(context);
@@ -54,7 +57,7 @@ export async function onRequestDelete({ env, request, params }) {
       },
     );
 
-    await getOrganizationOrThrow(env, organizationId);
+    const organization = await getOrganizationOrThrow(env, organizationId);
     const file = await findRowByIdAndOrganization(
       env,
       "organization_files",
@@ -81,7 +84,12 @@ export async function onRequestDelete({ env, request, params }) {
     );
 
     const dropboxPath = getFileDropboxPath(file);
-    if (dropboxPath) await deleteOrganizationBinary(env, dropboxPath);
+    if (dropboxPath) {
+      requireOrganizationStorageReady(organization, {
+        operation: "document.delete.readiness",
+      });
+      await deleteOrganizationBinary(env, dropboxPath);
+    }
 
     await updateRow(env, "organization_files", fileId, {
       status: "DELETED",

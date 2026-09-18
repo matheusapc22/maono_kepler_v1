@@ -16,6 +16,7 @@ const MAX_REPAIR_BATCH = 500;
 // /projects, /projects/{slug} and /documents, so keep a generous lease margin
 // without requiring a new schema column.
 export const ORGANIZATION_STORAGE_CLAIM_TTL_MS = 120_000;
+export const ORGANIZATION_STORAGE_ERROR_BACKOFF_MS = 15 * 60 * 1000;
 
 export const ORGANIZATION_STORAGE_STATUS = Object.freeze({
   PENDING: "PENDING",
@@ -532,20 +533,84 @@ function normalizeAfterId(afterId) {
     : 0;
 }
 
+function repairCandidateReason(organization, {
+  nowMs,
+  claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
+  errorBackoffMs = 0,
+} = {}) {
+  const path = normalizeDropboxFolderPath(
+    organization?.dropbox_root_path,
+  );
+  const status = normalizeStorageStatus(organization?.storage_status);
+  const checkedAt = Date.parse(
+    String(organization?.storage_checked_at || ""),
+  );
+
+  if (
+    !path ||
+    path === PROJECTS_ROOT ||
+    !path.startsWith(`${PROJECTS_ROOT}/`)
+  ) {
+    return "PATH_INVALID";
+  }
+
+  if (!status) return "STATE_INVALID";
+  if (status === ORGANIZATION_STORAGE_STATUS.DISABLED) {
+    return "ACTIVE_DISABLED";
+  }
+
+  if (status === ORGANIZATION_STORAGE_STATUS.PENDING) {
+    const stale =
+      !Number.isFinite(checkedAt) ||
+      checkedAt <= nowMs - Math.max(1, Number(claimTtlMs) || 1);
+    return stale ? "PENDING_EXPIRED" : null;
+  }
+
+  if (status === ORGANIZATION_STORAGE_STATUS.ERROR) {
+    const retryAllowed =
+      Number(errorBackoffMs) <= 0 ||
+      !Number.isFinite(checkedAt) ||
+      checkedAt <= nowMs - Math.max(0, Number(errorBackoffMs) || 0);
+    return retryAllowed ? "ERROR_RETRY" : null;
+  }
+
+  if (
+    status === ORGANIZATION_STORAGE_STATUS.READY &&
+    String(organization?.storage_error || "").trim()
+  ) {
+    return "READY_WITH_ERROR";
+  }
+
+  return null;
+}
+
 async function listRepairCandidates(
   env,
   {
     limit,
     afterId,
     staleBefore,
+    errorRetryBefore,
+    errorBackoffEnabled,
+    fairOrder,
   },
 ) {
+  const orderSql = fairOrder
+    ? `ORDER BY
+         CASE
+           WHEN storage_checked_at IS NULL
+             OR julianday(storage_checked_at) IS NULL
+           THEN 0
+           ELSE julianday(storage_checked_at)
+         END ASC,
+         id ASC`
+    : "ORDER BY id ASC";
   const result = await getDb(env)
     .prepare(
       `SELECT *
        FROM organizations
        WHERE active = 1
-         AND id > ?
+         AND (? = 1 OR id > ?)
          AND (
            dropbox_root_path IS NULL
            OR TRIM(dropbox_root_path) = ''
@@ -554,13 +619,22 @@ async function listRepairCandidates(
            OR storage_status IS NULL
            OR TRIM(storage_status) = ''
            OR UPPER(TRIM(storage_status)) NOT IN ('READY', 'PENDING', 'ERROR', 'DISABLED')
-           OR UPPER(TRIM(storage_status)) IN ('ERROR', 'DISABLED')
+           OR UPPER(TRIM(storage_status)) = 'DISABLED'
+           OR (
+             UPPER(TRIM(storage_status)) = 'ERROR'
+             AND (
+               ? = 0
+               OR storage_checked_at IS NULL
+               OR julianday(storage_checked_at) IS NULL
+               OR julianday(storage_checked_at) <= julianday(?)
+             )
+           )
            OR (
              UPPER(TRIM(storage_status)) = 'PENDING'
              AND (
                storage_checked_at IS NULL
                OR julianday(storage_checked_at) IS NULL
-               OR julianday(storage_checked_at) < julianday(?)
+               OR julianday(storage_checked_at) <= julianday(?)
              )
            )
            OR (
@@ -569,10 +643,17 @@ async function listRepairCandidates(
              AND TRIM(storage_error) <> ''
            )
          )
-       ORDER BY id ASC
+       ${orderSql}
        LIMIT ?`,
     )
-    .bind(afterId, staleBefore, limit + 1)
+    .bind(
+      fairOrder ? 1 : 0,
+      afterId,
+      errorBackoffEnabled ? 1 : 0,
+      errorRetryBefore,
+      staleBefore,
+      limit + 1,
+    )
     .all();
 
   return result?.results || [];
@@ -586,6 +667,9 @@ export async function repairActiveOrganizationStorages(
     correlationId = null,
     nowFn = Date.now,
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
+    errorBackoffMs = 0,
+    fairOrder = false,
+    dryRun = false,
     ensureFolder = ensureDropboxFolder,
   } = {},
 ) {
@@ -600,11 +684,21 @@ export async function repairActiveOrganizationStorages(
   const staleBefore = isoAt(
     startedAtMs - Math.max(1, Number(claimTtlMs) || 1),
   );
+  const safeErrorBackoffMs = Math.max(
+    0,
+    Number(errorBackoffMs) || 0,
+  );
+  const errorRetryBefore = isoAt(
+    startedAtMs - safeErrorBackoffMs,
+  );
 
   const candidateRows = await listRepairCandidates(env, {
     limit: safeLimit,
     afterId: safeAfterId,
     staleBefore,
+    errorRetryBefore,
+    errorBackoffEnabled: safeErrorBackoffMs > 0,
+    fairOrder: Boolean(fairOrder),
   });
   const hasMore = candidateRows.length > safeLimit;
   const organizations = candidateRows.slice(0, safeLimit);
@@ -613,7 +707,23 @@ export async function repairActiveOrganizationStorages(
   const failed = [];
   const skipped = [];
 
-  for (const organization of organizations) {
+  if (dryRun) {
+    for (const organization of organizations) {
+      skipped.push({
+        organizationId: organization.id,
+        status:
+          normalizeStorageStatus(organization.storage_status) ||
+          ORGANIZATION_STORAGE_STATUS.PENDING,
+        reason:
+          repairCandidateReason(organization, {
+            nowMs: startedAtMs,
+            claimTtlMs,
+            errorBackoffMs: safeErrorBackoffMs,
+          }) || "STATE_CHANGED",
+        correlationId: operationCorrelationId,
+      });
+    }
+  } else for (const organization of organizations) {
     try {
       const storage = await ensureOrganizationStorage(env, organization, {
         correlationId: operationCorrelationId,
@@ -664,8 +774,12 @@ export async function repairActiveOrganizationStorages(
     ready: repaired.length,
     failed: failed.length,
     skipped: skipped.length,
+    dryRun: Boolean(dryRun),
+    fairOrder: Boolean(fairOrder),
+    errorBackoffMs: safeErrorBackoffMs,
     hasMore,
-    nextCursor: hasMore ? lastProcessedId : null,
+    nextCursor:
+      !fairOrder && hasMore ? lastProcessedId : null,
     organizations: [...repaired, ...failed, ...skipped],
   };
 }
@@ -677,4 +791,5 @@ export const __organizationStorageTesting = Object.freeze({
   storageCauseRetryable,
   normalizeLimit,
   normalizeAfterId,
+  repairCandidateReason,
 });

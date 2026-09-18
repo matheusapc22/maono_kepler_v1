@@ -15,6 +15,9 @@ import {
   recordOrganizationFileAudit,
 } from "../../../../../_lib/organization-files.js";
 import { requireProjectGeoJsonAccess } from "../../../../../_lib/geojson-access.js";
+import {
+  requireOrganizationStorageReady,
+} from "../../../../../_lib/organization-storage-readiness.js";
 
 export async function onRequest(context) {
   if (context.request.method === "GET") return onRequestGet(context);
@@ -52,7 +55,7 @@ export async function onRequestGet({ env, request, params }) {
       },
     );
 
-    await getOrganizationOrThrow(env, organizationId);
+    const organization = await getOrganizationOrThrow(env, organizationId);
     const file = await findRowByIdAndOrganization(
       env,
       "organization_files",
@@ -77,6 +80,10 @@ export async function onRequestGet({ env, request, params }) {
       file,
       { surface: "document.download", auditAllowed: true },
     );
+
+    requireOrganizationStorageReady(organization, {
+      operation: "document.download.readiness",
+    });
 
     const dropboxPath = getFileDropboxPath(file);
     if (!dropboxPath) {

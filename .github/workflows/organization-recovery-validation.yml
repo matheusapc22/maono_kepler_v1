@@ -1,0 +1,81 @@
+name: Organization recovery validation
+
+on:
+  push:
+    branches:
+      - "feat/prh-06-*"
+    paths:
+      - "functions/_lib/organization-storage.js"
+      - "functions/_lib/organization-storage-readiness.js"
+      - "functions/_lib/ticket-center.js"
+      - "functions/_lib/organization-files.js"
+      - "functions/api/organizations/**"
+      - "functions/api/admin/organizations/**"
+      - "workers/organization-storage-recovery.js"
+      - "wrangler.organization-storage-recovery.toml.example"
+      - "docs/ops/organization-storage-recovery.md"
+      - "docs/architecture/organization-storage-readiness-boundaries.md"
+      - "tests/organization-storage*.test.mjs"
+      - "tests/ticket-center.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-recovery-validation.yml"
+  pull_request:
+    branches:
+      - mano_kepler_v1
+    paths:
+      - "functions/_lib/organization-storage.js"
+      - "functions/_lib/organization-storage-readiness.js"
+      - "functions/_lib/ticket-center.js"
+      - "functions/_lib/organization-files.js"
+      - "functions/api/organizations/**"
+      - "functions/api/admin/organizations/**"
+      - "workers/organization-storage-recovery.js"
+      - "wrangler.organization-storage-recovery.toml.example"
+      - "docs/ops/organization-storage-recovery.md"
+      - "docs/architecture/organization-storage-readiness-boundaries.md"
+      - "tests/organization-storage*.test.mjs"
+      - "tests/ticket-center.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-recovery-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Organization readiness and recovery suite
+        run: npm run test:organization-readiness
+
+      - name: Organization storage regression
+        run: npm run test:organization-storage
+
+      - name: Organization lifecycle regression
+        run: npm run test:organization-lifecycle
+
+      - name: Ticket attachment regression
+        run: node --test tests/ticket-center.test.mjs
+
+      - name: Dropbox resilience regression
+        run: npm run test:dropbox-resilience
+
+      - name: Product reliability UX ratchet
+        run: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
+
+      - name: Build application
+        run: npm run build

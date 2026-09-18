@@ -39,6 +39,15 @@ function numericQueryParam(url, name, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function booleanQueryParam(url, name, fallback = false) {
+  const raw = url.searchParams.get(name);
+  if (raw === null || raw === "") return fallback;
+
+  return ["1", "true", "yes", "on"].includes(
+    String(raw).trim().toLowerCase(),
+  );
+}
+
 export async function onRequest({ env, request }) {
   const correlationId = getOrCreateCorrelationId(request);
 
@@ -59,10 +68,19 @@ export async function onRequest({ env, request }) {
       "afterId",
       numericQueryParam(url, "cursor", 0),
     );
+    const dryRun = booleanQueryParam(url, "dryRun", false);
+    const fairOrder = booleanQueryParam(url, "fairOrder", false);
+    const errorBackoffSeconds = Math.max(
+      0,
+      numericQueryParam(url, "errorBackoffSeconds", 0),
+    );
     const result = await repairActiveOrganizationStorages(env, {
       limit,
       afterId,
       correlationId,
+      dryRun,
+      fairOrder,
+      errorBackoffMs: errorBackoffSeconds * 1000,
     });
 
     await recordAuditLog(env, {
@@ -70,13 +88,21 @@ export async function onRequest({ env, request }) {
       action: "admin.organizations.repair_storage",
       resourceType: "platform",
       resourceId: "organization_storage",
-      result: result.failed > 0 ? "partial" : "success",
+      result:
+        result.failed > 0
+          ? "partial"
+          : result.dryRun
+            ? "dry_run"
+            : "success",
       metadata: {
         correlationId,
         checked: result.checked,
         ready: result.ready,
         failed: result.failed,
         skipped: result.skipped,
+        dryRun: result.dryRun,
+        fairOrder: result.fairOrder,
+        errorBackoffMs: result.errorBackoffMs,
         hasMore: result.hasMore,
         nextCursor: result.nextCursor,
       },

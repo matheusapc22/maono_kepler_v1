@@ -11,8 +11,10 @@ import {
 } from "./organization-files.js";
 import {
   canonicalOrganizationRoot,
-  ensureOrganizationStorage,
 } from "./organization-storage.js";
+import {
+  requireOrganizationStorageReady,
+} from "./organization-storage-readiness.js";
 import {
   fileDownloadHeaders,
   getDb,
@@ -1351,10 +1353,10 @@ export async function initiateTicketAttachmentUpload(
   await assertAttachmentCapacity(env, organizationId, ticketId, upload.size);
 
   const organization = await getOrganizationOrThrow(env, organizationId);
-  const storage = await ensureOrganizationStorage(env, organization, {
-    provisionDocuments: false,
+  requireOrganizationStorageReady(organization, {
+    operation: "ticket.attachment.upload.readiness",
   });
-  const rootPath = `${storage.rootPath || canonicalOrganizationRoot(organization)}/tickets/${ticketId}/attachments`;
+  const rootPath = `${canonicalOrganizationRoot(organization)}/tickets/${ticketId}/attachments`;
   const storedName = buildStoredFileName(upload.originalName);
   const storageKey = organizationFileDropboxPath(rootPath, storedName);
   const timestamp = isoNow();
@@ -1653,10 +1655,10 @@ export async function createTicketAttachment(
   );
 
   const organization = await getOrganizationOrThrow(env, organizationId);
-  const storage = await ensureOrganizationStorage(env, organization, {
-    provisionDocuments: false,
+  requireOrganizationStorageReady(organization, {
+    operation: "ticket.attachment.upload.readiness",
   });
-  const rootPath = `${storage.rootPath || canonicalOrganizationRoot(organization)}/tickets/${ticketId}/attachments`;
+  const rootPath = `${canonicalOrganizationRoot(organization)}/tickets/${ticketId}/attachments`;
   const storedName = buildStoredFileName(upload.originalName);
   const storageKey = organizationFileDropboxPath(rootPath, storedName);
   const timestamp = isoNow();
@@ -1808,12 +1810,16 @@ export async function downloadTicketAttachment(
   attachmentId,
 ) {
   await getTicketOrThrow(env, organizationId, ticketId);
+  const organization = await getOrganizationOrThrow(env, organizationId);
   const attachment = await getTicketAttachmentOrThrow(
     env,
     organizationId,
     ticketId,
     attachmentId,
   );
+  requireOrganizationStorageReady(organization, {
+    operation: "ticket.attachment.download.readiness",
+  });
   const response = await downloadOrganizationBinary(env, attachment.storage_key);
 
   return {
@@ -1840,6 +1846,7 @@ export async function deleteTicketAttachment(
   request,
 ) {
   await getTicketOrThrow(env, organizationId, ticketId);
+  const organization = await getOrganizationOrThrow(env, organizationId);
   const attachment = await getTicketAttachmentRecordOrThrow(
     env,
     organizationId,
@@ -1849,6 +1856,9 @@ export async function deleteTicketAttachment(
   );
 
   if (attachment.status === "ACTIVE") {
+    requireOrganizationStorageReady(organization, {
+      operation: "ticket.attachment.delete.readiness",
+    });
     await deleteOrganizationBinary(env, attachment.storage_key);
   }
   await updateRow(env, "ticket_attachments", attachmentId, {
