@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { login } from "../../lib/api";
 import { useSession } from "../../hooks/useSession";
+import { normalizeUserError } from "../../lib/user-error-catalog";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ const LoginPage: React.FC = () => {
       await login(email, password);
       navigate("/projects", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao entrar.");
+      setError(normalizeUserError(err).message);
     } finally {
       setSubmitting(false);
     }
