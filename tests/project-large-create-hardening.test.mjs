@@ -59,7 +59,7 @@ function activeProject(slug = "qa-smoke-large-client", idempotent = false) {
   };
 }
 
-function createOptions({ idempotencyKey, fetchImpl, onStage = () => {} }) {
+function createOptions({ idempotencyKey, fetchImpl, onPhase = () => {} }) {
   const fixture = buildLargeCreateFixture({ targetMiB: 9 });
   return {
     attempt: beginClientSaveAttempt("create"),
@@ -70,7 +70,7 @@ function createOptions({ idempotencyKey, fetchImpl, onStage = () => {} }) {
     config: fixture.config,
     legacy: null,
     fetchImpl,
-    onStage,
+    onPhase,
   };
 }
 
@@ -119,7 +119,7 @@ test("CREATE grande executa POST metadata-first, PUT streaming e só conclui ap�
     createOptions({
       idempotencyKey,
       fetchImpl,
-      onStage: (stage) => stages.push(stage),
+      onPhase: (phase) => stages.push(phase),
     }),
   );
 
@@ -170,7 +170,7 @@ test("interrupção durante PUT mantém erro no estágio de arquivos e permite r
     executeProjectCreateFlow(createOptions({ idempotencyKey, fetchImpl: firstFetch })),
     (error) => {
       assert.ok(error instanceof ProjectCreateFlowError);
-      assert.equal(error.stage, "preparing_files");
+      assert.equal(error.phase, "preparing_files");
       assert.equal(error.data.error.code, "DROPBOX_TIMEOUT");
       assert.equal(error.data.error.retryable, true);
       return true;
