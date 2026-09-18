@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { TicketApiError, toTicketApiError } from "./tickets-api";
 
 type TicketErrorNoticeProps = {
@@ -34,7 +35,7 @@ function userMessage(error: TicketApiError) {
   if ((error.status || 0) >= 500) {
     return "Não foi possível concluir. Informe a referência exibida ao suporte.";
   }
-  return error.message;
+  return normalizeUserError(error).message;
 }
 
 export default function TicketErrorNotice({
@@ -43,16 +44,15 @@ export default function TicketErrorNotice({
   onRetry,
 }: TicketErrorNoticeProps) {
   const [copied, setCopied] = useState(false);
-  const apiError =
-    typeof error === "string"
-      ? new TicketApiError(error)
-      : toTicketApiError(error);
-  const message = userMessage(apiError);
+  const apiError = typeof error === "string" ? null : toTicketApiError(error);
+  const presentation = apiError ? normalizeUserError(apiError) : null;
+  const message = typeof error === "string" ? error : userMessage(apiError!);
+  const supportReference = presentation?.supportReference;
 
   async function copyReference() {
-    if (!apiError.requestId) return;
+    if (!supportReference) return;
     try {
-      await navigator.clipboard.writeText(apiError.requestId);
+      await navigator.clipboard.writeText(supportReference);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2_000);
     } catch {
@@ -67,17 +67,14 @@ export default function TicketErrorNotice({
     >
       <div>
         <strong>{message}</strong>
-        {apiError.message !== message ? (
-          <span>{apiError.message}</span>
-        ) : null}
-        {apiError.requestId ? (
+        {supportReference ? (
           <span className="ticket-error-reference">
-            Referência: <code>{apiError.requestId}</code>
+            Referência: <code>{supportReference}</code>
           </span>
         ) : null}
       </div>
       <div className="ticket-error-actions">
-        {apiError.requestId ? (
+        {supportReference ? (
           <button type="button" onClick={() => void copyReference()}>
             {copied ? "Referência copiada" : "Copiar referência"}
           </button>
