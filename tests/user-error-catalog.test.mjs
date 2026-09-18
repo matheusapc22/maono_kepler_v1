@@ -14,6 +14,30 @@ const documentsSource = await readFile(
   new URL("../src/pages/Projects/components/DocumentsSection.tsx", import.meta.url),
   "utf8",
 );
+const loginSource = await readFile(
+  new URL("../src/pages/Login/index.tsx", import.meta.url),
+  "utf8",
+);
+const ticketNoticeSource = await readFile(
+  new URL("../src/pages/Projects/components/TicketErrorNotice.tsx", import.meta.url),
+  "utf8",
+);
+const ticketsApiSource = await readFile(
+  new URL("../src/pages/Projects/components/tickets-api.ts", import.meta.url),
+  "utf8",
+);
+const adminFilesSource = await readFile(
+  new URL("../src/pages/AdminFiles.tsx", import.meta.url),
+  "utf8",
+);
+const adminUsersSource = await readFile(
+  new URL("../src/pages/Admin/components/AdminUserManagerLegacy.tsx", import.meta.url),
+  "utf8",
+);
+const saveButtonSource = await readFile(
+  new URL("../src/pages/Kepler/components/maono-save-button.tsx", import.meta.url),
+  "utf8",
+);
 
 test("catálogo cobre códigos e categorias prioritários sem provider na copy", () => {
   for (const code of [
@@ -74,4 +98,38 @@ test("Documentos normaliza erros sem expor diagnósticos técnicos", () => {
   assert.doesNotMatch(documentsSource, /`requisição \$\{/);
   assert.doesNotMatch(documentsSource, /Dropbox/i);
   assert.doesNotMatch(documentsSource, /Cloudflare D1/i);
+});
+
+
+test("PRH-03 normaliza Login e superfícies Admin/Ops", () => {
+  assert.match(loginSource, /normalizeUserError\(err\)\.message/);
+  assert.doesNotMatch(loginSource, /err\.message/);
+
+  for (const source of [adminFilesSource, adminUsersSource]) {
+    assert.match(source, /normalizeUserError/);
+    assert.doesNotMatch(source, /\b(?:err|error)\.message\b/);
+    assert.doesNotMatch(source, /response\.text\s*\(/);
+  }
+});
+
+test("Central de Chamados não expõe mensagem nem identificador operacional bruto", () => {
+  assert.match(ticketNoticeSource, /supportReference/);
+  assert.match(ticketNoticeSource, /normalizeUserError/);
+  assert.doesNotMatch(ticketNoticeSource, /apiError\.message/);
+  assert.doesNotMatch(ticketNoticeSource, /requestId/);
+
+  assert.match(ticketsApiSource, /buildHttpApiError/);
+  assert.match(ticketsApiSource, /requestJson/);
+  assert.doesNotMatch(ticketsApiSource, /payload\.error\.message/);
+  assert.doesNotMatch(ticketsApiSource, /\brequestId\b/);
+  assert.doesNotMatch(ticketsApiSource, /\bstage\b/);
+});
+
+test("salvamento de mapa usa contrato central sem propagar corpo ou mensagem técnica", () => {
+  assert.match(saveButtonSource, /buildApiError/);
+  assert.match(saveButtonSource, /normalizeUserError/);
+  assert.doesNotMatch(saveButtonSource, /response\.text\s*\(/);
+  assert.doesNotMatch(saveButtonSource, /error instanceof Error \? error\.message/);
+  assert.doesNotMatch(saveButtonSource, /getBackendErrorMessage/);
+  assert.doesNotMatch(saveButtonSource, /getErrorReference/);
 });
