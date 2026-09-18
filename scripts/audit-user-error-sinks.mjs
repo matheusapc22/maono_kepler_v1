@@ -84,8 +84,15 @@ export function classifySurface(relativePath) {
   if (
     file.startsWith("src/lib/") ||
     file.startsWith("src/auth/") ||
+    file === "src/pages/Kepler/actions.ts" ||
+    file === "src/pages/Kepler/save-observability.ts" ||
+    file === "src/pages/Kepler/project-create-flow.ts" ||
     file.includes("/observability/") ||
-    file.includes("/engine-adapter/")
+    file.includes("/engine-adapter/") ||
+    file.includes("/cloud-providers/") ||
+    file.includes("/reducers/") ||
+    file.includes("/thumbnail/") ||
+    /\/map-panel\/[^/]+-api\.ts$/.test(file)
   ) {
     return "internal-diagnostic";
   }
