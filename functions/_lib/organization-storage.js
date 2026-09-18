@@ -246,7 +246,8 @@ async function claimOrganizationStorage(
            OR TRIM(storage_status) = ''
            OR UPPER(TRIM(storage_status)) <> 'PENDING'
            OR storage_checked_at IS NULL
-           OR storage_checked_at < ?
+           OR julianday(storage_checked_at) IS NULL
+           OR julianday(storage_checked_at) < julianday(?)
          )
        RETURNING *`,
     )
@@ -529,7 +530,8 @@ async function listRepairCandidates(
              UPPER(TRIM(storage_status)) = 'PENDING'
              AND (
                storage_checked_at IS NULL
-               OR storage_checked_at < ?
+               OR julianday(storage_checked_at) IS NULL
+               OR julianday(storage_checked_at) < julianday(?)
              )
            )
            OR (
