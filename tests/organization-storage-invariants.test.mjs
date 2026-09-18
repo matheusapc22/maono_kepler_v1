@@ -37,6 +37,8 @@ function candidate(row, afterId, staleBefore) {
   const path = String(row.dropbox_root_path || "").trim();
   const status = String(row.storage_status || "").trim().toUpperCase();
   const checkedAt = String(row.storage_checked_at || "");
+  const checkedAtMs = Date.parse(checkedAt);
+  const staleBeforeMs = Date.parse(staleBefore);
   const storageError = String(row.storage_error || "").trim();
 
   return (
@@ -47,7 +49,10 @@ function candidate(row, afterId, staleBefore) {
     !["READY", "PENDING", "ERROR", "DISABLED"].includes(status) ||
     status === "ERROR" ||
     status === "DISABLED" ||
-    (status === "PENDING" && (!checkedAt || checkedAt < staleBefore)) ||
+    (status === "PENDING" &&
+      (!checkedAt ||
+        !Number.isFinite(checkedAtMs) ||
+        checkedAtMs < staleBeforeMs)) ||
     (status === "READY" && Boolean(storageError))
   );
 }
@@ -490,6 +495,28 @@ test("repair inclui PENDING expirado, mas ignora PENDING recente", async () => {
   );
   assert.equal(env.__rows.get(1).storage_status, "READY");
   assert.equal(env.__rows.get(2).storage_status, "PENDING");
+});
+
+test("PENDING com timestamp legado inválido é recuperável", async () => {
+  const now = Date.parse("2026-09-18T12:00:00.000Z");
+  const env = createFakeEnv([
+    organization({
+      storage_status: "PENDING",
+      storage_error: null,
+      storage_checked_at: "timestamp-legado-invalido",
+    }),
+  ]);
+
+  const result = await repairActiveOrganizationStorages(env, {
+    limit: 10,
+    nowFn: () => now,
+    correlationId: "corr-prh04-invalid-date",
+    ensureFolder: async () => {},
+  });
+
+  assert.equal(result.checked, 1);
+  assert.equal(result.ready, 1);
+  assert.equal(env.__rows.get(1).storage_status, "READY");
 });
 
 test("schema 0009 é exigido integralmente", async () => {
