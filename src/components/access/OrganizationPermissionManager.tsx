@@ -10,6 +10,8 @@ import {
   accessFromCode,
   profileFromTechnical,
 } from "../../pages/Projects/components/user-access-commercial";
+import { requestJson } from "../../lib/api-transport";
+import { normalizeUserError } from "../../lib/user-error-catalog";
 import "./OrganizationPermissionManager.css";
 
 type ApiId = number | string;
@@ -72,30 +74,25 @@ export type AccessGovernanceCapabilities = {
 export async function loadAccessGovernance(
   organizationId: ApiId,
 ): Promise<AccessGovernanceCapabilities> {
-  const response = await fetch(
+  const data = await requestJson<{
+    ok?: boolean;
+    capabilities?: AccessGovernanceCapabilities;
+  }>(
     "/api/organizations/" +
       encodeURIComponent(String(organizationId)) +
       "/access-governance",
-    {
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    },
+    { cache: "no-store" },
   );
-  const data = await response.json();
-  if (!response.ok || data?.ok === false || !data?.capabilities) {
-    throw new Error(
-      data?.error?.message ||
-        data?.error ||
-        "Não foi possível carregar a governança de acessos.",
-    );
+
+  if (data?.ok === false || !data?.capabilities) {
+    throw new Error("Não foi possível carregar a governança de acessos.");
   }
-  return data.capabilities as AccessGovernanceCapabilities;
+
+  return data.capabilities;
 }
 
 function errorText(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Não foi possível concluir a operação.";
+  return normalizeUserError(error).message;
 }
 
 function profileLabel(person: OrganizationUser): string {
@@ -392,7 +389,7 @@ export default function OrganizationPermissionManager({
                 <span>
                   {governance.mode === "super_admin"
                     ? "A operação será registrada na gestão central."
-                    : "O backend revalidará organização, alvo, operação e teto no salvamento."}
+                    : "As permissões serão revalidadas no salvamento para esta organização."}
                 </span>
               </div>
 

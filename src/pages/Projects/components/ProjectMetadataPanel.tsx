@@ -156,7 +156,7 @@ const ProjectMetadataPanel: React.FC<ProjectMetadataPanelProps> = ({
     }
 
     requestSequenceRef.current += 1;
-    const requestId = requestSequenceRef.current;
+    const requestSequence = requestSequenceRef.current;
     requestControllerRef.current?.abort();
     const controller = new AbortController();
     requestControllerRef.current = controller;
@@ -170,7 +170,7 @@ const ProjectMetadataPanel: React.FC<ProjectMetadataPanelProps> = ({
         signal: controller.signal,
       });
 
-      if (requestId !== requestSequenceRef.current) {
+      if (requestSequence !== requestSequenceRef.current) {
         return;
       }
 
@@ -180,14 +180,14 @@ const ProjectMetadataPanel: React.FC<ProjectMetadataPanelProps> = ({
         return;
       }
 
-      if (requestId !== requestSequenceRef.current) {
+      if (requestSequence !== requestSequenceRef.current) {
         return;
       }
 
       setStatus("error");
       setNotice(normalizeUserError(requestFailure).message);
     } finally {
-      if (requestId === requestSequenceRef.current) {
+      if (requestSequence === requestSequenceRef.current) {
         requestControllerRef.current = null;
       }
     }

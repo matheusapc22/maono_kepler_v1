@@ -183,16 +183,11 @@ export function isochroneErrorMessage(error: unknown) {
     return "O serviço de isócronas está temporariamente indisponível.";
   }
 
-  if (
-    error instanceof TypeError &&
-    /fetch|network|load failed/i.test(error.message)
-  ) {
+  if (error instanceof TypeError) {
     return "Não foi possível conectar ao serviço de isócronas.";
   }
 
-  return error instanceof Error && error.message.trim()
-    ? error.message
-    : "Não foi possível gerar a análise.";
+  return "Não foi possível gerar a análise.";
 }
 
 export async function requestIsochrone(

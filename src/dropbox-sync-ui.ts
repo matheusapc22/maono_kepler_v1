@@ -1,3 +1,6 @@
+import { requestJson } from "./lib/api-transport";
+import { normalizeUserError } from "./lib/user-error-catalog";
+
 function isAdminFilesPage() {
   return window.location.pathname === "/admin/files";
 }
@@ -42,16 +45,16 @@ async function syncDropboxOrganizations(button: HTMLButtonElement) {
   setButtonState(button, true);
 
   try {
-    const response = await fetch("/api/admin/organizations/sync-dropbox?rootPath=/projects", {
+    const data = await requestJson<{
+      ok?: boolean;
+      organizationsSynced?: number;
+      foldersFound?: number;
+    }>("/api/admin/organizations/sync-dropbox?rootPath=/projects", {
       method: "POST",
-      credentials: "include",
-      headers: { Accept: "application/json" },
     });
 
-    const data = await response.json();
-
-    if (!response.ok || data?.ok === false) {
-      throw new Error(data?.error?.message || "Falha ao sincronizar Dropbox.");
+    if (data?.ok === false) {
+      throw new Error("Não foi possível concluir a sincronização.");
     }
 
     showAdminSyncMessage(
@@ -61,7 +64,7 @@ async function syncDropboxOrganizations(button: HTMLButtonElement) {
 
     window.setTimeout(() => window.location.reload(), 850);
   } catch (error) {
-    showAdminSyncMessage(error instanceof Error ? error.message : "Erro ao sincronizar Dropbox.", "error");
+    showAdminSyncMessage(normalizeUserError(error).message, "error");
     setButtonState(button, false);
   }
 }

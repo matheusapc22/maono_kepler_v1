@@ -131,9 +131,9 @@ export default function TicketsSection({
   );
   const [toast, setToast] = useState<string | null>(null);
 
-  const listRequestIdRef = useRef(0);
+  const listRequestSequenceRef = useRef(0);
   const listControllerRef = useRef<AbortController | null>(null);
-  const detailRequestIdRef = useRef(0);
+  const detailRequestSequenceRef = useRef(0);
   const detailControllerRef = useRef<AbortController | null>(null);
   const organizationKeyRef = useRef(String(organizationId ?? ""));
   const newTicketButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -189,8 +189,8 @@ export default function TicketsSection({
         return;
       }
 
-      listRequestIdRef.current += 1;
-      const requestId = listRequestIdRef.current;
+      listRequestSequenceRef.current += 1;
+      const requestSequence = listRequestSequenceRef.current;
       const requestOrganizationKey = String(organizationId);
       listControllerRef.current?.abort();
       const controller = new AbortController();
@@ -216,7 +216,7 @@ export default function TicketsSection({
         );
 
         if (
-          requestId !== listRequestIdRef.current ||
+          requestSequence !== listRequestSequenceRef.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -241,7 +241,7 @@ export default function TicketsSection({
           return;
         }
         if (
-          requestId !== listRequestIdRef.current ||
+          requestSequence !== listRequestSequenceRef.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -252,7 +252,7 @@ export default function TicketsSection({
         );
       } finally {
         if (
-          requestId === listRequestIdRef.current &&
+          requestSequence === listRequestSequenceRef.current &&
           requestOrganizationKey === organizationKeyRef.current
         ) {
           setInitialLoading(false);
@@ -271,7 +271,7 @@ export default function TicketsSection({
     void loadTicketsPage(1);
 
     return () => {
-      listRequestIdRef.current += 1;
+      listRequestSequenceRef.current += 1;
       listControllerRef.current?.abort();
     };
   }, [loadTicketsPage]);
@@ -280,8 +280,8 @@ export default function TicketsSection({
     async (ticketId: number | string) => {
       if (!organizationId) return;
 
-      detailRequestIdRef.current += 1;
-      const requestId = detailRequestIdRef.current;
+      detailRequestSequenceRef.current += 1;
+      const requestSequence = detailRequestSequenceRef.current;
       const requestOrganizationKey = String(organizationId);
       detailControllerRef.current?.abort();
       const controller = new AbortController();
@@ -298,7 +298,7 @@ export default function TicketsSection({
         );
 
         if (
-          requestId !== detailRequestIdRef.current ||
+          requestSequence !== detailRequestSequenceRef.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -316,7 +316,7 @@ export default function TicketsSection({
           return;
         }
         if (
-          requestId !== detailRequestIdRef.current ||
+          requestSequence !== detailRequestSequenceRef.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -326,7 +326,7 @@ export default function TicketsSection({
           toTicketApiError(requestError, "Não foi possível carregar o chamado."),
         );
       } finally {
-        if (requestId === detailRequestIdRef.current) {
+        if (requestSequence === detailRequestSequenceRef.current) {
           setDetailLoading(false);
           detailControllerRef.current = null;
         }
@@ -345,7 +345,7 @@ export default function TicketsSection({
   );
 
   const closeDetail = useCallback(() => {
-    detailRequestIdRef.current += 1;
+    detailRequestSequenceRef.current += 1;
     detailControllerRef.current?.abort();
     setSelectedTicketId(null);
     setDetail(null);

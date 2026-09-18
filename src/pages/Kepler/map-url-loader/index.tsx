@@ -5,6 +5,7 @@ import { addDataToMap, removeDataset, toggleModal } from "@kepler.gl/actions";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
 import Spinner from "../../../components/Spinner";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
 import { loadReviewBaseProjectConfig } from "../change-requests/review-base-config-client";
@@ -303,11 +304,7 @@ const MapUrlLoader = connectStore(
           status: transportFailure ? err.status : null,
         });
         loadedProjectRef.current = null;
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Não foi possível carregar o projeto.",
-        );
+        setError(normalizeUserError(err).message);
         dispatch(setLoadingMapStatus(false));
       });
 

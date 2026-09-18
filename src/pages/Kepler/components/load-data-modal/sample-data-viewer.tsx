@@ -8,6 +8,7 @@ import styled from "styled-components";
 import { format } from "d3-format";
 import { LoadingDialog } from "@kepler.gl/components";
 import { FormattedMessage } from "react-intl";
+import { normalizeUserError } from "../../../../lib/user-error-catalog";
 
 const numFormat = format(",");
 
@@ -110,7 +111,7 @@ const SampleMapGallery = ({
   return (
     <div className="sample-data-modal">
       {error ? (
-        <StyledError>{error.message}</StyledError>
+        <StyledError>{normalizeUserError(error).message}</StyledError>
       ) : isMapLoading ? (
         <LoadingDialog size={64} />
       ) : (

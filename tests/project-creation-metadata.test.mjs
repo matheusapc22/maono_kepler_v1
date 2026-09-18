@@ -341,7 +341,7 @@ test("retry mantém título e descrição da tentativa idempotente", () => {
   );
   assert.match(createPanel, /initialName\?: string/);
   assert.match(createPanel, /initialDescription\?: string/);
-  assert.match(createPanel, /busy \|\| stage === "error"/);
+  assert.match(createPanel, /busy \|\| phase === "error"/);
 });
 
 test("package consolida metadata e lifecycle nos gates de projeto", () => {

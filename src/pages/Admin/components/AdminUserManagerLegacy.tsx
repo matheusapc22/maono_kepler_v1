@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import OrganizationPermissionManager from "../../../components/access/OrganizationPermissionManager";
+import { parseJsonResponse } from "../../../lib/api-transport";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 
 type User = {
   id: number;
@@ -74,11 +76,9 @@ type UserManagementView =
   | "delegation";
 
 async function json(response: Response) {
-  const data = await response.json();
-  if (!response.ok || data?.ok === false) {
-    throw new Error(
-      data?.error?.message || data?.error || "Erro na requisição.",
-    );
+  const data = await parseJsonResponse<any>(response);
+  if (data?.ok === false) {
+    throw new Error("Não foi possível concluir a operação administrativa.");
   }
   return data;
 }
@@ -179,7 +179,7 @@ export default function AdminUserManager({
         if (!cancelled) setMemberships(data.organizations || []);
       })
       .catch((error) => {
-        if (!cancelled) onMessage("error", error.message);
+        if (!cancelled) onMessage("error", normalizeUserError(error).message);
       })
       .finally(() => {
         if (!cancelled) setMembershipsLoading(false);
@@ -213,7 +213,7 @@ export default function AdminUserManager({
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error ? error.message : "Falha ao atualizar.",
+        normalizeUserError(error).message,
       );
     } finally {
       setBusy(false);
@@ -242,7 +242,7 @@ export default function AdminUserManager({
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error ? error.message : "Falha ao excluir.",
+        normalizeUserError(error).message,
       );
     } finally {
       setBusy(false);
@@ -272,7 +272,7 @@ export default function AdminUserManager({
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error ? error.message : "Falha ao criar.",
+        normalizeUserError(error).message,
       );
     } finally {
       setBusy(false);
@@ -317,7 +317,7 @@ export default function AdminUserManager({
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error ? error.message : "Falha no vínculo.",
+        normalizeUserError(error).message,
       );
     } finally {
       setBusy(false);
@@ -375,9 +375,7 @@ export default function AdminUserManager({
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error
-          ? error.message
-          : "Falha ao carregar a política de delegação.",
+        normalizeUserError(error).message,
       );
     } finally {
       setBusy(false);
@@ -473,7 +471,7 @@ export default function AdminUserManager({
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error ? error.message : "Falha ao salvar a delegação.",
+        normalizeUserError(error).message,
       );
     } finally {
       setBusy(false);
@@ -504,9 +502,7 @@ export default function AdminUserManager({
     } catch (error) {
       onMessage(
         "error",
-        error instanceof Error
-          ? error.message
-          : "Falha ao revogar a delegação.",
+        normalizeUserError(error).message,
       );
     } finally {
       setBusy(false);

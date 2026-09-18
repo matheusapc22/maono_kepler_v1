@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+import { parseJsonResponse } from "../lib/api-transport";
+import { normalizeUserError } from "../lib/user-error-catalog";
+
 type DropboxEntry = {
   tag: "folder" | "file" | string;
   name: string;
@@ -36,9 +39,9 @@ function parentPath(path: string) {
 }
 
 async function readJson(response: Response) {
-  const data = await response.json();
-  if (!response.ok || data?.ok === false) {
-    throw new Error(data?.error?.message || "Erro ao acessar o backend.");
+  const data = await parseJsonResponse<any>(response);
+  if (data?.ok === false) {
+    throw new Error("Não foi possível carregar os arquivos.");
   }
   return data;
 }
@@ -95,7 +98,7 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
       setPath(normalizedPath);
       setEntries(data.entries || data.entradas || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao listar Dropbox.");
+      setError(normalizeUserError(err).message);
     } finally {
       setLoading(false);
     }

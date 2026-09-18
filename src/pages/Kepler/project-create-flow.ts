@@ -1,3 +1,5 @@
+import { parseResponseJson } from "../../lib/api-transport.ts";
+
 import {
   buildSaveRequestHeaders,
   readSaveResponseDiagnostics,
@@ -76,24 +78,21 @@ export class ProjectCreateFlowError extends Error {
   }
 }
 
-async function readJsonResponse(response: Response) {
-  const text = await response.text();
-  if (!text.trim()) return null;
+async function readJsonResponse(response: Response): Promise<any> {
+  const parsed = await parseResponseJson(response);
 
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {
-      ok: false,
-      error: {
-        message: "A API retornou uma resposta inesperada.",
-        code: "INVALID_JSON_RESPONSE",
-        category: "INFRASTRUCTURE",
-        retryable: true,
-        correlationId: response.headers.get("X-Correlation-Id") || undefined,
-      },
-    };
+  if (parsed.valid) {
+    return parsed.data;
   }
+
+  return {
+    ok: false,
+    error: {
+      code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
+      category: "INFRASTRUCTURE",
+      retryable: true,
+    },
+  };
 }
 
 function resolveConfigRevision(data: any) {

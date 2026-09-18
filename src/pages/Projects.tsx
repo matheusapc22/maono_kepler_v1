@@ -322,7 +322,7 @@ const ProjectsPage: React.FC = () => {
   const [favoriteBusySlugs, setFavoriteBusySlugs] = useState<
     Record<string, true>
   >({});
-  const projectsRequestIdRef = useRef(0);
+  const projectsRequestSequenceRef = useRef(0);
   const projectsRequestControllerRef = useRef<AbortController | null>(null);
 
   const organizationContext = useMemo(
@@ -350,8 +350,8 @@ const ProjectsPage: React.FC = () => {
         return;
       }
 
-      projectsRequestIdRef.current += 1;
-      const requestId = projectsRequestIdRef.current;
+      projectsRequestSequenceRef.current += 1;
+      const requestSequence = projectsRequestSequenceRef.current;
       const requestOrganizationKey = String(activeOrganizationId);
       projectsRequestControllerRef.current?.abort();
       const controller = new AbortController();
@@ -367,7 +367,7 @@ const ProjectsPage: React.FC = () => {
         });
 
         if (
-          requestId !== projectsRequestIdRef.current ||
+          requestSequence !== projectsRequestSequenceRef.current ||
           requestOrganizationKey !== activeOrganizationKeyRef.current
         ) {
           return;
@@ -387,7 +387,7 @@ const ProjectsPage: React.FC = () => {
         }
 
         if (
-          requestId !== projectsRequestIdRef.current ||
+          requestSequence !== projectsRequestSequenceRef.current ||
           requestOrganizationKey !== activeOrganizationKeyRef.current
         ) {
           return;
@@ -396,7 +396,7 @@ const ProjectsPage: React.FC = () => {
         setProjectsError(normalizeUserError(requestFailure).message);
       } finally {
         if (
-          requestId === projectsRequestIdRef.current &&
+          requestSequence === projectsRequestSequenceRef.current &&
           requestOrganizationKey === activeOrganizationKeyRef.current
         ) {
           setProjectsLoading(false);
@@ -413,7 +413,7 @@ const ProjectsPage: React.FC = () => {
     }
 
     return () => {
-      projectsRequestIdRef.current += 1;
+      projectsRequestSequenceRef.current += 1;
       projectsRequestControllerRef.current?.abort();
     };
   }, [authenticated, loadProjectSection, loading, sidebarSection]);
@@ -445,7 +445,7 @@ const ProjectsPage: React.FC = () => {
   async function handleOrganizationSwitch(organizationId: number | string) {
     await switchOrganization(organizationId);
 
-    projectsRequestIdRef.current += 1;
+    projectsRequestSequenceRef.current += 1;
     projectsRequestControllerRef.current?.abort();
     projectsRequestControllerRef.current = null;
     setSearchQuery("");
