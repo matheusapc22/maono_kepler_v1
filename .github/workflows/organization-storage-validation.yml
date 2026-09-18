@@ -1,0 +1,63 @@
+name: Organization storage validation
+
+on:
+  push:
+    branches:
+      - "feat/prh-04-*"
+    paths:
+      - "functions/_lib/organization-storage.js"
+      - "functions/_lib/dropbox.js"
+      - "functions/_lib/dropbox-client.js"
+      - "functions/_lib/maono-error.js"
+      - "functions/_lib/http.js"
+      - "functions/api/admin/organizations/repair-storage.js"
+      - "migrations/0009_organization_storage_invariant.sql"
+      - "tests/organization-storage-*.test.mjs"
+      - "tests/dropbox-resilience*.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-storage-validation.yml"
+  pull_request:
+    branches:
+      - mano_kepler_v1
+    paths:
+      - "functions/_lib/organization-storage.js"
+      - "functions/_lib/dropbox.js"
+      - "functions/_lib/dropbox-client.js"
+      - "functions/_lib/maono-error.js"
+      - "functions/_lib/http.js"
+      - "functions/api/admin/organizations/repair-storage.js"
+      - "migrations/0009_organization_storage_invariant.sql"
+      - "tests/organization-storage-*.test.mjs"
+      - "tests/dropbox-resilience*.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-storage-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  storage-invariants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Organization storage invariant suite
+        run: npm run test:organization-storage
+
+      - name: Dropbox resilience regression
+        run: npm run test:dropbox-resilience
+
+      - name: Build application
+        run: npm run build
