@@ -6,6 +6,7 @@ import {
   toTicketApiError,
   uploadTicketAttachment,
 } from "./tickets-api";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 import TicketErrorNotice from "./TicketErrorNotice";
 import { dateInputToIso } from "./ticket-format";
 import {
@@ -614,7 +615,7 @@ export default function NewTicketPopover({
                       </div>
                       <small>
                         {state?.status === "failed"
-                          ? state.error?.message
+                          ? state.error ? normalizeUserError(state.error).message : undefined
                           : state?.status === "done"
                             ? "Concluído"
                             : state?.status === "finalizing"
