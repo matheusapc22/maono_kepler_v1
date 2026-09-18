@@ -73,20 +73,66 @@ test("provider usa controller tokenizado e política anti-flicker", () => {
   assert.match(provider, /controller\.withLoading\(operation\)/);
 });
 
-test("fundação é instalada no root sem substituir loadings existentes", () => {
-  assert.match(main, /import \{ LoadingProvider \} from "\.\/components\/loading"/);
-  assert.match(main, /<LoadingProvider>/);
-  assert.match(main, /<SessionProvider>/);
+test("fallback genérico de rota usa somente o loader universal", () => {
+  assert.match(routes, /import \{ LoadingOverlay \} from "\.\/components\/loading"/);
+  assert.match(routes, /const RouteSuspenseFallback/);
+  assert.match(
+    routes,
+    /<LoadingOverlay[\s\S]*?active[\s\S]*?scope="viewport"[\s\S]*?loaderSize="page"/,
+  );
+  assert.doesNotMatch(routes, /const RouteLoading/);
+  assert.doesNotMatch(routes, /<Skeleton /);
+});
 
+test("Projects e Admin preservam seus skeletons estruturais", () => {
   assert.match(skeleton, /export function ProjectsPageSkeleton/);
   assert.match(skeleton, /export function AdminPageSkeleton/);
   assert.match(routes, /fallback=\{<ProjectsPageSkeleton \/>\}/);
   assert.match(routes, /fallback=\{<AdminPageSkeleton \/>\}/);
-  assert.match(routes, /const RouteLoading/);
+  assert.match(routes, /if \(loading\)[\s\S]*return <AdminPageSkeleton \/>/);
 });
 
-test("PRL-01 não substitui boot loader nem fluxo de rotas", () => {
+test("rotas lazy legadas também ficam protegidas por Suspense", () => {
+  for (const routePath of [
+    'path="(:id)"',
+    'path="map/:provider"',
+    'path="demo/map"',
+    'path="demo/map/:provider"',
+  ]) {
+    const start = routes.indexOf(routePath);
+    assert.notEqual(start, -1, `rota ausente: ${routePath}`);
+    const excerpt = routes.slice(start, start + 220);
+    assert.match(excerpt, /<WithSuspense>/);
+    assert.match(excerpt, /<KeplerApp \/>/);
+  }
+});
+
+test("boot inicial replica o loader universal sem mensagem visual", () => {
   assert.match(boot, /id="app-boot-fallback"/);
-  assert.match(boot, /Carregando Maõno Maps/);
-  assert.match(routes, /const RouteLoading/);
+  assert.match(boot, /class="mm-boot-loader"/);
+  assert.match(boot, /class="mm-boot-loader__ring"/);
+  assert.match(boot, /--mm-boot-loader-size:\s*46px/);
+  assert.match(boot, /--mm-boot-loader-thickness:\s*4px/);
+  assert.match(boot, /--mm-boot-loader-duration:\s*1\.05s/);
+  assert.match(boot, /perspective\(140px\) rotateX\(7deg\)/);
+  assert.match(boot, /prefers-reduced-motion:\s*reduce/);
+  assert.doesNotMatch(boot, /Carregando Maõno Maps/);
+  assert.doesNotMatch(boot, /mm-boot-caption/);
+  assert.doesNotMatch(boot, /mm-boot-scan/);
+  assert.doesNotMatch(boot, /mm-boot-logo/);
+});
+
+test("boot mantém recuperação explícita em caso de falha real", () => {
+  assert.match(boot, /__MAONO_SHOW_BOOT_FAILURE__/);
+  assert.match(boot, /__MAONO_BOOT_TIMEOUT__/);
+  assert.match(boot, /12000/);
+  assert.match(boot, /Não foi possível iniciar a plataforma/);
+  assert.match(boot, /Tentar novamente/);
+  assert.match(boot, /window\.location\.reload\(\)/);
+});
+
+test("fundação continua instalada no root", () => {
+  assert.match(main, /import \{ LoadingProvider \} from "\.\/components\/loading"/);
+  assert.match(main, /<LoadingProvider>/);
+  assert.match(main, /<SessionProvider>/);
 });
