@@ -543,6 +543,16 @@ test("schema 0009 é exigido integralmente", async () => {
   );
 });
 
+test("retryability respeita flag explícita e status do provider", () => {
+  const { storageCauseRetryable } = __organizationStorageTesting;
+
+  assert.equal(storageCauseRetryable({ retryable: false, status: 503 }), false);
+  assert.equal(storageCauseRetryable({ retryable: true, status: 400 }), true);
+  assert.equal(storageCauseRetryable({ status: 429 }), true);
+  assert.equal(storageCauseRetryable({ status: 503 }), true);
+  assert.equal(storageCauseRetryable({ status: 400 }), false);
+});
+
 test("helpers normalizam limites e reconhecem lease recente", () => {
   assert.equal(__organizationStorageTesting.normalizeLimit(9_999), 500);
   assert.equal(__organizationStorageTesting.normalizeLimit("invalid"), 100);
