@@ -78,8 +78,8 @@ export class ProjectCreateFlowError extends Error {
   }
 }
 
-async function readJsonResponse(response: Response) {
-  const parsed = await parseResponseJson(response);
+async function readJsonResponse(response: Response): Promise<any> {
+  const parsed = await parseResponseJson<any>(response);
 
   if (parsed.valid) {
     return parsed.data;
