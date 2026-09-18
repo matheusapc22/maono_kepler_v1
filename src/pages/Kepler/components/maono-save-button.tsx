@@ -249,32 +249,6 @@ function normalizeCreationStage(value: unknown) {
   return "creating_record";
 }
 
-function getCreationResponseError(
-  response: Response,
-  data: ProjectWriteResponse,
-) {
-  const backendMessage = data?.error?.message;
-  const reference = getErrorReference(data);
-
-  if (response.status === 401) {
-    return `Sua sessão expirou. Entre novamente para criar o projeto.${reference}`;
-  }
-
-  if (response.status === 403) {
-    return `Você não tem permissão para criar projetos nesta organização.${reference}`;
-  }
-
-  if (response.status === 409) {
-    return `${backendMessage || "A criação já está em andamento ou entrou em conflito. Tente novamente."}${reference}`;
-  }
-
-  if (response.status >= 500) {
-    return `${backendMessage || "A criação não foi concluída. O projeto permaneceu inativo e pode ser retomado."}${reference}`;
-  }
-
-  return `${backendMessage || "Não foi possível criar o projeto."}${reference}`;
-}
-
 function resolveConfigRevision(data: ProjectWriteResponse) {
   return Math.max(
     0,
