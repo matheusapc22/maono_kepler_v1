@@ -40,11 +40,12 @@ function numericQueryParam(url, name, fallback) {
 }
 
 export async function onRequest({ env, request }) {
+  const correlationId = getOrCreateCorrelationId(request);
+
   if (request.method !== "POST") {
-    return methodNotAllowed(["POST"]);
+    return methodNotAllowed(["POST"], { correlationId });
   }
 
-  const correlationId = getOrCreateCorrelationId(request);
   let actor = null;
 
   try {
