@@ -126,11 +126,14 @@ test("superfície Admin de arquivos físicos exige READY", () => {
   assert.match(adminFilesSource, /storage_status/);
   assert.match(adminFilesSource, /storage_checked_at/);
 
-  const gate = adminFilesSource.indexOf(
+  const handler = adminFilesSource.slice(
+    adminFilesSource.indexOf("export async function onRequest"),
+  );
+  const gate = handler.indexOf(
     "requireOrganizationStorageReady(organization",
   );
-  const list = adminFilesSource.indexOf("listDropboxFolder(");
-  const upload = adminFilesSource.indexOf("uploadDropboxTextFile(");
+  const list = handler.indexOf("listDropboxFolder(");
+  const upload = handler.indexOf("upsertOrganizationFile(");
   assert.ok(gate >= 0);
   assert.ok(list > gate);
   assert.ok(upload > gate);
