@@ -103,6 +103,7 @@ function createFakeEnv(initialRows, { columns = STORAGE_COLUMNS } = {}) {
 
         if (
           normalized.startsWith("UPDATE organizations") &&
+          normalized.includes("SET dropbox_root_path = ?") &&
           normalized.includes("storage_status = 'PENDING'")
         ) {
           const [rootPath, claimAt, updatedAt, organizationId, staleBefore] = args;
