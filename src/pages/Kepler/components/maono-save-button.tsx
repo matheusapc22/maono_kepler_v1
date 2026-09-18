@@ -231,16 +231,16 @@ function clearCreationKey(organizationId: unknown) {
 }
 
 function normalizeCreationStage(value: unknown) {
-  const stage = String(value || "");
+  const phase = String(value || "");
 
   if (
-    stage === "capturing" ||
-    stage === "creating_record" ||
-    stage === "preparing_files" ||
-    stage === "linking_user" ||
-    stage === "finalizing"
+    phase === "capturing" ||
+    phase === "creating_record" ||
+    phase === "preparing_files" ||
+    phase === "linking_user" ||
+    phase === "finalizing"
   ) {
-    return stage as Exclude<
+    return phase as Exclude<
       ProjectCreationStage,
       "ready" | "success" | "error"
     >;
