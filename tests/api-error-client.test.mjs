@@ -3,6 +3,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const apiSource = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+const apiTransportSource = await readFile(
+  new URL("../src/lib/api-transport.ts", import.meta.url),
+  "utf8",
+);
+const fileTransferSource = await readFile(
+  new URL("../src/lib/file-transfer.ts", import.meta.url),
+  "utf8",
+);
 const contractSource = await readFile(new URL("../src/lib/error-contract.ts", import.meta.url), "utf8");
 const catalogSource = await readFile(new URL("../src/lib/user-error-catalog.ts", import.meta.url), "utf8");
 const saveButtonSource = await readFile(
@@ -27,6 +35,20 @@ test("transporte compartilhado converte falha de rede em erro tipado seguro", ()
   assert.match(apiSource, /fetchWithNetworkGuard/);
   assert.match(apiSource, /buildClientApiError/);
   assert.doesNotMatch(apiSource, /Failed to fetch|NetworkError|load failed/i);
+});
+
+test("metadados operacionais ficam centralizados no contrato de erro", () => {
+  assert.match(contractSource, /getResponseErrorReference/);
+  assert.match(contractSource, /getXhrErrorReference/);
+  assert.match(contractSource, /withErrorReference/);
+  assert.match(apiTransportSource, /getResponseErrorReference/);
+  assert.match(apiTransportSource, /withErrorReference/);
+  assert.match(fileTransferSource, /getXhrErrorReference/);
+  assert.doesNotMatch(
+    apiTransportSource,
+    /\b(?:requestId|correlationId|stage)\b/,
+  );
+  assert.doesNotMatch(fileTransferSource, /\b(?:correlationId|stage)\b/);
 });
 
 test("catálogo de apresentação não usa mensagem remota como fallback", () => {

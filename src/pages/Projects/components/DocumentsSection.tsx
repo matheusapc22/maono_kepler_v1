@@ -13,6 +13,10 @@ import {
   uploadOrganizationFileWithProgress,
   type FileTransferProgress,
 } from "../../../lib/file-transfer";
+import {
+  formatSupportReference,
+  normalizeUserError,
+} from "../../../lib/user-error-catalog";
 
 import "./DocumentsTransferPanel.css";
 
@@ -96,38 +100,11 @@ function validateFile(file: File) {
 }
 
 function formatRequestError(error: unknown, fallback: string) {
-  if (!(error instanceof Error)) return fallback;
+  const presentation = normalizeUserError(error);
+  const message = presentation.message.trim() || fallback;
+  const supportReference = formatSupportReference(presentation.supportReference);
 
-  const enriched = error as Error & {
-    code?: string;
-    payload?: unknown;
-  };
-  const payload =
-    enriched.payload && typeof enriched.payload === "object"
-      ? (enriched.payload as {
-          code?: unknown;
-          stage?: unknown;
-          requestId?: unknown;
-        })
-      : null;
-
-  const code =
-    typeof payload?.code === "string" ? payload.code : enriched.code || null;
-  const stage = typeof payload?.stage === "string" ? payload.stage : null;
-  const requestId =
-    typeof payload?.requestId === "string" ? payload.requestId : null;
-  const diagnostics = [
-    code ? `código ${code}` : null,
-    stage ? `etapa ${stage}` : null,
-    requestId ? `requisição ${requestId}` : null,
-  ].filter(Boolean);
-  const message = (error.message || fallback)
-    .replace(/Dropbox/gi, "armazenamento")
-    .replace(/Cloudflare D1/gi, "sistema");
-
-  return diagnostics.length
-    ? `${message} (${diagnostics.join(" · ")})`
-    : message;
+  return supportReference ? `${message} (${supportReference})` : message;
 }
 
 function downloadBlob(blob: Blob, fileName: string) {

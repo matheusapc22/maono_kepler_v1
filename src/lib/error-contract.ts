@@ -55,6 +55,11 @@ function categoryField(record: Record<string, unknown>, key: string) {
   return value && ERROR_CATEGORIES.has(value) ? value : undefined;
 }
 
+function normalizedReference(value?: string | null) {
+  const normalized = String(value || "").trim();
+  return normalized || undefined;
+}
+
 export function getApiErrorContract(payload: unknown): Partial<ApiErrorContract> {
   if (!payload || typeof payload !== "object") return {};
 
@@ -74,6 +79,30 @@ export function getApiErrorContract(payload: unknown): Partial<ApiErrorContract>
     correlationId: stringField(error, "correlationId"),
     message: stringField(error, "message"),
     details: error["details"],
+  };
+}
+
+export function getResponseErrorReference(response: Response) {
+  return normalizedReference(
+    response.headers.get("X-Correlation-Id") ||
+      response.headers.get("X-Request-Id"),
+  );
+}
+
+export function getXhrErrorReference(xhr: XMLHttpRequest) {
+  return normalizedReference(
+    xhr.getResponseHeader("X-Correlation-Id") ||
+      xhr.getResponseHeader("X-Request-Id"),
+  );
+}
+
+export function withErrorReference(
+  diagnostic: ApiErrorDiagnostic,
+  reference?: string | null,
+): ApiErrorDiagnostic {
+  return {
+    ...diagnostic,
+    correlationId: diagnostic.correlationId ?? normalizedReference(reference),
   };
 }
 

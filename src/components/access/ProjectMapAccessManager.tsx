@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { normalizeUserError } from "../../lib/user-error-catalog";
 import {
   loadProjectMapAccessPolicy,
   updateProjectCreateAccess,
@@ -11,9 +12,7 @@ import {
 type ApiId = number | string;
 
 function errorText(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "Não foi possível concluir a alteração.";
+  return normalizeUserError(error).message;
 }
 
 export default function ProjectMapAccessManager({
@@ -76,8 +75,8 @@ export default function ProjectMapAccessManager({
         kind: "success",
         text:
           mode === "viewer"
-            ? "Rota Viewer atribuída. A persistência direta deste projeto foi bloqueada."
-            : "Rota Editor atribuída. A rota Viewer deixou de estar disponível para este projeto.",
+            ? "Acesso Viewer atribuído. Este projeto ficará disponível somente para visualização."
+            : "Acesso Editor atribuído. A pessoa poderá editar este projeto conforme as demais permissões.",
       });
     } catch (error) {
       setMessage({ kind: "error", text: errorText(error) });
@@ -101,7 +100,7 @@ export default function ProjectMapAccessManager({
         kind: "success",
         text: enabled
           ? "Criação de novos projetos liberada."
-          : "Criação de novos projetos negada explicitamente.",
+          : "Criação de novos projetos bloqueada para esta pessoa.",
       });
     } catch (error) {
       setMessage({ kind: "error", text: errorText(error) });
@@ -149,7 +148,7 @@ export default function ProjectMapAccessManager({
                 </strong>
                 <span>
                   {viewerRole
-                    ? "Perfil Viewer: a rota Viewer é obrigatória e o Create permanece bloqueado."
+                    ? "Perfil Viewer: o acesso de visualização é obrigatório e a criação de projetos permanece bloqueada."
                     : "Escolha Viewer ou Editor em cada projeto. As opções são mutuamente exclusivas."}
                 </span>
               </div>
@@ -214,8 +213,8 @@ export default function ProjectMapAccessManager({
                     <span>
                       <strong>Pode criar novos projetos</strong>
                       <small>
-                        Controla /maps/new/create e não altera a rota Viewer ou
-                        Editor dos projetos existentes.
+                        Controla a criação de novos projetos e não altera o
+                        acesso Viewer ou Editor dos projetos existentes.
                       </small>
                     </span>
                   </label>

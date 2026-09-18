@@ -1,6 +1,8 @@
 import {
   ApiError,
   getApiErrorContract,
+  getResponseErrorReference,
+  withErrorReference,
   type ApiErrorDiagnostic,
 } from "./error-contract";
 import { normalizeUserError } from "./user-error-catalog";
@@ -63,31 +65,48 @@ export async function parseResponseJson(
   }
 }
 
+export function buildHttpApiError(
+  statusValue: number,
+  data: unknown,
+  overrides: Partial<ApiErrorDiagnostic> = {},
+  reference?: string | null,
+): ApiError {
+  const contract = getApiErrorContract(data);
+  const status = Number(overrides.status ?? statusValue ?? 500);
+  const diagnostic = withErrorReference(
+    {
+      ...contract,
+      ...overrides,
+      status,
+      code: overrides.code ?? contract.code,
+      category:
+        overrides.category ??
+        contract.category ??
+        inferCategoryFromStatus(status),
+      retryable:
+        overrides.retryable ??
+        contract.retryable ??
+        inferRetryableFromStatus(status),
+      details: overrides.details ?? contract.details,
+    },
+    reference,
+  );
+  const presentation = normalizeUserError(diagnostic);
+
+  return new ApiError(diagnostic, data, presentation.message);
+}
+
 export function buildApiError(
   response: Response,
   data: unknown,
   overrides: Partial<ApiErrorDiagnostic> = {},
 ): ApiError {
-  const contract = getApiErrorContract(data);
-  const status = Number(overrides.status ?? response.status ?? 500);
-  const diagnostic: ApiErrorDiagnostic = {
-    ...contract,
-    ...overrides,
-    status,
-    code: overrides.code ?? contract.code,
-    category:
-      overrides.category ??
-      contract.category ??
-      inferCategoryFromStatus(status),
-    retryable:
-      overrides.retryable ??
-      contract.retryable ??
-      inferRetryableFromStatus(status),
-    details: overrides.details ?? contract.details,
-  };
-  const presentation = normalizeUserError(diagnostic);
-
-  return new ApiError(diagnostic, data, presentation.message);
+  return buildHttpApiError(
+    response.status,
+    data,
+    overrides,
+    getResponseErrorReference(response),
+  );
 }
 
 export function buildClientApiError(
