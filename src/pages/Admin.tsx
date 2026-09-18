@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { useSession } from "../auth/session";
 import { AdminPageSkeleton } from "../components/loading/Skeleton";
+import { parseJsonResponse } from "../lib/api-transport";
+import { normalizeUserError } from "../lib/user-error-catalog";
 import "./Projects/projects.css";
 import "./Admin/admin.css";
 import AdminUserManager from "./Admin/components/AdminUserManager";
@@ -57,9 +59,9 @@ type AdminAccess = {
 };
 
 async function readJson(response: Response) {
-  const data = await response.json();
-  if (!response.ok || data?.ok === false) {
-    throw new Error(data?.error?.message || "Erro na requisição.");
+  const data = await parseJsonResponse<any>(response);
+  if (data?.ok === false) {
+    throw new Error("Não foi possível concluir a requisição administrativa.");
   }
   return data;
 }
@@ -128,7 +130,7 @@ const AdminPage: React.FC = () => {
       setAccess(accessData.access || []);
       setOrganizations(organizationsData.organizations || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar painel administrativo.");
+      setError(normalizeUserError(err).message);
     } finally {
       setHasLoaded(true);
       setIsRefreshing(false);
