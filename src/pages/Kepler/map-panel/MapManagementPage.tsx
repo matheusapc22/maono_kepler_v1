@@ -10,6 +10,7 @@ import {
 } from "react-router";
 
 import { useSession } from "../../../auth/session";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { fetchProjectMapNavigation } from "./map-panel-api";
 import type {
   MapPanelApiError,
@@ -110,7 +111,7 @@ export default function MapManagementPage() {
       <main className="maono-map-management">
         <section className="maono-map-management__error" role="alert">
           <h1>Não foi possível abrir o mapa</h1>
-          <p>{error.message}</p>
+          <p>{normalizeUserError(error).message}</p>
           <Link to="/projects">Voltar aos projetos</Link>
         </section>
       </main>
