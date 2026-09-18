@@ -48,15 +48,19 @@ test("claim é atômico e conclusão usa compare-and-set pelo checked_at", () =>
   assert.match(storageSource, /julianday\(storage_checked_at\)/);
 });
 
-test("repair é cursorizado e seleciona apenas estados inconsistentes", () => {
+test("repair mantém cursor manual e adiciona fairness/backoff para recovery", () => {
   assert.match(storageSource, /id > \?/);
   assert.match(storageSource, /ORDER BY id ASC/);
-  assert.match(storageSource, /LIMIT \?/);
+  assert.match(storageSource, /julianday\(storage_checked_at\)/);
+  assert.match(storageSource, /errorBackoffMs/);
+  assert.match(storageSource, /fairOrder/);
+  assert.match(storageSource, /dryRun/);
   assert.match(storageSource, /limit \+ 1/);
   assert.match(storageSource, /hasMore/);
   assert.match(storageSource, /nextCursor/);
-  assert.match(storageSource, /storage_status\)\) IN \('ERROR', 'DISABLED'\)/);
-  assert.match(storageSource, /storage_status\)\) = 'PENDING'/);
+  assert.match(storageSource, /UPPER\(TRIM\(storage_status\)\) = 'ERROR'/);
+  assert.match(storageSource, /UPPER\(TRIM\(storage_status\)\) = 'DISABLED'/);
+  assert.match(storageSource, /UPPER\(TRIM\(storage_status\)\) = 'PENDING'/);
 });
 
 test("endpoint propaga correlationId e não devolve mensagem técnica crua", () => {
@@ -64,6 +68,9 @@ test("endpoint propaga correlationId e não devolve mensagem técnica crua", () 
   assert.match(repairEndpointSource, /X-Correlation-Id/);
   assert.match(repairEndpointSource, /afterId/);
   assert.match(repairEndpointSource, /cursor/);
+  assert.match(repairEndpointSource, /dryRun/);
+  assert.match(repairEndpointSource, /fairOrder/);
+  assert.match(repairEndpointSource, /errorBackoffSeconds/);
   assert.match(repairEndpointSource, /errorResponseFromError/);
   assert.match(
     repairEndpointSource,

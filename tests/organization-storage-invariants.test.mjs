@@ -31,15 +31,31 @@ function clone(row) {
   return row ? { ...row } : null;
 }
 
-function candidate(row, afterId, staleBefore) {
-  if (!activeValue(row.active) || Number(row.id) <= Number(afterId)) return false;
+function candidate(
+  row,
+  {
+    afterId,
+    ignoreCursor,
+    staleBefore,
+    errorBackoffEnabled,
+    errorRetryBefore,
+  },
+) {
+  if (!activeValue(row.active)) return false;
+  if (!ignoreCursor && Number(row.id) <= Number(afterId)) return false;
 
   const path = String(row.dropbox_root_path || "").trim();
   const status = String(row.storage_status || "").trim().toUpperCase();
   const checkedAt = String(row.storage_checked_at || "");
   const checkedAtMs = Date.parse(checkedAt);
   const staleBeforeMs = Date.parse(staleBefore);
+  const errorRetryBeforeMs = Date.parse(errorRetryBefore);
   const storageError = String(row.storage_error || "").trim();
+  const errorRetryAllowed =
+    !errorBackoffEnabled ||
+    !checkedAt ||
+    !Number.isFinite(checkedAtMs) ||
+    checkedAtMs <= errorRetryBeforeMs;
 
   return (
     !path ||
@@ -47,12 +63,12 @@ function candidate(row, afterId, staleBefore) {
     !path.startsWith("/projects/") ||
     !status ||
     !["READY", "PENDING", "ERROR", "DISABLED"].includes(status) ||
-    status === "ERROR" ||
+    (status === "ERROR" && errorRetryAllowed) ||
     status === "DISABLED" ||
     (status === "PENDING" &&
       (!checkedAt ||
         !Number.isFinite(checkedAtMs) ||
-        checkedAtMs < staleBeforeMs)) ||
+        checkedAtMs <= staleBeforeMs)) ||
     (status === "READY" && Boolean(storageError))
   );
 }
@@ -195,12 +211,37 @@ function createFakeEnv(initialRows, { columns = STORAGE_COLUMNS } = {}) {
         if (
           normalized.startsWith("SELECT * FROM organizations") &&
           normalized.includes("id > ?") &&
-          normalized.includes("ORDER BY id ASC")
+          normalized.includes("LIMIT ?")
         ) {
-          const [afterId, staleBefore, limit] = args;
+          const [
+            fairOrder,
+            afterId,
+            errorBackoffEnabled,
+            errorRetryBefore,
+            staleBefore,
+            limit,
+          ] = args;
           const result = [...rows.values()]
-            .filter((row) => candidate(row, afterId, staleBefore))
-            .sort((a, b) => Number(a.id) - Number(b.id))
+            .filter((row) =>
+              candidate(row, {
+                afterId,
+                ignoreCursor: Number(fairOrder) === 1,
+                staleBefore,
+                errorBackoffEnabled: Number(errorBackoffEnabled) === 1,
+                errorRetryBefore,
+              }),
+            )
+            .sort((a, b) => {
+              if (Number(fairOrder) !== 1) {
+                return Number(a.id) - Number(b.id);
+              }
+
+              const aTime = Date.parse(String(a.storage_checked_at || ""));
+              const bTime = Date.parse(String(b.storage_checked_at || ""));
+              const safeA = Number.isFinite(aTime) ? aTime : 0;
+              const safeB = Number.isFinite(bTime) ? bTime : 0;
+              return safeA - safeB || Number(a.id) - Number(b.id);
+            })
             .slice(0, Number(limit))
             .map(clone);
           return { results: result };
@@ -593,6 +634,114 @@ test("PENDING com timestamp legado inválido é recuperável", async () => {
   assert.equal(result.checked, 1);
   assert.equal(result.ready, 1);
   assert.equal(env.__rows.get(1).storage_status, "READY");
+});
+
+test("recovery automático respeita backoff de ERROR recente", async () => {
+  const now = Date.parse("2026-09-18T12:00:00.000Z");
+  const env = createFakeEnv([
+    organization({
+      id: 1,
+      slug: "recent",
+      dropbox_root_path: "/projects/recent",
+      storage_status: "ERROR",
+      storage_checked_at: new Date(now - 60_000).toISOString(),
+    }),
+    organization({
+      id: 2,
+      slug: "old",
+      dropbox_root_path: "/projects/old",
+      storage_status: "ERROR",
+      storage_checked_at: new Date(now - 30 * 60_000).toISOString(),
+    }),
+  ]);
+  const provisioned = [];
+
+  const result = await repairActiveOrganizationStorages(env, {
+    limit: 10,
+    nowFn: () => now,
+    correlationId: "corr-prh06-backoff",
+    errorBackoffMs: 15 * 60_000,
+    fairOrder: true,
+    ensureFolder: async (_env, path) => provisioned.push(path),
+  });
+
+  assert.equal(result.checked, 1);
+  assert.equal(result.ready, 1);
+  assert.deepEqual(
+    result.organizations.map((item) => item.organizationId),
+    [2],
+  );
+  assert.equal(env.__rows.get(1).storage_status, "ERROR");
+  assert.equal(env.__rows.get(2).storage_status, "READY");
+  assert.deepEqual(provisioned, ["/projects/old/documents"]);
+});
+
+test("fair order prioriza checked_at mais antigo e não depende de cursor", async () => {
+  const now = Date.parse("2026-09-18T12:00:00.000Z");
+  const env = createFakeEnv([
+    organization({
+      id: 1,
+      slug: "newer",
+      dropbox_root_path: "/projects/newer",
+      storage_status: "ERROR",
+      storage_checked_at: new Date(now - 20 * 60_000).toISOString(),
+    }),
+    organization({
+      id: 9,
+      slug: "older",
+      dropbox_root_path: "/projects/older",
+      storage_status: "ERROR",
+      storage_checked_at: new Date(now - 60 * 60_000).toISOString(),
+    }),
+  ]);
+
+  const result = await repairActiveOrganizationStorages(env, {
+    limit: 1,
+    afterId: 999,
+    nowFn: () => now,
+    correlationId: "corr-prh06-fair",
+    fairOrder: true,
+    ensureFolder: async () => {},
+  });
+
+  assert.equal(result.checked, 1);
+  assert.equal(result.organizations[0].organizationId, 9);
+  assert.equal(result.hasMore, true);
+  assert.equal(result.nextCursor, null);
+});
+
+test("dry-run reporta candidatos sem claim, mutação ou provider call", async () => {
+  const now = Date.parse("2026-09-18T12:00:00.000Z");
+  const env = createFakeEnv([
+    organization({
+      id: 3,
+      slug: "dry",
+      dropbox_root_path: "/projects/dry",
+      storage_status: "ERROR",
+      storage_checked_at: new Date(now - 60 * 60_000).toISOString(),
+    }),
+  ]);
+  let providerCalls = 0;
+
+  const result = await repairActiveOrganizationStorages(env, {
+    limit: 10,
+    nowFn: () => now,
+    correlationId: "corr-prh06-dry",
+    fairOrder: true,
+    dryRun: true,
+    errorBackoffMs: 15 * 60_000,
+    ensureFolder: async () => {
+      providerCalls += 1;
+    },
+  });
+
+  assert.equal(providerCalls, 0);
+  assert.equal(result.dryRun, true);
+  assert.equal(result.ready, 0);
+  assert.equal(result.failed, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.organizations[0].reason, "ERROR_RETRY");
+  assert.equal(env.__rows.get(3).storage_status, "ERROR");
 });
 
 test("schema 0009 é exigido integralmente", async () => {

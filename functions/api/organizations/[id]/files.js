@@ -8,6 +8,7 @@ import {
   parsePositiveInteger,
 } from "../../../_lib/organizations.js";
 import {
+  buildOrganizationDocumentsRoot,
   buildStoredFileName,
   createPendingFileRecord,
   deleteOrganizationBinary,
@@ -24,9 +25,10 @@ import {
   validateProjectForOrganization,
 } from "../../../_lib/organization-files.js";
 import {
-  ensureOrganizationStorage,
-  publicOrganizationStorage,
-} from "../../../_lib/organization-storage.js";
+  publicOrganizationStorageReadiness,
+  readOrganizationStorageReadiness,
+  requireOrganizationStorageReady,
+} from "../../../_lib/organization-storage-readiness.js";
 import { filterVisibleOrganizationFiles } from "../../../_lib/geojson-access.js";
 
 export async function onRequest(context) {
@@ -64,9 +66,9 @@ export async function onRequestGet({ env, request, params }) {
 
     const organization = await getOrganizationOrThrow(env, organizationId);
 
-    // Autorreparo: toda organização ativa acessada por esta área precisa ter
-    // uma raiz canônica e a subpasta /documents fisicamente disponíveis.
-    const storage = await ensureOrganizationStorage(env, organization);
+    // Leitura D1-only: a tela continua disponível mesmo quando o provider
+    // de storage está indisponível. O status é apenas reportado, sem healing.
+    const storage = readOrganizationStorageReadiness(organization);
 
     const rows = await listRowsByOrganization(
       env,
@@ -85,7 +87,7 @@ export async function onRequestGet({ env, request, params }) {
       {
         ok: true,
         requestId,
-        storage: publicOrganizationStorage(storage),
+        storage: publicOrganizationStorageReadiness(storage),
         files: visibleRows.map(publicOrganizationFile),
       },
       {
@@ -135,9 +137,10 @@ export async function onRequestPost({ env, request, params }) {
 
     const organization = await getOrganizationOrThrow(env, organizationId);
 
-    // O provisionamento ocorre antes de interpretar e persistir o arquivo.
-    // Se a organização for legada, o caminho é corrigido no D1 e criado no Dropbox.
-    const storage = await ensureOrganizationStorage(env, organization);
+    // Escrita física exige READY, mas não dispara healing dentro do request.
+    const storage = requireOrganizationStorageReady(organization, {
+      operation: "document.upload.readiness",
+    });
 
     upload = await readOrganizationFileUpload(request);
     await validateProjectForOrganization(env, organizationId, upload.projectId);
@@ -159,7 +162,7 @@ export async function onRequestPost({ env, request, params }) {
             ok: true,
             idempotent: true,
             requestId,
-            storage: publicOrganizationStorage(storage),
+            storage: publicOrganizationStorageReadiness(storage),
             file: publicOrganizationFile(previous),
           },
           {
@@ -181,7 +184,7 @@ export async function onRequestPost({ env, request, params }) {
       throw conflict;
     }
 
-    const documentsRoot = storage.documentsRoot;
+    const documentsRoot = buildOrganizationDocumentsRoot(organization);
     const storedFileName = buildStoredFileName(upload.originalName);
     uploadedPath = organizationFileDropboxPath(documentsRoot, storedFileName);
 
@@ -229,7 +232,7 @@ export async function onRequestPost({ env, request, params }) {
       {
         ok: true,
         requestId,
-        storage: publicOrganizationStorage(storage),
+        storage: publicOrganizationStorageReadiness(storage),
         file: publicOrganizationFile(activeFile || pendingFile),
       },
       {
