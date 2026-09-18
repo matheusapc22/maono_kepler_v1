@@ -4,8 +4,8 @@ import {
   getResponseErrorReference,
   withErrorReference,
   type ApiErrorDiagnostic,
-} from "./error-contract";
-import { normalizeUserError } from "./user-error-catalog";
+} from "./error-contract.ts";
+import { normalizeUserError } from "./user-error-catalog.ts";
 
 export type ParsedJsonBody = {
   valid: boolean;
