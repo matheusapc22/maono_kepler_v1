@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   buildBaseline,
+  classifySurface,
   compareWithBaseline,
+  compareWithBaselineExact,
   scanText,
   summarize,
 } from "./audit-user-error-sinks.mjs";
@@ -62,7 +64,16 @@ test("baseline automático inclui apenas regras high-signal", () => {
   assert.equal(baseline.byFile["src/a.tsx::implementation-copy"], undefined);
 });
 
-test("ratchet permite redução de dívida", () => {
+test("classifica superfícies Admin/Ops e Change Requests separadamente", () => {
+  assert.equal(classifySurface("src/pages/AdminFiles.tsx"), "admin-ops");
+  assert.equal(
+    classifySurface("src/pages/Kepler/change-requests/review-api.ts"),
+    "paused-change-requests",
+  );
+  assert.equal(classifySurface("src/pages/Login/index.tsx"), "product-ui");
+});
+
+test("ratchet legado permite redução de dívida", () => {
   const summary = { byFile: { "src/a.tsx::raw-error-message": 1 } };
   const baseline = {
     version: 2,
@@ -70,6 +81,28 @@ test("ratchet permite redução de dívida", () => {
     byFile: { "src/a.tsx::raw-error-message": 2 },
   };
   assert.deepEqual(compareWithBaseline(summary, baseline), []);
+});
+
+test("ratchet estrito falha também quando o baseline mantém folga obsoleta", () => {
+  const summary = { byFile: { "src/a.tsx::raw-error-message": 1 } };
+  const baseline = {
+    version: 3,
+    rules: ["raw-error-message"],
+    byFile: { "src/a.tsx::raw-error-message": 2 },
+  };
+  const drift = compareWithBaselineExact(summary, baseline);
+  assert.equal(drift.length, 1);
+  assert.equal(drift[0].direction, "stale-baseline");
+});
+
+test("ratchet estrito aceita baseline idêntico ao inventário", () => {
+  const summary = { byFile: { "src/a.tsx::raw-error-message": 1 } };
+  const baseline = {
+    version: 3,
+    rules: ["raw-error-message"],
+    byFile: { "src/a.tsx::raw-error-message": 1 },
+  };
+  assert.deepEqual(compareWithBaselineExact(summary, baseline), []);
 });
 
 test("ratchet falha quando um sink high-signal aumenta ou surge em arquivo novo", () => {
