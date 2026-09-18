@@ -1,4 +1,4 @@
-import { parseResponseJson } from "../../lib/api-transport";
+import { parseResponseJson } from "../../lib/api-transport.ts";
 
 import {
   buildSaveRequestHeaders,
@@ -42,14 +42,14 @@ type ProjectCreateFlowOptions = {
   legacy: LegacyPreview;
   fetchImpl?: typeof fetch;
   onPrepared?: (prepared: PreparedProjectCreateTransport) => void;
-  onPhase?: (phase: ProjectCreateRequestStage) => void;
+  onStage?: (stage: ProjectCreateRequestStage) => void;
 };
 
 export class ProjectCreateFlowError extends Error {
   response: Response;
   data: any;
   diagnostics: SaveResponseDiagnostics;
-  phase: ProjectCreateRequestStage;
+  stage: ProjectCreateRequestStage;
   prepared: PreparedProjectCreateTransport;
 
   constructor(
@@ -58,13 +58,13 @@ export class ProjectCreateFlowError extends Error {
       response,
       data,
       diagnostics,
-      phase,
+      stage,
       prepared,
     }: {
       response: Response;
       data: any;
       diagnostics: SaveResponseDiagnostics;
-      phase: ProjectCreateRequestStage;
+      stage: ProjectCreateRequestStage;
       prepared: PreparedProjectCreateTransport;
     },
   ) {
@@ -73,13 +73,13 @@ export class ProjectCreateFlowError extends Error {
     this.response = response;
     this.data = data;
     this.diagnostics = diagnostics;
-    this.phase = phase;
+    this.stage = stage;
     this.prepared = prepared;
   }
 }
 
 async function readJsonResponse(response: Response): Promise<any> {
-  const parsed = await parseResponseJson<any>(response);
+  const parsed = await parseResponseJson(response);
 
   if (parsed.valid) {
     return parsed.data;
@@ -125,12 +125,12 @@ function flowError(
   response: Response,
   data: any,
   diagnostics: SaveResponseDiagnostics,
-  phase: ProjectCreateRequestStage,
+  stage: ProjectCreateRequestStage,
   prepared: PreparedProjectCreateTransport,
 ) {
   return new ProjectCreateFlowError(
     data?.error?.message || "Não foi possível concluir a criação do projeto.",
-    { response, data, diagnostics, phase, prepared },
+    { response, data, diagnostics, stage, prepared },
   );
 }
 
@@ -184,7 +184,7 @@ export async function executeProjectCreateFlow({
   legacy,
   fetchImpl = fetch,
   onPrepared = () => {},
-  onPhase = () => {},
+  onStage = () => {},
 }: ProjectCreateFlowOptions): Promise<ProjectCreateFlowResult> {
   const prepared = prepareProjectCreateTransport(attempt, {
     name,
@@ -196,7 +196,7 @@ export async function executeProjectCreateFlow({
   });
   onPrepared(prepared);
 
-  onPhase("creating_record");
+  onStage("creating_record");
   const created = await sendCreateRequest(fetchImpl, attempt, prepared);
   if (
     !created.response.ok ||
@@ -220,7 +220,7 @@ export async function executeProjectCreateFlow({
   // Retry pós-commit: se a tentativa anterior terminou e só a resposta se
   // perdeu, o POST idempotente devolve ACTIVE e o cliente não reenvia bytes.
   if (prepared.large && !isProjectCreationActive(finalData)) {
-    onPhase("preparing_files");
+    onStage("preparing_files");
     const streamed = await sendLargeConfig(
       fetchImpl,
       attempt,
@@ -243,7 +243,7 @@ export async function executeProjectCreateFlow({
     }
   }
 
-  onPhase("finalizing");
+  onStage("finalizing");
   if (!isProjectCreationActive(finalData)) {
     const inactiveData = {
       ...(finalData || {}),
