@@ -46,6 +46,17 @@ test("kernel técnico pode preservar identificadores sem ser classificado como U
   );
 });
 
+test("fluxo interno de criação pode preservar stage operacional", () => {
+  const findings = scanText(
+    `const stage = error.stage; onStage(stage);`,
+    "src/pages/Kepler/project-create-flow.ts",
+  );
+  assert.equal(
+    findings.some((item) => item.rule === "diagnostic-id"),
+    false,
+  );
+});
+
 test("não classifica copy de produto sem diagnóstico técnico", () => {
   const findings = scanText(
     `setError("Não foi possível concluir esta ação. Tente novamente.");`,
