@@ -143,7 +143,10 @@ function storageResult({
   };
 }
 
-export async function ensureOrganizationStorageSchema(env) {
+export async function ensureOrganizationStorageSchema(
+  env,
+  { correlationId = null } = {},
+) {
   const columns = await getTableColumns(env, "organizations");
   const missing = STORAGE_SCHEMA_COLUMNS.filter((column) => !columns.has(column));
 
@@ -154,6 +157,7 @@ export async function ensureOrganizationStorageSchema(env) {
       "ORGANIZATION_STORAGE_SCHEMA_OUTDATED",
       "organization.storage.schema",
       {
+        correlationId,
         retryable: false,
         details: { missingColumns: missing },
       },
@@ -319,9 +323,10 @@ export async function ensureOrganizationStorage(
     );
   }
 
-  await ensureOrganizationStorageSchema(env);
-
   const operationCorrelationId = correlationId || createCorrelationId();
+  await ensureOrganizationStorageSchema(env, {
+    correlationId: operationCorrelationId,
+  });
   const rootPath = canonicalOrganizationRoot(organization);
   const documentsRoot = `${rootPath}/${DOCUMENTS_FOLDER}`;
   const configuredPath = normalizeDropboxFolderPath(
@@ -560,11 +565,13 @@ export async function repairActiveOrganizationStorages(
     ensureFolder = ensureDropboxFolder,
   } = {},
 ) {
-  await ensureOrganizationStorageSchema(env);
+  const operationCorrelationId = correlationId || createCorrelationId();
+  await ensureOrganizationStorageSchema(env, {
+    correlationId: operationCorrelationId,
+  });
 
   const safeLimit = normalizeLimit(limit);
   const safeAfterId = normalizeAfterId(afterId);
-  const operationCorrelationId = correlationId || createCorrelationId();
   const startedAtMs = nowMillis(nowFn);
   const staleBefore = isoAt(
     startedAtMs - Math.max(1, Number(claimTtlMs) || 1),
