@@ -2,7 +2,7 @@ import {
   apiErrorDiagnostic,
   type ApiErrorDiagnostic,
   type ErrorCategory,
-} from "./error-contract";
+} from "./error-contract.ts";
 
 export type UserErrorSeverity = "info" | "warning" | "error";
 export type UserErrorAction =
