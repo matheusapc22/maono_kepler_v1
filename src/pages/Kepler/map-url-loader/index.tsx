@@ -4,7 +4,7 @@ import { useParams } from "react-router";
 import { addDataToMap, removeDataset, toggleModal } from "@kepler.gl/actions";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
-import Spinner from "../../../components/Spinner";
+import { useLoadingActivity } from "../../../components/loading";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
@@ -220,6 +220,8 @@ const MapUrlLoader = connectStore(
     const [error, setError] = useState<string | null>(null);
     const [retryToken, setRetryToken] = useState(0);
 
+    useLoadingActivity(isMapLoading);
+
     useEffect(() => {
       if (!isMapLoading || currentModal == null) return;
       dispatch(toggleModal(null));
@@ -260,6 +262,7 @@ const MapUrlLoader = connectStore(
 
         const visualReadinessFailure = isMapVisualReadinessError(err);
         if (visualReadinessFailure) {
+          dispatch(setLoadingMapStatus(true));
           let recovered = false;
           try {
             recovered = await waitForMaonoMapLateVisualRecovery({
@@ -272,6 +275,7 @@ const MapUrlLoader = connectStore(
           if (controller.signal.aborted) return;
           if (recovered) {
             setError(null);
+            dispatch(setLoadingMapStatus(false));
             return;
           }
         }
@@ -344,20 +348,7 @@ const MapUrlLoader = connectStore(
       );
     }
 
-    return isMapLoading ? (
-      <div
-        className="maono-map-central-loading fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-2 bg-black/50"
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-      >
-        <Spinner className="h-10 w-10 text-white" />
-        <p className="animate-pulse text-white text-center">
-          Os dados estão sendo carregados... <br /> Isso pode levar alguns
-          segundos — logo tudo estará pronto para visualização.
-        </p>
-      </div>
-    ) : null;
+    return null;
   },
 );
 

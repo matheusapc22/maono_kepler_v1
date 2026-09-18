@@ -360,7 +360,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
             ) : null}
           </form>
 
-          {phase !== "ready" ? (
+          {phase === "error" ? (
             <section
               aria-label="Progresso da criação"
               className="mt-6 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
@@ -368,15 +368,6 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
               <h3 className="text-sm font-black text-white">
                 Progresso
               </h3>
-
-              {phase === "capturing" ? (
-                <p
-                  role="status"
-                  className="mt-3 text-sm font-semibold text-emerald-200"
-                >
-                  Preparando configuração e visualização do mapa…
-                </p>
-              ) : null}
 
               <ol className="mt-4 grid gap-3">
                 {STEPS.map((step, index) => {
@@ -447,11 +438,9 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
             disabled={busy}
             className="min-h-12 rounded-xl border border-emerald-300/50 bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white shadow-xl transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
           >
-            {busy
-              ? "Criando projeto…"
-              : phase === "error"
-                ? "Tentar novamente"
-                : "Criar e salvar projeto"}
+            {phase === "error"
+              ? "Tentar novamente"
+              : "Criar e salvar projeto"}
           </button>
         </footer>
       </section>
