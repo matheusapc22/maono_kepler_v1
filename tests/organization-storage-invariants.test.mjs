@@ -531,9 +531,11 @@ test("schema 0009 é exigido integralmente", async () => {
     () =>
       ensureOrganizationStorage(env, organization(), {
         ensureFolder: async () => {},
+        correlationId: "corr-prh04-schema",
       }),
     (error) => {
       assert.equal(error.code, "ORGANIZATION_STORAGE_SCHEMA_OUTDATED");
+      assert.equal(error.correlationId, "corr-prh04-schema");
       assert.deepEqual(error.details.missingColumns, ["storage_checked_at"]);
       return true;
     },
