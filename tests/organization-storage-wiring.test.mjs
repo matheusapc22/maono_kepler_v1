@@ -45,6 +45,7 @@ test("claim é atômico e conclusão usa compare-and-set pelo checked_at", () =>
     /storage_status = 'PENDING'[\s\S]*storage_checked_at = \?[\s\S]*RETURNING \*/,
   );
   assert.match(storageSource, /ORGANIZATION_STORAGE_CLAIM_TTL_MS = 120_000/);
+  assert.match(storageSource, /julianday\(storage_checked_at\)/);
 });
 
 test("repair é cursorizado e seleciona apenas estados inconsistentes", () => {
