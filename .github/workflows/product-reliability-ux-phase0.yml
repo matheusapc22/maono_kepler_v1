@@ -64,7 +64,7 @@ jobs:
           cat reliability-generated-baseline.json
 
       - name: Enforce error-sink ratchet
-        run: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json
+        run: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
 
       - name: Build application
         run: npm run build
