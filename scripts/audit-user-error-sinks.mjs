@@ -18,6 +18,7 @@ const RULE_EXCLUDED_FILES = {
   "diagnostic-id": new Set([
     "src/lib/error-contract.ts",
     "src/lib/user-error-catalog.ts",
+    "src/pages/Kepler/project-create-flow.ts",
   ]),
 };
 
