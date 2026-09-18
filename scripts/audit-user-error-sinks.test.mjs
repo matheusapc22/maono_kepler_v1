@@ -71,6 +71,14 @@ test("classifica superfícies Admin/Ops e Change Requests separadamente", () => 
     "paused-change-requests",
   );
   assert.equal(classifySurface("src/pages/Login/index.tsx"), "product-ui");
+  assert.equal(
+    classifySurface("src/pages/Kepler/map-panel/buffer-api.ts"),
+    "internal-diagnostic",
+  );
+  assert.equal(
+    classifySurface("src/pages/Kepler/cloud-providers/carto/carto-provider.ts"),
+    "internal-diagnostic",
+  );
 });
 
 test("ratchet legado permite redução de dívida", () => {
