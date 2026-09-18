@@ -1,23 +1,34 @@
 import React, { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router";
-import { login } from "../../lib/api";
+import { LoadingOverlay } from "../../components/loading";
+import { usePreparedNavigate } from "../../hooks/usePreparedNavigate";
 import { useSession } from "../../hooks/useSession";
 import { normalizeUserError } from "../../lib/user-error-catalog";
 
 const LoginPage: React.FC = () => {
-  const navigate = useNavigate();
   const session = useSession();
+  const { prepareNavigate } = usePreparedNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!session.loading && session.authenticated) {
-      navigate("/projects", { replace: true });
+    if (!session.loading && session.authenticated && !submitting) {
+      void prepareNavigate({
+        route: "projects",
+        to: "/projects",
+        replace: true,
+      }).catch(() => {
+        window.location.assign("/projects");
+      });
     }
-  }, [session.loading, session.authenticated, navigate]);
+  }, [
+    prepareNavigate,
+    session.authenticated,
+    session.loading,
+    submitting,
+  ]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,13 +36,31 @@ const LoginPage: React.FC = () => {
     setError(null);
 
     try {
-      await login(email, password);
-      navigate("/projects", { replace: true });
+      const navigated = await prepareNavigate({
+        route: "projects",
+        to: "/projects",
+        replace: true,
+        beforeNavigate: () => session.login(email, password),
+      });
+
+      if (!navigated) {
+        setSubmitting(false);
+      }
     } catch (err) {
       setError(normalizeUserError(err).message);
-    } finally {
       setSubmitting(false);
     }
+  }
+
+  if (session.loading && !submitting) {
+    return (
+      <LoadingOverlay
+        active
+        scope="viewport"
+        loaderSize="page"
+        accessibleLabel="Verificando sessão"
+      />
+    );
   }
 
   return (
@@ -105,7 +134,7 @@ const LoginPage: React.FC = () => {
               type="submit"
               disabled={submitting}
             >
-              {submitting ? "Entrando..." : "Entrar"}
+              Entrar
             </button>
 
             <div className="pt-1 text-center">

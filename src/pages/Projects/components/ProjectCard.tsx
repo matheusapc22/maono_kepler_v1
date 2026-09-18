@@ -25,7 +25,7 @@ type ProjectCardProps = {
   actionsOpen?: boolean;
   favoriteBusy?: boolean;
   opening?: boolean;
-  onOpen?: (project: ProjectListItem) => void;
+  onOpen?: (project: ProjectListItem) => void | Promise<void>;
   onActionsOpenChange?: (open: boolean) => void;
   onEditMetadata?: (project: ProjectListItem) => void;
   onFavoriteToggle?: (project: ProjectListItem) => void | Promise<void>;
@@ -801,10 +801,22 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 return;
               }
 
-              onOpen?.(project);
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              ) {
+                return;
+              }
+
+              if (onOpen) {
+                event.preventDefault();
+                void onOpen(project);
+              }
             }}
           >
-            <span>{opening ? "Abrindo..." : "Abrir projeto"}</span>
+            <span>Abrir projeto</span>
             <ArrowIcon />
           </Link>
         </footer>
