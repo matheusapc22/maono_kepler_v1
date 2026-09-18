@@ -5,6 +5,7 @@ import React, {
 } from "react";
 
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
+import { usePreparedNavigate } from "../../../hooks/usePreparedNavigate";
 import {
   fetchProjectThumbnailStatus,
   type ProjectListItem,
@@ -125,6 +126,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   const [actionsOpenSlug, setActionsOpenSlug] = useState<string | null>(null);
   const [editingProject, setEditingProject] =
     useState<ProjectListItem | null>(null);
+  const { prepareNavigate } = usePreparedNavigate();
 
   useEffect(() => {
     if (
@@ -307,8 +309,26 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
             favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
             opening={openingSlug === project.slug}
             onOpen={(selectedProject) => {
+              const destination =
+                `/projects/${encodeURIComponent(selectedProject.slug)}/manage`;
+
               setOpeningSlug(selectedProject.slug);
               setActionsOpenSlug(null);
+
+              void prepareNavigate({
+                route: "mapManagement",
+                to: destination,
+              })
+                .then((navigated) => {
+                  if (!navigated) {
+                    setOpeningSlug((current) =>
+                      current === selectedProject.slug ? null : current,
+                    );
+                  }
+                })
+                .catch(() => {
+                  window.location.assign(destination);
+                });
             }}
             onActionsOpenChange={(open) => {
               setActionsOpenSlug(open ? project.slug : null);

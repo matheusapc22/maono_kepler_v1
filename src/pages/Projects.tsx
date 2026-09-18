@@ -15,6 +15,7 @@ import {
   type MaonoUser,
 } from "../auth/session";
 import { ProjectsPageSkeleton } from "../components/loading/Skeleton";
+import { usePreparedNavigate } from "../hooks/usePreparedNavigate";
 import { normalizeUserError } from "../lib/user-error-catalog";
 import ProjectsSidebar, {
   type ProjectSidebarSection,
@@ -308,6 +309,7 @@ const ProjectsPage: React.FC = () => {
     logout,
   } = useSession();
   const navigate = useNavigate();
+  const { prepareNavigate } = usePreparedNavigate();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarSection, setSidebarSection] =
@@ -440,6 +442,28 @@ const ProjectsPage: React.FC = () => {
   async function handleLogout() {
     await logout();
     navigate("/login", { replace: true });
+  }
+
+  function handleNewMapNavigation(
+    event: React.MouseEvent<HTMLAnchorElement>,
+  ) {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    void prepareNavigate({
+      route: "kepler",
+      to: "/maps/new/create",
+    }).catch(() => {
+      window.location.assign("/maps/new/create");
+    });
   }
 
   async function handleOrganizationSwitch(organizationId: number | string) {
@@ -578,6 +602,7 @@ const ProjectsPage: React.FC = () => {
                   <Link
                     to="/maps/new/create"
                     className="mm-btn primary mm-new-map-btn"
+                    onClick={handleNewMapNavigation}
                   >
                     Novo mapa
                   </Link>
