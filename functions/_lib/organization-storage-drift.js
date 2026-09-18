@@ -294,6 +294,12 @@ function classifyOrganization(
     }
   }
 
+  const pathDecisionRequired = organizationIssues.some(
+    (item) =>
+      item.code === ORGANIZATION_STORAGE_DRIFT_CODE.PATH_INVALID ||
+      item.code === ORGANIZATION_STORAGE_DRIFT_CODE.PATH_LEGACY,
+  );
+
   return {
     id: Number(organization.id),
     name: organization.name || null,
@@ -307,7 +313,10 @@ function classifyOrganization(
     storageCheckedAt: organization.storage_checked_at || null,
     issues: organizationIssues,
     fileIssues,
-    repairable: organizationIssues.some((item) => item.repairable),
+    repairable:
+      !pathDecisionRequired &&
+      organizationIssues.some((item) => item.repairable),
+    pathDecisionRequired,
     _row: organization,
   };
 }
@@ -565,7 +574,7 @@ export async function applyOrganizationStorageDriftRepairs(
       .filter((item) => item.repairable)
       .map((item) => item.code);
 
-    if (repairableIssues.length === 0) {
+    if (!inventory.repairable || repairableIssues.length === 0) {
       skipped.push({
         organizationId,
         reason: "NO_APPROVED_REPAIRABLE_DRIFT",

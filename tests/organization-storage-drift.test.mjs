@@ -285,6 +285,52 @@ test("path legacy e orphan nunca são auto-aplicados", async () => {
   assert.equal(report.orphanFolders.length, 1);
 });
 
+test("path inválido bloqueia apply mesmo quando o estado também seria repairable", async () => {
+  const report = await buildOrganizationStorageDriftReport(
+    {},
+    {
+      correlationId: "corr-prh07-path-block",
+      nowFn: () => NOW,
+      ...deps({
+        organizations: [
+          org({
+            id: 11,
+            slug: "cliente-onze",
+            dropbox_root_path: "/legacy/cliente-onze",
+            storage_status: "UNKNOWN",
+          }),
+        ],
+        entries: [],
+      }),
+    },
+  );
+
+  assert.equal(report.organizations[0].pathDecisionRequired, true);
+  assert.equal(report.organizations[0].repairable, false);
+
+  let ensureCalls = 0;
+  const result = await applyOrganizationStorageDriftRepairs(
+    {},
+    {
+      approvedOrganizationIds: [11],
+      confirmation: "APPLY_APPROVED_STORAGE_DRIFT",
+      correlationId: "corr-prh07-path-block",
+      buildReport: async () => report,
+      ensureStorage: async () => {
+        ensureCalls += 1;
+      },
+    },
+  );
+
+  assert.equal(ensureCalls, 0);
+  assert.equal(result.repaired, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(
+    result.organizations[0].reason,
+    "NO_APPROVED_REPAIRABLE_DRIFT",
+  );
+});
+
 test("apply exige confirmação explícita e lote aprovado limitado", async () => {
   await assert.rejects(
     () =>
