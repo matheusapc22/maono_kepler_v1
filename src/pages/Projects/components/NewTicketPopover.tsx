@@ -222,12 +222,12 @@ export default function NewTicketPopover({
                     : "uploading",
               },
             })),
-          onStage: (stage) =>
+          onPhase: (uploadPhase) =>
             setUploadStates((current) => ({
               ...current,
               [key]: {
                 progress: current[key]?.progress || 0,
-                status: stage,
+                status: uploadPhase,
               },
             })),
         });
@@ -294,12 +294,12 @@ export default function NewTicketPopover({
                   : "uploading",
             },
           })),
-        onStage: (stage) =>
+        onPhase: (uploadPhase) =>
           setUploadStates((current) => ({
             ...current,
             [key]: {
               progress: current[key]?.progress || 0,
-              status: stage,
+              status: uploadPhase,
             },
           })),
       });
