@@ -739,8 +739,8 @@ const MaonoSaveButton: React.FC = () => {
             transport,
           });
         },
-        onPhase(phase) {
-          setCreationStage(phase);
+        onStage(stage) {
+          setCreationStage(stage);
         },
       });
 
@@ -786,7 +786,7 @@ const MaonoSaveButton: React.FC = () => {
             error.prepared.serializeDurationMs ?? serializeDurationMs,
           durationMs: clientSaveTotalDurationMs(attempt),
           expectedRevision: 0,
-          stage: data?.error?.details?.stage ?? error.phase,
+          stage: data?.error?.details?.stage ?? error.stage,
           code: data?.error?.code ?? "PROJECT_CREATION_FAILED",
           category: data?.error?.category ?? null,
           retryable:
@@ -804,7 +804,7 @@ const MaonoSaveButton: React.FC = () => {
           refresh();
         }
         setCreationFailedStage(
-          normalizeCreationStage(error.phase),
+          normalizeCreationStage(error.stage),
         );
         const failure = getResponseFailureMessage(
           error.response,
