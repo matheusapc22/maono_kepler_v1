@@ -20,6 +20,10 @@ import store from "./store";
 import { BrowserRouter } from "react-router";
 import { SessionProvider } from "./auth/session";
 import { LoadingProvider } from "./components/loading";
+import {
+  acknowledgeInitialBootRuntime,
+  completeInitialBootLoader,
+} from "./components/loading/initial-boot-loader";
 import { installMapLoadObservability } from "./pages/Kepler/observability/map-load-runtime";
 
 function enableWebglScreenshotReadback() {
@@ -51,9 +55,13 @@ function enableWebglScreenshotReadback() {
 enableWebglScreenshotReadback();
 installMapLoadObservability();
 
-if (typeof window !== "undefined" && window.__MAONO_BOOT_TIMEOUT__) {
-  window.clearTimeout(window.__MAONO_BOOT_TIMEOUT__);
-  window.__MAONO_BOOT_TIMEOUT__ = undefined;
+acknowledgeInitialBootRuntime();
+
+if (
+  typeof window !== "undefined" &&
+  !/^\/login\/?$/.test(window.location.pathname)
+) {
+  completeInitialBootLoader();
 }
 
 const rootElement = document.getElementById("root");

@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useLoadingActivity } from "../../components/loading";
+import {
+  useInitialBootReadiness,
+  useLoading,
+  useLoadingActivity,
+} from "../../components/loading";
 import { usePreparedNavigate } from "../../hooks/usePreparedNavigate";
 import { useSession } from "../../hooks/useSession";
 import { normalizeUserError } from "../../lib/user-error-catalog";
 
 const LoginPage: React.FC = () => {
   const session = useSession();
+  const { initialBootActive } = useLoading();
   const { prepareNavigate } = usePreparedNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +51,8 @@ const LoginPage: React.FC = () => {
     submitting ||
     redirecting ||
     authenticatedRedirectPending;
-  useLoadingActivity(loginLoading);
+  useLoadingActivity(loginLoading && !initialBootActive);
+  useInitialBootReadiness(!loginLoading);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
