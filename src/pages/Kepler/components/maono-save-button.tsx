@@ -8,10 +8,7 @@ import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import { useSession } from "../../../auth/session";
 import { UniversalLoader } from "../../../components/loading";
-import {
-  buildApiError,
-  parseResponseJson,
-} from "../../../lib/api-transport";
+import { buildApiError } from "../../../lib/api-transport";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import {
   captureProjectThumbnail,
@@ -39,11 +36,8 @@ import {
 import { emitMapPanelTelemetry } from "../map-panel/map-panel-telemetry";
 import {
   beginClientSaveAttempt,
-  buildSaveRequestHeaders,
   clientSaveTotalDurationMs,
   isNetworkSaveFailure,
-  readSaveResponseDiagnostics,
-  serializeSaveRequest,
   type ClientSaveAttempt,
 } from "../save-observability";
 import {
@@ -109,23 +103,6 @@ type ProjectWriteResponse = {
   };
   error?: ApiError;
 };
-
-async function readJsonResponse(response: Response): Promise<any> {
-  const parsed = await parseResponseJson(response);
-
-  if (parsed.valid) {
-    return parsed.data;
-  }
-
-  return {
-    ok: false,
-    error: {
-      code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
-      category: "INFRASTRUCTURE",
-      retryable: true,
-    },
-  };
-}
 
 function userErrorMessage(error: unknown) {
   const presentation = normalizeUserError(error);
