@@ -68,12 +68,16 @@ test("overlay suporta viewport e container sem impor tela de loading", () => {
 test("provider usa controller tokenizado, ownership de handoff e política anti-flicker", () => {
   assert.match(provider, /DEFAULT_SHOW_AFTER_MS = 120/);
   assert.match(provider, /DEFAULT_MIN_VISIBLE_MS = 250/);
-  assert.match(provider, /controller\.begin\(\)/);
+  assert.match(provider, /controller\.begin\(options\?\.metadata\)/);
   assert.match(provider, /controller\.end\(token\)/);
   assert.match(provider, /controller\.owns\(token\)/);
   assert.match(provider, /LoadingHandoffController/);
   assert.match(provider, /cancelOutsideLocation/);
-  assert.match(provider, /controller\.withLoading\(operation\)/);
+  assert.match(
+    provider,
+    /controller\.withLoading\([\s\S]*operation,[\s\S]*options\?\.metadata/,
+  );
+  assert.match(provider, /LoadingStaleObserver/);
 });
 
 test("fallback genérico de rota usa somente o loader universal", () => {

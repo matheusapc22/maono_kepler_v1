@@ -31,6 +31,8 @@ test("prepared navigation prepara chunk e pré-condição antes de alterar a rot
   assert.match(preparedHook, /preloadRouteModule\(route\)/);
   assert.match(preparedHook, /beforeNavigate\(abortController\.signal\)/);
   assert.match(preparedHook, /activeLoadingTokenRef/);
+  assert.match(preparedHook, /label: "prepared-navigation"/);
+  assert.match(preparedHook, /scope: "navigation"/);
   assert.match(preparedHook, /activeAbortControllerRef/);
   assert.match(preparedHook, /controller\.isCurrent\(intent\)/);
   assert.match(preparedHook, /navigate\(destination, \{ replace \}\)/);
@@ -48,11 +50,15 @@ test("Login canônico usa sessão, prefetch e handoff para Projects", () => {
   );
   assert.match(login, /handoffKey: "login-projects"/);
   assert.match(login, /authenticatedRedirectPending/);
-  assert.match(login, /useLoadingActivity\(session\.loading && !initialBootActive\)/);
+  assert.match(
+    login,
+    /useLoadingActivity\([\s\S]*session\.loading && !initialBootActive,[\s\S]*label: "session-bootstrap"/,
+  );
   assert.match(login, /useInitialBootReadiness\(bootCanCompleteOnLogin\)/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
   assert.doesNotMatch(login, /assetsReady/);
   assert.match(login, /directLoginControllerRef/);
+  assert.match(login, /label: "auth-login"/);
   assert.match(login, /directLoginControllerRef\.current\?\.abort\(\)/);
 });
 

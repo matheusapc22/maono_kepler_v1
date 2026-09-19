@@ -1,22 +1,39 @@
 import { useLayoutEffect, useRef } from "react";
 
 import { useLoading } from "./LoadingProvider";
-import type { LoadingToken } from "./loading-controller";
+import type {
+  LoadingToken,
+  LoadingTokenMetadataInput,
+} from "./loading-controller";
 
 type LoadingActivityOptions = {
   immediate?: boolean;
+  metadata?: LoadingTokenMetadataInput;
 };
 
 export function useLoadingActivity(
   active: boolean,
-  { immediate = true }: LoadingActivityOptions = {},
+  {
+    immediate = true,
+    metadata,
+  }: LoadingActivityOptions = {},
 ) {
   const { beginLoading, endLoading } = useLoading();
   const tokenRef = useRef<LoadingToken | null>(null);
+  const label = metadata?.label ?? "unclassified";
+  const scope = metadata?.scope ?? "system";
+  const surface = metadata?.surface ?? "viewport";
 
   useLayoutEffect(() => {
     if (active && tokenRef.current === null) {
-      tokenRef.current = beginLoading({ immediate });
+      tokenRef.current = beginLoading({
+        immediate,
+        metadata: {
+          label,
+          scope,
+          surface,
+        },
+      });
       return;
     }
 
@@ -24,7 +41,15 @@ export function useLoadingActivity(
       endLoading(tokenRef.current);
       tokenRef.current = null;
     }
-  }, [active, beginLoading, endLoading, immediate]);
+  }, [
+    active,
+    beginLoading,
+    endLoading,
+    immediate,
+    label,
+    scope,
+    surface,
+  ]);
 
   useLayoutEffect(
     () => () => {

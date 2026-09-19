@@ -53,7 +53,16 @@ const LoginPage: React.FC = () => {
     unauthenticatedReady ||
     (authenticatedRedirectPending && !projectsLanding);
 
-  useLoadingActivity(session.loading && !initialBootActive);
+  useLoadingActivity(
+    session.loading && !initialBootActive,
+    {
+      metadata: {
+        label: "session-bootstrap",
+        scope: "auth",
+        surface: "viewport",
+      },
+    },
+  );
   useInitialBootReadiness(bootCanCompleteOnLogin);
 
   useEffect(
@@ -138,10 +147,19 @@ const LoginPage: React.FC = () => {
         return;
       }
 
-      await withLoading(() =>
-        session.login(email, password, {
-          signal: directController.signal,
-        }),
+      await withLoading(
+        () =>
+          session.login(email, password, {
+            signal: directController.signal,
+          }),
+        {
+          immediate: true,
+          metadata: {
+            label: "auth-login",
+            scope: "auth",
+            surface: "viewport",
+          },
+        },
       );
 
       if (!directController.signal.aborted) {

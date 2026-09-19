@@ -28,7 +28,13 @@ export default function MapManagementPage() {
     useState<MapPanelApiError | null>(null);
   const [preparing, setPreparing] = useState(true);
 
-  useLoadingActivity(loading || preparing);
+  useLoadingActivity(loading || preparing, {
+    metadata: {
+      label: "map-management",
+      scope: "map",
+      surface: "handoff",
+    },
+  });
 
   useEffect(() => {
     if (!loading && !authenticated) {

@@ -248,7 +248,13 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
     context: null,
     error: null,
   });
-  useLoadingActivity(state.status === "loading");
+  useLoadingActivity(state.status === "loading", {
+    metadata: {
+      label: "map-context",
+      scope: "map",
+      surface: "handoff",
+    },
+  });
   const previousRequestRef = useRef<{
     organizationKey: string;
     projectSlug?: string;

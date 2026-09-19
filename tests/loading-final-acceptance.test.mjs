@@ -29,6 +29,8 @@ const [
   projects,
   sampleViewer,
   routes,
+  loadingController,
+  loadingDiagnostics,
 ] = await Promise.all([
   source("index.html"),
   source("src/main.tsx"),
@@ -39,6 +41,8 @@ const [
   source("src/pages/Projects.tsx"),
   source("src/pages/Kepler/components/load-data-modal/sample-data-viewer.tsx"),
   source("src/Routes.tsx"),
+  source("src/components/loading/loading-controller.ts"),
+  source("src/components/loading/loading-diagnostics.ts"),
 ]);
 
 test("cold load de /login usa componente canônico e libera boot por readiness", () => {
@@ -52,10 +56,23 @@ test("cold load de /login usa componente canônico e libera boot por readiness",
   assert.match(routes, /<Route path="\/login" element=\{<LoginPage \/>\} \/>/);
   assert.match(loginShim, /export \{ default \} from "\.\.\/Login\.tsx"/);
   assert.match(login, /useInitialBootReadiness\(bootCanCompleteOnLogin\)/);
-  assert.match(login, /useLoadingActivity\(session\.loading && !initialBootActive\)/);
+  assert.match(
+    login,
+    /useLoadingActivity\([\s\S]*session\.loading && !initialBootActive,[\s\S]*label: "session-bootstrap"/,
+  );
   assert.doesNotMatch(login, /maono-login-page__loading/);
   assert.doesNotMatch(login, /maono-login-page__spinner/);
   assert.doesNotMatch(login, /Carregando experiência Maõno/);
+});
+
+test("tokens globais têm ownership seguro e stale apenas diagnóstico", () => {
+  assert.match(loadingController, /getActiveSnapshot/);
+  assert.match(loadingController, /createdAt/);
+  assert.match(loadingDiagnostics, /loading_token_stale/);
+  assert.doesNotMatch(
+    loadingDiagnostics,
+    /controller\.end\(|controller\.clear\(/,
+  );
 });
 
 test("runtime troca watchdog do bundle por watchdog de readiness", () => {

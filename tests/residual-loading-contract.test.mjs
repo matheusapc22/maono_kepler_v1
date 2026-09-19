@@ -92,7 +92,7 @@ test("Login transfere o mesmo loading até Projects concluir a primeira carga", 
   assert.match(login, /authenticatedRedirectPending/);
   assert.match(
     login,
-    /useLoadingActivity\(session\.loading && !initialBootActive\)/,
+    /useLoadingActivity\([\s\S]*session\.loading && !initialBootActive,[\s\S]*label: "session-bootstrap"/,
   );
   assert.match(
     login,
@@ -131,9 +131,10 @@ test("atividade booleana entra antes do paint e força visibilidade imediata", (
   assert.match(loadingActivity, /useLayoutEffect/);
   assert.match(
     loadingActivity,
-    /beginLoading\(\{ immediate \}\)/,
+    /beginLoading\(\{[\s\S]*immediate,[\s\S]*metadata:/,
   );
   assert.match(loadingActivity, /immediate = true/);
+  assert.match(loadingActivity, /label = metadata\?\.label/);
   assert.doesNotMatch(loadingActivity, /useEffect/);
 });
 

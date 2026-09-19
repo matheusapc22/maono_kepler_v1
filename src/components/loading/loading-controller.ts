@@ -1,7 +1,55 @@
+export type LoadingLabel =
+  | "unclassified"
+  | "session-bootstrap"
+  | "auth-login"
+  | "prepared-navigation"
+  | "map-management"
+  | "map-context"
+  | "map-hydration";
+
+export type LoadingScope =
+  | "system"
+  | "auth"
+  | "navigation"
+  | "map";
+
+export type LoadingSurface =
+  | "viewport"
+  | "handoff";
+
+export type LoadingTokenMetadataInput = Readonly<{
+  label: LoadingLabel;
+  scope: LoadingScope;
+  surface: LoadingSurface;
+}>;
+
+export type LoadingTokenMetadata = Readonly<
+  LoadingTokenMetadataInput & {
+    createdAt: number;
+  }
+>;
+
 export type LoadingToken = Readonly<{
   id: number;
   owner: symbol;
+  metadata: LoadingTokenMetadata;
 }>;
+
+export type ActiveLoadingSnapshot = Readonly<{
+  id: number;
+  label: LoadingLabel;
+  scope: LoadingScope;
+  surface: LoadingSurface;
+  createdAt: number;
+  ageMs: number;
+}>;
+
+export const DEFAULT_LOADING_TOKEN_METADATA: LoadingTokenMetadataInput =
+  Object.freeze({
+    label: "unclassified",
+    scope: "system",
+    surface: "viewport",
+  });
 
 type LoadingListener = (activeCount: number) => void;
 type LoadingOperation<T> = () => Promise<T> | T;
@@ -20,14 +68,33 @@ export class LoadingController {
     return this.activeTokens.size > 0;
   }
 
-  begin() {
+  begin(
+    metadata: LoadingTokenMetadataInput =
+      DEFAULT_LOADING_TOKEN_METADATA,
+    now = Date.now(),
+  ) {
     const token: LoadingToken = Object.freeze({
       id: ++this.nextToken,
       owner: this.owner,
+      metadata: Object.freeze({
+        ...metadata,
+        createdAt: now,
+      }),
     });
     this.activeTokens.add(token);
     this.emit();
     return token;
+  }
+
+  getActiveSnapshot(now = Date.now()): ActiveLoadingSnapshot[] {
+    return Array.from(this.activeTokens, (token) => ({
+      id: token.id,
+      label: token.metadata.label,
+      scope: token.metadata.scope,
+      surface: token.metadata.surface,
+      createdAt: token.metadata.createdAt,
+      ageMs: Math.max(0, now - token.metadata.createdAt),
+    }));
   }
 
   owns(token: LoadingToken) {
@@ -51,8 +118,12 @@ export class LoadingController {
     return removed;
   }
 
-  async withLoading<T>(operation: LoadingOperation<T>): Promise<T> {
-    const token = this.begin();
+  async withLoading<T>(
+    operation: LoadingOperation<T>,
+    metadata: LoadingTokenMetadataInput =
+      DEFAULT_LOADING_TOKEN_METADATA,
+  ): Promise<T> {
+    const token = this.begin(metadata);
 
     try {
       return await operation();

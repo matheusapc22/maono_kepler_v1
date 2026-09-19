@@ -98,7 +98,7 @@ test("/manage permanece compatível sem spinner próprio", () => {
   assert.match(mapManagement, /route: "kepler"/);
   assert.match(
     mapManagement,
-    /useLoadingActivity\(loading \|\| preparing\)/,
+    /useLoadingActivity\(loading \|\| preparing,[\s\S]*label: "map-management"/,
   );
   assert.doesNotMatch(mapManagement, /MapRedirectLoader/);
   assert.doesNotMatch(mapManagement, /maono-map-management__spinner/);
@@ -108,7 +108,7 @@ test("MapPanelProvider consome contexto preparado e não mostra copy de espera",
   assert.match(mapPanelProvider, /consumeMapPanelContextHandoff/);
   assert.match(
     mapPanelProvider,
-    /useLoadingActivity\(state\.status === "loading"\)/,
+    /useLoadingActivity\(state\.status === "loading",[\s\S]*label: "map-context"/,
   );
   assert.match(mapPanelProvider, /consumedHandoffSignatureRef/);
   assert.doesNotMatch(mapPanelProvider, /Preparando o mapa/);
@@ -116,7 +116,10 @@ test("MapPanelProvider consome contexto preparado e não mostra copy de espera",
 });
 
 test("hidratação mantém Universal Loader até visual readiness", () => {
-  assert.match(mapUrlLoader, /useLoadingActivity\(isMapLoading\)/);
+  assert.match(
+    mapUrlLoader,
+    /useLoadingActivity\(isMapLoading,[\s\S]*label: "map-hydration"/,
+  );
   assert.match(mapUrlLoader, /waitForMaonoMapVisualReadiness/);
   assert.match(mapUrlLoader, /loadCycleComplete/);
   assert.match(mapUrlLoader, /useCompleteLoadingHandoff/);
@@ -151,7 +154,10 @@ test("save e create usam feedback local sem overlay global de viewport", () => {
 test("adaptador booleano faz cleanup do token e overlay global cobre modais", () => {
   assert.match(loadingActivity, /useLayoutEffect/);
   assert.match(loadingActivity, /tokenRef/);
-  assert.match(loadingActivity, /beginLoading\(\{ immediate \}\)/);
+  assert.match(
+    loadingActivity,
+    /beginLoading\(\{[\s\S]*immediate,[\s\S]*metadata:/,
+  );
   assert.match(loadingActivity, /endLoading\(tokenRef\.current\)/);
   assert.match(loaderCss, /\.mm-loading-overlay \{[\s\S]*z-index: 120000/);
 });
