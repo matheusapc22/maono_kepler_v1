@@ -57,8 +57,9 @@ test("cold /login libera boot e controles recebem hit-test/foco real", async ({ 
 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  expect(await centerHit(page, ".maono-login-page__submit")).toBe(true);
   await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(email).toBeFocused();
 
   await expect.poll(() => activeLoadingCount(page)).toBe(0);
 });
