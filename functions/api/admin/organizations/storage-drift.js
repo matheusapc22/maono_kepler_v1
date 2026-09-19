@@ -93,6 +93,7 @@ export async function onRequest({ env, request }) {
           approvedOrganizationIds:
             body?.approvedOrganizationIds,
           confirmation: body?.confirmation,
+          resetRetryBudget: body?.resetRetryBudget === true,
           correlationId,
         },
       );
@@ -107,6 +108,7 @@ export async function onRequest({ env, request }) {
         metadata: {
           correlationId,
           approved: result.approved,
+          resetRetryBudget: body?.resetRetryBudget === true,
           repaired: result.repaired,
           skipped: result.skipped,
           failed: result.failed,

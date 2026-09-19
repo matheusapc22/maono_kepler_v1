@@ -10,6 +10,7 @@ import {
 function organization(overrides = {}) {
   return {
     id: 1,
+    slug: "acme",
     active: 1,
     dropbox_root_path: "/projects/acme",
     storage_status: "READY",
@@ -165,4 +166,14 @@ test("operações físicas recebem erro seguro e retryable quando storage não e
       return true;
     },
   );
+});
+
+test("legacy READY funciona, mas legacy não pronto não promete retry automático", () => {
+  const row = organization({ slug: "new-name", dropbox_root_path: "/projects/old-name" });
+  assert.equal(readOrganizationStorageReadiness(row, { nowFn: () => NOW }).ready, true);
+  const failed = readOrganizationStorageReadiness({ ...row, storage_status: "ERROR", storage_error: "DROPBOX_UNAVAILABLE" }, { nowFn: () => NOW });
+  assert.equal(failed.ready, false);
+  assert.equal(failed.retryable, false);
+  assert.equal(failed.recoveryRecommended, false);
+  assert.equal(failed.reason, "STORAGE_PATH_DECISION_REQUIRED");
 });

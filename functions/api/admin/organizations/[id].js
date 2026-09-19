@@ -15,6 +15,7 @@ import {
   deleteDropboxPath,
 } from "../../../_lib/dropbox.js";
 import { logAudit } from "../../../_lib/projects.js";
+import { readOrganizationStorageIncident } from "../../../_lib/organization-storage-retry.js";
 
 function normalizePositiveInteger(value) {
   const numberValue = Number(value);
@@ -61,7 +62,7 @@ function publicOrganization(row) {
     active: Boolean(row.active),
     dropboxRootConfigured: Boolean(row.dropbox_root_path),
     storageStatus: row.storage_status || null,
-    storageError: row.storage_error || null,
+    storageError: readOrganizationStorageIncident(row.storage_error)?.providerCode || null,
     storageCheckedAt: row.storage_checked_at || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

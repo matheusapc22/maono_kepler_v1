@@ -7,6 +7,16 @@ import {
   getTableColumns,
 } from "./organizations.js";
 import { createCorrelationId } from "./maono-error.js";
+import { recordOrganizationStorageObservation } from "./organization-storage-telemetry.js";
+import { organizationStoragePathPolicy } from "./organization-storage-policy.js";
+import {
+  ORGANIZATION_STORAGE_MAX_ATTEMPTS,
+  ORGANIZATION_STORAGE_RETRY_DELAY_MS,
+  organizationStorageRetryDecision,
+  readOrganizationStorageIncident,
+  safeStorageFailureCode,
+  startOrganizationStorageIncident,
+} from "./organization-storage-retry.js";
 
 const PROJECTS_ROOT = "/projects";
 const DOCUMENTS_FOLDER = "documents";
@@ -111,9 +121,7 @@ function storageError(
 }
 
 function safeFailureCode(cause) {
-  const code = String(cause?.code || "").trim().toUpperCase();
-  if (/^[A-Z][A-Z0-9_]{2,119}$/.test(code)) return code;
-  return "ORGANIZATION_STORAGE_PROVISION_FAILED";
+  return safeStorageFailureCode(cause?.code);
 }
 
 function storageCauseRetryable(cause) {
@@ -132,6 +140,10 @@ function storageResult({
   claimed = false,
   superseded = false,
   busy = false,
+  incident = null,
+  completedAt = null,
+  physicallyVerified = false,
+  reason = null,
 }) {
   const status =
     normalizeStorageStatus(organization?.storage_status) ||
@@ -142,12 +154,25 @@ function storageResult({
     rootPath,
     documentsRoot,
     status,
-    ready: status === ORGANIZATION_STORAGE_STATUS.READY,
+    ready: isActiveOrganization(organization) &&
+      status === ORGANIZATION_STORAGE_STATUS.READY &&
+      organizationStoragePathPolicy(organization).valid &&
+      !String(organization?.storage_error || "").trim(),
     repairedPath,
     claimed,
     superseded,
     busy,
     correlationId,
+    reason,
+    incidentId: incident?.incidentId || null,
+    incidentStartedAt: incident?.incidentStartedAt || null,
+    firstFailedAt: incident?.firstFailedAt || null,
+    attemptCount: incident?.attemptCount || 0,
+    nextRetryAt: incident?.nextRetryAt || null,
+    retryable: Boolean(incident?.retryable && incident.attemptCount < ORGANIZATION_STORAGE_MAX_ATTEMPTS),
+    providerCode: incident?.providerCode || null,
+    completedAt,
+    physicallyVerified,
   };
 }
 
@@ -221,8 +246,7 @@ async function persistDisabledState(
   return getDb(env)
     .prepare(
       `UPDATE organizations
-       SET dropbox_root_path = ?,
-           storage_status = 'DISABLED',
+       SET storage_status = 'DISABLED',
            storage_error = NULL,
            storage_checked_at = ?,
            updated_at = ?
@@ -230,272 +254,170 @@ async function persistDisabledState(
          AND (active = 0 OR active = '0' OR active = false)
        RETURNING *`,
     )
-    .bind(rootPath, checkedAt, checkedAt, organizationId)
+    .bind(checkedAt, checkedAt, organizationId)
     .first();
 }
 
-async function claimOrganizationStorage(
-  env,
-  {
-    organizationId,
-    rootPath,
-    claimAt,
-    staleBefore,
-    revalidateReady,
-  },
-) {
-  return getDb(env)
-    .prepare(
-      `UPDATE organizations
-       SET dropbox_root_path = ?,
-           storage_status = 'PENDING',
-           storage_error = NULL,
-           storage_checked_at = ?,
-           updated_at = ?
-       WHERE id = ?
-         AND active = 1
-         AND (
-           storage_status IS NULL
-           OR TRIM(storage_status) = ''
-           OR UPPER(TRIM(storage_status)) NOT IN ('READY', 'PENDING', 'ERROR', 'DISABLED')
-           OR UPPER(TRIM(storage_status)) IN ('ERROR', 'DISABLED')
-           OR (
-             UPPER(TRIM(storage_status)) = 'READY'
-             AND (
-               (storage_error IS NOT NULL AND TRIM(storage_error) <> '')
-               OR ? = 1
-             )
-           )
-           OR (
-             UPPER(TRIM(storage_status)) = 'PENDING'
-             AND (
-               storage_checked_at IS NULL
-               OR julianday(storage_checked_at) IS NULL
-               OR julianday(storage_checked_at) < julianday(?)
-             )
-           )
-         )
-       RETURNING *`,
-    )
-    .bind(
-      rootPath,
-      claimAt,
-      claimAt,
-      organizationId,
-      revalidateReady ? 1 : 0,
-      staleBefore,
-    )
-    .first();
+async function claimOrganizationStorage(env, { organization, claimAt, claimValue, staleBefore, revalidateReady }) {
+  return getDb(env).prepare(
+    `UPDATE organizations
+     SET storage_status = 'PENDING', storage_error = ?, storage_checked_at = ?, updated_at = ?
+     WHERE id = ? AND active = 1
+       AND dropbox_root_path IS ? AND storage_status IS ?
+       AND storage_error IS ? AND storage_checked_at IS ?
+       AND (
+         storage_status IS NULL OR TRIM(storage_status) = ''
+         OR UPPER(TRIM(storage_status)) NOT IN ('READY', 'PENDING', 'ERROR', 'DISABLED')
+         OR UPPER(TRIM(storage_status)) IN ('ERROR', 'DISABLED')
+         OR (UPPER(TRIM(storage_status)) = 'READY' AND
+             ((storage_error IS NOT NULL AND TRIM(storage_error) <> '') OR ? = 1))
+         OR (UPPER(TRIM(storage_status)) = 'PENDING' AND
+             (storage_checked_at IS NULL OR julianday(storage_checked_at) IS NULL
+              OR julianday(storage_checked_at) <= julianday(?)))
+       ) RETURNING *`,
+  ).bind(claimValue, claimAt, claimAt, organization.id,
+    organization.dropbox_root_path ?? null, organization.storage_status ?? null,
+    organization.storage_error ?? null, organization.storage_checked_at ?? null,
+    revalidateReady ? 1 : 0, staleBefore).first();
 }
 
-async function completeOrganizationStorageClaim(
-  env,
-  {
-    organizationId,
-    claimAt,
-    completedAt,
-    status,
-    errorCode = null,
-  },
-) {
-  return getDb(env)
-    .prepare(
-      `UPDATE organizations
-       SET storage_status = ?,
-           storage_error = ?,
-           storage_checked_at = ?,
-           updated_at = ?
-       WHERE id = ?
-         AND active = 1
-         AND storage_status = 'PENDING'
-         AND storage_checked_at = ?
-       RETURNING *`,
-    )
-    .bind(
-      status,
-      errorCode,
-      completedAt,
-      completedAt,
-      organizationId,
-      claimAt,
-    )
-    .first();
+async function completeOrganizationStorageClaim(env, {
+  organizationId, rootPath, claimAt, claimValue, completedAt, status, errorCode = null,
+}) {
+  return getDb(env).prepare(
+    `UPDATE organizations
+     SET storage_status = ?, storage_error = ?, storage_checked_at = ?, updated_at = ?
+     WHERE id = ? AND active = 1 AND storage_status = 'PENDING'
+       AND storage_checked_at = ? AND storage_error = ? AND dropbox_root_path = ?
+     RETURNING *`,
+  ).bind(status, errorCode, completedAt, completedAt, organizationId,
+    claimAt, claimValue, rootPath).first();
 }
 
-export async function ensureOrganizationStorage(
-  env,
-  organization,
-  {
-    provisionDocuments = true,
-    correlationId = null,
-    nowFn = Date.now,
-    claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
-    ensureFolder = ensureDropboxFolder,
-    revalidateReady = false,
-  } = {},
-) {
-  if (!organization?.id) {
-    throw storageError(
-      "Organização inválida para provisionamento de armazenamento.",
-      500,
-      "ORGANIZATION_STORAGE_CONTEXT_INVALID",
-      "organization.storage.context",
-      {
-        correlationId: correlationId || createCorrelationId(),
-        retryable: false,
-      },
-    );
-  }
-
+export async function ensureOrganizationStorage(env, organization, {
+  provisionDocuments = true,
+  correlationId = null,
+  nowFn = Date.now,
+  claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
+  ensureFolder = ensureDropboxFolder,
+  revalidateReady = false,
+  unattended = false,
+  telemetrySource = "lifecycle",
+  resetRetryBudget = false,
+  observe = recordOrganizationStorageObservation,
+} = {}) {
   const operationCorrelationId = correlationId || createCorrelationId();
-  await ensureOrganizationStorageSchema(env, {
-    correlationId: operationCorrelationId,
-  });
-  const rootPath = canonicalOrganizationRoot(organization);
-  const documentsRoot = `${rootPath}/${DOCUMENTS_FOLDER}`;
-  const configuredPath = normalizeDropboxFolderPath(
-    organization.dropbox_root_path,
-  );
-  const repairedPath = configuredPath !== rootPath;
+  if (!organization?.id) {
+    throw storageError("Organização inválida para provisionamento de armazenamento.", 500,
+      "ORGANIZATION_STORAGE_CONTEXT_INVALID", "organization.storage.context",
+      { correlationId: operationCorrelationId });
+  }
+  await ensureOrganizationStorageSchema(env, { correlationId: operationCorrelationId });
+  // Refresh before deriving a path or retry budget: caller snapshots can be stale.
+  organization = await getOrganizationStorageRow(env, organization.id);
+  if (!organization) {
+    throw storageError("Organização não encontrada.", 404,
+      "ORGANIZATION_STORAGE_CONTEXT_INVALID", "organization.storage.context",
+      { correlationId: operationCorrelationId });
+  }
+  const policy = organizationStoragePathPolicy(organization);
+  const rootPath = policy.configuredPath;
+  const documentsRoot = rootPath ? `${rootPath}/${DOCUMENTS_FOLDER}` : null;
   const startedAtMs = nowMillis(nowFn);
   const claimAt = isoAt(startedAtMs);
-
-  if (!isActiveOrganization(organization)) {
-    const updated = await persistDisabledState(
-      env,
-      organization.id,
-      rootPath,
-      claimAt,
-    );
-    const current =
-      updated || (await getOrganizationStorageRow(env, organization.id));
-
-    return storageResult({
-      organization:
-        current || {
-          ...organization,
-          dropbox_root_path: rootPath,
-          storage_status: ORGANIZATION_STORAGE_STATUS.DISABLED,
-          storage_error: null,
-          storage_checked_at: claimAt,
-        },
-      rootPath,
-      documentsRoot,
-      repairedPath,
-      correlationId: operationCorrelationId,
-    });
-  }
-
-  const staleBefore = isoAt(startedAtMs - Math.max(1, Number(claimTtlMs) || 1));
-  const claimed = await claimOrganizationStorage(env, {
-    organizationId: organization.id,
-    rootPath,
-    claimAt,
-    staleBefore,
-    revalidateReady,
+  const previous = readOrganizationStorageIncident(organization.storage_error);
+  const resultFor = (row, extra = {}) => storageResult({
+    organization: row, rootPath: normalizeDropboxFolderPath(row?.dropbox_root_path),
+    documentsRoot: row?.dropbox_root_path ? `${normalizeDropboxFolderPath(row.dropbox_root_path)}/${DOCUMENTS_FOLDER}` : null,
+    repairedPath: false, correlationId: operationCorrelationId, incident: previous, ...extra,
   });
-
-  if (!claimed) {
-    const current =
-      (await getOrganizationStorageRow(env, organization.id)) || organization;
-
-    if (!isActiveOrganization(current)) {
-      const disabledAt = isoAt(nowMillis(nowFn));
-      const disabled = await persistDisabledState(
-        env,
-        organization.id,
-        canonicalOrganizationRoot(current),
-        disabledAt,
-      );
-
-      return storageResult({
-        organization: disabled || current,
-        rootPath: canonicalOrganizationRoot(current),
-        documentsRoot: organizationDocumentsRoot(current),
-        repairedPath,
-        correlationId: operationCorrelationId,
-      });
-    }
-
-    return storageResult({
-      organization: current,
-      rootPath,
-      documentsRoot,
-      repairedPath,
-      correlationId: operationCorrelationId,
-      claimed: false,
-      busy: isPendingClaimFresh(current, nowMillis(nowFn), claimTtlMs),
-    });
+  if (!isActiveOrganization(organization)) {
+    const disabled = await persistDisabledState(env, organization.id, rootPath, claimAt);
+    return resultFor(disabled || organization);
   }
-
+  if (!policy.valid || (unattended && policy.decisionRequired)) {
+    throw storageError("O armazenamento desta organização precisa de verificação pela equipe responsável.",
+      503, "ORGANIZATION_STORAGE_PATH_DECISION_REQUIRED", "organization.storage.path",
+      { correlationId: operationCorrelationId, details: { reason: policy.reason } });
+  }
+  if (isPendingClaimFresh(organization, startedAtMs, claimTtlMs)) {
+    return resultFor(organization, { busy: true, reason: "CLAIM_IN_PROGRESS" });
+  }
+  const healthy = normalizeStorageStatus(organization.storage_status) === "READY" &&
+    !String(organization.storage_error || "").trim();
+  if (healthy && !revalidateReady) return resultFor(organization);
+  const decision = organizationStorageRetryDecision(organization, startedAtMs);
+  const resetIncident = resetRetryBudget === true && telemetrySource === "operator";
+  if (!decision.allowed && !resetIncident) {
+    const retryable = decision.reason === "RETRY_BACKOFF";
+    throw storageError(retryable
+      ? "O armazenamento está sendo preparado. Aguarde alguns instantes."
+      : "O armazenamento desta organização precisa de verificação pela equipe responsável.",
+      503, `ORGANIZATION_STORAGE_${decision.reason}`, "organization.storage.retry",
+      { correlationId: operationCorrelationId, retryable,
+        details: { ...resultFor(organization), organization: undefined, rootPath: undefined, documentsRoot: undefined,
+          reason: decision.reason } });
+  }
+  const incident = startOrganizationStorageIncident(resetIncident ? null : previous, {
+    incidentId: createCorrelationId(), nowMs: startedAtMs,
+  });
+  // A unique claim token also guards two claims made in the same millisecond.
+  const claimValue = JSON.stringify({ ...incident, claimId: createCorrelationId() });
+  const claimed = await claimOrganizationStorage(env, {
+    organization, claimAt, claimValue,
+    staleBefore: isoAt(startedAtMs - Math.max(1, Number(claimTtlMs) || 1)), revalidateReady,
+  });
+  if (!claimed) {
+    const current = await getOrganizationStorageRow(env, organization.id) || organization;
+    return resultFor(current, { busy: isPendingClaimFresh(current, nowMillis(nowFn), claimTtlMs), reason: "STATE_CHANGED" });
+  }
+  const emit = (type, value = {}) => observe(env, {
+    type, source: telemetrySource, organizationId: organization.id,
+    observedAt: isoAt(nowMillis(nowFn)), correlationId: operationCorrelationId,
+    ...incident, manualIntervention: telemetrySource === "operator",
+    ...(resetIncident ? { previousIncidentId: previous?.incidentId || null, retryBudgetReset: true } : {}),
+    ...value,
+  });
+  await emit("attempt");
+  const complete = (extra) => completeOrganizationStorageClaim(env, {
+    organizationId: organization.id, rootPath: organization.dropbox_root_path,
+    claimAt, claimValue, ...extra,
+  });
   try {
-    await ensureFolder(
-      env,
-      provisionDocuments ? documentsRoot : rootPath,
-    );
-
+    // READY means the complete required structure exists; root-only callers
+    // cannot weaken this invariant. ensureFolder validates each path component.
+    await ensureFolder(env, documentsRoot);
     const completedAt = isoAt(nowMillis(nowFn));
-    const updated = await completeOrganizationStorageClaim(env, {
-      organizationId: organization.id,
-      claimAt,
-      completedAt,
-      status: ORGANIZATION_STORAGE_STATUS.READY,
-      errorCode: null,
-    });
-
-    if (!updated) {
-      const current =
-        (await getOrganizationStorageRow(env, organization.id)) || claimed;
-
-      return storageResult({
-        organization: current,
-        rootPath,
-        documentsRoot,
-        repairedPath,
-        correlationId: operationCorrelationId,
-        claimed: true,
-        superseded: true,
-        busy: isPendingClaimFresh(current, nowMillis(nowFn), claimTtlMs),
-      });
-    }
-
-    return storageResult({
-      organization: updated,
-      rootPath,
-      documentsRoot,
-      repairedPath,
-      correlationId: operationCorrelationId,
-      claimed: true,
+    const updated = await complete({ completedAt, status: ORGANIZATION_STORAGE_STATUS.READY });
+    const current = updated || await getOrganizationStorageRow(env, organization.id) || claimed;
+    if (updated) await emit("operational", { completedAt, physicallyVerified: true,
+      retryable: false, durationMs: Math.max(0, Date.parse(completedAt) - startedAtMs) });
+    return resultFor(current, {
+      incident, claimed: true, superseded: !updated, completedAt,
+      physicallyVerified: Boolean(updated),
+      busy: !updated && isPendingClaimFresh(current, nowMillis(nowFn), claimTtlMs),
     });
   } catch (cause) {
     const completedAt = isoAt(nowMillis(nowFn));
     const failureCode = safeFailureCode(cause);
-    const updated = await completeOrganizationStorageClaim(env, {
-      organizationId: organization.id,
-      claimAt,
-      completedAt,
-      status: ORGANIZATION_STORAGE_STATUS.ERROR,
-      errorCode: failureCode,
-    });
-
-    const error = storageError(
-      "Não foi possível criar ou validar a pasta Dropbox da organização.",
-      502,
-      "ORGANIZATION_STORAGE_PROVISION_FAILED",
-      "organization.storage.provision",
-      {
-        cause,
-        correlationId: operationCorrelationId,
-        retryable: storageCauseRetryable(cause),
-        details: {
-          providerCode: failureCode,
-          statePersisted: Boolean(updated),
-          superseded: !updated,
-        },
-      },
-    );
-
-    throw error;
+    const retryable = storageCauseRetryable(cause);
+    const failedIncident = {
+      ...incident, providerCode: failureCode, retryable,
+      firstFailedAt: incident.firstFailedAt || completedAt,
+      nextRetryAt: retryable && incident.attemptCount < ORGANIZATION_STORAGE_MAX_ATTEMPTS
+        ? isoAt(Date.parse(completedAt) + ORGANIZATION_STORAGE_RETRY_DELAY_MS) : null,
+    };
+    const updated = await complete({ completedAt, status: ORGANIZATION_STORAGE_STATUS.ERROR,
+      errorCode: JSON.stringify(failedIncident) });
+    await emit("failure", { ...failedIncident, completedAt, physicallyVerified: false,
+      superseded: !updated, durationMs: Math.max(0, Date.parse(completedAt) - startedAtMs) });
+    throw storageError("Não foi possível criar ou validar a pasta Dropbox da organização.",
+      502, "ORGANIZATION_STORAGE_PROVISION_FAILED", "organization.storage.provision", {
+        cause, correlationId: operationCorrelationId,
+        retryable: retryable && incident.attemptCount < ORGANIZATION_STORAGE_MAX_ATTEMPTS,
+        details: { ...failedIncident, completedAt, physicallyVerified: false,
+          statePersisted: Boolean(updated), superseded: !updated },
+      });
   }
 }
 
@@ -513,6 +435,17 @@ export function publicOrganizationStorage(result) {
     busy: Boolean(result?.busy),
     checkedAt: organization.storage_checked_at || null,
   };
+}
+
+function storageEvidence(value) {
+  return Object.fromEntries([
+    "incidentId", "incidentStartedAt", "firstFailedAt", "attemptCount", "nextRetryAt",
+    "retryable", "completedAt", "physicallyVerified", "providerCode", "claimed", "superseded",
+  ].map((key) => [key, value?.[key] ?? null]));
+}
+
+function incidentEvidence(value) {
+  return storageEvidence(readOrganizationStorageIncident(value));
 }
 
 function normalizeLimit(limit) {
@@ -541,6 +474,10 @@ function repairCandidateReason(organization, {
   const path = normalizeDropboxFolderPath(
     organization?.dropbox_root_path,
   );
+  const policy = organizationStoragePathPolicy(organization);
+  if (policy.decisionRequired) return policy.reason;
+  const decision = organizationStorageRetryDecision(organization, nowMs);
+  if (!decision.allowed) return decision.reason;
   const status = normalizeStorageStatus(organization?.storage_status);
   const checkedAt = Date.parse(
     String(organization?.storage_checked_at || ""),
@@ -593,10 +530,45 @@ async function listRepairCandidates(
     errorRetryBefore,
     errorBackoffEnabled,
     fairOrder,
+    nowIso,
   },
 ) {
   const orderSql = fairOrder
     ? `ORDER BY
+         CASE WHEN lower(rtrim(trim(dropbox_root_path), '/')) = '/projects/' || lower(slug)
+           AND CASE WHEN json_valid(storage_error) THEN
+             json_extract(storage_error, '$.v') = 1
+             AND json_type(storage_error, '$.retryable') = 'true'
+             AND json_type(storage_error, '$.attemptCount') = 'integer'
+             AND json_extract(storage_error, '$.attemptCount') BETWEEN 1 AND ${ORGANIZATION_STORAGE_MAX_ATTEMPTS - 1}
+             AND json_type(storage_error, '$.incidentId') = 'text'
+             AND length(json_extract(storage_error, '$.incidentId')) BETWEEN 1 AND 120
+             AND json_extract(storage_error, '$.incidentId') NOT GLOB '*[^A-Za-z0-9_-]*'
+             AND json_type(storage_error, '$.incidentStartedAt') = 'text'
+             AND julianday(json_extract(storage_error, '$.incidentStartedAt')) IS NOT NULL
+             AND (json_type(storage_error, '$.firstFailedAt') = 'null'
+               OR (json_type(storage_error, '$.firstFailedAt') = 'text'
+                 AND julianday(json_extract(storage_error, '$.firstFailedAt')) IS NOT NULL))
+             AND (json_type(storage_error, '$.nextRetryAt') = 'null'
+               OR (json_type(storage_error, '$.nextRetryAt') = 'text'
+                 AND julianday(json_extract(storage_error, '$.nextRetryAt')) <= julianday(?)))
+           ELSE storage_error IS NULL OR trim(storage_error) = ''
+             OR (length(trim(storage_error)) BETWEEN 3 AND 120
+               AND upper(trim(storage_error)) GLOB '[A-Z]*'
+               AND upper(trim(storage_error)) NOT GLOB '*[^A-Z0-9_]*'
+               AND upper(storage_error) NOT GLOB '*AUTH*'
+               AND upper(storage_error) NOT GLOB '*TOKEN*'
+               AND upper(storage_error) NOT GLOB '*CREDENTIAL*'
+               AND upper(storage_error) NOT GLOB '*FORBIDDEN*'
+               AND upper(storage_error) NOT GLOB '*PERMISSION*'
+               AND upper(storage_error) NOT GLOB '*INVALID*'
+               AND upper(storage_error) NOT GLOB '*CONFLICT*'
+               AND upper(storage_error) NOT GLOB '*ENV_MISSING*'
+               AND (upper(storage_error) GLOB '*TIMEOUT*' OR upper(storage_error) GLOB '*UNAVAILABLE*'
+                 OR upper(storage_error) GLOB '*RATE_LIMIT*' OR upper(storage_error) GLOB '*NETWORK*'
+                 OR upper(storage_error) GLOB '*RETRY_EXHAUSTED*' OR upper(storage_error) GLOB '*REQUEST_FAILED*'
+                 OR upper(storage_error) GLOB '*REQUEST_BUDGET*')) END
+           THEN 0 ELSE 1 END ASC,
          CASE
            WHEN storage_checked_at IS NULL
              OR julianday(storage_checked_at) IS NULL
@@ -652,6 +624,7 @@ async function listRepairCandidates(
       errorBackoffEnabled ? 1 : 0,
       errorRetryBefore,
       staleBefore,
+      ...(fairOrder ? [nowIso] : []),
       limit + 1,
     )
     .all();
@@ -671,6 +644,7 @@ export async function repairActiveOrganizationStorages(
     fairOrder = false,
     dryRun = false,
     ensureFolder = ensureDropboxFolder,
+    telemetrySource = "operator",
   } = {},
 ) {
   const operationCorrelationId = correlationId || createCorrelationId();
@@ -699,6 +673,7 @@ export async function repairActiveOrganizationStorages(
     errorRetryBefore,
     errorBackoffEnabled: safeErrorBackoffMs > 0,
     fairOrder: Boolean(fairOrder),
+    nowIso: isoAt(startedAtMs),
   });
   const hasMore = candidateRows.length > safeLimit;
   const organizations = candidateRows.slice(0, safeLimit);
@@ -724,18 +699,27 @@ export async function repairActiveOrganizationStorages(
       });
     }
   } else for (const organization of organizations) {
+    const reason = repairCandidateReason(organization, { nowMs: startedAtMs, claimTtlMs, errorBackoffMs: safeErrorBackoffMs });
+    if (["PATH_INVALID", "PATH_LEGACY", "RETRY_BLOCKED", "RETRY_EXHAUSTED", "RETRY_BACKOFF"].includes(reason)) {
+      skipped.push({ organizationId: organization.id, status: organization.storage_status,
+        reason, correlationId: operationCorrelationId, ...incidentEvidence(organization.storage_error) });
+      continue;
+    }
     try {
       const storage = await ensureOrganizationStorage(env, organization, {
         correlationId: operationCorrelationId,
         nowFn,
         claimTtlMs,
         ensureFolder,
+        unattended: true,
+        telemetrySource,
       });
 
-      if (storage.ready) {
+      if (storage.ready && storage.claimed && !storage.superseded && storage.physicallyVerified) {
         repaired.push({
           organizationId: organization.id,
           status: ORGANIZATION_STORAGE_STATUS.READY,
+          ...storageEvidence(storage),
           repairedPath: storage.repairedPath,
           superseded: storage.superseded,
           correlationId: operationCorrelationId,
@@ -744,6 +728,7 @@ export async function repairActiveOrganizationStorages(
         skipped.push({
           organizationId: organization.id,
           status: storage.status,
+          ...storageEvidence(storage),
           reason: storage.busy
             ? "CLAIM_IN_PROGRESS"
             : storage.superseded
@@ -756,6 +741,9 @@ export async function repairActiveOrganizationStorages(
       failed.push({
         organizationId: organization.id,
         status: ORGANIZATION_STORAGE_STATUS.ERROR,
+        ...storageEvidence(error?.details || {}),
+        retryable: Boolean(error?.retryable),
+        superseded: Boolean(error?.details?.superseded),
         code: error?.code || "ORGANIZATION_STORAGE_PROVISION_FAILED",
         stage: error?.stage || "organization.storage.provision",
         correlationId: error?.correlationId || operationCorrelationId,

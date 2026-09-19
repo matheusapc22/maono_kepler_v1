@@ -26,6 +26,11 @@ function boundedInteger(value, fallback, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function clockMillis(nowFn) {
+  const value = Number(nowFn());
+  return Number.isFinite(value) ? value : Date.now();
+}
+
 export function organizationStorageRecoveryConfig(env) {
   return {
     enabled: booleanValue(
@@ -92,6 +97,9 @@ export async function runScheduledStorageRecovery(
     };
   }
 
+  const startedAtMs = clockMillis(nowFn);
+  const startedAt = new Date(startedAtMs).toISOString();
+
   await audit(env, {
     actorUserId: null,
     action: "organization.storage.recovery.scheduled.start",
@@ -104,6 +112,8 @@ export async function runScheduledStorageRecovery(
       batchSize: config.batchSize,
       errorBackoffMs: config.errorBackoffMs,
       claimTtlMs: config.claimTtlMs,
+      startedAt,
+      telemetryVersion: 1,
     },
   });
 
@@ -117,7 +127,12 @@ export async function runScheduledStorageRecovery(
       errorBackoffMs: config.errorBackoffMs,
       fairOrder: true,
       dryRun: config.dryRun,
+      telemetrySource: "scheduled",
     });
+
+    const finishedAtMs = clockMillis(nowFn);
+    const durationMs = Math.max(0, finishedAtMs - startedAtMs);
+    const completedAt = new Date(finishedAtMs).toISOString();
 
     await audit(env, {
       actorUserId: null,
@@ -140,6 +155,10 @@ export async function runScheduledStorageRecovery(
         hasMore: result.hasMore,
         fairOrder: result.fairOrder,
         errorBackoffMs: result.errorBackoffMs,
+        startedAt,
+        completedAt,
+        durationMs,
+        telemetryVersion: 1,
       },
     });
 
@@ -151,6 +170,7 @@ export async function runScheduledStorageRecovery(
       failed: result.failed,
       skipped: result.skipped,
       hasMore: result.hasMore,
+      durationMs,
     });
 
     return {
@@ -158,8 +178,13 @@ export async function runScheduledStorageRecovery(
       correlationId,
       config,
       result,
+      durationMs,
+      startedAt,
+      completedAt,
     };
   } catch (error) {
+    const failedAtMs = clockMillis(nowFn);
+    const durationMs = Math.max(0, failedAtMs - startedAtMs);
     await audit(env, {
       actorUserId: null,
       action: "organization.storage.recovery.scheduled.failed",
@@ -171,6 +196,10 @@ export async function runScheduledStorageRecovery(
         dryRun: config.dryRun,
         code: error?.code || "ORGANIZATION_STORAGE_RECOVERY_FAILED",
         stage: error?.stage || "organization.storage.recovery",
+        startedAt,
+        completedAt: new Date(failedAtMs).toISOString(),
+        durationMs,
+        telemetryVersion: 1,
       },
     });
 
@@ -178,6 +207,7 @@ export async function runScheduledStorageRecovery(
       correlationId,
       code: error?.code || "ORGANIZATION_STORAGE_RECOVERY_FAILED",
       stage: error?.stage || "organization.storage.recovery",
+      durationMs,
     });
     throw error;
   }

@@ -1,15 +1,16 @@
 import {
   listDropboxFolderAll,
+  getDropboxMetadata,
   normalizeDropboxFolderPath,
 } from "./dropbox.js";
 import { createCorrelationId } from "./maono-error.js";
 import {
-  canonicalOrganizationRoot,
   ensureOrganizationStorage,
   ensureOrganizationStorageSchema,
   ORGANIZATION_STORAGE_STATUS,
 } from "./organization-storage.js";
-import { normalizeOrganizationSlug } from "./organization-lifecycle.js";
+import { organizationStoragePathPolicy } from "./organization-storage-policy.js";
+import { readOrganizationStorageIncident } from "./organization-storage-retry.js";
 import { getDb } from "./organizations.js";
 
 export const ORGANIZATION_STORAGE_DRIFT_CODE = Object.freeze({
@@ -17,6 +18,8 @@ export const ORGANIZATION_STORAGE_DRIFT_CODE = Object.freeze({
   PATH_LEGACY: "ORGANIZATION_PATH_LEGACY",
   READY_MISSING_PHYSICAL: "READY_MISSING_PHYSICAL_FOLDER",
   MISSING_PHYSICAL: "MISSING_PHYSICAL_FOLDER",
+  DOCUMENTS_MISSING: "DOCUMENTS_FOLDER_MISSING",
+  DOCUMENTS_TYPE_CONFLICT: "DOCUMENTS_FOLDER_TYPE_CONFLICT",
   PHYSICAL_PRESENT_NOT_READY: "PHYSICAL_PRESENT_STORAGE_NOT_READY",
   READY_WITH_ERROR: "READY_WITH_STORAGE_ERROR",
   STATE_INVALID: "STORAGE_STATE_INVALID",
@@ -31,6 +34,7 @@ export const ORGANIZATION_STORAGE_DRIFT_CODE = Object.freeze({
 const REPAIRABLE_CODES = new Set([
   ORGANIZATION_STORAGE_DRIFT_CODE.READY_MISSING_PHYSICAL,
   ORGANIZATION_STORAGE_DRIFT_CODE.MISSING_PHYSICAL,
+  ORGANIZATION_STORAGE_DRIFT_CODE.DOCUMENTS_MISSING,
   ORGANIZATION_STORAGE_DRIFT_CODE.PHYSICAL_PRESENT_NOT_READY,
   ORGANIZATION_STORAGE_DRIFT_CODE.READY_WITH_ERROR,
   ORGANIZATION_STORAGE_DRIFT_CODE.STATE_INVALID,
@@ -56,20 +60,11 @@ function pathKey(value) {
 }
 
 function expectedOrganizationPath(organization) {
-  const slug =
-    normalizeOrganizationSlug(organization?.slug) ||
-    normalizeOrganizationSlug(organization?.name) ||
-    `organization-${organization?.id || "unknown"}`;
-  return `/projects/${slug}`;
+  return organizationStoragePathPolicy(organization).expectedPath;
 }
 
 function validProjectOrganizationPath(value) {
-  const path = normalizeDropboxFolderPath(value);
-  return Boolean(
-    path &&
-      path !== "/projects" &&
-      path.startsWith("/projects/"),
-  );
+  return organizationStoragePathPolicy({ dropbox_root_path: value }).valid;
 }
 
 function issue(code, details = {}) {
@@ -125,6 +120,15 @@ async function defaultListProjectsRoot(env, rootPath) {
   return listDropboxFolderAll(env, rootPath);
 }
 
+async function defaultInspectDocuments(env, rootPath) {
+  try {
+    return await getDropboxMetadata(env, rootPath, "documents");
+  } catch (error) {
+    if (error?.code === "DROPBOX_PATH_NOT_FOUND") return null;
+    throw error; // permission/network failure is unknown, never evidence of absence
+  }
+}
+
 function buildPhysicalIndex(entries) {
   const folders = new Map();
   const rootFiles = [];
@@ -165,6 +169,7 @@ function classifyOrganization(
   {
     folders,
     filesByOrganization,
+    documentsByPath,
   },
 ) {
   const active = activeOrganization(organization);
@@ -203,7 +208,7 @@ function classifyOrganization(
     );
   }
 
-  if (active && validPath && !physical) {
+  if (active && validPath && configuredPath.split("/").length === 3 && !physical) {
     organizationIssues.push(
       issue(
         status === ORGANIZATION_STORAGE_STATUS.READY
@@ -215,6 +220,13 @@ function classifyOrganization(
         },
       ),
     );
+  }
+
+  const documents = documentsByPath.get(pathKey(configuredPath));
+  if (active && physical && documents !== undefined && documents?.[".tag"] !== "folder") {
+    organizationIssues.push(issue(documents === null
+      ? ORGANIZATION_STORAGE_DRIFT_CODE.DOCUMENTS_MISSING
+      : ORGANIZATION_STORAGE_DRIFT_CODE.DOCUMENTS_TYPE_CONFLICT, { configuredPath }));
   }
 
   if (
@@ -243,7 +255,7 @@ function classifyOrganization(
     organizationIssues.push(
       issue(ORGANIZATION_STORAGE_DRIFT_CODE.READY_WITH_ERROR, {
         configuredPath,
-        storageErrorCode: String(organization.storage_error).trim(),
+        storageErrorCode: readOrganizationStorageIncident(organization.storage_error)?.providerCode || null,
       }),
     );
   }
@@ -307,14 +319,17 @@ function classifyOrganization(
     active,
     configuredPath: configuredPath || null,
     expectedPath,
-    physicalFolderExists: Boolean(physical),
+    physicalFolderExists: validPath && configuredPath.split("/").length === 3 ? Boolean(physical) : null,
+    physicalInventoryScope: "DIRECT_PROJECTS_CHILDREN",
+    documentsFolderVerified: documents?.[".tag"] === "folder",
     storageStatus: status || null,
-    storageErrorCode: organization.storage_error || null,
+    storageErrorCode: readOrganizationStorageIncident(organization.storage_error)?.providerCode || null,
     storageCheckedAt: organization.storage_checked_at || null,
     issues: organizationIssues,
     fileIssues,
     repairable:
       !pathDecisionRequired &&
+      !organizationIssues.some((item) => item.code === ORGANIZATION_STORAGE_DRIFT_CODE.DOCUMENTS_TYPE_CONFLICT) &&
       organizationIssues.some((item) => item.repairable),
     pathDecisionRequired,
     _row: organization,
@@ -374,6 +389,7 @@ export async function buildOrganizationStorageDriftReport(
     listOrganizations = defaultListOrganizations,
     listOrganizationFiles = defaultListOrganizationFiles,
     listProjectsRoot = defaultListProjectsRoot,
+    inspectDocuments = defaultInspectDocuments,
     requireSchema = ensureOrganizationStorageSchema,
   } = {},
 ) {
@@ -416,10 +432,22 @@ export async function buildOrganizationStorageDriftReport(
     filesByOrganization.get(organizationId).push(file);
   }
 
+  const documentsByPath = new Map();
+  // Inspect only roots proven to exist within the complete /projects inventory.
+  // Sequential requests avoid a burst proportional to the organization count.
+  for (const organization of organizations || []) {
+    const policy = organizationStoragePathPolicy(organization);
+    const key = pathKey(policy.configuredPath);
+    if (activeOrganization(organization) && policy.valid && folders.has(key) && !documentsByPath.has(key)) {
+      documentsByPath.set(key, await inspectDocuments(env, policy.configuredPath));
+    }
+  }
+
   const classified = (organizations || []).map((organization) =>
     classifyOrganization(organization, {
       folders,
       filesByOrganization,
+      documentsByPath,
     }),
   );
 
@@ -512,6 +540,7 @@ export async function applyOrganizationStorageDriftRepairs(
   {
     approvedOrganizationIds,
     confirmation,
+    resetRetryBudget = false,
     correlationId = createCorrelationId(),
     nowFn = Date.now,
     buildReport = buildOrganizationStorageDriftReport,
@@ -537,6 +566,13 @@ export async function applyOrganizationStorageDriftRepairs(
     correlationId,
     nowFn,
   });
+  if (report.complete === false) {
+    const error = new Error("O inventário está incompleto; conclua a consulta antes de reparar.");
+    error.code = "ORGANIZATION_STORAGE_DRIFT_INCOMPLETE";
+    error.status = 409;
+    error.retryable = true;
+    throw error;
+  }
   const organizationsById = new Map(
     report.organizations.map((organization) => [
       Number(organization.id),
@@ -589,9 +625,12 @@ export async function applyOrganizationStorageDriftRepairs(
         correlationId,
         nowFn,
         revalidateReady: true,
+        unattended: true,
+        telemetrySource: "operator",
+        resetRetryBudget: resetRetryBudget === true,
       });
 
-      if (storage.ready) {
+      if (storage.ready && storage.claimed && storage.physicallyVerified && !storage.superseded) {
         repaired.push({
           organizationId,
           status: storage.status,

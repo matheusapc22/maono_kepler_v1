@@ -98,6 +98,7 @@ test("dry-run propaga fairness/backoff sem mutação do reconciler", async () =>
   assert.equal(receivedOptions.errorBackoffMs, 600_000);
   assert.equal(receivedOptions.claimTtlMs, 180_000);
   assert.equal(receivedOptions.correlationId, "corr-prh06-dry");
+  assert.equal(receivedOptions.telemetrySource, "scheduled");
   assert.equal(audits.length, 2);
   assert.equal(audits[0].actorUserId, null);
   assert.equal(audits[0].metadata.correlationId, "corr-prh06-dry");
@@ -138,4 +139,39 @@ test("modo apply mantém correlationId e registra conclusão parcial", async () 
   assert.equal(result.result.failed, 1);
   assert.equal(audits[1].result, "partial");
   assert.equal(audits[1].metadata.correlationId, "corr-prh06-apply");
+});
+
+test("recovery mede duração de lote sem confundir dry-run com prontidão física", async () => {
+  const audits = [];
+  const ticks = [Date.parse("2026-09-19T00:00:00Z"), Date.parse("2026-09-19T00:00:01.250Z")];
+  const result = await runScheduledStorageRecovery(
+    { MAONO_STORAGE_RECOVERY_ENABLED: "true" },
+    {
+      nowFn: () => ticks.shift(),
+      repair: async () => ({ checked: 1, ready: 0, failed: 0, skipped: 1, organizations: [] }),
+      audit: async (_env, event) => audits.push(event),
+    },
+  );
+  assert.equal(result.durationMs, 1250);
+  assert.equal(audits[1].metadata.durationMs, 1250);
+  assert.equal(audits[1].metadata.telemetryVersion, 1);
+  assert.equal(audits[1].result, "dry_run");
+  assert.equal(audits.some((event) => event.action === "organization.storage.observation"), false);
+});
+
+test("recovery preserva erro original e duração também em falha de lote", async () => {
+  const audits = [];
+  const original = Object.assign(new Error("provider failure"), { code: "STORAGE_TEST_FAILED" });
+  let now = 1000;
+  await assert.rejects(runScheduledStorageRecovery(
+    { MAONO_STORAGE_RECOVERY_ENABLED: "true", MAONO_STORAGE_RECOVERY_DRY_RUN: "false" },
+    {
+      nowFn: () => { const value = now; now += 800; return value; },
+      repair: async () => { throw original; },
+      audit: async (_env, event) => audits.push(event),
+    },
+  ), (error) => error === original);
+  assert.equal(audits.at(-1).action, "organization.storage.recovery.scheduled.failed");
+  assert.equal(audits.at(-1).metadata.durationMs, 800);
+  assert.equal(audits.at(-1).metadata.code, "STORAGE_TEST_FAILED");
 });
