@@ -2,7 +2,6 @@ import { createCachedModuleLoader } from "./navigation/route-module-loader";
 
 export const routeModules = {
   kepler: createCachedModuleLoader(() => import("./pages/Kepler")),
-  login: createCachedModuleLoader(() => import("./pages/Login")),
   projects: createCachedModuleLoader(() => import("./pages/Projects")),
   admin: createCachedModuleLoader(() => import("./pages/Admin")),
   mapManagement: createCachedModuleLoader(

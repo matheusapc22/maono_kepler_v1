@@ -8,6 +8,7 @@ const [
   login,
   projects,
   preparedNavigate,
+  loadingProvider,
   loadingHandoff,
   loadingActivity,
   projectsSection,
@@ -26,7 +27,11 @@ const [
   readFile(new URL("src/pages/Projects.tsx", ROOT), "utf8"),
   readFile(new URL("src/hooks/usePreparedNavigate.ts", ROOT), "utf8"),
   readFile(
-    new URL("src/components/loading/loading-handoff.ts", ROOT),
+    new URL("src/components/loading/LoadingProvider.tsx", ROOT),
+    "utf8",
+  ),
+  readFile(
+    new URL("src/components/loading/loading-handoff-controller.ts", ROOT),
     "utf8",
   ),
   readFile(
@@ -87,6 +92,7 @@ test("Login transfere o mesmo loading até Projects concluir a primeira carga", 
   assert.match(login, /authenticatedRedirectPending/);
   assert.match(login, /useLoadingActivity\(loginLoading\)/);
   assert.match(login, /if \(loginLoading\) \{[\s\S]*return null/);
+  assert.doesNotMatch(login, /LoadingOverlay/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
 
   assert.match(
@@ -98,13 +104,20 @@ test("Login transfere o mesmo loading até Projects concluir a primeira carga", 
   assert.match(projects, /!projectsLoading/);
 });
 
-test("prepared navigation não encerra token transferido antes do destino", () => {
-  assert.match(preparedNavigate, /primeLoadingHandoff/);
+test("prepared navigation transfere token para owner do LoadingProvider", () => {
+  assert.match(preparedNavigate, /handoffLoading/);
+  assert.match(preparedNavigate, /cancelLoadingHandoff/);
   assert.match(preparedNavigate, /let handedOff = false/);
   assert.match(preparedNavigate, /activeLoadingTokenRef\.current = null/);
   assert.match(preparedNavigate, /if \(!handedOff\)/);
-  assert.match(loadingHandoff, /handoffs = new Map/);
-  assert.match(loadingHandoff, /completeLoadingHandoff/);
+
+  assert.match(loadingProvider, /LoadingHandoffController/);
+  assert.match(loadingProvider, /controller\.owns\(token\)/);
+  assert.match(loadingProvider, /cancelOutsideLocation/);
+  assert.match(loadingProvider, /handoffController\.cancelAll\(\)/);
+  assert.match(loadingHandoff, /class LoadingHandoffController/);
+  assert.match(loadingHandoff, /state: "handed-off"/);
+  assert.match(loadingHandoff, /state = "claimed"/);
   assert.doesNotMatch(loadingHandoff, /setTimeout/);
 });
 
@@ -112,8 +125,9 @@ test("atividade booleana entra antes do paint e força visibilidade imediata", (
   assert.match(loadingActivity, /useLayoutEffect/);
   assert.match(
     loadingActivity,
-    /beginLoading\(\{ immediate: true \}\)/,
+    /beginLoading\(\{ immediate \}\)/,
   );
+  assert.match(loadingActivity, /immediate = true/);
   assert.doesNotMatch(loadingActivity, /useEffect/);
 });
 

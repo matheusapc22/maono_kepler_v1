@@ -32,17 +32,17 @@
         --mm-boot-bg: #060606;
         --mm-boot-text: #f3efe4;
         --mm-boot-muted: rgba(243, 239, 228, 0.68);
-        --mm-boot-accent-rgb: 197 160 89;
-        --mm-boot-accent: #c5a059;
-        --mm-boot-accent-muted: #8a6a2f;
-        --mm-boot-accent-strong: #d6a84f;
-        --mm-boot-accent-bright: #f2c766;
-        --mm-boot-accent-text: #f3d58a;
-        --mm-boot-accent-glow: rgb(var(--mm-boot-accent-rgb) / 0.24);
-        --mm-boot-accent-glow-strong: rgb(var(--mm-boot-accent-rgb) / 0.38);
-        --mm-boot-loader-size: 46px;
-        --mm-boot-loader-thickness: 4px;
-        --mm-boot-loader-duration: 1.05s;
+        --maono-accent-rgb: 197 160 89;
+        --maono-accent: #c5a059;
+        --maono-accent-muted: #8a6a2f;
+        --maono-accent-strong: #d6a84f;
+        --maono-accent-bright: #f2c766;
+        --maono-accent-text: #f3d58a;
+        --maono-accent-glow: rgb(var(--maono-accent-rgb) / 0.24);
+        --maono-accent-glow-strong: rgb(var(--maono-accent-rgb) / 0.38);
+        --maono-loader-size-page: 46px;
+        --maono-loader-thickness-page: 4px;
+        --maono-loader-duration: 1.05s;
         --mm-boot-viewport-height: 100vh;
       }
 
@@ -82,25 +82,39 @@
         overflow: hidden;
       }
 
-      .mm-boot-screen {
+      .mm-loading-overlay {
+        z-index: 120000;
         display: grid;
-        min-height: var(--mm-boot-viewport-height);
         place-items: center;
-        padding: 24px;
-        background: var(--mm-boot-bg);
+        pointer-events: auto;
+        cursor: progress;
+        background: transparent;
       }
 
-      .mm-boot-loader {
+      .mm-loading-overlay--viewport {
+        position: fixed;
+        inset: 0;
+      }
+
+      .mm-universal-loader {
+        --maono-loader-size: var(--maono-loader-size-page);
+        --maono-loader-thickness: var(--maono-loader-thickness-page);
         position: relative;
         display: inline-grid;
-        width: var(--mm-boot-loader-size);
-        height: var(--mm-boot-loader-size);
+        width: var(--maono-loader-size);
+        height: var(--maono-loader-size);
+        flex: 0 0 auto;
         place-items: center;
         isolation: isolate;
         pointer-events: none;
       }
 
-      .mm-boot-loader::after {
+      .mm-universal-loader--page {
+        --maono-loader-size: var(--maono-loader-size-page);
+        --maono-loader-thickness: var(--maono-loader-thickness-page);
+      }
+
+      .mm-universal-loader::after {
         position: absolute;
         z-index: -1;
         left: 17%;
@@ -110,8 +124,8 @@
         border-radius: 999px;
         background: radial-gradient(
           ellipse at center,
-          var(--mm-boot-accent-glow-strong) 0%,
-          var(--mm-boot-accent-glow) 44%,
+          var(--maono-accent-glow-strong) 0%,
+          var(--maono-accent-glow) 44%,
           transparent 74%
         );
         filter: blur(3.5px);
@@ -120,7 +134,7 @@
         content: "";
       }
 
-      .mm-boot-loader__ring {
+      .mm-universal-loader__ring {
         display: block;
         width: 100%;
         height: 100%;
@@ -129,35 +143,36 @@
           conic-gradient(
             from 12deg,
             transparent 0deg 54deg,
-            rgb(var(--mm-boot-accent-rgb) / 0.52) 72deg,
-            var(--mm-boot-accent-muted) 118deg,
-            var(--mm-boot-accent) 184deg,
-            var(--mm-boot-accent-bright) 244deg,
-            var(--mm-boot-accent-text) 274deg,
-            var(--mm-boot-accent-strong) 316deg,
+            rgb(var(--maono-accent-rgb) / 0.52) 72deg,
+            var(--maono-accent-muted) 118deg,
+            var(--maono-accent) 184deg,
+            var(--maono-accent-bright) 244deg,
+            var(--maono-accent-text) 274deg,
+            var(--maono-accent-strong) 316deg,
             transparent 352deg 360deg
           );
         -webkit-mask: radial-gradient(
           farthest-side,
-          transparent calc(100% - var(--mm-boot-loader-thickness) - 0.5px),
-          #000 calc(100% - var(--mm-boot-loader-thickness))
+          transparent calc(100% - var(--maono-loader-thickness) - 0.5px),
+          #000 calc(100% - var(--maono-loader-thickness))
         );
         mask: radial-gradient(
           farthest-side,
-          transparent calc(100% - var(--mm-boot-loader-thickness) - 0.5px),
-          #000 calc(100% - var(--mm-boot-loader-thickness))
+          transparent calc(100% - var(--maono-loader-thickness) - 0.5px),
+          #000 calc(100% - var(--maono-loader-thickness))
         );
         filter:
           drop-shadow(0 1px 0 rgb(255 255 255 / 0.18))
           drop-shadow(0 5px 5px rgb(0 0 0 / 0.38))
-          drop-shadow(0 0 5px var(--mm-boot-accent-glow));
+          drop-shadow(0 0 5px var(--maono-accent-glow));
         transform-origin: 50% 50%;
         transform-style: preserve-3d;
-        animation: mm-boot-loader-spin var(--mm-boot-loader-duration) linear infinite;
+        animation: maono-universal-loader-spin var(--maono-loader-duration)
+          linear infinite;
         will-change: transform;
       }
 
-      .mm-boot-sr-only {
+      .mm-sr-only {
         position: absolute !important;
         width: 1px !important;
         height: 1px !important;
@@ -169,8 +184,9 @@
         border: 0 !important;
       }
 
-      .mm-boot-screen.mm-boot-failed {
+      .mm-loading-overlay.mm-boot-failed {
         padding: 24px;
+        cursor: default;
       }
 
       .mm-boot-failed .mm-boot-failure {
@@ -198,7 +214,7 @@
       .mm-boot-retry {
         min-height: 44px;
         padding: 0 22px;
-        border: 1px solid var(--mm-boot-accent-strong);
+        border: 1px solid var(--maono-accent-strong);
         background: transparent;
         color: var(--mm-boot-text);
         font: inherit;
@@ -210,10 +226,10 @@
       }
 
       .mm-boot-retry:hover {
-        background: rgb(var(--mm-boot-accent-rgb) / 0.12);
+        background: rgb(var(--maono-accent-rgb) / 0.12);
       }
 
-      @keyframes mm-boot-loader-spin {
+      @keyframes maono-universal-loader-spin {
         from {
           transform: perspective(140px) rotateX(7deg) rotateZ(0deg);
         }
@@ -224,12 +240,12 @@
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .mm-boot-loader__ring {
+        .mm-universal-loader__ring {
           animation: none;
           transform: perspective(140px) rotateX(7deg) rotateZ(26deg);
         }
 
-        .mm-boot-loader::after {
+        .mm-universal-loader::after {
           opacity: 0.56;
         }
       }
@@ -239,14 +255,14 @@
     <div id="root">
       <main
         id="app-boot-fallback"
-        class="mm-boot-screen"
+        class="mm-loading-overlay mm-loading-overlay--viewport"
         role="status"
         aria-live="polite"
         aria-busy="true"
       >
-        <span class="mm-boot-loader">
-          <span class="mm-boot-loader__ring" aria-hidden="true"></span>
-          <span class="mm-boot-sr-only">Inicializando plataforma.</span>
+        <span class="mm-universal-loader mm-universal-loader--page">
+          <span class="mm-universal-loader__ring" aria-hidden="true"></span>
+          <span class="mm-sr-only">Inicializando plataforma.</span>
         </span>
       </main>
     </div>
