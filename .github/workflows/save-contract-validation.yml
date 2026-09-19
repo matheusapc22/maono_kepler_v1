@@ -24,6 +24,7 @@ on:
       - "tests/project-large-legacy-lifecycle.test.mjs"
       - "tests/project-config-stream-watchdog.test.mjs"
       - "tests/project-config-revision-recycle.test.mjs"
+      - "tests/project-config-revision-concurrency.test.mjs"
       - ".github/workflows/save-contract-validation.yml"
   workflow_dispatch:
 
@@ -63,7 +64,7 @@ jobs:
         run: node --test tests/project-config-stream-watchdog.test.mjs
 
       - name: Validate unpublished revision recycling
-        run: node --test tests/project-config-revision-recycle.test.mjs
+        run: node --test tests/project-config-revision-recycle.test.mjs tests/project-config-revision-concurrency.test.mjs
 
       - name: Build application
         run: npm run build

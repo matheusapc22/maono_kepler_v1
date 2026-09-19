@@ -471,6 +471,7 @@ export async function saveVersionedProjectConfig(
           projectId: project.id,
           revision: nextRevision,
           checksum: artifact.checksum,
+          attempts: reservation.revision.attempts,
           storageProviderVersion: providerVersion,
           storageProviderHash: providerHash,
         });
@@ -484,6 +485,8 @@ export async function saveVersionedProjectConfig(
         organizationId: project.organization_id,
         expectedCurrentRevision: expected,
         revision: nextRevision,
+        checksum: artifact.checksum,
+        attempts: reservation.revision.attempts,
         actor,
         markPreviewPending,
         expectedLifecycleState,
@@ -520,6 +523,8 @@ export async function saveVersionedProjectConfig(
       await markProjectConfigRevisionFailed(env, {
         projectId: project.id,
         revision: nextRevision,
+        checksum: reservation.revision.checksum,
+        attempts: reservation.revision.attempts,
         errorCode: error?.code || "PROJECT_CONFIG_REVISION_FAILED",
         errorStage: stage,
       }).catch(() => null);

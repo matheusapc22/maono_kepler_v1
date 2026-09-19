@@ -326,6 +326,10 @@ async function publishLegacyPromotion(
         AND config_revision = ?
         AND lifecycle_state IS NULL
         AND active = 1
+        AND EXISTS (
+          SELECT 1 FROM project_config_revisions
+           WHERE id = ? AND checksum = ? AND attempts = ? AND status = 'READY'
+        )
       RETURNING *`,
   )
     .bind(
@@ -346,6 +350,9 @@ async function publishLegacyPromotion(
       project.id,
       project.organization_id,
       expectedRevision,
+      ledger.id,
+      ledger.checksum,
+      ledger.attempts,
     )
     .first();
 
@@ -646,6 +653,7 @@ export async function saveLargeLegacyProjectConfigStream(
       projectId: project.id,
       revision: nextRevision,
       checksum: contentHash,
+      attempts: reservation.revision.attempts,
       storageProviderVersion: metadata.providerVersion,
       storageProviderHash: metadata.providerHash,
     });
@@ -686,6 +694,8 @@ export async function saveLargeLegacyProjectConfigStream(
         await markProjectConfigRevisionFailed(env, {
           projectId: project.id,
           revision: nextRevision,
+          checksum: reservation.revision.checksum,
+          attempts: reservation.revision.attempts,
           errorCode: error?.code || "PROJECT_CONFIG_LARGE_SAVE_FAILED",
           errorStage: currentStage,
         });
