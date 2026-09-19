@@ -154,7 +154,10 @@ test("save e create usam feedback local sem overlay global de viewport", () => {
 test("adaptador booleano faz cleanup do token e overlay global cobre modais", () => {
   assert.match(loadingActivity, /useLayoutEffect/);
   assert.match(loadingActivity, /tokenRef/);
-  assert.match(loadingActivity, /beginLoading\(\{ immediate \}\)/);
+  assert.match(
+    loadingActivity,
+    /beginLoading\(\{[\s\S]*immediate,[\s\S]*metadata:/,
+  );
   assert.match(loadingActivity, /endLoading\(tokenRef\.current\)/);
   assert.match(loaderCss, /\.mm-loading-overlay \{[\s\S]*z-index: 120000/);
 });
