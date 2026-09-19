@@ -62,7 +62,11 @@ test("Login usa sessão canônica e prefetch de Projects", () => {
   assert.match(login, /beforeNavigate:/);
   assert.match(login, /handoffKey: "login-projects"/);
   assert.match(login, /authenticatedRedirectPending/);
-  assert.match(login, /useLoadingActivity\(loginLoading\)/);
+  assert.match(
+    login,
+    /useLoadingActivity\(loginLoading && !initialBootActive\)/,
+  );
+  assert.match(login, /useInitialBootReadiness\(!loginLoading\)/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
 });
 
