@@ -18,6 +18,8 @@ const DROPBOX_UPLOAD_SESSION_APPEND_URL =
 const DROPBOX_UPLOAD_SESSION_FINISH_URL =
   "https://content.dropboxapi.com/2/files/upload_session/finish";
 const DROPBOX_LIST_FOLDER_URL = "https://api.dropboxapi.com/2/files/list_folder";
+const DROPBOX_LIST_FOLDER_CONTINUE_URL =
+  "https://api.dropboxapi.com/2/files/list_folder/continue";
 const DROPBOX_CREATE_FOLDER_URL =
   "https://api.dropboxapi.com/2/files/create_folder_v2";
 const DROPBOX_DELETE_URL = "https://api.dropboxapi.com/2/files/delete_v2";
@@ -214,6 +216,97 @@ export async function listDropboxFolder(env, path = "") {
   }
 
   return await response.json();
+}
+
+export async function listDropboxFolderAll(
+  env,
+  path = "",
+  {
+    maxPages = 100,
+  } = {},
+) {
+  const firstPage = await listDropboxFolder(env, path);
+
+  if (isLocalStorageMode(env) || !firstPage?.has_more) {
+    return {
+      entries: firstPage?.entries || [],
+      cursor: firstPage?.cursor || null,
+      has_more: false,
+      pages: 1,
+    };
+  }
+
+  const client = getDropboxClient(env);
+  const entries = [...(firstPage.entries || [])];
+  let cursor = firstPage.cursor || null;
+  let hasMore = Boolean(firstPage.has_more);
+  let pages = 1;
+  const safeMaxPages = Math.max(
+    1,
+    Math.min(Number(maxPages) || 100, 1_000),
+  );
+
+  while (hasMore) {
+    if (!cursor) {
+      const error = new Error(
+        "Dropbox retornou paginação sem cursor.",
+      );
+      error.status = 502;
+      error.code = "DROPBOX_LIST_CURSOR_MISSING";
+      throw error;
+    }
+
+    if (pages >= safeMaxPages) {
+      const error = new Error(
+        "A listagem Dropbox excedeu o limite seguro de páginas.",
+      );
+      error.status = 502;
+      error.code = "DROPBOX_LIST_PAGE_LIMIT_EXCEEDED";
+      error.details = {
+        path: normalizeDropboxFolderPath(path),
+        maxPages: safeMaxPages,
+      };
+      throw error;
+    }
+
+    const response = await client.request({
+      operation: "files.list_folder.continue",
+      url: DROPBOX_LIST_FOLDER_CONTINUE_URL,
+      timeoutMs: DROPBOX_METADATA_TIMEOUT_MS,
+      buildInit: ({ accessToken }) => ({
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ cursor }),
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      const error = new Error(
+        `Falha ao continuar listagem Dropbox: ${response.status} ${text}`,
+      );
+      error.status = response.status;
+      error.code = "DROPBOX_LIST_FOLDER_CONTINUE_FAILED";
+      error.dropboxStatus = response.status;
+      throw error;
+    }
+
+    const page = await response.json();
+    entries.push(...(page?.entries || []));
+    cursor = page?.cursor || cursor;
+    hasMore = Boolean(page?.has_more);
+    pages += 1;
+  }
+
+  return {
+    entries,
+    cursor,
+    has_more: false,
+    pages,
+  };
 }
 
 export async function getDropboxMetadata(env, rootPath, fileName) {

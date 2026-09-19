@@ -1,0 +1,212 @@
+name: Organization storage recovery operator
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "validate | deploy_disabled | deploy_dry_run | deploy_apply"
+        required: true
+        default: "validate"
+        type: choice
+        options:
+          - validate
+          - deploy_disabled
+          - deploy_dry_run
+          - deploy_apply
+      confirmation:
+        description: "Confirmação exata correspondente ao modo"
+        required: true
+        type: string
+      migration_0009_confirmation:
+        description: "Para dry-run/apply: digite MIGRATION_0009_APPLIED_TO_TARGET_D1"
+        required: false
+        type: string
+      release_ref:
+        description: "Branch/ref já validada"
+        required: true
+        default: "mano_kepler_v1"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: organization-storage-recovery-operator
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate explicit operator confirmation
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          MIGRATION_CONFIRMATION: ${{ inputs.migration_0009_confirmation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$MODE" in
+            validate)
+              expected="VALIDATE_STORAGE_RECOVERY_OPERATOR"
+              ;;
+            deploy_disabled)
+              expected="DEPLOY_STORAGE_RECOVERY_DISABLED"
+              ;;
+            deploy_dry_run)
+              expected="DEPLOY_STORAGE_RECOVERY_DRY_RUN"
+              ;;
+            deploy_apply)
+              expected="DEPLOY_STORAGE_RECOVERY_APPLY"
+              ;;
+            *)
+              echo "Modo inválido." >&2
+              exit 2
+              ;;
+          esac
+
+          test "$CONFIRMATION" = "$expected"
+
+          if [[ "$MODE" == "deploy_dry_run" || "$MODE" == "deploy_apply" ]]; then
+            test "$MIGRATION_CONFIRMATION" = "MIGRATION_0009_APPLIED_TO_TARGET_D1"
+          fi
+
+  validate:
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      release_sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - name: Checkout requested release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+
+      - name: Pin audited release SHA
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Validated release SHA: $sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Validate drift/recovery contracts
+        run: |
+          npm run test:organization-drift
+          npm run test:organization-readiness
+          npm run test:organization-storage
+          npm run test:organization-lifecycle
+
+      - name: Syntax-check operator helpers
+        run: |
+          node --check scripts/organization-storage/render-recovery-wrangler-config.mjs
+          node --check workers/organization-storage-recovery.js
+
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    if: ${{ inputs.mode != 'validate' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      MODE: ${{ inputs.mode }}
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+      RELEASE_REF: ${{ inputs.release_ref }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MAONO_RECOVERY_D1_DATABASE_ID: ${{ secrets.MAONO_PRODUCTION_D1_DATABASE_ID }}
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+      DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+    steps:
+      - name: Checkout validated release SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Refuse release ref drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
+          if [[ "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            current="$RELEASE_REF"
+          fi
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
+
+      - name: Validate deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$MAONO_RECOVERY_D1_DATABASE_ID"
+
+          if [[ "$MODE" == "deploy_apply" ]]; then
+            test -n "$DROPBOX_APP_KEY"
+            test -n "$DROPBOX_APP_SECRET"
+            test -n "$DROPBOX_REFRESH_TOKEN"
+          fi
+
+      - name: Render safe disabled config
+        env:
+          MAONO_RECOVERY_OPERATOR_MODE: disabled
+          MAONO_RECOVERY_CONFIG_PATH: .tmp/recovery-worker.toml
+        run: node scripts/organization-storage/render-recovery-wrangler-config.mjs
+
+      - name: Deploy disabled baseline first
+        run: npx --yes wrangler@4.112.0 deploy --config .tmp/recovery-worker.toml
+
+      - name: Configure Dropbox secrets before apply
+        if: ${{ inputs.mode == 'deploy_apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$DROPBOX_APP_KEY" | npx --yes wrangler@4.112.0 secret put DROPBOX_APP_KEY --config .tmp/recovery-worker.toml
+          printf '%s' "$DROPBOX_APP_SECRET" | npx --yes wrangler@4.112.0 secret put DROPBOX_APP_SECRET --config .tmp/recovery-worker.toml
+          printf '%s' "$DROPBOX_REFRESH_TOKEN" | npx --yes wrangler@4.112.0 secret put DROPBOX_REFRESH_TOKEN --config .tmp/recovery-worker.toml
+
+      - name: Render requested final config
+        if: ${{ inputs.mode != 'deploy_disabled' }}
+        env:
+          MAONO_RECOVERY_CONFIG_PATH: .tmp/recovery-worker.toml
+          MAONO_RECOVERY_OPERATOR_MODE: ${{ inputs.mode == 'deploy_apply' && 'apply' || 'dry-run' }}
+        run: node scripts/organization-storage/render-recovery-wrangler-config.mjs
+
+      - name: Deploy requested final mode
+        if: ${{ inputs.mode != 'deploy_disabled' }}
+        run: npx --yes wrangler@4.112.0 deploy --config .tmp/recovery-worker.toml
+
+      - name: Record operator result
+        shell: bash
+        run: |
+          {
+            echo "### Organization storage recovery operator"
+            echo "- release SHA: `$VALIDATED_RELEASE_SHA`"
+            echo "- mode: `$MODE`"
+            echo "- worker: `maono-organization-storage-recovery`"
+            if [[ "$MODE" == "deploy_disabled" ]]; then
+              echo "- runtime state: disabled"
+            elif [[ "$MODE" == "deploy_dry_run" ]]; then
+              echo "- runtime state: enabled + dry-run"
+            else
+              echo "- runtime state: enabled + apply"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,81 @@
+name: Organization drift validation
+
+on:
+  push:
+    branches:
+      - "feat/prh-07-*"
+    paths:
+      - "functions/_lib/dropbox.js"
+      - "functions/_lib/organization-storage-drift.js"
+      - "functions/api/admin/organizations/storage-drift.js"
+      - "scripts/organization-storage/**"
+      - "workers/organization-storage-recovery.js"
+      - "docs/ops/organization-storage-drift-backfill.md"
+      - "tests/organization-storage-drift*.test.mjs"
+      - "tests/organization-storage-recovery-operator.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-storage-recovery-operator.yml"
+      - ".github/workflows/organization-drift-validation.yml"
+  pull_request:
+    branches:
+      - mano_kepler_v1
+    paths:
+      - "functions/_lib/dropbox.js"
+      - "functions/_lib/organization-storage-drift.js"
+      - "functions/api/admin/organizations/storage-drift.js"
+      - "scripts/organization-storage/**"
+      - "workers/organization-storage-recovery.js"
+      - "docs/ops/organization-storage-drift-backfill.md"
+      - "tests/organization-storage-drift*.test.mjs"
+      - "tests/organization-storage-recovery-operator.test.mjs"
+      - "package.json"
+      - ".github/workflows/organization-storage-recovery-operator.yml"
+      - ".github/workflows/organization-drift-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Physical drift and operator suite
+        run: npm run test:organization-drift
+
+      - name: Organization readiness regression
+        run: npm run test:organization-readiness
+
+      - name: Organization storage regression
+        run: npm run test:organization-storage
+
+      - name: Organization lifecycle regression
+        run: npm run test:organization-lifecycle
+
+      - name: Dropbox resilience regression
+        run: npm run test:dropbox-resilience
+
+      - name: Product reliability UX ratchet
+        run: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
+
+      - name: Syntax-check recovery operator
+        run: |
+          node --check scripts/organization-storage/render-recovery-wrangler-config.mjs
+          node --check functions/_lib/organization-storage-drift.js
+          node --check workers/organization-storage-recovery.js
+
+      - name: Build application
+        run: npm run build
