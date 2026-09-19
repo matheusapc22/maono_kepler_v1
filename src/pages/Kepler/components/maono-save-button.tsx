@@ -533,9 +533,8 @@ const MaonoSaveButton: React.FC = () => {
             mode: context?.mode ?? null,
             projectId: context?.project?.id ?? null,
             organizationId: context?.organization?.id ?? null,
+            ...snapshot.attempt,
             operation: "update",
-            saveId: snapshot.attempt.saveId,
-            correlationId: snapshot.attempt.correlationId,
             payloadBytes: snapshot.serialized.payloadBytes,
             serializeDurationMs: snapshot.serialized.serializeDurationMs,
             durationMs: clientSaveTotalDurationMs(snapshot.attempt),
@@ -642,9 +641,8 @@ const MaonoSaveButton: React.FC = () => {
             mode: context?.mode ?? null,
             projectId: context?.project?.id ?? null,
             organizationId: context?.organization?.id ?? null,
+            ...snapshot.attempt,
             operation: "update",
-            saveId: snapshot.attempt.saveId,
-            correlationId: snapshot.attempt.correlationId,
             payloadBytes: snapshot.serialized.payloadBytes,
             serializeDurationMs: snapshot.serialized.serializeDurationMs,
             durationMs: clientSaveTotalDurationMs(snapshot.attempt),
@@ -830,9 +828,8 @@ const MaonoSaveButton: React.FC = () => {
             mode: context?.mode ?? null,
             organizationId:
               context?.organization?.id ?? activeOrganizationId,
+            ...attempt,
             operation: "create",
-            saveId: attempt.saveId,
-            correlationId: attempt.correlationId,
             payloadBytes,
             serializeDurationMs,
             durationMs: clientSaveTotalDurationMs(attempt),
@@ -903,9 +900,8 @@ const MaonoSaveButton: React.FC = () => {
           mode: context?.mode ?? null,
           organizationId:
             context?.organization?.id ?? activeOrganizationId,
+          ...attempt,
           operation: "create",
-          saveId: attempt.saveId,
-          correlationId: attempt.correlationId,
           payloadBytes,
           serializeDurationMs,
           durationMs: clientSaveTotalDurationMs(attempt),
@@ -1040,7 +1036,9 @@ const MaonoSaveButton: React.FC = () => {
             className={
               messageType === "success"
                 ? "max-w-xl rounded-2xl border border-emerald-300/50 bg-emerald-800/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
-                : "max-w-xl rounded-2xl border border-red-300/50 bg-red-900/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
+                : messageType === "warning"
+                  ? "max-w-xl rounded-2xl border border-amber-300/50 bg-amber-900/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
+                  : "max-w-xl rounded-2xl border border-red-300/50 bg-red-900/95 px-4 py-3 text-sm font-semibold text-white shadow-2xl"
             }
           >
             {message}

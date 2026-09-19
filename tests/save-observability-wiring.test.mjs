@@ -54,7 +54,7 @@ test("frontend cria saveId antes da serialização e envia body já serializado"
   assert.match(clientObservability, /"X-Correlation-Id"/);
   assert.match(saveButton, /beginClientSaveAttempt\("update"\)/);
   assert.match(saveButton, /beginClientSaveAttempt\("create"\)/);
-  assert.match(saveButton, /serializeSaveRequest\(attempt/);
+  assert.match(saveResilience, /serializeSaveRequest\(attempt/);
   assert.match(saveResilience, /headers: buildSaveRequestHeaders\(snapshot\.attempt\)/);
   assert.match(saveResilience, /body: snapshot\.serialized\.body/);
   assert.match(saveButton, /prepareProjectUpdateSnapshot/);
