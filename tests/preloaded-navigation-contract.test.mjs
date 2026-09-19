@@ -42,13 +42,19 @@ test("Login canônico usa sessão, prefetch e handoff para Projects", () => {
   assert.match(login, /const session = useSession\(\)/);
   assert.match(login, /session\.login\(email, password\)/);
   assert.match(login, /route: "projects"/);
-  assert.match(login, /beforeNavigate:/);
+  assert.match(login, /beforeNavigate: \(signal\)/);
+  assert.match(
+    login,
+    /session\.login\(email, password, \{ signal \}\)/,
+  );
   assert.match(login, /handoffKey: "login-projects"/);
   assert.match(login, /authenticatedRedirectPending/);
   assert.match(login, /useLoadingActivity\(session\.loading && !initialBootActive\)/);
   assert.match(login, /useInitialBootReadiness\(bootCanCompleteOnLogin\)/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
   assert.doesNotMatch(login, /assetsReady/);
+  assert.match(login, /directLoginControllerRef/);
+  assert.match(login, /directLoginControllerRef\.current\?\.abort\(\)/);
 });
 
 test("Projects prepara chunks antes das navegações pesadas", () => {

@@ -334,3 +334,22 @@ test("login usa código canônico e mantém alias de deploy skew no catálogo", 
   assert.match(catalogSource, /AUTH_INVALID_CREDENTIALS/);
   assert.match(catalogSource, /INVALID_CREDENTIALS:\s*INVALID_CREDENTIALS_PRESENTATION/);
 });
+
+
+test("PRL-09 propaga cancelamento externo por toda a transação de login", () => {
+  assert.match(
+    sessionSource,
+    /refreshSession: \(options\?: \{ signal\?: AbortSignal \}\)/,
+  );
+  assert.match(sessionSource, /options\.signal\?\.addEventListener\("abort"/);
+  assert.match(sessionSource, /fetchAuthLoginWithDeadline\(\{/);
+  assert.match(sessionSource, /await refreshSession\(\{ signal: options\.signal \}\)/);
+  assert.match(loginSource, /beforeNavigate: \(signal\)/);
+  assert.match(loginSource, /session\.login\(email, password, \{ signal \}\)/);
+  assert.match(loginSource, /directLoginControllerRef\.current\?\.abort\(\)/);
+});
+
+test("PRL-09 mantém deadline fora do transport global", () => {
+  assert.doesNotMatch(transportSource, /AUTH_LOGIN_REQUEST_TIMEOUT_MS/);
+  assert.doesNotMatch(transportSource, /setTimeout\([\s\S]*fetchWithNetworkGuard/);
+});
