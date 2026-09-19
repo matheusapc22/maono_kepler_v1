@@ -47,6 +47,8 @@ test("prepared navigation prepara chunk e pré-condição antes de alterar a rot
   assert.match(preparedHook, /activeAbortControllerRef/);
   assert.match(preparedHook, /controller\.isCurrent\(intent\)/);
   assert.match(preparedHook, /navigate\(destination, \{ replace \}\)/);
+  assert.match(preparedHook, /primeLoadingHandoff/);
+  assert.match(preparedHook, /if \(!handedOff\)/);
   assert.match(preparedHook, /cancelPreparedNavigation/);
 });
 
@@ -55,16 +57,20 @@ test("Login usa sessão canônica e prefetch de Projects", () => {
   assert.match(login, /session\.login\(email, password\)/);
   assert.match(login, /route: "projects"/);
   assert.match(login, /beforeNavigate:/);
-  assert.match(login, /session\.loading && !submitting/);
+  assert.match(login, /handoffKey: "login-projects"/);
+  assert.match(login, /authenticatedRedirectPending/);
+  assert.match(login, /useLoadingActivity\(loginLoading\)/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
 });
 
 test("Projects prepara chunks antes das navegações pesadas", () => {
   assert.match(projects, /route: "kepler"/);
   assert.match(projects, /to: "\/maps\/new\/create"/);
+  assert.match(projects, /handoffKey: "map:\/maps\/new\/create"/);
   assert.match(projectsSection, /route: "kepler"/);
   assert.match(projectsSection, /prepareProjectMapDestination/);
   assert.match(projectsSection, /to: \(\) => destination/);
+  assert.match(projectsSection, /handoffKey: \(resolvedDestination\)/);
 });
 
 test("ProjectCard preserva modified-click e remove copy de espera", () => {

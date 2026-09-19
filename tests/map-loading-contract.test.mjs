@@ -90,12 +90,16 @@ test("prepared navigation executa prefetch e preparação em paralelo e suporta 
   assert.match(preparedHook, /abortController\.signal\.aborted/);
   assert.match(preparedHook, /typeof to === "function" \? to\(\) : to/);
   assert.match(preparedHook, /navigate\(destination, \{ replace \}\)/);
+  assert.match(preparedHook, /primeLoadingHandoff/);
 });
 
 test("/manage permanece compatível sem spinner próprio", () => {
   assert.match(mapManagement, /prepareProjectMapDestination/);
   assert.match(mapManagement, /route: "kepler"/);
-  assert.match(mapManagement, /useLoadingActivity\(loading\)/);
+  assert.match(
+    mapManagement,
+    /useLoadingActivity\(loading \|\| preparing\)/,
+  );
   assert.doesNotMatch(mapManagement, /MapRedirectLoader/);
   assert.doesNotMatch(mapManagement, /maono-map-management__spinner/);
 });
@@ -114,6 +118,8 @@ test("MapPanelProvider consome contexto preparado e não mostra copy de espera",
 test("hidratação mantém Universal Loader até visual readiness", () => {
   assert.match(mapUrlLoader, /useLoadingActivity\(isMapLoading\)/);
   assert.match(mapUrlLoader, /waitForMaonoMapVisualReadiness/);
+  assert.match(mapUrlLoader, /loadCycleComplete/);
+  assert.match(mapUrlLoader, /useCompleteLoadingHandoff/);
   assert.match(mapUrlLoader, /dispatch\(setLoadingMapStatus\(true\)\)/);
   assert.match(mapUrlLoader, /dispatch\(setLoadingMapStatus\(false\)\)/);
   assert.doesNotMatch(mapUrlLoader, /components\/Spinner/);
@@ -138,8 +144,9 @@ test("save e create usam atividade universal sem rótulos de espera", () => {
 });
 
 test("adaptador booleano faz cleanup do token e overlay global cobre modais", () => {
+  assert.match(loadingActivity, /useLayoutEffect/);
   assert.match(loadingActivity, /tokenRef/);
-  assert.match(loadingActivity, /beginLoading\(\)/);
+  assert.match(loadingActivity, /beginLoading\(\{ immediate: true \}\)/);
   assert.match(loadingActivity, /endLoading\(tokenRef\.current\)/);
   assert.match(loaderCss, /\.mm-loading-overlay \{[\s\S]*z-index: 120000/);
 });

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { connect, useStore } from "react-redux";
-import { useParams } from "react-router";
+import { useLocation, useParams } from "react-router";
 import { addDataToMap, removeDataset, toggleModal } from "@kepler.gl/actions";
 import { selectIsMapLoading } from "../reducers/selectors";
 import { setLoadingMapStatus } from "../actions";
-import { useLoadingActivity } from "../../../components/loading";
+import {
+  useCompleteLoadingHandoff,
+  useLoadingActivity,
+} from "../../../components/loading";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { isPointClusteringFeatureEnabled } from "../clustering/point-cluster-policy.ts";
 import { loadPointClusterState } from "../clustering/point-cluster-store.ts";
@@ -215,12 +218,18 @@ const MapUrlLoader = connectStore(
       changeRequestId?: string;
     }>();
     const { context } = useMapPanel();
+    const location = useLocation();
     const store = useStore();
     const loadedProjectRef = useRef<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retryToken, setRetryToken] = useState(0);
+    const [loadCycleComplete, setLoadCycleComplete] = useState(false);
 
     useLoadingActivity(isMapLoading);
+    useCompleteLoadingHandoff(
+      `map:${location.pathname}`,
+      loadCycleComplete || Boolean(error),
+    );
 
     useEffect(() => {
       if (!isMapLoading || currentModal == null) return;
@@ -249,6 +258,7 @@ const MapUrlLoader = connectStore(
       const controller = new AbortController();
       loadedProjectRef.current = contextKey;
       setError(null);
+      setLoadCycleComplete(false);
 
       void loadProjectConfig(
         projectSlug,
@@ -257,7 +267,13 @@ const MapUrlLoader = connectStore(
         store,
         controller.signal,
         context?.mode === "viewer" || Boolean(changeRequestId),
-      ).catch(async (err) => {
+      )
+        .then(() => {
+          if (!controller.signal.aborted) {
+            setLoadCycleComplete(true);
+          }
+        })
+        .catch(async (err) => {
         if (controller.signal.aborted) return;
 
         const visualReadinessFailure = isMapVisualReadinessError(err);
@@ -276,6 +292,7 @@ const MapUrlLoader = connectStore(
           if (recovered) {
             setError(null);
             dispatch(setLoadingMapStatus(false));
+            setLoadCycleComplete(true);
             return;
           }
         }
@@ -310,6 +327,7 @@ const MapUrlLoader = connectStore(
         loadedProjectRef.current = null;
         setError(normalizeUserError(err).message);
         dispatch(setLoadingMapStatus(false));
+        setLoadCycleComplete(true);
       });
 
       return () => {

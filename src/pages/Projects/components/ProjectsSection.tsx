@@ -320,6 +320,8 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
               void prepareNavigate({
                 route: "kepler",
                 to: () => destination,
+                handoffKey: (resolvedDestination) =>
+                  `map:${resolvedDestination}`,
                 beforeNavigate: async (signal) => {
                   const prepared = await prepareProjectMapDestination(
                     selectedProject.slug,

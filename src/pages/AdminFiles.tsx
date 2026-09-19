@@ -10,6 +10,11 @@ import {
 import { PERMISSION } from "../access-control/permissions";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
+import {
+  LoadingOverlay,
+  UniversalLoader,
+  useLoadingActivity,
+} from "../components/loading";
 import { parseJsonResponse } from "../lib/api-transport";
 import { normalizeUserError } from "../lib/user-error-catalog";
 
@@ -156,12 +161,6 @@ function loginRedirectForAdminFiles() {
   return `/login?next=${encodeURIComponent("/admin/files")}`;
 }
 
-const LoadingScreen: React.FC = () => (
-  <main className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
-    <p className="animate-pulse">Carregando gestão de arquivos...</p>
-  </main>
-);
-
 const RestrictedAdminAccess: React.FC = () => (
   <main className="min-h-screen bg-[#0f172a] text-white">
     <section className="mx-auto flex min-h-screen max-w-3xl flex-col items-start justify-center px-6 py-12">
@@ -200,6 +199,7 @@ const RestrictedAdminAccess: React.FC = () => (
 const AdminFilesPage: React.FC = () => {
   const { authenticated, loading, user, logout } = useSession();
   const navigate = useNavigate();
+  useLoadingActivity(loading);
 
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -603,7 +603,7 @@ const AdminFilesPage: React.FC = () => {
   }
 
   if (loading) {
-    return <LoadingScreen />;
+    return null;
   }
 
   if (!authenticated) {
@@ -739,8 +739,18 @@ const AdminFilesPage: React.FC = () => {
               </label>
 
               <div className="flex flex-wrap gap-3 md:col-span-2">
-                <button className="rounded-xl bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-400 disabled:opacity-60" type="submit" disabled={savingOrganization}>
-                  {savingOrganization ? "Salvando..." : editingOrgId ? "Salvar organização" : "Criar organização/pasta"}
+                <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-400 disabled:opacity-60" type="submit" disabled={savingOrganization}>
+                  {savingOrganization ? (
+                    <UniversalLoader
+                      size="inline"
+                      accessibleLabel="Salvando organização"
+                    />
+                  ) : null}
+                  <span>
+                    {editingOrgId
+                      ? "Salvar organização"
+                      : "Criar organização/pasta"}
+                  </span>
                 </button>
                 {editingOrgId && <button className="rounded-xl border border-white/20 px-5 py-3 font-semibold text-white hover:bg-white/10" type="button" onClick={resetOrgForm}>Limpar</button>}
               </div>
@@ -798,7 +808,13 @@ const AdminFilesPage: React.FC = () => {
           </section>
         </div>
 
-        <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6">
+        <section className="relative mt-8 rounded-2xl border border-white/10 bg-white/5 p-6">
+          <LoadingOverlay
+            active={loadingDetails}
+            scope="container"
+            loaderSize="compact"
+            accessibleLabel="Atualizando arquivos da organização"
+          />
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Arquivos da organização</h2>
@@ -807,8 +823,14 @@ const AdminFilesPage: React.FC = () => {
               </p>
             </div>
             {selectedOrganizationId && (
-              <button className="rounded-xl border border-white/20 px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-50" type="button" disabled={loadingDetails} onClick={() => refreshOrganizationDetails(selectedOrganizationId)}>
-                {loadingDetails ? "Atualizando..." : "Atualizar"}
+              <button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-4 py-2 text-sm hover:bg-white/10 disabled:opacity-50" type="button" disabled={loadingDetails} onClick={() => refreshOrganizationDetails(selectedOrganizationId)}>
+                {loadingDetails ? (
+                  <UniversalLoader
+                    size="inline"
+                    accessibleLabel="Atualizando arquivos"
+                  />
+                ) : null}
+                <span>Atualizar</span>
               </button>
             )}
           </div>
@@ -825,8 +847,14 @@ const AdminFilesPage: React.FC = () => {
                   <input className="mt-1 w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400" style={fieldStyle} type="file" onChange={handleFileInput} />
                 </label>
                 <div className="flex items-end">
-                  <button className="w-full rounded-xl bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-400 disabled:opacity-60" type="submit" disabled={savingFile || !fileUpload}>
-                    {savingFile ? "Enviando..." : "Enviar para Dropbox"}
+                  <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-400 disabled:opacity-60" type="submit" disabled={savingFile || !fileUpload}>
+                    {savingFile ? (
+                      <UniversalLoader
+                        size="inline"
+                        accessibleLabel="Enviando arquivo"
+                      />
+                    ) : null}
+                    <span>Enviar para Dropbox</span>
                   </button>
                 </div>
               </form>
@@ -867,7 +895,13 @@ const AdminFilesPage: React.FC = () => {
                               disabled={transformingFileId === file.id}
                               onClick={() => handleCreateProjectFromFile(file)}
                             >
-                              {transformingFileId === file.id ? "Criando..." : "Transformar em projeto"}
+                              {transformingFileId === file.id ? (
+                                <UniversalLoader
+                                  size="inline"
+                                  accessibleLabel="Criando projeto"
+                                />
+                              ) : null}
+                              <span>Transformar em projeto</span>
                             </button>
                           ) : (
                             <span className="text-xs text-white/50">Não aplicável</span>
@@ -940,8 +974,14 @@ const AdminFilesPage: React.FC = () => {
                   </select>
                 </label>
                 <div className="flex items-end">
-                  <button className="w-full rounded-xl bg-emerald-500 px-5 py-3 font-semibold text-white hover:bg-emerald-400 disabled:opacity-60" type="submit" disabled={savingOrgUser}>
-                    {savingOrgUser ? "Salvando..." : "Vincular usuário"}
+                  <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 font-semibold text-white hover:bg-emerald-400 disabled:opacity-60" type="submit" disabled={savingOrgUser}>
+                    {savingOrgUser ? (
+                      <UniversalLoader
+                        size="inline"
+                        accessibleLabel="Vinculando usuário"
+                      />
+                    ) : null}
+                    <span>Vincular usuário</span>
                   </button>
                 </div>
               </form>

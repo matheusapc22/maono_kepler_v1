@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+import { LoadingOverlay } from "../components/loading";
 import { parseJsonResponse } from "../lib/api-transport";
 import { normalizeUserError } from "../lib/user-error-catalog";
 
@@ -66,7 +67,6 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
   const [path, setPath] = useState(() => normalizePath(currentRootPath || "/projects"));
   const [entries, setEntries] = useState<DropboxEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState("");
 
   const previewUrl = useMemo(
@@ -124,9 +124,7 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
 
   function handlePreview() {
     if (!previewUrl) return;
-    setPreviewLoading(true);
     window.open(previewUrl, "_blank", "noopener,noreferrer");
-    window.setTimeout(() => setPreviewLoading(false), 1200);
   }
 
   return (
@@ -191,11 +189,11 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
           <button
             className="rounded-lg border border-emerald-300/30 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-50"
             type="button"
-            disabled={!previewUrl || previewLoading}
+            disabled={!previewUrl}
             onClick={handlePreview}
             title="Abre o arquivo selecionado em uma nova aba do mapa para pré-visualização."
           >
-            {previewLoading ? "Abrindo..." : "Pré-visualizar mapa"}
+            Pré-visualizar mapa
           </button>
         </div>
       </div>
@@ -206,10 +204,14 @@ const AdminDropboxBrowser: React.FC<DropboxBrowserProps> = ({
         </div>
       )}
 
-      <div className="mt-4 max-h-72 overflow-auto rounded-xl border border-white/10">
-        {loading ? (
-          <div className="p-4 text-sm text-white/70">Carregando Dropbox...</div>
-        ) : sortedEntries.length === 0 ? (
+      <div className="relative mt-4 max-h-72 min-h-28 overflow-auto rounded-xl border border-white/10">
+        <LoadingOverlay
+          active={loading}
+          scope="container"
+          loaderSize="compact"
+          accessibleLabel="Carregando Dropbox"
+        />
+        {sortedEntries.length === 0 ? (
           <div className="p-4 text-sm text-white/70">Nenhum item encontrado nesta pasta.</div>
         ) : (
           <table className="w-full text-left text-sm">
