@@ -17,6 +17,13 @@ const mainEntry = await readFile(
   new URL("../src/main.tsx", import.meta.url),
   "utf8",
 );
+const initialBootLoader = await readFile(
+  new URL(
+    "../src/components/loading/initial-boot-loader.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("Cloudflare build grants Vite a 6144 MB heap", () => {
   assert.match(
@@ -51,7 +58,11 @@ test("application displays a visible boot state instead of a blank page", () => 
   assert.match(indexHtml, /__MAONO_BOOT_TIMEOUT__/);
   assert.match(indexHtml, /__MAONO_SHOW_BOOT_FAILURE__/);
   assert.match(indexHtml, /Tentar novamente/);
-  assert.match(mainEntry, /clearTimeout\(window\.__MAONO_BOOT_TIMEOUT__\)/);
+  assert.match(mainEntry, /acknowledgeInitialBootRuntime\(\)/);
+  assert.match(
+    initialBootLoader,
+    /clearTimeout\(currentWindow\.__MAONO_BOOT_TIMEOUT__\)/,
+  );
   assert.match(mainEntry, /Elemento raiz da aplicação não foi encontrado/);
 });
 
