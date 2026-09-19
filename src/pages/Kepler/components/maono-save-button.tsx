@@ -556,6 +556,18 @@ const MaonoSaveButton: React.FC = () => {
           void refresh();
         }
 
+        if (response.status === 409) {
+          emitSaveTelemetry("map_save_conflict", {
+            ...snapshot.attempt,
+            mode: context?.mode ?? null,
+            projectId: context?.project?.id ?? null,
+            organizationId: context?.organization?.id ?? null,
+            operation: "update",
+            code: data?.error?.code ?? "PROJECT_VERSION_CONFLICT",
+            expectedRevision: snapshot.expectedConfigRevision,
+          });
+        }
+
         if (recovery && response.status === 409) {
           clearProjectUpdateRecovery(snapshot.projectSlug);
           setPendingUpdateRecovery(null);
