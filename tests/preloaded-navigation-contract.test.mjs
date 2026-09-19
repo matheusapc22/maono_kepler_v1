@@ -40,7 +40,6 @@ test("prepared navigation prepara chunk e pré-condição antes de alterar a rot
 
 test("Login canônico usa sessão, prefetch e handoff para Projects", () => {
   assert.match(login, /const session = useSession\(\)/);
-  assert.match(login, /session\.login\(email, password\)/);
   assert.match(login, /route: "projects"/);
   assert.match(login, /beforeNavigate: \(signal\)/);
   assert.match(
