@@ -13,10 +13,7 @@ import {
   uploadOrganizationFileWithProgress,
   type FileTransferProgress,
 } from "../../../lib/file-transfer";
-import {
-  formatSupportReference,
-  normalizeUserError,
-} from "../../../lib/user-error-catalog";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 
 import "./DocumentsTransferPanel.css";
 
@@ -102,7 +99,7 @@ function validateFile(file: File) {
 function formatRequestError(error: unknown, fallback: string) {
   const presentation = normalizeUserError(error);
   const message = presentation.message.trim() || fallback;
-  const supportReference = formatSupportReference(presentation.supportReference);
+  const supportReference = presentation.supportReference;
 
   return supportReference ? `${message} (${supportReference})` : message;
 }
@@ -207,7 +204,12 @@ function FeedbackToast({ feedback }: { feedback: FeedbackState }) {
   );
 }
 
-export default function DocumentsSection({
+export default function DocumentsSection(props: DocumentsSectionProps) {
+  // A new organization must not inherit a previous request's files or transfer.
+  return <OrganizationDocuments key={String(props.organizationId ?? "none")} {...props} />;
+}
+
+function OrganizationDocuments({
   user,
   organizationId,
 }: DocumentsSectionProps) {
@@ -218,6 +220,8 @@ export default function DocumentsSection({
   const progressTimerRef = useRef<number | null>(null);
   const progressTargetRef = useRef(0);
   const displayedProgressRef = useRef(0);
+  const uploadInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
   const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -226,6 +230,11 @@ export default function DocumentsSection({
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [transfer, setTransfer] = useState<TransferPanelState | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{
+    file: File;
+    idempotencyKey: string;
+    retryable: boolean;
+  } | null>(null);
 
   const permissionContext = useMemo(
     () => ({
@@ -466,7 +475,9 @@ export default function DocumentsSection({
   }, [organizationId, canView]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       stopProcessingTimer();
       stopProgressTimer();
       clearDismissTimer();
@@ -474,8 +485,8 @@ export default function DocumentsSection({
     };
   }, []);
 
-  async function handleUpload(file: File) {
-    if (!organizationId || !canUpload || transferBusy) return;
+  async function handleUpload(file: File, retryKey?: string) {
+    if (!organizationId || !canUpload || transferBusy || uploadInFlightRef.current) return;
 
     const validationError = validateFile(file);
     if (validationError) {
@@ -485,8 +496,11 @@ export default function DocumentsSection({
     }
 
     const formData = new FormData();
+    const idempotencyKey = retryKey || crypto.randomUUID();
     formData.append("file", file);
-    formData.append("idempotencyKey", crypto.randomUUID());
+    formData.append("idempotencyKey", idempotencyKey);
+    uploadInFlightRef.current = true;
+    setPendingUpload({ file, idempotencyKey, retryable: false });
 
     stopProcessingTimer();
     clearDismissTimer();
@@ -507,14 +521,23 @@ export default function DocumentsSection({
       await uploadOrganizationFileWithProgress(
         organizationId,
         formData,
-        (progress) => updateRunningTransfer("upload", file.name, progress),
+        (progress) => {
+          if (mountedRef.current) updateRunningTransfer("upload", file.name, progress);
+        },
       );
 
+      if (!mountedRef.current) return;
+
       await completeTransfer("upload", file.name);
+      if (!mountedRef.current) return;
+      setPendingUpload(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       await loadFiles({ background: true });
+      if (!mountedRef.current) return;
       showFeedback("success", "Documento enviado.", 3400);
       scheduleTransferDismiss();
     } catch (requestError) {
+      if (!mountedRef.current) return;
       stopProcessingTimer();
       stopProgressTimer();
       const formattedError = formatRequestError(
@@ -523,6 +546,11 @@ export default function DocumentsSection({
       );
 
       setError(formattedError);
+      setPendingUpload({
+        file,
+        idempotencyKey,
+        retryable: normalizeUserError(requestError).retryable,
+      });
       setTransfer((current) => ({
         kind: "upload",
         status: "error",
@@ -532,8 +560,8 @@ export default function DocumentsSection({
       }));
       scheduleTransferDismiss(6500);
     } finally {
+      uploadInFlightRef.current = false;
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -559,20 +587,26 @@ export default function DocumentsSection({
       const response = await downloadOrganizationFileWithProgress(
         organizationId,
         file.id,
-        (progress) =>
+        (progress) => {
+          if (!mountedRef.current) return;
           updateRunningTransfer(
             "download",
             file.name || "documento",
             progress,
-          ),
+          );
+        },
       );
+
+      if (!mountedRef.current) return;
 
       const fileName = response.fileName || file.name || "documento";
       downloadBlob(response.blob, fileName);
       await completeTransfer("download", fileName);
+      if (!mountedRef.current) return;
       showFeedback("success", "Download concluído.", 3400);
       scheduleTransferDismiss();
     } catch (requestError) {
+      if (!mountedRef.current) return;
       stopProgressTimer();
       const formattedError = formatRequestError(
         requestError,
@@ -607,10 +641,12 @@ export default function DocumentsSection({
 
     try {
       await deleteOrganizationFile(organizationId, file.id);
+      if (!mountedRef.current) return;
       setFiles((current) =>
         current.filter((item) => String(item.id) !== String(file.id)),
       );
       await loadFiles({ background: true });
+      if (!mountedRef.current) return;
       showFeedback("success", "Documento excluído.", 3400);
     } catch (requestError) {
       setFeedback(null);
@@ -672,7 +708,16 @@ export default function DocumentsSection({
           ) : null}
         </div>
 
-        {error ? <p className="mm-error-text">{error}</p> : null}
+        {error ? <p className="mm-error-text" role="alert">{error}</p> : null}
+        {pendingUpload?.retryable && canUpload && !uploading && !transferBusy ? (
+          <button
+            type="button"
+            className="mm-button secondary"
+            onClick={() => void handleUpload(pendingUpload.file, pendingUpload.idempotencyKey)}
+          >
+            Tentar enviar novamente
+          </button>
+        ) : null}
 
         {initialLoading && files.length === 0 ? (
           <TableSkeleton
@@ -680,9 +725,9 @@ export default function DocumentsSection({
             rows={5}
             className="documents-table-skeleton"
           />
-        ) : files.length === 0 ? (
+        ) : files.length === 0 && !error ? (
           <div className="projects-empty-state">Nenhum documento.</div>
-        ) : (
+        ) : files.length === 0 ? null : (
           <div className="mm-table-wrap" aria-busy={refreshing}>
             <table className="documents-table">
               <thead>

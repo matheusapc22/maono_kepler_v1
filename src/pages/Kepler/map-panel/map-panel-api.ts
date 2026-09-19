@@ -1,5 +1,7 @@
 import { EMPTY_MAP_CAPABILITIES, EMPTY_MAP_PANEL_FEATURES } from "./types";
 import { normalizeIsochroneFeatureState } from "./isochrone-feature-diagnostic";
+import { buildApiError } from "../../../lib/api-transport";
+import { getApiErrorContract } from "../../../lib/error-contract";
 import type {
   MapCapabilities,
   MapNavigationMode,
@@ -189,14 +191,8 @@ function assertCapabilityContract(
 }
 
 async function readJson(response: Response) {
-  const text = await response.text();
-
-  if (!text.trim()) {
-    return null;
-  }
-
   try {
-    return JSON.parse(text);
+    return await response.json();
   } catch {
     const error = new Error(
       "A API de navegação retornou uma resposta inválida.",
@@ -273,6 +269,7 @@ async function requestMapContextResponse(
 
       if (
         retryableMapContextStatus(response.status) &&
+        getApiErrorContract(data).retryable !== false &&
         attempt < MAP_CONTEXT_RETRY_DELAYS_MS.length
       ) {
         await waitForMapContextRetry(
@@ -310,13 +307,7 @@ async function requestMapContext(
   const { response, data } = await requestMapContextResponse(url, signal);
 
   if (!response.ok || !data?.ok) {
-    const error = new Error(
-      data?.error?.message || "Não foi possível resolver o painel deste mapa.",
-    ) as MapPanelApiError;
-    error.status = response.status;
-    error.code = data?.error?.code || "MAP_PANEL_REQUEST_FAILED";
-    error.details = data?.error?.details || null;
-    throw error;
+    throw buildApiError(response, data) as MapPanelApiError;
   }
 
   const context = data.navigation || data.context || data;

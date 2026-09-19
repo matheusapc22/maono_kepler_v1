@@ -8,6 +8,7 @@ import React, {
 import { Link, useLocation, useParams } from "react-router";
 
 import { useSession } from "../../../auth/session";
+import { normalizeUserError } from "../../../lib/user-error-catalog";
 import {
   useCompleteLoadingHandoff,
   useLoadingActivity,
@@ -497,6 +498,9 @@ export function MapPanelAccessGate({
   if (state.status === "blocked" || state.status === "error") {
     const fallback = state.error?.details?.fallbackPanel;
     const replacementRoute = state.error?.details?.replacementRoute;
+    const presentation = normalizeUserError(state.error);
+    const message =
+      BLOCKED_MESSAGES[state.error?.code || ""] || presentation.message;
 
     return (
       <main className="maono-map-gate">
@@ -506,7 +510,10 @@ export function MapPanelAccessGate({
               ? "Acesso não disponível"
               : "Não foi possível abrir o mapa"}
           </strong>
-          <span>{state.error?.message}</span>
+          <span>{message}</span>
+          {presentation.supportReference ? (
+            <small>Referência: {presentation.supportReference}</small>
+          ) : null}
           <div className="maono-map-gate__actions">
             {replacementRoute ? (
               <Link to={replacementRoute}>Abrir rota atribuída</Link>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import {
@@ -215,6 +215,7 @@ const AdminFilesPage: React.FC = () => {
   const [orgUserForm, setOrgUserForm] = useState({ userId: "", accessLevel: "viewer" });
 
   const [savingOrganization, setSavingOrganization] = useState(false);
+  const organizationSaveInFlightRef = useRef(false);
   const [savingFile, setSavingFile] = useState(false);
   const [savingOrgUser, setSavingOrgUser] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -366,6 +367,8 @@ const AdminFilesPage: React.FC = () => {
 
   async function handleSaveOrganization(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (organizationSaveInFlightRef.current) return;
+    organizationSaveInFlightRef.current = true;
     setSavingOrganization(true);
     setError("");
     setSuccess("");
@@ -396,12 +399,24 @@ const AdminFilesPage: React.FC = () => {
       }).then(readJson);
 
       const savedOrganization = data.organization;
-      setSuccess(editingOrgId ? "Organização atualizada com sucesso." : "Organização criada com sucesso.");
+      const confirmation = editingOrgId ? "Organização atualizada com sucesso." : "Organização criada com sucesso.";
+      setSuccess(confirmation);
       resetOrgForm();
-      await refreshOrganizations(savedOrganization?.id || selectedOrganizationId);
+      try {
+        await refreshOrganizations(savedOrganization?.id || selectedOrganizationId);
+      } catch {
+        // The mutation has already succeeded. A failed list refresh must not
+        // invite a second create or be reported as a failed save.
+        setSuccess(`${confirmation} A lista não pôde ser atualizada. Atualize a página para consultar os dados atuais.`);
+      }
     } catch (err) {
-      setError(normalizeUserError(err).message);
+      setError(
+        err instanceof TypeError
+          ? "Não foi possível confirmar o salvamento. Seus dados foram mantidos. Consulte a lista de organizações antes de tentar novamente."
+          : normalizeUserError(err).message,
+      );
     } finally {
+      organizationSaveInFlightRef.current = false;
       setSavingOrganization(false);
     }
   }
@@ -640,8 +655,8 @@ const AdminFilesPage: React.FC = () => {
       </header>
 
       <section className="mx-auto max-w-7xl px-6 py-8">
-        {error && <div className="mb-6 rounded-xl border border-red-300/40 bg-red-500/15 px-4 py-3 text-sm text-red-100">{error}</div>}
-        {success && <div className="mb-6 rounded-xl border border-emerald-300/40 bg-emerald-500/15 px-4 py-3 text-sm text-emerald-100">{success}</div>}
+        {error && <div role="alert" className="mb-6 rounded-xl border border-red-300/40 bg-red-500/15 px-4 py-3 text-sm text-red-100">{error}</div>}
+        {success && <div role="status" className="mb-6 rounded-xl border border-emerald-300/40 bg-emerald-500/15 px-4 py-3 text-sm text-emerald-100">{success}</div>}
 
         <div className="grid gap-6 xl:grid-cols-2">
           <section className="rounded-2xl border border-white/10 bg-white/5 p-6">

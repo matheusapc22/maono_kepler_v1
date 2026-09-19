@@ -29,7 +29,6 @@
     "src/pages/Kepler/engine-adapter/useViewerLayerLifecycleReplayCommand.ts::raw-error-message": 2,
     "src/pages/Kepler/map-panel/buffer-api.ts::raw-response-text": 1,
     "src/pages/Kepler/map-panel/isochrone-api.ts::raw-response-text": 1,
-    "src/pages/Kepler/map-panel/map-panel-api.ts::raw-response-text": 1,
     "src/pages/Kepler/map-panel/map-panel-telemetry.ts::diagnostic-id": 2,
     "src/pages/Kepler/map-panel/map-save-events.ts::diagnostic-id": 8,
     "src/pages/Kepler/map-url-loader/index.tsx::diagnostic-id": 2,
