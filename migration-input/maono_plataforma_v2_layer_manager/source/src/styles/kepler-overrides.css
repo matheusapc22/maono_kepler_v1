@@ -1,0 +1,107 @@
+/* src/styles/kepler-overrides.css */
+
+/* =========================================================
+   MAÕNO WHITE-LABEL — Escopo de Isolação (Tarefa 1.2)
+   Refinado para os IDs reais do FilterPanel
+   ========================================================= */
+
+/* 1) A “Jaula” do Portal (alvo específico + isolamento) */
+#maono-kepler-layers-root > .maono-kepler-override,
+#maono-kepler-filters-root > .maono-kepler-override {
+  isolation: isolate;
+
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  background-color: #111827 !important;
+
+  /* layout */
+  display: flex;
+  flex-direction: column;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+#maono-kepler-layers-root > .maono-kepler-override *,
+#maono-kepler-filters-root > .maono-kepler-override * {
+  box-sizing: border-box;
+}
+
+/* 2) Anti-Float (seguro): só anula quem tentar flutuar (inline style) */
+#maono-kepler-layers-root > .maono-kepler-override > div[style*="position: absolute"],
+#maono-kepler-layers-root > .maono-kepler-override > div[style*="position: fixed"],
+#maono-kepler-filters-root > .maono-kepler-override > div[style*="position: absolute"],
+#maono-kepler-filters-root > .maono-kepler-override > div[style*="position: fixed"] {
+  position: static !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+/* 3) Força bruta nos componentes internos críticos */
+#maono-kepler-layers-root > .maono-kepler-override .layer-manager,
+#maono-kepler-filters-root > .maono-kepler-override .filter-manager,
+#maono-kepler-layers-root > .maono-kepler-override .side-panel__content,
+#maono-kepler-filters-root > .maono-kepler-override .side-panel__content,
+#maono-kepler-layers-root > .maono-kepler-override .side-panel-section,
+#maono-kepler-filters-root > .maono-kepler-override .side-panel-section {
+  position: static !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* 4) Limpeza visual (somente dentro dos portais) */
+#maono-kepler-layers-root > .maono-kepler-override .side-panel__header,
+#maono-kepler-filters-root > .maono-kepler-override .side-panel__header,
+#maono-kepler-layers-root > .maono-kepler-override .side-panel__tabs,
+#maono-kepler-filters-root > .maono-kepler-override .side-panel__tabs,
+#maono-kepler-layers-root > .maono-kepler-override .panel-header,
+#maono-kepler-filters-root > .maono-kepler-override .panel-header,
+#maono-kepler-layers-root > .maono-kepler-override .side-panel__title,
+#maono-kepler-filters-root > .maono-kepler-override .side-panel__title {
+  display: none !important;
+}
+
+/* 5) Inputs (identidade Maõno) */
+#maono-kepler-layers-root > .maono-kepler-override input,
+#maono-kepler-layers-root > .maono-kepler-override select,
+#maono-kepler-layers-root > .maono-kepler-override .item-selector__dropdown,
+#maono-kepler-filters-root > .maono-kepler-override input,
+#maono-kepler-filters-root > .maono-kepler-override select,
+#maono-kepler-filters-root > .maono-kepler-override .item-selector__dropdown {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  border-radius: 8px !important;
+}
+
+/* 6) Dropdowns internos: podem flutuar, mas dentro do contexto isolado */
+#maono-kepler-layers-root > .maono-kepler-override .list-selector,
+#maono-kepler-filters-root > .maono-kepler-override .list-selector {
+  position: relative !important;
+}
+
+/* =========================================================
+   Sprint 4 — Evitar redundância visual no modo híbrido
+   Mini lista Maõno = lista principal
+   Kepler portal = só painel profundo de config
+   ========================================================= */
+
+/* Somente dentro do portal de layers (não toca MiniLayerListMaono) */
+#maono-kepler-layers-root > .maono-kepler-override [class*="layer-list"],
+#maono-kepler-layers-root > .maono-kepler-override [class*="layerList"],
+#maono-kepler-layers-root > .maono-kepler-override [class*="layers-list"] {
+  display: none !important;
+}
