@@ -12,10 +12,17 @@ import {
   mapSaveSourceAnalysisKind,
 } from "../src/pages/Kepler/map-panel/map-save-events.ts";
 
-const [saveButton, provider, analysisAdapter, bufferHook] = await Promise.all([
+const [saveButton, saveResilience, provider, analysisAdapter, bufferHook] = await Promise.all([
   readFile(
     new URL(
       "../src/pages/Kepler/components/maono-save-button.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../src/pages/Kepler/save-operation-resilience.ts",
       import.meta.url,
     ),
     "utf8",
@@ -293,8 +300,8 @@ test("Manter Buffer promove a camada sem acionar o save global", () => {
   assert.match(bufferHook, /Salve o projeto para gravar as alterações/);
   assert.match(saveButton, /serializeProjectConfig/);
   assert.match(
-    saveButton,
-    /\/api\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/config/,
+    saveResilience,
+    /\/api\/projects\/\$\{encodeURIComponent\(snapshot\.projectSlug\)\}\/config/,
   );
 });
 
