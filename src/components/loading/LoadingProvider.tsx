@@ -33,6 +33,7 @@ type BeginLoadingOptions = {
 type LoadingContextValue = {
   isLoading: boolean;
   isVisible: boolean;
+  initialBootActive: boolean;
   activeCount: number;
   beginLoading: (options?: BeginLoadingOptions) => LoadingToken;
   endLoading: (token: LoadingToken) => void;
@@ -287,6 +288,7 @@ export function LoadingProvider({
     () => ({
       isLoading: activeCount > 0,
       isVisible,
+      initialBootActive,
       activeCount,
       beginLoading,
       endLoading,
@@ -308,6 +310,7 @@ export function LoadingProvider({
       endLoading,
       getLoadingHandoffCount,
       handoffLoading,
+      initialBootActive,
       isVisible,
       withLoading,
     ],

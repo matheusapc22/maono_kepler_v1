@@ -64,6 +64,10 @@ test("cold load de /login mantém um único DOM loader até readiness", () => {
   assert.match(provider, /controller\.activeCount > 0/);
 
   assert.match(login, /useInitialBootReadiness\(!loginLoading\)/);
+  assert.match(
+    login,
+    /useLoadingActivity\(loginLoading && !initialBootActive\)/,
+  );
   assert.match(login, /if \(loginLoading\) \{[\s\S]*return null/);
   assert.doesNotMatch(login, /LoadingOverlay/);
 

@@ -90,7 +90,10 @@ const [
 test("Login transfere o mesmo loading até Projects concluir a primeira carga", () => {
   assert.match(login, /handoffKey: "login-projects"/);
   assert.match(login, /authenticatedRedirectPending/);
-  assert.match(login, /useLoadingActivity\(loginLoading\)/);
+  assert.match(
+    login,
+    /useLoadingActivity\(loginLoading && !initialBootActive\)/,
+  );
   assert.match(login, /if \(loginLoading\) \{[\s\S]*return null/);
   assert.doesNotMatch(login, /LoadingOverlay/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
