@@ -41,7 +41,7 @@ test("cold /login libera boot e controles recebem hit-test/foco real", async ({ 
 
   const email = page.locator("#maono-login-email");
   const password = page.locator("#maono-login-password");
-  const toggle = page.getByRole("button", { name: "Mostrar senha" });
+  const toggle = page.locator(".maono-login-page__password-toggle");
   const submit = page.getByRole("button", { name: "Entrar" });
 
   await expect(email).toBeVisible();
