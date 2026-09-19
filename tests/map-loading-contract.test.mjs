@@ -127,8 +127,11 @@ test("hidratação mantém Universal Loader até visual readiness", () => {
   assert.doesNotMatch(mapUrlLoader, /maono-map-central-loading/);
 });
 
-test("save e create usam atividade universal sem rótulos de espera", () => {
-  assert.match(saveButton, /useLoadingActivity\(saving\)/);
+test("save e create usam feedback local sem overlay global de viewport", () => {
+  assert.doesNotMatch(saveButton, /useLoadingActivity\(saving\)/);
+  assert.match(saveButton, /<UniversalLoader/);
+  assert.match(saveButton, /pendingUpdateRecovery/);
+  assert.match(saveButton, /Cancelar espera/);
   assert.doesNotMatch(saveButton, /Salvando\.\.\./);
   assert.doesNotMatch(saveButton, /Criando\.\.\./);
   assert.match(saveButton, /Salvar na Maõno/);
@@ -139,6 +142,8 @@ test("save e create usam atividade universal sem rótulos de espera", () => {
     createPanel,
     /Preparando configuração e visualização do mapa…/,
   );
+  assert.match(createPanel, /<UniversalLoader/);
+  assert.match(createPanel, /Cancelar espera/);
   assert.match(createPanel, /phase === "error" \? \(/);
   assert.match(createPanel, /Tentar novamente/);
 });

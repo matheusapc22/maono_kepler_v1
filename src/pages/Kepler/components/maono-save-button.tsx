@@ -7,7 +7,7 @@ import React, {
 import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import { useSession } from "../../../auth/session";
-import { useLoadingActivity } from "../../../components/loading";
+import { UniversalLoader } from "../../../components/loading";
 import {
   buildApiError,
   parseResponseJson,
@@ -50,6 +50,16 @@ import {
   executeProjectCreateFlow,
   ProjectCreateFlowError,
 } from "../project-create-flow";
+import {
+  clearProjectUpdateRecovery,
+  executePreparedProjectUpdate,
+  getProjectUpdateRecovery,
+  isSaveRequestAbort,
+  prepareProjectUpdateSnapshot,
+  rememberProjectUpdateRecovery,
+  runWithSaveStallNotice,
+  type PreparedProjectUpdateSnapshot,
+} from "../save-operation-resilience";
 
 const CREATION_KEY_PREFIX = "maono.project-create.idempotency";
 const ASYNC_THUMBNAIL_ENABLED =
@@ -283,10 +293,15 @@ const MaonoSaveButton: React.FC = () => {
   const commandsRef = useRef(commands);
   const transientDatasetIdsRef = useRef(new Set<string>());
   const [saving, setSaving] = useState(false);
-  useLoadingActivity(saving);
+  const [saveStalled, setSaveStalled] = useState(false);
+  const activeSaveControllerRef = useRef<AbortController | null>(null);
+  const [pendingUpdateRecovery, setPendingUpdateRecovery] =
+    useState<PreparedProjectUpdateSnapshot | null>(() =>
+      projectSlug ? getProjectUpdateRecovery(projectSlug) : null,
+    );
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] =
-    useState<"success" | "error">("success");
+    useState<"success" | "warning" | "error">("success");
   const [createPanelOpen, setCreatePanelOpen] = useState(false);
   const [creationStage, setCreationStage] =
     useState<ProjectCreationStage>("ready");
@@ -340,6 +355,16 @@ const MaonoSaveButton: React.FC = () => {
     ],
   );
   const allowed = projectSlug ? canSaveExisting : canCreateNew;
+
+  useEffect(() => {
+    setPendingUpdateRecovery(
+      projectSlug ? getProjectUpdateRecovery(projectSlug) : null,
+    );
+  }, [projectSlug]);
+
+  function cancelActiveSaveWait() {
+    activeSaveControllerRef.current?.abort();
+  }
 
   useEffect(() => {
     const handleExternalSaveRequest = (event: Event) => {
@@ -467,6 +492,196 @@ const MaonoSaveButton: React.FC = () => {
     return captureProjectThumbnail(mapState, config);
   }
 
+  async function executeExistingProjectSnapshot(
+    snapshot: PreparedProjectUpdateSnapshot,
+    recovery: boolean,
+  ) {
+    if (operationInFlightRef.current) {
+      return;
+    }
+
+    const controller = new AbortController();
+    activeSaveControllerRef.current = controller;
+    operationInFlightRef.current = true;
+    setSaving(true);
+    setSaveStalled(false);
+    setMessage("");
+
+    if (recovery) {
+      emitSaveTelemetry("map_save_recovery_requested", {
+        mode: context?.mode ?? null,
+        projectId: context?.project?.id ?? null,
+        organizationId: context?.organization?.id ?? null,
+        operation: "update",
+        saveId: snapshot.attempt.saveId,
+        correlationId: snapshot.attempt.correlationId,
+        payloadBytes: snapshot.serialized.payloadBytes,
+        serializeDurationMs: snapshot.serialized.serializeDurationMs,
+        expectedRevision: snapshot.expectedConfigRevision,
+      });
+    }
+
+    let failureTelemetryEmitted = false;
+
+    try {
+      const result = await executePreparedProjectUpdate({
+        snapshot,
+        signal: controller.signal,
+        onStall: () => {
+          setSaveStalled(true);
+          emitSaveTelemetry("map_save_stalled", {
+            mode: context?.mode ?? null,
+            projectId: context?.project?.id ?? null,
+            organizationId: context?.organization?.id ?? null,
+            operation: "update",
+            saveId: snapshot.attempt.saveId,
+            correlationId: snapshot.attempt.correlationId,
+            payloadBytes: snapshot.serialized.payloadBytes,
+            serializeDurationMs: snapshot.serialized.serializeDurationMs,
+            durationMs: clientSaveTotalDurationMs(snapshot.attempt),
+            expectedRevision: snapshot.expectedConfigRevision,
+          });
+        },
+      });
+
+      const {
+        response,
+        data,
+        diagnostics: responseDiagnostics,
+      } = result;
+
+      if (!response.ok || data?.ok === false) {
+        failureTelemetryEmitted = true;
+        emitSaveTelemetry("map_save_failed", {
+          mode: context?.mode ?? null,
+          projectId: context?.project?.id ?? null,
+          organizationId: context?.organization?.id ?? null,
+          operation: "update",
+          saveId: responseDiagnostics.saveId,
+          correlationId: responseDiagnostics.correlationId,
+          payloadBytes: snapshot.serialized.payloadBytes,
+          serializeDurationMs: snapshot.serialized.serializeDurationMs,
+          durationMs: clientSaveTotalDurationMs(snapshot.attempt),
+          expectedRevision: snapshot.expectedConfigRevision,
+          stage: data?.error?.details?.stage ?? null,
+          code: data?.error?.code ?? "PROJECT_SAVE_FAILED",
+          category: data?.error?.category ?? null,
+          retryable:
+            typeof data?.error?.retryable === "boolean"
+              ? data.error.retryable
+              : data?.error?.details?.retryable ?? null,
+          httpStatus: response.status,
+          provider: data?.error?.details?.provider ?? null,
+          providerStatus: data?.error?.details?.providerStatus ?? null,
+          serverTiming: responseDiagnostics.serverTiming,
+        });
+
+        if (response.status === 403 || response.status === 409) {
+          void refresh();
+        }
+
+        if (recovery && response.status === 409) {
+          clearProjectUpdateRecovery(snapshot.projectSlug);
+          setPendingUpdateRecovery(null);
+        }
+
+        throw buildApiError(response, data);
+      }
+
+      const revision = resolveConfigRevision(data);
+      clearProjectUpdateRecovery(snapshot.projectSlug);
+      setPendingUpdateRecovery(null);
+      void refresh();
+
+      emitSaveTelemetry(
+        recovery ? "map_save_recovery_succeeded" : "map_save_succeeded",
+        {
+          mode: context?.mode ?? null,
+          projectId: context?.project?.id ?? null,
+          organizationId: context?.organization?.id ?? null,
+          policyVersion: context?.policyVersion ?? null,
+          operation: "update",
+          saveId: responseDiagnostics.saveId,
+          correlationId: responseDiagnostics.correlationId,
+          payloadBytes: snapshot.serialized.payloadBytes,
+          serializeDurationMs: snapshot.serialized.serializeDurationMs,
+          durationMs: clientSaveTotalDurationMs(snapshot.attempt),
+          expectedRevision: snapshot.expectedConfigRevision,
+          candidateRevision: revision,
+          httpStatus: response.status,
+          serverTiming: responseDiagnostics.serverTiming,
+        },
+      );
+
+      setMessageType("success");
+      setMessage(
+        recovery
+          ? "Tentativa anterior reconciliada. O projeto está salvo."
+          : ASYNC_THUMBNAIL_ENABLED
+            ? "Projeto salvo na Maõno. A visualização está sendo atualizada em segundo plano."
+            : "Projeto e visualização salvos na Maõno.",
+      );
+      finishPendingMapSave("success");
+      enqueuePreview(
+        snapshot.projectSlug,
+        revision,
+        snapshot.config,
+        handlePreviewState,
+      );
+    } catch (error) {
+      if (isSaveRequestAbort(error)) {
+        rememberProjectUpdateRecovery(snapshot);
+        setPendingUpdateRecovery(snapshot);
+        setMessageType("warning");
+        setMessage(
+          "A espera foi cancelada. Antes de salvar novas alterações, conclua a tentativa anterior para confirmar o estado do projeto.",
+        );
+        emitSaveTelemetry(
+          recovery ? "map_save_recovery_cancelled" : "map_save_cancelled",
+          {
+            mode: context?.mode ?? null,
+            projectId: context?.project?.id ?? null,
+            organizationId: context?.organization?.id ?? null,
+            operation: "update",
+            saveId: snapshot.attempt.saveId,
+            correlationId: snapshot.attempt.correlationId,
+            payloadBytes: snapshot.serialized.payloadBytes,
+            serializeDurationMs: snapshot.serialized.serializeDurationMs,
+            durationMs: clientSaveTotalDurationMs(snapshot.attempt),
+            expectedRevision: snapshot.expectedConfigRevision,
+          },
+        );
+        finishPendingMapSave(
+          "cancelled",
+          "A espera do salvamento foi cancelada; a tentativa anterior precisa ser reconciliada.",
+        );
+        return;
+      }
+
+      if (!failureTelemetryEmitted) {
+        emitClientSaveFailure(snapshot.attempt, error, {
+          mode: context?.mode ?? null,
+          projectId: context?.project?.id ?? null,
+          organizationId: context?.organization?.id ?? null,
+          payloadBytes: snapshot.serialized.payloadBytes,
+          serializeDurationMs: snapshot.serialized.serializeDurationMs,
+        });
+      }
+
+      const failure = getSaveFailureMessage(error);
+      setMessageType("error");
+      setMessage(failure);
+      finishPendingMapSave("error", failure);
+    } finally {
+      if (activeSaveControllerRef.current === controller) {
+        activeSaveControllerRef.current = null;
+      }
+      operationInFlightRef.current = false;
+      setSaveStalled(false);
+      setSaving(false);
+    }
+  }
+
   async function handleExistingProjectSave() {
     if (!canSaveExisting) {
       const failure =
@@ -486,6 +701,14 @@ const MaonoSaveButton: React.FC = () => {
       return;
     }
 
+    if (pendingUpdateRecovery) {
+      await executeExistingProjectSnapshot(
+        pendingUpdateRecovery,
+        true,
+      );
+      return;
+    }
+
     if (operationInFlightRef.current) {
       const failure = "Já existe um salvamento em andamento.";
       setMessageType("error");
@@ -495,13 +718,28 @@ const MaonoSaveButton: React.FC = () => {
     }
 
     const attempt = beginClientSaveAttempt("update");
-    let failureTelemetryEmitted = false;
-    let payloadBytes: number | null = null;
-    let serializeDurationMs: number | null = null;
+    const config: any = serializeProjectConfig(mapState);
+    const maonoConfig = getMaonoConfigForSave();
+    if (maonoConfig) {
+      config.maono = maonoConfig;
+    }
+    const legacy = await legacyCapture(config);
+    const expectedConfigRevision = Math.max(
+      0,
+      Number(
+        context?.version ??
+          context?.project?.configRevision ??
+          0,
+      ) || 0,
+    );
+    const snapshot = prepareProjectUpdateSnapshot({
+      attempt,
+      projectSlug,
+      config,
+      expectedConfigRevision,
+      legacy,
+    });
 
-    operationInFlightRef.current = true;
-    setSaving(true);
-    setMessage("");
     emitSaveTelemetry("map_save_requested", {
       mode: context?.mode ?? null,
       projectId: context?.project?.id ?? null,
@@ -511,153 +749,19 @@ const MaonoSaveButton: React.FC = () => {
       saveId: attempt.saveId,
       correlationId: attempt.correlationId,
     });
+    emitSaveTelemetry("map_save_serialized", {
+      mode: context?.mode ?? null,
+      projectId: context?.project?.id ?? null,
+      organizationId: context?.organization?.id ?? null,
+      operation: "update",
+      saveId: attempt.saveId,
+      correlationId: attempt.correlationId,
+      payloadBytes: snapshot.serialized.payloadBytes,
+      serializeDurationMs: snapshot.serialized.serializeDurationMs,
+      expectedRevision: expectedConfigRevision,
+    });
 
-    try {
-      const config: any = serializeProjectConfig(mapState);
-      const maonoConfig = getMaonoConfigForSave();
-      if (maonoConfig) {
-        config.maono = maonoConfig;
-      }
-      const legacy = await legacyCapture(config);
-      const expectedConfigRevision = Math.max(
-        0,
-        Number(
-          context?.version ??
-            context?.project?.configRevision ??
-            0,
-        ) || 0,
-      );
-      const serialized = serializeSaveRequest(attempt, {
-        config,
-        expectedConfigRevision,
-        ...(legacy
-          ? {
-              thumbnailDataUrl: legacy.dataUrl,
-              thumbnailCapture: {
-                method: legacy.method,
-                diagnostics: legacy.diagnostics.join(" | "),
-              },
-            }
-          : {}),
-      });
-      payloadBytes = serialized.payloadBytes;
-      serializeDurationMs = serialized.serializeDurationMs;
-      emitSaveTelemetry("map_save_serialized", {
-        mode: context?.mode ?? null,
-        projectId: context?.project?.id ?? null,
-        organizationId: context?.organization?.id ?? null,
-        operation: "update",
-        saveId: attempt.saveId,
-        correlationId: attempt.correlationId,
-        payloadBytes,
-        serializeDurationMs,
-        expectedRevision: expectedConfigRevision,
-      });
-
-      const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectSlug)}/config`,
-        {
-          method: "PUT",
-          credentials: "include",
-          headers: buildSaveRequestHeaders(attempt),
-          body: serialized.body,
-        },
-      );
-      const responseDiagnostics = readSaveResponseDiagnostics(response, attempt);
-      const data = await readJsonResponse(response);
-
-      if (!response.ok || data?.ok === false) {
-        failureTelemetryEmitted = true;
-        emitSaveTelemetry("map_save_failed", {
-          mode: context?.mode ?? null,
-          projectId: context?.project?.id ?? null,
-          organizationId: context?.organization?.id ?? null,
-          operation: "update",
-          saveId: responseDiagnostics.saveId,
-          correlationId: responseDiagnostics.correlationId,
-          payloadBytes,
-          serializeDurationMs,
-          durationMs: clientSaveTotalDurationMs(attempt),
-          expectedRevision: expectedConfigRevision,
-          stage: data?.error?.details?.stage ?? null,
-          code: data?.error?.code ?? "PROJECT_SAVE_FAILED",
-          category: data?.error?.category ?? null,
-          retryable:
-            typeof data?.error?.retryable === "boolean"
-              ? data.error.retryable
-              : data?.error?.details?.retryable ?? null,
-          httpStatus: response.status,
-          provider: data?.error?.details?.provider ?? null,
-          providerStatus: data?.error?.details?.providerStatus ?? null,
-          serverTiming: responseDiagnostics.serverTiming,
-        });
-        if (response.status === 403) {
-          refresh();
-        }
-        if (response.status === 409) {
-          emitSaveTelemetry("map_save_conflict", {
-            mode: context?.mode ?? null,
-            projectId: context?.project?.id ?? null,
-            organizationId: context?.organization?.id ?? null,
-            code: data?.error?.code ?? "PROJECT_VERSION_CONFLICT",
-            operation: "update",
-            saveId: responseDiagnostics.saveId,
-            correlationId: responseDiagnostics.correlationId,
-            expectedRevision: expectedConfigRevision,
-          });
-        }
-        throw buildApiError(response, data);
-      }
-
-      const revision = resolveConfigRevision(data);
-      void refresh();
-      emitSaveTelemetry("map_save_succeeded", {
-        mode: context?.mode ?? null,
-        projectId: context?.project?.id ?? null,
-        organizationId: context?.organization?.id ?? null,
-        policyVersion: context?.policyVersion ?? null,
-        operation: "update",
-        saveId: responseDiagnostics.saveId,
-        correlationId: responseDiagnostics.correlationId,
-        payloadBytes,
-        serializeDurationMs,
-        durationMs: clientSaveTotalDurationMs(attempt),
-        expectedRevision: expectedConfigRevision,
-        candidateRevision: revision,
-        httpStatus: response.status,
-        serverTiming: responseDiagnostics.serverTiming,
-      });
-      setMessageType("success");
-      setMessage(
-        ASYNC_THUMBNAIL_ENABLED
-          ? "Projeto salvo na Maõno. A visualização está sendo atualizada em segundo plano."
-          : "Projeto e visualização salvos na Maõno.",
-      );
-      finishPendingMapSave("success");
-      enqueuePreview(
-        projectSlug,
-        revision,
-        config,
-        handlePreviewState,
-      );
-    } catch (error) {
-      if (!failureTelemetryEmitted) {
-        emitClientSaveFailure(attempt, error, {
-          mode: context?.mode ?? null,
-          projectId: context?.project?.id ?? null,
-          organizationId: context?.organization?.id ?? null,
-          payloadBytes,
-          serializeDurationMs,
-        });
-      }
-      const failure = getSaveFailureMessage(error);
-      setMessageType("error");
-      setMessage(failure);
-      finishPendingMapSave("error", failure);
-    } finally {
-      operationInFlightRef.current = false;
-      setSaving(false);
-    }
+    await executeExistingProjectSnapshot(snapshot, false);
   }
 
   async function handleCreateProject(input: ProjectCreateInput) {
@@ -689,8 +793,11 @@ const MaonoSaveButton: React.FC = () => {
     let transport: "inline" | "stream" | null = null;
 
     setCreationDraft(input);
+    const controller = new AbortController();
+    activeSaveControllerRef.current = controller;
     operationInFlightRef.current = true;
     setSaving(true);
+    setSaveStalled(false);
     setCreationError(null);
     setCreationFailedStage(null);
     setCreationStage(
@@ -716,7 +823,24 @@ const MaonoSaveButton: React.FC = () => {
         activeOrganizationId,
       );
 
-      const result = await executeProjectCreateFlow({
+      const result = await runWithSaveStallNotice({
+        onStall: () => {
+          setSaveStalled(true);
+          emitSaveTelemetry("map_save_stalled", {
+            mode: context?.mode ?? null,
+            organizationId:
+              context?.organization?.id ?? activeOrganizationId,
+            operation: "create",
+            saveId: attempt.saveId,
+            correlationId: attempt.correlationId,
+            payloadBytes,
+            serializeDurationMs,
+            durationMs: clientSaveTotalDurationMs(attempt),
+            transport,
+          });
+        },
+        operation: () =>
+          executeProjectCreateFlow({
         attempt,
         name: input.name,
         description: input.description,
@@ -744,6 +868,8 @@ const MaonoSaveButton: React.FC = () => {
         onStage(stage) {
           setCreationStage(stage);
         },
+        signal: controller.signal,
+          }),
       });
 
       setCreationStage("success");
@@ -772,6 +898,31 @@ const MaonoSaveButton: React.FC = () => {
         { replace: true },
       );
     } catch (error) {
+      if (isSaveRequestAbort(error)) {
+        emitSaveTelemetry("map_save_cancelled", {
+          mode: context?.mode ?? null,
+          organizationId:
+            context?.organization?.id ?? activeOrganizationId,
+          operation: "create",
+          saveId: attempt.saveId,
+          correlationId: attempt.correlationId,
+          payloadBytes,
+          serializeDurationMs,
+          durationMs: clientSaveTotalDurationMs(attempt),
+          transport,
+        });
+        setCreationFailedStage(normalizeCreationStage(creationStage));
+        setCreationStage("error");
+        setCreationError(
+          "A espera foi cancelada. Tente novamente para retomar a criação com a mesma chave de segurança.",
+        );
+        finishPendingMapSave(
+          "cancelled",
+          "A espera da criação foi cancelada antes da confirmação final.",
+        );
+        return;
+      }
+
       if (error instanceof ProjectCreateFlowError) {
         failureTelemetryEmitted = true;
         const data = error.data as ProjectWriteResponse;
@@ -832,7 +983,11 @@ const MaonoSaveButton: React.FC = () => {
       setCreationError(failure);
       finishPendingMapSave("error", failure);
     } finally {
+      if (activeSaveControllerRef.current === controller) {
+        activeSaveControllerRef.current = null;
+      }
       operationInFlightRef.current = false;
+      setSaveStalled(false);
       setSaving(false);
     }
   }
@@ -892,20 +1047,49 @@ const MaonoSaveButton: React.FC = () => {
           </div>
         ) : null}
 
+        {projectSlug && saving && saveStalled ? (
+          <button
+            type="button"
+            onClick={cancelActiveSaveWait}
+            className="rounded-2xl border border-amber-300/60 bg-amber-900/95 px-4 py-3 text-sm font-extrabold text-white shadow-xl transition hover:bg-amber-800"
+          >
+            Cancelar espera
+          </button>
+        ) : null}
+
         <button
           type="button"
           onClick={() => handlePrimaryAction(null)}
-          disabled={saving || !mapState}
+          disabled={saving || (!pendingUpdateRecovery && !mapState)}
+          aria-busy={saving}
           className="rounded-2xl border border-emerald-300/50 bg-emerald-600 px-5 py-4 text-sm font-extrabold text-white shadow-2xl transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
           title={
-            projectSlug
-              ? "Salvar alterações do projeto na Maõno"
-              : "Transformar este mapa em um novo projeto Maõno"
+            pendingUpdateRecovery
+              ? "Concluir e confirmar a tentativa anterior"
+              : projectSlug
+                ? "Salvar alterações do projeto na Maõno"
+                : "Transformar este mapa em um novo projeto Maõno"
           }
         >
-          {projectSlug
-            ? "Salvar na Maõno"
-            : "Salvar como projeto"}
+          <span className="inline-flex items-center justify-center gap-2">
+            {saving ? (
+              <UniversalLoader
+                size="inline"
+                accessibleLabel={
+                  pendingUpdateRecovery
+                    ? "Reconciliando salvamento"
+                    : "Salvando projeto"
+                }
+              />
+            ) : null}
+            <span>
+              {pendingUpdateRecovery
+                ? "Concluir tentativa anterior"
+                : projectSlug
+                  ? "Salvar na Maõno"
+                  : "Salvar como projeto"}
+            </span>
+          </span>
         </button>
       </div>
 
@@ -915,9 +1099,11 @@ const MaonoSaveButton: React.FC = () => {
         initialName={creationDraft?.name}
         initialDescription={creationDraft?.description}
         busy={saving}
+        stalled={saveStalled}
         phase={creationStage}
         failedStage={creationFailedStage}
         error={creationError}
+        onCancelWait={cancelActiveSaveWait}
         onClose={() => {
           if (!saving) {
             setCreatePanelOpen(false);
