@@ -14,6 +14,7 @@ const service = read("functions/_lib/project-config-service.js");
 const backendObservability = read("functions/_lib/save-observability.js");
 const clientObservability = read("src/pages/Kepler/save-observability.ts");
 const saveButton = read("src/pages/Kepler/components/maono-save-button.tsx");
+const saveResilience = read("src/pages/Kepler/save-operation-resilience.ts");
 const telemetry = read("src/pages/Kepler/map-panel/map-panel-telemetry.ts");
 const packageJson = JSON.parse(read("package.json"));
 
@@ -53,9 +54,20 @@ test("frontend cria saveId antes da serialização e envia body já serializado"
   assert.match(clientObservability, /"X-Correlation-Id"/);
   assert.match(saveButton, /beginClientSaveAttempt\("update"\)/);
   assert.match(saveButton, /beginClientSaveAttempt\("create"\)/);
-  assert.match(saveButton, /serializeSaveRequest\(attempt/);
-  assert.match(saveButton, /headers: buildSaveRequestHeaders\(attempt\)/);
-  assert.match(saveButton, /body: serialized\.body/);
+  assert.match(saveResilience, /serializeSaveRequest\(attempt/);
+  assert.match(saveResilience, /headers: buildSaveRequestHeaders\(snapshot\.attempt\)/);
+  assert.match(saveResilience, /body: snapshot\.serialized\.body/);
+  assert.match(saveButton, /prepareProjectUpdateSnapshot/);
+});
+
+test("save local cobre stall, cancelamento e recovery sem timeout global", () => {
+  assert.match(saveResilience, /SAVE_STALL_NOTICE_MS = 12_000/);
+  assert.match(saveResilience, /signal,/);
+  assert.match(saveButton, /map_save_stalled/);
+  assert.match(saveButton, /map_save_cancelled/);
+  assert.match(saveButton, /map_save_recovery_requested/);
+  assert.match(saveButton, /map_save_recovery_succeeded/);
+  assert.doesNotMatch(saveResilience, /AbortController/);
 });
 
 test("telemetria cobre serialização, sucesso, falha HTTP e falha de rede", () => {
