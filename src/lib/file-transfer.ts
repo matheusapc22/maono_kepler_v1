@@ -2,8 +2,28 @@ import type { OrganizationFile } from "./api";
 import {
   buildClientApiError,
   buildHttpApiError,
-} from "./api-transport";
-import { getXhrErrorReference } from "./error-contract";
+} from "./api-transport.ts";
+import { getXhrErrorReference } from "./error-contract.ts";
+
+export const FILE_TRANSFER_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_FILE_TRANSFER_TIMEOUT_MS = 15 * 60 * 1000;
+
+type FileTransferOptions = { timeoutMs?: number };
+
+function transferTimeout(value?: number) {
+  return Number.isFinite(value)
+    ? Math.max(1000, Math.min(MAX_FILE_TRANSFER_TIMEOUT_MS, Math.trunc(value!)))
+    : FILE_TRANSFER_TIMEOUT_MS;
+}
+
+function buildTransferTimeoutError() {
+  return buildClientApiError({
+    status: 408,
+    code: "PERFORMANCE_OPERATION_TIMEOUT",
+    category: "PERFORMANCE",
+    retryable: true,
+  });
+}
 
 export type FileTransferProgress = {
   loaded: number;
@@ -75,7 +95,11 @@ function getFileNameFromContentDisposition(header: string | null): string | null
 
   const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8Match?.[1]) {
-    return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+    try {
+      return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+    } catch {
+      // An invalid optional filename must not leave the transfer unresolved.
+    }
   }
 
   const simpleMatch = header.match(/filename="?([^";]+)"?/i);
@@ -96,11 +120,14 @@ export function uploadOrganizationFileWithProgress(
   organizationId: number | string,
   formData: FormData,
   onProgress?: (progress: FileTransferProgress) => void,
+  options: FileTransferOptions = {},
 ): Promise<OrganizationFileUploadResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
     xhr.open("POST", organizationFilesPath(organizationId));
+    xhr.timeout = transferTimeout(options.timeoutMs);
+    xhr.ontimeout = () => reject(buildTransferTimeoutError());
     xhr.withCredentials = true;
     xhr.setRequestHeader("Accept", "application/json");
 
@@ -156,6 +183,7 @@ export function downloadOrganizationFileWithProgress(
   organizationId: number | string,
   fileId: number | string,
   onProgress?: (progress: FileTransferProgress) => void,
+  options: FileTransferOptions = {},
 ): Promise<FileDownloadResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -165,6 +193,8 @@ export function downloadOrganizationFileWithProgress(
       `${organizationFilesPath(organizationId)}/${pathSegment(fileId)}/download`,
     );
     xhr.withCredentials = true;
+    xhr.timeout = transferTimeout(options.timeoutMs);
+    xhr.ontimeout = () => reject(buildTransferTimeoutError());
     xhr.responseType = "blob";
 
     xhr.onprogress = (event) => {

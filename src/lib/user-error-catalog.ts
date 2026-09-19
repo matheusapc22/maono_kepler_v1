@@ -33,6 +33,22 @@ const INVALID_CREDENTIALS_PRESENTATION: UserErrorTemplate = {
   severity: "warning",
 };
 
+const STORAGE_WAIT_PRESENTATION: UserErrorTemplate = {
+  title: "Armazenamento temporariamente indisponível",
+  message: "Não foi possível concluir esta ação agora. Aguarde alguns instantes antes de tentar novamente.",
+  severity: "warning",
+  retryable: true,
+  action: "retry",
+};
+
+const STORAGE_BLOCKED_PRESENTATION: UserErrorTemplate = {
+  title: "Armazenamento indisponível",
+  message: "O armazenamento desta organização precisa de verificação. Procure o suporte para continuar.",
+  severity: "warning",
+  retryable: false,
+  action: "contact_support",
+};
+
 const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
   AUTH_INVALID_CREDENTIALS: INVALID_CREDENTIALS_PRESENTATION,
 
@@ -88,6 +104,38 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
     title: "Organização indisponível",
     message: "A organização selecionada está inativa.",
     severity: "warning",
+  },
+  ORGANIZATION_STORAGE_IN_PROGRESS: {
+    title: "Preparando armazenamento",
+    message: "O armazenamento desta organização está sendo preparado. Aguarde alguns instantes antes de tentar novamente.",
+    severity: "info",
+    retryable: true,
+    action: "retry",
+  },
+  ORGANIZATION_STORAGE_DISABLED: {
+    title: "Organização indisponível",
+    message: "Esta organização não está disponível para esta operação. Se precisar de ajuda, procure o suporte.",
+    severity: "warning",
+    retryable: false,
+    action: "contact_support",
+  },
+  ORGANIZATION_STORAGE_PATH_DECISION_REQUIRED: STORAGE_BLOCKED_PRESENTATION,
+  ORGANIZATION_STORAGE_RETRY_EXHAUSTED: STORAGE_BLOCKED_PRESENTATION,
+  ORGANIZATION_STORAGE_RETRY_BLOCKED: STORAGE_BLOCKED_PRESENTATION,
+  ORGANIZATION_STORAGE_SCHEMA_OUTDATED: STORAGE_BLOCKED_PRESENTATION,
+  ORGANIZATION_STORAGE_RETRY_BACKOFF: STORAGE_WAIT_PRESENTATION,
+  ORGANIZATION_CONCURRENT_UPDATE: {
+    title: "A organização foi atualizada",
+    message: "Carregue os dados atuais da organização antes de salvar novamente.",
+    severity: "warning",
+    retryable: false,
+    action: "reload",
+  },
+  ORGANIZATION_EXISTS: {
+    title: "Organização já cadastrada",
+    message: "Já existe uma organização com este identificador. Confira a lista de organizações antes de tentar criar novamente.",
+    severity: "warning",
+    retryable: false,
   },
   PERMISSION_PROJECT_SAVE_DENIED: {
     title: "Não foi possível salvar",
@@ -256,8 +304,26 @@ function presentationForDiagnostic(
 ): UserErrorTemplate {
   if (!diagnostic) return FALLBACK_PRESENTATION;
 
+  // Readiness uses the same public code for transient and terminal states.
+  // Respect the server decision without interpreting provider messages/details.
+  if (
+    diagnostic.code === "ORGANIZATION_STORAGE_NOT_READY" ||
+    diagnostic.code === "ORGANIZATION_STORAGE_NOT_CONFIGURED" ||
+    diagnostic.code === "ORGANIZATION_STORAGE_PROVISION_FAILED"
+  ) {
+    return diagnostic.retryable
+      ? STORAGE_WAIT_PRESENTATION
+      : STORAGE_BLOCKED_PRESENTATION;
+  }
+
   if (diagnostic.code && CODE_PRESENTATIONS[diagnostic.code]) {
     return CODE_PRESENTATIONS[diagnostic.code];
+  }
+
+  if (diagnostic.category === "STORAGE") {
+    return diagnostic.retryable
+      ? STORAGE_WAIT_PRESENTATION
+      : STORAGE_BLOCKED_PRESENTATION;
   }
 
   const byStatus = statusPresentation(diagnostic.status);

@@ -32,6 +32,7 @@ function deps({
 } = {}) {
   return {
     listOrganizations: async () => organizations,
+    inspectDocuments: async (_env, root) => ({ ".tag": "folder", path_lower: `${root}/documents` }),
     listOrganizationFiles: async () => files,
     listProjectsRoot: async () => ({
       entries,
@@ -208,6 +209,8 @@ test("READY com folder ausente é repairable e ERROR com folder existente conver
           },
           status: "READY",
           ready: true,
+          claimed: true,
+          physicallyVerified: true,
           repairedPath: false,
           superseded: false,
         };
@@ -428,4 +431,33 @@ test("relatório público remove rows internos usados pelo apply", async () => {
   const publicReport = publicOrganizationStorageDriftReport(report);
   assert.equal("_rowsById" in publicReport, false);
   assert.equal(publicReport.correlationId, "corr-prh07-public");
+});
+
+test("documents ausente é reparável; arquivo no mesmo caminho exige decisão", async () => {
+  for (const metadata of [null, { ".tag": "file" }]) {
+    const report = await buildOrganizationStorageDriftReport({}, {
+      ...deps({ organizations: [org()], entries: [{ ".tag": "folder", path_lower: "/projects/cliente-a" }] }),
+      inspectDocuments: async () => metadata,
+    });
+    assert.equal(report.organizations[0].documentsFolderVerified, false);
+    assert.equal(report.organizations[0].repairable, metadata === null);
+    assert.ok(report.organizations[0].issues.some((item) => item.code === (metadata === null
+      ? ORGANIZATION_STORAGE_DRIFT_CODE.DOCUMENTS_MISSING : ORGANIZATION_STORAGE_DRIFT_CODE.DOCUMENTS_TYPE_CONFLICT)));
+  }
+});
+
+test("path fora do inventário é desconhecido, não pasta comprovadamente ausente", async () => {
+  const report = await buildOrganizationStorageDriftReport({}, {
+    ...deps({ organizations: [org({ dropbox_root_path: "/Apps/MaonoKepler/preview/qa" })] }),
+  });
+  assert.equal(report.organizations[0].physicalFolderExists, null);
+  assert.equal(report.organizations[0].repairable, false);
+});
+
+test("inventário incompleto bloqueia todo apply sem chamar provider", async () => {
+  await assert.rejects(applyOrganizationStorageDriftRepairs({}, {
+    approvedOrganizationIds: [1], confirmation: "APPLY_APPROVED_STORAGE_DRIFT",
+    buildReport: async () => ({ complete: false }),
+    ensureStorage: async () => { throw new Error("must not call"); },
+  }), { code: "ORGANIZATION_STORAGE_DRIFT_INCOMPLETE" });
 });

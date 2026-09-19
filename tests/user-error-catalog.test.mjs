@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { ApiError } from "../src/lib/error-contract.ts";
+import { normalizeUserError, formatSupportReference } from "../src/lib/user-error-catalog.ts";
 
 const catalogSource = await readFile(
   new URL("../src/lib/user-error-catalog.ts", import.meta.url),
@@ -87,8 +89,9 @@ test("Documentos normaliza erros sem expor diagnósticos técnicos", () => {
   assert.match(documentsSource, /normalizeUserError\(error\)/);
   assert.match(
     documentsSource,
-    /formatSupportReference\(presentation\.supportReference\)/,
+    /const supportReference = presentation\.supportReference/,
   );
+  assert.doesNotMatch(documentsSource, /formatSupportReference\(presentation\.supportReference\)/);
 
   assert.doesNotMatch(documentsSource, /payload\?\.code/);
   assert.doesNotMatch(documentsSource, /payload\?\.stage/);
@@ -98,6 +101,46 @@ test("Documentos normaliza erros sem expor diagnósticos técnicos", () => {
   assert.doesNotMatch(documentsSource, /`requisição \$\{/);
   assert.doesNotMatch(documentsSource, /Dropbox/i);
   assert.doesNotMatch(documentsSource, /Cloudflare D1/i);
+});
+
+test("readiness transitória e terminal recebem ações diferentes sem mensagens remotas", () => {
+  for (const retryable of [true, false]) {
+    const presentation = normalizeUserError(new ApiError({
+      status: 503,
+      code: "ORGANIZATION_STORAGE_NOT_READY",
+      category: "STORAGE",
+      retryable,
+      correlationId: "internal-storage-incident-123",
+      details: { provider: "Dropbox", root: "/private/secret" },
+    }, null, "Dropbox token=secret; D1 schema invalid"));
+    assert.equal(presentation.retryable, retryable);
+    assert.equal(presentation.action, retryable ? "retry" : "contact_support");
+    assert.doesNotMatch(presentation.message, /Dropbox|D1|secret|private|schema|token/);
+    assert.equal(presentation.supportReference, formatSupportReference("internal-storage-incident-123"));
+  }
+});
+
+test("estados bloqueados não oferecem repetição mesmo com classificação incoerente", () => {
+  for (const code of [
+    "ORGANIZATION_STORAGE_DISABLED",
+    "ORGANIZATION_STORAGE_PATH_DECISION_REQUIRED",
+    "ORGANIZATION_STORAGE_RETRY_EXHAUSTED",
+    "ORGANIZATION_STORAGE_RETRY_BLOCKED",
+  ]) {
+    const presentation = normalizeUserError({ status: 503, code, category: "STORAGE", retryable: true });
+    assert.equal(presentation.retryable, false, code);
+    assert.equal(presentation.action, "contact_support", code);
+  }
+  const preparing = normalizeUserError({ status: 503, code: "ORGANIZATION_STORAGE_IN_PROGRESS", category: "STORAGE", retryable: true });
+  assert.equal(preparing.severity, "info");
+  assert.match(preparing.message, /sendo preparado/);
+});
+
+test("categoria STORAGE desconhecida respeita retryable e nunca sugere reparo manual", () => {
+  const presentation = normalizeUserError({ status: 503, code: "NEW_INTERNAL_CODE", category: "STORAGE", retryable: false });
+  assert.equal(presentation.retryable, false);
+  assert.equal(presentation.action, "contact_support");
+  assert.doesNotMatch(presentation.message, /reparar|sincronizar|Dropbox|NEW_INTERNAL_CODE/);
 });
 
 

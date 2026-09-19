@@ -7,6 +7,18 @@ on:
       - "feat/prh-*"
     paths:
       - "src/**"
+      - "functions/_lib/organization-*.js"
+      - "functions/_lib/dropbox*.js"
+      - "functions/api/admin/organizations/**"
+      - "functions/api/organizations/**"
+      - "workers/organization-storage-recovery.js"
+      - ".github/workflows/organization-storage-recovery-operator.yml"
+      - "wrangler.organization-storage-recovery.toml.example"
+      - "scripts/organization-storage/**"
+      - "tests/organization-*.test.mjs"
+      - "tests/dropbox-*.test.mjs"
+      - "tests/helpers/**"
+      - "schema.sql"
       - "tests/api-error-client.test.mjs"
       - "tests/user-error-catalog.test.mjs"
       - "tests/browser/**"
@@ -22,6 +34,18 @@ on:
       - "mano_kepler_v1"
     paths:
       - "src/**"
+      - "functions/_lib/organization-*.js"
+      - "functions/_lib/dropbox*.js"
+      - "functions/api/admin/organizations/**"
+      - "functions/api/organizations/**"
+      - "workers/organization-storage-recovery.js"
+      - ".github/workflows/organization-storage-recovery-operator.yml"
+      - "wrangler.organization-storage-recovery.toml.example"
+      - "scripts/organization-storage/**"
+      - "tests/organization-*.test.mjs"
+      - "tests/dropbox-*.test.mjs"
+      - "tests/helpers/**"
+      - "schema.sql"
       - "tests/api-error-client.test.mjs"
       - "tests/user-error-catalog.test.mjs"
       - "tests/browser/**"
@@ -40,7 +64,7 @@ permissions:
 jobs:
   reliability-ux-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -60,6 +84,9 @@ jobs:
       - name: Validate audit scanner
         run: node --test scripts/audit-user-error-sinks.test.mjs
 
+      - name: Storage, chaos, lifecycle and SLO contract
+        run: npm run test:reliability
+
       - name: Capture current error-sink inventory
         run: |
           node scripts/audit-user-error-sinks.mjs --json > reliability-error-sinks.json
@@ -76,10 +103,20 @@ jobs:
       - name: Install Chromium for loading acceptance
         run: npx playwright install --with-deps chromium
 
-      - name: Browser loading acceptance
-        run: npm run test:loading-browser
+      - name: Browser loading and reliability acceptance
+        run: npm run test:reliability-browser
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reliability-browser-failures-${{ github.sha }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload reliability inventory
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: product-reliability-ux-${{ github.sha }}

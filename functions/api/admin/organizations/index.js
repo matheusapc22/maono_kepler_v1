@@ -10,6 +10,7 @@ import {
 } from "../../../_lib/organization-lifecycle.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import { logAudit } from "../../../_lib/projects.js";
+import { readOrganizationStorageIncident } from "../../../_lib/organization-storage-retry.js";
 
 async function requireGlobalAdminPanelAccess(env, request, action) {
   return requirePermission(
@@ -37,7 +38,7 @@ function publicOrganization(row) {
     dropboxRootPath: row.dropbox_root_path,
     active: Boolean(row.active),
     storageStatus: row.storage_status || null,
-    storageError: row.storage_error || null,
+    storageError: readOrganizationStorageIncident(row.storage_error)?.providerCode || null,
     storageCheckedAt: row.storage_checked_at || null,
     fileCount: row.file_count || 0,
     projectCount: row.project_count || 0,

@@ -1,4 +1,8 @@
 import { normalizeDropboxFolderPath } from "./dropbox.js";
+import { createCorrelationId } from "./maono-error.js";
+import { organizationStoragePathPolicy } from "./organization-storage-policy.js";
+import { readOrganizationStorageReadiness } from "./organization-storage-readiness.js";
+import { recordOrganizationStorageObservation } from "./organization-storage-telemetry.js";
 import {
   ORGANIZATION_STORAGE_CLAIM_TTL_MS,
   ORGANIZATION_STORAGE_STATUS,
@@ -113,7 +117,7 @@ function normalizeOrganizationPayload(body, current = null) {
   };
 }
 
-function validateOrganizationPayload(payload, correlationId) {
+function validateOrganizationPayload(payload, correlationId, current = null) {
   if (!payload.name) {
     throw lifecycleError(
       "Informe o nome da organização.",
@@ -132,10 +136,14 @@ function validateOrganizationPayload(payload, correlationId) {
     );
   }
 
-  if (
-    !payload.dropboxRootPath ||
-    !payload.dropboxRootPath.startsWith("/projects/")
-  ) {
+  // Preserve configured legacy roots for metadata/disable operations. A name
+  // edit must not require moving the customer's files or reactivate storage.
+  const unchangedPath = current &&
+    normalizeDropboxFolderPath(current.dropbox_root_path) === payload.dropboxRootPath;
+  if (!unchangedPath && !organizationStoragePathPolicy({
+    dropbox_root_path: payload.dropboxRootPath,
+    slug: payload.slug,
+  }).valid) {
     throw lifecycleError(
       "A pasta da organização deve ficar dentro de /projects. Exemplo: /projects/cliente-a.",
       400,
@@ -264,7 +272,14 @@ async function persistOrganizationFields(
   payload,
   mode,
   nowIso,
+  snapshot,
 ) {
+  const guard = ` AND active IS ? AND dropbox_root_path IS ?
+    AND storage_status IS ? AND storage_error IS ? AND storage_checked_at IS ?
+    AND updated_at IS ?`;
+  const expected = [snapshot.active, snapshot.dropbox_root_path,
+    snapshot.storage_status ?? null, snapshot.storage_error ?? null,
+    snapshot.storage_checked_at ?? null, snapshot.updated_at ?? null];
   if (mode === "disabled") {
     return env.DB.prepare(
       `UPDATE organizations
@@ -277,7 +292,7 @@ async function persistOrganizationFields(
            storage_error = NULL,
            storage_checked_at = ?,
            updated_at = ?
-       WHERE id = ?
+       WHERE id = ? ${guard}
        RETURNING *`,
     )
       .bind(
@@ -288,6 +303,7 @@ async function persistOrganizationFields(
         nowIso,
         nowIso,
         organizationId,
+        ...expected,
       )
       .first();
   }
@@ -304,7 +320,7 @@ async function persistOrganizationFields(
            storage_error = NULL,
            storage_checked_at = NULL,
            updated_at = ?
-       WHERE id = ?
+       WHERE id = ? ${guard}
        RETURNING *`,
     )
       .bind(
@@ -314,6 +330,7 @@ async function persistOrganizationFields(
         payload.dropboxRootPath,
         nowIso,
         organizationId,
+        ...expected,
       )
       .first();
   }
@@ -326,7 +343,7 @@ async function persistOrganizationFields(
          dropbox_root_path = ?,
          active = 1,
          updated_at = ?
-     WHERE id = ?
+     WHERE id = ? ${guard}
      RETURNING *`,
   )
     .bind(
@@ -336,6 +353,7 @@ async function persistOrganizationFields(
       payload.dropboxRootPath,
       nowIso,
       organizationId,
+      ...expected,
     )
     .first();
 }
@@ -347,15 +365,26 @@ async function persistOrganizationFieldsSafely(
   mode,
   nowIso,
   correlationId,
+  snapshot,
 ) {
   try {
-    return await persistOrganizationFields(
+    const persisted = await persistOrganizationFields(
       env,
       organizationId,
       payload,
       mode,
       nowIso,
+      snapshot,
     );
+    if (!persisted) {
+      throw lifecycleError(
+        "A organização foi atualizada durante esta operação. Atualize os dados e tente novamente.",
+        409,
+        "ORGANIZATION_CONCURRENT_UPDATE",
+        { correlationId, retryable: true },
+      );
+    }
+    return persisted;
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       throw lifecycleError(
@@ -380,12 +409,14 @@ async function ensureLifecycleStorageReady(
     nowFn,
     claimTtlMs,
     ensureStorage,
+    telemetrySource,
   },
 ) {
   const storage = await ensureStorage(env, organization, {
     correlationId,
     nowFn,
     claimTtlMs,
+    telemetrySource,
   });
 
   if (storage.ready) {
@@ -427,11 +458,12 @@ function lifecycleResult(
   } = {},
 ) {
   const status = normalizedStorageStatus(organization);
+  const readiness = readOrganizationStorageReadiness(organization);
   return {
     organization,
     created,
     resumed,
-    storageReady: status === ORGANIZATION_STORAGE_STATUS.READY,
+    storageReady: readiness.ready,
     storagePending: status === ORGANIZATION_STORAGE_STATUS.PENDING,
     storageBusy: Boolean(storage?.busy),
   };
@@ -441,10 +473,11 @@ export async function createOrganizationLifecycle(
   env,
   body,
   {
-    correlationId = null,
+    correlationId = createCorrelationId(),
     nowFn = Date.now,
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
     ensureStorage = ensureOrganizationStorage,
+    observe = recordOrganizationStorageObservation,
   } = {},
 ) {
   const nowMs = Number(nowFn());
@@ -474,6 +507,7 @@ export async function createOrganizationLifecycle(
         "preserve",
         nowIso,
         correlationId,
+        matches.exact,
       );
       resumed = true;
     } else {
@@ -499,12 +533,14 @@ export async function createOrganizationLifecycle(
       );
 
       if (matches.exact && payload.active && canResumeCreate(matches.exact)) {
-        organization = await persistOrganizationFields(
+        organization = await persistOrganizationFieldsSafely(
           env,
           matches.exact.id,
           payload,
           "preserve",
           nowIso,
+          correlationId,
+          matches.exact,
         );
         resumed = true;
       } else {
@@ -521,6 +557,14 @@ export async function createOrganizationLifecycle(
     }
   }
 
+  if (created) {
+    await observe(env, {
+      type: "created", source: "lifecycle", organizationId: organization.id,
+      observedAt: nowIso, createdAt: organization.created_at || nowIso,
+      activeAtCreation: Boolean(payload.active), correlationId,
+    });
+  }
+
   if (!payload.active) {
     return lifecycleResult(organization, { created, resumed });
   }
@@ -530,6 +574,7 @@ export async function createOrganizationLifecycle(
     nowFn,
     claimTtlMs,
     ensureStorage,
+    telemetrySource: resumed ? "operator" : "lifecycle",
   });
 
   return lifecycleResult(ready.organization, {
@@ -544,7 +589,7 @@ export async function updateOrganizationLifecycle(
   organizationId,
   body,
   {
-    correlationId = null,
+    correlationId = createCorrelationId(),
     nowFn = Date.now,
     claimTtlMs = ORGANIZATION_STORAGE_CLAIM_TTL_MS,
     ensureStorage = ensureOrganizationStorage,
@@ -567,6 +612,7 @@ export async function updateOrganizationLifecycle(
   const payload = validateOrganizationPayload(
     normalizeOrganizationPayload(body, current),
     correlationId,
+    current,
   );
 
   const matches = await getIdentityMatches(
@@ -592,6 +638,7 @@ export async function updateOrganizationLifecycle(
       "disabled",
       nowIso,
       correlationId,
+      current,
     );
     return lifecycleResult(disabled);
   }
@@ -619,7 +666,10 @@ export async function updateOrganizationLifecycle(
     !pathChanged &&
     pendingFresh;
 
-  if (healthyMetadataOnly || pendingMetadataOnly) {
+  const legacyMetadataOnly = isActive(current) && !pathChanged &&
+    !organizationStoragePathPolicy(current).valid;
+
+  if (healthyMetadataOnly || pendingMetadataOnly || legacyMetadataOnly) {
     const updated = await persistOrganizationFieldsSafely(
       env,
       organizationId,
@@ -627,6 +677,7 @@ export async function updateOrganizationLifecycle(
       "preserve",
       nowIso,
       correlationId,
+      current,
     );
     return lifecycleResult(updated);
   }
@@ -638,6 +689,7 @@ export async function updateOrganizationLifecycle(
     !isActive(current) || pathChanged ? "reset-pending" : "preserve",
     nowIso,
     correlationId,
+    current,
   );
 
   const ready = await ensureLifecycleStorageReady(env, prepared, {
@@ -645,6 +697,7 @@ export async function updateOrganizationLifecycle(
     nowFn,
     claimTtlMs,
     ensureStorage,
+    telemetrySource: "operator",
   });
 
   return lifecycleResult(ready.organization, {

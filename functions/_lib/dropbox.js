@@ -143,8 +143,33 @@ async function createDropboxFolderWithClient(client, path) {
   if (response.ok) return await response.json();
 
   const text = await response.text();
-  if (text.includes("path/conflict/folder") || text.includes("path/conflict")) {
-    return null;
+  if (response.status === 409 && text.includes("path/conflict")) {
+    // A conflict can be a file, not a folder. Verify metadata before treating
+    // create as idempotent; otherwise provisioning can publish a false READY.
+    const metadataResponse = await client.request({
+      operation: "files.get_metadata",
+      url: DROPBOX_METADATA_URL,
+      timeoutMs: DROPBOX_METADATA_TIMEOUT_MS,
+      buildInit: ({ accessToken }) => ({
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ path: normalizedPath, include_deleted: false }),
+      }),
+    });
+    if (metadataResponse.ok) {
+      const metadata = await metadataResponse.json();
+      if (metadata?.[".tag"] === "folder") return { metadata };
+      const error = new Error("O caminho de armazenamento não corresponde a uma pasta.");
+      error.status = 409;
+      error.code = "DROPBOX_FOLDER_TYPE_CONFLICT";
+      error.retryable = false;
+      throw error;
+    }
+    const error = new Error("Não foi possível validar a pasta de armazenamento existente.");
+    error.status = metadataResponse.status;
+    error.code = "DROPBOX_FOLDER_VALIDATION_FAILED";
+    error.retryable = metadataResponse.status === 429 || metadataResponse.status >= 500;
+    throw error;
   }
 
   const error = new Error(

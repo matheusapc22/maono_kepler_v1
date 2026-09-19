@@ -1,4 +1,5 @@
-import { normalizeDropboxFolderPath } from "./dropbox.js";
+import { organizationStoragePathPolicy } from "./organization-storage-policy.js";
+import { organizationStorageRetryDecision } from "./organization-storage-retry.js";
 import {
   ORGANIZATION_STORAGE_CLAIM_TTL_MS,
   ORGANIZATION_STORAGE_STATUS,
@@ -26,14 +27,7 @@ function activeOrganization(organization) {
 }
 
 function validOrganizationPath(organization) {
-  const path = normalizeDropboxFolderPath(
-    organization?.dropbox_root_path,
-  );
-  return Boolean(
-    path &&
-      path !== "/projects" &&
-      path.startsWith("/projects/"),
-  );
+  return organizationStoragePathPolicy(organization).valid;
 }
 
 export function readOrganizationStorageReadiness(
@@ -84,14 +78,21 @@ export function readOrganizationStorageReadiness(
     reason = "STORAGE_STATE_INVALID";
   }
 
-  const retryable =
-    active &&
-    !ready &&
-    reason !== "STORAGE_DISABLED";
+  const retryDecision = organizationStorageRetryDecision(organization, nowMs);
+  const terminalRetry = !retryDecision.allowed && retryDecision.reason !== "RETRY_BACKOFF";
+  if (active && pathValid && !ready && !pendingFresh && terminalRetry) {
+    reason = retryDecision.reason === "RETRY_EXHAUSTED" ? "STORAGE_RETRY_EXHAUSTED" : "STORAGE_RETRY_BLOCKED";
+  }
+  const pathDecisionRequired = organizationStoragePathPolicy(organization).decisionRequired;
+  if (active && pathValid && !ready && !pendingFresh && pathDecisionRequired) reason = "STORAGE_PATH_DECISION_REQUIRED";
+  const retryable = active && pathValid && !ready && reason !== "STORAGE_DISABLED" &&
+    (pendingFresh || (!terminalRetry && !pathDecisionRequired));
   const recoveryRecommended =
     active &&
     !ready &&
-    !pendingFresh;
+    !pendingFresh &&
+    !organizationStoragePathPolicy(organization).decisionRequired &&
+    retryDecision.allowed;
 
   return {
     status,
@@ -113,7 +114,9 @@ function readinessError(readiness, operation) {
       ? "A organização não está disponível para esta operação."
       : readiness.busy
         ? "O armazenamento da organização está sendo preparado. Tente novamente em instantes."
-        : "O armazenamento da organização está temporariamente indisponível.",
+        : !readiness.retryable
+          ? "O armazenamento desta organização precisa de verificação pela equipe responsável."
+          : "O armazenamento da organização está temporariamente indisponível.",
   );
 
   error.status = inactive ? 409 : 503;

@@ -38,7 +38,7 @@ test("PRH-04 reutiliza migration 0009 sem criar segunda taxonomia de estado", ()
 test("claim é atômico e conclusão usa compare-and-set pelo checked_at", () => {
   assert.match(
     storageSource,
-    /storage_status = 'PENDING'[\s\S]*julianday\(storage_checked_at\) < julianday\(\?\)/,
+    /storage_status = 'PENDING'[\s\S]*julianday\(storage_checked_at\) <= julianday\(\?\)/,
   );
   assert.match(
     storageSource,
