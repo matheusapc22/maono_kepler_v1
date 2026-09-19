@@ -252,20 +252,20 @@
     </style>
   </head>
   <body>
-    <div id="root">
-      <main
-        id="app-boot-fallback"
-        class="mm-loading-overlay mm-loading-overlay--viewport"
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-      >
-        <span class="mm-universal-loader mm-universal-loader--page">
-          <span class="mm-universal-loader__ring" aria-hidden="true"></span>
-          <span class="mm-sr-only">Inicializando plataforma.</span>
-        </span>
-      </main>
-    </div>
+    <div id="root"></div>
+    <main
+      id="app-boot-fallback"
+      class="mm-loading-overlay mm-loading-overlay--viewport"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      data-loading-owner="initial-boot"
+    >
+      <span class="mm-universal-loader mm-universal-loader--page">
+        <span class="mm-universal-loader__ring" aria-hidden="true"></span>
+        <span class="mm-sr-only">Inicializando plataforma.</span>
+      </span>
+    </main>
     <script>
       (function () {
         if (window.location.pathname === "/") {

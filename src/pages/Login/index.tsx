@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useLoadingActivity } from "../../components/loading";
+import {
+  useInitialBootReadiness,
+  useLoadingActivity,
+} from "../../components/loading";
 import { usePreparedNavigate } from "../../hooks/usePreparedNavigate";
 import { useSession } from "../../hooks/useSession";
 import { normalizeUserError } from "../../lib/user-error-catalog";
@@ -47,6 +50,7 @@ const LoginPage: React.FC = () => {
     redirecting ||
     authenticatedRedirectPending;
   useLoadingActivity(loginLoading);
+  useInitialBootReadiness(!loginLoading);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

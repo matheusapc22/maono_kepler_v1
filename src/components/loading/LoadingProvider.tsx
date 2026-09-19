@@ -17,6 +17,10 @@ import {
   type LoadingToken,
 } from "./loading-controller";
 import { LoadingHandoffController } from "./loading-handoff-controller";
+import {
+  completeInitialBootLoader,
+  hasInitialBootLoader,
+} from "./initial-boot-loader";
 
 const DEFAULT_SHOW_AFTER_MS = 120;
 const DEFAULT_MIN_VISIBLE_MS = 250;
@@ -41,6 +45,7 @@ type LoadingContextValue = {
   completeLoadingHandoff: (key: string) => boolean;
   cancelLoadingHandoff: (key: string) => boolean;
   getLoadingHandoffCount: () => number;
+  completeInitialBootLoading: () => boolean;
   withLoading: <T>(operation: LoadingOperation<T>) => Promise<T>;
 };
 
@@ -74,6 +79,10 @@ export function LoadingProvider({
   const handoffController = handoffControllerRef.current;
   const [activeCount, setActiveCount] = useState(controller.activeCount);
   const [isVisible, setIsVisible] = useState(false);
+  const [initialBootActive, setInitialBootActive] = useState(() =>
+    hasInitialBootLoader(),
+  );
+  const bootCompletionRequestedRef = useRef(false);
   const shownAtRef = useRef(0);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -237,6 +246,38 @@ export function LoadingProvider({
     () => handoffController.activeCount,
     [handoffController],
   );
+  const completeInitialBootLoading = useCallback(() => {
+    if (!initialBootActive) {
+      return true;
+    }
+
+    if (controller.activeCount > 0) {
+      bootCompletionRequestedRef.current = true;
+      return false;
+    }
+
+    bootCompletionRequestedRef.current = false;
+    setIsVisible(false);
+    const removed = completeInitialBootLoader();
+    setInitialBootActive(false);
+    return removed;
+  }, [controller, initialBootActive]);
+
+  useLayoutEffect(() => {
+    if (
+      initialBootActive &&
+      bootCompletionRequestedRef.current &&
+      controller.activeCount === 0
+    ) {
+      completeInitialBootLoading();
+    }
+  }, [
+    activeCount,
+    completeInitialBootLoading,
+    controller,
+    initialBootActive,
+  ]);
+
   const withLoading = useCallback(
     <T,>(operation: LoadingOperation<T>) => controller.withLoading(operation),
     [controller],
@@ -254,6 +295,7 @@ export function LoadingProvider({
       completeLoadingHandoff,
       cancelLoadingHandoff,
       getLoadingHandoffCount,
+      completeInitialBootLoading,
       withLoading,
     }),
     [
@@ -261,6 +303,7 @@ export function LoadingProvider({
       beginLoading,
       cancelLoadingHandoff,
       claimLoadingHandoff,
+      completeInitialBootLoading,
       completeLoadingHandoff,
       endLoading,
       getLoadingHandoffCount,
@@ -274,7 +317,7 @@ export function LoadingProvider({
     <LoadingContext.Provider value={value}>
       {children}
       <LoadingOverlay
-        active={isVisible}
+        active={isVisible && !initialBootActive}
         scope="viewport"
         accessibleLabel="Carregando conteúdo"
       />

@@ -17,6 +17,7 @@ import {
 import {
   LoadingOverlay,
   useCompleteLoadingHandoff,
+  useInitialBootReadiness,
 } from "../components/loading";
 import { ProjectsPageSkeleton } from "../components/loading/Skeleton";
 import { usePreparedNavigate } from "../hooks/usePreparedNavigate";
@@ -441,6 +442,10 @@ const ProjectsPage: React.FC = () => {
 
   useCompleteLoadingHandoff(
     "login-projects",
+    loginProjectsReady || (!loading && !authenticated),
+  );
+
+  useInitialBootReadiness(
     loginProjectsReady || (!loading && !authenticated),
   );
 
