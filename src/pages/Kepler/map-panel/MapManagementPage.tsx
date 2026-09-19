@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useRef,
   useState,
 } from "react";
 import {
@@ -10,27 +9,12 @@ import {
 } from "react-router";
 
 import { useSession } from "../../../auth/session";
+import { useLoadingActivity } from "../../../components/loading";
+import { usePreparedNavigate } from "../../../hooks/usePreparedNavigate";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
-import { fetchProjectMapNavigation } from "./map-panel-api";
-import type {
-  MapPanelApiError,
-  MapPanelContextValue,
-} from "./types";
+import { prepareProjectMapDestination } from "./prepare-project-map-destination";
+import type { MapPanelApiError } from "./types";
 import "./map-management-page.css";
-
-function MapRedirectLoader() {
-  return (
-    <main className="maono-map-management is-loading" aria-busy="true">
-      <span
-        className="maono-map-management__spinner"
-        aria-hidden="true"
-      />
-      <span className="maono-map-management__sr-only" role="status">
-        Abrindo mapa.
-      </span>
-    </main>
-  );
-}
 
 export default function MapManagementPage() {
   const { projectSlug = "" } = useParams();
@@ -38,20 +22,12 @@ export default function MapManagementPage() {
   const {
     authenticated,
     loading,
-    activeOrganization,
-    user,
   } = useSession();
-  const [context, setContext] =
-    useState<MapPanelContextValue | null>(null);
+  const { prepareNavigate } = usePreparedNavigate();
   const [error, setError] =
     useState<MapPanelApiError | null>(null);
-  const redirectedRef = useRef(false);
-  const organizationKey = String(
-    activeOrganization?.id ??
-      user?.activeOrganizationId ??
-      user?.organizationId ??
-      "none",
-  );
+
+  useLoadingActivity(loading);
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -67,44 +43,25 @@ export default function MapManagementPage() {
   useEffect(() => {
     if (!authenticated || !projectSlug) return;
 
-    const controller = new AbortController();
-    setContext(null);
+    let destination =
+      `/projects/${encodeURIComponent(projectSlug)}/manage`;
     setError(null);
-    redirectedRef.current = false;
 
-    fetchProjectMapNavigation(
-      projectSlug,
-      "manage",
-      controller.signal,
-    )
-      .then((value) => {
-        if (!controller.signal.aborted) setContext(value);
-      })
-      .catch((nextError: MapPanelApiError) => {
-        if (!controller.signal.aborted) setError(nextError);
-      });
-
-    return () => controller.abort();
-  }, [authenticated, organizationKey, projectSlug]);
-
-  useEffect(() => {
-    if (!context || redirectedRef.current) return;
-
-    const destination =
-      context.defaultPanel === "editor" || context.defaultPanel === "viewer"
-        ? context.defaultPanel === "editor"
-          ? "edit"
-          : "view"
-        : null;
-
-    if (!destination) return;
-
-    redirectedRef.current = true;
-    navigate(
-      `/projects/${encodeURIComponent(projectSlug)}/${destination}`,
-      { replace: true },
-    );
-  }, [context, navigate, projectSlug]);
+    void prepareNavigate({
+      route: "kepler",
+      to: () => destination,
+      replace: true,
+      beforeNavigate: async (signal) => {
+        const prepared = await prepareProjectMapDestination(
+          projectSlug,
+          signal,
+        );
+        destination = prepared.pathname;
+      },
+    }).catch((nextError: MapPanelApiError) => {
+      setError(nextError);
+    });
+  }, [authenticated, prepareNavigate, projectSlug]);
 
   if (error) {
     return (
@@ -118,21 +75,5 @@ export default function MapManagementPage() {
     );
   }
 
-  if (
-    context &&
-    !context.availablePanels.editor.allowed &&
-    !context.availablePanels.viewer.allowed
-  ) {
-    return (
-      <main className="maono-map-management">
-        <section className="maono-map-management__error" role="alert">
-          <h1>Mapa indisponível</h1>
-          <p>Sua conta não recebeu acesso para abrir este projeto.</p>
-          <Link to="/projects">Voltar aos projetos</Link>
-        </section>
-      </main>
-    );
-  }
-
-  return <MapRedirectLoader />;
+  return null;
 }

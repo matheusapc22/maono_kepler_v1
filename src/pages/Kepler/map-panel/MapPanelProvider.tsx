@@ -8,11 +8,13 @@ import React, {
 import { Link, useLocation, useParams } from "react-router";
 
 import { useSession } from "../../../auth/session";
+import { useLoadingActivity } from "../../../components/loading";
 import {
   fetchNewMapCreateContext,
   fetchProjectMapNavigation,
 } from "./map-panel-api";
 import { MapPanelContextProvider, useMapPanel } from "./MapPanelContext";
+import { consumeMapPanelContextHandoff } from "./map-panel-context-handoff";
 import { normalizeIsochroneFeatureState } from "./isochrone-feature-diagnostic";
 import { emitMapPanelTelemetry } from "./map-panel-telemetry";
 import type {
@@ -243,11 +245,13 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
     context: null,
     error: null,
   });
+  useLoadingActivity(state.status === "loading");
   const previousRequestRef = useRef<{
     organizationKey: string;
     projectSlug?: string;
     refreshToken: number;
   } | null>(null);
+  const consumedHandoffSignatureRef = useRef<string | null>(null);
   const reviewWorkspace = isReviewWorkspace(location.pathname);
   const mode = requestedMode(location.pathname);
   const organizationKey = activeOrganizationKey(activeOrganization, user);
@@ -280,6 +284,59 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
       refreshToken,
     };
 
+    const handoffSignature = [
+      location.pathname,
+      organizationKey,
+      projectSlug ?? "none",
+      mode,
+      refreshToken,
+    ].join("|");
+
+    if (
+      consumedHandoffSignatureRef.current ===
+      handoffSignature
+    ) {
+      return () => controller.abort();
+    }
+
+    const handedOffContext =
+      !isNewMap &&
+      projectSlug &&
+      (mode === "editor" || mode === "viewer")
+        ? consumeMapPanelContextHandoff({
+            pathname: location.pathname,
+            organizationKey,
+            projectSlug,
+            mode,
+          })
+        : null;
+
+    if (handedOffContext) {
+      consumedHandoffSignatureRef.current =
+        handoffSignature;
+      const routedContext = reviewWorkspace
+        ? reviewReadOnlyContext(handedOffContext)
+        : handedOffContext;
+      const resolvedContext =
+        viewerPresentationContext(routedContext);
+
+      setState({
+        status: "ready",
+        context: resolvedContext,
+        error: null,
+      });
+      emitMapPanelTelemetry("map_panel_opened", {
+        mode: resolvedContext.mode,
+        projectId: resolvedContext.project?.id ?? null,
+        organizationId: resolvedContext.organization?.id ?? null,
+        defaultPanel: resolvedContext.defaultPanel,
+        policyVersion: resolvedContext.policyVersion,
+      });
+
+      return () => controller.abort();
+    }
+
+    consumedHandoffSignatureRef.current = null;
     setState({
       status: "loading",
       context: null,
@@ -362,6 +419,7 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
     return () => controller.abort();
   }, [
     isNewMap,
+    location.pathname,
     mode,
     organizationKey,
     projectSlug,
@@ -417,14 +475,7 @@ export function MapPanelAccessGate({
   const { projectSlug } = useParams();
 
   if (state.status === "loading") {
-    return (
-      <main className="maono-map-gate" aria-busy="true">
-        <div className="maono-map-gate__card" role="status">
-          <strong>Preparando o mapa</strong>
-          <span>Validando contexto e permissões…</span>
-        </div>
-      </main>
-    );
+    return null;
   }
 
   if (state.status === "blocked" || state.status === "error") {

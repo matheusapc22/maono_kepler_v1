@@ -6,6 +6,7 @@ import React, {
 
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
 import { usePreparedNavigate } from "../../../hooks/usePreparedNavigate";
+import { prepareProjectMapDestination } from "../../Kepler/map-panel/prepare-project-map-destination";
 import {
   fetchProjectThumbnailStatus,
   type ProjectListItem,
@@ -309,15 +310,23 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
             favoriteBusy={Boolean(favoriteBusySlugs[project.slug])}
             opening={openingSlug === project.slug}
             onOpen={(selectedProject) => {
-              const destination =
+              const fallbackDestination =
                 `/projects/${encodeURIComponent(selectedProject.slug)}/manage`;
+              let destination = fallbackDestination;
 
               setOpeningSlug(selectedProject.slug);
               setActionsOpenSlug(null);
 
               void prepareNavigate({
-                route: "mapManagement",
-                to: destination,
+                route: "kepler",
+                to: () => destination,
+                beforeNavigate: async (signal) => {
+                  const prepared = await prepareProjectMapDestination(
+                    selectedProject.slug,
+                    signal,
+                  );
+                  destination = prepared.pathname;
+                },
               })
                 .then((navigated) => {
                   if (!navigated) {
@@ -327,7 +336,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
                   }
                 })
                 .catch(() => {
-                  window.location.assign(destination);
+                  window.location.assign(fallbackDestination);
                 });
             }}
             onActionsOpenChange={(open) => {

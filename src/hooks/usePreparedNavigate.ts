@@ -13,9 +13,9 @@ import { PreparedNavigationIntentController } from "../navigation/prepared-navig
 
 type PreparedNavigationOptions = {
   route: RouteModuleKey;
-  to: string;
+  to: string | (() => string);
   replace?: boolean;
-  beforeNavigate?: () => Promise<void> | void;
+  beforeNavigate?: (signal: AbortSignal) => Promise<void> | void;
 };
 
 export function usePreparedNavigate() {
@@ -23,6 +23,7 @@ export function usePreparedNavigate() {
   const { beginLoading, endLoading } = useLoading();
   const controllerRef = useRef<PreparedNavigationIntentController | null>(null);
   const activeLoadingTokenRef = useRef<LoadingToken | null>(null);
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
 
   if (!controllerRef.current) {
     controllerRef.current = new PreparedNavigationIntentController();
@@ -30,6 +31,8 @@ export function usePreparedNavigate() {
 
   const cancelPreparedNavigation = useCallback(() => {
     controllerRef.current?.cancel();
+    activeAbortControllerRef.current?.abort();
+    activeAbortControllerRef.current = null;
 
     if (activeLoadingTokenRef.current !== null) {
       endLoading(activeLoadingTokenRef.current);
@@ -59,31 +62,51 @@ export function usePreparedNavigate() {
 
       const intent = controller.begin();
 
+      activeAbortControllerRef.current?.abort();
+
       if (activeLoadingTokenRef.current !== null) {
         endLoading(activeLoadingTokenRef.current);
       }
 
       const loadingToken = beginLoading();
+      const abortController = new AbortController();
       activeLoadingTokenRef.current = loadingToken;
+      activeAbortControllerRef.current = abortController;
 
       try {
-        await preloadRouteModule(route);
+        await Promise.all([
+          preloadRouteModule(route),
+          beforeNavigate
+            ? beforeNavigate(abortController.signal)
+            : Promise.resolve(),
+        ]);
 
-        if (!controller.isCurrent(intent)) {
+        if (
+          abortController.signal.aborted ||
+          !controller.isCurrent(intent)
+        ) {
           return false;
         }
 
-        if (beforeNavigate) {
-          await beforeNavigate();
+        const destination =
+          typeof to === "function" ? to() : to;
+
+        if (!destination) {
+          throw new Error("Destino de navegação não resolvido.");
         }
 
-        if (!controller.isCurrent(intent)) {
-          return false;
-        }
-
-        navigate(to, { replace });
+        navigate(destination, { replace });
         return true;
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return false;
+        }
+
+        throw error;
       } finally {
+        if (activeAbortControllerRef.current === abortController) {
+          activeAbortControllerRef.current = null;
+        }
         if (activeLoadingTokenRef.current === loadingToken) {
           activeLoadingTokenRef.current = null;
         }

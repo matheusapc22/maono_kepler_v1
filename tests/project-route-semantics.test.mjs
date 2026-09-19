@@ -10,6 +10,10 @@ const urls = {
     "../src/pages/Kepler/map-panel/MapManagementPage.tsx",
     import.meta.url,
   ),
+  preparedDestination: new URL(
+    "../src/pages/Kepler/map-panel/prepare-project-map-destination.ts",
+    import.meta.url,
+  ),
   endpoint: new URL(
     "../functions/api/projects/[slug]/map-navigation.js",
     import.meta.url,
@@ -237,23 +241,37 @@ test("Viewer e Editor nunca são expostos simultaneamente como rotas permitidas"
 });
 
 test("manage redireciona pela rota atribuída e não prioriza Editor", () => {
-  assert.match(sources.management, /context\.defaultPanel === "editor"/);
-  assert.match(sources.management, /context\.defaultPanel === "viewer"/);
-
-  const destinationStart = sources.management.indexOf("const destination =");
-  const destinationEnd = sources.management.indexOf(
-    "if (!destination)",
-    destinationStart,
+  assert.match(
+    sources.management,
+    /prepareProjectMapDestination\([\s\S]*projectSlug/,
   );
-  assert.ok(destinationStart >= 0 && destinationEnd > destinationStart);
-
-  const destinationBlock = sources.management.slice(
-    destinationStart,
-    destinationEnd,
+  assert.match(
+    sources.preparedDestination,
+    /context\.defaultPanel === "editor"[\s\S]*context\.defaultPanel === "viewer"/,
   );
+  assert.match(
+    sources.preparedDestination,
+    /context\.assignedMode === "editor"[\s\S]*context\.assignedMode === "viewer"/,
+  );
+  assert.match(
+    sources.preparedDestination,
+    /context\.availablePanels\[mode\]\.allowed/,
+  );
+
+  const resolverStart =
+    sources.preparedDestination.indexOf("function resolveDestinationMode");
+  const resolverEnd =
+    sources.preparedDestination.indexOf(
+      "export async function prepareProjectMapDestination",
+      resolverStart,
+    );
+  assert.ok(resolverStart >= 0 && resolverEnd > resolverStart);
+
+  const resolverBlock =
+    sources.preparedDestination.slice(resolverStart, resolverEnd);
   assert.doesNotMatch(
-    destinationBlock,
-    /context\.availablePanels\.(?:editor|viewer)\.allowed/,
+    resolverBlock,
+    /availablePanels\.editor\.allowed[\s\S]*availablePanels\.viewer\.allowed/,
   );
 });
 

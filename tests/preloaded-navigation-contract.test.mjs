@@ -39,16 +39,14 @@ test("rotas lazy compartilham o mesmo registry usado pelo prefetch", () => {
   assert.doesNotMatch(routes, /lazy\(\(\) => import\(/);
 });
 
-test("prepared navigation carrega o chunk antes de alterar a rota", () => {
-  const preloadIndex = preparedHook.indexOf("await preloadRouteModule(route)");
-  const beforeNavigateIndex = preparedHook.indexOf("await beforeNavigate()");
-  const navigateIndex = preparedHook.indexOf("navigate(to, { replace })");
-
-  assert.ok(preloadIndex >= 0);
-  assert.ok(beforeNavigateIndex > preloadIndex);
-  assert.ok(navigateIndex > beforeNavigateIndex);
+test("prepared navigation prepara chunk e pré-condição antes de alterar a rota", () => {
+  assert.match(preparedHook, /Promise\.all\(/);
+  assert.match(preparedHook, /preloadRouteModule\(route\)/);
+  assert.match(preparedHook, /beforeNavigate\(abortController\.signal\)/);
   assert.match(preparedHook, /activeLoadingTokenRef/);
+  assert.match(preparedHook, /activeAbortControllerRef/);
   assert.match(preparedHook, /controller\.isCurrent\(intent\)/);
+  assert.match(preparedHook, /navigate\(destination, \{ replace \}\)/);
   assert.match(preparedHook, /cancelPreparedNavigation/);
 });
 
@@ -64,11 +62,9 @@ test("Login usa sessão canônica e prefetch de Projects", () => {
 test("Projects prepara chunks antes das navegações pesadas", () => {
   assert.match(projects, /route: "kepler"/);
   assert.match(projects, /to: "\/maps\/new\/create"/);
-  assert.match(projectsSection, /route: "mapManagement"/);
-  assert.match(
-    projectsSection,
-    /\/projects\/\$\{encodeURIComponent\(selectedProject\.slug\)\}\/manage/,
-  );
+  assert.match(projectsSection, /route: "kepler"/);
+  assert.match(projectsSection, /prepareProjectMapDestination/);
+  assert.match(projectsSection, /to: \(\) => destination/);
 });
 
 test("ProjectCard preserva modified-click e remove copy de espera", () => {

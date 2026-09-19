@@ -94,7 +94,7 @@
 }
 
 .mm-loading-overlay {
-  z-index: 1200;
+  z-index: 120000;
   display: grid;
   place-items: center;
   pointer-events: auto;

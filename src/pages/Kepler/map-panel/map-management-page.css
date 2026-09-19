@@ -8,34 +8,6 @@
   padding: 24px;
 }
 
-.maono-map-management.is-loading {
-  overflow: hidden;
-}
-
-.maono-map-management__spinner {
-  animation: maono-map-management-spin 0.82s linear infinite;
-  border: 8px solid rgba(197, 160, 89, 0.18);
-  border-radius: 50%;
-  border-top-color: #c5a059;
-  box-shadow: 0 0 34px rgba(197, 160, 89, 0.16);
-  display: block;
-  height: 76px;
-  width: 76px;
-}
-
-.maono-map-management__sr-only {
-  border: 0;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  padding: 0;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
-
 .maono-map-management__error {
   background: #141e2f;
   border: 1px solid rgba(197, 160, 89, 0.32);
@@ -65,24 +37,4 @@
   font-weight: 700;
   padding: 10px 14px;
   text-decoration: none;
-}
-
-@keyframes maono-map-management-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 640px) {
-  .maono-map-management__spinner {
-    border-width: 7px;
-    height: 66px;
-    width: 66px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .maono-map-management__spinner {
-    animation-duration: 1.65s;
-  }
 }

@@ -7,6 +7,7 @@ import React, {
 import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import { useSession } from "../../../auth/session";
+import { useLoadingActivity } from "../../../components/loading";
 import {
   buildApiError,
   parseResponseJson,
@@ -282,6 +283,7 @@ const MaonoSaveButton: React.FC = () => {
   const commandsRef = useRef(commands);
   const transientDatasetIdsRef = useRef(new Set<string>());
   const [saving, setSaving] = useState(false);
+  useLoadingActivity(saving);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] =
     useState<"success" | "error">("success");
@@ -901,13 +903,9 @@ const MaonoSaveButton: React.FC = () => {
               : "Transformar este mapa em um novo projeto Maõno"
           }
         >
-          {saving
-            ? projectSlug
-              ? "Salvando..."
-              : "Criando..."
-            : projectSlug
-              ? "Salvar na Maõno"
-              : "Salvar como projeto"}
+          {projectSlug
+            ? "Salvar na Maõno"
+            : "Salvar como projeto"}
         </button>
       </div>
 

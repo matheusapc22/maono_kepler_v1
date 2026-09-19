@@ -360,7 +360,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
             ) : null}
           </form>
 
-          {phase !== "ready" ? (
+          {phase === "error" ? (
             <section
               aria-label="Progresso da criação"
               className="mt-6 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
@@ -369,28 +369,9 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
                 Progresso
               </h3>
 
-              {phase === "capturing" ? (
-                <p
-                  role="status"
-                  className="mt-3 text-sm font-semibold text-emerald-200"
-                >
-                  Preparando configuração e visualização do mapa…
-                </p>
-              ) : null}
-
               <ol className="mt-4 grid gap-3">
                 {STEPS.map((step, index) => {
-                  const completed =
-                    phase === "success" ||
-                    (phase !== "error" &&
-                      activeIndex >= 0 &&
-                      index < activeIndex);
-                  const active =
-                    phase !== "success" &&
-                    index === activeIndex;
-                  const failed =
-                    phase === "error" &&
-                    index === activeIndex;
+                  const failed = index === activeIndex;
 
                   return (
                     <li
@@ -401,24 +382,18 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
                         aria-hidden="true"
                         className={[
                           "grid h-7 w-7 flex-none place-items-center rounded-full border text-xs font-black",
-                          completed
-                            ? "border-emerald-300 bg-emerald-500 text-slate-950"
-                            : failed
-                              ? "border-red-300 bg-red-900 text-red-100"
-                              : active
-                                ? "border-emerald-300 bg-emerald-950 text-emerald-200"
-                                : "border-white/20 bg-slate-950 text-slate-400",
+                          failed
+                            ? "border-red-300 bg-red-900 text-red-100"
+                            : "border-white/20 bg-slate-950 text-slate-400",
                         ].join(" ")}
                       >
-                        {completed ? "✓" : failed ? "!" : index + 1}
+                        {failed ? "!" : index + 1}
                       </span>
                       <span
                         className={
-                          completed || active
-                            ? "font-bold text-white"
-                            : failed
-                              ? "font-bold text-red-100"
-                              : "text-slate-400"
+                          failed
+                            ? "font-bold text-red-100"
+                            : "text-slate-400"
                         }
                       >
                         {step.label}
@@ -447,11 +422,9 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
             disabled={busy}
             className="min-h-12 rounded-xl border border-emerald-300/50 bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white shadow-xl transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
           >
-            {busy
-              ? "Criando projeto…"
-              : phase === "error"
-                ? "Tentar novamente"
-                : "Criar e salvar projeto"}
+            {phase === "error"
+              ? "Tentar novamente"
+              : "Criar e salvar projeto"}
           </button>
         </footer>
       </section>
