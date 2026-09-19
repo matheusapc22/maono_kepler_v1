@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const ROOT = new URL("../", import.meta.url);
@@ -93,7 +94,7 @@ test("loaders legados removidos não podem voltar", async () => {
 
   assert.doesNotMatch(sampleViewer, /LoadingDialog/);
 
-  const srcDirectory = new URL("src/", ROOT);
+  const srcDirectory = fileURLToPath(new URL("src/", ROOT));
   const files = await walk(srcDirectory);
 
   const forbidden = [
