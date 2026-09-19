@@ -99,3 +99,52 @@ test("clear encerra toda a geração atual sem afetar outro controller", () => {
   assert.equal(firstController.activeCount, 0);
   assert.equal(secondController.activeCount, 1);
 });
+
+
+test("metadata segura acompanha token e snapshot ativo", () => {
+  const controller = new LoadingController();
+  const token = controller.begin(
+    {
+      label: "prepared-navigation",
+      scope: "navigation",
+      surface: "handoff",
+    },
+    1_000,
+  );
+
+  assert.deepEqual(token.metadata, {
+    label: "prepared-navigation",
+    scope: "navigation",
+    surface: "handoff",
+    createdAt: 1_000,
+  });
+
+  assert.deepEqual(controller.getActiveSnapshot(1_250), [
+    {
+      id: token.id,
+      label: "prepared-navigation",
+      scope: "navigation",
+      surface: "handoff",
+      createdAt: 1_000,
+      ageMs: 250,
+    },
+  ]);
+
+  controller.end(token);
+  assert.deepEqual(controller.getActiveSnapshot(2_000), []);
+});
+
+test("snapshot não expõe owner symbol do controller", () => {
+  const controller = new LoadingController();
+  controller.begin(
+    {
+      label: "session-bootstrap",
+      scope: "auth",
+      surface: "viewport",
+    },
+    10,
+  );
+
+  const [snapshot] = controller.getActiveSnapshot(20);
+  assert.equal("owner" in snapshot, false);
+});

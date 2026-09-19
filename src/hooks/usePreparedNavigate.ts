@@ -75,7 +75,14 @@ export function usePreparedNavigate() {
         endLoading(activeLoadingTokenRef.current);
       }
 
-      const loadingToken = beginLoading({ immediate: true });
+      const loadingToken = beginLoading({
+        immediate: true,
+        metadata: {
+          label: "prepared-navigation",
+          scope: "navigation",
+          surface: handoffKey ? "handoff" : "viewport",
+        },
+      });
       const abortController = new AbortController();
       activeLoadingTokenRef.current = loadingToken;
       activeAbortControllerRef.current = abortController;

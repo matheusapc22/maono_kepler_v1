@@ -15,7 +15,13 @@ import { LoadingOverlay } from "./LoadingOverlay";
 import {
   LoadingController,
   type LoadingToken,
+  type LoadingTokenMetadataInput,
 } from "./loading-controller";
+import {
+  DEFAULT_LOADING_STALE_MS,
+  LoadingStaleObserver,
+  type LoadingStaleDiagnostic,
+} from "./loading-diagnostics";
 import { LoadingHandoffController } from "./loading-handoff-controller";
 import {
   completeInitialBootLoader,
@@ -28,6 +34,7 @@ const DEFAULT_MIN_VISIBLE_MS = 250;
 type LoadingOperation<T> = () => Promise<T> | T;
 type BeginLoadingOptions = {
   immediate?: boolean;
+  metadata?: LoadingTokenMetadataInput;
 };
 
 type LoadingContextValue = {
@@ -47,13 +54,17 @@ type LoadingContextValue = {
   cancelLoadingHandoff: (key: string) => boolean;
   getLoadingHandoffCount: () => number;
   completeInitialBootLoading: () => boolean;
-  withLoading: <T>(operation: LoadingOperation<T>) => Promise<T>;
+  withLoading: <T>(
+    operation: LoadingOperation<T>,
+    options?: BeginLoadingOptions,
+  ) => Promise<T>;
 };
 
 type LoadingProviderProps = {
   children: ReactNode;
   showAfterMs?: number;
   minVisibleMs?: number;
+  staleAfterMs?: number;
 };
 
 const LoadingContext = createContext<LoadingContextValue | null>(null);
@@ -62,6 +73,7 @@ export function LoadingProvider({
   children,
   showAfterMs = DEFAULT_SHOW_AFTER_MS,
   minVisibleMs = DEFAULT_MIN_VISIBLE_MS,
+  staleAfterMs = DEFAULT_LOADING_STALE_MS,
 }: LoadingProviderProps) {
   const location = useLocation();
   const controllerRef = useRef<LoadingController | null>(null);
@@ -86,8 +98,47 @@ export function LoadingProvider({
   const shownAtRef = useRef(0);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const staleDiagnosticsRef = useRef<LoadingStaleDiagnostic[]>([]);
 
   useEffect(() => controller.subscribe(setActiveCount), [controller]);
+
+  useEffect(() => {
+    const observer = new LoadingStaleObserver(controller, {
+      staleAfterMs,
+      onStale(diagnostic) {
+        staleDiagnosticsRef.current = [
+          ...staleDiagnosticsRef.current.slice(-19),
+          diagnostic,
+        ];
+        console.warn("[Maono loading] token global stale", diagnostic);
+      },
+    });
+    observer.start();
+
+    return () => observer.stop();
+  }, [controller, staleAfterMs]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || typeof window === "undefined") {
+      return;
+    }
+
+    const currentWindow = window as any;
+    const bridge = {
+      activeCount: () => controller.activeCount,
+      handoffCount: () => handoffController.activeCount,
+      snapshot: () => controller.getActiveSnapshot(),
+      staleDiagnostics: () => [...staleDiagnosticsRef.current],
+    };
+
+    currentWindow.__MAONO_LOADING_DEBUG__ = bridge;
+
+    return () => {
+      if (currentWindow.__MAONO_LOADING_DEBUG__ === bridge) {
+        delete currentWindow.__MAONO_LOADING_DEBUG__;
+      }
+    };
+  }, [controller, handoffController]);
 
   useEffect(() => {
     const clearShowTimer = () => {
@@ -177,7 +228,7 @@ export function LoadingProvider({
         setIsVisible(true);
       }
 
-      return controller.begin();
+      return controller.begin(options?.metadata);
     },
     [controller],
   );
@@ -258,7 +309,20 @@ export function LoadingProvider({
   }, [initialBootActive]);
 
   const withLoading = useCallback(
-    <T,>(operation: LoadingOperation<T>) => controller.withLoading(operation),
+    <T,>(
+      operation: LoadingOperation<T>,
+      options?: BeginLoadingOptions,
+    ) => {
+      if (options?.immediate) {
+        shownAtRef.current = Date.now();
+        setIsVisible(true);
+      }
+
+      return controller.withLoading(
+        operation,
+        options?.metadata,
+      );
+    },
     [controller],
   );
 

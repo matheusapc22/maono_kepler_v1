@@ -225,7 +225,13 @@ const MapUrlLoader = connectStore(
     const [retryToken, setRetryToken] = useState(0);
     const [loadCycleComplete, setLoadCycleComplete] = useState(false);
 
-    useLoadingActivity(isMapLoading);
+    useLoadingActivity(isMapLoading, {
+    metadata: {
+      label: "map-hydration",
+      scope: "map",
+      surface: "handoff",
+    },
+  });
     useCompleteLoadingHandoff(
       `map:${location.pathname}`,
       loadCycleComplete || Boolean(error),

@@ -41,7 +41,8 @@
     "test:organization-storage": "node --test tests/organization-storage-invariants.test.mjs tests/organization-storage-wiring.test.mjs",
     "test:organization-lifecycle": "node --test tests/organization-lifecycle.test.mjs tests/organization-lifecycle-wiring.test.mjs",
     "test:organization-readiness": "node --test tests/organization-storage-readiness.test.mjs tests/organization-storage-readiness-wiring.test.mjs tests/organization-storage-recovery.test.mjs",
-    "test:loading": "node --experimental-strip-types --test tests/loading-controller.test.mjs tests/initial-boot-loader.test.mjs tests/universal-loader-contract.test.mjs tests/preloaded-navigation.test.mjs tests/preloaded-navigation-contract.test.mjs tests/map-loading-handoff.test.mjs tests/map-loading-contract.test.mjs tests/loading-handoff.test.mjs tests/residual-loading-contract.test.mjs tests/loading-final-acceptance.test.mjs"
+    "test:loading": "node --experimental-strip-types --test tests/loading-controller.test.mjs tests/loading-diagnostics.test.mjs tests/loading-diagnostics-privacy.test.mjs tests/loading-browser-contract.test.mjs tests/initial-boot-loader.test.mjs tests/universal-loader-contract.test.mjs tests/preloaded-navigation.test.mjs tests/preloaded-navigation-contract.test.mjs tests/map-loading-handoff.test.mjs tests/map-loading-contract.test.mjs tests/loading-handoff.test.mjs tests/residual-loading-contract.test.mjs tests/loading-final-acceptance.test.mjs",
+    "test:loading-browser": "playwright test tests/browser/loading-runtime.spec.ts --project=chromium"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",
@@ -114,7 +115,8 @@
     "tailwindcss": "^4.1.13",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.39.1",
-    "vite": "^7.1.2"
+    "vite": "^7.1.2",
+    "@playwright/test": "1.55.0"
   },
   "resolutions": {
     "@luma.gl/core": "8.5.21",
