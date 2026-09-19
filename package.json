@@ -39,11 +39,15 @@
     "test:foundation-gate": "npm run test:preview-safety && npm run test:projects && npm run test:map-load-observability && npm run test:save-observability && npm run test:loading",
     "test:macro-c-gate": "node scripts/macro-c-gate.mjs",
     "test:organization-storage": "node --test tests/organization-storage-invariants.test.mjs tests/organization-storage-wiring.test.mjs",
-    "test:organization-lifecycle": "node --test tests/organization-lifecycle.test.mjs tests/organization-lifecycle-wiring.test.mjs",
+    "test:organization-lifecycle": "node --test tests/organization-lifecycle.test.mjs tests/organization-lifecycle-wiring.test.mjs tests/organization-lifecycle-concurrency.test.mjs",
     "test:organization-readiness": "node --test tests/organization-storage-readiness.test.mjs tests/organization-storage-readiness-wiring.test.mjs tests/organization-storage-recovery.test.mjs",
     "test:organization-drift": "node --test tests/organization-storage-drift.test.mjs tests/organization-storage-drift-wiring.test.mjs tests/organization-storage-recovery-operator.test.mjs",
     "test:loading": "node --experimental-strip-types --test tests/loading-controller.test.mjs tests/loading-diagnostics.test.mjs tests/loading-diagnostics-privacy.test.mjs tests/loading-browser-contract.test.mjs tests/initial-boot-loader.test.mjs tests/universal-loader-contract.test.mjs tests/preloaded-navigation.test.mjs tests/preloaded-navigation-contract.test.mjs tests/map-loading-handoff.test.mjs tests/map-loading-contract.test.mjs tests/loading-handoff.test.mjs tests/residual-loading-contract.test.mjs tests/loading-final-acceptance.test.mjs",
-    "test:loading-browser": "playwright test tests/browser/loading-runtime.spec.ts --project=chromium"
+    "test:loading-browser": "playwright test tests/browser/loading-runtime.spec.ts --project=chromium",
+    "test:reliability-chaos": "node --test tests/organization-storage-chaos.test.mjs tests/dropbox-folder-safety.test.mjs tests/organization-lifecycle-concurrency.test.mjs",
+    "test:reliability-slo": "node --test tests/organization-storage-slo.test.mjs",
+    "test:reliability-browser": "playwright test --project=chromium",
+    "test:reliability": "npm run test:organization-storage && npm run test:organization-lifecycle && npm run test:organization-readiness && npm run test:organization-drift && npm run test:dropbox-resilience && npm run test:reliability-chaos && npm run test:reliability-slo && node --test tests/user-error-catalog.test.mjs tests/api-error-client.test.mjs tests/file-transfer-resilience.test.mjs tests/ticket-center.test.mjs"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

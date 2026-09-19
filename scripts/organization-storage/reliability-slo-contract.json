@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "version": "PRH-08.1",
+  "target": {
+    "environment": "production",
+    "databaseName": "maono_maps",
+    "databaseId": "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
+  },
+  "windowDays": 30,
+  "provisioning": { "objective": 0.999, "deadlineMs": 300000, "minSamples": 1000 },
+  "transientRecovery": { "objective": 0.99, "deadlineMs": 3600000, "minSamples": 100 },
+  "zeroTolerance": ["publicErrorLeaks", "duplicateProvisioning", "silentDataLoss", "untrackedIncidents", "manualRepairRequired"]
+}

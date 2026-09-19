@@ -10,7 +10,7 @@ O Worker deve ser implantado inicialmente com:
 
 - `MAONO_STORAGE_RECOVERY_ENABLED=false`
 - `MAONO_STORAGE_RECOVERY_DRY_RUN=true`
-- `MAONO_STORAGE_RECOVERY_KILL_SWITCH=false`
+- `MAONO_STORAGE_RECOVERY_KILL_SWITCH=true`
 - batch pequeno (10)
 - backoff de erro de 900 s
 - lease de 120 s
@@ -22,7 +22,7 @@ O cron pode existir com a feature desabilitada: nesse estado não há consulta d
 1. Validar bindings D1 e secrets Dropbox.
 2. Executar a suíte `test:organization-readiness`.
 3. Implantar o Worker ainda desabilitado.
-4. Habilitar apenas `MAONO_STORAGE_RECOVERY_ENABLED=true`, mantendo `DRY_RUN=true`.
+4. Pelo operador, habilitar `MAONO_STORAGE_RECOVERY_ENABLED=true` e retirar o kill switch, mantendo `DRY_RUN=true`.
 5. Observar uma ou mais execuções e conferir `checked/skipped/hasMore` e o mesmo `correlationId` nos audit logs.
 6. Confirmar que os candidatos reportados são esperados.
 7. Somente então definir `MAONO_STORAGE_RECOVERY_DRY_RUN=false`.
@@ -39,6 +39,18 @@ Definir `MAONO_STORAGE_RECOVERY_KILL_SWITCH=true`. O handler retorna antes do ac
 - `PENDING` expirado volta a ser candidato.
 - O modo automático usa ordem pelo `storage_checked_at` mais antigo, e falhas atualizam o timestamp; assim um item que falha repetidamente vai para o fim temporal da fila em vez de monopolizar o batch.
 - O endpoint manual continua suportando `afterId/cursor`; o Worker não depende de cursor persistente.
+
+### Endurecimento PRH-08
+
+O modo periódico e o backfill seletivo compartilham a proteção de paths. Raízes inválidas/legadas exigem decisão e nunca são normalizadas para outro caminho automaticamente. Itens elegíveis têm prioridade sobre bloqueados para evitar starvation.
+
+O campo existente `storage_error` pode conter um envelope JSON v1 sanitizado: código, incidente, tentativas e datas. Não contém mensagens do provider, tokens ou paths. O envelope é persistido já no claim, portanto interrupções também consomem o limite de 5 tentativas por incidente. Falhas transitórias respeitam 15 minutos de espera; erros permanentes, envelopes inválidos e limite esgotado ficam bloqueados para investigação. APIs de organizações expõem apenas o código seguro, não o envelope. `READY` limpa o envelope, e observações correlacionadas preservam a evidência em `audit_logs`.
+
+Antes de habilitar dry-run/apply, o operador verifica remotamente UUID/nome, histórico e schema 0009, e captura um bookmark do D1 Time Travel. A verificação não executa SQL de migration e não comprova a existência das pastas Dropbox. Dry-run não altera organizações nem cria pastas, mas **grava auditoria**.
+
+Após esta versão, não fazer downgrade isolado do Worker para um código que ignore o orçamento persistido de tentativas. Em regressão, primeiro desabilitar o Worker/acionar kill switch; preservar os dados e investigar. Reverter código não reverte escritas de banco ou Dropbox.
+
+O aceite completo e as instruções do SLO estão em [PRH-08](./product-reliability-prh08-acceptance.md).
 
 ## Rollback
 

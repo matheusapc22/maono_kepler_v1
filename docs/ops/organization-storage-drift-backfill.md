@@ -51,7 +51,7 @@ O Worker é publicado com:
 
 - recovery disabled;
 - dry-run true;
-- kill switch false.
+- kill switch true.
 
 Esse estágio não executa healing.
 
@@ -64,7 +64,7 @@ Confirmações:
 - `DEPLOY_STORAGE_RECOVERY_DRY_RUN`
 - `MIGRATION_0009_APPLIED_TO_TARGET_D1`
 
-O Worker passa a executar o scheduler, mas o reconciliador permanece sem claim, mutação ou chamada de criação ao provider.
+O Worker passa a executar o scheduler, mas o reconciliador permanece sem claim, alteração de organizações ou chamada de criação ao provider. Os eventos de auditoria são gravados no D1.
 
 Observar:
 
@@ -133,6 +133,12 @@ Payload:
 Somente organizações explicitamente aprovadas e com drift marcado como `repairable` entram em apply.
 
 O backfill reutiliza `ensureOrganizationStorage(..., { revalidateReady: true })`.
+
+### PRH-08: rearmar incidente após investigação
+
+Após corrigir a causa de um incidente bloqueado/esgotado, o operador pode acrescentar `"resetRetryBudget": true` ao mesmo payload com IDs explicitamente aprovados e confirmação `APPLY_APPROVED_STORAGE_DRIFT`. Sem esse campo booleano, o orçamento não é reiniciado. A operação registra a ligação entre incidente anterior e novo e conta como intervenção manual no SLO. Não libera paths protegidos nem substitui a revisão do inventário; não é utilizada pelo cron.
+
+A verificação física também valida `documents`; conflitos com arquivos e inventário incompleto impedem falso sucesso/apply. Raízes fora do inventário `/projects` são desconhecidas, não presumidamente ausentes.
 
 ### Nunca automático
 

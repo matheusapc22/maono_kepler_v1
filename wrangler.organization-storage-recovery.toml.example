@@ -1,15 +1,17 @@
 # EXEMPLO SEGURO — Worker dedicado ao recovery de storage das organizações.
 # A ativação em Production é um gate operacional separado da PRH-06.
-# Substitua o database_id antes do deploy e configure os secrets do Dropbox
-# com `wrangler secret put`.
+# Alvo exclusivo: Production maono_maps. Use o renderer para obter caminhos
+# relativos corretos se a configuração for gravada fora da raiz do repositório.
+# A configuração desabilitada permite configurar os secrets antes da ativação.
 
 name = "maono-organization-storage-recovery"
+account_id = "09d455fa1cf988b0d9db89987b73eaff"
 main = "workers/organization-storage-recovery.js"
 compatibility_date = "2026-05-21"
 
 [vars]
 MAONO_STORAGE_RECOVERY_ENABLED = "false"
-MAONO_STORAGE_RECOVERY_KILL_SWITCH = "false"
+MAONO_STORAGE_RECOVERY_KILL_SWITCH = "true"
 MAONO_STORAGE_RECOVERY_DRY_RUN = "true"
 MAONO_STORAGE_RECOVERY_BATCH_SIZE = "10"
 MAONO_STORAGE_RECOVERY_ERROR_BACKOFF_SECONDS = "900"
@@ -18,7 +20,7 @@ MAONO_STORAGE_RECOVERY_CLAIM_TTL_SECONDS = "120"
 [[d1_databases]]
 binding = "DB"
 database_name = "maono_maps"
-database_id = "COLE_AQUI_O_DATABASE_ID_DE_PRODUCAO"
+database_id = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
 migrations_dir = "migrations"
 
 [triggers]
