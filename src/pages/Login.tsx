@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -42,6 +42,7 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const directLoginControllerRef = useRef<AbortController | null>(null);
 
   const next = safeNextPath(searchParams.get("next"));
   const projectsLanding = isProjectsLandingPath(next);
@@ -54,6 +55,14 @@ const LoginPage: React.FC = () => {
 
   useLoadingActivity(session.loading && !initialBootActive);
   useInitialBootReadiness(bootCanCompleteOnLogin);
+
+  useEffect(
+    () => () => {
+      directLoginControllerRef.current?.abort();
+      directLoginControllerRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (
@@ -109,6 +118,9 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    directLoginControllerRef.current?.abort();
+    const directController = new AbortController();
+    directLoginControllerRef.current = directController;
     setSubmitting(true);
 
     try {
@@ -118,18 +130,32 @@ const LoginPage: React.FC = () => {
           to: next,
           replace: true,
           handoffKey: "login-projects",
-          beforeNavigate: () => session.login(email, password),
+          beforeNavigate: (signal) =>
+            session.login(email, password, { signal }),
         });
 
         if (!navigated) setSubmitting(false);
         return;
       }
 
-      await withLoading(() => session.login(email, password));
-      navigate(next, { replace: true });
+      await withLoading(() =>
+        session.login(email, password, {
+          signal: directController.signal,
+        }),
+      );
+
+      if (!directController.signal.aborted) {
+        navigate(next, { replace: true });
+      }
     } catch (loginFailure) {
-      setError(normalizeUserError(loginFailure).message);
-      setSubmitting(false);
+      if (!directController.signal.aborted) {
+        setError(normalizeUserError(loginFailure).message);
+        setSubmitting(false);
+      }
+    } finally {
+      if (directLoginControllerRef.current === directController) {
+        directLoginControllerRef.current = null;
+      }
     }
   }
 

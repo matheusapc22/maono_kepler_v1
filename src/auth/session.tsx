@@ -17,10 +17,12 @@ import {
   buildApiError,
   buildClientApiError,
   fetchWithNetworkGuard,
+  parseJsonResponse,
   parseResponseJson,
   requestJson,
 } from "../lib/api-transport";
 import { normalizeUserError } from "../lib/user-error-catalog";
+import { fetchAuthLoginWithDeadline } from "./login-resilience";
 import {
   classifySessionResponse,
   fetchSessionResponseWithRetry,
@@ -152,8 +154,12 @@ type SessionState = {
   organizationSwitchError: string | null;
   switchOrganization: (organizationId: MaonoId) => Promise<void>;
   clearOrganizationSwitchError: () => void;
-  refreshSession: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  refreshSession: (options?: { signal?: AbortSignal }) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    options?: { signal?: AbortSignal },
+  ) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -620,76 +626,90 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     return nextSession;
   }, []);
 
-  const refreshSession = useCallback(async () => {
-    const requestId = requestSequenceRef.current + 1;
-    requestSequenceRef.current = requestId;
-    requestControllerRef.current?.abort();
-    const controller = new AbortController();
-    requestControllerRef.current = controller;
-    setLoading(true);
+  const refreshSession = useCallback(
+    async (options: { signal?: AbortSignal } = {}) => {
+      const requestId = requestSequenceRef.current + 1;
+      requestSequenceRef.current = requestId;
+      requestControllerRef.current?.abort();
 
-    if (!authenticatedRef.current) {
-      setHealth("loading");
-    }
+      const controller = new AbortController();
+      requestControllerRef.current = controller;
 
-    try {
-      const { response } = await fetchSessionResponseWithRetry({
-        signal: controller.signal,
+      function handleExternalAbort() {
+        controller.abort();
+      }
+
+      options.signal?.addEventListener("abort", handleExternalAbort, {
+        once: true,
       });
+      setLoading(true);
 
-      if (requestId !== requestSequenceRef.current) {
-        return;
+      if (!authenticatedRef.current) {
+        setHealth("loading");
       }
 
-      const policy = classifySessionResponse(
-        response.status,
-        authenticatedRef.current,
-      );
+      try {
+        const { response } = await fetchSessionResponseWithRetry({
+          signal: controller.signal,
+        });
 
-      if (policy.disposition === "unauthenticated") {
-        applySession(EMPTY_SESSION);
-        setHealth("unauthenticated");
-        return;
-      }
-
-      if (policy.disposition === "preserve") {
-        setHealth(policy.health);
-
-        if (response.status === 403) {
-          console.warn(
-            "[Maono session] Sessão preservada após resposta 403; a ação não possui permissão.",
-          );
-        } else {
-          console.error(
-            `[Maono session] Sessão preservada após falha HTTP ${response.status}.`,
-          );
+        if (requestId !== requestSequenceRef.current) {
+          return;
         }
-        return;
-      }
 
-      const data = await readSuccessfulSessionJson(response);
-      const nextSession = applySession(data);
-      setHealth(nextSession.authenticated ? "healthy" : "unauthenticated");
-    } catch (requestFailure) {
-      if (isSessionRequestAbort(requestFailure)) {
-        return;
-      }
+        const policy = classifySessionResponse(
+          response.status,
+          authenticatedRef.current,
+        );
 
-      console.error(
-        "[Maono session] Infraestrutura indisponível ao atualizar sessão; estado conhecido preservado.",
-        requestFailure,
-      );
+        if (policy.disposition === "unauthenticated") {
+          applySession(EMPTY_SESSION);
+          setHealth("unauthenticated");
+          return;
+        }
 
-      if (requestId === requestSequenceRef.current) {
-        setHealth("degraded");
+        if (policy.disposition === "preserve") {
+          setHealth(policy.health);
+
+          if (response.status === 403) {
+            console.warn(
+              "[Maono session] Sessão preservada após resposta 403; a ação não possui permissão.",
+            );
+          } else {
+            console.error(
+              `[Maono session] Sessão preservada após falha HTTP ${response.status}.`,
+            );
+          }
+          return;
+        }
+
+        const data = await readSuccessfulSessionJson(response);
+        const nextSession = applySession(data);
+        setHealth(nextSession.authenticated ? "healthy" : "unauthenticated");
+      } catch (requestFailure) {
+        if (isSessionRequestAbort(requestFailure)) {
+          return;
+        }
+
+        console.error(
+          "[Maono session] Infraestrutura indisponível ao atualizar sessão; estado conhecido preservado.",
+          requestFailure,
+        );
+
+        if (requestId === requestSequenceRef.current) {
+          setHealth("degraded");
+        }
+      } finally {
+        options.signal?.removeEventListener("abort", handleExternalAbort);
+
+        if (requestId === requestSequenceRef.current) {
+          setLoading(false);
+          requestControllerRef.current = null;
+        }
       }
-    } finally {
-      if (requestId === requestSequenceRef.current) {
-        setLoading(false);
-        requestControllerRef.current = null;
-      }
-    }
-  }, [applySession]);
+    },
+    [applySession],
+  );
 
   const clearOrganizationSwitchError = useCallback(() => {
     setOrganizationSwitchError(null);
@@ -793,13 +813,31 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   );
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      await requestJson("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
+    async (
+      email: string,
+      password: string,
+      options: { signal?: AbortSignal } = {},
+    ) => {
+      const response = await fetchAuthLoginWithDeadline({
+        signal: options.signal,
+        init: {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        },
       });
 
-      await refreshSession();
+      await parseJsonResponse(response);
+
+      if (options.signal?.aborted) {
+        return;
+      }
+
+      await refreshSession({ signal: options.signal });
     },
     [refreshSession],
   );

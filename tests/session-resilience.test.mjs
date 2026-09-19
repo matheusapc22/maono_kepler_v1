@@ -281,7 +281,8 @@ test("PRH-02A elimina raw body e mensagens remotas de Auth e Projects", () => {
     );
   }
 
-  assert.match(sessionSource, /requestJson\("\/api\/auth\/login"/);
+  assert.match(sessionSource, /fetchAuthLoginWithDeadline\(\{/);
+  assert.match(sessionSource, /await parseJsonResponse\(response\)/);
   assert.match(sessionSource, /fetchWithNetworkGuard/);
   assert.match(sessionSource, /buildApiError/);
   assert.match(sessionSource, /normalizeUserError\(requestFailure\)\.message/);
@@ -333,4 +334,23 @@ test("login usa código canônico e mantém alias de deploy skew no catálogo", 
   assert.doesNotMatch(loginEndpointSource, /"INVALID_CREDENTIALS"/);
   assert.match(catalogSource, /AUTH_INVALID_CREDENTIALS/);
   assert.match(catalogSource, /INVALID_CREDENTIALS:\s*INVALID_CREDENTIALS_PRESENTATION/);
+});
+
+
+test("PRL-09 propaga cancelamento externo por toda a transação de login", () => {
+  assert.match(
+    sessionSource,
+    /refreshSession: \(options\?: \{ signal\?: AbortSignal \}\)/,
+  );
+  assert.match(sessionSource, /options\.signal\?\.addEventListener\("abort"/);
+  assert.match(sessionSource, /fetchAuthLoginWithDeadline\(\{/);
+  assert.match(sessionSource, /await refreshSession\(\{ signal: options\.signal \}\)/);
+  assert.match(loginSource, /beforeNavigate: \(signal\)/);
+  assert.match(loginSource, /session\.login\(email, password, \{ signal \}\)/);
+  assert.match(loginSource, /directLoginControllerRef\.current\?\.abort\(\)/);
+});
+
+test("PRL-09 mantém deadline fora do transport global", () => {
+  assert.doesNotMatch(transportSource, /AUTH_LOGIN_REQUEST_TIMEOUT_MS/);
+  assert.doesNotMatch(transportSource, /setTimeout\([\s\S]*fetchWithNetworkGuard/);
 });

@@ -39,6 +39,13 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
   // Compatibilidade temporária com deploys anteriores à PRH-02A.
   INVALID_CREDENTIALS: INVALID_CREDENTIALS_PRESENTATION,
 
+  AUTH_LOGIN_TIMEOUT: {
+    title: "Não foi possível entrar",
+    message: "A conexão demorou mais que o esperado. Tente entrar novamente.",
+    severity: "warning",
+    retryable: true,
+    action: "retry",
+  },
   AUTH_SESSION_REQUIRED: {
     title: "Sessão necessária",
     message: "Entre novamente para continuar.",
