@@ -19,12 +19,15 @@ const DEFAULT_SHOW_AFTER_MS = 120;
 const DEFAULT_MIN_VISIBLE_MS = 250;
 
 type LoadingOperation<T> = () => Promise<T> | T;
+type BeginLoadingOptions = {
+  immediate?: boolean;
+};
 
 type LoadingContextValue = {
   isLoading: boolean;
   isVisible: boolean;
   activeCount: number;
-  beginLoading: () => LoadingToken;
+  beginLoading: (options?: BeginLoadingOptions) => LoadingToken;
   endLoading: (token: LoadingToken) => void;
   withLoading: <T>(operation: LoadingOperation<T>) => Promise<T>;
 };
@@ -122,7 +125,17 @@ export function LoadingProvider({
     [controller],
   );
 
-  const beginLoading = useCallback(() => controller.begin(), [controller]);
+  const beginLoading = useCallback(
+    (options?: BeginLoadingOptions) => {
+      if (options?.immediate) {
+        shownAtRef.current = Date.now();
+        setIsVisible(true);
+      }
+
+      return controller.begin();
+    },
+    [controller],
+  );
   const endLoading = useCallback(
     (token: LoadingToken) => controller.end(token),
     [controller],

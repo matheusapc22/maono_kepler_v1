@@ -26,8 +26,9 @@ export default function MapManagementPage() {
   const { prepareNavigate } = usePreparedNavigate();
   const [error, setError] =
     useState<MapPanelApiError | null>(null);
+  const [preparing, setPreparing] = useState(true);
 
-  useLoadingActivity(loading);
+  useLoadingActivity(loading || preparing);
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -51,6 +52,8 @@ export default function MapManagementPage() {
       route: "kepler",
       to: () => destination,
       replace: true,
+      handoffKey: (resolvedDestination) =>
+        `map:${resolvedDestination}`,
       beforeNavigate: async (signal) => {
         const prepared = await prepareProjectMapDestination(
           projectSlug,
@@ -60,6 +63,7 @@ export default function MapManagementPage() {
       },
     }).catch((nextError: MapPanelApiError) => {
       setError(nextError);
+      setPreparing(false);
     });
   }, [authenticated, prepareNavigate, projectSlug]);
 

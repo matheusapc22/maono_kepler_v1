@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { LoadingOverlay } from "../../components/loading";
+import { useLoadingActivity } from "../../components/loading";
 import { usePreparedNavigate } from "../../hooks/usePreparedNavigate";
 import { useSession } from "../../hooks/useSession";
 import { normalizeUserError } from "../../lib/user-error-catalog";
@@ -11,24 +11,42 @@ const LoginPage: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!session.loading && session.authenticated && !submitting) {
+    if (
+      !session.loading &&
+      session.authenticated &&
+      !submitting &&
+      !redirecting
+    ) {
+      setRedirecting(true);
       void prepareNavigate({
         route: "projects",
         to: "/projects",
         replace: true,
+        handoffKey: "login-projects",
       }).catch(() => {
         window.location.assign("/projects");
       });
     }
   }, [
     prepareNavigate,
+    redirecting,
     session.authenticated,
     session.loading,
     submitting,
   ]);
+
+  const authenticatedRedirectPending =
+    !session.loading && session.authenticated;
+  const loginLoading =
+    session.loading ||
+    submitting ||
+    redirecting ||
+    authenticatedRedirectPending;
+  useLoadingActivity(loginLoading);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,6 +58,7 @@ const LoginPage: React.FC = () => {
         route: "projects",
         to: "/projects",
         replace: true,
+        handoffKey: "login-projects",
         beforeNavigate: () => session.login(email, password),
       });
 
@@ -52,15 +71,8 @@ const LoginPage: React.FC = () => {
     }
   }
 
-  if (session.loading && !submitting) {
-    return (
-      <LoadingOverlay
-        active
-        scope="viewport"
-        loaderSize="page"
-        accessibleLabel="Verificando sessão"
-      />
-    );
+  if (loginLoading) {
+    return null;
   }
 
   return (

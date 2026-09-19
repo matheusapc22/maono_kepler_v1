@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import PropTypes from "prop-types";
 import styled from "styled-components";
 import { format } from "d3-format";
-import { LoadingDialog } from "@kepler.gl/components";
 import { FormattedMessage } from "react-intl";
 import { normalizeUserError } from "../../../../lib/user-error-catalog";
 
@@ -112,10 +111,11 @@ const SampleMapGallery = ({
     <div className="sample-data-modal">
       {error ? (
         <StyledError>{normalizeUserError(error).message}</StyledError>
-      ) : isMapLoading ? (
-        <LoadingDialog size={64} />
       ) : (
-        <StyledSampleGallery className="sample-map-gallery">
+        <StyledSampleGallery
+          className="sample-map-gallery"
+          aria-busy={isMapLoading}
+        >
           {sampleMaps
             .filter((sp) => sp.visible)
             .map((sp) => (

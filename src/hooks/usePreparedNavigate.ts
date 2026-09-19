@@ -10,11 +10,16 @@ import {
   type RouteModuleKey,
 } from "../route-modules";
 import { PreparedNavigationIntentController } from "../navigation/prepared-navigation-controller";
+import {
+  completeLoadingHandoff,
+  primeLoadingHandoff,
+} from "../components/loading/loading-handoff";
 
 type PreparedNavigationOptions = {
   route: RouteModuleKey;
   to: string | (() => string);
   replace?: boolean;
+  handoffKey?: string | ((destination: string) => string);
   beforeNavigate?: (signal: AbortSignal) => Promise<void> | void;
 };
 
@@ -52,6 +57,7 @@ export function usePreparedNavigate() {
       route,
       to,
       replace = false,
+      handoffKey,
       beforeNavigate,
     }: PreparedNavigationOptions) => {
       const controller = controllerRef.current;
@@ -68,10 +74,13 @@ export function usePreparedNavigate() {
         endLoading(activeLoadingTokenRef.current);
       }
 
-      const loadingToken = beginLoading();
+      const loadingToken = beginLoading({ immediate: true });
       const abortController = new AbortController();
       activeLoadingTokenRef.current = loadingToken;
       activeAbortControllerRef.current = abortController;
+
+      let handedOff = false;
+      let resolvedHandoffKey: string | null = null;
 
       try {
         await Promise.all([
@@ -95,7 +104,42 @@ export function usePreparedNavigate() {
           throw new Error("Destino de navegação não resolvido.");
         }
 
-        navigate(destination, { replace });
+        if (handoffKey) {
+          resolvedHandoffKey =
+            typeof handoffKey === "function"
+              ? handoffKey(destination)
+              : handoffKey;
+
+          const previousToken = primeLoadingHandoff(
+            resolvedHandoffKey,
+            loadingToken,
+          );
+          if (
+            previousToken !== null &&
+            previousToken !== loadingToken
+          ) {
+            endLoading(previousToken);
+          }
+
+          activeLoadingTokenRef.current = null;
+          handedOff = true;
+        }
+
+        try {
+          navigate(destination, { replace });
+        } catch (navigationError) {
+          if (handedOff && resolvedHandoffKey) {
+            const token = completeLoadingHandoff(
+              resolvedHandoffKey,
+            );
+            if (token !== null) {
+              endLoading(token);
+            }
+            handedOff = false;
+          }
+          throw navigationError;
+        }
+
         return true;
       } catch (error) {
         if (abortController.signal.aborted) {
@@ -107,11 +151,13 @@ export function usePreparedNavigate() {
         if (activeAbortControllerRef.current === abortController) {
           activeAbortControllerRef.current = null;
         }
-        if (activeLoadingTokenRef.current === loadingToken) {
-          activeLoadingTokenRef.current = null;
-        }
+        if (!handedOff) {
+          if (activeLoadingTokenRef.current === loadingToken) {
+            activeLoadingTokenRef.current = null;
+          }
 
-        endLoading(loadingToken);
+          endLoading(loadingToken);
+        }
       }
     },
     [beginLoading, endLoading, navigate],

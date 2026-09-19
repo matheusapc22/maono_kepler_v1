@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { useLoading } from "./LoadingProvider";
 import type { LoadingToken } from "./loading-controller";
@@ -7,9 +7,9 @@ export function useLoadingActivity(active: boolean) {
   const { beginLoading, endLoading } = useLoading();
   const tokenRef = useRef<LoadingToken | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (active && tokenRef.current === null) {
-      tokenRef.current = beginLoading();
+      tokenRef.current = beginLoading({ immediate: true });
       return;
     }
 
@@ -19,7 +19,7 @@ export function useLoadingActivity(active: boolean) {
     }
   }, [active, beginLoading, endLoading]);
 
-  useEffect(
+  useLayoutEffect(
     () => () => {
       if (tokenRef.current !== null) {
         endLoading(tokenRef.current);

@@ -8,7 +8,10 @@ import React, {
 import { Link, useLocation, useParams } from "react-router";
 
 import { useSession } from "../../../auth/session";
-import { useLoadingActivity } from "../../../components/loading";
+import {
+  useCompleteLoadingHandoff,
+  useLoadingActivity,
+} from "../../../components/loading";
 import {
   fetchNewMapCreateContext,
   fetchProjectMapNavigation,
@@ -256,6 +259,13 @@ export function MapPanelProvider({ children }: { children: React.ReactNode }) {
   const mode = requestedMode(location.pathname);
   const organizationKey = activeOrganizationKey(activeOrganization, user);
   const isNewMap = location.pathname === "/maps/new/create";
+
+  useCompleteLoadingHandoff(
+    `map:${location.pathname}`,
+    state.status === "blocked" ||
+      state.status === "error" ||
+      (isNewMap && state.status === "ready"),
+  );
 
   useEffect(() => {
     const controller = new AbortController();

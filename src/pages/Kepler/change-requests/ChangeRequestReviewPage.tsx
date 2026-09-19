@@ -22,6 +22,7 @@ import {
 } from "@kepler.gl/actions";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import { Link, useParams } from "react-router";
+import { LoadingOverlay, UniversalLoader } from "../../../components/loading";
 
 import KeplerApp from "../index";
 import {
@@ -631,7 +632,8 @@ function ReviewWorkspaceOverlay({
   );
   const [review, setReview] = useState<ProjectChangeReview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"approve" | "reject" | "apply" | null>(null);
+  const busy = busyAction !== null;
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState<"before" | "after">("after");
@@ -724,7 +726,7 @@ function ReviewWorkspaceOverlay({
 
   async function approve() {
     if (!review?.permissions.canApprove || busy) return;
-    setBusy(true);
+    setBusyAction("approve");
     setError(null);
     try {
       const updated = await changeProjectChangeReviewState(projectSlug, changeRequestId, {
@@ -735,13 +737,13 @@ function ReviewWorkspaceOverlay({
     } catch (actionError) {
       setError(safeMessage(actionError));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function reject() {
     if (!rejectComment.trim() || busy) return;
-    setBusy(true);
+    setBusyAction("reject");
     setError(null);
     try {
       const updated = await changeProjectChangeReviewState(projectSlug, changeRequestId, {
@@ -755,13 +757,13 @@ function ReviewWorkspaceOverlay({
     } catch (actionError) {
       setError(safeMessage(actionError));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function apply() {
     if (!review?.permissions.canApply || busy) return;
-    setBusy(true);
+    setBusyAction("apply");
     setError(null);
     try {
       const result = await applyProjectChangeReview(projectSlug, changeRequestId);
@@ -781,7 +783,7 @@ function ReviewWorkspaceOverlay({
         // Mantém o erro principal; refresh é best-effort.
       }
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -805,6 +807,12 @@ function ReviewWorkspaceOverlay({
       />
 
       <aside className="maono-review-panel" aria-label="Review da solicitação">
+        <LoadingOverlay
+          active={loading}
+          scope="container"
+          loaderSize="compact"
+          accessibleLabel="Carregando revisão"
+        />
         <header className="maono-review-panel__header">
           <div>
             <small>Review workspace</small>
@@ -817,13 +825,6 @@ function ReviewWorkspaceOverlay({
             Voltar ao projeto
           </Link>
         </header>
-
-        {loading ? (
-          <div className="maono-review-panel__state" role="status">
-            <strong>Carregando revisão-base</strong>
-            <span>Validando operações e proposta…</span>
-          </div>
-        ) : null}
 
         {!loading && error ? (
           <div className="maono-review-panel__error" role="alert">
@@ -983,7 +984,13 @@ function ReviewWorkspaceOverlay({
                 disabled={!review.permissions.canApprove || busy}
                 onClick={() => void approve()}
               >
-                Aprovar
+                {busyAction === "approve" ? (
+                  <UniversalLoader
+                    size="inline"
+                    accessibleLabel="Aprovando solicitação"
+                  />
+                ) : null}
+                <span>Aprovar</span>
               </button>
               <button
                 type="button"
@@ -991,7 +998,13 @@ function ReviewWorkspaceOverlay({
                 disabled={!review.permissions.canApply || busy}
                 onClick={() => void apply()}
               >
-                {busy ? "Processando…" : "Aprovar e aplicar"}
+                {busyAction === "apply" ? (
+                  <UniversalLoader
+                    size="inline"
+                    accessibleLabel="Aplicando solicitação"
+                  />
+                ) : null}
+                <span>Aprovar e aplicar</span>
               </button>
             </footer>
           </div>
@@ -1030,7 +1043,13 @@ function ReviewWorkspaceOverlay({
                 disabled={busy || !rejectComment.trim()}
                 onClick={() => void reject()}
               >
-                Confirmar rejeição
+                {busyAction === "reject" ? (
+                  <UniversalLoader
+                    size="inline"
+                    accessibleLabel="Rejeitando solicitação"
+                  />
+                ) : null}
+                <span>Confirmar rejeição</span>
               </button>
             </div>
           </section>
