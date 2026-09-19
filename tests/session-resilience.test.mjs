@@ -281,7 +281,8 @@ test("PRH-02A elimina raw body e mensagens remotas de Auth e Projects", () => {
     );
   }
 
-  assert.match(sessionSource, /fetchAuthLoginWithDeadline\(\{/);\n  assert.match(sessionSource, /await parseJsonResponse\(response\)/);
+  assert.match(sessionSource, /fetchAuthLoginWithDeadline\(\{/);
+  assert.match(sessionSource, /await parseJsonResponse\(response\)/);
   assert.match(sessionSource, /fetchWithNetworkGuard/);
   assert.match(sessionSource, /buildApiError/);
   assert.match(sessionSource, /normalizeUserError\(requestFailure\)\.message/);
