@@ -5,37 +5,27 @@ import { useNavigate, useSearchParams } from "react-router";
 import LoginPageBackground from "../assets/images/login-background-maono.webp";
 import Logo from "../assets/images/Logo_Maono.png";
 import { useSession } from "../auth/session";
+import {
+  useInitialBootReadiness,
+  useLoading,
+  useLoadingActivity,
+} from "../components/loading";
+import { usePreparedNavigate } from "../hooks/usePreparedNavigate";
 import { normalizeUserError } from "../lib/user-error-catalog";
 import "./login.css";
 
 const LOGIN_BACKGROUND_URL =
   "https://pub-56c14c350e6c453c98cb6275d38db861.r2.dev/Piramides_Maono.png";
-const ASSET_PRELOAD_TIMEOUT_MS = 4_000;
-
-function preloadImage(src: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof window === "undefined") {
-      resolve();
-      return;
-    }
-
-    const image = new Image();
-    image.onload = () => resolve();
-    image.onerror = () => resolve();
-    image.src = src;
-
-    if (image.complete) {
-      resolve();
-    }
-  });
-}
 
 function safeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
     return "/projects";
   }
-
   return value;
+}
+
+function isProjectsLandingPath(value: string) {
+  return value === "/projects" || value.startsWith("/projects?");
 }
 
 function formField(form: HTMLFormElement, name: string) {
@@ -43,48 +33,67 @@ function formField(form: HTMLFormElement, name: string) {
 }
 
 const LoginPage: React.FC = () => {
-  const { authenticated, loading, login } = useSession();
+  const session = useSession();
+  const { initialBootActive, withLoading } = useLoading();
+  const { prepareNavigate } = usePreparedNavigate();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [assetsReady, setAssetsReady] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   const next = safeNextPath(searchParams.get("next"));
+  const projectsLanding = isProjectsLandingPath(next);
+  const unauthenticatedReady = !session.loading && !session.authenticated;
+  const authenticatedRedirectPending =
+    !session.loading && session.authenticated;
+  const bootCanCompleteOnLogin =
+    unauthenticatedReady ||
+    (authenticatedRedirectPending && !projectsLanding);
+
+  useLoadingActivity(session.loading && !initialBootActive);
+  useInitialBootReadiness(bootCanCompleteOnLogin);
 
   useEffect(() => {
-    if (!loading && authenticated) {
-      navigate(next, { replace: true });
+    if (
+      session.loading ||
+      !session.authenticated ||
+      submitting ||
+      redirecting
+    ) {
+      return;
     }
-  }, [authenticated, loading, navigate, next]);
 
-  useEffect(() => {
-    let active = true;
-    let timeoutId = 0;
+    setRedirecting(true);
 
-    const timeout = new Promise<void>((resolve) => {
-      timeoutId = window.setTimeout(resolve, ASSET_PRELOAD_TIMEOUT_MS);
-    });
+    if (projectsLanding) {
+      void prepareNavigate({
+        route: "projects",
+        to: next,
+        replace: true,
+        handoffKey: "login-projects",
+      })
+        .then((navigated) => {
+          if (!navigated) setRedirecting(false);
+        })
+        .catch(() => {
+          window.location.assign(next);
+        });
+      return;
+    }
 
-    Promise.race([
-      Promise.all([
-        preloadImage(Logo),
-        preloadImage(LOGIN_BACKGROUND_URL),
-        preloadImage(LoginPageBackground),
-      ]).then(() => undefined),
-      timeout,
-    ]).finally(() => {
-      if (active) {
-        setAssetsReady(true);
-      }
-    });
-
-    return () => {
-      active = false;
-      window.clearTimeout(timeoutId);
-    };
-  }, []);
+    navigate(next, { replace: true });
+  }, [
+    navigate,
+    next,
+    prepareNavigate,
+    projectsLanding,
+    redirecting,
+    session.authenticated,
+    session.loading,
+    submitting,
+  ]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,65 +112,47 @@ const LoginPage: React.FC = () => {
     setSubmitting(true);
 
     try {
-      await login(email, password);
+      if (projectsLanding) {
+        const navigated = await prepareNavigate({
+          route: "projects",
+          to: next,
+          replace: true,
+          handoffKey: "login-projects",
+          beforeNavigate: () => session.login(email, password),
+        });
+
+        if (!navigated) setSubmitting(false);
+        return;
+      }
+
+      await withLoading(() => session.login(email, password));
       navigate(next, { replace: true });
     } catch (loginFailure) {
       setError(normalizeUserError(loginFailure).message);
-    } finally {
       setSubmitting(false);
     }
   }
 
   const pageStyle = {
     "--maono-login-background": `url("${LOGIN_BACKGROUND_URL}")`,
-    // O asset externo é importado pelo Vite para que o build gere e resolva
-    // a URL final, evitando depender de uma rota absoluta do diretório public.
     background: `#050505 url("${LoginPageBackground}") center / cover no-repeat`,
   } as CSSProperties;
-
-  if (!assetsReady) {
-    return (
-      <main
-        className="maono-login-page maono-login-page__loading"
-        style={pageStyle}
-        aria-busy="true"
-      >
-        <div className="maono-login-page__spinner" aria-hidden="true" />
-        <p role="status">Carregando experiência Maõno...</p>
-      </main>
-    );
-  }
 
   return (
     <main className="maono-login-page" style={pageStyle}>
       <section className="maono-login-page__card">
         <div className="maono-login-page__content maono-login-page__content--floating">
           <div className="maono-login-page__brand">
-            <img
-              src={Logo}
-              alt="Maõno"
-              className="maono-login-page__logo"
-            />
-
+            <img src={Logo} alt="Maõno" className="maono-login-page__logo" />
             <h1>Faça seu login</h1>
-
             <p className="maono-login-page__intro">
-              Entre para acessar seus projetos, mapas e permissões da
-              plataforma.
+              Entre para acessar seus projetos, mapas e permissões da plataforma.
             </p>
           </div>
 
-          <form
-            onSubmit={handleSubmit}
-            className="maono-login-page__form"
-            autoComplete="on"
-          >
-            <label
-              className="maono-login-page__field"
-              htmlFor="maono-login-email"
-            >
+          <form onSubmit={handleSubmit} className="maono-login-page__form" autoComplete="on">
+            <label className="maono-login-page__field" htmlFor="maono-login-email">
               <span className="maono-login-page__field-label">e-mail</span>
-
               <input
                 id="maono-login-email"
                 name="email"
@@ -175,12 +166,8 @@ const LoginPage: React.FC = () => {
               />
             </label>
 
-            <label
-              className="maono-login-page__field"
-              htmlFor="maono-login-password"
-            >
+            <label className="maono-login-page__field" htmlFor="maono-login-password">
               <span className="maono-login-page__field-label">senha</span>
-
               <span className="maono-login-page__password-control">
                 <input
                   id="maono-login-password"
@@ -190,17 +177,12 @@ const LoginPage: React.FC = () => {
                   autoComplete="current-password"
                   required
                 />
-
                 <button
                   type="button"
                   className="maono-login-page__password-toggle"
-                  aria-label={
-                    showPassword ? "Ocultar senha" : "Mostrar senha"
-                  }
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                   aria-pressed={showPassword}
-                  onClick={() =>
-                    setShowPassword((current) => !current)
-                  }
+                  onClick={() => setShowPassword((current) => !current)}
                 >
                   {showPassword ? "ocultar" : "ver"}
                 </button>
@@ -208,33 +190,25 @@ const LoginPage: React.FC = () => {
             </label>
 
             <div className="maono-login-page__link-row">
-              <button
-                type="button"
-                className="maono-login-page__link-button"
-              >
+              <button type="button" className="maono-login-page__link-button">
                 esqueci minha senha
               </button>
             </div>
 
             {error ? (
-              <div className="maono-login-page__error" role="alert">
-                {error}
-              </div>
+              <div className="maono-login-page__error" role="alert">{error}</div>
             ) : null}
 
             <button
               className="maono-login-page__submit"
               type="submit"
-              disabled={submitting}
+              disabled={submitting || redirecting}
             >
-              {submitting ? "Entrando..." : "Entrar"}
+              Entrar
             </button>
 
             <div className="maono-login-page__link-center">
-              <button
-                type="button"
-                className="maono-login-page__link-button"
-              >
+              <button type="button" className="maono-login-page__link-button">
                 ainda não tenho uma conta
               </button>
             </div>

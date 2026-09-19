@@ -23,7 +23,7 @@ const [
   sampleViewer,
   routes,
 ] = await Promise.all([
-  readFile(new URL("src/pages/Login/index.tsx", ROOT), "utf8"),
+  readFile(new URL("src/pages/Login.tsx", ROOT), "utf8"),
   readFile(new URL("src/pages/Projects.tsx", ROOT), "utf8"),
   readFile(new URL("src/hooks/usePreparedNavigate.ts", ROOT), "utf8"),
   readFile(
@@ -92,9 +92,12 @@ test("Login transfere o mesmo loading até Projects concluir a primeira carga", 
   assert.match(login, /authenticatedRedirectPending/);
   assert.match(
     login,
-    /useLoadingActivity\(loginLoading && !initialBootActive\)/,
+    /useLoadingActivity\(session\.loading && !initialBootActive\)/,
   );
-  assert.match(login, /if \(loginLoading\) \{[\s\S]*return null/);
+  assert.match(
+    login,
+    /useInitialBootReadiness\(bootCanCompleteOnLogin\)/,
+  );
   assert.doesNotMatch(login, /LoadingOverlay/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
 

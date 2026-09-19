@@ -15,7 +15,7 @@ const documentsSource = await readFile(
   "utf8",
 );
 const loginSource = await readFile(
-  new URL("../src/pages/Login/index.tsx", import.meta.url),
+  new URL("../src/pages/Login.tsx", import.meta.url),
   "utf8",
 );
 const ticketNoticeSource = await readFile(
@@ -102,8 +102,8 @@ test("Documentos normaliza erros sem expor diagnósticos técnicos", () => {
 
 
 test("PRH-03 normaliza Login e superfícies Admin/Ops", () => {
-  assert.match(loginSource, /normalizeUserError\(err\)\.message/);
-  assert.doesNotMatch(loginSource, /err\.message/);
+  assert.match(loginSource, /normalizeUserError\([^)]*\)\.message/);
+  assert.doesNotMatch(loginSource, /\b(?:err|error|loginFailure)\.message\b/);
 
   for (const source of [adminFilesSource, adminUsersSource]) {
     assert.match(source, /normalizeUserError/);

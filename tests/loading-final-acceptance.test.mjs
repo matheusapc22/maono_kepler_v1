@@ -5,24 +5,17 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const ROOT = new URL("../", import.meta.url);
-
 async function source(filePath) {
   return readFile(new URL(filePath, ROOT), "utf8");
 }
-
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
-
   for (const entry of entries) {
     const next = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await walk(next)));
-    } else {
-      files.push(next);
-    }
+    if (entry.isDirectory()) files.push(...(await walk(next)));
+    else files.push(next);
   }
-
   return files;
 }
 
@@ -30,7 +23,9 @@ const [
   boot,
   main,
   provider,
+  bootRuntime,
   login,
+  loginShim,
   projects,
   sampleViewer,
   routes,
@@ -38,69 +33,52 @@ const [
   source("index.html"),
   source("src/main.tsx"),
   source("src/components/loading/LoadingProvider.tsx"),
+  source("src/components/loading/initial-boot-loader.ts"),
+  source("src/pages/Login.tsx"),
   source("src/pages/Login/index.tsx"),
   source("src/pages/Projects.tsx"),
   source("src/pages/Kepler/components/load-data-modal/sample-data-viewer.tsx"),
   source("src/Routes.tsx"),
 ]);
 
-test("cold load de /login mantém um único DOM loader até readiness", () => {
-  assert.match(
-    boot,
-    /<div id="root"><\/div>\s*<main[\s\S]*id="app-boot-fallback"/,
-  );
-  assert.doesNotMatch(
-    boot,
-    /<div id="root">\s*<main[\s\S]*id="app-boot-fallback"/,
-  );
+test("cold load de /login usa componente canônico e libera boot por readiness", () => {
+  assert.match(boot, /<div id="root"><\/div>\s*<main[\s\S]*id="app-boot-fallback"/);
   assert.match(boot, /data-loading-owner="initial-boot"/);
-
   assert.match(provider, /initialBootActive/);
-  assert.match(
-    provider,
-    /active=\{isVisible && !initialBootActive\}/,
-  );
+  assert.match(provider, /active=\{isVisible && !initialBootActive\}/);
   assert.match(provider, /completeInitialBootLoading/);
-  assert.match(provider, /controller\.activeCount > 0/);
-
-  assert.match(login, /useInitialBootReadiness\(!loginLoading\)/);
-  assert.match(
-    login,
-    /useLoadingActivity\(loginLoading && !initialBootActive\)/,
-  );
-  assert.match(login, /if \(loginLoading\) \{[\s\S]*return null/);
-  assert.doesNotMatch(login, /LoadingOverlay/);
-
+  assert.doesNotMatch(provider, /controller\.activeCount > 0[\s\S]*return false/);
+  assert.match(routes, /import LoginPage from "\.\/pages\/Login\.tsx"/);
   assert.match(routes, /<Route path="\/login" element=\{<LoginPage \/>\} \/>/);
-  assert.doesNotMatch(routes, /lazy\(routeModules\.login\)/);
+  assert.match(loginShim, /export \{ default \} from "\.\.\/Login\.tsx"/);
+  assert.match(login, /useInitialBootReadiness\(bootCanCompleteOnLogin\)/);
+  assert.match(login, /useLoadingActivity\(session\.loading && !initialBootActive\)/);
+  assert.doesNotMatch(login, /maono-login-page__loading/);
+  assert.doesNotMatch(login, /maono-login-page__spinner/);
+  assert.doesNotMatch(login, /Carregando experiência Maõno/);
 });
 
-test("runtime só remove o boot imediatamente fora de /login", () => {
+test("runtime troca watchdog do bundle por watchdog de readiness", () => {
+  assert.match(bootRuntime, /INITIAL_BOOT_RUNTIME_TIMEOUT_MS = 35_000/);
+  assert.match(bootRuntime, /__MAONO_BOOT_TIMEOUT__/);
+  assert.match(bootRuntime, /__MAONO_BOOT_READINESS_TIMEOUT__/);
+  assert.match(bootRuntime, /__MAONO_SHOW_BOOT_FAILURE__/);
   assert.match(main, /acknowledgeInitialBootRuntime\(\)/);
-  assert.match(main, /window\.location\.pathname/);
-  assert.match(main, /completeInitialBootLoader\(\)/);
 });
 
-test("Login autenticado mantém o mesmo boot até Projects readiness", () => {
+test("Login autenticado preserva handoff até Projects readiness", () => {
   assert.match(login, /handoffKey: "login-projects"/);
+  assert.match(login, /route: "projects"/);
   assert.match(projects, /useCompleteLoadingHandoff/);
   assert.match(projects, /loginProjectsReady/);
-  assert.match(
-    projects,
-    /useInitialBootReadiness\([\s\S]*loginProjectsReady/,
-  );
+  assert.match(projects, /useInitialBootReadiness\([\s\S]*loginProjectsReady/);
 });
 
 test("loaders legados removidos não podem voltar", async () => {
-  await assert.rejects(
-    access(new URL("src/components/Spinner.tsx", ROOT)),
-  );
-
+  await assert.rejects(access(new URL("src/components/Spinner.tsx", ROOT)));
   assert.doesNotMatch(sampleViewer, /LoadingDialog/);
-
   const srcDirectory = fileURLToPath(new URL("src/", ROOT));
   const files = await walk(srcDirectory);
-
   const forbidden = [
     /components\/Spinner/,
     /<Spinner\b/,
@@ -114,17 +92,11 @@ test("loaders legados removidos não podem voltar", async () => {
     /Trocando organização e atualizando permissões…/,
     /Validando acesso e atualizando projetos…/,
   ];
-
   for (const filePath of files) {
     if (!/\.(?:ts|tsx|css)$/.test(filePath)) continue;
     const content = await readFile(filePath, "utf8");
-
     for (const pattern of forbidden) {
-      assert.doesNotMatch(
-        content,
-        pattern,
-        `legado ${pattern} encontrado em ${filePath}`,
-      );
+      assert.doesNotMatch(content, pattern, `legado ${pattern} encontrado em ${filePath}`);
     }
   }
 });
