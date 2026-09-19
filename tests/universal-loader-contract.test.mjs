@@ -88,7 +88,7 @@ test("fallback genérico de rota usa somente o loader universal", () => {
 });
 
 test("rota /login não possui Suspense ou loader alternativo", () => {
-  assert.match(routes, /import LoginPage from "\.\/pages\/Login"/);
+  assert.match(routes, /import LoginPage from "\.\/pages\/Login\.tsx"/);
   assert.match(
     routes,
     /<Route path="\/login" element=\{<LoginPage \/>\} \/>/,

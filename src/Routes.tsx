@@ -5,7 +5,7 @@ import { Navigate, Routes, Route, useLocation, useParams } from "react-router";
 import { normalizeRole } from "./access-control/roles";
 import { useSession } from "./auth/session";
 import { LoadingOverlay } from "./components/loading";
-import LoginPage from "./pages/Login";
+import LoginPage from "./pages/Login.tsx";
 import { routeModules } from "./route-modules";
 import {
   AdminPageSkeleton,

@@ -83,7 +83,6 @@ export function LoadingProvider({
   const [initialBootActive, setInitialBootActive] = useState(() =>
     hasInitialBootLoader(),
   );
-  const bootCompletionRequestedRef = useRef(false);
   const shownAtRef = useRef(0);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -252,32 +251,11 @@ export function LoadingProvider({
       return true;
     }
 
-    if (controller.activeCount > 0) {
-      bootCompletionRequestedRef.current = true;
-      return false;
-    }
-
-    bootCompletionRequestedRef.current = false;
     setIsVisible(false);
     const removed = completeInitialBootLoader();
     setInitialBootActive(false);
     return removed;
-  }, [controller, initialBootActive]);
-
-  useLayoutEffect(() => {
-    if (
-      initialBootActive &&
-      bootCompletionRequestedRef.current &&
-      controller.activeCount === 0
-    ) {
-      completeInitialBootLoading();
-    }
-  }, [
-    activeCount,
-    completeInitialBootLoading,
-    controller,
-    initialBootActive,
-  ]);
+  }, [initialBootActive]);
 
   const withLoading = useCallback(
     <T,>(operation: LoadingOperation<T>) => controller.withLoading(operation),

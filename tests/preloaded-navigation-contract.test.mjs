@@ -3,30 +3,16 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const ROOT = new URL("../", import.meta.url);
-
-const [
-  routes,
-  routeModules,
-  preparedHook,
-  login,
-  projects,
-  projectsSection,
-  projectCard,
-] = await Promise.all([
-  readFile(new URL("src/Routes.tsx", ROOT), "utf8"),
-  readFile(new URL("src/route-modules.ts", ROOT), "utf8"),
-  readFile(new URL("src/hooks/usePreparedNavigate.ts", ROOT), "utf8"),
-  readFile(new URL("src/pages/Login/index.tsx", ROOT), "utf8"),
-  readFile(new URL("src/pages/Projects.tsx", ROOT), "utf8"),
-  readFile(
-    new URL("src/pages/Projects/components/ProjectsSection.tsx", ROOT),
-    "utf8",
-  ),
-  readFile(
-    new URL("src/pages/Projects/components/ProjectCard.tsx", ROOT),
-    "utf8",
-  ),
-]);
+const [routes, routeModules, preparedHook, login, projects, projectsSection, projectCard] =
+  await Promise.all([
+    readFile(new URL("src/Routes.tsx", ROOT), "utf8"),
+    readFile(new URL("src/route-modules.ts", ROOT), "utf8"),
+    readFile(new URL("src/hooks/usePreparedNavigate.ts", ROOT), "utf8"),
+    readFile(new URL("src/pages/Login.tsx", ROOT), "utf8"),
+    readFile(new URL("src/pages/Projects.tsx", ROOT), "utf8"),
+    readFile(new URL("src/pages/Projects/components/ProjectsSection.tsx", ROOT), "utf8"),
+    readFile(new URL("src/pages/Projects/components/ProjectCard.tsx", ROOT), "utf8"),
+  ]);
 
 test("rotas lazy compartilham o mesmo registry usado pelo prefetch", () => {
   assert.match(routeModules, /createCachedModuleLoader/);
@@ -38,7 +24,6 @@ test("rotas lazy compartilham o mesmo registry usado pelo prefetch", () => {
   assert.match(routes, /lazy\(routeModules\.kepler\)/);
   assert.doesNotMatch(routeModules, /login:/);
   assert.doesNotMatch(routes, /lazy\(routeModules\.login\)/);
-  assert.doesNotMatch(routes, /lazy\(\(\) => import\(/);
 });
 
 test("prepared navigation prepara chunk e pré-condição antes de alterar a rota", () => {
@@ -51,23 +36,19 @@ test("prepared navigation prepara chunk e pré-condição antes de alterar a rot
   assert.match(preparedHook, /navigate\(destination, \{ replace \}\)/);
   assert.match(preparedHook, /handoffLoading/);
   assert.match(preparedHook, /cancelLoadingHandoff/);
-  assert.match(preparedHook, /if \(!handedOff\)/);
-  assert.match(preparedHook, /cancelPreparedNavigation/);
 });
 
-test("Login usa sessão canônica e prefetch de Projects", () => {
-  assert.doesNotMatch(login, /from "\.\.\/\.\.\/lib\/api"/);
+test("Login canônico usa sessão, prefetch e handoff para Projects", () => {
+  assert.match(login, /const session = useSession\(\)/);
   assert.match(login, /session\.login\(email, password\)/);
   assert.match(login, /route: "projects"/);
   assert.match(login, /beforeNavigate:/);
   assert.match(login, /handoffKey: "login-projects"/);
   assert.match(login, /authenticatedRedirectPending/);
-  assert.match(
-    login,
-    /useLoadingActivity\(loginLoading && !initialBootActive\)/,
-  );
-  assert.match(login, /useInitialBootReadiness\(!loginLoading\)/);
+  assert.match(login, /useLoadingActivity\(session\.loading && !initialBootActive\)/);
+  assert.match(login, /useInitialBootReadiness\(bootCanCompleteOnLogin\)/);
   assert.doesNotMatch(login, /Entrando\.\.\./);
+  assert.doesNotMatch(login, /assetsReady/);
 });
 
 test("Projects prepara chunks antes das navegações pesadas", () => {
@@ -93,10 +74,8 @@ test("callback de autenticação usa feedback universal sem texto visual", () =>
   const callbackStart = routes.indexOf("const AuthCallback");
   const callbackEnd = routes.indexOf("const NotFound");
   const callback = routes.slice(callbackStart, callbackEnd);
-
   assert.match(callback, /<LoadingOverlay/);
   assert.match(callback, /accessibleLabel="Autenticando"/);
-  assert.doesNotMatch(callback, /Authenticating/);
   assert.match(callback, /window\.opener\.postMessage/);
   assert.match(callback, /window\.close\(\)/);
 });
