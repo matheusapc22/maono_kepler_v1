@@ -42,6 +42,10 @@ const urls = {
     "../src/pages/Kepler/components/maono-save-button.tsx",
     import.meta.url,
   ),
+  saveResilience: new URL(
+    "../src/pages/Kepler/save-operation-resilience.ts",
+    import.meta.url,
+  ),
   job: new URL(
     "../src/pages/Kepler/thumbnail/background-thumbnail-job.ts",
     import.meta.url,
@@ -67,6 +71,7 @@ const [
   previewHelper,
   list,
   saveButton,
+  saveResilience,
   job,
   provider,
   reconcile,
@@ -81,6 +86,7 @@ const [
   readFile(urls.previewHelper, "utf8"),
   readFile(urls.list, "utf8"),
   readFile(urls.saveButton, "utf8"),
+  readFile(urls.saveResilience, "utf8"),
   readFile(urls.job, "utf8"),
   readFile(urls.provider, "utf8"),
   readFile(urls.reconcile, "utf8"),
@@ -321,13 +327,14 @@ test("rota de thumbnail aceita status separado sem conflito de Pages Functions",
   assert.match(status, /"project\.view"/);
 });
 
-test("frontend confirma JSON antes de enfileirar captura", () => {
+test("frontend confirma resposta persistida antes de enfileirar captura", () => {
   const saveFlow = saveButton.match(
-    /async function handleExistingProjectSave\(\)[\s\S]*?\n  \}/,
+    /async function executeExistingProjectSnapshot\([\s\S]*?\n  \}/,
   )?.[0];
 
   assert.ok(saveFlow);
-  assert.match(saveFlow, /await fetch\(/);
+  assert.match(saveResilience, /await runWithSaveStallNotice\(/);
+  assert.match(saveResilience, /fetchImpl\(/);
   assert.match(saveFlow, /if \(!response\.ok/);
   assert.match(saveFlow, /enqueuePreview\(/);
   assert.ok(

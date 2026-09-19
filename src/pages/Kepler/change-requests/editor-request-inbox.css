@@ -15,3 +15,5 @@
 .maono-editor-inbox__list a { flex-shrink: 0; }
 .maono-editor-inbox__pagination { margin-top: 24px; }
 @media (max-width: 640px) { .maono-editor-inbox__list li { align-items: flex-start; flex-direction: column; } }
+
+.maono-editor-inbox__results { position: relative; min-height: 140px; }

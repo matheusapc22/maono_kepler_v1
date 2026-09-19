@@ -22,6 +22,10 @@ const saveButtonUrl = new URL(
   "../src/pages/Kepler/components/maono-save-button.tsx",
   import.meta.url,
 );
+const saveResilienceUrl = new URL(
+  "../src/pages/Kepler/save-operation-resilience.ts",
+  import.meta.url,
+);
 const createPanelUrl = new URL(
   "../src/pages/Kepler/components/project-create-panel.tsx",
   import.meta.url,
@@ -42,6 +46,7 @@ const [
   projectsIndex,
   creationService,
   saveButton,
+  saveResilience,
   createPanel,
   createFlow,
   createTransport,
@@ -52,6 +57,7 @@ const [
   readFile(projectsIndexUrl, "utf8"),
   readFile(creationServiceUrl, "utf8"),
   readFile(saveButtonUrl, "utf8"),
+  readFile(saveResilienceUrl, "utf8"),
   readFile(createPanelUrl, "utf8"),
   readFile(createFlowUrl, "utf8"),
   readFile(createTransportUrl, "utf8"),
@@ -206,10 +212,10 @@ test("mapa existente mantém PUT de config com optimistic concurrency", () => {
     /projectSlug\s*&&\s*context\?\.capabilities\?\.saveMap/,
   );
   assert.match(
-    saveButton,
-    /`\/api\/projects\/\$\{encodeURIComponent\(projectSlug\)\}\/config`/,
+    saveResilience,
+    /`\/api\/projects\/\$\{encodeURIComponent\(snapshot\.projectSlug\)\}\/config`/,
   );
-  assert.match(saveButton, /method:\s*"PUT"/);
+  assert.match(saveResilience, /method:\s*"PUT"/);
   assert.match(saveButton, /handleExistingProjectSave/);
   assert.match(saveButton, /expectedConfigRevision/);
   assert.match(saveButton, /context\?\.version/);

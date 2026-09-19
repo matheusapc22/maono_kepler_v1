@@ -40,7 +40,6 @@ test("plataforma usa uma única referência dinâmica de viewport", () => {
     ".maono-login-page",
     ".mm-projects-page",
     ".mm-projects-layout",
-    ".mm-loading-screen",
     ".admin-page",
     ".maono-admin-page",
     ".maono-map-gate",
@@ -53,14 +52,24 @@ test("plataforma usa uma única referência dinâmica de viewport", () => {
   assert.doesNotMatch(platformLayout, /transform:\s*scale\(/i);
 });
 
-test("boot inicial usa a mesma estratégia 100vh com upgrade para 100dvh", () => {
+test("boot inicial usa viewport dinâmico e a identidade Universal Loader", () => {
   assert.match(boot, /--mm-boot-viewport-height:\s*100vh/);
   assert.match(boot, /@supports \(height: 100dvh\)/);
   assert.match(boot, /--mm-boot-viewport-height:\s*100dvh/);
   assert.match(
     boot,
-    /\.mm-boot-screen\s*\{[\s\S]*min-height:\s*var\(--mm-boot-viewport-height\)/,
+    /\.mm-loading-overlay--viewport\s*\{[\s\S]*position:\s*fixed[\s\S]*inset:\s*0/,
   );
+  assert.match(
+    boot,
+    /\.mm-universal-loader\s*\{[\s\S]*width:\s*var\(--maono-loader-size\)/,
+  );
+  assert.match(
+    boot,
+    /\.mm-universal-loader__ring\s*\{[\s\S]*conic-gradient/,
+  );
+  assert.doesNotMatch(boot, /\.mm-boot-loader/);
+  assert.doesNotMatch(boot, /\.mm-boot-screen/);
 });
 
 test("painel é overlay opaco e mantém a barreira visual da PR 106", () => {

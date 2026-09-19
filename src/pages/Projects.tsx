@@ -14,7 +14,13 @@ import {
   type MaonoProject,
   type MaonoUser,
 } from "../auth/session";
+import {
+  LoadingOverlay,
+  useCompleteLoadingHandoff,
+  useInitialBootReadiness,
+} from "../components/loading";
 import { ProjectsPageSkeleton } from "../components/loading/Skeleton";
+import { usePreparedNavigate } from "../hooks/usePreparedNavigate";
 import { normalizeUserError } from "../lib/user-error-catalog";
 import ProjectsSidebar, {
   type ProjectSidebarSection,
@@ -308,6 +314,7 @@ const ProjectsPage: React.FC = () => {
     logout,
   } = useSession();
   const navigate = useNavigate();
+  const { prepareNavigate } = usePreparedNavigate();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarSection, setSidebarSection] =
@@ -315,6 +322,8 @@ const ProjectsPage: React.FC = () => {
   const [allProjects, setAllProjects] = useState<ProjectListItem[]>([]);
   const [projectItems, setProjectItems] = useState<ProjectListItem[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [organizationTransitionPending, setOrganizationTransitionPending] =
+    useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [projectsContextKey, setProjectsContextKey] = useState<string | null>(
     null,
@@ -420,6 +429,50 @@ const ProjectsPage: React.FC = () => {
 
   const projectContextIsCurrent =
     projectsContextKey === activeOrganizationKey;
+  const loginProjectsReady =
+    !loading &&
+    authenticated &&
+    (
+      !activeOrganizationId ||
+      (
+        projectContextIsCurrent &&
+        !projectsLoading
+      )
+    );
+
+  useCompleteLoadingHandoff(
+    "login-projects",
+    loginProjectsReady || (!loading && !authenticated),
+  );
+
+  useInitialBootReadiness(
+    loginProjectsReady || (!loading && !authenticated),
+  );
+
+  useEffect(() => {
+    if (!organizationTransitionPending) return;
+
+    if (
+      !switchingOrganization &&
+      (
+        Boolean(organizationSwitchError) ||
+        !activeOrganizationId ||
+        (projectContextIsCurrent && !projectsLoading)
+      )
+    ) {
+      setOrganizationTransitionPending(false);
+    }
+  }, [
+    activeOrganizationId,
+    organizationSwitchError,
+    organizationTransitionPending,
+    projectContextIsCurrent,
+    projectsLoading,
+    switchingOrganization,
+  ]);
+
+  const organizationTransitionActive =
+    switchingOrganization || organizationTransitionPending;
   const visibleProjectItems = projectContextIsCurrent ? projectItems : [];
 
   const activeProjects = useMemo(() => {
@@ -442,7 +495,31 @@ const ProjectsPage: React.FC = () => {
     navigate("/login", { replace: true });
   }
 
+  function handleNewMapNavigation(
+    event: React.MouseEvent<HTMLAnchorElement>,
+  ) {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    void prepareNavigate({
+      route: "kepler",
+      to: "/maps/new/create",
+      handoffKey: "map:/maps/new/create",
+    }).catch(() => {
+      window.location.assign("/maps/new/create");
+    });
+  }
+
   async function handleOrganizationSwitch(organizationId: number | string) {
+    setOrganizationTransitionPending(true);
     await switchOrganization(organizationId);
 
     projectsRequestSequenceRef.current += 1;
@@ -541,7 +618,7 @@ const ProjectsPage: React.FC = () => {
           user={user}
           activeOrganization={activeOrganization}
           organizations={organizations}
-          switchingOrganization={switchingOrganization}
+          switchingOrganization={organizationTransitionActive}
           organizationSwitchError={organizationSwitchError}
           activeProjectsCount={activeProjects.length}
           searchQuery={searchQuery}
@@ -555,17 +632,18 @@ const ProjectsPage: React.FC = () => {
 
         <section
           className={
-            switchingOrganization
+            organizationTransitionActive
               ? "mm-projects-main is-context-switching"
               : "mm-projects-main"
           }
-          aria-busy={switchingOrganization}
+          aria-busy={organizationTransitionActive}
         >
-          {switchingOrganization ? (
-            <div className="mm-context-switch-status" role="status">
-              Trocando organização e atualizando permissões…
-            </div>
-          ) : null}
+          <LoadingOverlay
+            active={organizationTransitionActive}
+            scope="container"
+            loaderSize="compact"
+            accessibleLabel="Trocando organização"
+          />
 
           {showProjectsTopbar && (
             <header className="mm-projects-topbar">
@@ -578,6 +656,7 @@ const ProjectsPage: React.FC = () => {
                   <Link
                     to="/maps/new/create"
                     className="mm-btn primary mm-new-map-btn"
+                    onClick={handleNewMapNavigation}
                   >
                     Novo mapa
                   </Link>

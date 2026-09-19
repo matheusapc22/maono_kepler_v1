@@ -55,3 +55,20 @@ test("legado distingue upload feito de commit de metadata não confirmado", () =
     /retryable: true/,
   );
 });
+
+
+test("PRL-10: recovery de UPDATE depende do contrato idempotente revisão + checksum", async () => {
+  const revisionsSource = await readFile(
+    new URL("../functions/_lib/project-config-revisions.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    revisionsSource,
+    /currentRevision === nextRevision[\s\S]*config_checksum[\s\S]*publishedLedger\?\.status === "READY"[\s\S]*alreadyPublished: true/,
+  );
+  assert.match(
+    revisionsSource,
+    /existing\.status === "FAILED"[\s\S]*attempts = attempts \+ 1/,
+  );
+});

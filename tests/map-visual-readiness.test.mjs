@@ -111,7 +111,11 @@ test("central loader owns the loading presentation and panel stays hidden until 
   );
 
   assert.match(loader, /await waitForMaonoMapVisualReadiness\(/);
-  assert.match(loader, /maono-map-central-loading/);
+  assert.match(
+    loader,
+    /useLoadingActivity\(isMapLoading,[\s\S]*label: "map-hydration"/,
+  );
+  assert.doesNotMatch(loader, /maono-map-central-loading/);
   assert.match(css, /data-map-loading="true"/);
   assert.match(css, /data-map-ready="false"/);
   assert.match(css, /maono-layer-panel__notice:has\(\.maono-layer-panel__loading\)/);

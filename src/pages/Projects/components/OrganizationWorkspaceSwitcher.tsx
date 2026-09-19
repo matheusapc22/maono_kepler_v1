@@ -12,6 +12,7 @@ import type {
   MaonoId,
   MaonoOrganization,
 } from "../../../auth/session";
+import { UniversalLoader } from "../../../components/loading";
 
 type OrganizationWorkspaceSwitcherProps = {
   activeOrganization: MaonoOrganization | null;
@@ -304,8 +305,11 @@ const OrganizationWorkspaceSwitcher: React.FC<
             </div>
 
             {switching ? (
-              <div className="mm-organization-menu-status" role="status">
-                Validando acesso e atualizando projetos…
+              <div className="mm-organization-menu-status">
+                <UniversalLoader
+                  size="inline"
+                  accessibleLabel="Trocando organização"
+                />
               </div>
             ) : null}
 
@@ -361,8 +365,15 @@ const OrganizationWorkspaceSwitcher: React.FC<
               : "Nenhuma organização ativa"}
           </span>
         </span>
-        <span className="mm-organization-chevron" aria-hidden="true">
-          {switching ? "…" : open ? "⌃" : "⌄"}
+        <span className="mm-organization-chevron">
+          {switching ? (
+            <UniversalLoader
+              size="inline"
+              accessibleLabel="Trocando organização"
+            />
+          ) : (
+            <span aria-hidden="true">{open ? "⌃" : "⌄"}</span>
+          )}
         </span>
       </button>
 

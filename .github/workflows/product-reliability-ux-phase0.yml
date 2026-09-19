@@ -9,6 +9,8 @@ on:
       - "src/**"
       - "tests/api-error-client.test.mjs"
       - "tests/user-error-catalog.test.mjs"
+      - "tests/browser/**"
+      - "playwright.config.ts"
       - "scripts/audit-user-error-sinks.mjs"
       - "scripts/audit-user-error-sinks.test.mjs"
       - "scripts/user-error-sink-baseline.json"
@@ -22,6 +24,8 @@ on:
       - "src/**"
       - "tests/api-error-client.test.mjs"
       - "tests/user-error-catalog.test.mjs"
+      - "tests/browser/**"
+      - "playwright.config.ts"
       - "scripts/audit-user-error-sinks.mjs"
       - "scripts/audit-user-error-sinks.test.mjs"
       - "scripts/user-error-sink-baseline.json"
@@ -68,6 +72,12 @@ jobs:
 
       - name: Build application
         run: npm run build
+
+      - name: Install Chromium for loading acceptance
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser loading acceptance
+        run: npm run test:loading-browser
 
       - name: Upload reliability inventory
         uses: actions/upload-artifact@v4

@@ -41,6 +41,7 @@ type ProjectCreateFlowOptions = {
   config: any;
   legacy: LegacyPreview;
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
   onPrepared?: (prepared: PreparedProjectCreateTransport) => void;
   onStage?: (stage: ProjectCreateRequestStage) => void;
 };
@@ -138,12 +139,14 @@ async function sendCreateRequest(
   fetchImpl: typeof fetch,
   attempt: ClientSaveAttempt,
   prepared: PreparedProjectCreateTransport,
+  signal?: AbortSignal,
 ) {
   const response = await fetchImpl("/api/projects", {
     method: "POST",
     credentials: "include",
     headers: buildSaveRequestHeaders(attempt, { forceJson: true }),
     body: prepared.requestBody,
+    signal,
   });
   const diagnostics = readSaveResponseDiagnostics(response, attempt);
   const data = await readJsonResponse(response);
@@ -156,6 +159,7 @@ async function sendLargeConfig(
   prepared: PreparedProjectCreateTransport,
   slug: string,
   idempotencyKey: string,
+  signal?: AbortSignal,
 ) {
   const response = await fetchImpl(
     `/api/projects/${encodeURIComponent(slug)}/config`,
@@ -167,6 +171,7 @@ async function sendLargeConfig(
         "X-Maono-Creation-Key": idempotencyKey,
       },
       body: prepared.configBody,
+      signal,
     },
   );
   const diagnostics = readSaveResponseDiagnostics(response, attempt);
@@ -183,6 +188,7 @@ export async function executeProjectCreateFlow({
   config,
   legacy,
   fetchImpl = fetch,
+  signal,
   onPrepared = () => {},
   onStage = () => {},
 }: ProjectCreateFlowOptions): Promise<ProjectCreateFlowResult> {
@@ -197,7 +203,12 @@ export async function executeProjectCreateFlow({
   onPrepared(prepared);
 
   onStage("creating_record");
-  const created = await sendCreateRequest(fetchImpl, attempt, prepared);
+  const created = await sendCreateRequest(
+    fetchImpl,
+    attempt,
+    prepared,
+    signal,
+  );
   if (
     !created.response.ok ||
     created.data?.ok === false ||
@@ -227,6 +238,7 @@ export async function executeProjectCreateFlow({
       prepared,
       createdSlug,
       idempotencyKey,
+      signal,
     );
     finalResponse = streamed.response;
     finalData = streamed.data;
