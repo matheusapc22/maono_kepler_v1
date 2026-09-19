@@ -36,6 +36,8 @@ test("rotas lazy compartilham o mesmo registry usado pelo prefetch", () => {
   assert.match(routes, /lazy\(routeModules\.mapManagement\)/);
   assert.match(routes, /lazy\(routeModules\.projects\)/);
   assert.match(routes, /lazy\(routeModules\.kepler\)/);
+  assert.doesNotMatch(routeModules, /login:/);
+  assert.doesNotMatch(routes, /lazy\(routeModules\.login\)/);
   assert.doesNotMatch(routes, /lazy\(\(\) => import\(/);
 });
 
@@ -47,7 +49,8 @@ test("prepared navigation prepara chunk e pré-condição antes de alterar a rot
   assert.match(preparedHook, /activeAbortControllerRef/);
   assert.match(preparedHook, /controller\.isCurrent\(intent\)/);
   assert.match(preparedHook, /navigate\(destination, \{ replace \}\)/);
-  assert.match(preparedHook, /primeLoadingHandoff/);
+  assert.match(preparedHook, /handoffLoading/);
+  assert.match(preparedHook, /cancelLoadingHandoff/);
   assert.match(preparedHook, /if \(!handedOff\)/);
   assert.match(preparedHook, /cancelPreparedNavigation/);
 });

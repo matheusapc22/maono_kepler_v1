@@ -1,20 +1,26 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
-import { completeLoadingHandoff } from "./loading-handoff";
 import { useLoading } from "./LoadingProvider";
 
 export function useCompleteLoadingHandoff(
   key: string,
   complete: boolean,
 ) {
-  const { endLoading } = useLoading();
+  const {
+    claimLoadingHandoff,
+    completeLoadingHandoff,
+  } = useLoading();
 
-  useEffect(() => {
-    if (!complete) return;
+  useLayoutEffect(() => {
+    const claimed = claimLoadingHandoff(key);
 
-    const token = completeLoadingHandoff(key);
-    if (token !== null) {
-      endLoading(token);
+    if (complete && claimed) {
+      completeLoadingHandoff(key);
     }
-  }, [complete, endLoading, key]);
+  }, [
+    claimLoadingHandoff,
+    complete,
+    completeLoadingHandoff,
+    key,
+  ]);
 }

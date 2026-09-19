@@ -1,10 +1,14 @@
-export type LoadingToken = number;
+export type LoadingToken = Readonly<{
+  id: number;
+  owner: symbol;
+}>;
 
 type LoadingListener = (activeCount: number) => void;
 type LoadingOperation<T> = () => Promise<T> | T;
 
 export class LoadingController {
   private nextToken = 0;
+  private readonly owner = Symbol("maono-loading-controller");
   private readonly activeTokens = new Set<LoadingToken>();
   private readonly listeners = new Set<LoadingListener>();
 
@@ -17,18 +21,34 @@ export class LoadingController {
   }
 
   begin() {
-    const token = ++this.nextToken;
+    const token: LoadingToken = Object.freeze({
+      id: ++this.nextToken,
+      owner: this.owner,
+    });
     this.activeTokens.add(token);
     this.emit();
     return token;
   }
 
+  owns(token: LoadingToken) {
+    return (
+      token.owner === this.owner &&
+      this.activeTokens.has(token)
+    );
+  }
+
   end(token: LoadingToken) {
+    if (token.owner !== this.owner) {
+      return false;
+    }
+
     const removed = this.activeTokens.delete(token);
 
     if (removed) {
       this.emit();
     }
+
+    return removed;
   }
 
   async withLoading<T>(operation: LoadingOperation<T>): Promise<T> {

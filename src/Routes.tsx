@@ -5,6 +5,7 @@ import { Navigate, Routes, Route, useLocation, useParams } from "react-router";
 import { normalizeRole } from "./access-control/roles";
 import { useSession } from "./auth/session";
 import { LoadingOverlay } from "./components/loading";
+import LoginPage from "./pages/Login";
 import { routeModules } from "./route-modules";
 import {
   AdminPageSkeleton,
@@ -18,7 +19,6 @@ import "./pages/Projects/projects.css";
 import "./pages/Admin/admin.css";
 
 const KeplerApp = lazy(routeModules.kepler);
-const LoginPage = lazy(routeModules.login);
 const ProjectsPage = lazy(routeModules.projects);
 const AdminPage = lazy(routeModules.admin);
 const MapManagementPage = lazy(routeModules.mapManagement);
@@ -142,14 +142,7 @@ const AppRoutes: React.FC = () => {
     <Routes>
       <Route path="/" element={<Navigate to="/projects" replace />} />
 
-      <Route
-        path="/login"
-        element={
-          <WithSuspense>
-            <LoginPage />
-          </WithSuspense>
-        }
-      />
+      <Route path="/login" element={<LoginPage />} />
 
       <Route
         path="/projects"

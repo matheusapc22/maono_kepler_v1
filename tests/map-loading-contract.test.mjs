@@ -90,7 +90,7 @@ test("prepared navigation executa prefetch e preparação em paralelo e suporta 
   assert.match(preparedHook, /abortController\.signal\.aborted/);
   assert.match(preparedHook, /typeof to === "function" \? to\(\) : to/);
   assert.match(preparedHook, /navigate\(destination, \{ replace \}\)/);
-  assert.match(preparedHook, /primeLoadingHandoff/);
+  assert.match(preparedHook, /handoffLoading/);
 });
 
 test("/manage permanece compatível sem spinner próprio", () => {
@@ -146,7 +146,7 @@ test("save e create usam atividade universal sem rótulos de espera", () => {
 test("adaptador booleano faz cleanup do token e overlay global cobre modais", () => {
   assert.match(loadingActivity, /useLayoutEffect/);
   assert.match(loadingActivity, /tokenRef/);
-  assert.match(loadingActivity, /beginLoading\(\{ immediate: true \}\)/);
+  assert.match(loadingActivity, /beginLoading\(\{ immediate \}\)/);
   assert.match(loadingActivity, /endLoading\(tokenRef\.current\)/);
   assert.match(loaderCss, /\.mm-loading-overlay \{[\s\S]*z-index: 120000/);
 });

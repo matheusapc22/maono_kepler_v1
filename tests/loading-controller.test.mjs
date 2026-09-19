@@ -65,3 +65,37 @@ test("subscribe observa mudanças reais de concorrência", () => {
 
   assert.deepEqual(snapshots, [0, 1, 2, 1, 0]);
 });
+
+
+test("tokens pertencem à instância que os criou", () => {
+  const firstController = new LoadingController();
+  const secondController = new LoadingController();
+  const firstToken = firstController.begin();
+  const secondToken = secondController.begin();
+
+  assert.equal(firstToken.id, 1);
+  assert.equal(secondToken.id, 1);
+  assert.notEqual(firstToken.owner, secondToken.owner);
+  assert.equal(firstController.owns(firstToken), true);
+  assert.equal(firstController.owns(secondToken), false);
+  assert.equal(firstController.end(secondToken), false);
+  assert.equal(firstController.activeCount, 1);
+
+  assert.equal(firstController.end(firstToken), true);
+  assert.equal(firstController.activeCount, 0);
+  assert.equal(secondController.activeCount, 1);
+  secondController.end(secondToken);
+});
+
+test("clear encerra toda a geração atual sem afetar outro controller", () => {
+  const firstController = new LoadingController();
+  const secondController = new LoadingController();
+  firstController.begin();
+  firstController.begin();
+  secondController.begin();
+
+  firstController.clear();
+
+  assert.equal(firstController.activeCount, 0);
+  assert.equal(secondController.activeCount, 1);
+});

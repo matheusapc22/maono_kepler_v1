@@ -65,11 +65,14 @@ test("overlay suporta viewport e container sem impor tela de loading", () => {
   assert.match(styles, /background:\s*transparent/);
 });
 
-test("provider usa controller tokenizado e política anti-flicker", () => {
+test("provider usa controller tokenizado, ownership de handoff e política anti-flicker", () => {
   assert.match(provider, /DEFAULT_SHOW_AFTER_MS = 120/);
   assert.match(provider, /DEFAULT_MIN_VISIBLE_MS = 250/);
   assert.match(provider, /controller\.begin\(\)/);
   assert.match(provider, /controller\.end\(token\)/);
+  assert.match(provider, /controller\.owns\(token\)/);
+  assert.match(provider, /LoadingHandoffController/);
+  assert.match(provider, /cancelOutsideLocation/);
   assert.match(provider, /controller\.withLoading\(operation\)/);
 });
 
@@ -82,6 +85,15 @@ test("fallback genérico de rota usa somente o loader universal", () => {
   );
   assert.doesNotMatch(routes, /const RouteLoading/);
   assert.doesNotMatch(routes, /<Skeleton /);
+});
+
+test("rota /login não possui Suspense ou loader alternativo", () => {
+  assert.match(routes, /import LoginPage from "\.\/pages\/Login"/);
+  assert.match(
+    routes,
+    /<Route path="\/login" element=\{<LoginPage \/>\} \/>/,
+  );
+  assert.doesNotMatch(routes, /lazy\(routeModules\.login\)/);
 });
 
 test("Projects e Admin preservam seus skeletons estruturais", () => {
@@ -107,19 +119,26 @@ test("rotas lazy legadas também ficam protegidas por Suspense", () => {
   }
 });
 
-test("boot inicial replica o loader universal sem mensagem visual", () => {
+test("boot inicial usa exatamente a identidade do Universal Loader", () => {
   assert.match(boot, /id="app-boot-fallback"/);
-  assert.match(boot, /class="mm-boot-loader"/);
-  assert.match(boot, /class="mm-boot-loader__ring"/);
-  assert.match(boot, /--mm-boot-loader-size:\s*46px/);
-  assert.match(boot, /--mm-boot-loader-thickness:\s*4px/);
-  assert.match(boot, /--mm-boot-loader-duration:\s*1\.05s/);
+  assert.match(
+    boot,
+    /class="mm-loading-overlay mm-loading-overlay--viewport"/,
+  );
+  assert.match(
+    boot,
+    /class="mm-universal-loader mm-universal-loader--page"/,
+  );
+  assert.match(boot, /class="mm-universal-loader__ring"/);
+  assert.match(boot, /--maono-loader-size-page:\s*46px/);
+  assert.match(boot, /--maono-loader-thickness-page:\s*4px/);
+  assert.match(boot, /--maono-loader-duration:\s*1\.05s/);
+  assert.match(boot, /@keyframes maono-universal-loader-spin/);
   assert.match(boot, /perspective\(140px\) rotateX\(7deg\)/);
   assert.match(boot, /prefers-reduced-motion:\s*reduce/);
+  assert.doesNotMatch(boot, /mm-boot-loader/);
+  assert.doesNotMatch(boot, /mm-boot-screen/);
   assert.doesNotMatch(boot, /Carregando Maõno Maps/);
-  assert.doesNotMatch(boot, /mm-boot-caption/);
-  assert.doesNotMatch(boot, /mm-boot-scan/);
-  assert.doesNotMatch(boot, /mm-boot-logo/);
 });
 
 test("boot mantém recuperação explícita em caso de falha real", () => {

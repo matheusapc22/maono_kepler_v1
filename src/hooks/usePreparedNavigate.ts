@@ -10,10 +10,6 @@ import {
   type RouteModuleKey,
 } from "../route-modules";
 import { PreparedNavigationIntentController } from "../navigation/prepared-navigation-controller";
-import {
-  completeLoadingHandoff,
-  primeLoadingHandoff,
-} from "../components/loading/loading-handoff";
 
 type PreparedNavigationOptions = {
   route: RouteModuleKey;
@@ -25,7 +21,12 @@ type PreparedNavigationOptions = {
 
 export function usePreparedNavigate() {
   const navigate = useNavigate();
-  const { beginLoading, endLoading } = useLoading();
+  const {
+    beginLoading,
+    endLoading,
+    handoffLoading,
+    cancelLoadingHandoff,
+  } = useLoading();
   const controllerRef = useRef<PreparedNavigationIntentController | null>(null);
   const activeLoadingTokenRef = useRef<LoadingToken | null>(null);
   const activeAbortControllerRef = useRef<AbortController | null>(null);
@@ -110,16 +111,11 @@ export function usePreparedNavigate() {
               ? handoffKey(destination)
               : handoffKey;
 
-          const previousToken = primeLoadingHandoff(
+          handoffLoading(
             resolvedHandoffKey,
             loadingToken,
+            destination,
           );
-          if (
-            previousToken !== null &&
-            previousToken !== loadingToken
-          ) {
-            endLoading(previousToken);
-          }
 
           activeLoadingTokenRef.current = null;
           handedOff = true;
@@ -129,12 +125,7 @@ export function usePreparedNavigate() {
           navigate(destination, { replace });
         } catch (navigationError) {
           if (handedOff && resolvedHandoffKey) {
-            const token = completeLoadingHandoff(
-              resolvedHandoffKey,
-            );
-            if (token !== null) {
-              endLoading(token);
-            }
+            cancelLoadingHandoff(resolvedHandoffKey);
             handedOff = false;
           }
           throw navigationError;
@@ -160,7 +151,13 @@ export function usePreparedNavigate() {
         }
       }
     },
-    [beginLoading, endLoading, navigate],
+    [
+      beginLoading,
+      cancelLoadingHandoff,
+      endLoading,
+      handoffLoading,
+      navigate,
+    ],
   );
 
   return {
