@@ -14,6 +14,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
+    // Local browser regression only; does not change a deployed environment.
+    env: { VITE_POINT_CLUSTERING_V1: "true" },
     command: "npm run dev -- --host 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173/login",
     timeout: 120_000,
