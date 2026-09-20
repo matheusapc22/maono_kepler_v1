@@ -1,0 +1,34 @@
+{
+  "results": [
+    {
+      "name": "contradictory-initial-classification",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "insufficient-samples-approved",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "unverified-ready-accepted",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "provisioning-deadline-drift",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    }
+  ],
+  "killed": 4,
+  "total": 4
+}
