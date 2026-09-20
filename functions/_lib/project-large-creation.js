@@ -966,11 +966,20 @@ export async function markLargeProjectCreationFailed(
     `UPDATE organization_files
         SET status = 'ERROR', active = 0,
             error_message = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
+      WHERE id = ?
+        AND organization_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM projects
+           WHERE projects.organization_file_id = organization_files.id
+             AND (projects.lifecycle_state = 'ACTIVE'
+                  OR projects.lifecycle_version <> ?)
+        )`,
   )
     .bind(
       String(error?.message || "Falha na criação streaming.").slice(0, 800),
       project.organization_file_id || project.reservation_id,
+      project.organization_id,
+      Number(current?.lifecycle_version ?? -1),
     )
     .run()
     .catch(() => null);
@@ -990,6 +999,7 @@ export async function markLargeProjectCreationFailed(
     await releaseProjectQuota(env, {
       reservationId: quota?.id,
       errorCode: error?.code || "PROJECT_CREATE_LARGE_FAILED",
+      expectedProject: current,
     }).catch(() => null);
   }
 
