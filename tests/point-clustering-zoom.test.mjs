@@ -6,8 +6,11 @@ import {
 } from "../src/pages/Kepler/clustering/point-cluster-policy.ts";
 import {
   resolveClusterClick,
-  resolveVisibilityChanges,
+  adaptiveClusterDeckLayerId,
 } from "../src/pages/Kepler/clustering/point-cluster-controller.ts";
+
+import { DeckGLClusterLayer } from "@kepler.gl/deckgl-layers";
+import { loadPointClusterRuntime, pointRenderOptions } from "./helpers/load-point-cluster-runtime.mjs";
 
 const policy = {
   enabled: true,
@@ -55,45 +58,30 @@ test("mantém pontos dentro da banda inferior de histerese", () => {
   );
 });
 
-test("não gera dispatch quando visibilidades já representam o modo", () => {
-  const result = resolveVisibilityChanges({
-    pointLayer: {
-      id: "point",
-      config: { isVisible: false },
-    },
-    clusterLayer: {
-      id: "cluster",
-      config: { isVisible: true },
-    },
-    zoom: 11,
-    previousMode: "cluster",
-    policy,
-  });
-
-  assert.equal(result.nextMode, "cluster");
-  assert.deepEqual(result.changes, []);
+test("zoom repetido mantém a representação sem alterar configuração lógica", async () => {
+  const runtime = await loadPointClusterRuntime();
+  runtime.loadPointClusterState({ pointClustering: { version: 2, layers: { point: policy } } });
+  const layer = new runtime.MaonoAdaptivePointLayer({ id: "point" });
+  const before = structuredClone(layer.config);
+  const opts = pointRenderOptions([{ position: [0, 0] }, { position: [1, 1] }], 11);
+  for (let repeat = 0; repeat < 3; repeat++) {
+    const [cluster] = layer.renderLayer(opts);
+    assert.ok(cluster instanceof DeckGLClusterLayer);
+    assert.equal(cluster.id, adaptiveClusterDeckLayerId("point"));
+    assert.deepEqual(layer.config, before);
+  }
 });
 
-test("alterna exatamente as duas camadas quando cruza o limiar", () => {
-  const result = resolveVisibilityChanges({
-    pointLayer: {
-      id: "point",
-      config: { isVisible: false },
-    },
-    clusterLayer: {
-      id: "cluster",
-      config: { isVisible: true },
-    },
-    zoom: 12.3,
-    previousMode: "cluster",
-    policy,
-  });
-
-  assert.equal(result.nextMode, "points");
-  assert.deepEqual(result.changes, [
-    { layerId: "cluster", isVisible: false },
-    { layerId: "point", isVisible: true },
-  ]);
+test("sequência de zoom atravessa histerese sem alternar visibilidade lógica", async () => {
+  const runtime = await loadPointClusterRuntime();
+  runtime.loadPointClusterState({ pointClustering: { version: 2, layers: { point: policy } } });
+  const layer = new runtime.MaonoAdaptivePointLayer({ id: "point" });
+  const before = structuredClone(layer.config);
+  for (const [zoom, clustered] of [[11,true],[12.25,true],[12.26,false],[11.75,false],[11.74,true],[12,true]]) {
+    const [rendered] = layer.renderLayer(pointRenderOptions([{ position: [0, 0] }], zoom));
+    assert.equal(rendered instanceof DeckGLClusterLayer, clustered, `zoom=${zoom}`);
+    assert.deepEqual(layer.config, before);
+  }
 });
 
 test("política desativada sempre volta para pontos individuais", () => {
@@ -113,7 +101,7 @@ test("clique em cluster centraliza e aumenta o zoom", () => {
   const viewport = resolveClusterClick({
     clicked: {
       layer: {
-        id: "maono-cluster-estabelecimentos-cluster",
+        id: `${adaptiveClusterDeckLayerId("estabelecimentos")}-cluster`,
       },
       object: {
         position: [-46.63, -23.55],
@@ -121,15 +109,8 @@ test("clique em cluster centraliza e aumenta o zoom", () => {
       },
     },
     mapState: { zoom: 9 },
-    pairs: [
-      {
-        pointLayerId: "estabelecimentos",
-        clusterLayerId:
-          "maono-cluster-estabelecimentos",
-      },
-    ],
     extension: {
-      version: 1,
+      version: 2,
       layers: {
         estabelecimentos: policy,
       },
@@ -148,7 +129,7 @@ test("clique em ponto único não altera o viewport", () => {
   const viewport = resolveClusterClick({
     clicked: {
       layer: {
-        id: "maono-cluster-estabelecimentos-cluster",
+        id: `${adaptiveClusterDeckLayerId("estabelecimentos")}-cluster`,
       },
       object: {
         position: [-46.63, -23.55],
@@ -156,15 +137,8 @@ test("clique em ponto único não altera o viewport", () => {
       },
     },
     mapState: { zoom: 9 },
-    pairs: [
-      {
-        pointLayerId: "estabelecimentos",
-        clusterLayerId:
-          "maono-cluster-estabelecimentos",
-      },
-    ],
     extension: {
-      version: 1,
+      version: 2,
       layers: {
         estabelecimentos: policy,
       },

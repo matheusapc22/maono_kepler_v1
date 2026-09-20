@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { can } from "../functions/_lib/permissions.js";
+import { authorizeOrganizationPermissionMutation } from "../functions/_lib/access-governance.js";
+import { persistenceFixture } from "./helpers/project-persistence-fixture.mjs";
 
 const guardModule = await import("../functions/_lib/geojson-access.js");
 const permissions = await readFile(new URL("../functions/_lib/permissions.js", import.meta.url), "utf8");
@@ -20,11 +23,34 @@ test("classifica JSON/GeoJSON atuais e legados como protegidos", () => {
   assert.equal(guardModule.isProjectGeoJsonFile({ project_id: 10, file_type: "pdf", name: "relatorio.pdf" }), false);
 });
 
-test("permissão ampla não é padrão e só super admin pode gerenciá-la", () => {
+test("permissão ampla não é padrão e só super admin pode gerenciá-la", async (t) => {
   assert.match(permissions, /organization\.projects\.geojson\.view/);
   assert.doesNotMatch(permissions.match(/const OWNER_ORGANIZATION_PERMISSIONS[\s\S]*?\]\);/)?.[0] ?? "", /organization\.projects\.geojson\.view/);
   assert.match(organizations, /Somente Super Admin pode gerenciar o acesso amplo a GeoJSON/);
-  assert.match(grantRoute, /SUPER_ADMIN_REQUIRED/);
+  assert.match(grantRoute, /await authorizeOrganizationPermissionMutation\(/);
+  assert.ok(grantRoute.indexOf("await authorizeOrganizationPermissionMutation(") < grantRoute.indexOf("await grantOrganizationPermission("));
+  const { db, env } = persistenceFixture(t);
+  db.exec(`INSERT INTO users (id,email,role,password_hash) VALUES (3,'target@offline.invalid','viewer','not-a-login');
+    INSERT INTO organization_users (organization_id,user_id,access_level) VALUES (1,3,'viewer');`);
+  const permission = "organization.projects.geojson.view";
+  for (const role of ["client", "admin", "editor", "viewer"]) {
+    db.prepare("UPDATE users SET role=? WHERE id=1").run(role);
+    const actor = { id: 1, role, activeOrganizationId: 1 };
+    assert.equal((await can(env, actor, permission, { organizationId: 1 })).allowed, false, role);
+    for (const operation of ["grant", "revoke"]) {
+      await assert.rejects(authorizeOrganizationPermissionMutation({
+        env, actor, organizationId: 1, targetUserId: 3, permission, operation,
+      }), (error) => error.status === 403 && error.code === "OWNER_CEILING_EXCEEDED", `${role}/${operation}`);
+    }
+  }
+  for (const operation of ["grant", "revoke"]) {
+    const decision = await authorizeOrganizationPermissionMutation({
+      env, actor: { id: 1, role: "super_admin" }, organizationId: 1,
+      targetUserId: 3, permission, operation,
+    });
+    assert.equal(decision.allowed, true);
+    assert.equal(decision.reason, "SUPER_ADMIN");
+  }
 });
 
 test("listagem, download e exclusão repetem a autorização GeoJSON", () => {
