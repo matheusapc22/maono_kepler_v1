@@ -87,10 +87,17 @@ async function claimAbandonedReadyRevision(db, existing) {
         WHERE id = ?
           AND status = 'READY'
           AND published_at IS NULL
+          AND checksum = ?
+          AND attempts = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM projects
+             WHERE projects.id = project_config_revisions.project_id
+               AND projects.config_revision >= project_config_revisions.revision
+          )
           AND updated_at <= datetime('now', '-${ABANDONED_READY_GRACE_SECONDS} seconds')
         RETURNING *`,
     )
-    .bind(existing.id)
+    .bind(existing.id, existing.checksum, existing.attempts)
     .first();
 }
 
@@ -138,6 +145,20 @@ async function recycleUnpublishedRevisionCandidate(
     transitionId,
   },
 ) {
+  const current = await getProjectForRevision(db, projectId, organizationId);
+  const currentRevision = Number(current?.config_revision || 0);
+  if (currentRevision !== expected) {
+    throw revisionError(
+      "O projeto foi alterado por outra operação.",
+      409,
+      "PROJECT_CONFIG_REVISION_CONFLICT",
+      {
+        expectedConfigRevision: expected,
+        currentConfigRevision: currentRevision,
+      },
+    );
+  }
+
   let reclaimable = existing;
 
   if (existing?.status === "READY") {
@@ -152,19 +173,41 @@ async function recycleUnpublishedRevisionCandidate(
     return null;
   }
 
-  const current = await getProjectForRevision(db, projectId, organizationId);
-  const currentRevision = Number(current?.config_revision || 0);
-  if (currentRevision !== expected) {
-    throw revisionError(
-      "O projeto foi alterado por outra operação.",
-      409,
-      "PROJECT_CONFIG_REVISION_CONFLICT",
-      {
-        expectedConfigRevision: expected,
-        currentConfigRevision,
-      },
-    );
+  if (
+    String(reclaimable.storage_provider || storageProvider).toLowerCase() !== "dropbox" ||
+    !project?.dropbox_root_path
+  ) {
+    return null;
   }
+
+  // Claim before touching the shared revision path. Keep old metadata until
+  // deletion succeeds; all reservers and late callbacks reject this marker.
+  // An interrupted/ambiguous delete stays fenced for operational inspection.
+  const recycleToken = crypto.randomUUID();
+  const claimed = await db
+    .prepare(
+      `UPDATE project_config_revisions
+        SET error_stage = 'RECYCLE', transition_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'FAILED' AND published_at IS NULL
+        AND error_stage IS NOT 'RECYCLE'
+        AND checksum = ? AND attempts = ?
+        AND EXISTS (
+          SELECT 1 FROM projects
+           WHERE id = ? AND organization_id = ? AND config_revision = ?
+        )
+      RETURNING *`,
+    )
+    .bind(
+      recycleToken,
+      reclaimable.id,
+      reclaimable.checksum,
+      reclaimable.attempts,
+      projectId,
+      organizationId,
+      expected,
+    )
+    .first();
+  if (!claimed) return null;
 
   const removed = await removeUnpublishedRevisionArtifact(
     env,
@@ -202,6 +245,8 @@ async function recycleUnpublishedRevisionCandidate(
         WHERE id = ?
           AND status = 'FAILED'
           AND published_at IS NULL
+          AND error_stage = 'RECYCLE'
+          AND transition_id = ?
         RETURNING *`,
     )
     .bind(
@@ -216,6 +261,7 @@ async function recycleUnpublishedRevisionCandidate(
       actorUserId,
       transitionId,
       reclaimable.id,
+      recycleToken,
     )
     .first();
 
@@ -334,6 +380,13 @@ export async function reserveProjectConfigRevision(
   );
 
   if (existing) {
+    if (existing.error_stage === "RECYCLE") {
+      throw revisionError(
+        "A revisão está em recuperação de armazenamento.",
+        409,
+        "PROJECT_CONFIG_REVISION_CONFLICT",
+      );
+    }
     if (
       String(existing.checksum_algorithm).toLowerCase() !==
         String(checksumAlgorithm).toLowerCase() ||
@@ -388,12 +441,21 @@ export async function reserveProjectConfigRevision(
                 updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
             AND status = 'FAILED'
+            AND error_stage IS NOT 'RECYCLE'
+            AND checksum = ? AND attempts = ?
           RETURNING *`,
         )
-        .bind(transitionId, existing.id)
+        .bind(transitionId, existing.id, normalizedChecksum, existing.attempts)
         .first();
+      if (!retried) {
+        throw revisionError(
+          "A revisão foi alterada por outra operação.",
+          409,
+          "PROJECT_CONFIG_REVISION_CONFLICT",
+        );
+      }
       return {
-        revision: retried || existing,
+        revision: retried,
         idempotent: true,
         retry: true,
         alreadyPublished: false,
@@ -480,6 +542,7 @@ export async function markProjectConfigRevisionReady(
     projectId,
     revision,
     checksum,
+    attempts,
     storageProviderVersion = null,
     storageProviderHash = null,
   },
@@ -497,6 +560,8 @@ export async function markProjectConfigRevisionReady(
       WHERE project_id = ?
         AND revision = ?
         AND checksum = ?
+        AND attempts = ?
+        AND error_stage IS NOT 'RECYCLE'
         AND status IN ('WRITING', 'READY')
       RETURNING *`,
     )
@@ -506,6 +571,7 @@ export async function markProjectConfigRevisionReady(
       projectId,
       revision,
       String(checksum).toLowerCase(),
+      attempts,
     )
     .first();
 
@@ -522,7 +588,7 @@ export async function markProjectConfigRevisionReady(
 
 export async function markProjectConfigRevisionFailed(
   env,
-  { projectId, revision, errorCode, errorStage },
+  { projectId, revision, checksum, attempts, errorCode, errorStage },
 ) {
   return getDb(env)
     .prepare(
@@ -533,6 +599,8 @@ export async function markProjectConfigRevisionFailed(
             updated_at = CURRENT_TIMESTAMP
       WHERE project_id = ?
         AND revision = ?
+        AND checksum = ? AND attempts = ?
+        AND error_stage IS NOT 'RECYCLE'
         AND status <> 'READY'
       RETURNING *`,
     )
@@ -541,6 +609,8 @@ export async function markProjectConfigRevisionFailed(
       String(errorStage || "UNKNOWN").slice(0, 120),
       projectId,
       revision,
+      String(checksum).toLowerCase(),
+      attempts,
     )
     .first();
 }
@@ -552,6 +622,8 @@ export async function publishProjectConfigRevision(
     organizationId,
     expectedCurrentRevision,
     revision,
+    checksum,
+    attempts,
     actor,
     markPreviewPending = true,
     expectedLifecycleState = PROJECT_LIFECYCLE_STATES.ACTIVE,
@@ -589,6 +661,17 @@ export async function publishProjectConfigRevision(
     );
   }
 
+  if (
+    ledger.checksum !== String(checksum).toLowerCase() ||
+    ledger.attempts !== attempts
+  ) {
+    throw revisionError(
+      "A revisão foi substituída por outra tentativa.",
+      409,
+      "PROJECT_CONFIG_REVISION_CONFLICT",
+    );
+  }
+
   if (normalizedRevision !== expected + 1) {
     throw revisionError(
       "A revisão a publicar não é sucessora da revisão vigente.",
@@ -622,6 +705,10 @@ export async function publishProjectConfigRevision(
         AND organization_id = ?
         AND config_revision = ?
         AND lifecycle_state = ?
+        AND EXISTS (
+          SELECT 1 FROM project_config_revisions
+           WHERE id = ? AND checksum = ? AND attempts = ? AND status = 'READY'
+        )
       RETURNING *`,
     )
     .bind(
@@ -646,6 +733,9 @@ export async function publishProjectConfigRevision(
       organizationId,
       expected,
       lifecycleState,
+      ledger.id,
+      ledger.checksum,
+      ledger.attempts,
     )
     .first();
 

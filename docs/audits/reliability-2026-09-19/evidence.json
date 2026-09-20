@@ -1,0 +1,197 @@
+{
+  "baseline": "c0864514605b32ac6ff26605e9b35869ad19ed39",
+  "runtime": "Node 24.19.0 local; Node 22 CI",
+  "runs": [
+    {
+      "name": "Foundation baseline",
+      "result": "796/796 passaram; 0 falharam",
+      "evidence": "baseline-foundation.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Foundation final",
+      "result": "812/812 passaram; 0 falharam",
+      "evidence": "final-foundation.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Reliability baseline",
+      "result": "184/184 passaram; 0 falharam",
+      "evidence": "baseline-reliability.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Reliability final",
+      "result": "184/184 passaram; 0 falharam",
+      "evidence": "final-reliability.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Regressões antes do fix",
+      "result": "0/5 passaram; 5 falharam",
+      "evidence": "regressions-before.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Regressões novas finais",
+      "result": "16/16 passaram; 0 falharam",
+      "evidence": "new-regressions-final.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Macro C",
+      "result": "4/4 passaram; 0 falharam",
+      "evidence": "macro-c.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Suíte Node ampliada — baseline",
+      "result": "1165/1174 passaram; 9 falharam",
+      "evidence": "all-node-baseline.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Suíte Node ampliada — corrigida",
+      "result": "1181/1190 passaram; 9 falharam",
+      "evidence": "all-node-tests.log",
+      "limit": "Contagens são execuções e podem se sobrepor entre gates."
+    },
+    {
+      "name": "Build",
+      "result": "Passou",
+      "evidence": "build.log",
+      "limit": "TypeScript/Vite; avisos de tamanho de chunk preservados."
+    },
+    {
+      "name": "Browser Chromium",
+      "result": "11/11; 0 ignorados; 0 flaky",
+      "evidence": "browser-results.json",
+      "limit": "Primeira tentativa sem Chromium. Logs textuais incompletos não usados como aceite; JSON final íntegro."
+    },
+    {
+      "name": "Mutation testing seletivo",
+      "result": "5/5 eliminados por asserções",
+      "evidence": "mutations.json",
+      "limit": "Somente cinco proteções de revisão; não é score global."
+    },
+    {
+      "name": "Ratchet de erros",
+      "result": "Passou; 142 sinais mantidos",
+      "evidence": "error-ratchet.log",
+      "limit": "Não houve atualização de baseline."
+    },
+    {
+      "name": "Branch remota",
+      "result": "Base sem drift antes do push",
+      "evidence": "c0864514605b32ac6ff26605e9b35869ad19ed39",
+      "limit": "main permanece fora da base do produto."
+    }
+  ],
+  "logs": [
+    {
+      "file": "all-node-baseline.log",
+      "bytes": 175686,
+      "sha256": "f33de919e78b47606a2cc6bda1a618a39ef99b8245bd92ac6842a16419ff81f9"
+    },
+    {
+      "file": "all-node-tests.log",
+      "bytes": 177123,
+      "sha256": "a50f528fdba542b021ccd00dc65652e005ea1a3ce4b0ad9063611601839f4440"
+    },
+    {
+      "file": "baseline-foundation.log",
+      "bytes": 85714,
+      "sha256": "1ba316354e1eca4f9deb8e42dafff8e5c5b931f17661b9aefad85d49d2b0f68c"
+    },
+    {
+      "file": "baseline-reliability.log",
+      "bytes": 23860,
+      "sha256": "f70dea308e1637daf70aa3dcc743caa734d2ed1f95afc381d7ab9e5dea783a06"
+    },
+    {
+      "file": "browser-complete.log",
+      "bytes": 1053,
+      "sha256": "a7a410ce47a76be1b6aa6f1b32ade9d8c284304aaa7691854f3a52a8a0c70da1"
+    },
+    {
+      "file": "browser-final.log",
+      "bytes": 2191,
+      "sha256": "f0dcc9b75b28192184a9c299a18e6b5bbef0fb88773c7e2885b03105e23f9192"
+    },
+    {
+      "file": "browser-install.log",
+      "bytes": 9636,
+      "sha256": "87e9c2555424114e6af05082058012217a63ad0d0c20833446a3342e9079548f"
+    },
+    {
+      "file": "browser-org.json",
+      "bytes": 3029,
+      "sha256": "6fc0ccf6e7313096b29b80ec2d38f32c9f9d698e712e02205616f72483dbfd2b"
+    },
+    {
+      "file": "browser-results.json",
+      "bytes": 14940,
+      "sha256": "8b899a1bef0f15d18407820724ffcd0ec4d523f950021a834c1901b40317f7c3"
+    },
+    {
+      "file": "browser.log",
+      "bytes": 29760,
+      "sha256": "fbf0d546c18d34c34f840f721c061f33df3af089b47b57b8db53298eedfeefa2"
+    },
+    {
+      "file": "build.log",
+      "bytes": 12648,
+      "sha256": "023e81dd83bc957618c735937c1ffa249af08df70828f4ff395fe42338794cd4"
+    },
+    {
+      "file": "error-ratchet.log",
+      "bytes": 345704,
+      "sha256": "d5faac36f41c34c7181654c8496b07f9d780a2bc600104e7343cfa562a6c13ef"
+    },
+    {
+      "file": "final-foundation.log",
+      "bytes": 87076,
+      "sha256": "7d0eb6d92e673e06e9e6bf303a20f5ae57ce81e735ca41243d17192daba7478e"
+    },
+    {
+      "file": "final-reliability.log",
+      "bytes": 23858,
+      "sha256": "0b67d6dbb1918cc429d49ee92499c2927839e4dc7d9a50d30966640a51894002"
+    },
+    {
+      "file": "macro-c.log",
+      "bytes": 1090,
+      "sha256": "23a66404efd842e229f11365d4b075406cf101647467eb94866427a2f649d5a0"
+    },
+    {
+      "file": "mutations.json",
+      "bytes": 691,
+      "sha256": "154a7529e3373ebfed1eb6a470b8052ce53f7499f8cb3891fba001dc8524cfc6"
+    },
+    {
+      "file": "new-regressions-final.log",
+      "bytes": 1594,
+      "sha256": "22e24418c6e32cd9a9b95531318e1c25c0c8dd8df6b104035b456d25e4860fea"
+    },
+    {
+      "file": "new-regressions.log",
+      "bytes": 1500,
+      "sha256": "91c52c34fb9caf5cc72e71e72fa95a95089fc33f4928a09c9704de35be53dd32"
+    },
+    {
+      "file": "preexisting-user-management.log",
+      "bytes": 25229,
+      "sha256": "f366f7a617d8da561f807c640754c0ae4abb3dd43dc6dfa1612bcd26874e1de6"
+    },
+    {
+      "file": "regressions-after.log",
+      "bytes": 3869,
+      "sha256": "b1322c48be9f54613c1a3488b5c71d08694180383754aba982cad78822ff4392"
+    },
+    {
+      "file": "regressions-before.log",
+      "bytes": 5343,
+      "sha256": "48e9d242f6636782935f6f7f2cc80647f8283695fe8935c6935b6c30d3545b48"
+    }
+  ]
+}

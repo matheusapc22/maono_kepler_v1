@@ -637,6 +637,7 @@ export async function saveLargeProjectConfigStream(
       projectId: project.id,
       revision: nextRevision,
       checksum: contentHash,
+      attempts: reservation.revision.attempts,
       storageProviderVersion: metadata.providerVersion,
       storageProviderHash: metadata.providerHash,
     });
@@ -647,6 +648,8 @@ export async function saveLargeProjectConfigStream(
       organizationId: project.organization_id,
       expectedCurrentRevision: manifest.expectedRevision,
       revision: nextRevision,
+      checksum: contentHash,
+      attempts: reservation.revision.attempts,
       actor: { id: user?.id ?? null, name: user?.name || "Usuário" },
       markPreviewPending: true,
       expectedLifecycleState,
@@ -687,6 +690,8 @@ export async function saveLargeProjectConfigStream(
         await markProjectConfigRevisionFailed(env, {
           projectId: project.id,
           revision: nextRevision,
+          checksum: reservation.revision.checksum,
+          attempts: reservation.revision.attempts,
           errorCode: error?.code || "PROJECT_CONFIG_LARGE_SAVE_FAILED",
           errorStage: currentStage,
         });

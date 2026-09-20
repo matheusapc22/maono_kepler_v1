@@ -1,0 +1,845 @@
+{
+  "baseline": "c0864514605b32ac6ff26605e9b35869ad19ed39",
+  "method": "Inventário estático de rotas e referências. Não é medição de cobertura dinâmica nem prova de autorização.",
+  "counts": {
+    "Interface": 21,
+    "Middleware": 2,
+    "Endpoint": 77,
+    "Persistência / domínio": 19
+  },
+  "inventory": [
+    {
+      "type": "Interface",
+      "route": "/",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "Navigate"
+    },
+    {
+      "type": "Interface",
+      "route": "/login",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "LoginPage"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "ProjectsPageSkeleton, ProjectsPage"
+    },
+    {
+      "type": "Interface",
+      "route": "/admin",
+      "file": "src/Routes.tsx",
+      "auth": "AdminRouteGuard (super_admin)",
+      "notes": "AdminRouteGuard, AdminPageSkeleton, AdminPage"
+    },
+    {
+      "type": "Interface",
+      "route": "/admin/files",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "Navigate"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects/:projectSlug/manage",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "MapManagementPage"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects/:projectSlug/view",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "KeplerApp"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects/:projectSlug/edit",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "KeplerApp"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects/:projectSlug/requests",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "EditorRequestInboxPage"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects/:projectSlug/review/:changeRequestId",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "ChangeRequestReviewPage"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects/:projectSlug/create",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "DeprecatedProjectCreateRedirect"
+    },
+    {
+      "type": "Interface",
+      "route": "/projects/:projectSlug/map",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "LegacyProjectMapRedirect"
+    },
+    {
+      "type": "Interface",
+      "route": "/auth",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "AuthCallback"
+    },
+    {
+      "type": "Interface",
+      "route": "/maps/new/create",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "KeplerApp"
+    },
+    {
+      "type": "Interface",
+      "route": "/maps/new/edit",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "Navigate"
+    },
+    {
+      "type": "Interface",
+      "route": "/map",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "Navigate"
+    },
+    {
+      "type": "Interface",
+      "route": "(:id)",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "KeplerApp"
+    },
+    {
+      "type": "Interface",
+      "route": "map/:provider",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "KeplerApp"
+    },
+    {
+      "type": "Interface",
+      "route": "demo/map",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "KeplerApp"
+    },
+    {
+      "type": "Interface",
+      "route": "demo/map/:provider",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "KeplerApp"
+    },
+    {
+      "type": "Interface",
+      "route": "*",
+      "file": "src/Routes.tsx",
+      "auth": "Controle da página + endpoint; inventário estático",
+      "notes": "NotFound"
+    },
+    {
+      "type": "Middleware",
+      "route": "onRequest / dispatcher /_middleware",
+      "file": "functions/_middleware.js",
+      "auth": "requireSession",
+      "notes": "SQL direto: projects | Referência estática em: tests/buffer-preview-policy.test.mjs, tests/preview-middleware.test.mjs, tests/project-large-create-observability.test.mjs, tests/project-large-legacy-lifecycle.test.mjs, tests/project-large-save.test.mjs, tests/project-route-semantics.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "DELETE /api/admin/access/:id",
+      "file": "functions/api/admin/access/[id].js",
+      "auth": "requirePermission, requireSession",
+      "notes": "SQL direto: user_projects, projects | Referência estática em: tests/organization-lifecycle-wiring.test.mjs, tests/project-change-request-domain.test.mjs, tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/admin/access",
+      "file": "functions/api/admin/access/index.js",
+      "auth": "requireAdminPanelAccess, requirePermission, requireSession",
+      "notes": "SQL direto: projects, user_projects, users, organization_users | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PUT, PATCH, DELETE /api/admin/organization-files/:id",
+      "file": "functions/api/admin/organization-files/[id].js",
+      "auth": "requirePermission, requireSession",
+      "notes": "SQL direto: organization_files, projects, user_projects | Referência estática em: tests/organization-lifecycle-wiring.test.mjs, tests/project-change-request-domain.test.mjs, tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/admin/organization-files/:id/project",
+      "file": "functions/api/admin/organization-files/[id]/project.js",
+      "auth": "requirePermission",
+      "notes": "SQL direto: projects, organization_files, organizations, organization_users, user_projects | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PATCH, PUT, DELETE /api/admin/organization-users/:id",
+      "file": "functions/api/admin/organization-users/[id].js",
+      "auth": "requirePermission, requireSession",
+      "notes": "SQL direto: organization_users, users, organizations | Referência estática em: tests/organization-lifecycle-wiring.test.mjs, tests/project-change-request-domain.test.mjs, tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PUT, PATCH, DELETE /api/admin/organizations/:id",
+      "file": "functions/api/admin/organizations/[id].js",
+      "auth": "requireOrganizationAdminPanelAccess, requirePermission",
+      "notes": "SQL direto: projects, organization_users, organization_files, organizations | Referência estática em: tests/organization-lifecycle-wiring.test.mjs, tests/project-change-request-domain.test.mjs, tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PUT, DELETE /api/admin/organizations/:id/access-delegations/:userId",
+      "file": "functions/api/admin/organizations/[id]/access-delegations/[userId].js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/admin/organizations/:id/files",
+      "file": "functions/api/admin/organizations/[id]/files.js",
+      "auth": "requireOrganizationAdminPanelAccess, requirePermission",
+      "notes": "SQL direto: organizations, organization_files, projects | Referência estática em: tests/geojson-organization-access.test.mjs, tests/organization-storage-readiness-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/admin/organizations/:id/users",
+      "file": "functions/api/admin/organizations/[id]/users.js",
+      "auth": "requireOrganizationAdminPanelAccess, requirePermission, requireGlobalAdminPanelAccess",
+      "notes": "SQL direto: organizations, organization_users, users | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/admin/organizations",
+      "file": "functions/api/admin/organizations/index.js",
+      "auth": "requireGlobalAdminPanelAccess, requirePermission",
+      "notes": "SQL direto: organizations, organization_files, projects, organization_users | Referência estática em: tests/organization-lifecycle-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/admin/organizations/repair-storage",
+      "file": "functions/api/admin/organizations/repair-storage.js",
+      "auth": "requireGlobalStorageRepairAccess, requirePermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/organization-storage-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/admin/organizations/storage-drift",
+      "file": "functions/api/admin/organizations/storage-drift.js",
+      "auth": "requireGlobalDriftAccess, requirePermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/organization-storage-chaos.test.mjs, tests/organization-storage-drift-wiring.test.mjs, tests/organization-storage-drift.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/admin/organizations/sync-dropbox",
+      "file": "functions/api/admin/organizations/sync-dropbox.js",
+      "auth": "requireGlobalAdminPanelAccess, requirePermission",
+      "notes": "SQL direto: organizations, projects, organization_files | Referência estática em: tests/organization-lifecycle-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/admin/project-lifecycle/reconcile",
+      "file": "functions/api/admin/project-lifecycle/reconcile.js",
+      "auth": "requireSession",
+      "notes": "SQL direto: projects | Referência estática em: tests/project-preview-lifecycle.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/admin/project-previews/reconcile",
+      "file": "functions/api/admin/project-previews/reconcile.js",
+      "auth": "requireSession",
+      "notes": "SQL direto: projects | Referência estática em: tests/project-preview-lifecycle.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PUT, PATCH, DELETE /api/admin/projects/:id",
+      "file": "functions/api/admin/projects/[id].js",
+      "auth": "requirePermission, requireSession",
+      "notes": "SQL direto: projects, organizations, users, organization_files, user_projects | Referência estática em: tests/organization-lifecycle-wiring.test.mjs, tests/project-change-request-domain.test.mjs, tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/admin/projects",
+      "file": "functions/api/admin/projects/index.js",
+      "auth": "requireAdminPanelAccess, requirePermission, requireSession",
+      "notes": "SQL direto: organizations, users, user_projects, projects | Referência estática em: tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/admin/projects/upload",
+      "file": "functions/api/admin/projects/upload.js",
+      "auth": "requireAdminPanelAccess, requirePermission",
+      "notes": "SQL direto: organizations, projects | Referência estática em: tests/project-large-create-failures.test.mjs, tests/project-large-save.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PUT, PATCH, DELETE /api/admin/users/:id",
+      "file": "functions/api/admin/users/[id].js",
+      "auth": "requireGlobalAdminPanelAccess, requirePermission",
+      "notes": "SQL direto: users, sessions, user_projects, organization_users | Referência estática em: tests/organization-lifecycle-wiring.test.mjs, tests/project-change-request-domain.test.mjs, tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/admin/users/:id/organizations",
+      "file": "functions/api/admin/users/[id]/organizations.js",
+      "auth": "requireSession",
+      "notes": "SQL direto: organizations, organization_users | Referência estática em: tests/geojson-organization-access.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PUT, DELETE /api/admin/users/:id/organizations/:organizationId",
+      "file": "functions/api/admin/users/[id]/organizations/[organizationId].js",
+      "auth": "requireSession",
+      "notes": "SQL direto: users, organizations, organization_users, user_permissions | Referência estática em: tests/admin-user-organization-assignment-ui.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/admin/users",
+      "file": "functions/api/admin/users/index.js",
+      "auth": "requireGlobalAdminPanelAccess, requirePermission",
+      "notes": "SQL direto: users, user_projects, organization_users, organizations | Referência estática em: tests/access-delegation.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/auth/login",
+      "file": "functions/api/auth/login.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "SQL direto: users | Referência estática em: tests/login-autofill-session.test.mjs, tests/session-resilience.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/auth/logout",
+      "file": "functions/api/auth/logout.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/dropbox/list",
+      "file": "functions/api/dropbox/list.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/organization-context.test.mjs, tests/project-lifecycle.test.mjs, tests/project-preview-lifecycle.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/dropbox/preview-file/:fileName",
+      "file": "functions/api/dropbox/preview-file/[fileName].js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/dropbox/preview",
+      "file": "functions/api/dropbox/preview.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-preview-lifecycle.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/dropbox/validate",
+      "file": "functions/api/dropbox/validate.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/health",
+      "file": "functions/api/health.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-large-create-observability.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/maps/buffers",
+      "file": "functions/api/maps/buffers.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/buffer-endpoint.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/maps/isochrones",
+      "file": "functions/api/maps/isochrones.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/isochrone-feature-state.test.mjs, tests/isochrone-service.test.mjs, tests/maono-isochrone-contract.test.mjs, tests/map-runtime-recovery.test.mjs, tests/map-shell-overlay-integration.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/maps/new/context",
+      "file": "functions/api/maps/new/context.js",
+      "auth": "requireSession",
+      "notes": "SQL direto: organizations | Referência estática em: tests/isochrone-feature-state.test.mjs, tests/map-panel-navigation-api.test.mjs, tests/map-point-configuration.test.mjs, tests/map-runtime-recovery.test.mjs, tests/project-route-semantics.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/observability/map-load",
+      "file": "functions/api/observability/map-load.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/map-load-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/organizations/:id/access-governance",
+      "file": "functions/api/organizations/[id]/access-governance.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/access-delegation.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/exports",
+      "file": "functions/api/organizations/[id]/exports.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/files",
+      "file": "functions/api/organizations/[id]/files.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/geojson-organization-access.test.mjs, tests/organization-storage-readiness-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "DELETE /api/organizations/:id/files/:fileId",
+      "file": "functions/api/organizations/[id]/files/[fileId].js",
+      "auth": "requireOrganizationPermission, requireProjectGeoJsonAccess",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/geojson-organization-access.test.mjs, tests/organization-storage-readiness-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/organizations/:id/files/:fileId/download",
+      "file": "functions/api/organizations/[id]/files/[fileId]/download.js",
+      "auth": "requireOrganizationPermission, requireProjectGeoJsonAccess",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/geojson-organization-access.test.mjs, tests/organization-storage-readiness-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/organizations/:id",
+      "file": "functions/api/organizations/[id]/index.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/organizations/:id/limits",
+      "file": "functions/api/organizations/[id]/limits.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/organizations/:id/limits/requests",
+      "file": "functions/api/organizations/[id]/limits/requests.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-change-request-domain.test.mjs, tests/project-change-request-layer-style.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/roadmaps",
+      "file": "functions/api/organizations/[id]/roadmaps.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/roadmap.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PATCH, DELETE, GET /api/organizations/:id/roadmaps/:roadmapId",
+      "file": "functions/api/organizations/[id]/roadmaps/[roadmapId].js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/organizations/:id/roadmaps/:roadmapId/phases",
+      "file": "functions/api/organizations/[id]/roadmaps/[roadmapId]/phases.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/roadmaps/:roadmapId/tasks",
+      "file": "functions/api/organizations/[id]/roadmaps/[roadmapId]/tasks.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PATCH, DELETE /api/organizations/:id/roadmaps/:roadmapId/tasks/:taskId",
+      "file": "functions/api/organizations/[id]/roadmaps/[roadmapId]/tasks/[taskId].js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/roadmaps/:roadmapId/tasks/:taskId/comments",
+      "file": "functions/api/organizations/[id]/roadmaps/[roadmapId]/tasks/[taskId]/comments.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/organizations/:id/roadmaps/:roadmapId/tasks/:taskId/dependencies",
+      "file": "functions/api/organizations/[id]/roadmaps/[roadmapId]/tasks/[taskId]/dependencies.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "DELETE /api/organizations/:id/roadmaps/:roadmapId/tasks/:taskId/dependencies/:dependencyId",
+      "file": "functions/api/organizations/[id]/roadmaps/[roadmapId]/tasks/[taskId]/dependencies/[dependencyId].js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/tickets",
+      "file": "functions/api/organizations/[id]/tickets.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PATCH /api/organizations/:id/tickets/:ticketId",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId].js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/tickets/:ticketId/attachments",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId]/attachments.js",
+      "auth": "requireOrganizationPermission, can",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PATCH, DELETE /api/organizations/:id/tickets/:ticketId/attachments/:attachmentId",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId]/attachments/[attachmentId].js",
+      "auth": "requireOrganizationPermission, can",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/organizations/:id/tickets/:ticketId/attachments/:attachmentId/download",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId]/attachments/[attachmentId]/download.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/geojson-organization-access.test.mjs, tests/organization-storage-readiness-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/organizations/:id/users",
+      "file": "functions/api/organizations/[id]/users.js",
+      "auth": "requireOrganizationPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PATCH, DELETE /api/organizations/:id/users/:userId",
+      "file": "functions/api/organizations/[id]/users/[userId].js",
+      "auth": "can, requireSession",
+      "notes": "SQL direto: users, sessions, organization_users, user_permissions | Referência estática em: tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PATCH /api/organizations/:id/users/:userId/map-access",
+      "file": "functions/api/organizations/[id]/users/[userId]/map-access.js",
+      "auth": "can, requireSession",
+      "notes": "SQL direto: users, organization_users, user_projects, projects, user_permission_denials, user_permissions | Referência estática em: tests/project-route-semantics.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/organizations/:id/users/:userId/permissions",
+      "file": "functions/api/organizations/[id]/users/[userId]/permissions.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/access-delegation.test.mjs, tests/geojson-organization-access.test.mjs, tests/map-panel-navigation-api.test.mjs, tests/project-organization-isolation.test.mjs, tests/project-route-semantics.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "DELETE /api/organizations/:id/users/:userId/permissions/:permission",
+      "file": "functions/api/organizations/[id]/users/[userId]/permissions/[permission].js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/access-delegation.test.mjs"
+    },
+    {
+      "type": "Middleware",
+      "route": "PUT /api/projects/:slug/_middleware",
+      "file": "functions/api/projects/[slug]/_middleware.js",
+      "auth": "requireSession, assertProjectPersistenceRoute, can",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/buffer-preview-policy.test.mjs, tests/preview-middleware.test.mjs, tests/project-large-create-observability.test.mjs, tests/project-large-legacy-lifecycle.test.mjs, tests/project-large-save.test.mjs, tests/project-route-semantics.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/projects/:slug/change-requests",
+      "file": "functions/api/projects/[slug]/change-requests.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-change-request-domain.test.mjs, tests/project-change-request-layer-style.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/:slug/change-requests/:id",
+      "file": "functions/api/projects/[slug]/change-requests/[id].js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/organization-lifecycle-wiring.test.mjs, tests/project-change-request-domain.test.mjs, tests/project-creation-metadata.test.mjs, tests/project-lifecycle-admin-boundary.test.mjs, tests/user-management-evolution.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/projects/:slug/change-requests/:id/apply",
+      "file": "functions/api/projects/[slug]/change-requests/[id]/apply.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-change-request-review-workspace.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, POST /api/projects/:slug/change-requests/:id/review",
+      "file": "functions/api/projects/[slug]/change-requests/[id]/review.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-change-request-review-workspace.test.mjs, tests/project-preview-lifecycle.test.mjs, tests/viewer-persistent-mutation-coverage.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/:slug/change-requests/inbox",
+      "file": "functions/api/projects/[slug]/change-requests/inbox.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-change-request-inbox.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/:slug/config-stream",
+      "file": "functions/api/projects/[slug]/config-stream.js",
+      "auth": "requireSession, can",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/map-runtime-recovery.test.mjs, tests/project-config-stream-backpressure.test.mjs, tests/project-config-stream-watchdog.test.mjs, tests/project-large-load-resilience.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PUT, GET /api/projects/:slug/config",
+      "file": "functions/api/projects/[slug]/config.js",
+      "auth": "requireProjectConfigPermission, can, requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-metadata-api.test.mjs, tests/project-preview-lifecycle.test.mjs, tests/save-deploy-wiring.test.mjs, tests/save-observability-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/projects/:slug/favorite",
+      "file": "functions/api/projects/[slug]/favorite.js",
+      "auth": "requireSession, requireProjectPermission",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/:slug/map-navigation",
+      "file": "functions/api/projects/[slug]/map-navigation.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/isochrone-feature-state.test.mjs, tests/map-load-wiring.test.mjs, tests/map-panel-navigation-api.test.mjs, tests/map-point-configuration.test.mjs, tests/map-runtime-recovery.test.mjs, tests/project-route-semantics.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/:slug/metadata",
+      "file": "functions/api/projects/[slug]/metadata.js",
+      "auth": "requireMetadataPermission, can, requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-metadata-api.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST /api/projects/:slug/save",
+      "file": "functions/api/projects/[slug]/save.js",
+      "auth": "requireSession, requireProjectPermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-large-legacy-lifecycle.test.mjs, tests/project-large-save.test.mjs, tests/save-deploy-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET, PUT /api/projects/:slug/thumbnail",
+      "file": "functions/api/projects/[slug]/thumbnail/index.js",
+      "auth": "requireThumbnailPermission, requireProjectPermission, requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-preview-lifecycle.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/:slug/thumbnail/status",
+      "file": "functions/api/projects/[slug]/thumbnail/status.js",
+      "auth": "requireSession, requireProjectPermission",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-preview-lifecycle.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/favorites",
+      "file": "functions/api/projects/favorites.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "POST, GET /api/projects",
+      "file": "functions/api/projects/index.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Referência estática em: tests/project-creation-metadata.test.mjs, tests/project-preview-lifecycle.test.mjs, tests/save-deploy-wiring.test.mjs, tests/save-observability-wiring.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/projects/recent",
+      "file": "functions/api/projects/recent.js",
+      "auth": "requireSession",
+      "notes": "Persistência delegada ou ausente | Sem referência direta detectada nos testes"
+    },
+    {
+      "type": "Endpoint",
+      "route": "GET /api/session",
+      "file": "functions/api/session.js",
+      "auth": "Verificar handler/delegação; sem inferência",
+      "notes": "SQL direto: organizations, organization_users, user_permissions, organization_user_permissions, role_permissions, user_permission_denials, user_scopes, user_feature_flags, organization_feature_flags, organization_limits | Referência estática em: tests/organization-context.test.mjs"
+    },
+    {
+      "type": "Endpoint",
+      "route": "PUT /api/session/active-organization",
+      "file": "functions/api/session/active-organization.js",
+      "auth": "requireSession",
+      "notes": "SQL direto: organizations, organization_users | Referência estática em: tests/organization-context.test.mjs"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "auth",
+      "file": "functions/_lib/auth.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: sessions, users | Storage: delegado ou ausente"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "permissions",
+      "file": "functions/_lib/permissions.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: projects, organization_users, user_projects, user_permissions, user_permission_denials, role_permissions, audit_logs | Storage: delegado ou ausente"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "projects",
+      "file": "functions/_lib/projects.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: users, projects, organizations, user_projects, organization_users, audit_logs | Storage: Dropbox"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-service",
+      "file": "functions/_lib/project-service.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: projects, organizations, users | Storage: Dropbox"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-config-service",
+      "file": "functions/_lib/project-config-service.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: organization_files | Storage: delegado ou ausente"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-config-revisions",
+      "file": "functions/_lib/project-config-revisions.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: projects, project_config_revisions | Storage: deleteDropboxPathIfExists, joinDropboxPath"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-large-creation",
+      "file": "functions/_lib/project-large-creation.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: organizations, organization_files, projects, organization_resource_reservations, user_projects | Storage: joinDropboxPath, normalizeDropboxRoot"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-large-config-save",
+      "file": "functions/_lib/project-large-config-save.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: organization_files | Storage: ensureDropboxFolder, getDropboxMetadata, appendLargeDropboxUploadSession, finishLargeDropboxUploadSession, startLargeDropboxUploadSession, Dropbox"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-large-legacy-config-save",
+      "file": "functions/_lib/project-large-legacy-config-save.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: projects, project_config_revisions, organization_files | Storage: ensureDropboxFolder, getDropboxMetadata, appendLargeDropboxUploadSession, finishLargeDropboxUploadSession, startLargeDropboxUploadSession, Dropbox"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "organization-files",
+      "file": "functions/_lib/organization-files.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: projects, organization_files | Storage: appendDropboxUploadSession, deleteDropboxPathIfExists, downloadDropboxBinaryFile, ensureDropboxFolder, finishDropboxUploadSession, joinDropboxPath, normalizeDropboxFolderPath, startDropboxUploadSession, uploadDropboxBinaryFile, Dropbox, splitDropboxFilePath, organizationFileDropboxPath"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "organization-lifecycle",
+      "file": "functions/_lib/organization-lifecycle.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: organizations | Storage: normalizeDropboxFolderPath, Dropbox"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "organization-storage",
+      "file": "functions/_lib/organization-storage.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: organizations | Storage: ensureDropboxFolder, normalizeDropboxFolderPath, Dropbox"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "organization-storage-readiness",
+      "file": "functions/_lib/organization-storage-readiness.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: delegado | Storage: delegado ou ausente"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "organization-limit-service",
+      "file": "functions/_lib/organization-limit-service.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: organizations, projects, organization_resource_reservations, organization_files | Storage: delegado ou ausente"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "dropbox",
+      "file": "functions/_lib/dropbox.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: delegado | Storage: getDropboxClient, normalizeDropboxFolderPath, normalizeDropboxPath, normalizeDropboxFileName, Dropbox, joinDropboxPath, createDropboxFolderWithClient, ensureDropboxFolder, listDropboxFolder, listDropboxFolderAll, getDropboxMetadata, deleteDropboxPath"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "dropbox-client",
+      "file": "functions/_lib/dropbox-client.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: delegado | Storage: isCanonicalDropboxError, Dropbox, DropboxClient, createDropboxClient, getDropboxClient"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "dropbox-map-config-repository",
+      "file": "functions/_lib/dropbox-map-config-repository.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: delegado | Storage: downloadDropboxBinaryFile, ensureDropboxFolder, getDropboxMetadata, uploadDropboxBinaryFile, DropboxMapConfigRepository"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-lifecycle",
+      "file": "functions/_lib/project-lifecycle.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: projects | Storage: delegado ou ausente"
+    },
+    {
+      "type": "Persistência / domínio",
+      "route": "project-change-requests",
+      "file": "functions/_lib/project-change-requests.js",
+      "auth": "Biblioteca chamada pelos handlers; revisar autorização no caller",
+      "notes": "SQL: project_change_operations, project_change_requests, organization_tickets, ticket_events | Storage: delegado ou ausente"
+    }
+  ]
+}

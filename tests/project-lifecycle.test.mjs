@@ -355,6 +355,7 @@ test("ledger impede conteúdo concorrente, publica por CAS e recupera retry idem
     projectId: 84,
     revision: 15,
     checksum: base.checksum,
+    attempts: reserved.revision.attempts,
     storageProviderVersion: "rev-provider-15",
     storageProviderHash: "provider-hash",
   });
@@ -363,6 +364,8 @@ test("ledger impede conteúdo concorrente, publica por CAS e recupera retry idem
     organizationId: 7,
     expectedCurrentRevision: 14,
     revision: 15,
+    checksum: base.checksum,
+    attempts: reserved.revision.attempts,
     actor: { id: 10, name: "Editor" },
     expectedLifecycleState: "ACTIVE",
   });
