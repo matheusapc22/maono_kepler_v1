@@ -703,6 +703,18 @@ export async function releaseProjectQuota(
     return null;
   }
 
+  const lifecycleGuard = expectedProject ? `AND EXISTS (
+    SELECT 1 FROM projects
+     WHERE projects.id = ?
+       AND projects.organization_id = organization_resource_reservations.organization_id
+       AND projects.lifecycle_version = ?
+       AND projects.lifecycle_state <> 'ACTIVE'
+  )` : "";
+  const args = [normalizeText(errorCode).slice(0, 120), reservationId];
+  if (expectedProject) {
+    args.push(expectedProject.id ?? null, expectedProject.lifecycle_version ?? null);
+  }
+
   const row = await getDb(env)
     .prepare(
       `UPDATE organization_resource_reservations
@@ -711,22 +723,10 @@ export async function releaseProjectQuota(
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?
          AND status IN ('RESERVED', 'PROCESSING')
-         AND (? IS NULL OR EXISTS (
-           SELECT 1 FROM projects
-            WHERE projects.id = ?
-              AND projects.organization_id = organization_resource_reservations.organization_id
-              AND projects.lifecycle_version = ?
-              AND projects.lifecycle_state <> 'ACTIVE'
-         ))
+         ${lifecycleGuard}
        RETURNING *`,
     )
-    .bind(
-      normalizeText(errorCode).slice(0, 120),
-      reservationId,
-      expectedProject?.id ?? null,
-      expectedProject?.id ?? null,
-      expectedProject?.lifecycle_version ?? null,
-    )
+    .bind(...args)
     .first();
 
   return publicReservation(row);
