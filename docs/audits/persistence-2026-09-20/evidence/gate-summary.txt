@@ -1,0 +1,6 @@
+npm run test:foundation-gate: exit=0; 844/844; fail=0
+npm run test:reliability: exit=0; 184/184; fail=0
+node --experimental-strip-types --test [10 existing CREATE/SAVE contract files]: exit=0; 69/69; fail=0
+Ratchet estrito OK: baseline e inventário high-signal estão idênticos.
+npm run build: exit=0; TypeScript + Vite; 12662 modules transformed; built in 4m 15s.
+Build retains existing externalization and >2500 kB chunk warnings; no threshold change.

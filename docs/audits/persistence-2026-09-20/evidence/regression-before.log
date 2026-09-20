@@ -1,0 +1,135 @@
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ small creation failure remains inactive and retry recovers the same project (162.521115ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✖ concurrent large creation cannot invalidate an already activated winner (2739.675579ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✖ small late failure callback preserves an activated project and its committed quota (29.448216ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✖ large late failure callback preserves an activated project and its committed quota (42.903951ms)
+✖ small failure cleanup cannot invalidate a newer reservation between its read and write (1004.677445ms)
+✖ large failure cleanup cannot invalidate a newer reservation between its read and write (1353.623231ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 1
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6281.237458
+
+✖ failing tests:
+
+test at tests/project-persistence-integration.test.mjs:222:1
+✖ concurrent large creation cannot invalidate an already activated winner (2739.675579ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/fadc687c9b79/maono-audit/tests/project-persistence-integration.test.mjs:231:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/project-persistence-integration.test.mjs:235:38
+✖ small late failure callback preserves an activated project and its committed quota (29.448216ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/fadc687c9b79/maono-audit/tests/project-persistence-integration.test.mjs:247:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/project-persistence-integration.test.mjs:235:38
+✖ large late failure callback preserves an activated project and its committed quota (42.903951ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/fadc687c9b79/maono-audit/tests/project-persistence-integration.test.mjs:247:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/project-persistence-integration.test.mjs:252:38
+✖ small failure cleanup cannot invalidate a newer reservation between its read and write (1004.677445ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'ERROR'
+  - 'PROCESSING'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/fadc687c9b79/maono-audit/tests/project-persistence-integration.test.mjs:273:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'ERROR',
+    expected: 'PROCESSING',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/project-persistence-integration.test.mjs:252:38
+✖ large failure cleanup cannot invalidate a newer reservation between its read and write (1353.623231ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'ERROR'
+  - 'PROCESSING'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/fadc687c9b79/maono-audit/tests/project-persistence-integration.test.mjs:273:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'ERROR',
+    expected: 'PROCESSING',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

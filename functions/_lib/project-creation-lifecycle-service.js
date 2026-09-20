@@ -611,9 +611,21 @@ export async function markCreationFailed(
               active = 0,
               error_message = ?,
               updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?`,
+        WHERE id = ?
+          AND organization_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM projects
+             WHERE projects.organization_file_id = organization_files.id
+               AND (projects.lifecycle_state = 'ACTIVE'
+                    OR projects.lifecycle_version <> ?)
+          )`,
     )
-      .bind(message, reservationId)
+      .bind(
+        message,
+        reservationId,
+        organizationId,
+        Number(failedProject?.lifecycle_version ?? -1),
+      )
       .run();
   }
   return failedProject;
@@ -989,6 +1001,7 @@ export async function createProjectFromKepler(
       releasedQuota = await releaseProjectQuota(env, {
         reservationId: quotaReservation?.id,
         errorCode: error?.code || "PROJECT_CREATION_FAILED",
+        expectedProject: currentProject,
       });
       project = await markCreationFailed(env, {
         reservationId: reservation?.reservation_id,

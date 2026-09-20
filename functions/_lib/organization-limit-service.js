@@ -695,10 +695,24 @@ export async function releaseProjectQuota(
   {
     reservationId,
     errorCode = "PROJECT_CREATION_FAILED",
+    // Failure cleanup supplies its snapshot so a resumed creation keeps its quota.
+    expectedProject = null,
   },
 ) {
   if (!reservationId || !isProjectQuotaReservationEnabled(env)) {
     return null;
+  }
+
+  const lifecycleGuard = expectedProject ? `AND EXISTS (
+    SELECT 1 FROM projects
+     WHERE projects.id = ?
+       AND projects.organization_id = organization_resource_reservations.organization_id
+       AND projects.lifecycle_version = ?
+       AND projects.lifecycle_state <> 'ACTIVE'
+  )` : "";
+  const args = [normalizeText(errorCode).slice(0, 120), reservationId];
+  if (expectedProject) {
+    args.push(expectedProject.id ?? null, expectedProject.lifecycle_version ?? null);
   }
 
   const row = await getDb(env)
@@ -709,9 +723,10 @@ export async function releaseProjectQuota(
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?
          AND status IN ('RESERVED', 'PROCESSING')
+         ${lifecycleGuard}
        RETURNING *`,
     )
-    .bind(normalizeText(errorCode).slice(0, 120), reservationId)
+    .bind(...args)
     .first();
 
   return publicReservation(row);

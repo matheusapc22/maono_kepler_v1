@@ -7,6 +7,9 @@ on:
       - "functions/_lib/save-*.js"
       - "functions/_lib/dropbox*.js"
       - "functions/_lib/project-config-revisions.js"
+      - "functions/_lib/project-config-service.js"
+      - "functions/_lib/project-creation-lifecycle-service.js"
+      - "functions/_lib/organization-limit-service.js"
       - "functions/_lib/project-large-config-save.js"
       - "functions/_lib/project-large-legacy-config-save.js"
       - "functions/_lib/project-large-creation.js"
@@ -25,6 +28,13 @@ on:
       - "tests/project-config-stream-watchdog.test.mjs"
       - "tests/project-config-revision-recycle.test.mjs"
       - "tests/project-config-revision-concurrency.test.mjs"
+      - "tests/project-persistence-integration.test.mjs"
+      - "tests/project-recycle-recovery.test.mjs"
+      - "tests/helpers/project-persistence-fixture.mjs"
+      - "tests/fixtures/maps/golden/**"
+      - "scripts/project-revisions/**"
+      - "package.json"
+      - "schema.sql"
       - ".github/workflows/save-contract-validation.yml"
   workflow_dispatch:
 
@@ -65,6 +75,9 @@ jobs:
 
       - name: Validate unpublished revision recycling
         run: node --test tests/project-config-revision-recycle.test.mjs tests/project-config-revision-concurrency.test.mjs
+
+      - name: Validate persistence flows and manual recovery rehearsal
+        run: npm run test:persistence-integration
 
       - name: Build application
         run: npm run build

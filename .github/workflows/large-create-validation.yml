@@ -9,6 +9,8 @@ on:
       - "functions/_lib/project-config-integrity.js"
       - "functions/_lib/project-large-config-save.js"
       - "functions/_lib/project-large-creation.js"
+      - "functions/_lib/project-creation-lifecycle-service.js"
+      - "functions/_lib/organization-limit-service.js"
       - "functions/_lib/projects.js"
       - "functions/_lib/runtime-environment.js"
       - "src/pages/Kepler/project-create-flow.ts"
@@ -20,6 +22,10 @@ on:
       - "tests/large-create-preview-operator.test.mjs"
       - "tests/project-creation-metadata.test.mjs"
       - "tests/project-large-save.test.mjs"
+      - "tests/project-persistence-integration.test.mjs"
+      - "tests/helpers/project-persistence-fixture.mjs"
+      - "tests/fixtures/maps/golden/**"
+      - "schema.sql"
       - ".github/workflows/large-create-validation.yml"
       - ".github/workflows/large-create-preview-acceptance.yml"
   workflow_dispatch:
@@ -58,6 +64,9 @@ jobs:
           node --experimental-strip-types --test
           tests/project-creation-metadata.test.mjs
           tests/project-large-save.test.mjs
+
+      - name: Exercise CREATE and SAVE services with SQLite and provider failures
+        run: node --experimental-strip-types --test tests/project-persistence-integration.test.mjs
 
       - name: Syntax-check Preview acceptance operator
         run: |
