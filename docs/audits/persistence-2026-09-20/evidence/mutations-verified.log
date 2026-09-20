@@ -1,0 +1,62 @@
+{
+  "results": [
+    {
+      "name": "recovery-token",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "recovery-generation",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "active-creation-fence",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "newer-creation-fence",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "small-creation-fence",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "quota-lifecycle-cas",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "stream-integrity",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "legacy-publication-ledger",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    }
+  ],
+  "killed": 8,
+  "total": 8
+}

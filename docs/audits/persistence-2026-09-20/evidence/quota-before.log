@@ -1,0 +1,36 @@
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✖ large failure quota release cannot overtake a retry after the file CAS (3150.369191ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4400.268044
+
+✖ failing tests:
+
+test at tests/project-persistence-integration.test.mjs:517:1
+✖ large failure quota release cannot overtake a retry after the file CAS (3150.369191ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'RELEASED'
+  - 'PROCESSING'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/fadc687c9b79/maono-audit/tests/project-persistence-integration.test.mjs:536:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'RELEASED',
+    expected: 'PROCESSING',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

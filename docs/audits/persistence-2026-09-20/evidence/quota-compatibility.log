@@ -1,0 +1,16 @@
+✔ release devolve a vaga e commit vincula o projeto (38.112717ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ large failure quota release cannot overtake a retry after the file CAS (3676.820005ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5327.852207

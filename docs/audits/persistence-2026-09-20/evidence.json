@@ -1,0 +1,190 @@
+{
+  "date": "2026-09-20",
+  "baseBranch": "mano_kepler_v1",
+  "baseSha": "c3a8af8f179d773effa331e78ddeca382e335a78",
+  "codeSha": "5c815b265dab6e24f2b1ca008e0eb0f398396287",
+  "localTestedCodeSha": "f7d72576058b941d55840c56709edd442adb3687",
+  "verifiedSourceTree": "85759751e1e601a966e7e4f859d7a2478943a948",
+  "publicationProof": "GitHub and local tested commits have identical Git tree IDs; author/commit IDs differ because publication used the authenticated GitHub connector.",
+  "branch": "test/recycle-recovery-save-integration-20260920",
+  "runtime": "v24.19.0",
+  "pr184": {
+    "url": "https://github.com/matheusapc22/maono_kepler_v1/pull/184",
+    "merged": true,
+    "mergeSha": "c3a8af8f179d773effa331e78ddeca382e335a78",
+    "mergedAt": "2026-09-20T16:38:36Z",
+    "formalReviews": [],
+    "productionDeploymentVerified": false
+  },
+  "coverage": {
+    "newTests": 32,
+    "integrationTests": 27,
+    "recoveryTests": 5,
+    "fixture": "schema.sql + SQLite + real production services and frontend serializers; only external Dropbox HTTP simulated",
+    "networkUsedForTests": false,
+    "qaSessionCreated": false
+  },
+  "regressions": [
+    {
+      "id": "AH-06",
+      "severity": "P1",
+      "classification": "confirmed locally",
+      "before": "5 failing assertions; organization_files.active=0 or status=ERROR for winner/newer attempt",
+      "log": "evidence/regression-before.log"
+    },
+    {
+      "id": "AH-07",
+      "severity": "P1",
+      "classification": "confirmed locally",
+      "before": "new reservation RELEASED instead of PROCESSING",
+      "log": "evidence/quota-before.log"
+    }
+  ],
+  "gates": [
+    {
+      "command": "npm run test:foundation-gate",
+      "result": "passed",
+      "exitCode": 0,
+      "tests": 844,
+      "pass": 844,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "stdoutSha256": "61c04cfe7f1563416b25fda10a36b2d7e3f1bd440457a8efe08b804db8b1ade9"
+    },
+    {
+      "command": "npm run test:reliability",
+      "result": "passed",
+      "exitCode": 0,
+      "tests": 184,
+      "pass": 184,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "stdoutSha256": "bb42c25729a90b1481c84ebb0e1c23f3ddd46d15cc5558b125a89dc916503064"
+    },
+    {
+      "command": "node --experimental-strip-types --test [10 existing CREATE/SAVE contract files]",
+      "result": "passed",
+      "exitCode": 0,
+      "tests": 69,
+      "pass": 69,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "stdoutSha256": "807f5d941822a8c6d8a539c01bfd02643615b92651fe6562f4cfff71b225c701"
+    },
+    {
+      "command": "node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline",
+      "exitCode": 0,
+      "result": "unchanged high-signal inventory",
+      "stdoutSha256": "d5faac36f41c34c7181654c8496b07f9d780a2bc600104e7343cfa562a6c13ef"
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0,
+      "result": "passed",
+      "transformedModules": 12662,
+      "viteBuildDuration": "4m 15s",
+      "warnings": "existing browser externalizations and chunks above 2500 kB; unchanged thresholds"
+    }
+  ],
+  "mutations": {
+    "results": [
+      {
+        "name": "recovery-token",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      },
+      {
+        "name": "recovery-generation",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      },
+      {
+        "name": "active-creation-fence",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      },
+      {
+        "name": "newer-creation-fence",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      },
+      {
+        "name": "small-creation-fence",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      },
+      {
+        "name": "quota-lifecycle-cas",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      },
+      {
+        "name": "stream-integrity",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      },
+      {
+        "name": "legacy-publication-ledger",
+        "killed": true,
+        "baselineExitCode": 0,
+        "exitCode": 1,
+        "timedOut": false
+      }
+    ],
+    "killed": 8,
+    "total": 8
+  },
+  "fileSha256": {
+    "functions/_lib/organization-limit-service.js": "618b3320793ad97658c9aa41f9d3b2dab940fdc83841f246e9498b3251fea9d2",
+    "functions/_lib/project-creation-lifecycle-service.js": "552343d5190fd3b644f1836a79f1650cbfd4e6c811dcd354848e03bee40fffc6",
+    "functions/_lib/project-large-creation.js": "e2e9a109f93c8de97f26b7f4f8acdb34abd8482d92361e34e82642f56bc62100",
+    "tests/project-persistence-integration.test.mjs": "bb573ca6ba222d26897ae00d40038897f150818b4e6dcb2351512a23637dc21c",
+    "tests/project-recycle-recovery.test.mjs": "a166d6bdd14887f1a5fb5a973486780675aec23cf576aa4ae3179ca03608167c",
+    "tests/helpers/project-persistence-fixture.mjs": "c2f506007d08e01a88403fe972cf127ddf5acc89863116435e8bcf708a8f0d72",
+    "scripts/project-revisions/recover-verified-absent.sql": "64d9b6194685888e24fc139f45971d0c65b2998970080dd87e69f3e2f86f05d2",
+    "scripts/audit-persistence-mutations.mjs": "6af79a1c2e9b7696d3269bf8f144c3093d432d06fac905cac488ef350857ac36"
+  },
+  "acceptance": {
+    "OB-02": {
+      "codeProcedure": "complete",
+      "localTests": "complete",
+      "operational": "pending; repair only for verified absence and quiescence; other states preserve fence"
+    },
+    "OB-03": {
+      "code": "complete",
+      "localTests": "complete",
+      "remoteAcceptance": "OB-04 pending"
+    },
+    "mergeOfThisChange": false,
+    "deploymentOfThisChange": false,
+    "migrationsApplied": false,
+    "previewMutationsEnabled": false,
+    "operatorsActivated": false,
+    "changeRequestsReactivated": false
+  },
+  "limitations": [
+    "Node 24 local; existing CI Node 22 is a separate check",
+    "D1 remote consistency and Dropbox real object identity/quiescence not proven by SQLite/HTTP fixture",
+    "No authenticated endpoint/browser QA or pixel/GPU/tiles proof added",
+    "Nine historical expanded-suite failures remain tracked in OB-05",
+    "No generic recovery for present/unknown object or in-flight deletion",
+    "Legacy small overwrite semantics preserved"
+  ]
+}

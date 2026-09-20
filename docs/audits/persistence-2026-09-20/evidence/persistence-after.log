@@ -1,0 +1,127 @@
+> maono@0.0.0 test:persistence-integration
+> node --experimental-strip-types --test tests/project-recycle-recovery.test.mjs tests/project-persistence-integration.test.mjs
+
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ small creation, response-loss retry, save and reopen use one project and one quota (184.960788ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ small creation failure remains inactive and retry recovers the same project (110.097917ms)
+✔ different concurrent small saves publish one content and reject the stale writer (59.133079ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ small legacy save retains its existing overwrite semantics and can be reopened (22.123116ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ versioned streaming round-trip and lost-response retry preserve one revision (4045.800482ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ versioned interrupted and truncated streams never publish and permit retry (2636.265636ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ versioned reconciles a lost upload_session/append_v2 acknowledgement without duplicate bytes (1666.418092ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ versioned reconciles a lost upload_session/finish acknowledgement without duplicate bytes (1747.071453ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ versioned provider hash mismatch preserves HEAD and same-content retry reconciles storage (2204.802743ms)
+✔ versioned failed publication preserves READY for retry rather than losing stored content (2128.142749ms)
+✔ legacy streaming round-trip and lost-response retry preserve one revision (3034.518514ms)
+✔ legacy interrupted and truncated streams never publish and permit retry (2409.257704ms)
+✔ legacy reconciles a lost upload_session/append_v2 acknowledgement without duplicate bytes (1716.811957ms)
+✔ legacy reconciles a lost upload_session/finish acknowledgement without duplicate bytes (1279.151335ms)
+✔ legacy provider hash mismatch preserves HEAD and same-content retry reconciles storage (2028.599664ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ legacy failed publication preserves READY for retry rather than losing stored content (1933.00704ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ large creation activation and response-loss retry preserve owner, quota and published bytes (2111.37458ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ large creation cancelled upload stays unpublished and retry reuses its reservation (2009.908943ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ large creation failure after publish resumes finalization without another revision (2242.415819ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ concurrent large creation cannot invalidate an already activated winner (2362.181254ms)
+✔ versioned streaming publication rejects READY metadata replaced after its read (1978.247524ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ legacy streaming publication rejects READY metadata replaced after its read (2039.562644ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ small late failure callback preserves an activated project and its committed quota (39.349057ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ large late failure callback preserves an activated project and its committed quota (35.145845ms)
+✔ small failure cleanup cannot invalidate a newer reservation between its read and write (1222.433134ms)
+✔ large failure cleanup cannot invalidate a newer reservation between its read and write (1373.022605ms)
+✔ large failure quota release cannot overtake a retry after the file CAS (1388.0894ms)
+✔ interrupted recycle before deletion preserves the object and blocks all retries (143.46375ms)
+✔ verified absent recovery resumes old-candidate through the normal save pipeline (78.482242ms)
+✔ verified absent recovery resumes replacement through the normal save pipeline (68.39522ms)
+✔ recovery CAS refuses drift in tenant, token, attempt, path, lifecycle or published HEAD (60.704392ms)
+✔ late deletion stays fenced until its producer terminates; timeout age never unlocks it (43.343772ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 45479.830009
