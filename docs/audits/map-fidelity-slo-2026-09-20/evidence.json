@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "kind": "engineering-verification",
+  "recordedAt": "2026-09-20T18:37:48.795346+00:00",
+  "baseline": {
+    "branch": "mano_kepler_v1",
+    "sha": "43d35faeb0ffc4fb3ee003c97282b2476ecb253a",
+    "mergedPR": 186,
+    "mergedAt": "2026-09-20T18:08:14Z"
+  },
+  "localCodeCommit": "e0f182ee5c2d3032b89f570bfe2990b9ff89a583",
+  "runtime": {
+    "node": "v24.19.0",
+    "playwright": "1.55.0",
+    "chromiumBuild": 1187,
+    "viewport": [
+      1000,
+      640
+    ],
+    "clusteringFlag": "true only in local test server"
+  },
+  "sloContractSha256": "7bbaf6d1fcac34fb84bff40bb91ea3aace2011096ed95005a1a2c59afe4f403f",
+  "tests": {
+    "sloBaseline": {
+      "pass": 26,
+      "fail": 0
+    },
+    "regressionBeforeFix": {
+      "pass": 28,
+      "fail": 1,
+      "expected": "INVALID",
+      "actual": "PASS"
+    },
+    "sloAfterFix": {
+      "pass": 30,
+      "fail": 0
+    },
+    "sloMutations": {
+      "results": [
+        {
+          "name": "contradictory-initial-classification",
+          "killed": true,
+          "baselineExitCode": 0,
+          "exitCode": 1,
+          "timedOut": false
+        },
+        {
+          "name": "insufficient-samples-approved",
+          "killed": true,
+          "baselineExitCode": 0,
+          "exitCode": 1,
+          "timedOut": false
+        },
+        {
+          "name": "unverified-ready-accepted",
+          "killed": true,
+          "baselineExitCode": 0,
+          "exitCode": 1,
+          "timedOut": false
+        },
+        {
+          "name": "provisioning-deadline-drift",
+          "killed": true,
+          "baselineExitCode": 0,
+          "exitCode": 1,
+          "timedOut": false
+        }
+      ],
+      "killed": 4,
+      "total": 4
+    },
+    "viewer": {
+      "pass": 7,
+      "fail": 0,
+      "maps": 6,
+      "pixelTolerance": 0,
+      "inputs": "synthetic C0 Golden Maps, including legacy unversioned shape",
+      "frames": "evidence/viewer-frames.json"
+    }
+  },
+  "operationalAcceptance": {
+    "OB-06": "PENDING",
+    "OB-07": "PENDING",
+    "productionDeploymentVerified": false,
+    "authorizedSessionAvailable": false,
+    "realSloExportsAvailable": false,
+    "observationWindowStartedInThisExecution": false,
+    "realOrganizationsObserved": null,
+    "realIncidentsObserved": null,
+    "sloReportGeneratedFromProductionData": false
+  },
+  "limits": [
+    "Kepler viewer and Maono reducer/layers/hydrator/serializer are real; enclosing page, basemap, unused icon catalogue and datasets are controlled locally.",
+    "Authentication, remote save/reopen, client maps, externally hosted basemaps, physical GPU and complete Maono shell require authorized operational QA.",
+    "Synthetic SLO fixtures are tests, not production observations. No production acceptance report was fabricated."
+  ],
+  "logs": [
+    {
+      "path": "evidence/slo-baseline.log.gz",
+      "sha256": "2b1104d81495fbd6e046459f9b8139dc99df1e151756a8373fc41162ed4ee151",
+      "uncompressedSha256": "5d4ed693d888265804f541d57502223d211215a3b777c725e658a8578b258819"
+    },
+    {
+      "path": "evidence/slo-regression-before.log.gz",
+      "sha256": "e19e0edafe8bd24e5d84f2e843d63d8824604b928498a8f45ff597640e4a89de",
+      "uncompressedSha256": "5df7e70a3d55c6ca2de51a80b0e42c6ebe7ea2e3c0c4c3c9aa55bd06b5391fe4"
+    },
+    {
+      "path": "evidence/slo-after.log.gz",
+      "sha256": "226e1bc761c135051e504c340758b57cd52594ca13a94b5141a468dd04cec032",
+      "uncompressedSha256": "1cd24c09041e8be6495ab7bfa7ca8874b3d9cf634b46a1539de6705a53a98271"
+    },
+    {
+      "path": "evidence/viewer-final-candidate.log.gz",
+      "sha256": "fa5e3460773e6073c390dceb82f04b05585c19c8fc69f80f97cf784c9bab2105",
+      "uncompressedSha256": "c55a22c6529fd78833b4691add3d56fed9657c38e303dc9a8745a8745897002e"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "evidence/mutations.json",
+      "sha256": "dce73e760281da9af44921dd64f67a883b0aa1965ddfca21f2fd5e65ddbc458e"
+    },
+    {
+      "path": "evidence/viewer-frames.json",
+      "sha256": "341b5b8a13eb4c543e9f3384aa053681cdb76332c6e218fbd94e20830c08568c"
+    },
+    {
+      "path": "evidence/viewer-captures.zip",
+      "sha256": "7a780a7652880ca30e4f7bf9b67fa6576537cf1c5c43a94aa4da52a60e54ec1c"
+    }
+  ],
+  "publishedCodeCommit": "33b2e95070c918b7ecc54dba4d2a8c956e21c00b",
+  "codeTree": "f14c1fbadeebd0c9a9deaebef4f865d592c6aea0"
+}

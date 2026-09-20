@@ -236,6 +236,60 @@ test("falha permanente inicial é relatada separadamente da coorte transitória"
   assert.equal(report.cohorts.permanentIncidents, 1);
 });
 
+test("classificações iniciais contraditórias do mesmo incidente invalidam a evidência", () => {
+  for (const reverse of [false, true]) {
+    const input = fixture({ incidentCount: 101 });
+    const initial = input.audit.find((row) => metadata(row).type === "failure" && metadata(row).organizationId === 101);
+    const contradiction = structuredClone(initial);
+    contradiction.id = 99000;
+    metadata(contradiction).retryable = false;
+    input.audit.push(contradiction);
+    if (reverse) input.audit.reverse();
+    const report = buildReliabilitySloReport(input);
+    assert.equal(report.status, "INVALID");
+    assert.match(report.errors[0], /classificação inicial divergente/i);
+  }
+});
+
+test("permutar exportações não altera métricas nem permite ocultar recuperação tardia", () => {
+  const input = fixture();
+  for (const row of input.audit.filter((row) => metadata(row).type === "operational" && metadata(row).organizationId <= 2)) {
+    metadata(row).observedAt = iso(START + 2 * 3600000);
+  }
+  const expected = buildReliabilitySloReport(input);
+  assert.equal(expected.status, "FAIL");
+  for (const rotate of [1, 31, 499, 999]) {
+    const shuffled = {
+      ...input,
+      organizations: [...input.organizations].reverse(),
+      audit: [...input.audit.slice(rotate), ...input.audit.slice(0, rotate)].reverse(),
+    };
+    assert.deepEqual(buildReliabilitySloReport(shuffled), expected);
+  }
+});
+
+test("observação inicial repetida e consistente não infla a coorte nem invalida o relatório", () => {
+  const input = fixture();
+  const expected = buildReliabilitySloReport(input);
+  const repeated = structuredClone(input.audit.find((row) => metadata(row).type === "failure"));
+  repeated.id = 99000;
+  input.audit.push(repeated);
+  assert.deepEqual(buildReliabilitySloReport(input), expected);
+});
+
+test("cobertura um milissegundo menor não é arredondada para aceite", () => {
+  for (const change of [
+    (input) => { input.manifest.coverage.from = iso(START + 1); },
+    (input) => { input.manifest.coverage.through = iso(THROUGH - 1); },
+    (input) => { input.manifest.window.observedThrough = iso(THROUGH - 1); },
+    (input) => { input.manifest.safetyChecks[0].through = iso(THROUGH - 1); },
+  ]) {
+    const input = fixture();
+    change(input);
+    assert.equal(buildReliabilitySloReport(input).status, "INCONCLUSIVE");
+  }
+});
+
 test("falha de execução superseded não abre novo incidente após conclusão mais recente", () => {
   const input = fixture();
   input.audit.push({ id: 90000, action: "organization.storage.observation", details: { metadata: {

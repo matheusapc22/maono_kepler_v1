@@ -169,6 +169,9 @@ export function buildReliabilitySloReport({ manifest, organizations, audit }, co
       const isInitialFailure = completedAt === firstFailedAt;
       const previous = incidents.get(event.incidentId);
       invariant(!previous || (previous.organizationId === event.organizationId && previous.firstFailedAt === firstFailedAt), "Incidente com identidade ou início divergente");
+      if (isInitialFailure && previous?.initialObservationPresent) {
+        invariant(previous.retryable === event.retryable, "Incidente com classificação inicial divergente");
+      }
       // Preserve the initial classification: a permanent failure after initial
       // transient errors is still an unsuccessful member of that first cohort.
       // The first *exported* event may already be a retry after a lost audit row.

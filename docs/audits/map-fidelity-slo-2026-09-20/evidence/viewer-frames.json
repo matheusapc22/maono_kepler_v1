@@ -1,0 +1,220 @@
+[
+  {
+    "synthetic": true,
+    "name": "map-filters-smart-histogram",
+    "before": {
+      "hash": "be5cb4808055d20dd21df9c13d09f41f2be11b2072b212636f5ff616e9ba868d",
+      "paintedPixels": 48,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "filtered-points",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "after": {
+      "hash": "be5cb4808055d20dd21df9c13d09f41f2be11b2072b212636f5ff616e9ba868d",
+      "paintedPixels": 48,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "filtered-points",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "configComparison": "exact-with-explicit-Kepler-legacy-filter-migration"
+  },
+  {
+    "synthetic": true,
+    "name": "map-geojson-polygon",
+    "before": {
+      "hash": "144ce59adc1f561be5bac6574b5ac4eebe6c0468629136fbb6e55bd35dbb3c59",
+      "paintedPixels": 23976,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "polygon",
+        "polygon-polygons-fill",
+        "polygon-polygons-stroke",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "after": {
+      "hash": "144ce59adc1f561be5bac6574b5ac4eebe6c0468629136fbb6e55bd35dbb3c59",
+      "paintedPixels": 23976,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "polygon",
+        "polygon-polygons-fill",
+        "polygon-polygons-stroke",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "configComparison": "exact"
+  },
+  {
+    "synthetic": true,
+    "name": "map-isochrone-persisted",
+    "before": {
+      "hash": "147aef3d49e5251abaeb13246a69a49a98e3ff9d59c3698d614bef74689ea32f",
+      "paintedPixels": 15346,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "isochrone",
+        "isochrone-polygons-fill",
+        "isochrone-polygons-stroke",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "after": {
+      "hash": "147aef3d49e5251abaeb13246a69a49a98e3ff9d59c3698d614bef74689ea32f",
+      "paintedPixels": 15346,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "isochrone",
+        "isochrone-polygons-fill",
+        "isochrone-polygons-stroke",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "configComparison": "exact"
+  },
+  {
+    "synthetic": true,
+    "name": "map-point-basic",
+    "before": {
+      "hash": "ba4c08c779638ba42d3fbc4bbc6ead34a17325e459523cbb7f0c4d394c63258f",
+      "paintedPixels": 67,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "points",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "after": {
+      "hash": "ba4c08c779638ba42d3fbc4bbc6ead34a17325e459523cbb7f0c4d394c63258f",
+      "paintedPixels": 67,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "points",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "configComparison": "exact"
+  },
+  {
+    "synthetic": true,
+    "name": "map-point-cluster-v2-current",
+    "before": {
+      "hash": "b591d8361c6a5ab8e203faabafa36150d33b7b2f4ebd984a59252bc8d9608311",
+      "paintedPixels": 5124,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "points-maono-cluster-runtime",
+        "points-maono-cluster-runtime-cluster",
+        "points-maono-cluster-runtime-count-labels",
+        "points-maono-cluster-runtime-count-labels-characters",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "after": {
+      "hash": "b591d8361c6a5ab8e203faabafa36150d33b7b2f4ebd984a59252bc8d9608311",
+      "paintedPixels": 5124,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "points-maono-cluster-runtime",
+        "points-maono-cluster-runtime-cluster",
+        "points-maono-cluster-runtime-count-labels",
+        "points-maono-cluster-runtime-count-labels-characters",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "configComparison": "exact"
+  },
+  {
+    "synthetic": true,
+    "name": "map-point-cluster-v1-legacy",
+    "before": {
+      "hash": "b591d8361c6a5ab8e203faabafa36150d33b7b2f4ebd984a59252bc8d9608311",
+      "paintedPixels": 5124,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "points-maono-cluster-runtime",
+        "points-maono-cluster-runtime-cluster",
+        "points-maono-cluster-runtime-count-labels",
+        "points-maono-cluster-runtime-count-labels-characters",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "after": {
+      "hash": "b591d8361c6a5ab8e203faabafa36150d33b7b2f4ebd984a59252bc8d9608311",
+      "paintedPixels": 5124,
+      "width": 1000,
+      "height": 640,
+      "renderer": "WebKit WebGL",
+      "layers": [
+        "points-maono-cluster-runtime",
+        "points-maono-cluster-runtime-cluster",
+        "points-maono-cluster-runtime-count-labels",
+        "points-maono-cluster-runtime-count-labels-characters",
+        "kepler_editor_layer",
+        "kepler_editor_layer-geojson",
+        "kepler_editor_layer-tooltips",
+        "kepler_editor_layer-tooltips-characters"
+      ]
+    },
+    "configComparison": "exact"
+  }
+]
