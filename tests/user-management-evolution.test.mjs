@@ -7,7 +7,6 @@ const organizationUser = await readFile(new URL("../functions/api/organizations/
 const membership = await readFile(new URL("../functions/api/admin/users/[id]/organizations/[organizationId].js", import.meta.url), "utf8");
 const adminUiShell = await readFile(new URL("../src/pages/Admin/components/AdminUserManager.tsx", import.meta.url), "utf8");
 const adminUiLegacy = await readFile(new URL("../src/pages/Admin/components/AdminUserManagerLegacy.tsx", import.meta.url), "utf8");
-const adminUi = `${adminUiShell}\n${adminUiLegacy}`;
 
 test("alterações de senha usam hash e invalidam sessões", () => {
   assert.match(adminUser, /hashPassword\(password\)/);
@@ -29,7 +28,14 @@ test("somente super admin gerencia organizações de usuário", () => {
 });
 
 test("painel oferece criação, edição, senha, exclusão e organizações", () => {
-  for (const label of ["Novo usuário", "Editar usuário", "Atribuir ou alterar senha", "Excluir usuário", "Organizações atribuídas"]) {
-    assert.match(adminUi, new RegExp(label));
+  assert.match(adminUiShell, /import AdminUserManagerLegacy from "\.\/AdminUserManagerLegacy"/);
+  assert.match(adminUiShell, /<AdminUserManagerLegacy \{\.\.\.props\}/);
+  for (const label of ["Novo usuário", "Dados do usuário", "Nova senha", "Excluir usuário", "Organizações"]) {
+    assert.match(adminUiLegacy, new RegExp(label));
   }
+  assert.match(adminUiLegacy, /onSubmit=\{save\}/);
+  assert.match(adminUiLegacy, /onSubmit=\{create\}/);
+  assert.match(adminUiLegacy, /type="password"[\s\S]*value=\{draft.password\}/);
+  assert.match(adminUiLegacy, /onClick=\{\(\) => void remove\(\)\}/);
+  assert.match(adminUiLegacy, /isSuperAdmin && selectedView === "organizations"/);
 });

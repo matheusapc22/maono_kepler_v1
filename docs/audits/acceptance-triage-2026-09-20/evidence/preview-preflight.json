@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-09-20T17:49:53.711Z",
+  "url": "https://1a44738f.maono-kepler-v1.pages.dev",
+  "botReferencedHead": "7c10209cfb1867b26180f569d9822c7b63ed53da",
+  "productMerge": "b49dbb6620e86e268ff6119e76317d3272509ec7",
+  "health": {
+    "status": 200,
+    "runtimeEnvironment": "preview",
+    "preview": true,
+    "databaseReachable": true
+  },
+  "anonymousProjectsStatus": 401,
+  "authenticatedAcceptance": "NOT_RUN_NO_LEGITIMATE_SESSION",
+  "mutations": "NOT_RUN_NO_AUTHORIZED_ENVIRONMENT",
+  "productionDeployment": "NOT_VERIFIED"
+}

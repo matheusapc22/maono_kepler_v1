@@ -3,10 +3,11 @@ import test from "node:test";
 
 import {
   MAX_CLIENT_POINT_COUNT,
+  POINT_CLUSTERING_VERSION,
   getAdaptivePointClusterDefaults,
   normalizePointClusteringExtension,
-  pointClusterLayerId,
 } from "../src/pages/Kepler/clustering/point-cluster-policy.ts";
+import { adaptiveClusterDeckLayerId, legacyPointClusterLayerId } from "../src/pages/Kepler/clustering/point-cluster-controller.ts";
 import {
   getPointClusterEligibility,
 } from "../src/pages/Kepler/clustering/point-cluster-eligibility.ts";
@@ -30,7 +31,7 @@ test("normaliza configuração ausente sem ativar clustering", () => {
   assert.deepEqual(
     normalizePointClusteringExtension(undefined),
     {
-      version: 1,
+      version: 2,
       layers: {},
     },
   );
@@ -51,14 +52,14 @@ test("aplica defaults seguros a configuração parcial", () => {
     enabled: true,
     clusterMaxZoom: 11.5,
     hysteresis: 0.25,
-    clusterSize: 50,
+    clusterSize: 40,
     showCount: true,
   });
 });
 
 test("ignora versão futura em vez de interpretar campos desconhecidos", () => {
   const normalized = normalizePointClusteringExtension({
-    version: 2,
+    version: POINT_CLUSTERING_VERSION + 1,
     layers: {
       estabelecimentos: {
         enabled: true,
@@ -77,12 +78,12 @@ test("calcula defaults adaptativos por volume", () => {
   });
   assert.deepEqual(getAdaptivePointClusterDefaults(10_001), {
     clusterMaxZoom: 12,
-    clusterSize: 55,
+    clusterSize: 40,
     delivery: "warn",
   });
   assert.deepEqual(getAdaptivePointClusterDefaults(100_001), {
     clusterMaxZoom: 13,
-    clusterSize: 70,
+    clusterSize: 40,
     delivery: "warn",
   });
   assert.equal(
@@ -93,11 +94,12 @@ test("calcula defaults adaptativos por volume", () => {
   );
 });
 
-test("gera ID determinístico para a camada emparelhada", () => {
+test("gera IDs determinísticos distintos para migração legada e runtime transitório", () => {
   assert.equal(
-    pointClusterLayerId("estabelecimentos"),
+    legacyPointClusterLayerId("estabelecimentos"),
     "maono-cluster-estabelecimentos",
   );
+  assert.equal(adaptiveClusterDeckLayerId("estabelecimentos"), "estabelecimentos-maono-cluster-runtime");
 });
 
 test("aceita Point Layer com coordenadas e volume elegível", () => {

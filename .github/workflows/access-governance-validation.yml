@@ -61,6 +61,7 @@ on:
       - "src/pages/Kepler/**"
       - "src/pages/Projects/**"
       - "tests/access-delegation.test.mjs"
+      - "tests/**/*.mjs"
       - "tests/admin-user-manager-delegation-map.test.mjs"
       - "tests/cloudflare-build-chunking.test.mjs"
       - "tests/map-config-*.test.mjs"
@@ -130,3 +131,6 @@ jobs:
 
       - name: MACRO C — Progressive gate
         run: npm run test:macro-c-gate
+
+      - name: Expanded Node regression suite
+        run: npm run test:expanded

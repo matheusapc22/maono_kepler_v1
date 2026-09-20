@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [runtime, workflow, reviewPage, reviewApi, backend] = await Promise.all([
+const [composition, runtime, workflow, reviewPage, reviewApi, backend] = await Promise.all([
   readFile(
     new URL("../src/pages/Kepler/change-requests/ViewerWorkingCopyRuntime.tsx", import.meta.url),
+    "utf8",
+  ),
+  readFile(
+    new URL("../src/pages/Kepler/change-requests/ViewerWorkingCopyRuntimeLegacy.tsx", import.meta.url),
     "utf8",
   ),
   readFile(
@@ -25,7 +29,9 @@ const [runtime, workflow, reviewPage, reviewApi, backend] = await Promise.all([
   ),
 ]);
 
-test("Viewer captura somente visualizações persistíveis previstas", () => {
+test("runtime composto monta a captura de visibilidade, filtro e ordem sem capturar viewport", () => {
+  assert.match(composition, /import ViewerWorkingCopyRuntimeLegacy from "\.\/ViewerWorkingCopyRuntimeLegacy\.tsx"/);
+  assert.match(composition, /<ViewerWorkingCopyRuntimeLegacy \{\.\.\.props\} store=\{coordinatedStore\}/);
   for (const operation of [
     "layer.visibility.update",
     "persistent.filter.update",
