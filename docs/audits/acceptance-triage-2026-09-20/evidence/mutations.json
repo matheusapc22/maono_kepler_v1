@@ -1,0 +1,48 @@
+{
+  "results": [
+    {
+      "name": "geojson-authorization-bypass",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "unknown-profile-promoted",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "spatial-radius-drift",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "legacy-pair-retained",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "hysteresis-boundary-drift",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    },
+    {
+      "name": "feature-off-ignored",
+      "killed": true,
+      "baselineExitCode": 0,
+      "exitCode": 1,
+      "timedOut": false
+    }
+  ],
+  "killed": 6,
+  "total": 6
+}
