@@ -11,6 +11,7 @@ export const DELEGABLE_PERMISSION_CATALOG = Object.freeze([
   { code: "document.upload", group: "Arquivos e documentos", name: "Enviar documentos", risk: "standard", ownerDelegable: true },
   { code: "document.download", group: "Arquivos e documentos", name: "Baixar documentos", risk: "standard", ownerDelegable: true },
   { code: "document.delete", group: "Arquivos e documentos", name: "Excluir documentos", risk: "irreversible", ownerDelegable: true },
+  { code: "document.manage", group: "Arquivos e documentos", name: "Gerenciar organização de documentos", risk: "operational", ownerDelegable: true },
   { code: "ticket.view", group: "Central de chamados", name: "Acompanhar chamados", risk: "standard", ownerDelegable: true },
   { code: "ticket.create", group: "Central de chamados", name: "Abrir novos chamados", risk: "standard", ownerDelegable: true },
   { code: "ticket.comment", group: "Central de chamados", name: "Comentar em chamados", risk: "standard", ownerDelegable: true },

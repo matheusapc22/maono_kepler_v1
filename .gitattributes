@@ -1,0 +1,2 @@
+# Keep SQL migrations stable across Windows/macOS/Linux checkouts.
+migrations/*.sql text eol=lf

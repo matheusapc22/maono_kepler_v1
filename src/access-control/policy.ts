@@ -57,6 +57,7 @@ const OWNER_NATIVE_PERMISSIONS: readonly Permission[] = [
   "document.upload",
   "document.download",
   "document.delete",
+  "document.manage",
 
   "ticket.view",
   "ticket.create",
