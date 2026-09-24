@@ -112,5 +112,5 @@ test("UI reserva folderId/trash e implementa filtros, chips e paginação increm
   assert.match(source, /updatedFrom/);
   assert.match(source, /projectId/);
   assert.doesNotMatch(source, /folderId:/);
-  assert.doesNotMatch(source, /state:\s*["']trash[#']/);
+  assert.doesNotMatch(source, /state:\s*["']trash["']/);
 });

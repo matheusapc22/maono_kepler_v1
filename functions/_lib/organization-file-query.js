@@ -249,7 +249,7 @@ export function buildOrganizationFileListSql(
 ) {
   const { where, bindings } = baseWhere(organizationId, canViewGeoJson);
   applyFilters(where, bindings, query);
-  if (includeCorsor) applyCursor(where, bindings, query);
+  if (includeCursor) applyCursor(where, bindings, query);
 
   const sort = SORTS[query.sort];
   return {
