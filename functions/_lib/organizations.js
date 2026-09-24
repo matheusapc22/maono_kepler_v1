@@ -55,6 +55,7 @@ const OWNER_GRANTABLE_PERMISSIONS = new Set([
   "document.upload",
   "document.download",
   "document.delete",
+  "document.manage",
 
   "ticket.view",
   "ticket.create",

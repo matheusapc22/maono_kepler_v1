@@ -44,6 +44,7 @@ export type OrganizationFile = {
   id: number;
   projectId?: number | string | null;
   projectName?: string | null;
+  folderId?: number | string | null;
   name: string;
   fileType?: string;
   mimeType?: string;
@@ -92,6 +93,16 @@ export type OrganizationFileListResponse = {
   facets: OrganizationFileListFacets;
   pagination: OrganizationFileListPagination;
   storage?: unknown;
+};
+
+export type OrganizationDocumentFolder = {
+  id: number | string;
+  organizationId: number | string;
+  parentId?: number | string | null;
+  name: string;
+  createdBy?: number | string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
 export type OrganizationTicket = {
@@ -459,6 +470,65 @@ export function listOrganizationFiles(
   const queryString = params.toString();
   return requestJson<OrganizationFileListResponse>(
     `${organizationPath(organizationId)}/files${queryString ? `?${queryString}` : ""}`,
+  );
+}
+
+export function listOrganizationDocumentFolders(
+  organizationId: number | string,
+) {
+  return requestJson<{ ok: boolean; folders: OrganizationDocumentFolder[] }>(
+    `${organizationPath(organizationId)}/document-folders`,
+  );
+}
+
+export function createOrganizationDocumentFolder(
+  organizationId: number | string,
+  payload: { name: string; parentId?: number | string | null },
+) {
+  return requestJson<{ ok: boolean; folder: OrganizationDocumentFolder }>(
+    `${organizationPath(organizationId)}/document-folders`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function updateOrganizationDocumentFolder(
+  organizationId: number | string,
+  folderId: number | string,
+  payload: { name?: string; parentId?: number | string | null },
+) {
+  return requestJson<{ ok: boolean; folder: OrganizationDocumentFolder }>(
+    `${organizationPath(organizationId)}/document-folders/${pathSegment(folderId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function deleteOrganizationDocumentFolder(
+  organizationId: number | string,
+  folderId: number | string,
+) {
+  return requestJson<{ ok: boolean; deleted: boolean }>(
+    `${organizationPath(organizationId)}/document-folders/${pathSegment(folderId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function moveOrganizationFileToFolder(
+  organizationId: number | string,
+  fileId: number | string,
+  folderId: number | string | null,
+) {
+  return requestJson<{ ok: boolean; file: OrganizationFile }>(
+    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ folderId }),
+    },
   );
 }
 

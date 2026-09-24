@@ -134,6 +134,7 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "document.upload",
   "document.download",
   "document.delete",
+  "document.manage",
 
   "ticket.view",
   "ticket.create",
@@ -741,7 +742,8 @@ async function organizationPermissionAllows(
   }
 
   const relation = await getOrganizationRelation(env, user, organizationId);
-  const managementPermission = isManagementPermission(permission);
+  const managementPermission =
+    isManagementPermission(permission) || permission === "document.manage";
 
   if (role === "admin") {
     const adminHasNativeAccess =

@@ -165,6 +165,15 @@ export const COMMERCIAL_ACCESSES: CommercialAccess[] = [
     ownerGrantable: true,
   },
   {
+    code: "document.manage",
+    name: "Gerenciar organização de documentos",
+    description:
+      "Criar e reorganizar pastas e mover documentos dentro da organização.",
+    group: "Arquivos e documentos",
+    risk: "operational",
+    ownerGrantable: true,
+  },
+  {
     code: "ticket.view",
     name: "Acompanhar chamados",
     description: "Ver chamados e o andamento do atendimento.",

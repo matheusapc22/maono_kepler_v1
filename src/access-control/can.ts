@@ -76,6 +76,7 @@ const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
     "document.upload",
     "document.download",
     "document.delete",
+    "document.manage",
 
     "ticket.view",
     "ticket.create",
