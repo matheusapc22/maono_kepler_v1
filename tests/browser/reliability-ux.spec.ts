@@ -40,7 +40,7 @@ for (const scenario of [
 ]) {
   test(`documentos: ${scenario.code} mostra estado seguro sem falso vazio`, async ({ page }) => {
     let requests = 0;
-    await page.route("**/api/organizations/1/files", async (route) => {
+    await page.route("**/api/organizations/1/files*", async (route) => {
       requests += 1;
       await route.fulfill({ status: 503, json: storageFailure(scenario.code, scenario.retryable) });
     });
@@ -59,7 +59,7 @@ test("upload com falha preserva arquivo e chave; repetição explícita termina 
   let completed = false;
   let releaseFirst!: () => void;
   const firstHeld = new Promise<void>((resolve) => { releaseFirst = resolve; });
-  await page.route("**/api/organizations/1/files", async (route) => {
+  await page.route("**/api/organizations/1/files*", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({ json: { ok: true, files: completed ? [{ id: 10, name: "relatorio.txt", size: 4 }] : [] } });
       return;
@@ -98,7 +98,7 @@ test("troca de organização ignora resposta tardia da anterior", async ({ page 
   let releaseOld!: () => void;
   const oldHeld = new Promise<void>((resolve) => { releaseOld = resolve; });
   let oldRequested = false;
-  await page.route("**/api/organizations/*/files", async (route) => {
+  await page.route("**/api/organizations/*/files*", async (route) => {
     if (route.request().url().includes("/1/")) {
       oldRequested = true;
       await oldHeld;
