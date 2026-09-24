@@ -76,6 +76,23 @@ test("cursor preserva unicode e chave de desempate", () => {
   });
 });
 
+test("cursor rejeita valor incompatível com o tipo da ordenação e payload excessivo", () => {
+  const invalidNumericCursor = encodeOrganizationFileCursor({
+    v: 1,
+    sort: "size_desc",
+    value: "100",
+    id: 7,
+  });
+  assert.throws(
+    () => decodeOrganizationFileCursor(invalidNumericCursor),
+    /Cursor inválido/,
+  );
+  assert.throws(
+    () => decodeOrganizationFileCursor("x".repeat(1025)),
+    /Cursor inválido/,
+  );
+});
+
 test("SQL sem concessão GeoJSON exclui JSON/GeoJSON antes da paginação e contagem", () => {
   const parsed = parseOrganizationFileListQuery(request("?search=mapa&type=pdf&projectId=4"));
   const built = buildOrganizationFileListSql(3, parsed, { canViewGeoJson: false });

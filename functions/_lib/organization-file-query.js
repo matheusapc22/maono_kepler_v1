@@ -126,16 +126,25 @@ export function encodeOrganizationFileCursor(payload) {
 
 export function decodeOrganizationFileCursor(value) {
   if (!value) return null;
+  if (String(value).length > 1024) {
+    throw queryError("Cursor inválido.", "ORGANIZATION_FILE_CURSOR_INVALID");
+  }
 
   try {
     const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
     const payload = JSON.parse(base64ToUtf8(padded));
 
+    const sort = SORTS[payload?.sort];
+    const numericSort = payload?.sort === "size_asc" || payload?.sort === "size_desc";
+    const validValue = numericSort
+      ? typeof payload?.value === "number" && Number.isFinite(payload.value)
+      : typeof payload?.value === "string";
+
     if (
       payload?.v !== 1 ||
-      !Object.hasOwn(SORTS, payload?.sort) ||
-      payload?.value === undefined ||
+      !sort ||
+      !validValue ||
       !Number.isInteger(Number(payload?.id)) ||
       Number(payload.id) <= 0
     ) {

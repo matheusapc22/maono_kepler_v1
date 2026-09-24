@@ -92,7 +92,6 @@ export type OrganizationFileListResponse = {
   facets: OrganizationFileListFacets;
   pagination: OrganizationFileListPagination;
   storage?: unknown;
-  requestId?: string;
 };
 
 export type OrganizationTicket = {
