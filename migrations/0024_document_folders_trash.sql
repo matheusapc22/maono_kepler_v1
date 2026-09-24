@@ -87,7 +87,7 @@ BEGIN
   SELECT (CASE
     WHEN NEW.parent_id = NEW.id
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_SELF_PARENT')
-  END;
+  END);
 
   SELECT (CASE
     WHEN NOT EXISTS (
@@ -98,7 +98,7 @@ BEGIN
         AND parent.deleted_at IS NULL
     )
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_PARENT_SCOPE_MISMATCH')
-  END;
+  END);
 
   SELECT (CASE
     WHEN EXISTS (
@@ -135,7 +135,7 @@ BEGIN
         AND child.deleted_at IS NULL
     )
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_NOT_EMPTY')
-  END;
+  END);
 
   SELECT (CASE
     WHEN EXISTS (
