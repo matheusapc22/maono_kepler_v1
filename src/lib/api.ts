@@ -67,6 +67,7 @@ export type OrganizationFileListQuery = {
   search?: string;
   type?: string;
   projectId?: number | string;
+  folderId?: number | string;
   updatedFrom?: string;
   updatedTo?: string;
   sort?: OrganizationFileSort;
@@ -77,6 +78,8 @@ export type OrganizationFileListQuery = {
 export type OrganizationFileListFacets = {
   types: string[];
   projects: Array<{ id: number | string; name: string }>;
+  rootCount: number;
+  folderCounts: Array<{ folderId: number | string; count: number }>;
 };
 
 export type OrganizationFileListPagination = {
@@ -461,6 +464,7 @@ export function listOrganizationFiles(
   if (query.search) params.set("search", query.search);
   if (query.type) params.set("type", query.type);
   if (query.projectId) params.set("projectId", String(query.projectId));
+  if (query.folderId) params.set("folderId", String(query.folderId));
   if (query.updatedFrom) params.set("updatedFrom", query.updatedFrom);
   if (query.updatedTo) params.set("updatedTo", query.updatedTo);
   if (query.sort) params.set("sort", query.sort);

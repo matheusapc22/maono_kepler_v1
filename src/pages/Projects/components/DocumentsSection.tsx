@@ -4,8 +4,14 @@ import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
 import { TableSkeleton } from "../../../components/loading/Skeleton";
 import {
+  createOrganizationDocumentFolder,
+  deleteOrganizationDocumentFolder,
   deleteOrganizationFile,
+  listOrganizationDocumentFolders,
   listOrganizationFiles,
+  moveOrganizationFileToFolder,
+  updateOrganizationDocumentFolder,
+  type OrganizationDocumentFolder,
   type OrganizationFile,
   type OrganizationFileListFacets,
   type OrganizationFileListPagination,
@@ -65,6 +71,7 @@ type DocumentFilterState = {
   search: string;
   type: string;
   projectId: string;
+  folderId: string;
   updatedFrom: string;
   updatedTo: string;
   sort: OrganizationFileSort;
@@ -74,6 +81,7 @@ const DEFAULT_DOCUMENT_FILTERS: DocumentFilterState = {
   search: "",
   type: "",
   projectId: "",
+  folderId: "",
   updatedFrom: "",
   updatedTo: "",
   sort: "updated_desc",
@@ -82,6 +90,8 @@ const DEFAULT_DOCUMENT_FILTERS: DocumentFilterState = {
 const EMPTY_DOCUMENT_FACETS: OrganizationFileListFacets = {
   types: [],
   projects: [],
+  rootCount: 0,
+  folderCounts: [],
 };
 
 const EMPTY_DOCUMENT_PAGINATION: OrganizationFileListPagination = {
@@ -123,6 +133,7 @@ function toFileListQuery(filters: DocumentFilterState, cursor?: string | null) {
     search: filters.search.trim() || undefined,
     type: filters.type || undefined,
     projectId: filters.projectId || undefined,
+    folderId: filters.folderId || undefined,
     updatedFrom: filters.updatedFrom || undefined,
     updatedTo: filters.updatedTo || undefined,
     sort: filters.sort,
@@ -131,6 +142,63 @@ function toFileListQuery(filters: DocumentFilterState, cursor?: string | null) {
   };
 }
 
+
+type DocumentFolderTreeEntry = {
+  folder: OrganizationDocumentFolder;
+  depth: number;
+};
+
+function flattenDocumentFolderTree(
+  folders: OrganizationDocumentFolder[],
+): DocumentFolderTreeEntry[] {
+  const children = new Map<string, OrganizationDocumentFolder[]>();
+
+  for (const folder of folders) {
+    const parentKey = folder.parentId == null ? "root" : String(folder.parentId);
+    const current = children.get(parentKey) || [];
+    current.push(folder);
+    children.set(parentKey, current);
+  }
+
+  for (const siblings of children.values()) {
+    siblings.sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+    );
+  }
+
+  const entries: DocumentFolderTreeEntry[] = [];
+  const visit = (parentKey: string, depth: number) => {
+    for (const folder of children.get(parentKey) || []) {
+      entries.push({ folder, depth });
+      visit(String(folder.id), depth + 1);
+    }
+  };
+
+  visit("root", 0);
+  return entries;
+}
+
+function documentFolderBreadcrumb(
+  folders: OrganizationDocumentFolder[],
+  folderId: string,
+) {
+  if (!folderId) return [];
+  if (folderId === "root") return [];
+
+  const byId = new Map(folders.map((folder) => [String(folder.id), folder]));
+  const lineage: OrganizationDocumentFolder[] = [];
+  const seen = new Set<string>();
+  let current = byId.get(folderId);
+
+  while (current && !seen.has(String(current.id))) {
+    lineage.unshift(current);
+    seen.add(String(current.id));
+    current =
+      current.parentId == null ? undefined : byId.get(String(current.parentId));
+  }
+
+  return lineage;
+}
 
 function formatBytes(size?: number | null) {
   if (!size || size <= 0) return "—";
@@ -297,6 +365,9 @@ function OrganizationDocuments({
   const loadSequenceRef = useRef(0);
   const mountedRef = useRef(true);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
+  const [folders, setFolders] = useState<OrganizationDocumentFolder[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(false);
+  const [busyFolderId, setBusyFolderId] = useState<number | string | null>(null);
   const [filterDraft, setFilterDraft] = useState<DocumentFilterState>({
     ...DEFAULT_DOCUMENT_FILTERS,
   });
@@ -335,8 +406,25 @@ function OrganizationDocuments({
   const canUpload = can(user, PERMISSION.DOCUMENT_UPLOAD, permissionContext);
   const canDownload = can(user, PERMISSION.DOCUMENT_DOWNLOAD, permissionContext);
   const canDelete = can(user, PERMISSION.DOCUMENT_DELETE, permissionContext);
+  const canManage = can(user, PERMISSION.DOCUMENT_MANAGE, permissionContext);
   const transferBusy =
     transfer?.status === "running" || transfer?.status === "processing";
+
+  const folderTree = useMemo(() => flattenDocumentFolderTree(folders), [folders]);
+  const folderCountById = useMemo(
+    () =>
+      new Map(
+        facets.folderCounts.map((item) => [
+          String(item.folderId),
+          Number(item.count || 0),
+        ]),
+      ),
+    [facets.folderCounts],
+  );
+  const breadcrumbFolders = useMemo(
+    () => documentFolderBreadcrumb(folders, appliedFilters.folderId),
+    [folders, appliedFilters.folderId],
+  );
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: keyof DocumentFilterState; label: string }> = [];
@@ -358,6 +446,21 @@ function OrganizationDocuments({
         label: `Projeto: ${project?.name || appliedFilters.projectId}`,
       });
     }
+    if (appliedFilters.folderId) {
+      const folder =
+        appliedFilters.folderId === "root"
+          ? null
+          : folders.find(
+              (item) => String(item.id) === appliedFilters.folderId,
+            );
+      chips.push({
+        key: "folderId",
+        label:
+          appliedFilters.folderId === "root"
+            ? "Pasta: Raiz"
+            : `Pasta: ${folder?.name || appliedFilters.folderId}`,
+      });
+    }
     if (appliedFilters.updatedFrom) {
       chips.push({
         key: "updatedFrom",
@@ -371,7 +474,7 @@ function OrganizationDocuments({
       });
     }
     return chips;
-  }, [appliedFilters, facets.projects]);
+  }, [appliedFilters, facets.projects, folders]);
 
   const hasActiveFilters = activeFilterChips.length > 0;
   const hasModifiedQuery =
@@ -561,6 +664,30 @@ function OrganizationDocuments({
     });
   }
 
+  async function loadFolders() {
+    if (!organizationId || !canView) {
+      setFolders([]);
+      return;
+    }
+
+    setFoldersLoading(true);
+    try {
+      const response = await listOrganizationDocumentFolders(organizationId);
+      if (!mountedRef.current) return;
+      setFolders(response.folders ?? []);
+    } catch (requestError) {
+      if (!mountedRef.current) return;
+      setError(
+        formatRequestError(
+          requestError,
+          "Não foi possível carregar as pastas.",
+        ),
+      );
+    } finally {
+      if (mountedRef.current) setFoldersLoading(false);
+    }
+  }
+
   async function loadFiles({
     background = false,
     append = false,
@@ -628,6 +755,11 @@ function OrganizationDocuments({
     void loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, canView, appliedFilters]);
+
+  useEffect(() => {
+    void loadFolders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId, canView]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -816,6 +948,125 @@ function OrganizationDocuments({
     }
   }
 
+  function selectFolder(folderId: string) {
+    const next = {
+      ...appliedFilters,
+      folderId,
+    };
+    setFilterDraft(next);
+    setFiles([]);
+    setAppliedFilters(next);
+  }
+
+  async function handleCreateFolder() {
+    if (!organizationId || !canManage) return;
+    const name = window.prompt("Nome da nova pasta:");
+    if (!name?.trim()) return;
+
+    const parentId =
+      appliedFilters.folderId &&
+      appliedFilters.folderId !== "root"
+        ? appliedFilters.folderId
+        : null;
+
+    setBusyFolderId("create");
+    setError(null);
+    try {
+      const response = await createOrganizationDocumentFolder(organizationId, {
+        name,
+        parentId,
+      });
+      if (!mountedRef.current) return;
+      await loadFolders();
+      selectFolder(String(response.folder.id));
+      showFeedback("success", "Pasta criada.", 3000);
+    } catch (requestError) {
+      setError(
+        formatRequestError(requestError, "Não foi possível criar a pasta."),
+      );
+    } finally {
+      setBusyFolderId(null);
+    }
+  }
+
+  async function handleRenameFolder(folder: OrganizationDocumentFolder) {
+    if (!organizationId || !canManage) return;
+    const name = window.prompt("Novo nome da pasta:", folder.name);
+    if (!name?.trim() || name.trim() === folder.name) return;
+
+    setBusyFolderId(folder.id);
+    setError(null);
+    try {
+      await updateOrganizationDocumentFolder(organizationId, folder.id, { name });
+      if (!mountedRef.current) return;
+      await loadFolders();
+      showFeedback("success", "Pasta renomeada.", 3000);
+    } catch (requestError) {
+      setError(
+        formatRequestError(requestError, "Não foi possível renomear a pasta."),
+      );
+    } finally {
+      setBusyFolderId(null);
+    }
+  }
+
+  async function handleDeleteFolder(folder: OrganizationDocumentFolder) {
+    if (!organizationId || !canManage) return;
+    const confirmed = window.confirm(
+      `Excluir a pasta "${folder.name}"? Apenas pastas vazias podem ser excluídas.`,
+    );
+    if (!confirmed) return;
+
+    setBusyFolderId(folder.id);
+    setError(null);
+    try {
+      await deleteOrganizationDocumentFolder(organizationId, folder.id);
+      if (!mountedRef.current) return;
+      if (appliedFilters.folderId === String(folder.id)) selectFolder("root");
+      await loadFolders();
+      await loadFiles({ background: true });
+      showFeedback("success", "Pasta excluída.", 3000);
+    } catch (requestError) {
+      setError(
+        formatRequestError(
+          requestError,
+          "Não foi possível excluir a pasta. Confirme se ela está vazia.",
+        ),
+      );
+    } finally {
+      setBusyFolderId(null);
+    }
+  }
+
+  async function handleMoveFile(
+    file: OrganizationFile,
+    targetFolderId: string,
+  ) {
+    if (!organizationId || !canManage || !targetFolderId) return;
+    const folderId = targetFolderId === "root" ? null : targetFolderId;
+
+    setBusyFileId(file.id);
+    setError(null);
+    showFeedback("loading", "Movendo documento...");
+    try {
+      await moveOrganizationFileToFolder(organizationId, file.id, folderId);
+      if (!mountedRef.current) return;
+      await Promise.all([
+        loadFiles({ background: true }),
+        loadFolders(),
+      ]);
+      if (!mountedRef.current) return;
+      showFeedback("success", "Documento movido.", 3000);
+    } catch (requestError) {
+      setFeedback(null);
+      setError(
+        formatRequestError(requestError, "Não foi possível mover o documento."),
+      );
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
   function applyDocumentFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const next = {
@@ -900,6 +1151,132 @@ function OrganizationDocuments({
           ) : null}
         </div>
 
+        <div className="documents-folder-browser">
+          <div className="documents-folder-browser-header">
+            <div>
+              <strong>Pastas</strong>
+              <span>Organização lógica dos documentos</span>
+            </div>
+            {canManage ? (
+              <button
+                type="button"
+                className="mm-button secondary"
+                disabled={busyFolderId !== null}
+                onClick={() => void handleCreateFolder()}
+              >
+                Nova pasta
+              </button>
+            ) : null}
+          </div>
+
+          <div className="documents-folder-tree" role="tree" aria-label="Árvore de pastas">
+            <div className="documents-folder-row root-row">
+              <button
+                type="button"
+                className={`documents-folder-select ${appliedFilters.folderId === "" ? "active" : ""}`}
+                onClick={() => selectFolder("")}
+              >
+                <span>Todos os documentos</span>
+              </button>
+            </div>
+            <div className="documents-folder-row root-row">
+              <button
+                type="button"
+                className={`documents-folder-select ${appliedFilters.folderId === "root" ? "active" : ""}`}
+                onClick={() => selectFolder("root")}
+              >
+                <span>Raiz</span>
+                <span className="documents-folder-count">{facets.rootCount}</span>
+              </button>
+            </div>
+
+            {foldersLoading ? (
+              <span className="documents-folder-loading">Carregando pastas...</span>
+            ) : folderTree.length === 0 ? (
+              <span className="documents-folder-empty">Nenhuma pasta criada.</span>
+            ) : (
+              folderTree.map(({ folder, depth }) => {
+                const active = appliedFilters.folderId === String(folder.id);
+                const busy = String(busyFolderId) === String(folder.id);
+                return (
+                  <div
+                    key={String(folder.id)}
+                    className="documents-folder-row"
+                    role="treeitem"
+                    aria-level={depth + 1}
+                    style={{ paddingLeft: `${depth * 18}px` }}
+                  >
+                    <button
+                      type="button"
+                      className={`documents-folder-select ${active ? "active" : ""}`}
+                      onClick={() => selectFolder(String(folder.id))}
+                    >
+                      <span className="documents-folder-name" title={folder.name}>
+                        {folder.name}
+                      </span>
+                      <span className="documents-folder-count">
+                        {folderCountById.get(String(folder.id)) || 0}
+                      </span>
+                    </button>
+                    {canManage ? (
+                      <div className="documents-folder-actions">
+                        <button
+                          type="button"
+                          className="documents-folder-action"
+                          disabled={busy}
+                          onClick={() => void handleRenameFolder(folder)}
+                          aria-label={`Renomear pasta ${folder.name}`}
+                        >
+                          Renomear
+                        </button>
+                        <button
+                          type="button"
+                          className="documents-folder-action danger"
+                          disabled={busy}
+                          onClick={() => void handleDeleteFolder(folder)}
+                          aria-label={`Excluir pasta ${folder.name}`}
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <nav className="documents-folder-breadcrumb" aria-label="Caminho da pasta">
+          <button type="button" onClick={() => selectFolder("")}>
+            Todos
+          </button>
+          {appliedFilters.folderId ? (
+            <>
+              <span aria-hidden="true">/</span>
+              <button type="button" onClick={() => selectFolder("root")}>
+                Raiz
+              </button>
+            </>
+          ) : null}
+          {breadcrumbFolders.map((folder) => (
+            <span key={String(folder.id)} className="documents-folder-breadcrumb-part">
+              <span aria-hidden="true">/</span>
+              <button
+                type="button"
+                onClick={() => selectFolder(String(folder.id))}
+                aria-current={
+                  appliedFilters.folderId === String(folder.id)
+                    ? "page"
+                    : undefined
+                }
+              >
+                {folder.name}
+              </button>
+            </span>
+          ))}
+        </nav>
+
         <form className="documents-filter-toolbar" onSubmit={applyDocumentFilters}>
           <label className="documents-filter-field documents-filter-search">
             <span>Buscar</span>
@@ -951,6 +1328,27 @@ function OrganizationDocuments({
               {facets.projects.map((project) => (
                 <option key={String(project.id)} value={String(project.id)}>
                   {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="documents-filter-field">
+            <span>Pasta</span>
+            <select
+              value={filterDraft.folderId}
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  folderId: event.target.value,
+                }))
+              }
+            >
+              <option value="">Todas</option>
+              <option value="root">Raiz</option>
+              {folderTree.map(({ folder, depth }) => (
+                <option key={String(folder.id)} value={String(folder.id)}>
+                  {`${"— ".repeat(depth)}${folder.name}`}
                 </option>
               ))}
             </select>
@@ -1093,6 +1491,31 @@ function OrganizationDocuments({
                         <td>{formatDate(file.updatedAt || file.createdAt)}</td>
                         <td>
                           <div className="projects-row-actions">
+                            {canManage ? (
+                              <select
+                                className="documents-move-select"
+                                value=""
+                                disabled={busy || transferBusy}
+                                aria-label={`Mover ${file.name} para pasta`}
+                                onChange={(event) => {
+                                  const target = event.target.value;
+                                  if (target) void handleMoveFile(file, target);
+                                }}
+                              >
+                                <option value="">Mover para...</option>
+                                <option value="root">Raiz</option>
+                                {folderTree.map(({ folder, depth }) => (
+                                  <option
+                                    key={String(folder.id)}
+                                    value={String(folder.id)}
+                                    disabled={String(file.folderId) === String(folder.id)}
+                                  >
+                                    {`${"— ".repeat(depth)}${folder.name}`}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null}
+
                             {canDownload ? (
                               <button
                                 type="button"

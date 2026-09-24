@@ -65,6 +65,13 @@ function parsePositiveInteger(value, label) {
   return parsed;
 }
 
+function parseFolderId(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "root") return "root";
+  return parsePositiveInteger(value, "folderId");
+}
+
 function parseLimit(value) {
   if (value === null || value === undefined || value === "") {
     return ORGANIZATION_FILE_DEFAULT_LIMIT;
@@ -167,6 +174,7 @@ export function parseOrganizationFileListQuery(request) {
   const search = normalizeText(url.searchParams.get("search"), 160, "Busca");
   const type = normalizeText(url.searchParams.get("type"), 64, "Tipo")?.toLowerCase() || null;
   const projectId = parsePositiveInteger(url.searchParams.get("projectId"), "projectId");
+  const folderId = parseFolderId(url.searchParams.get("folderId"));
   const updatedFrom = normalizeDateBound(url.searchParams.get("updatedFrom"), false);
   const updatedTo = normalizeDateBound(url.searchParams.get("updatedTo"), true);
   const sort = normalizeSort(url.searchParams.get("sort"));
@@ -185,6 +193,7 @@ export function parseOrganizationFileListQuery(request) {
     search,
     type,
     projectId,
+    folderId,
     updatedFrom,
     updatedTo,
     sort,
@@ -225,6 +234,13 @@ function applyFilters(where, bindings, query) {
   if (query.projectId) {
     where.push("f.project_id = ?");
     bindings.push(query.projectId);
+  }
+
+  if (query.folderId === "root") {
+    where.push("f.folder_id IS NULL");
+  } else if (query.folderId) {
+    where.push("f.folder_id = ?");
+    bindings.push(query.folderId);
   }
 
   if (query.updatedFrom) {
@@ -293,8 +309,9 @@ async function listFacets(env, organizationId, canViewGeoJson) {
   const db = getDb(env);
   const typeScope = buildFacetWhere(organizationId, canViewGeoJson);
   const projectScope = buildFacetWhere(organizationId, canViewGeoJson);
+  const folderScope = buildFacetWhere(organizationId, canViewGeoJson);
 
-  const [typesResult, projectsResult] = await Promise.all([
+  const [typesResult, projectsResult, foldersResult] = await Promise.all([
     db.prepare(`
       SELECT LOWER(COALESCE(NULLIF(f.file_type, ''), 'other')) AS value
       FROM organization_files f
@@ -313,7 +330,15 @@ async function listFacets(env, organizationId, canViewGeoJson) {
       GROUP BY p.id, p.name
       ORDER BY LOWER(p.name) ASC, p.id ASC
     `).bind(...projectScope.bindings).all(),
+    db.prepare(`
+      SELECT f.folder_id, COUNT(*) AS count
+      FROM organization_files f
+      WHERE ${folderScope.where.join(" AND ")}
+      GROUP BY f.folder_id
+    `).bind(...folderScope.bindings).all(),
   ]);
+
+  const folderRows = foldersResult?.results || [];
 
   return {
     types: (typesResult?.results || []).map((row) => row.value).filter(Boolean),
@@ -321,6 +346,13 @@ async function listFacets(env, organizationId, canViewGeoJson) {
       id: row.id,
       name: row.name || `Projeto ${row.id}`,
     })),
+    rootCount: Number(folderRows.find((row) => row.folder_id == null)?.count || 0),
+    folderCounts: folderRows
+      .filter((row) => row.folder_id != null)
+      .map((row) => ({
+        folderId: row.folder_id,
+        count: Number(row.count || 0),
+      })),
   };
 }
 

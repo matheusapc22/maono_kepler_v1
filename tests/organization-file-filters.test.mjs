@@ -27,14 +27,15 @@ test("contrato padrão usa paginação limitada e ordenação estável", () => {
   assert.equal(built.bindings.at(-1), ORGANIZATION_FILE_DEFAULT_LIMIT + 1);
 });
 
-test("parseia busca, tipo, projeto, período e normaliza datas inclusivas", () => {
+test("parseia busca, tipo, projeto, pasta, período e normaliza datas inclusivas", () => {
   const parsed = parseOrganizationFileListQuery(
-    request("?search=relatorio&type=PDF&projectId=12&updatedFrom=2026-09-01&updatedTo=2026-09-24&sort=name_asc&limit=25"),
+    request("?search=relatorio&type=PDF&projectId=12&folderId=7&updatedFrom=2026-09-01&updatedTo=2026-09-24&sort=name_asc&limit=25"),
   );
 
   assert.equal(parsed.search, "relatorio");
   assert.equal(parsed.type, "pdf");
   assert.equal(parsed.projectId, 12);
+  assert.equal(parsed.folderId, 7);
   assert.equal(parsed.updatedFrom, "2026-09-01T00:00:00.000Z");
   assert.equal(parsed.updatedTo, "2026-09-24T23:59:59.999Z");
   assert.equal(parsed.sort, "name_asc");
@@ -93,6 +94,25 @@ test("cursor rejeita valor incompatível com o tipo da ordenação e payload exc
   );
 });
 
+test("filtro por pasta suporta raiz e id sem sair do SQL autorizado", () => {
+  const root = parseOrganizationFileListQuery(request("?folderId=root"));
+  const rootSql = buildOrganizationFileListSql(3, root, { canViewGeoJson: false });
+  assert.equal(root.folderId, "root");
+  assert.match(rootSql.sql, /f\.folder_id IS NULL/);
+  assert.match(rootSql.sql, /NOT \([\s\S]*geojson/s);
+
+  const folder = parseOrganizationFileListQuery(request("?folderId=42"));
+  const folderSql = buildOrganizationFileListSql(3, folder, { canViewGeoJson: true });
+  assert.equal(folder.folderId, 42);
+  assert.match(folderSql.sql, /f\.folder_id = \?/);
+  assert.ok(folderSql.bindings.includes(42));
+
+  assert.throws(
+    () => parseOrganizationFileListQuery(request("?folderId=fora")),
+    /folderId inválido/,
+  );
+});
+
 test("SQL sem concessão GeoJSON exclui JSON/GeoJSON antes da paginação e contagem", () => {
   const parsed = parseOrganizationFileListQuery(request("?search=mapa&type=pdf&projectId=4"));
   const built = buildOrganizationFileListSql(3, parsed, { canViewGeoJson: false });
@@ -117,17 +137,24 @@ test("rota usa query server-side e decide visibilidade GeoJSON uma vez por reque
   assert.doesNotMatch(source, /filterVisibleOrganizationFiles\(/);
 });
 
-test("UI reserva folderId/trash e implementa filtros, chips e paginação incremental", async () => {
+test("UI implementa árvore, breadcrumb, CRUD, move e filtro por pasta", async () => {
   const source = await readFile(
     new URL("../src/pages/Projects/components/DocumentsSection.tsx", import.meta.url),
     "utf8",
   );
 
   assert.match(source, /documents-filter-toolbar/);
+  assert.match(source, /documents-folder-tree/);
+  assert.match(source, /documents-folder-breadcrumb/);
+  assert.match(source, /Nova pasta/);
+  assert.match(source, /createOrganizationDocumentFolder/);
+  assert.match(source, /updateOrganizationDocumentFolder/);
+  assert.match(source, /deleteOrganizationDocumentFolder/);
+  assert.match(source, /moveOrganizationFileToFolder/);
+  assert.match(source, /folderId/);
   assert.match(source, /Limpar filtros/);
   assert.match(source, /Carregar mais/);
   assert.match(source, /updatedFrom/);
   assert.match(source, /projectId/);
-  assert.doesNotMatch(source, /folderId:/);
   assert.doesNotMatch(source, /state:\s*["']trash["']/);
 });
