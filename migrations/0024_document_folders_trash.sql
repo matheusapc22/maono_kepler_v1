@@ -67,7 +67,7 @@ BEFORE INSERT ON organization_file_folders
 FOR EACH ROW
 WHEN NEW.parent_id IS NOT NULL
 BEGIN
-  SELECT CASE
+  SELECT (CASE
     WHEN NOT EXISTS (
       SELECT 1
       FROM organization_file_folders parent
@@ -76,7 +76,7 @@ BEGIN
         AND parent.deleted_at IS NULL
     )
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_PARENT_SCOPE_MISMATCH')
-  END;
+  END);
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_document_folder_parent_scope_update
@@ -84,12 +84,12 @@ BEFORE UPDATE OF parent_id, organization_id ON organization_file_folders
 FOR EACH ROW
 WHEN NEW.parent_id IS NOT NULL
 BEGIN
-  SELECT CASE
+  SELECT (CASE
     WHEN NEW.parent_id = NEW.id
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_SELF_PARENT')
   END;
 
-  SELECT CASE
+  SELECT (CASE
     WHEN NOT EXISTS (
       SELECT 1
       FROM organization_file_folders parent
@@ -100,7 +100,7 @@ BEGIN
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_PARENT_SCOPE_MISMATCH')
   END;
 
-  SELECT CASE
+  SELECT (CASE
     WHEN EXISTS (
       WITH RECURSIVE descendants(id) AS (
         SELECT id
@@ -118,7 +118,7 @@ BEGIN
       SELECT 1 FROM descendants WHERE id = NEW.parent_id
     )
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_CYCLE')
-  END;
+  END);
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_document_folder_delete_empty
@@ -126,7 +126,7 @@ BEFORE UPDATE OF deleted_at ON organization_file_folders
 FOR EACH ROW
 WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
 BEGIN
-  SELECT CASE
+  SELECT (CASE
     WHEN EXISTS (
       SELECT 1
       FROM organization_file_folders child
@@ -137,7 +137,7 @@ BEGIN
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_NOT_EMPTY')
   END;
 
-  SELECT CASE
+  SELECT (CASE
     WHEN EXISTS (
       SELECT 1
       FROM organization_files file
@@ -147,7 +147,7 @@ BEGIN
         AND (file.active = 1 OR file.active IS NULL)
     )
     THEN RAISE(ABORT, 'DOCUMENT_FOLDER_NOT_EMPTY')
-  END;
+  END);
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_organization_file_folder_scope_insert
@@ -155,7 +155,7 @@ BEFORE INSERT ON organization_files
 FOR EACH ROW
 WHEN NEW.folder_id IS NOT NULL
 BEGIN
-  SELECT CASE
+  SELECT (CASE
     WHEN NOT EXISTS (
       SELECT 1
       FROM organization_file_folders folder
@@ -164,7 +164,7 @@ BEGIN
         AND folder.deleted_at IS NULL
     )
     THEN RAISE(ABORT, 'ORGANIZATION_FILE_FOLDER_SCOPE_MISMATCH')
-  END;
+  END);
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_organization_file_folder_scope_update
@@ -172,7 +172,7 @@ BEFORE UPDATE OF folder_id, organization_id ON organization_files
 FOR EACH ROW
 WHEN NEW.folder_id IS NOT NULL
 BEGIN
-  SELECT CASE
+  SELECT (CASE
     WHEN NOT EXISTS (
       SELECT 1
       FROM organization_file_folders folder
@@ -181,5 +181,5 @@ BEGIN
         AND folder.deleted_at IS NULL
     )
     THEN RAISE(ABORT, 'ORGANIZATION_FILE_FOLDER_SCOPE_MISMATCH')
-  END;
+  END);
 END;
