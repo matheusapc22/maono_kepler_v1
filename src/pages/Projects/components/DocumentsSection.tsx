@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
@@ -7,6 +7,9 @@ import {
   deleteOrganizationFile,
   listOrganizationFiles,
   type OrganizationFile,
+  type OrganizationFileListFacets,
+  type OrganizationFileListPagination,
+  type OrganizationFileSort,
 } from "../../../lib/api";
 import {
   downloadOrganizationFileWithProgress,
@@ -58,6 +61,76 @@ const ALLOWED_EXTENSIONS = new Set([
   "txt",
   "docx",
 ]);
+type DocumentFilterState = {
+  search: string;
+  type: string;
+  projectId: string;
+  updatedFrom: string;
+  updatedTo: string;
+  sort: OrganizationFileSort;
+};
+
+const DEFAULT_DOCUMENT_FILTERS: DocumentFilterState = {
+  search: "",
+  type: "",
+  projectId: "",
+  updatedFrom: "",
+  updatedTo: "",
+  sort: "updated_desc",
+};
+
+const EMPTY_DOCUMENT_FACETS: OrganizationFileListFacets = {
+  types: [],
+  projects: [],
+};
+
+const EMPTY_DOCUMENT_PAGINATION: OrganizationFileListPagination = {
+  limit: 50,
+  total: 0,
+  hasMore: false,
+  nextCursor: null,
+  sort: "updated_desc",
+};
+
+const DOCUMENT_SORT_OPTIONS: Array<{ value: OrganizationFileSort; label: string }> = [
+  { value: "updated_desc", label: "Mais recentes" },
+  { value: "updated_asc", label: "Mais antigos" },
+  { value: "name_asc", label: "Nome A–Z" },
+  { value: "name_desc", label: "Nome Z–A" },
+  { value: "size_desc", label: "Maior tamanho" },
+  { value: "size_asc", label: "Menor tamanho" },
+];
+
+function fileTypeLabel(value?: string | null) {
+  const normalized = String(value || "").toLowerCase();
+  const labels: Record<string, string> = {
+    geojson: "GeoJSON",
+    json: "JSON",
+    csv: "CSV",
+    spreadsheet: "Planilha",
+    pdf: "PDF",
+    image: "Imagem",
+    zip: "ZIP",
+    document: "Documento",
+    text: "Texto",
+    other: "Outro",
+  };
+  return labels[normalized] || normalized || "Outro";
+}
+
+function toFileListQuery(filters: DocumentFilterState, cursor?: string | null) {
+  return {
+    search: filters.search.trim() || undefined,
+    type: filters.type || undefined,
+    projectId: filters.projectId || undefined,
+    updatedFrom: filters.updatedFrom || undefined,
+    updatedTo: filters.updatedTo || undefined,
+    sort: filters.sort,
+    cursor: cursor || undefined,
+    limit: 50,
+  };
+}
+
 
 function formatBytes(size?: number | null) {
   if (!size || size <= 0) return "—";
@@ -221,8 +294,22 @@ function OrganizationDocuments({
   const progressTargetRef = useRef(0);
   const displayedProgressRef = useRef(0);
   const uploadInFlightRef = useRef(false);
+  const loadSequenceRef = useRef(0);
   const mountedRef = useRef(true);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
+  const [filterDraft, setFilterDraft] = useState<DocumentFilterState>({
+    ...DEFAULT_DOCUMENT_FILTERS,
+  });
+  const [appliedFilters, setAppliedFilters] = useState<DocumentFilterState>({
+    ...DEFAULT_DOCUMENT_FILTERS,
+  });
+  const [facets, setFacets] = useState<OrganizationFileListFacets>(
+    EMPTY_DOCUMENT_FACETS,
+  );
+  const [pagination, setPagination] = useState<OrganizationFileListPagination>(
+    EMPTY_DOCUMENT_PAGINATION,
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -250,6 +337,45 @@ function OrganizationDocuments({
   const canDelete = can(user, PERMISSION.DOCUMENT_DELETE, permissionContext);
   const transferBusy =
     transfer?.status === "running" || transfer?.status === "processing";
+
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: keyof DocumentFilterState; label: string }> = [];
+    if (appliedFilters.search) {
+      chips.push({ key: "search", label: `Busca: ${appliedFilters.search}` });
+    }
+    if (appliedFilters.type) {
+      chips.push({
+        key: "type",
+        label: `Tipo: ${fileTypeLabel(appliedFilters.type)}`,
+      });
+    }
+    if (appliedFilters.projectId) {
+      const project = facets.projects.find(
+        (item) => String(item.id) === appliedFilters.projectId,
+      );
+      chips.push({
+        key: "projectId",
+        label: `Projeto: ${project?.name || appliedFilters.projectId}`,
+      });
+    }
+    if (appliedFilters.updatedFrom) {
+      chips.push({
+        key: "updatedFrom",
+        label: `Desde: ${appliedFilters.updatedFrom}`,
+      });
+    }
+    if (appliedFilters.updatedTo) {
+      chips.push({
+        key: "updatedTo",
+        label: `Até: ${appliedFilters.updatedTo}`,
+      });
+    }
+    return chips;
+  }, [appliedFilters, facets.projects]);
+
+  const hasActiveFilters = activeFilterChips.length > 0;
+  const hasModifiedQuery =
+    hasActiveFilters || appliedFilters.sort !== DEFAULT_DOCUMENT_FILTERS.sort;
 
   function stopProgressTimer() {
     if (progressTimerRef.current !== null) {
@@ -435,13 +561,30 @@ function OrganizationDocuments({
     });
   }
 
-  async function loadFiles({ background = false } = {}) {
+  async function loadFiles({
+    background = false,
+    append = false,
+    cursor = null,
+    filters = appliedFilters,
+  }: {
+    background?: boolean;
+    append?: boolean;
+    cursor?: string | null;
+    filters?: DocumentFilterState;
+  } = {}) {
     if (!organizationId || !canView) {
       setFiles([]);
+      setFacets(EMPTY_DOCUMENT_FACETS);
+      setPagination(EMPTY_DOCUMENT_PAGINATION);
       return;
     }
 
-    if (background) {
+    const sequence = ++loadSequenceRef.current;
+    const showAsRefresh = background || (!append && files.length > 0);
+
+    if (append) {
+      setLoadingMore(true);
+    } else if (showAsRefresh) {
       setRefreshing(true);
     } else {
       setInitialLoading(true);
@@ -449,9 +592,19 @@ function OrganizationDocuments({
     setError(null);
 
     try {
-      const response = await listOrganizationFiles(organizationId);
-      setFiles(response.files ?? []);
+      const response = await listOrganizationFiles(
+        organizationId,
+        toFileListQuery(filters, cursor),
+      );
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+
+      setFiles((current) =>
+        append ? [...current, ...(response.files ?? [])] : response.files ?? [],
+      );
+      setFacets(response.facets ?? EMPTY_DOCUMENT_FACETS);
+      setPagination(response.pagination ?? EMPTY_DOCUMENT_PAGINATION);
     } catch (requestError) {
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
       setError(
         formatRequestError(
           requestError,
@@ -459,7 +612,10 @@ function OrganizationDocuments({
         ),
       );
     } finally {
-      if (background) {
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      if (append) {
+        setLoadingMore(false);
+      } else if (showAsRefresh) {
         setRefreshing(false);
       } else {
         setInitialLoading(false);
@@ -468,11 +624,10 @@ function OrganizationDocuments({
   }
 
   useEffect(() => {
-    setFiles([]);
     setFeedback(null);
     void loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId, canView]);
+  }, [organizationId, canView, appliedFilters]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -661,6 +816,43 @@ function OrganizationDocuments({
     }
   }
 
+  function applyDocumentFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = {
+      ...filterDraft,
+      search: filterDraft.search.trim(),
+    };
+    setFilterDraft(next);
+    setFiles([]);
+    setAppliedFilters(next);
+  }
+
+  function clearDocumentFilters() {
+    const next = { ...DEFAULT_DOCUMENT_FILTERS };
+    setFilterDraft(next);
+    setFiles([]);
+    setAppliedFilters(next);
+  }
+
+  function removeDocumentFilter(key: keyof DocumentFilterState) {
+    const next = {
+      ...appliedFilters,
+      [key]: key === "sort" ? DEFAULT_DOCUMENT_FILTERS.sort : "",
+    };
+    setFilterDraft(next);
+    setFiles([]);
+    setAppliedFilters(next);
+  }
+
+  function loadMoreDocuments() {
+    if (!pagination.hasMore || !pagination.nextCursor || loadingMore) return;
+    void loadFiles({
+      background: true,
+      append: true,
+      cursor: pagination.nextCursor,
+    });
+  }
+
   if (!organizationId) {
     return (
       <section className="mm-card mm-section-card">
@@ -708,6 +900,141 @@ function OrganizationDocuments({
           ) : null}
         </div>
 
+        <form className="documents-filter-toolbar" onSubmit={applyDocumentFilters}>
+          <label className="documents-filter-field documents-filter-search">
+            <span>Buscar</span>
+            <input
+              type="search"
+              value={filterDraft.search}
+              placeholder="Nome do documento"
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  search: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <label className="documents-filter-field">
+            <span>Tipo</span>
+            <select
+              value={filterDraft.type}
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  type: event.target.value,
+                }))
+              }
+            >
+              <option value="">Todos</option>
+              {facets.types.map((type) => (
+                <option key={type} value={type}>
+                  {fileTypeLabel(type)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="documents-filter-field">
+            <span>Projeto</span>
+            <select
+              value={filterDraft.projectId}
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  projectId: event.target.value,
+                }))
+              }
+            >
+              <option value="">Todos</option>
+              {facets.projects.map((project) => (
+                <option key={String(project.id)} value={String(project.id)}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="documents-filter-field">
+            <span>De</span>
+            <input
+              type="date"
+              value={filterDraft.updatedFrom}
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  updatedFrom: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <label className="documents-filter-field">
+            <span>Até</span>
+            <input
+              type="date"
+              value={filterDraft.updatedTo}
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  updatedTo: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <label className="documents-filter-field">
+            <span>Ordenar</span>
+            <select
+              value={filterDraft.sort}
+              onChange={(event) =>
+                setFilterDraft((current) => ({
+                  ...current,
+                  sort: event.target.value as OrganizationFileSort,
+                }))
+              }
+            >
+              {DOCUMENT_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="documents-filter-actions">
+            <button type="submit" className="mm-button secondary">
+              Aplicar
+            </button>
+            <button
+              type="button"
+              className="mm-button ghost"
+              disabled={!hasModifiedQuery}
+              onClick={clearDocumentFilters}
+            >
+              Limpar filtros
+            </button>
+          </div>
+        </form>
+
+        {activeFilterChips.length > 0 ? (
+          <div className="documents-filter-chips" aria-label="Filtros ativos">
+            {activeFilterChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                className="documents-filter-chip"
+                onClick={() => removeDocumentFilter(chip.key)}
+                aria-label={`Remover filtro ${chip.label}`}
+              >
+                <span>{chip.label}</span>
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {error ? <p className="mm-error-text" role="alert">{error}</p> : null}
         {pendingUpload?.retryable && canUpload && !uploading && !transferBusy ? (
           <button
@@ -726,70 +1053,100 @@ function OrganizationDocuments({
             className="documents-table-skeleton"
           />
         ) : files.length === 0 && !error ? (
-          <div className="projects-empty-state">Nenhum documento.</div>
-        ) : files.length === 0 ? null : (
-          <div className="mm-table-wrap" aria-busy={refreshing}>
-            <table className="documents-table">
-              <thead>
-                <tr>
-                  {DOCUMENT_HEADERS.map((header) => (
-                    <th key={header}>{header}</th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {files.map((file) => {
-                  const busy = String(busyFileId) === String(file.id);
-
-                  return (
-                    <tr key={file.id}>
-                      <td className="documents-name-cell">
-                        <span className="documents-file-name" title={file.name}>
-                          {file.name}
-                        </span>
-                      </td>
-                      <td>{file.mimeType || "—"}</td>
-                      <td>{formatBytes(file.size)}</td>
-                      <td>{formatDate(file.updatedAt || file.createdAt)}</td>
-                      <td>
-                        <div className="projects-row-actions">
-                          {canDownload ? (
-                            <button
-                              type="button"
-                              className="mm-button ghost"
-                              disabled={busy || transferBusy}
-                              onClick={() => void handleDownload(file)}
-                            >
-                              {busy ? "Processando..." : "Baixar"}
-                            </button>
-                          ) : null}
-
-                          {canDelete ? (
-                            <button
-                              type="button"
-                              className="mm-button danger"
-                              disabled={busy || transferBusy}
-                              onClick={() => void handleDelete(file)}
-                            >
-                              Excluir
-                            </button>
-                          ) : null}
-
-                          {!canDownload && !canDelete ? "—" : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {refreshing ? (
-              <span className="mm-sr-only" role="status">
-                Atualizando documentos.
-              </span>
-            ) : null}
+          <div className="projects-empty-state">
+            {hasActiveFilters
+              ? "Nenhum documento encontrado com os filtros atuais."
+              : "Nenhum documento."}
           </div>
+        ) : files.length === 0 ? null : (
+          <>
+            <div className="mm-table-wrap" aria-busy={refreshing || loadingMore}>
+              <table className="documents-table">
+                <thead>
+                  <tr>
+                    {DOCUMENT_HEADERS.map((header) => (
+                      <th key={header}>{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {files.map((file) => {
+                    const busy = String(busyFileId) === String(file.id);
+
+                    return (
+                      <tr key={file.id}>
+                        <td className="documents-name-cell">
+                          <span className="documents-file-name" title={file.name}>
+                            {file.name}
+                          </span>
+                          {file.projectName ? (
+                            <span className="documents-file-project">
+                              {file.projectName}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td title={file.mimeType || undefined}>
+                          {file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}
+                        </td>
+                        <td>{formatBytes(file.size)}</td>
+                        <td>{formatDate(file.updatedAt || file.createdAt)}</td>
+                        <td>
+                          <div className="projects-row-actions">
+                            {canDownload ? (
+                              <button
+                                type="button"
+                                className="mm-button ghost"
+                                disabled={busy || transferBusy}
+                                onClick={() => void handleDownload(file)}
+                              >
+                                {busy ? "Processando..." : "Baixar"}
+                              </button>
+                            ) : null}
+
+                            {canDelete ? (
+                              <button
+                                type="button"
+                                className="mm-button danger"
+                                disabled={busy || transferBusy}
+                                onClick={() => void handleDelete(file)}
+                              >
+                                Excluir
+                              </button>
+                            ) : null}
+
+                            {!canDownload && !canDelete ? "—" : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {refreshing ? (
+                <span className="mm-sr-only" role="status">
+                  Atualizando documentos.
+                </span>
+              ) : null}
+            </div>
+
+            <div className="documents-pagination">
+              <span>
+                Exibindo {files.length} de {pagination.total} documento
+                {pagination.total === 1 ? "" : "s"}.
+              </span>
+              {pagination.hasMore && pagination.nextCursor ? (
+                <button
+                  type="button"
+                  className="mm-button secondary"
+                  disabled={loadingMore || refreshing}
+                  onClick={loadMoreDocuments}
+                >
+                  {loadingMore ? "Carregando..." : "Carregar mais"}
+                </button>
+              ) : null}
+            </div>
+          </>
         )}
       </section>
     </>

@@ -54,7 +54,8 @@ test("permissão ampla não é padrão e só super admin pode gerenciá-la", asy
 });
 
 test("listagem, download e exclusão repetem a autorização GeoJSON", () => {
-  assert.match(listing, /filterVisibleOrganizationFiles/);
+  assert.match(listing, /decideProjectGeoJsonAccess/);
+  assert.match(listing, /listOrganizationFilesPage/);
   assert.match(download, /requireProjectGeoJsonAccess/);
   assert.match(deletion, /requireProjectGeoJsonAccess/);
   assert.ok(download.indexOf("requireProjectGeoJsonAccess") < download.indexOf("downloadOrganizationBinary\(env"));

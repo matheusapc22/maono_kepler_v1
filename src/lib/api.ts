@@ -42,12 +42,57 @@ export type SessionResponse = {
 
 export type OrganizationFile = {
   id: number;
+  projectId?: number | string | null;
+  projectName?: string | null;
   name: string;
+  fileType?: string;
   mimeType?: string;
   size?: number;
+  status?: string;
   createdAt?: string;
   updatedAt?: string;
-  createdBy?: { id: number; name?: string; email?: string };
+  createdBy?: { id: number; name?: string; email?: string } | number | string | null;
+};
+
+export type OrganizationFileSort =
+  | "updated_desc"
+  | "updated_asc"
+  | "name_asc"
+  | "name_desc"
+  | "size_asc"
+  | "size_desc";
+
+export type OrganizationFileListQuery = {
+  search?: string;
+  type?: string;
+  projectId?: number | string;
+  updatedFrom?: string;
+  updatedTo?: string;
+  sort?: OrganizationFileSort;
+  cursor?: string;
+  limit?: number;
+};
+
+export type OrganizationFileListFacets = {
+  types: string[];
+  projects: Array<{ id: number | string; name: string }>;
+};
+
+export type OrganizationFileListPagination = {
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  sort: OrganizationFileSort;
+};
+
+export type OrganizationFileListResponse = {
+  ok: boolean;
+  files: OrganizationFile[];
+  facets: OrganizationFileListFacets;
+  pagination: OrganizationFileListPagination;
+  storage?: unknown;
+  requestId?: string;
 };
 
 export type OrganizationTicket = {
@@ -397,9 +442,24 @@ export function saveProjectConfig(projectSlug: string, config: unknown) {
   );
 }
 
-export function listOrganizationFiles(organizationId: number | string) {
-  return requestJson<{ ok: boolean; files: OrganizationFile[] }>(
-    `${organizationPath(organizationId)}/files`,
+export function listOrganizationFiles(
+  organizationId: number | string,
+  query: OrganizationFileListQuery = {},
+) {
+  const params = new URLSearchParams();
+
+  if (query.search) params.set("search", query.search);
+  if (query.type) params.set("type", query.type);
+  if (query.projectId) params.set("projectId", String(query.projectId));
+  if (query.updatedFrom) params.set("updatedFrom", query.updatedFrom);
+  if (query.updatedTo) params.set("updatedTo", query.updatedTo);
+  if (query.sort) params.set("sort", query.sort);
+  if (query.cursor) params.set("cursor", query.cursor);
+  if (query.limit) params.set("limit", String(query.limit));
+
+  const queryString = params.toString();
+  return requestJson<OrganizationFileListResponse>(
+    `${organizationPath(organizationId)}/files${queryString ? `?${queryString}` : ""}`,
   );
 }
 
