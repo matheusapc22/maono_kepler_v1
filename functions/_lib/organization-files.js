@@ -276,6 +276,7 @@ export function publicOrganizationFile(row) {
     id: row.id,
     organizationId: row.organization_id,
     projectId: row.project_id || null,
+    projectName: row.project_name || null,
     name: row.original_name || row.name || row.file_name || "Documento",
     fileName: row.file_name || null,
     fileType: row.file_type || "other",

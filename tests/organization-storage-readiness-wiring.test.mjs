@@ -81,11 +81,11 @@ test("GET de documentos é D1-only e não dispara healing", () => {
   const getReadiness = organizationFilesSource.indexOf(
     "readOrganizationStorageReadiness(organization)",
   );
-  const listRows = organizationFilesSource.indexOf(
-    "listRowsByOrganization(",
+  const listPage = organizationFilesSource.indexOf(
+    "listOrganizationFilesPage(",
   );
   assert.ok(getReadiness >= 0);
-  assert.ok(listRows > getReadiness);
+  assert.ok(listPage > getReadiness);
 });
 
 test("operações físicas de documentos têm readiness gate explícito", () => {

@@ -3,7 +3,6 @@ import {
   getOrganizationOrThrow,
   getRouteParam,
   jsonResponse,
-  listRowsByOrganization,
   methodNotAllowed,
   parsePositiveInteger,
 } from "../../../_lib/organizations.js";
@@ -29,7 +28,11 @@ import {
   readOrganizationStorageReadiness,
   requireOrganizationStorageReady,
 } from "../../../_lib/organization-storage-readiness.js";
-import { filterVisibleOrganizationFiles } from "../../../_lib/geojson-access.js";
+import { decideProjectGeoJsonAccess } from "../../../_lib/geojson-access.js";
+import {
+  listOrganizationFilesPage,
+  parseOrganizationFileListQuery,
+} from "../../../_lib/organization-file-query.js";
 
 export async function onRequest(context) {
   const { request } = context;
@@ -70,17 +73,18 @@ export async function onRequestGet({ env, request, params }) {
     // de storage está indisponível. O status é apenas reportado, sem healing.
     const storage = readOrganizationStorageReadiness(organization);
 
-    const rows = await listRowsByOrganization(
+    const listQuery = parseOrganizationFileListQuery(request);
+    const geoJsonAccess = await decideProjectGeoJsonAccess(
       env,
-      "organization_files",
-      organizationId,
-    );
-    const visibleRows = await filterVisibleOrganizationFiles(
-      env,
-      request,
       user,
       organizationId,
-      rows,
+      null,
+    );
+    const page = await listOrganizationFilesPage(
+      env,
+      organizationId,
+      listQuery,
+      { canViewGeoJson: geoJsonAccess.allowed },
     );
 
     return jsonResponse(
@@ -88,7 +92,9 @@ export async function onRequestGet({ env, request, params }) {
         ok: true,
         requestId,
         storage: publicOrganizationStorageReadiness(storage),
-        files: visibleRows.map(publicOrganizationFile),
+        files: page.rows.map(publicOrganizationFile),
+        facets: page.facets,
+        pagination: page.pagination,
       },
       {
         headers: {
