@@ -18,6 +18,9 @@ import {
   purgeOrganizationFile,
 } from "../../../../../_lib/organization-file-purge.js";
 import { requireProjectGeoJsonAccess } from "../../../../../_lib/geojson-access.js";
+import {
+  requirePermanentDocumentPurgeEnabled,
+} from "../../../../../_lib/organization-file-rollout.js";
 
 const MANUAL_PURGE_CONFIRMATION = "EXCLUIR PERMANENTEMENTE";
 
@@ -42,6 +45,8 @@ export async function onRequestPost({ env, request, params }) {
       getRouteParam(params, "fileId"),
       "fileId",
     );
+
+    requirePermanentDocumentPurgeEnabled(env);
 
     const managePermission = await requireOrganizationPermission(
       env,
