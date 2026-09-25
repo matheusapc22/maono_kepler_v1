@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { inspectTicketLegacyBackfill, runTicketLegacyBackfillPage } from "../../../functions/_lib/ticket-legacy-backfill.js";
+import { inspectTicketLegacyBackfill, runTicketLegacyBackfillPage, reconcileEmptyTicketLegacyBackfill } from "../../../functions/_lib/ticket-legacy-backfill.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIGRATIONS = ["0025_ticket_triage_classification.sql", "0026_ticket_command_lifecycle.sql"];
@@ -45,17 +45,19 @@ export function parseOperatorArgs(args) {
 export function validateOperatorOptions(options, timestamp = new Date()) {
   if (!/^[a-zA-Z0-9_-]{1,63}$/.test(options.databaseName || "") || !UUID.test(options.databaseId || "")) throw operatorError("OPERATOR_DATABASE_INVALID", "Informe nome e UUID válidos do D1 de destino.");
   if (options.accountId && !/^[a-f0-9]{32}$/i.test(options.accountId)) throw operatorError("OPERATOR_ACCOUNT_INVALID", "account-id deve conter 32 caracteres hexadecimais.");
-  if (!["inventory", "apply"].includes(options.mode)) throw operatorError("OPERATOR_MODE_INVALID", "mode deve ser inventory ou apply.");
+  if (!["inventory", "apply", "reconcile-empty"].includes(options.mode)) throw operatorError("OPERATOR_MODE_INVALID", "mode deve ser inventory, apply ou reconcile-empty.");
   if (typeof options.reportPath !== "string" || !options.reportPath.trim()) throw operatorError("OPERATOR_REPORT_REQUIRED", "--report é obrigatório e deve ser um arquivo novo numa pasta existente.");
   integer(options.pageSize, "page-size", 50, 100); integer(options.maxPages, "max-pages", 1, 10000);
   if (options.organizationId !== null && options.organizationId !== undefined) integer(options.organizationId, "organization-id");
-  if (options.mode === "apply") {
-    integer(options.organizationId, "organization-id"); integer(options.operatorUserId, "operator-user-id"); integer(options.fallbackUserId, "fallback-user-id");
+  if (options.mode !== "inventory") {
+    integer(options.organizationId, "organization-id"); integer(options.operatorUserId, "operator-user-id");
+    if (options.mode === "apply") integer(options.fallbackUserId, "fallback-user-id");
+    else if (options.fallbackUserId !== null && options.fallbackUserId !== undefined) throw operatorError("OPERATOR_MODE_INVALID", "reconcile-empty não importa chamados e não aceita autor substituto.");
     if (options.confirmDatabaseId !== options.databaseId) throw operatorError("OPERATOR_CONFIRMATION_REQUIRED", "--confirm-database-id deve repetir exatamente o UUID de destino.");
     if (!options.writersPaused) throw operatorError("OPERATOR_WRITER_PAUSE_REQUIRED", "Ateste a suspensão dos escritores legados com --writers-paused.");
 
   } else if (options.writersPaused || options.confirmDatabaseId || options.operatorUserId || options.fallbackUserId) {
-    throw operatorError("OPERATOR_MODE_INVALID", "As confirmações e identidades de aplicação exigem --mode apply; o inventário não as utiliza.");
+    throw operatorError("OPERATOR_MODE_INVALID", "As confirmações e identidades de escrita exigem --mode apply ou reconcile-empty; o inventário não as utiliza.");
   }
   return options;
 }
@@ -167,9 +169,19 @@ export function isReconciledInventory(row) {
 }
 function safePage(page) {
   return { ...safeInspection(page), runId: page.runId, migrated: page.migrated, duplicates: page.duplicates,
-    skipped: page.skipped, scanned: page.scanned ?? null, lastLegacyId: page.lastLegacyId, complete: page.complete === true };
+    skipped: page.skipped, scanned: page.scanned ?? null, lastLegacyId: page.lastLegacyId, complete: page.complete === true,
+    ...(typeof page.writesPerformed === "boolean" ? { writesPerformed: page.writesPerformed } : {}),
+    ...(typeof page.outcomeUnknown === "boolean" ? { outcomeUnknown: page.outcomeUnknown } : {}) };
 }
 function safeError(error) {
+  const emptyErrors = {
+    TICKET_BACKFILL_EMPTY_SOURCE_REQUIRED: "A organização possui fonte legada elegível. reconcile-empty não pode importar ou ignorar esses chamados.",
+    TICKET_BACKFILL_EMPTY_SOURCE_CHANGED: "A fonte mudou durante a reconciliação. Mantenha as flags desligadas e repita o inventário.",
+    TICKET_BACKFILL_EMPTY_RESULT_UNCONFIRMED: "O resultado da escrita do marcador não foi confirmado. Repita o inventário antes de qualquer nova operação.",
+    TICKET_BACKFILL_OPERATOR_FORBIDDEN: "A reconciliação exige um operador super admin ativo.",
+    TICKET_BACKFILL_ORGANIZATION_INACTIVE: "A reconciliação exige uma organização ativa.",
+  };
+  if (Object.hasOwn(emptyErrors, error?.code)) return { code: error.code, message: emptyErrors[error.code] };
   return error?.operatorSafe ? { code: error.code, message: error.message }
     : { code: "OPERATOR_REMOTE_OPERATION_FAILED", message: "A operação remota falhou. Revise os contadores e as pendências antes de repetir; detalhes internos não são incluídos no relatório." };
 }
@@ -177,7 +189,8 @@ export function initialOperatorReport(options, identity = null, runId = randomUU
   return { reportVersion: 1, runId, generatedAt: timestamp.toISOString(), mode: options.mode,
     database: { requestedName: options.databaseName, requestedId: options.databaseId, verified: Boolean(identity && identity.name === options.databaseName && identity.id === options.databaseId), name: identity?.name || null, id: identity?.id || null },
     organizationId: options.organizationId, operatorUserId: options.operatorUserId, fallbackUserId: options.fallbackUserId,
-    attestations: options.mode === "apply" ? { writersPaused: options.writersPaused, verifiedAutomatically: false } : null, complete: false, ok: false, pages: [], organizations: [] };
+    attestations: options.mode !== "inventory" ? { writersPaused: options.writersPaused, verifiedAutomatically: false } : null,
+    releaseAuthorized: false, complete: false, ok: false, pages: [], organizations: [] };
 }
 export async function runOperator(env, options, { identity, expectations, runId = randomUUID(), timestamp = new Date(), backup = null, onProgress = async () => {}, signal = null } = {}) {
   const report = initialOperatorReport(options, identity, runId, timestamp);
@@ -209,6 +222,24 @@ export async function runOperator(env, options, { identity, expectations, runId 
     if (organizations[0]?.active !== 1) throw operatorError("OPERATOR_ORGANIZATION_INACTIVE", "A aplicação exige uma organização ativa.");
     const operator = await readonly.DB.prepare("SELECT id FROM users WHERE id = ? AND role = 'super_admin' AND active = 1").bind(options.operatorUserId).first();
     if (!operator) throw operatorError("OPERATOR_ACTOR_INVALID", "O operador deve ser um super admin ativo.");
+    if (options.mode === "reconcile-empty") {
+      if (!backup || !/^[a-zA-Z0-9._:-]{10,200}$/.test(backup.bookmark || "") || !Number.isFinite(Date.parse(backup.capturedAt))) throw operatorError("OPERATOR_BACKUP_REQUIRED", "A captura automática do bookmark atual é obrigatória antes de reconciliar.");
+      report.backup = { bookmark: backup.bookmark, capturedAt: backup.capturedAt, source: "wrangler_d1_time_travel_info" };
+      await onProgress(report);
+      if (signal?.aborted) throw operatorError("OPERATOR_INTERRUPTED", "Operação interrompida antes da reconciliação.");
+      writeStarted = true;
+      const result = await reconcileEmptyTicketLegacyBackfill(env, { organizationId: options.organizationId, operatorUserId: options.operatorUserId, runId });
+      report.pages.push(safePage(result));
+      report.migrated = 0; report.writesPerformed = result.writesPerformed;
+      report.reconciledReplay = result.reconciledReplay === true;
+      await onProgress(report);
+      report.final = safeInspection(await inspectTicketLegacyBackfill(readonly, options.organizationId));
+      report.complete = result.complete === true && report.final.sourceCount === 0 && isReconciledInventory(report.final);
+      if (!report.complete) throw operatorError("OPERATOR_EMPTY_RECONCILIATION_STALE", "A inspeção final não confirmou fonte vazia e marcador coerente. Repita o inventário antes de continuar.");
+      report.ok = true;
+      report.nextAction = "Reconciliar as demais organizações e revisar os gates; este operador não habilita flags.";
+      return { report, exitCode: 0 };
+    }
     const fallback = await readonly.DB.prepare(`SELECT u.id FROM users u INNER JOIN organization_users ou ON ou.user_id = u.id
       WHERE u.id = ? AND u.active = 1 AND ou.organization_id = ?`).bind(options.fallbackUserId, options.organizationId).first();
     if (!fallback) throw operatorError("OPERATOR_FALLBACK_INVALID", "O autor substituto deve ser um usuário ativo e membro da organização.");
@@ -243,10 +274,15 @@ export async function runOperator(env, options, { identity, expectations, runId 
     if (error.backfillReport) report.pages.push(safePage(error.backfillReport));
     report.migrated = report.pages.reduce((sum, page) => sum + Number(page.migrated || 0), 0);
     report.migratedCountMeaning = "confirmed_minimum_on_failure";
-    report.commitOutcomeUnknown = !error.operatorSafe && writeStarted;
-    report.requiresReconciliation = options.mode === "apply";
+    report.commitOutcomeUnknown = typeof error.backfillReport?.outcomeUnknown === "boolean" ? error.backfillReport.outcomeUnknown
+      : options.mode === "reconcile-empty" && report.pages.length > 0 ? false : !error.operatorSafe && writeStarted;
+    report.requiresReconciliation = options.mode !== "inventory";
     report.error = safeError(error); report.ok = false; report.complete = false;
     report.durableEffects = error.backfillReport ? "partial_reported" : report.pages.length ? "earlier_pages_committed" : writeStarted ? "unknown_if_remote_failure" : "none";
+    if (options.mode === "reconcile-empty") {
+      report.writesPerformed = error.backfillReport?.writesPerformed ?? report.writesPerformed ?? false;
+      report.durableEffects = report.commitOutcomeUnknown ? "unknown_if_remote_failure" : report.writesPerformed ? "reconciliation_marker_written" : "none";
+    }
     report.nextAction = "Não habilitar flags. Revisar os contadores duráveis; repetir é seguro por identidade legada após corrigir a causa.";
     return { report, exitCode: 1 };
   }

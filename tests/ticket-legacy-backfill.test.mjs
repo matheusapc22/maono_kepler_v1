@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { inspectTicketLegacyBackfill, runTicketLegacyBackfillPage } from "../functions/_lib/ticket-legacy-backfill.js";
+import { inspectTicketLegacyBackfill, runTicketLegacyBackfillPage, reconcileEmptyTicketLegacyBackfill } from "../functions/_lib/ticket-legacy-backfill.js";
 
 function fixture(t, { source = true, path = ":memory:" } = {}) {
   const sqlite = new DatabaseSync(path);
@@ -251,4 +251,185 @@ test("CLI defaults to read-only, accepts only explicit local execution and rejec
   assert.equal(applied.status, 0, applied.stderr || applied.stdout);
   assert.equal(JSON.parse(applied.stdout).complete, true);
   assert.equal(JSON.parse(applied.stdout).migrated, 1);
+});
+
+
+function emptyReconcileFixture(t, extra = {}) {
+  const db = fixture(t, extra);
+  db.sqlite.exec("UPDATE users SET role='super_admin' WHERE id=1; DELETE FROM organization_users WHERE organization_id=2");
+  return db;
+}
+const emptyOptions = { organizationId: 2, operatorUserId: 1, runId: "empty-reconcile-test" };
+function markerRow(db, organizationId = 2) {
+  const row = db.sqlite.prepare("SELECT * FROM ticket_command_backfills WHERE organization_id=?").get(organizationId);
+  return row ? { ...row } : null;
+}
+function interceptEmptyMarker(db, callback) {
+  const prepare = db.env.DB.prepare;
+  db.env.DB.prepare = (sql) => {
+    const statement = prepare(sql);
+    if (sql.includes("WITH empty_counts AS")) {
+      const run = statement.run;
+      statement.run = () => callback(run);
+    }
+    return statement;
+  };
+}
+
+for (const source of [true, false]) test(`empty reconciliation with source table ${source ? "present" : "absent"} writes only its marker without fallback or membership`, async (t) => {
+  const db = emptyReconcileFixture(t, { source });
+  const before = db.counts();
+  const result = await reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions);
+  assert.equal(result.complete, true); assert.equal(result.writesPerformed, true);
+  assert.equal(result.writeAttempted, true); assert.equal(result.outcomeUnknown, false);
+  assert.equal(result.sourceExists, source); assert.equal(result.migrated, 0); assert.equal(result.scanned, 0);
+  assert.equal(result.marker.status, "ready"); assert.equal(result.marker.last_run_id, emptyOptions.runId);
+  assert.equal(result.reconciledReplay, false);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM organization_users WHERE organization_id=2").get().n, 0);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM ticket_cycles").get().n, 0);
+  assert.deepEqual(db.counts(), before);
+  assert.equal(markerRow(db, 1), null);
+});
+
+test("empty ready replay has zero changes and preserves the existing marker timestamps/run ID", async (t) => {
+  const db = emptyReconcileFixture(t);
+  await reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions);
+  const before = markerRow(db); const domain = db.counts(); let changes;
+  interceptEmptyMarker(db, async (run) => { const result = await run(); changes = result.meta.changes; return result; });
+  const replay = await reconcileEmptyTicketLegacyBackfill(db.env, { ...emptyOptions, runId: "second-operation" });
+  assert.equal(changes, 0); assert.equal(replay.writesPerformed, false); assert.equal(replay.reconciledReplay, true);
+  assert.equal(replay.complete, true); assert.deepEqual(markerRow(db), before); assert.deepEqual(db.counts(), domain);
+});
+
+test("empty reconciliation refuses a nonempty source even when every legacy ticket is already canonical", async (t) => {
+  const db = emptyReconcileFixture(t);
+  db.add(1, { organization_id: 2 });
+  await runTicketLegacyBackfillPage(db.env, { ...options, organizationId: 2 });
+  const before = markerRow(db); const domain = db.counts();
+  await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions), (error) => {
+    assert.equal(error.code, "TICKET_BACKFILL_EMPTY_SOURCE_REQUIRED");
+    assert.equal(error.backfillReport.sourceCount, 1); assert.equal(error.backfillReport.pendingCount, 0);
+    assert.equal(error.backfillReport.writeAttempted, false); assert.equal(error.backfillReport.writesPerformed, false);
+    assert.equal(error.backfillReport.outcomeUnknown, false); return true;
+  });
+  assert.deepEqual(markerRow(db), before); assert.deepEqual(db.counts(), domain);
+});
+
+test("empty reconciliation counts only eligible rows in its organization", async (t) => {
+  const db = emptyReconcileFixture(t);
+  db.add(1, { organization_id: 1 }); db.add(2, { organization_id: 2, active: 0 });
+  const result = await reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions);
+  assert.equal(result.complete, true); assert.equal(result.sourceCount, 0); assert.equal(result.excludedSourceCount, 1);
+  assert.equal(db.counts().organization_tickets, 0);
+});
+
+for (const [name, mutate, expected] of [
+  ["operator is not super admin", "UPDATE users SET role='owner' WHERE id=1", "TICKET_BACKFILL_OPERATOR_FORBIDDEN"],
+  ["operator inactive", "UPDATE users SET active=0 WHERE id=1", "TICKET_BACKFILL_OPERATOR_FORBIDDEN"],
+  ["organization inactive", "UPDATE organizations SET active=0 WHERE id=2", "TICKET_BACKFILL_ORGANIZATION_INACTIVE"],
+]) test(`empty reconciliation rejects ${name} before its marker statement`, async (t) => {
+  const db = emptyReconcileFixture(t); db.sqlite.exec(mutate);
+  await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions), (error) => {
+    assert.equal(error.code, expected); assert.equal(error.backfillReport.writeAttempted, false);
+    assert.equal(error.backfillReport.writesPerformed, false); return true;
+  });
+  assert.equal(markerRow(db), null);
+});
+
+for (const active of [1, null]) test(`an eligible source row active=${active} arriving before the SQL guard leaves the marker unchanged`, async (t) => {
+  const db = emptyReconcileFixture(t);
+  await reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions);
+  const before = markerRow(db); const domain = db.counts();
+  interceptEmptyMarker(db, async (run) => { db.add(1, { organization_id: 2, active }); return run(); });
+  await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions), (error) => {
+    assert.equal(error.code, "TICKET_BACKFILL_EMPTY_SOURCE_CHANGED");
+    assert.equal(error.backfillReport.writeAttempted, true); assert.equal(error.backfillReport.writesPerformed, false);
+    assert.equal(error.backfillReport.outcomeUnknown, false); assert.equal(error.backfillReport.sourceCount, 1); return true;
+  });
+  assert.deepEqual(markerRow(db), before); assert.deepEqual(db.counts(), domain);
+});
+
+for (const populated of [false, true]) test(`a previously absent source table appearing before the SQL guard is rejected (${populated ? "with rows" : "empty"})`, async (t) => {
+  const db = emptyReconcileFixture(t, { source: false });
+  interceptEmptyMarker(db, async (run) => {
+    db.sqlite.exec("CREATE TABLE tickets(id INTEGER PRIMARY KEY,organization_id INTEGER,active INTEGER)");
+    if (populated) db.sqlite.exec("INSERT INTO tickets VALUES(1,2,1)");
+    return run();
+  });
+  await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions), (error) => {
+    assert.equal(error.code, "TICKET_BACKFILL_EMPTY_SOURCE_CHANGED"); assert.equal(error.backfillReport.writesPerformed, false);
+    assert.equal(error.backfillReport.outcomeUnknown, false); assert.equal(error.backfillReport.sourceExists, true); return true;
+  });
+  assert.equal(markerRow(db), null); assert.equal(db.counts().organization_tickets, 0);
+});
+
+test("a source row arriving after a successful marker write reports its durable effect without claiming rollback", async (t) => {
+  const db = emptyReconcileFixture(t);
+  interceptEmptyMarker(db, async (run) => { const result = await run(); db.add(1, { organization_id: 2 }); return result; });
+  await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions), (error) => {
+    assert.equal(error.code, "TICKET_BACKFILL_EMPTY_SOURCE_CHANGED"); assert.equal(error.backfillReport.complete, false);
+    assert.equal(error.backfillReport.writesPerformed, true); assert.equal(error.backfillReport.outcomeUnknown, false);
+    assert.equal(error.backfillReport.sourceCount, 1); return true;
+  });
+  assert.equal(markerRow(db).status, "ready"); assert.equal(db.counts().organization_tickets, 0);
+});
+
+for (const [mutate, expected] of [
+  ["UPDATE users SET role='owner' WHERE id=1", "TICKET_BACKFILL_OPERATOR_FORBIDDEN"],
+  ["UPDATE organizations SET active=0 WHERE id=2", "TICKET_BACKFILL_ORGANIZATION_INACTIVE"],
+]) test(`the marker SQL rechecks an operational revocation: ${expected}`, async (t) => {
+  const db = emptyReconcileFixture(t);
+  interceptEmptyMarker(db, async (run) => { db.sqlite.exec(mutate); return run(); });
+  await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions), (error) => {
+    assert.equal(error.code, expected); assert.equal(error.backfillReport.writeAttempted, true);
+    assert.equal(error.backfillReport.writesPerformed, false); assert.equal(error.backfillReport.outcomeUnknown, false); return true;
+  });
+  assert.equal(markerRow(db), null);
+});
+
+test("an inconsistent zero-source marker is repaired without touching canonical records", async (t) => {
+  const db = emptyReconcileFixture(t);
+  db.sqlite.exec(`INSERT INTO ticket_command_backfills(organization_id,status,source_count,canonical_count,pending_count,skipped_count)
+    VALUES(2,'failed',3,2,1,1)`);
+  const domain = db.counts();
+  const result = await reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions);
+  assert.equal(result.complete, true); assert.equal(result.writesPerformed, true);
+  assert.equal(result.marker.skipped_count, 0); assert.equal(result.marker.source_count, 0);
+  assert.equal(result.marker.canonical_count, 0); assert.equal(result.marker.pending_count, 0);
+  assert.deepEqual(db.counts(), domain);
+});
+
+test("another reconciler finishing before SQL produces a no-op instead of replacing its ready marker", async (t) => {
+  const db = emptyReconcileFixture(t);
+  let existing;
+  interceptEmptyMarker(db, async (run) => {
+    db.sqlite.exec(`INSERT INTO ticket_command_backfills(organization_id,status,completed_at,last_run_id)
+      VALUES(2,'ready','2026-09-25T18:00:00.000Z','other-reconciler')`);
+    existing = markerRow(db); return run();
+  });
+  const result = await reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions);
+  assert.equal(result.complete, true); assert.equal(result.writesPerformed, false); assert.equal(result.reconciledReplay, true);
+  assert.deepEqual(markerRow(db), existing);
+});
+
+test("a lost marker response exposes uncertain outcome and a fresh inspection without retrying writes", async (t) => {
+  const db = emptyReconcileFixture(t); let executions = 0;
+  interceptEmptyMarker(db, async (run) => { executions += 1; await run(); throw new Error("lost connection after commit"); });
+  await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, emptyOptions), (error) => {
+    assert.equal(error.backfillReport.writeAttempted, true); assert.equal(error.backfillReport.writesPerformed, false);
+    assert.equal(error.backfillReport.outcomeUnknown, true); assert.equal(error.backfillReport.complete, false);
+    assert.equal(error.backfillReport.marker.status, "ready"); return true;
+  });
+  assert.equal(executions, 1); assert.equal(db.counts().organization_tickets, 0);
+});
+
+test("empty reconciliation attaches an explicit no-write report even to validation errors", async (t) => {
+  const db = emptyReconcileFixture(t);
+  for (const overrides of [{ organizationId: -1 }, { operatorUserId: 0 }, { runId: "x".repeat(101) }]) {
+    await assert.rejects(reconcileEmptyTicketLegacyBackfill(db.env, { ...emptyOptions, ...overrides }), (error) => {
+      assert.equal(error.backfillReport.writeAttempted, false); assert.equal(error.backfillReport.writesPerformed, false);
+      assert.equal(error.backfillReport.outcomeUnknown, false); assert.equal(error.backfillReport.complete, false); return true;
+    });
+  }
+  assert.equal(markerRow(db), null);
 });

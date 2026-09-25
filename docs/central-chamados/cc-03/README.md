@@ -2,6 +2,8 @@
 
 ## Atualização operacional de 25/09/2026
 
+O inventário corrigido confirmou fonte elegível vazia nas seis organizações ativas. MRA (4) e Cliente Beta (8) não têm fallback membro. O [modo explícito de reconciliação vazia](reconcile-empty.md) grava somente o marcador mediante guarda atômica de fonte zero e super admin ativo; preserva os dois canônicos da Demo Maono e todas as regras de `apply`. A execução remota e o replay ainda precisam de evidência.
+
 O primeiro inventário remoto no operador `61fe77e` parou antes de verificar identidade. A [correção da captura JSON](operator-json-fix.md) resolve o uso de `WRANGLER_LOG=none`, que também silenciava o payload. A tentativa não iniciou backfill. O inventário precisa ser repetido com a versão corrigida e outro relatório.
 
 O usuário confirmou a **migration 0026 em produção**, no D1 `maono_maps` (`5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`): ledger ID 20, `applied_at = 2026-09-25 17:10:33` UTC, `foreign_key_check` vazio e `quick_check = ok`. É confirmação do operador, não leitura remota feita nesta entrega. A confirmação se refere à **migration, não ao merge**: a PR #196 continua em revisão. Dev e Preview exigem evidências próprias.

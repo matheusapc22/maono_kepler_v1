@@ -240,3 +240,101 @@ export async function runTicketLegacyBackfillPage(env, options) {
     throw error;
   }
 }
+
+function emptyMarkerIsReady(report) {
+  const marker = report?.marker;
+  return report?.sourceCount === 0 && report.canonicalCount === 0 && report.pendingCount === 0 &&
+    marker?.status === "ready" && marker.schema_version === 1 && marker.source_count === 0 &&
+    marker.canonical_count === 0 && marker.pending_count === 0 && marker.skipped_count === 0 &&
+    Boolean(String(marker.completed_at || "").trim());
+}
+
+async function assertEmptyReconciliationActors(db, organizationId, operatorUserId) {
+  const operator = await db.prepare("SELECT id FROM users WHERE id = ? AND active = 1 AND role = 'super_admin'").bind(operatorUserId).first();
+  if (!operator) throw backfillError("O operador deve ser um super admin ativo.", "TICKET_BACKFILL_OPERATOR_FORBIDDEN", 403);
+  const organization = await db.prepare("SELECT id FROM organizations WHERE id = ? AND active = 1").bind(organizationId).first();
+  if (!organization) throw backfillError("A reconciliação exige uma organização ativa.", "TICKET_BACKFILL_ORGANIZATION_INACTIVE", 409);
+}
+
+/**
+ * Reconcile only an empty eligible legacy source. No fallback author, import,
+ * event, command or cycle is fabricated. One conditional marker statement
+ * rechecks the source and operational actors at the instant of its write.
+ */
+export async function reconcileEmptyTicketLegacyBackfill(env, options) {
+  let organizationId = null;
+  let runId = null;
+  let inspection = null;
+  let source = null;
+  let writeAttempted = false;
+  let writeConfirmed = false;
+  let writesPerformed = false;
+  let outcomeUnknown = false;
+  const report = () => ({
+    organizationId, sourceExists: null, sourceCount: null, canonicalCount: null,
+    pendingCount: null, excludedSourceCount: null, canonicalTotal: null, marker: null,
+    ...inspection, runId, migrated: 0, scanned: 0, duplicates: 0, skipped: 0,
+    complete: false, writesPerformed, writeAttempted, outcomeUnknown,
+    reconciledReplay: false,
+  });
+  try {
+    organizationId = positiveId(options?.organizationId, "organizationId");
+    const operatorUserId = positiveId(options?.operatorUserId, "operatorUserId");
+    const suppliedRunId = String(options?.runId || crypto.randomUUID());
+    if (suppliedRunId.length > 100 || !suppliedRunId.trim()) throw backfillError("runId deve conter entre 1 e 100 caracteres.");
+    runId = suppliedRunId;
+    source = await sourceContract(env);
+    await assertBackfillSchema(env);
+    const db = getDb(env);
+    await assertEmptyReconciliationActors(db, organizationId, operatorUserId);
+    inspection = await inspectTicketLegacyBackfill(env, organizationId);
+    if (inspection.sourceExists !== source.exists) throw backfillError("A estrutura da fonte mudou durante a conferência. Refaça o inventário.", "TICKET_BACKFILL_EMPTY_SOURCE_CHANGED", 409);
+    // A fully imported nonempty source is still outside this operation's scope.
+    if (inspection.sourceCount !== 0) throw backfillError("A reconciliação sem importação exige zero chamados legados elegíveis.", "TICKET_BACKFILL_EMPTY_SOURCE_REQUIRED", 409);
+    const timestamp = new Date().toISOString();
+    const statement = db.prepare(`WITH empty_counts AS (${countQuery(source)})
+      INSERT INTO ticket_command_backfills (
+        organization_id,status,schema_version,source_count,canonical_count,pending_count,
+        skipped_count,last_legacy_id,completed_at,updated_at,last_run_id
+      ) SELECT ?1,'ready',1,0,0,0,0,NULL,?2,?2,?3 FROM empty_counts
+      WHERE source_count = 0
+        ${source.exists ? "" : "AND NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tickets')"}
+        AND EXISTS (SELECT 1 FROM organizations WHERE id = ?1 AND active = 1)
+        AND EXISTS (SELECT 1 FROM users WHERE id = ?4 AND active = 1 AND role = 'super_admin')
+      ON CONFLICT(organization_id) DO UPDATE SET status=excluded.status,
+        schema_version=excluded.schema_version,source_count=0,canonical_count=0,pending_count=0,
+        skipped_count=0,last_legacy_id=NULL,completed_at=excluded.completed_at,
+        updated_at=excluded.updated_at,last_run_id=excluded.last_run_id
+      WHERE NOT (
+        ticket_command_backfills.status = 'ready' AND ticket_command_backfills.schema_version = 1
+        AND ticket_command_backfills.source_count = 0 AND ticket_command_backfills.canonical_count = 0
+        AND ticket_command_backfills.pending_count = 0 AND ticket_command_backfills.skipped_count = 0
+        AND ticket_command_backfills.completed_at IS NOT NULL
+        AND length(trim(ticket_command_backfills.completed_at)) > 0
+      )`).bind(organizationId, timestamp, runId, operatorUserId);
+    writeAttempted = true;
+    const result = await statement.run();
+    if (result?.success === false || ![0, 1].includes(result?.meta?.changes)) {
+      throw backfillError("Não foi possível confirmar o resultado da reconciliação. Refaça o inventário.", "TICKET_BACKFILL_EMPTY_RESULT_UNCONFIRMED", 503);
+    }
+    writeConfirmed = true;
+    writesPerformed = result.meta.changes === 1;
+    // Re-read the source contract too: an absent table may have appeared, or an
+    // eligible row may have arrived after the atomic marker decision.
+    inspection = await inspectTicketLegacyBackfill(env, organizationId);
+    await assertEmptyReconciliationActors(db, organizationId, operatorUserId);
+    if (inspection.sourceExists !== source.exists || inspection.sourceCount !== 0) {
+      throw backfillError("A fonte legada mudou durante a reconciliação. O marcador não libera o cutover; refaça o inventário.", "TICKET_BACKFILL_EMPTY_SOURCE_CHANGED", 409);
+    }
+    if (!emptyMarkerIsReady(inspection)) throw backfillError("O marcador não foi reconciliado. Refaça o inventário antes de continuar.", "TICKET_BACKFILL_EMPTY_SOURCE_CHANGED", 409);
+    return { ...report(), complete: true, reconciledReplay: !writesPerformed };
+  } catch (error) {
+    outcomeUnknown = writeAttempted && !writeConfirmed;
+    if (organizationId !== null && source !== null) {
+      try { inspection = await inspectTicketLegacyBackfill(env, organizationId); }
+      catch { error.backfillReportError = "TICKET_BACKFILL_EMPTY_INSPECTION_UNAVAILABLE"; }
+    }
+    error.backfillReport = report();
+    throw error;
+  }
+}

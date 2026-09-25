@@ -139,6 +139,43 @@ try {
   const final = await run(inventory);
   assert.deepEqual(final.report.pendingOrganizationIds, [2]);
   evidence.checks.push("global inventory still blocks release for the untouched organization");
+
+  await DB.prepare("INSERT INTO organizations(id,name,slug,dropbox_root_path) VALUES(3,'Empty organization','empty-org','/projects/empty-org'),(4,'Race organization','race-org','/projects/race-org')").run();
+  await DB.prepare("INSERT INTO organization_tickets(organization_id,subject,description,created_by) VALUES(3,'Existing A','Preserve',2),(3,'Existing B','Preserve',2)").run();
+  const beforeEmpty = await snapshots();
+  const emptyOptions = { ...options, mode: "reconcile-empty", organizationId: 3, fallbackUserId: null };
+  const empty = await run(emptyOptions);
+  assert.equal(empty.exitCode, 0, JSON.stringify(empty.report));
+  assert.equal(empty.report.writesPerformed, true); assert.equal(empty.report.migrated, 0);
+  assert.equal(empty.report.final.canonicalTotal, 2);
+  const afterEmpty = await snapshots();
+  for (const table of tables) if (table !== "ticket_command_backfills") assert.deepEqual(afterEmpty[table], beforeEmpty[table], table);
+  const emptyReplay = await run(emptyOptions);
+  assert.equal(emptyReplay.exitCode, 0); assert.equal(emptyReplay.report.reconciledReplay, true);
+  assert.equal(emptyReplay.report.writesPerformed, false); assert.deepEqual(await snapshots(), afterEmpty);
+  evidence.checks.push("empty organization without members reconciles and replays while preserving two canonical tickets");
+
+  let raced = false;
+  const guardedDB = { prepare(sql) {
+    const statement = DB.prepare(sql);
+    if (!sql.startsWith("WITH empty_counts AS")) return statement;
+    return { bind(...values) {
+      const bound = statement.bind(...values);
+      return { async run() {
+        raced = true;
+        await DB.prepare("INSERT INTO tickets(id,organization_id,subject,created_by,active) VALUES(401,4,'Arrived before guard',2,1)").run();
+        return bound.run();
+      } };
+    } };
+  } };
+  const racedResult = await runOperator({ DB: guardedDB }, { ...emptyOptions, organizationId: 4 }, { identity,
+    backup: { bookmark: "LOCAL-FIXTURE-NOT-A-REMOTE-BOOKMARK", capturedAt: new Date().toISOString() } });
+  assert.equal(raced, true); assert.equal(racedResult.exitCode, 1);
+  assert.equal(racedResult.report.writesPerformed, false);
+  assert.equal(racedResult.report.commitOutcomeUnknown, false);
+  assert.equal((await DB.prepare("SELECT COUNT(*) AS n FROM ticket_command_backfills WHERE organization_id=4").first()).n, 0);
+  assert.equal((await DB.prepare("SELECT COUNT(*) AS n FROM organization_tickets WHERE organization_id=4").first()).n, 0);
+  evidence.checks.push("native SQL guard rejects a source arriving between preflight and marker write");
   evidence.ok = true;
   evidence.phase = "finished";
 } catch (error) {

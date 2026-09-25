@@ -19,13 +19,17 @@ Inventário somente leitura, padrão, organizações ativas:
 Aplique uma organização explicitamente, após revisar inventário e suspender escritores:
   node scripts/central-chamados/operator/backfill-d1.mjs --mode apply --database-name maono_maps --database-id 5bc4dc32-f3bd-4c92-bbd1-cbda63e467db --organization-id ID --operator-user-id ID_SUPER_ADMIN --fallback-user-id ID_MEMBRO --confirm-database-id 5bc4dc32-f3bd-4c92-bbd1-cbda63e467db --writers-paused --page-size 50 --max-pages 1 --report ./aplicacao-nova.json
 
+Reconcilie somente uma fonte vazia, sem importar chamados ou atribuir autoria:
+  node scripts/central-chamados/operator/backfill-d1.mjs --mode reconcile-empty --database-name maono_maps --database-id 5bc4dc32-f3bd-4c92-bbd1-cbda63e467db --organization-id ID --operator-user-id ID_SUPER_ADMIN --confirm-database-id 5bc4dc32-f3bd-4c92-bbd1-cbda63e467db --writers-paused --report ./reconciliacao-vazia-nova.json
+reconcile-empty rejeita --fallback-user-id e qualquer fonte legada elegível não vazia.
+
 --organization-id também limita o inventário e mostra candidatos a autor substituto.
 --account-id HEX32 é opcional; autenticação normal do Wrangler continua necessária.
 --report é obrigatório: arquivo novo, diretório já existente, criação exclusiva.
 Aplicação captura automaticamente o bookmark ATUAL do Time Travel antes de escrever.
 --writers-paused é um atestado humano; o programa não verifica a suspensão.
 Saídas: 0 concluído; 1 erro; 2 páginas esgotadas/pendências, com efeitos parciais duráveis.
-Nenhuma flag da aplicação é alterada. Sem --mode apply não há escrita no banco.
+Nenhuma flag da aplicação é alterada. O modo padrão inventory não escreve no banco.
 `;
 
 export function isolatedWranglerConfig(options) {
@@ -115,7 +119,7 @@ export async function main(argv = process.argv.slice(2), injected = {}) {
     if (identity.name !== options.databaseName || identity.id !== options.databaseId) throw operatorError("OPERATOR_IDENTITY_MISMATCH", "O nome e UUID retornados pelo D1 não correspondem ao destino solicitado.");
     report.database = { ...report.database, verified: true, ...identity };
     let backup = null;
-    if (options.mode === "apply") {
+    if (options.mode !== "inventory") {
       const result = await wranglerJson(["d1", "time-travel", "info", options.databaseName], configPath);
       if (!/^[a-zA-Z0-9._:-]{10,200}$/.test(result.bookmark || "")) throw operatorError("OPERATOR_BACKUP_UNAVAILABLE", "O D1 não retornou um bookmark atual válido. A aplicação foi bloqueada.");
       backup = { bookmark: result.bookmark, capturedAt: new Date().toISOString() };

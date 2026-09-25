@@ -1,0 +1,22 @@
+{
+  "mode": "local_native_binding",
+  "remoteBindings": false,
+  "remoteD1Access": false,
+  "node": "v24.19.0",
+  "wrangler": "4.140.0",
+  "startedAt": "2026-09-25T18:31:15.351Z",
+  "checks": [
+    "real pinned CLI preserves JSON despite parent WRANGLER_LOG=none",
+    "inventory leaves all tables unchanged",
+    "bounded native D1 batches import and resume with all mandatory effects",
+    "replay is a no-op and organization 2 remains untouched",
+    "native batch rolls back mandatory outbox failure and resumes after correction",
+    "global inventory still blocks release for the untouched organization",
+    "empty organization without members reconciles and replays while preserving two canonical tickets",
+    "native SQL guard rejects a source arriving between preflight and marker write"
+  ],
+  "phase": "finished",
+  "servedBy": "miniflare.db",
+  "ok": true,
+  "finishedAt": "2026-09-25T18:31:38.641Z"
+}
