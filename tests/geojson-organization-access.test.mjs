@@ -59,7 +59,7 @@ test("listagem, download e exclusão repetem a autorização GeoJSON", () => {
   assert.match(download, /requireProjectGeoJsonAccess/);
   assert.match(deletion, /requireProjectGeoJsonAccess/);
   assert.ok(download.indexOf("requireProjectGeoJsonAccess") < download.indexOf("downloadOrganizationBinary\(env"));
-  assert.ok(deletion.indexOf("requireProjectGeoJsonAccess") < deletion.indexOf("deleteOrganizationBinary\(env"));
+  assert.ok(deletion.indexOf("requireProjectGeoJsonAccess") < deletion.indexOf("trashOrganizationFile"));
   assert.match(`${listing}\n${download}`, /private, no-store/);
 });
 
