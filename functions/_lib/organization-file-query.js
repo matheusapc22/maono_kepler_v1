@@ -72,6 +72,14 @@ function parseFolderId(value) {
   return parsePositiveInteger(value, "folderId");
 }
 
+function normalizeState(value) {
+  const normalized = String(value || "active").trim().toLowerCase();
+  if (!["active", "trash"].includes(normalized)) {
+    throw queryError("Estado documental inválido.");
+  }
+  return normalized;
+}
+
 function parseLimit(value) {
   if (value === null || value === undefined || value === "") {
     return ORGANIZATION_FILE_DEFAULT_LIMIT;
@@ -175,6 +183,7 @@ export function parseOrganizationFileListQuery(request) {
   const type = normalizeText(url.searchParams.get("type"), 64, "Tipo")?.toLowerCase() || null;
   const projectId = parsePositiveInteger(url.searchParams.get("projectId"), "projectId");
   const folderId = parseFolderId(url.searchParams.get("folderId"));
+  const state = normalizeState(url.searchParams.get("state"));
   const updatedFrom = normalizeDateBound(url.searchParams.get("updatedFrom"), false);
   const updatedTo = normalizeDateBound(url.searchParams.get("updatedTo"), true);
   const sort = normalizeSort(url.searchParams.get("sort"));
@@ -194,6 +203,7 @@ export function parseOrganizationFileListQuery(request) {
     type,
     projectId,
     folderId,
+    state,
     updatedFrom,
     updatedTo,
     sort,
@@ -202,13 +212,19 @@ export function parseOrganizationFileListQuery(request) {
   };
 }
 
-function baseWhere(organizationId, canViewGeoJson) {
-  const where = [
-    "f.organization_id = ?",
-    "f.deleted_at IS NULL",
-    "(f.active = 1 OR f.active IS NULL)",
-  ];
+function baseWhere(organizationId, canViewGeoJson, state = "active") {
+  const where = ["f.organization_id = ?"];
   const bindings = [organizationId];
+
+  if (state === "trash") {
+    where.push("f.deleted_at IS NOT NULL");
+    where.push("f.purge_after IS NOT NULL");
+    where.push("f.purged_at IS NULL");
+    where.push("UPPER(COALESCE(f.status, '')) = 'TRASHED'");
+  } else {
+    where.push("f.deleted_at IS NULL");
+    where.push("(f.active = 1 OR f.active IS NULL)");
+  }
 
   if (!canViewGeoJson) where.push(`NOT ${GEOJSON_PREDICATE}`);
 
@@ -236,10 +252,12 @@ function applyFilters(where, bindings, query) {
     bindings.push(query.projectId);
   }
 
+  const folderColumn =
+    query.state === "trash" ? "f.trashed_from_folder_id" : "f.folder_id";
   if (query.folderId === "root") {
-    where.push("f.folder_id IS NULL");
+    where.push(`${folderColumn} IS NULL`);
   } else if (query.folderId) {
-    where.push("f.folder_id = ?");
+    where.push(`${folderColumn} = ?`);
     bindings.push(query.folderId);
   }
 
@@ -272,18 +290,34 @@ export function buildOrganizationFileListSql(
   query,
   { canViewGeoJson = false, includeCursor = true } = {},
 ) {
-  const { where, bindings } = baseWhere(organizationId, canViewGeoJson);
+  const { where, bindings } = baseWhere(
+    organizationId,
+    canViewGeoJson,
+    query.state,
+  );
   applyFilters(where, bindings, query);
   if (includeCursor) applyCursor(where, bindings, query);
 
   const sort = SORTS[query.sort];
   return {
     sql: `
-      SELECT f.*, p.name AS project_name, ${sort.expression} AS __sort_value
+      SELECT
+        f.*,
+        p.name AS project_name,
+        trashed_folder.name AS trashed_from_folder_name,
+        deleted_user.name AS deleted_by_name,
+        deleted_user.email AS deleted_by_email,
+        ${sort.expression} AS __sort_value
       FROM organization_files f
       LEFT JOIN projects p
         ON p.id = f.project_id
        AND p.organization_id = f.organization_id
+      LEFT JOIN organization_file_folders trashed_folder
+        ON trashed_folder.id = f.trashed_from_folder_id
+       AND trashed_folder.organization_id = f.organization_id
+       AND trashed_folder.deleted_at IS NULL
+      LEFT JOIN users deleted_user
+        ON deleted_user.id = f.deleted_by
       WHERE ${where.join(" AND ")}
       ORDER BY ${sort.expression} ${sort.direction}, f.id ${sort.direction}
       LIMIT ?
@@ -293,7 +327,11 @@ export function buildOrganizationFileListSql(
 }
 
 function buildCountSql(organizationId, query, canViewGeoJson) {
-  const { where, bindings } = baseWhere(organizationId, canViewGeoJson);
+  const { where, bindings } = baseWhere(
+    organizationId,
+    canViewGeoJson,
+    query.state,
+  );
   applyFilters(where, bindings, query);
   return {
     sql: `SELECT COUNT(*) AS total FROM organization_files f WHERE ${where.join(" AND ")}`,
@@ -301,15 +339,17 @@ function buildCountSql(organizationId, query, canViewGeoJson) {
   };
 }
 
-function buildFacetWhere(organizationId, canViewGeoJson) {
-  return baseWhere(organizationId, canViewGeoJson);
+function buildFacetWhere(organizationId, canViewGeoJson, state) {
+  return baseWhere(organizationId, canViewGeoJson, state);
 }
 
-async function listFacets(env, organizationId, canViewGeoJson) {
+async function listFacets(env, organizationId, canViewGeoJson, state) {
   const db = getDb(env);
-  const typeScope = buildFacetWhere(organizationId, canViewGeoJson);
-  const projectScope = buildFacetWhere(organizationId, canViewGeoJson);
-  const folderScope = buildFacetWhere(organizationId, canViewGeoJson);
+  const typeScope = buildFacetWhere(organizationId, canViewGeoJson, state);
+  const projectScope = buildFacetWhere(organizationId, canViewGeoJson, state);
+  const folderScope = buildFacetWhere(organizationId, canViewGeoJson, state);
+  const folderColumn =
+    state === "trash" ? "f.trashed_from_folder_id" : "f.folder_id";
 
   const [typesResult, projectsResult, foldersResult] = await Promise.all([
     db.prepare(`
@@ -331,10 +371,10 @@ async function listFacets(env, organizationId, canViewGeoJson) {
       ORDER BY LOWER(p.name) ASC, p.id ASC
     `).bind(...projectScope.bindings).all(),
     db.prepare(`
-      SELECT f.folder_id, COUNT(*) AS count
+      SELECT ${folderColumn} AS folder_id, COUNT(*) AS count
       FROM organization_files f
       WHERE ${folderScope.where.join(" AND ")}
-      GROUP BY f.folder_id
+      GROUP BY ${folderColumn}
     `).bind(...folderScope.bindings).all(),
   ]);
 
@@ -371,7 +411,7 @@ export async function listOrganizationFilesPage(
   const [pageResult, countResult, facets] = await Promise.all([
     db.prepare(pageSql.sql).bind(...pageSql.bindings).all(),
     db.prepare(countSql.sql).bind(...countSql.bindings).first(),
-    listFacets(env, organizationId, canViewGeoJson),
+    listFacets(env, organizationId, canViewGeoJson, query.state),
   ]);
 
   const fetchedRows = pageResult?.results || [];

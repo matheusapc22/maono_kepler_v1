@@ -74,6 +74,20 @@ export async function onRequestGet({ env, request, params }) {
     const storage = readOrganizationStorageReadiness(organization);
 
     const listQuery = parseOrganizationFileListQuery(request);
+    if (listQuery.state === "trash") {
+      await requireOrganizationPermission(
+        env,
+        request,
+        "document.delete",
+        {
+          organizationId,
+          scopeType: "organization",
+          resourceType: "document_trash",
+        },
+        { audit: false, resourceType: "document_trash" },
+      );
+    }
+
     const geoJsonAccess = await decideProjectGeoJsonAccess(
       env,
       user,

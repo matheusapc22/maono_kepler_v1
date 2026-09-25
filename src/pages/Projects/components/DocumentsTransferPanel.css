@@ -263,6 +263,19 @@
 
 
 
+.documents-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.documents-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .documents-folder-browser {
   margin: 18px 0 10px;
   border: 1px solid var(--mm-border);
@@ -637,5 +650,47 @@
   .mm-document-feedback-icon {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+
+.documents-trash-table {
+  min-width: 1120px;
+}
+
+.documents-trash-table th:first-child,
+.documents-trash-table td:first-child {
+  width: 28%;
+}
+
+.documents-trash-table th:nth-child(2),
+.documents-trash-table td:nth-child(2),
+.documents-trash-table th:nth-child(3),
+.documents-trash-table td:nth-child(3) {
+  width: 16%;
+}
+
+.documents-trash-table th:nth-child(4),
+.documents-trash-table td:nth-child(4),
+.documents-trash-table th:nth-child(5),
+.documents-trash-table td:nth-child(5) {
+  width: 15%;
+}
+
+.documents-trash-table th:nth-child(6),
+.documents-trash-table td:nth-child(6) {
+  width: 10%;
+}
+
+@media (max-width: 760px) {
+  .documents-header-actions,
+  .documents-view-switch {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .documents-header-actions .mm-button,
+  .documents-view-switch .mm-button {
+    width: 100%;
   }
 }

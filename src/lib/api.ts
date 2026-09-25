@@ -45,6 +45,16 @@ export type OrganizationFile = {
   projectId?: number | string | null;
   projectName?: string | null;
   folderId?: number | string | null;
+  trashedFromFolderId?: number | string | null;
+  trashedFromFolderName?: string | null;
+  deletedAt?: string | null;
+  deletedBy?: {
+    id: number | string;
+    name?: string | null;
+    email?: string | null;
+  } | null;
+  purgeAfter?: string | null;
+  purgedAt?: string | null;
   name: string;
   fileType?: string;
   mimeType?: string;
@@ -68,6 +78,7 @@ export type OrganizationFileListQuery = {
   type?: string;
   projectId?: number | string;
   folderId?: number | string;
+  state?: "active" | "trash";
   updatedFrom?: string;
   updatedTo?: string;
   sort?: OrganizationFileSort;
@@ -465,6 +476,7 @@ export function listOrganizationFiles(
   if (query.type) params.set("type", query.type);
   if (query.projectId) params.set("projectId", String(query.projectId));
   if (query.folderId) params.set("folderId", String(query.folderId));
+  if (query.state) params.set("state", query.state);
   if (query.updatedFrom) params.set("updatedFrom", query.updatedFrom);
   if (query.updatedTo) params.set("updatedTo", query.updatedTo);
   if (query.sort) params.set("sort", query.sort);
@@ -559,9 +571,30 @@ export function deleteOrganizationFile(
   organizationId: number | string,
   fileId: number | string,
 ) {
-  return requestJson<{ ok: boolean; deleted: boolean }>(
+  return requestJson<{
+    ok: boolean;
+    deleted: boolean;
+    trashed?: boolean;
+    file?: OrganizationFile;
+  }>(
     `${organizationPath(organizationId)}/files/${pathSegment(fileId)}`,
     { method: "DELETE" },
+  );
+}
+
+export function restoreOrganizationFile(
+  organizationId: number | string,
+  fileId: number | string,
+) {
+  return requestJson<{
+    ok: boolean;
+    restored: boolean;
+    restoredToRoot: boolean;
+    originalFolderMissing: boolean;
+    file: OrganizationFile;
+  }>(
+    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}/restore`,
+    { method: "POST" },
   );
 }
 
