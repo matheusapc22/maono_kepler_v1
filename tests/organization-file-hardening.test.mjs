@@ -16,6 +16,16 @@ import {
 } from "../functions/_lib/organization-file-rollout.js";
 import { persistenceFixture } from "./helpers/project-persistence-fixture.mjs";
 
+function markStorageReady(db, organizationId = 1, slug = "offline-a") {
+  db.prepare(`
+    UPDATE organizations
+    SET dropbox_root_path = ?,
+        storage_status = 'READY',
+        storage_error = NULL
+    WHERE id = ?
+  `).run(`/projects/${slug}`, organizationId);
+}
+
 function insertFile(db, {
   id,
   organizationId,
@@ -38,6 +48,7 @@ function insertFile(db, {
 
 test("cross-org não encontra arquivo em trash/restore/purge e não toca provider", async (t) => {
   const { env, db, calls } = persistenceFixture(t);
+  markStorageReady(db);
   insertFile(db, {
     id: 902,
     organizationId: 2,
@@ -75,6 +86,7 @@ test("cross-org não encontra arquivo em trash/restore/purge e não toca provide
 
 test("storage não READY bloqueia purge físico sem provider nem falso tombstone", async (t) => {
   const { env, db, store, objects, calls } = persistenceFixture(t);
+  markStorageReady(db);
   const path = "/offline/a/documents/not-ready.pdf";
   await store(path, new TextEncoder().encode("conteudo"));
   insertFile(db, {

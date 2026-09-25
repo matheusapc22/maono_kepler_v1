@@ -14,6 +14,16 @@ import {
 } from "../workers/organization-file-purge.js";
 import { persistenceFixture, interruption } from "./helpers/project-persistence-fixture.mjs";
 
+function markStorageReady(db, organizationId = 1, slug = "offline-a") {
+  db.prepare(`
+    UPDATE organizations
+    SET dropbox_root_path = ?,
+        storage_status = 'READY',
+        storage_error = NULL
+    WHERE id = ?
+  `).run(`/projects/${slug}`, organizationId);
+}
+
 function insertFile(db, {
   id = 501,
   organizationId = 1,
@@ -60,6 +70,7 @@ test("purge confirma Dropbox antes do tombstone e preserva registro D1", async (
       }
     },
   });
+  markStorageReady(db);
 
   const path = "/offline/a/documents/purge.pdf";
   await store(path, new TextEncoder().encode("conteudo"));
@@ -100,6 +111,7 @@ test("falha remota devolve item para TRASHED e mantém purge retryable", async (
       }
     },
   });
+  markStorageReady(db);
 
   insertFile(db);
   await trashOrganizationFile(env, {
@@ -137,6 +149,7 @@ test("crash após delete remoto mantém PURGE_PENDING e retry idempotente finali
       }
     },
   });
+  markStorageReady(db);
 
   await store(path, new TextEncoder().encode("conteudo"));
   insertFile(db, { path });
@@ -254,6 +267,7 @@ test("Worker apply remove somente vencidos e finaliza tombstone", async (t) => {
   const expiredPath = "/offline/a/documents/expired.pdf";
   const futurePath = "/offline/a/documents/future.pdf";
   const { env, db, store, objects } = persistenceFixture(t);
+  markStorageReady(db);
 
   await store(expiredPath, new TextEncoder().encode("expired"));
   await store(futurePath, new TextEncoder().encode("future"));

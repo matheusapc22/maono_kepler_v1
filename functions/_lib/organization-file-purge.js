@@ -326,10 +326,23 @@ export async function purgeOrganizationFile(
 ) {
   await requireDocumentFoldersSchema(env);
 
-  const initial = await rowById(env, organizationId, fileId);
+  const initial = await findOrganizationFileForPurge(
+    env,
+    organizationId,
+    fileId,
+  );
+  if (!initial) {
+    throw purgeError(
+      "Documento não encontrado na Lixeira.",
+      404,
+      "ORGANIZATION_FILE_TRASH_NOT_FOUND",
+      "document.purge.lookup",
+    );
+  }
+
   if (
-    initial?.purged_at ||
-    String(initial?.status || "").toUpperCase() === "PURGED"
+    initial.purged_at ||
+    String(initial.status || "").toUpperCase() === "PURGED"
   ) {
     return {
       file: initial,
