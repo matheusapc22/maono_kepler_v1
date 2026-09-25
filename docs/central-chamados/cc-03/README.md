@@ -1,5 +1,11 @@
 # CC-03 — transições, concorrência e trilha consistente
 
+## Atualização operacional de 25/09/2026
+
+O usuário confirmou a **migration 0026 em produção**, no D1 `maono_maps` (`5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`): ledger ID 20, `applied_at = 2026-09-25 17:10:33` UTC, `foreign_key_check` vazio e `quick_check = ok`. É confirmação do operador, não leitura remota feita nesta entrega. A confirmação se refere à **migration, não ao merge**: a PR #196 continua em revisão. Dev e Preview exigem evidências próprias.
+
+O próximo gate é o inventário e a reconciliação por organização. O [operador remoto](remote-operator-runbook.md) acrescentado à mesma PR usa o binding D1 nativo por um processo local autenticado, sem publicar endpoint. Mantém inventário como padrão, aplicação explícita por organização e relatórios de execução. O [aceite do operador](operator-acceptance.md) e a [revisão](operator-review.md) complementam as evidências históricas abaixo. Não reaplicar a 0026 em produção; não habilitar flags antes dos gates restantes.
+
 ## Base e confirmação recebida
 
 A [PR #195](https://github.com/matheusapc22/maono_kepler_v1/pull/195), CC-02, foi mergeada em `mano_kepler_v1` em 25/09/2026 às 13:15:15 BRT. Base desta entrega: `ddaabcb1ea6038b62da9d90a7d1acd20634bd236`. Branch de implementação: `feat/cc-03-ticket-command-lifecycle`.
@@ -38,7 +44,7 @@ O usuário confirmou em 25/09/2026 que a **0025 foi aplicada e validada**, sem a
 
 ## Nova migration e ativação
 
-**`0026_ticket_command_lifecycle.sql` é necessária. Sua aplicação remota não foi autorizada nem executada nesta tarefa.** A confirmação da 0025 não é confirmação da 0026.
+**Registro da entrega inicial:** `0026_ticket_command_lifecycle.sql` era necessária e sua aplicação remota não havia sido executada nesta tarefa. A confirmação posterior de produção está na atualização operacional acima; os demais ambientes continuam independentes.
 
 Antes de ativar, identificar o banco/ambiente real, revisar checksum e recuperação, aplicar isoladamente a 0026 pelo processo autorizado, executar e conciliar o backfill e validar os clientes. Preview não prova isolamento de produção. Não aplicar pendências em massa e não alterar 0021/0022/0023 como efeito desta entrega.
 

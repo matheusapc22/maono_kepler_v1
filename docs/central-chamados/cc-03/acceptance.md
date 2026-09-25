@@ -1,5 +1,7 @@
 # CC-03 — aceite técnico e evidências
 
+> **Snapshot da entrega inicial `cdc2277`.** A confirmação posterior da 0026 em produção e o novo executor remoto estão no [aceite complementar](operator-acceptance.md). Os 316 testes e hashes abaixo pertencem à entrega inicial; não substituem os testes do complemento nem afirmam execução remota do backfill.
+
 Execução local em 25/09/2026 sobre a base `ddaabcb1ea6038b62da9d90a7d1acd20634bd236`. O commit que contém este documento identifica o lote revisado; `evidence/manifest.json` relaciona os hashes dos arquivos. A URL e o SHA da PR e seus checks são registrados no [controle](https://docs.google.com/spreadsheets/d/1iLrW6EPgJeifKXhaeE85SfKt_PBEGLeqnTGGAe0rFLY/edit) após a publicação.
 
 ## Evidência automatizada

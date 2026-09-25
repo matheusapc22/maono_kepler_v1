@@ -1,5 +1,7 @@
 # CC-03 — implantação, validação e rollback
 
+> **Atualização de 25/09/2026:** a 0026 de produção foi aplicada e validada pelo usuário no D1 `maono_maps` (`5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`), ledger ID 20 às `17:10:33` UTC. `foreign_key_check` vazio; `quick_check = ok`. Não reaplicar. A PR #196 permanece em revisão: migration não significa merge. A próxima operação está em [remote-operator-runbook.md](remote-operator-runbook.md); os passos de aplicação abaixo continuam pertinentes somente a ambientes ainda não confirmados.
+
 ## Estado desta entrega
 
 A 0025 foi confirmada pelo usuário como aplicada e validada em 25/09/2026, sem impacto em 0021/0022/0023. O relato não identifica ambiente, binding, database ID ou flags. Não executar nem reaplicar pendências por inferência.
@@ -30,7 +32,7 @@ Confirmar tabelas, colunas, índices e triggers contra o arquivo versionado. Val
 
 ## Reconciliação e ativação
 
-Seguir [backfill-runbook.md](backfill-runbook.md). O CLI entregue ensaia em SQLite local explícito; a biblioteca de job usa `env.DB` e pode ser chamada pelo operador D1 controlado. **Não foi entregue nem implantado um endpoint público de importação ou um canal remoto de operador.** Esse canal precisa revisão operacional antes da ativação remota. Um relatório local não grava o marker remoto.
+Seguir [remote-operator-runbook.md](remote-operator-runbook.md) para o D1 real e [backfill-runbook.md](backfill-runbook.md) para ensaio em cópia SQLite. O complemento usa a biblioteca de job via binding `env.DB` e preserva `DB.batch` nativo, com configuração isolada e identidade verificada. Não há endpoint público de importação. Um relatório local não grava o marker remoto nem prova execução remota.
 
 O job deve ser executado explicitamente para cada organização alcançada, inclusive quando a fonte `tickets` não existir. Exigir `ready`, schema version 1, zero pendências/skips e data de conclusão. Verificar a segunda execução sem novas linhas/eventos. Falhas parciais preservam somente linhas completas; corrigir a causa e retomar, sem apagar a fonte.
 

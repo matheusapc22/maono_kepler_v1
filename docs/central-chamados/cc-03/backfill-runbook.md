@@ -1,12 +1,14 @@
 # CC-03 — importação legada explícita e reconciliação
 
+> **Atualização de 25/09/2026:** para operar o D1 real, use o [runbook do operador remoto](remote-operator-runbook.md). O CLI descrito neste documento permanece um ensaio em SQLite local. A 0026 de produção em `maono_maps` foi aplicada e validada pelo usuário; não precisa ser reaplicada. Merge, backfill e ativação continuam gates separados.
+
 ## Objetivo e limite de execução
 
 `functions/_lib/ticket-legacy-backfill.js` substitui a necessidade de importar chamados durante uma leitura HTTP **após o cutover CC-03**. A biblioteca é um job de operador, sem endpoint público. O CLI `scripts/central-chamados/backfill-ticket-legacy.mjs` executa somente contra um arquivo SQLite local indicado explicitamente. Não descobre ambientes, não usa credenciais, não chama Wrangler e não aplica migrations.
 
 Antes do cutover, a compatibilidade do fluxo antigo é preservada conforme o flag da CC-03. Depois do cutover, a leitura verifica schema e reconciliação sem DML. Um chamado legado novo sem correspondência canônica invalida o gate, mesmo que um marcador antigo esteja `ready`; execute novamente o job explícito.
 
-A 0025 foi informada como aplicada e validada pelo usuário em 25/09/2026; o ambiente exato não foi informado. A nova **0026 precisa de aplicação e validação próprias**, por ambiente, antes de executar o job. As 0021/0022/0023 continuam fora desta operação. Nada neste runbook comprova aplicação remota.
+A 0025 foi informada como aplicada e validada pelo usuário em 25/09/2026. A **0026 exige aplicação e validação próprias por ambiente**; a produção foi confirmada posteriormente conforme a atualização acima. As 0021/0022/0023 continuam fora desta operação. Os ensaios locais deste documento não comprovam aplicação remota.
 
 ## Contratos
 
@@ -63,7 +65,7 @@ node scripts/central-chamados/backfill-ticket-legacy.mjs \
 
 O limite de páginas encerra a execução normalmente mesmo se houver pendências. Verificar `complete` e contagens, não apenas o exit code. Em falha de uma linha, exit code 1 e `report` mostram o que foi concluído e o que falta. Resolver a causa e repetir o mesmo comando; a seleção recomeça no cursor zero e ignora as identidades já importadas.
 
-A biblioteca também fornece `runTicketLegacyBackfillPage(env, options)`, para um operador D1 autenticado e controlado, e `inspectTicketLegacyBackfill(env, organizationId)`, somente leitura. Este lote entrega o CLI local, **não um canal de execução remota**. Um ensaio local aprovado não grava marcadores no D1 remoto nem autoriza o cutover remoto. A integração com um operador remoto exige revisão de identidade, autorização do ambiente e evidências próprias; não publicar a função como endpoint de produto.
+A biblioteca também fornece `runTicketLegacyBackfillPage(env, options)`, para um operador D1 autenticado e controlado, e `inspectTicketLegacyBackfill(env, organizationId)`, somente leitura. A entrega inicial continha somente o CLI local. O complemento operacional agora está em [remote-operator-runbook.md](remote-operator-runbook.md). Um ensaio local aprovado não grava marcadores no D1 remoto nem autoriza o cutover remoto; cada ambiente exige identidade e evidências próprias. A função não é publicada como endpoint de produto.
 
 ## Reconciliação e liberação
 

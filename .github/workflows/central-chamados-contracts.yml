@@ -28,6 +28,7 @@ on:
       - 'tests/helpers/ticket-triage*.mjs'
       - 'tests/ticket-command*.test.mjs'
       - 'tests/ticket-legacy-backfill.test.mjs'
+      - 'tests/ticket-backfill*.test.mjs'
       - 'tests/helpers/ticket-command*.mjs'
       - 'migrations/0010_ticket_center.sql'
       - 'migrations/0020_project_change_requests.sql'
@@ -82,4 +83,17 @@ jobs:
         with:
           node-version: 22
       - name: Validate commands, concurrency, lifecycle and controlled backfill
-        run: node --experimental-strip-types --test tests/ticket-command*.test.mjs tests/ticket-legacy-backfill.test.mjs
+        run: node --experimental-strip-types --test tests/ticket-command*.test.mjs tests/ticket-legacy-backfill.test.mjs tests/ticket-backfill*.test.mjs
+
+  cc03-d1-binding-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the isolated pinned operator runtime
+        run: npm ci --prefix scripts/central-chamados/operator --no-audit --no-fund
+      - name: Verify native D1 binding locally without remote access
+        run: node scripts/central-chamados/operator/smoke-local.mjs
