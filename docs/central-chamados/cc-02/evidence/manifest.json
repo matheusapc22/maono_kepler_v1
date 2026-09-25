@@ -1,0 +1,66 @@
+{
+  "baseline": "b0f62ba6d00b1627ad9fcec45125da9ea3544232",
+  "node": "v24.19.0",
+  "tests": {
+    "triage_and_ticket": 52,
+    "preview": 23,
+    "change_requests": 98
+  },
+  "migration": {
+    "path": "migrations/0025_ticket_triage_classification.sql",
+    "sha256": "07a00cce68f24f059f47254e127a02d07450e60b2579e4160bb6d777e09d2a7b",
+    "remoteApplication": "not_run"
+  },
+  "authenticatedQA": "not_run",
+  "productionValidation": "not_run",
+  "featureFlagDefault": false,
+  "artifacts": [
+    {
+      "path": "baseline.log",
+      "bytes": 262,
+      "sha256": "a99fe9587fe3ab7f537eff0b162cdd9957a7557f0a39458d8f768d31041ece71"
+    },
+    {
+      "path": "build.log",
+      "bytes": 7590,
+      "sha256": "176cdff63a8f320ee5d7b712601870b130526ab790a7efd5943167ef4f9d7fa4"
+    },
+    {
+      "path": "cr-regression.log",
+      "bytes": 16070,
+      "sha256": "4c1bc0cc8be18fdcd0976bedf0a15b244ef69e63c687b8fea29f630da2ffbb51"
+    },
+    {
+      "path": "error-sink-ratchet.log",
+      "bytes": 567,
+      "sha256": "39c941b98f97f5a2d4bc3fe305a3d3e17cfc37e4afbdc14f81721f639040cdcc"
+    },
+    {
+      "path": "preview-safety.log",
+      "bytes": 2344,
+      "sha256": "706eccee0bb9d1f71dbced3bcfe620d83e5523bb2987ac492ee92136228059f5"
+    },
+    {
+      "path": "triage-desktop.png",
+      "bytes": 111617,
+      "sha256": "3c315d0e7fe3a6b0909f401d009e4fe429820e90a8a008651282253f4fedaf33"
+    },
+    {
+      "path": "triage-mobile.png",
+      "bytes": 59692,
+      "sha256": "4ca3874ba1f993f78ad4fa0998ad058529f5f574de2dac471d75551dd50a73cb"
+    },
+    {
+      "path": "triage-tests.log",
+      "bytes": 5253,
+      "sha256": "7098cc5dd8ae0538b0b6587be97fd36a9de895dc150b4cf64178e8fbf8b05748"
+    },
+    {
+      "path": "ui-smoke.json",
+      "bytes": 536,
+      "sha256": "07da5175093ed5a89faed0eb0c858324da07f64b0fce3b2bc7cc3835d6a2a4c3"
+    }
+  ],
+  "initialPublishedHead": "15198112625d921b0405970dbfcf369cc29e9293",
+  "ciCorrection": "Typed local validation prop; strict ratchet unchanged and passing; build, 52 tests and browser rerun."
+}

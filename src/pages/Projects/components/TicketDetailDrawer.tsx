@@ -3,6 +3,15 @@ import { useEffect, useRef, useState } from "react";
 
 import TicketAttachmentList from "./TicketAttachmentList";
 import TicketErrorNotice from "./TicketErrorNotice";
+import TicketTriageFields, { TicketTriageSummary } from "./TicketTriageFields";
+import {
+  buildTicketTriagePayload,
+  createTicketTriageForm,
+  ticketTriageReasonRequired,
+  TICKET_TRIAGE_LIMITS,
+  validateTicketTriageForm,
+  type TicketTriageFieldError,
+} from "./ticket-triage-form";
 import {
   TicketApiError,
   toTicketApiError,
@@ -46,6 +55,9 @@ const EVENT_LABELS: Record<string, string> = {
   "ticket.assigned": "Atendente alterado",
   "ticket.due.changed": "Prazo alterado",
   "ticket.priority.changed": "Prioridade alterada",
+  "ticket.category.changed": "Domínio alterado",
+  "ticket.triage.classified": "Classificação registrada",
+  "ticket.triage.changed": "Classificação alterada",
   "ticket.attachment.added": "Anexo adicionado",
   "ticket.attachment.deleted": "Anexo excluído",
 };
@@ -71,12 +83,28 @@ export default function TicketDetailDrawer({
   const [category, setCategory] = useState("support");
   const [dueDate, setDueDate] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
-  const [saveError, setSaveError] = useState<TicketApiError | null>(null);
+  const [saveError, setSaveError] = useState<TicketApiError | string | null>(null);
+  const [triageForm, setTriageForm] = useState(createTicketTriageForm);
+  const [triageEditing, setTriageEditing] = useState(false);
+  const [triageError, setTriageError] = useState<TicketTriageFieldError | null>(null);
+  const [priorityReason, setPriorityReason] = useState("");
+  const [savedDraftVersion, setSavedDraftVersion] = useState(0);
+  const dirtyRef = useRef(false);
+  const formTicketKeyRef = useRef("");
+  const triageEnabled = detail?.triageEnabled === true;
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!detail?.ticket) return;
+    const key = `${detail.ticket.organizationId}:${detail.ticket.id}`;
+    if (formTicketKeyRef.current === key && dirtyRef.current) return;
+    formTicketKeyRef.current = key;
+    dirtyRef.current = false;
+    setTriageForm(createTicketTriageForm(detail.ticket));
+    setTriageEditing(false);
+    setTriageError(null);
+    setPriorityReason("");
     setStatus(detail.ticket.status);
     setPriority(detail.ticket.priority);
     setCategory(detail.ticket.category);
@@ -87,7 +115,7 @@ export default function TicketDetailDrawer({
         : "",
     );
     setSaveError(null);
-  }, [detail?.ticket]);
+  }, [detail?.ticket, savedDraftVersion]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -136,14 +164,43 @@ export default function TicketDetailDrawer({
   async function handleSave() {
     if (!ticket) return;
     setSaveError(null);
-    try {
-      await onUpdate({
-        status,
+    setTriageError(null);
+    const classificationChanged = priority !== ticket.priority || category !== ticket.category;
+    let triagePayload: Partial<UpdateTicketPayload> = {};
+    if (triageEnabled && triageEditing) {
+      const validation = validateTicketTriageForm(triageForm, {
         priority: priority as typeof ticket.priority,
-        category: category as typeof ticket.category,
-        dueAt: dateInputToIso(dueDate),
-        assignedTo: assignedTo || null,
+        reasonRequired: ticketTriageReasonRequired(priority as typeof ticket.priority, ticket, triageForm.demandNature, category as typeof ticket.category),
       });
+      if (validation) {
+        setTriageError(validation);
+        document.getElementById(`detail-ticket-triage-${validation.field}`)?.focus();
+        return;
+      }
+      triagePayload = buildTicketTriagePayload(triageForm);
+    } else if (triageEnabled && classificationChanged) {
+      if (!priorityReason.trim() || priorityReason.length > TICKET_TRIAGE_LIMITS.priorityReason) {
+        setSaveError("Explique a mudança de classificação ou prioridade em até 1.000 caracteres.");
+        document.getElementById("ticket-priority-change-reason")?.focus();
+        return;
+      }
+      triagePayload = { priorityReason: priorityReason.trim() };
+    }
+    try {
+      const payload: UpdateTicketPayload = { ...triagePayload };
+      if (status !== ticket.status) payload.status = status;
+      if (priority !== ticket.priority) payload.priority = priority as typeof ticket.priority;
+      if (category !== ticket.category) payload.category = category as typeof ticket.category;
+      if (dueDate !== dateInputValue(ticket.dueAt)) payload.dueAt = dateInputToIso(dueDate);
+      if (assignedTo !== (ticket.assignedTo ? String(ticket.assignedTo.id) : "")) payload.assignedTo = assignedTo || null;
+      if (Object.keys(payload).length === 0) {
+        setSaveError("Nenhuma alteração para salvar.");
+        return;
+      }
+      await onUpdate(payload);
+      dirtyRef.current = false;
+      setTriageEditing(false);
+      setSavedDraftVersion((current) => current + 1);
     } catch (requestError) {
       setSaveError(
         toTicketApiError(requestError, "Não foi possível salvar as alterações."),
@@ -244,11 +301,13 @@ export default function TicketDetailDrawer({
                   <dd>{formatTicketDateTime(ticket.dueAt)}</dd>
                 </div>
                 <div>
-                  <dt>Categoria</dt>
+                  <dt>{triageEnabled ? "Domínio afetado" : "Categoria"}</dt>
                   <dd>{CATEGORY_LABELS[ticket.category]}</dd>
                 </div>
               </dl>
             </section>
+
+            {triageEnabled ? <TicketTriageSummary ticket={ticket} people={detail.assignees} /> : null}
 
             {canManage ? (
               <section className="ticket-detail-management">
@@ -258,9 +317,11 @@ export default function TicketDetailDrawer({
                     <span>Situação</span>
                     <select
                       value={status}
-                      onChange={(event) =>
-                        setStatus(event.target.value as TicketStatus)
-                      }
+                      disabled={saving}
+                      onChange={(event) => {
+                        dirtyRef.current = true;
+                        setStatus(event.target.value as TicketStatus);
+                      }}
                     >
                       {Object.entries(STATUS_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -274,7 +335,14 @@ export default function TicketDetailDrawer({
                     <span>Prioridade</span>
                     <select
                       value={priority}
-                      onChange={(event) => setPriority(event.target.value)}
+                      disabled={saving}
+                      onChange={(event) => {
+                        dirtyRef.current = true;
+                        setPriority(event.target.value);
+                        setPriorityReason("");
+                        setTriageForm((current) => ({ ...current, priorityReason: "" }));
+                        setSaveError(null);
+                      }}
                     >
                       {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -285,10 +353,17 @@ export default function TicketDetailDrawer({
                   </label>
 
                   <label>
-                    <span>Categoria</span>
+                    <span>{triageEnabled ? "Domínio afetado" : "Categoria"}</span>
                     <select
                       value={category}
-                      onChange={(event) => setCategory(event.target.value)}
+                      disabled={saving}
+                      onChange={(event) => {
+                        dirtyRef.current = true;
+                        setCategory(event.target.value);
+                        setPriorityReason("");
+                        setTriageForm((current) => ({ ...current, priorityReason: "" }));
+                        setSaveError(null);
+                      }}
                     >
                       {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -303,7 +378,8 @@ export default function TicketDetailDrawer({
                     <input
                       type="date"
                       value={dueDate}
-                      onChange={(event) => setDueDate(event.target.value)}
+                      disabled={saving}
+                      onChange={(event) => { dirtyRef.current = true; setDueDate(event.target.value); }}
                     />
                   </label>
 
@@ -311,7 +387,8 @@ export default function TicketDetailDrawer({
                     <span>Atendente</span>
                     <select
                       value={assignedTo}
-                      onChange={(event) => setAssignedTo(event.target.value)}
+                      disabled={saving}
+                      onChange={(event) => { dirtyRef.current = true; setAssignedTo(event.target.value); }}
                     >
                       <option value="">Não atribuído</option>
                       {detail.assignees.map((assignee) => (
@@ -322,6 +399,40 @@ export default function TicketDetailDrawer({
                     </select>
                   </label>
                 </div>
+
+                {triageEnabled ? (
+                  <>
+                    <div className="ticket-triage-edit-actions">
+                      <button type="button" className="ticket-secondary-action" disabled={saving}
+                        onClick={() => {
+                          setTriageForm({ ...createTicketTriageForm(ticket), ...(priority !== ticket.priority || category !== ticket.category ? { priorityReason } : {}) });
+                          setTriageError(null);
+                          setTriageEditing((current) => !current);
+                        }}>
+                        {triageEditing ? "Cancelar edição da classificação" : ticket.needsTriage || !ticket.demandNature ? "Classificar chamado" : "Editar classificação"}
+                      </button>
+                    </div>
+                    {triageEditing ? (
+                      <TicketTriageFields
+                        value={triageForm}
+                        onChange={(next) => { dirtyRef.current = true; setTriageForm(next); setTriageError(null); setSaveError(null); }}
+                        idPrefix="detail-ticket-triage"
+                        reasonRequired={ticketTriageReasonRequired(priority as typeof ticket.priority, ticket, triageForm.demandNature, category as typeof ticket.category)}
+                        disabled={saving}
+                        validationIssue={triageError}
+                      />
+                    ) : priority !== ticket.priority || category !== ticket.category ? (
+                      <label className="ticket-triage-reason" htmlFor="ticket-priority-change-reason">
+                        <span>Motivo da mudança de classificação ou prioridade *</span>
+                        <textarea id="ticket-priority-change-reason" value={priorityReason} rows={3} required
+                          maxLength={TICKET_TRIAGE_LIMITS.priorityReason} disabled={saving}
+                          aria-describedby="ticket-priority-change-help"
+                          onChange={(event) => { dirtyRef.current = true; setPriorityReason(event.target.value); setSaveError(null); }} />
+                        <small id="ticket-priority-change-help">Explique a nova classificação ou prioridade. A natureza e o prazo permanecem independentes. · {priorityReason.length}/1.000</small>
+                      </label>
+                    ) : null}
+                  </>
+                ) : null}
 
                 {saveError ? (
                   <TicketErrorNotice error={saveError} compact />

@@ -3,9 +3,10 @@ name: Central de Chamados contracts
 on:
   pull_request:
     paths:
-      - 'docs/central-chamados/cc-01/**'
+      - 'docs/central-chamados/**'
       - 'scripts/central-chamados/**'
       - 'functions/_lib/ticket-center.js'
+      - 'functions/_lib/ticket-triage.js'
       - 'functions/_lib/project-change-requests.js'
       - 'functions/_lib/project-change-request-review.js'
       - 'functions/_lib/project-change-request-inbox.js'
@@ -14,8 +15,15 @@ on:
       - 'src/access-control/permissions.ts'
       - 'src/pages/Projects/components/ticket-types.ts'
       - 'src/pages/Projects/components/tickets-api.ts'
+      - 'src/pages/Projects/components/*Ticket*.tsx'
+      - 'src/pages/Projects/components/ticket-triage-form.ts'
+      - 'src/pages/Projects/components/ticket-triage.css'
+      - 'tests/ticket-triage*.test.mjs'
+      - 'tests/helpers/ticket-triage*.mjs'
       - 'migrations/0010_ticket_center.sql'
       - 'migrations/0020_project_change_requests.sql'
+      - 'migrations/0025_ticket_triage_classification.sql'
+      - 'schema.sql'
       - 'functions/api/organizations/*/tickets/**'
       - 'functions/api/organizations/*/tickets.js'
       - 'functions/api/projects/*/change-requests/**'
@@ -41,3 +49,16 @@ jobs:
         run: node --test tests/ticket-center.test.mjs
       - name: Verify Preview safety policy
         run: npm run test:preview-safety
+
+  cc02-triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate triage contracts, SQLite migration and legacy compatibility
+        run: node --experimental-strip-types --test tests/ticket-triage*.test.mjs
+      - name: Verify product error presentation ratchet
+        run: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline

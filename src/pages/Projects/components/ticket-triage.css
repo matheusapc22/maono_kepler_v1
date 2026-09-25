@@ -1,0 +1,54 @@
+.ticket-triage,
+.ticket-triage input,
+.ticket-triage select,
+.ticket-triage textarea,
+.ticket-triage-reason textarea { box-sizing: border-box; }
+.ticket-triage-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.ticket-triage {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 6px 0 12px;
+  padding: 16px;
+  border: 1px solid var(--mm-border, #343a45);
+  border-radius: 10px;
+}
+.ticket-triage legend { padding: 0 6px; font-weight: 750; color: var(--maono-accent-text, #f3d58a); }
+.ticket-triage .ticket-triage-grid,
+.ticket-triage-summary dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.ticket-triage .ticket-triage-grid > label { min-width: 0; display: grid; gap: 7px; font-size: .82rem; }
+.ticket-triage .ticket-triage-wide,
+.ticket-triage-summary .ticket-triage-wide { grid-column: 1 / -1; }
+.ticket-triage input,
+.ticket-triage select,
+.ticket-triage textarea {
+  width: 100%; min-width: 0; min-height: 42px; padding: 10px 12px;
+  border: 1px solid var(--mm-border, #343a45); border-radius: 8px;
+  color: var(--mm-text, #f0f2f5); background: var(--mm-bg-soft, #0e1116); font: inherit;
+}
+.ticket-triage textarea { resize: vertical; line-height: 1.5; }
+.ticket-triage small,
+.ticket-triage-help { color: var(--mm-text-soft, #b0b8c6); font-size: .76rem; line-height: 1.5; }
+.ticket-triage-help { margin: 0 0 16px; }
+.ticket-triage [aria-invalid="true"] { border-color: var(--maono-semantic-danger, #ef4444); }
+.ticket-triage input:focus-visible,
+.ticket-triage select:focus-visible,
+.ticket-triage textarea:focus-visible,
+.ticket-triage button:focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 3px; }
+.ticket-triage-change { border-left: 3px solid var(--maono-accent, #c5a059); padding: 10px 14px; background: var(--maono-accent-surface, #221e17); font-size: .8rem; }
+.ticket-triage-change p { margin: 0 0 10px; }
+.ticket-triage-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ticket-triage-error { color: #fca5a5; font-size: .82rem; }
+.ticket-triage-summary { padding: 15px 0; border-top: 1px solid var(--mm-border, #343a45); }
+.ticket-triage-summary h4 { margin: 0 0 10px; }
+.ticket-triage-provenance { color: var(--maono-accent-text, #f3d58a); font-size: .82rem; }
+.ticket-triage-summary dl { margin: 0; }
+.ticket-triage-summary dt { color: var(--mm-text-soft, #b0b8c6); font-size: .75rem; }
+.ticket-triage-summary dd { margin: 3px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; }
+.ticket-detail-management > .ticket-triage-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.ticket-triage-reason { display: grid; gap: 6px; margin: 14px 0; font-size: .82rem; }
+.ticket-triage-reason textarea { width: 100%; resize: vertical; padding: 10px; border-radius: 8px; border: 1px solid var(--mm-border, #343a45); background: var(--mm-bg-soft, #0e1116); color: inherit; font: inherit; }
+.ticket-triage-reason small { color: var(--mm-text-soft, #b0b8c6); font-size: .76rem; }
+@media (max-width: 620px) { .ticket-triage .ticket-triage-grid, .ticket-triage-summary dl { grid-template-columns: minmax(0, 1fr); } .ticket-triage { padding: 12px; } }

@@ -9,6 +9,27 @@ export type TicketStatus =
 
 export type TicketPriority = "low" | "normal" | "high";
 
+export type TicketDemandNature =
+  | "question_request"
+  | "incident"
+  | "defect"
+  | "improvement_change"
+  | "recurring_problem";
+
+export type TicketImpact = "individual" | "team" | "organization";
+export type TicketUrgency = "flexible" | "soon" | "blocked";
+
+export type TicketTriagePayload = {
+  demandNature: TicketDemandNature;
+  expectedResult: string;
+  context: string;
+  impact: TicketImpact;
+  urgency: TicketUrgency;
+  priorityReason: string;
+  triageAnswers: Record<string, string>;
+  triageFormVersion: 1;
+};
+
 export type TicketCategory =
   | "map"
   | "database"
@@ -73,6 +94,18 @@ export type Ticket = {
   createdBy?: TicketPerson | null;
   assignedTo?: TicketPerson | null;
   attachmentsCount: number;
+  demandNature?: TicketDemandNature | null;
+  expectedResult?: string | null;
+  context?: string | null;
+  impact?: TicketImpact | null;
+  urgency?: TicketUrgency | null;
+  priorityReason?: string | null;
+  triageAnswers?: Record<string, string> | null;
+  triageFormVersion?: number | null;
+  needsTriage?: boolean;
+  triageSource?: "legacy" | "human" | null;
+  triagedAt?: string | null;
+  triagedBy?: number | null;
 };
 
 export type TicketFilters = {
@@ -101,6 +134,7 @@ export type TicketPagination = {
 
 export type TicketListResponse = {
   ok: boolean;
+  triageEnabled?: boolean;
   tickets: Ticket[];
   pagination: TicketPagination;
   facets: TicketFacets;
@@ -113,6 +147,7 @@ export type TicketListResponse = {
 };
 
 export type TicketDetailResponse = {
+  triageEnabled?: boolean;
   changeRequest?: { id: string; status: string; reviewUrl: string } | null;
   ok: boolean;
   ticket: Ticket;
@@ -122,7 +157,7 @@ export type TicketDetailResponse = {
   attachmentLimits: TicketAttachmentLimits;
 };
 
-export type CreateTicketPayload = {
+export type CreateTicketPayload = Partial<TicketTriagePayload> & {
   subject: string;
   description: string;
   priority: TicketPriority;

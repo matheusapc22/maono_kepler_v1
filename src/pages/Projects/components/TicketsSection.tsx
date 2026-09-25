@@ -98,6 +98,7 @@ export default function TicketsSection({
   organizationName,
 }: TicketsSectionProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [triageEnabled, setTriageEnabled] = useState(false);
   const [filters, setFilters] = useState<TicketFilters>(
     DEFAULT_TICKET_FILTERS,
   );
@@ -179,6 +180,8 @@ export default function TicketsSection({
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => { setTriageEnabled(false); }, [organizationId]);
+
   const loadTicketsPage = useCallback(
     async (
       targetPage = 1,
@@ -227,6 +230,7 @@ export default function TicketsSection({
             ? mergeTickets(current, response.tickets)
             : response.tickets,
         );
+        setTriageEnabled(response.triageEnabled === true);
         setFacets(response.facets);
         setPagination(response.pagination);
         setAssignees(response.assignees);
@@ -665,9 +669,11 @@ export default function TicketsSection({
       ) : null}
 
       <NewTicketPopover
+        key={String(organizationId)}
         open={newTicketOpen}
         organizationId={organizationId}
         assignees={assignees}
+        triageEnabled={triageEnabled}
         canManage={canManage}
         attachmentLimits={attachmentLimits}
         onClose={closeNewTicket}
@@ -675,6 +681,7 @@ export default function TicketsSection({
       />
 
       <TicketDetailDrawer
+        key={`${organizationId}:${selectedTicketId ?? "closed"}`}
         open={selectedTicketId !== null}
         organizationId={organizationId}
         detail={detail}

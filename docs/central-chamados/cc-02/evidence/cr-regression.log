@@ -1,0 +1,197 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> maono@0.0.0 test:change-requests
+> node --experimental-strip-types --test tests/viewer-working-copy.test.mjs tests/viewer-layer-lifecycle.test.mjs tests/viewer-layer-style.test.mjs tests/viewer-working-copy-projection.test.mjs tests/project-change-request-domain.test.mjs tests/project-change-request-inbox.test.mjs tests/project-change-request-proposal.test.mjs tests/project-change-request-layer-style.test.mjs tests/project-change-request-layer-lifecycle.test.mjs tests/project-change-request-visualization.test.mjs tests/project-change-request-apply.test.mjs tests/project-change-request-review-workspace.test.mjs tests/project-change-request-visualization-static.test.mjs
+
+✔ PR4 golden: REV184 + point.create publica REV185 sem criar projeto nem trocar slug/ID (20.934056ms)
+✔ migration 0020 cria apenas request + operations com vínculo opcional ao ticket (2.808929ms)
+✔ migration protege conteúdo submitted sem bloquear cascatas de lifecycle (0.299863ms)
+✔ máquina de estados nasce preparada sem expor comandos de review nesta PR (0.234834ms)
+✔ registry backend aceita point.create v1 e rejeita operação desconhecida (0.980469ms)
+✔ createdAt é obrigatório para manter hash idempotente entre retries (0.383989ms)
+✔ hash é canônico para payload semanticamente idêntico (16.892799ms)
+✔ submit exige Viewer route, Idempotency-Key e usa batch atômico (0.345001ms)
+✔ submit cria Ticket e evento no mesmo batch e vincula ticket_id à Change Request (0.666065ms)
+✔ schema guard exige também tabelas canônicas do Ticket Center (0.459704ms)
+✔ replay idempotente é resolvido antes de rejeitar revisão-base stale (0.332151ms)
+✔ schema drift é erro estruturado e list/get permanecem restritos ao solicitante (0.186832ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ Editor sees other requesters, stable pages and lightweight ticket metadata (54.328544ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ status filters include history and return empty pages (29.100759ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ unauthenticated, Viewer and another organization cannot access inbox (17.819527ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ ticket link uses stored relation and checks project access (15.637835ms)
+✔ invalid options reject, links encode segments, writes reject (7.096468ms)
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: role_permissions
+[Maono permissions] Consulta opcional ignorada: no such table: user_permissions
+✔ explicit edit denial blocks inbox and hides ticket Review (13.020917ms)
+✔ regular tickets work before the change request migration (6.384634ms)
+✔ submission Viewer aceita create, duplicate e remove de layer (7.45618ms)
+✔ layer.create insere estrutura sem copiar dataset (1.925806ms)
+✔ layer.duplicate preserva ID proposto e reutiliza o mesmo dataset (4.193066ms)
+✔ layer.remove remove somente a layer e preserva dataset (1.605082ms)
+✔ lifecycle compõe sequencialmente com estilo, visibilidade e ordem (2.099648ms)
+✔ lifecycle falha fechado para dataset ausente e target conflitante (0.964676ms)
+✔ source/remove stale e dupla remoção viram conflito/missing (0.800027ms)
+✔ payload com allData e versão futura são rejeitados (0.352371ms)
+✔ registry e normalização aceitam layer.style.update v1 com contrato fechado (3.214ms)
+✔ layer.style.update reconstrói before/after e altera somente a proposal (1.793826ms)
+✔ point.create targetMode=new pode ser seguido por style update na mesma nova camada (1.389426ms)
+✔ style update em layer removida falha fechado como conflito de target (0.352241ms)
+✔ submission Viewer aceita Buffer e Isócrona congelados sem abrir save direto (0.95442ms)
+✔ Buffer e Isócrona entram na proposal e style posterior pode atingir Buffer novo (1.2856ms)
+✔ análise com geometria inválida falha fechado antes da submissão (0.259282ms)
+✔ PR4: point.create reconstrói proposta sem mutar a REV base (2.944192ms)
+✔ PR4: nova target temporária cria dataset/layer determinísticos dentro do mesmo projeto (0.910473ms)
+✔ PR4: target inexistente falha fechado como conflito de operação (0.485983ms)
+✔ PR4: rota dedicada /projects/:slug/review/:changeRequestId usa workspace próprio (2.563758ms)
+✔ PR4: Review exige contexto Editor mas remove capabilities de escrita do mapa (0.737072ms)
+✔ P0 large-map: Review hidrata a revisão-base direto do storage, não pelo payload /review (0.370239ms)
+✔ P0 large-map: contrato v2 não contém MapConfig e pina descriptor à baseRevision (0.308866ms)
+✔ P0 large-map: GET/POST de Review são control plane e não materializam MapConfig (0.358782ms)
+✔ P0 large-map: projeções Before/After são produzidas no navegador sem clone do MapConfig inteiro (0.35825ms)
+✔ PR4: workspace preserva before/after, navegação e três decisões (0.603391ms)
+✔ PR4: Reviewer boundary é separado do GET requester-only e endpoints têm métodos explícitos (0.232861ms)
+✔ PR4: Apply continua autoritativo e publica base+1 pelo save versionado (0.487836ms)
+✔ PR4: conflito e retry idempotente protegem o HEAD (0.477641ms)
+✔ runtime composto monta a captura de visibilidade, filtro e ordem sem capturar viewport (2.506722ms)
+✔ Drawer e Review usam linguagem de produto (0.301966ms)
+✔ Review projeta visibilidade, filtro e ordem no mapa (0.217058ms)
+✔ submission Viewer aceita visibilidade, filtro persistente e ordem (4.356594ms)
+✔ proposal aplica visualizações sequencialmente sem mutar revisão-base (1.691332ms)
+✔ filtro persistente pode ser criado e removido de forma explícita (0.591422ms)
+✔ visualizações inválidas falham fechado antes da submissão (0.771144ms)
+✔ target divergente vira conflito e não aplica parcialmente (0.505583ms)
+✔ point.create novo pode ser seguido por visibilidade e ordem na mesma proposal (1.200211ms)
+✔ snapshot lifecycle é pequeno e exclui dados pesados (1.715398ms)
+✔ validators aceitam create, duplicate e remove v1 (1.936873ms)
+✔ payload lifecycle rejeita allData e propriedades arbitrárias (0.439293ms)
+✔ duplicação encontra a origem estrutural sem depender do label (1.130475ms)
+✔ create seguido de remove compacta lifecycle e operações dependentes (0.456809ms)
+✔ remove de layer da revisão-base não é compactado (0.11929ms)
+✔ Buffer amarelo → vermelho produz somente fixedColor no diff (1.725303ms)
+✔ voltar ao estilo base elimina o diff (1.766115ms)
+✔ opacidade, fill e stroke são capturados sem serializar estado Redux (0.269457ms)
+✔ runtime composto monta legado e cobertura persistente sobre a mesma Working Copy (1.370078ms)
+✔ Viewer materializa point.create targetMode=new com IDs temporários estáveis (0.295666ms)
+✔ replay da Working Copy é idempotente por operação e runtime (0.340684ms)
+✔ captura de alterações não roda enquanto replay aguarda estabilização (5.172074ms)
+✔ Viewer captura e reprojeta visibilidade, filtro persistente e ordem (0.33155ms)
+✔ runtime persistente reconhece sessão e só limpa dirty após captura/ack reconhecido (0.343969ms)
+✔ camada temporária projetada não vira target existente de outro point.create (0.180733ms)
+✔ Viewer captura estilo na Working Copy e drawer descreve a operação (0.191008ms)
+✔ Working Copy só é reprojetada depois do readiness visual do mapa-base (0.269987ms)
+✔ Viewer pode descartar explicitamente Working Copy persistida (0.348215ms)
+✔ submit não faz silent return para mutação sem contrato (0.207644ms)
+✔ Review aceita projeções das operações suportadas e mostra Antes/Depois (0.321024ms)
+✔ registry suporta operações Viewer v1 (1.990383ms)
+✔ working copy aceita somente visualizações persistíveis saneadas (4.03582ms)
+✔ working copy usa uma chave estável por organização/projeto/usuário (0.205691ms)
+✔ operação, baseRevision e submissionKey sobrevivem a nova instância do store (0.568017ms)
+✔ Viewer agrupa múltiplos pontos na mesma nova camada temporária (1.185268ms)
+✔ style update é coalescido por camada e reversão remove a operação (2.573303ms)
+✔ style update rejeita chaves e cores fora do contrato (0.552263ms)
+✔ snapshot é cópia independente e não altera o valor persistido (0.505443ms)
+✔ não aceita operation id duplicado nem operação desconhecida (0.456789ms)
+✔ revision divergente sinaliza stale sem apagar a working copy (0.584161ms)
+✔ completeSubmission remove apenas selecionadas e rotaciona submissionKey (3.280535ms)
+✔ clear é terminal e vence uma gravação de estilo já em voo (1.274012ms)
+✔ removeOperation e clear mantêm lifecycle mínimo (0.40387ms)
+✔ runtimes compostos não perdem operações em gravações concorrentes (1.058628ms)
+✔ Viewer mutation policy classifica todo comando do Engine Adapter (0.521928ms)
+✔ Viewer separa mutações persistentes, de sessão e bloqueadas (0.083576ms)
+✔ novos contratos v1 validam snapshots pequenos e rejeitam propriedades arbitrárias (0.615559ms)
+✔ backend aplica definição, tooltip e blending com before/after autoritativo (2.077605ms)
+✔ backend falha fechado quando definição referencia campo ausente (0.210277ms)
+✔ create local + definition + remove compacta para no-op (0.830713ms)
+✔ coverage mantém fail-closed e Review large-map-safe (0.37774ms)
+ℹ tests 98
+ℹ suites 0
+ℹ pass 98
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 481.582261
