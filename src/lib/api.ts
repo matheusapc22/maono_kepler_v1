@@ -598,6 +598,25 @@ export function restoreOrganizationFile(
   );
 }
 
+export function purgeOrganizationFilePermanently(
+  organizationId: number | string,
+  fileId: number | string,
+  confirmation: string,
+) {
+  return requestJson<{
+    ok: boolean;
+    purged: boolean;
+    idempotent: boolean;
+    file: OrganizationFile;
+  }>(
+    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}/purge`,
+    {
+      method: "POST",
+      body: JSON.stringify({ confirmation }),
+    },
+  );
+}
+
 export function listOrganizationTickets(organizationId: number | string) {
   return requestJson<{ ok: boolean; tickets: OrganizationTicket[] }>(
     `${organizationPath(organizationId)}/tickets`,

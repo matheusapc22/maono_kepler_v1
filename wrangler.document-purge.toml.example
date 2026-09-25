@@ -1,0 +1,32 @@
+# EXEMPLO SEGURO — Worker dedicado ao purge de documentos vencidos.
+# A 08-S5 NÃO ativa este Worker em Production automaticamente.
+# Estado inicial obrigatório: disabled + kill switch + dry-run.
+#
+# Migration: nenhuma nova. O Worker depende de 0024_document_folders_trash.sql
+# já confirmada no D1 Production maono_maps.
+
+name = "maono-document-purge"
+account_id = "09d455fa1cf988b0d9db89987b73eaff"
+main = "workers/organization-file-purge.js"
+compatibility_date = "2026-05-21"
+
+[vars]
+MAONO_DOCUMENT_PURGE_ENABLED = "false"
+MAONO_DOCUMENT_PURGE_KILL_SWITCH = "true"
+MAONO_DOCUMENT_PURGE_DRY_RUN = "true"
+MAONO_DOCUMENT_PURGE_BATCH_SIZE = "25"
+MAONO_DOCUMENT_PURGE_CLAIM_TTL_SECONDS = "900"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "maono_maps"
+database_id = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["0 * * * *"]
+
+# Secrets obrigatórios antes de qualquer modo apply:
+# DROPBOX_APP_KEY
+# DROPBOX_APP_SECRET
+# DROPBOX_REFRESH_TOKEN
