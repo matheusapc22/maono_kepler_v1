@@ -130,6 +130,9 @@ test("DELETE não chama Dropbox e restore repete autorização GeoJSON", async (
   const listRoute = await readFile(
     new URL("../functions/api/organizations/[id]/files.js", import.meta.url), "utf8",
   );
+  const downloadRoute = await readFile(
+    new URL("../functions/api/organizations/[id]/files/[fileId]/download.js", import.meta.url), "utf8",
+  );
 
   assert.match(deleteRoute, /trashOrganizationFile/);
   assert.match(deleteRoute, /document\.trash/);
@@ -140,6 +143,9 @@ test("DELETE não chama Dropbox e restore repete autorização GeoJSON", async (
   assert.match(restoreRoute, /restoreOrganizationFile/);
   assert.match(listRoute, /listQuery\.state === "trash"/);
   assert.match(listRoute, /"document\.delete"/);
+  assert.match(downloadRoute, /file\.deleted_at/);
+  assert.match(downloadRoute, /file\.active === 0/);
+  assert.match(downloadRoute, /TRASHED/);
 });
 
 test("UI separa Lixeira e não antecipa purge permanente", async () => {
