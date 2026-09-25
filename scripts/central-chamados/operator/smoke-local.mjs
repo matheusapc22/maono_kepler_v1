@@ -4,8 +4,11 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createTicketCommandDb } from "../../../tests/helpers/ticket-command-db.mjs";
 import { parseOperatorArgs, runOperator } from "./lib.mjs";
+import { runPinnedWranglerJson } from "./backfill-d1.mjs";
 
 process.env.WRANGLER_SEND_METRICS = "false";
 process.env.WRANGLER_LOG = "none";
@@ -36,6 +39,24 @@ try {
   const identity = { name: "cc03-local-fixture", id: "11111111-1111-4111-8111-111111111111" };
   await writeFile(configPath, JSON.stringify({ name: "cc03-local-fixture", compatibility_date: "2026-09-25",
     d1_databases: [{ binding: "DB", database_name: identity.name, database_id: identity.id, remote: false }] }));
+  evidence.phase = "native_cli_json";
+  // Execute the real pinned CLI through the production subprocess adapter.
+  // d1 execute returns an array, so the identity/bookmark parser must reject its
+  // shape; first verify that a real JSON payload survived the logger boundary.
+  let nativeJsonChecked = false;
+  const exec = promisify(execFile);
+  await assert.rejects(runPinnedWranglerJson(["d1", "execute", "DB", "--local", "--command", "SELECT 1 AS cli_json_probe"], configPath, {
+    execCommand: async (...args) => {
+      const result = await exec(...args);
+      const rows = JSON.parse(result.stdout);
+      assert.equal(rows[0].success, true);
+      assert.equal(rows[0].results[0].cli_json_probe, 1);
+      nativeJsonChecked = true;
+      return result;
+    },
+  }), { code: "OPERATOR_WRANGLER_INVALID_JSON" });
+  assert.equal(nativeJsonChecked, true);
+  evidence.checks.push("real pinned CLI preserves JSON despite parent WRANGLER_LOG=none");
   evidence.phase = "getPlatformProxy";
   const { getPlatformProxy } = await import("wrangler");
   proxy = await getPlatformProxy({ configPath, persist: false, remoteBindings: false, envFiles: [] });

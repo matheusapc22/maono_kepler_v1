@@ -33,21 +33,37 @@ export function isolatedWranglerConfig(options) {
     ...(options.accountId ? { account_id: options.accountId } : {}),
     d1_databases: [{ binding: "DB", database_name: options.databaseName, database_id: options.databaseId, remote: true }] };
 }
-export async function runPinnedWranglerJson(args, configPath) {
+export async function runPinnedWranglerJson(args, configPath, {
+  execCommand = exec,
+  readPackage = async () => JSON.parse(await readFile(join(PACKAGE_DIR, "node_modules/wrangler/package.json"), "utf8")),
+} = {}) {
+  let packageJson;
   try {
-    const packageJson = JSON.parse(await readFile(join(PACKAGE_DIR, "node_modules/wrangler/package.json"), "utf8"));
-    if (packageJson.version !== "4.140.0") throw operatorError("OPERATOR_WRANGLER_VERSION", "Instale a dependência isolada fixada em Wrangler 4.140.0.");
-    const result = await exec(process.execPath, [join(PACKAGE_DIR, "node_modules/wrangler/bin/wrangler.js"), ...args, "--config", configPath, "--json"], {
+    packageJson = await readPackage();
+  } catch {
+    throw operatorError("OPERATOR_WRANGLER_INSTALLATION", "Não foi possível ler a instalação isolada do Wrangler. Execute npm ci no pacote do operador.");
+  }
+  if (packageJson?.version !== "4.140.0") throw operatorError("OPERATOR_WRANGLER_VERSION", "Instale a dependência isolada fixada em Wrangler 4.140.0.");
+  let result;
+  try {
+    result = await execCommand(process.execPath, [join(PACKAGE_DIR, "node_modules/wrangler/bin/wrangler.js"), ...args, "--config", configPath, "--json"], {
       cwd: dirname(configPath), shell: false, windowsHide: true, timeout: 120000, maxBuffer: 2 * 1024 * 1024,
-      env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_LOG: "none", CI: "true" },
+      // Wrangler 4.140 emits d1 info/time-travel JSON through logger.log.
+      // "none" suppresses the result itself, not just diagnostic noise.
+      // Output remains captured here; never forward raw stdout/stderr.
+      env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_LOG: "log", WRANGLER_WRITE_LOGS: "false", CI: "true" },
     });
-    const parsed = JSON.parse(result.stdout.trim());
+  } catch {
+    throw operatorError("OPERATOR_WRANGLER_COMMAND_FAILED", "O Wrangler encerrou a consulta D1 com erro. Verifique autenticação e acesso à conta/banco; a resposta interna foi omitida.");
+  }
+  const output = typeof result?.stdout === "string" ? result.stdout.trim() : "";
+  if (!output) throw operatorError("OPERATOR_WRANGLER_EMPTY_OUTPUT", "O Wrangler concluiu a consulta sem devolver JSON. Verifique a versão do operador e a configuração de saída; isso não comprova falha de autenticação.");
+  try {
+    const parsed = JSON.parse(output);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid shape");
     return parsed;
-  } catch (error) {
-    if (error.operatorSafe) throw error;
-    // stdout/stderr can contain authentication or service details. Never echo it.
-    throw operatorError("OPERATOR_WRANGLER_READ_FAILED", "Não foi possível consultar o D1 pelo Wrangler. Verifique autenticação, permissões e instalação isolada; a resposta interna foi omitida.");
+  } catch {
+    throw operatorError("OPERATOR_WRANGLER_INVALID_JSON", "O Wrangler devolveu uma resposta fora do contrato JSON esperado. A resposta interna foi omitida; nenhuma identidade foi presumida.");
   }
 }
 export async function verifyRemoteBinding(db) {

@@ -6,7 +6,7 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { createTicketCommandDb } from "./helpers/ticket-command-db.mjs";
 import { parseOperatorArgs, readOnlyD1, runOperator, loadOperatorSchema } from "../scripts/central-chamados/operator/lib.mjs";
-import { main, verifyRemoteBinding } from "../scripts/central-chamados/operator/backfill-d1.mjs";
+import { main, verifyRemoteBinding, runPinnedWranglerJson } from "../scripts/central-chamados/operator/backfill-d1.mjs";
 
 const databaseId = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db";
 const identity = { id: databaseId, name: "maono_maps" };
@@ -282,4 +282,93 @@ test("preflight rejects a real SQLite expansion with DEFAULT 10 instead of DEFAU
   assert.equal(result.report.error.code, "OPERATOR_PREFLIGHT_FAILED");
   assert(result.report.preflight.missingSchema.includes("column-definition:organization_tickets.version"));
   assert.deepEqual(db.snapshot(), before);
+});
+
+
+const pinnedPackage = async () => ({ version: "4.140.0" });
+const wrapperConfigPath = join(tmpdir(), "operator path with spaces", "wrangler.json");
+
+for (const [name, command, response] of [
+  ["database identity", ["d1", "info", "maono_maps"], { uuid: databaseId, name: "maono_maps" }],
+  ["current bookmark", ["d1", "time-travel", "info", "maono_maps"], { bookmark: "00000001-00000002-00000003" }],
+]) test(`pinned Wrangler ${name} preserves JSON output and invokes Node without a shell`, async () => {
+  const inheritedLog = process.env.WRANGLER_LOG;
+  let executed = 0;
+  const actual = await runPinnedWranglerJson(command, wrapperConfigPath, {
+    readPackage: pinnedPackage,
+    async execCommand(binary, args, options) {
+      executed += 1;
+      assert.equal(binary, process.execPath);
+      assert.match(args[0].replaceAll("\\", "/"), /operator\/node_modules\/wrangler\/bin\/wrangler\.js$/);
+      assert.deepEqual(args.slice(1), [...command, "--config", wrapperConfigPath, "--json"]);
+      assert.equal(options.shell, false);
+      assert.equal(options.windowsHide, true);
+      assert.equal(options.env.WRANGLER_LOG, "log", "Wrangler uses logger.log to emit --json; none would suppress stdout");
+      assert.equal(options.env.WRANGLER_WRITE_LOGS, "false");
+      assert.equal(options.env.WRANGLER_SEND_METRICS, "false");
+      assert.equal(options.env.CI, "true");
+      assert(options.timeout > 0);
+      return { stdout: `  ${JSON.stringify(response)}\n`, stderr: "PRIVATE-DIAGNOSTIC" };
+    },
+  });
+  assert.equal(executed, 1);
+  assert.deepEqual(actual, response);
+  assert(!JSON.stringify(actual).includes("PRIVATE-DIAGNOSTIC"));
+  assert.equal(process.env.WRANGLER_LOG, inheritedLog, "subprocess settings must not change the parent logger");
+});
+
+function assertSafeWranglerFailure(error, expectedCode, secrets = []) {
+  assert.equal(error.code, expectedCode);
+  assert.equal(error.operatorSafe, true);
+  const exposed = [String(error), error.stack || "", JSON.stringify(error)].join("\n");
+  for (const secret of secrets) assert(!exposed.includes(secret), `Diagnostic leaked ${secret}`);
+  return true;
+}
+
+test("pinned Wrangler command failures redact stdout, stderr, command text and tokens", async () => {
+  const secrets = ["PRIVATE-STDOUT", "PRIVATE-STDERR", "PRIVATE-API-TOKEN", "PRIVATE-COMMAND"];
+  await assert.rejects(runPinnedWranglerJson(["d1", "info", "maono_maps"], wrapperConfigPath, {
+    readPackage: pinnedPackage,
+    async execCommand() {
+      throw Object.assign(new Error("PRIVATE-COMMAND failed with PRIVATE-API-TOKEN"), {
+        code: 1, stdout: "PRIVATE-STDOUT", stderr: "PRIVATE-STDERR", cmd: "PRIVATE-COMMAND",
+      });
+    },
+  }), (error) => assertSafeWranglerFailure(error, "OPERATOR_WRANGLER_COMMAND_FAILED", secrets));
+});
+
+test("successful Wrangler invocation with empty stdout has a distinct safe diagnostic", async () => {
+  for (const stdout of ["", " \r\n\t "]) {
+    await assert.rejects(runPinnedWranglerJson(["d1", "info", "maono_maps"], wrapperConfigPath, {
+      readPackage: pinnedPackage,
+      execCommand: async () => ({ stdout, stderr: "PRIVATE-STDERR" }),
+    }), (error) => assertSafeWranglerFailure(error, "OPERATOR_WRANGLER_EMPTY_OUTPUT", ["PRIVATE-STDERR"]));
+  }
+});
+
+test("Wrangler malformed JSON and non-object shapes fail without echoing output", async () => {
+  for (const stdout of ["PRIVATE-MALFORMED-OUTPUT", '{"token":"PRIVATE-JSON-TOKEN",}', "[]", "null", "123", '"PRIVATE-STRING"', "true"]) {
+    await assert.rejects(runPinnedWranglerJson(["d1", "info", "maono_maps"], wrapperConfigPath, {
+      readPackage: pinnedPackage,
+      execCommand: async () => ({ stdout, stderr: "PRIVATE-STDERR" }),
+    }), (error) => assertSafeWranglerFailure(error, "OPERATOR_WRANGLER_INVALID_JSON", ["PRIVATE-MALFORMED-OUTPUT", "PRIVATE-JSON-TOKEN", "PRIVATE-STRING", "PRIVATE-STDERR"]));
+  }
+});
+
+test("missing or unreadable pinned installation aborts before executing Wrangler", async () => {
+  let executed = false;
+  await assert.rejects(runPinnedWranglerJson(["d1", "info", "maono_maps"], wrapperConfigPath, {
+    readPackage: async () => { throw new Error("PRIVATE-INSTALLATION-PATH"); },
+    execCommand: async () => { executed = true; return { stdout: "{}" }; },
+  }), (error) => assertSafeWranglerFailure(error, "OPERATOR_WRANGLER_INSTALLATION", ["PRIVATE-INSTALLATION-PATH"]));
+  assert.equal(executed, false);
+});
+
+test("an unpinned Wrangler version aborts before authentication or execution", async () => {
+  let executed = false;
+  await assert.rejects(runPinnedWranglerJson(["d1", "info", "maono_maps"], wrapperConfigPath, {
+    readPackage: async () => ({ version: "4.139.0" }),
+    execCommand: async () => { executed = true; return { stdout: "{}" }; },
+  }), (error) => assertSafeWranglerFailure(error, "OPERATOR_WRANGLER_VERSION"));
+  assert.equal(executed, false);
 });

@@ -18,6 +18,8 @@ O modo padrão é **inventário somente leitura**. A aplicação exige uma organ
 
 O executor não lê/escreve valores das flags do Pages, não concede permissões, não aplica migrations, não ativa notificações e não faz merge/deploy. Não passa a considerar todo o ambiente pronto após processar uma organização.
 
+**Correção de 25/09/2026:** o primeiro inventário de produção no commit `61fe77e` foi bloqueado por um defeito na captura do JSON do Wrangler. Atualizar para a correção descrita em [operator-json-fix.md](operator-json-fix.md) antes de repetir. Preservar o relatório anterior e escolher outro nome; não reaplicar migrations nem reinstalar dependências, pois o lockfile não mudou.
+
 ## 1. Obter o código em uma pasta separada
 
 PowerShell, a partir do seu repositório. A pasta separada evita misturar a operação com alterações locais. Estes comandos não fazem merge:
