@@ -10,6 +10,7 @@ import {
   listOrganizationDocumentFolders,
   listOrganizationFiles,
   moveOrganizationFileToFolder,
+  restoreOrganizationFile,
   updateOrganizationDocumentFolder,
   type OrganizationDocumentFolder,
   type OrganizationFile,
@@ -52,6 +53,14 @@ type FeedbackState = {
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const PROGRESS_TICK_MS = 24;
 const DOCUMENT_HEADERS = ["Documento", "Tipo", "Tamanho", "Atualizado em", "Ações"];
+const TRASH_HEADERS = [
+  "Documento",
+  "Pasta anterior",
+  "Excluído por",
+  "Excluído em",
+  "Exclusão definitiva em",
+  "Ações",
+];
 const ALLOWED_EXTENSIONS = new Set([
   "geojson",
   "json",
@@ -128,12 +137,17 @@ function fileTypeLabel(value?: string | null) {
   return labels[normalized] || normalized || "Outro";
 }
 
-function toFileListQuery(filters: DocumentFilterState, cursor?: string | null) {
+function toFileListQuery(
+  filters: DocumentFilterState,
+  cursor?: string | null,
+  state: "active" | "trash" = "active",
+) {
   return {
     search: filters.search.trim() || undefined,
     type: filters.type || undefined,
     projectId: filters.projectId || undefined,
     folderId: filters.folderId || undefined,
+    state,
     updatedFrom: filters.updatedFrom || undefined,
     updatedTo: filters.updatedTo || undefined,
     sort: filters.sort,
@@ -207,7 +221,24 @@ function formatBytes(size?: number | null) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatDate(value?: string) {
+function deletedByLabel(file: OrganizationFile) {
+  const actor = file.deletedBy;
+  if (!actor) return "—";
+  return actor.name || actor.email || `Usuário ${actor.id}`;
+}
+
+function trashedFromFolderLabel(file: OrganizationFile) {
+  if (file.trashedFromFolderId == null) return "Raiz";
+  return file.trashedFromFolderName || "Pasta removida";
+}
+
+function restoreExpired(file: OrganizationFile) {
+  if (!file.purgeAfter) return false;
+  const expiresAt = new Date(file.purgeAfter).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+}
+
+function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
@@ -365,6 +396,7 @@ function OrganizationDocuments({
   const loadSequenceRef = useRef(0);
   const mountedRef = useRef(true);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
+  const [documentState, setDocumentState] = useState<"active" | "trash">("active");
   const [folders, setFolders] = useState<OrganizationDocumentFolder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [busyFolderId, setBusyFolderId] = useState<number | string | null>(null);
@@ -721,7 +753,7 @@ function OrganizationDocuments({
     try {
       const response = await listOrganizationFiles(
         organizationId,
-        toFileListQuery(filters, cursor),
+        toFileListQuery(filters, cursor, documentState),
       );
       if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
 
@@ -754,7 +786,7 @@ function OrganizationDocuments({
     setFeedback(null);
     void loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId, canView, appliedFilters]);
+  }, [organizationId, canView, appliedFilters, documentState]);
 
   useEffect(() => {
     void loadFolders();
@@ -918,13 +950,13 @@ function OrganizationDocuments({
     if (!organizationId || !canDelete || transferBusy) return;
 
     const confirmed = window.confirm(
-      `Excluir o documento "${file.name}"? Essa ação não pode ser desfeita.`,
+      `Mover o documento "${file.name}" para a Lixeira? Ele poderá ser restaurado por até 10 dias.`,
     );
     if (!confirmed) return;
 
     setBusyFileId(file.id);
     setError(null);
-    showFeedback("loading", "Excluindo documento...");
+    showFeedback("loading", "Movendo documento para a Lixeira...");
 
     try {
       await deleteOrganizationFile(organizationId, file.id);
@@ -934,18 +966,63 @@ function OrganizationDocuments({
       );
       await loadFiles({ background: true });
       if (!mountedRef.current) return;
-      showFeedback("success", "Documento excluído.", 3400);
+      showFeedback("success", "Documento movido para a Lixeira.", 3400);
     } catch (requestError) {
       setFeedback(null);
       setError(
         formatRequestError(
           requestError,
-          "Não foi possível excluir o documento.",
+          "Não foi possível mover o documento para a Lixeira.",
         ),
       );
     } finally {
       setBusyFileId(null);
     }
+  }
+
+  async function handleRestore(file: OrganizationFile) {
+    if (!organizationId || !canDelete) return;
+
+    setBusyFileId(file.id);
+    setError(null);
+    showFeedback("loading", "Restaurando documento...");
+
+    try {
+      const response = await restoreOrganizationFile(organizationId, file.id);
+      if (!mountedRef.current) return;
+      await loadFiles({ background: true });
+      if (!mountedRef.current) return;
+      showFeedback(
+        "success",
+        response.originalFolderMissing
+          ? "Documento restaurado na Raiz porque a pasta anterior não existe mais."
+          : response.restoredToRoot
+            ? "Documento restaurado na Raiz."
+            : "Documento restaurado na pasta anterior.",
+        4200,
+      );
+    } catch (requestError) {
+      setFeedback(null);
+      setError(
+        formatRequestError(
+          requestError,
+          "Não foi possível restaurar o documento.",
+        ),
+      );
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
+  function selectDocumentState(next: "active" | "trash") {
+    if (next === "trash" && !canDelete) return;
+    const clean = { ...DEFAULT_DOCUMENT_FILTERS };
+    setFilterDraft(clean);
+    setAppliedFilters(clean);
+    setFiles([]);
+    setDocumentState(next);
+    setError(null);
+    setFeedback(null);
   }
 
   function selectFolder(folderId: string) {
@@ -1133,25 +1210,47 @@ function OrganizationDocuments({
         <div className="projects-section-header">
           <h2>Arquivos e Documentos</h2>
 
-          {canUpload ? (
-            <label className="mm-button secondary">
-              {uploading ? "Enviando..." : "Enviar documento"}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".geojson,.json,.csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp,.zip,.txt,.docx"
-                disabled={uploading || transferBusy}
-                style={{ display: "none" }}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void handleUpload(file);
-                }}
-              />
-            </label>
-          ) : null}
+          <div className="documents-header-actions">
+            <div className="documents-view-switch" role="group" aria-label="Visão de documentos">
+              <button
+                type="button"
+                className={`mm-button ${documentState === "active" ? "secondary" : "ghost"}`}
+                onClick={() => selectDocumentState("active")}
+              >
+                Documentos
+              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  className={`mm-button ${documentState === "trash" ? "secondary" : "ghost"}`}
+                  onClick={() => selectDocumentState("trash")}
+                >
+                  Lixeira
+                </button>
+              ) : null}
+            </div>
+
+            {canUpload && documentState === "active" ? (
+              <label className="mm-button secondary">
+                {uploading ? "Enviando..." : "Enviar documento"}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".geojson,.json,.csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp,.zip,.txt,.docx"
+                  disabled={uploading || transferBusy}
+                  style={{ display: "none" }}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void handleUpload(file);
+                  }}
+                />
+              </label>
+            ) : null}
+          </div>
         </div>
 
-        <div className="documents-folder-browser">
+        {documentState === "active" ? (
+          <div className="documents-folder-browser">
           <div className="documents-folder-browser-header">
             <div>
               <strong>Pastas</strong>
@@ -1245,9 +1344,11 @@ function OrganizationDocuments({
               })
             )}
           </div>
-        </div>
+          </div>
+        ) : null}
 
-        <nav className="documents-folder-breadcrumb" aria-label="Caminho da pasta">
+        {documentState === "active" ? (
+          <nav className="documents-folder-breadcrumb" aria-label="Caminho da pasta">
           <button type="button" onClick={() => selectFolder("")}>
             Todos
           </button>
@@ -1275,7 +1376,8 @@ function OrganizationDocuments({
               </button>
             </span>
           ))}
-        </nav>
+          </nav>
+        ) : null}
 
         <form className="documents-filter-toolbar" onSubmit={applyDocumentFilters}>
           <label className="documents-filter-field documents-filter-search">
@@ -1333,7 +1435,8 @@ function OrganizationDocuments({
             </select>
           </label>
 
-          <label className="documents-filter-field">
+          {documentState === "active" ? (
+            <label className="documents-filter-field">
             <span>Pasta</span>
             <select
               value={filterDraft.folderId}
@@ -1352,7 +1455,8 @@ function OrganizationDocuments({
                 </option>
               ))}
             </select>
-          </label>
+            </label>
+          ) : null}
 
           <label className="documents-filter-field">
             <span>De</span>
@@ -1434,7 +1538,7 @@ function OrganizationDocuments({
         ) : null}
 
         {error ? <p className="mm-error-text" role="alert">{error}</p> : null}
-        {pendingUpload?.retryable && canUpload && !uploading && !transferBusy ? (
+        {documentState === "active" && pendingUpload?.retryable && canUpload && !uploading && !transferBusy ? (
           <button
             type="button"
             className="mm-button secondary"
@@ -1446,7 +1550,7 @@ function OrganizationDocuments({
 
         {initialLoading && files.length === 0 ? (
           <TableSkeleton
-            headers={DOCUMENT_HEADERS}
+            headers={documentState === "trash" ? TRASH_HEADERS : DOCUMENT_HEADERS}
             rows={5}
             className="documents-table-skeleton"
           />
@@ -1454,15 +1558,17 @@ function OrganizationDocuments({
           <div className="projects-empty-state">
             {hasActiveFilters
               ? "Nenhum documento encontrado com os filtros atuais."
-              : "Nenhum documento."}
+              : documentState === "trash"
+                ? "A Lixeira está vazia."
+                : "Nenhum documento."}
           </div>
         ) : files.length === 0 ? null : (
           <>
             <div className="mm-table-wrap" aria-busy={refreshing || loadingMore}>
-              <table className="documents-table">
+              <table className={documentState === "trash" ? "documents-table documents-trash-table" : "documents-table"}>
                 <thead>
                   <tr>
-                    {DOCUMENT_HEADERS.map((header) => (
+                    {(documentState === "trash" ? TRASH_HEADERS : DOCUMENT_HEADERS).map((header) => (
                       <th key={header}>{header}</th>
                     ))}
                   </tr>
@@ -1471,6 +1577,41 @@ function OrganizationDocuments({
                 <tbody>
                   {files.map((file) => {
                     const busy = String(busyFileId) === String(file.id);
+
+                    if (documentState === "trash") {
+                      const expired = restoreExpired(file);
+                      return (
+                        <tr key={file.id}>
+                          <td className="documents-name-cell">
+                            <span className="documents-file-name" title={file.name}>
+                              {file.name}
+                            </span>
+                            {file.projectName ? (
+                              <span className="documents-file-project">
+                                {file.projectName}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td>{trashedFromFolderLabel(file)}</td>
+                          <td>{deletedByLabel(file)}</td>
+                          <td>{formatDate(file.deletedAt)}</td>
+                          <td>{formatDate(file.purgeAfter)}</td>
+                          <td>
+                            {canDelete ? (
+                              <button
+                                type="button"
+                                className="mm-button secondary"
+                                disabled={busy || expired}
+                                onClick={() => void handleRestore(file)}
+                                title={expired ? "Prazo de restauração expirado." : undefined}
+                              >
+                                {busy ? "Restaurando..." : expired ? "Prazo expirado" : "Restaurar"}
+                              </button>
+                            ) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    }
 
                     return (
                       <tr key={file.id}>
@@ -1555,8 +1696,8 @@ function OrganizationDocuments({
 
             <div className="documents-pagination">
               <span>
-                Exibindo {files.length} de {pagination.total} documento
-                {pagination.total === 1 ? "" : "s"}.
+                Exibindo {files.length} de {pagination.total} {documentState === "trash" ? "item" : "documento"}
+                {pagination.total === 1 ? "" : "s"}{documentState === "trash" ? " na Lixeira" : ""}.
               </span>
               {pagination.hasMore && pagination.nextCursor ? (
                 <button

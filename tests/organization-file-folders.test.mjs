@@ -375,7 +375,7 @@ test("rotas de pasta e move repetem autorização; move preserva GeoJSON e não 
   assert.match(policy, /"document\.manage"/);
 });
 
-test("S2 reserva trash no schema sem alterar ainda o DELETE destrutivo", async () => {
+test("schema reservado na S2 sustenta o soft-trash ativado na S4", async () => {
   const migration = await readFile(migrationUrl, "utf8");
   const deleteRoute = await readFile(
     new URL("../functions/api/organizations/[id]/files/[fileId].js", import.meta.url),
@@ -386,6 +386,8 @@ test("S2 reserva trash no schema sem alterar ainda o DELETE destrutivo", async (
   assert.match(migration, /purge_after/);
   assert.match(migration, /trashed_from_folder_id/);
   assert.match(migration, /purged_at/);
-  assert.match(deleteRoute, /deleteOrganizationBinary\(env, dropboxPath\)/);
-  assert.match(deleteRoute, /status: "DELETED"/);
+  assert.match(deleteRoute, /trashOrganizationFile/);
+  assert.match(deleteRoute, /document\.trash/);
+  assert.doesNotMatch(deleteRoute, /deleteOrganizationBinary/);
+  assert.doesNotMatch(deleteRoute, /status: "DELETED"/);
 });

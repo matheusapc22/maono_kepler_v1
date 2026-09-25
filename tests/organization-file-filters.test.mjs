@@ -18,6 +18,7 @@ function request(query = "") {
 test("contrato padrão usa paginação limitada e ordenação estável", () => {
   const parsed = parseOrganizationFileListQuery(request());
   assert.equal(parsed.limit, ORGANIZATION_FILE_DEFAULT_LIMIT);
+  assert.equal(parsed.state, "active");
   assert.equal(parsed.sort, "updated_desc");
   assert.equal(parsed.cursor, null);
   assert.equal(ORGANIZATION_FILE_MAX_LIMIT, 100);
@@ -113,6 +114,25 @@ test("filtro por pasta suporta raiz e id sem sair do SQL autorizado", () => {
   );
 });
 
+test("state=trash seleciona somente lixeira e mantém bloqueio GeoJSON", () => {
+  const parsed = parseOrganizationFileListQuery(request("?state=trash"));
+  assert.equal(parsed.state, "trash");
+
+  const built = buildOrganizationFileListSql(3, parsed, { canViewGeoJson: false });
+  assert.match(built.sql, /f\.deleted_at IS NOT NULL/);
+  assert.match(built.sql, /f\.purge_after IS NOT NULL/);
+  assert.match(built.sql, /f\.purged_at IS NULL/);
+  assert.match(built.sql, /TRASHED/);
+  assert.match(built.sql, /deleted_user/);
+  assert.match(built.sql, /trashed_folder/);
+  assert.match(built.sql, /NOT \([\s\S]*geojson/s);
+
+  assert.throws(
+    () => parseOrganizationFileListQuery(request("?state=purged")),
+    /Estado documental inválido/,
+  );
+});
+
 test("SQL sem concessão GeoJSON exclui JSON/GeoJSON antes da paginação e contagem", () => {
   const parsed = parseOrganizationFileListQuery(request("?search=mapa&type=pdf&projectId=4"));
   const built = buildOrganizationFileListSql(3, parsed, { canViewGeoJson: false });
@@ -156,5 +176,8 @@ test("UI implementa árvore, breadcrumb, CRUD, move e filtro por pasta", async (
   assert.match(source, /Carregar mais/);
   assert.match(source, /updatedFrom/);
   assert.match(source, /projectId/);
-  assert.doesNotMatch(source, /state:\s*["']trash["']/);
+  assert.match(source, /Lixeira/);
+  assert.match(source, /Restaurar/);
+  assert.match(source, /restoreOrganizationFile/);
+  assert.match(source, /documentState/);
 });

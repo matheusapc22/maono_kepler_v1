@@ -1,18 +1,14 @@
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import {
-  deleteOrSoftDeleteRow,
   findRowByIdAndOrganization,
-  getFileDropboxPath,
   getOrganizationOrThrow,
   getRouteParam,
   jsonResponse,
   methodNotAllowed,
   parsePositiveInteger,
   readJsonBody,
-  updateRow,
 } from "../../../../_lib/organizations.js";
 import {
-  deleteOrganizationBinary,
   organizationFileErrorResponse,
   organizationFileRequestId,
   publicOrganizationFile,
@@ -21,10 +17,8 @@ import {
 import {
   moveOrganizationFileToFolder,
 } from "../../../../_lib/organization-file-folders.js";
+import { trashOrganizationFile } from "../../../../_lib/organization-file-trash.js";
 import { requireProjectGeoJsonAccess } from "../../../../_lib/geojson-access.js";
-import {
-  requireOrganizationStorageReady,
-} from "../../../../_lib/organization-storage-readiness.js";
 
 export async function onRequest(context) {
   if (context.request.method === "PATCH") return onRequestPatch(context);
@@ -161,7 +155,7 @@ export async function onRequestDelete({ env, request, params }) {
       },
     );
 
-    const organization = await getOrganizationOrThrow(env, organizationId);
+    await getOrganizationOrThrow(env, organizationId);
     const file = await findRowByIdAndOrganization(
       env,
       "organization_files",
@@ -180,20 +174,11 @@ export async function onRequestDelete({ env, request, params }) {
       { surface: "document.delete", auditAllowed: true },
     );
 
-    const dropboxPath = getFileDropboxPath(file);
-    if (dropboxPath) {
-      requireOrganizationStorageReady(organization, {
-        operation: "document.delete.readiness",
-      });
-      await deleteOrganizationBinary(env, dropboxPath);
-    }
-
-    await updateRow(env, "organization_files", fileId, {
-      status: "DELETED",
-      error_message: null,
-      updated_at: new Date().toISOString(),
+    const trashed = await trashOrganizationFile(env, {
+      organizationId,
+      fileId,
+      userId: user.id,
     });
-    await deleteOrSoftDeleteRow(env, "organization_files", fileId);
 
     await recordOrganizationFileAudit(env, {
       request,
@@ -201,14 +186,20 @@ export async function onRequestDelete({ env, request, params }) {
       userId: user.id,
       organizationId,
       projectId: file.project_id || null,
-      action: "document.delete",
+      action: "document.trash",
       fileId,
       fileName: file.original_name || file.name || file.file_name,
       size: file.size_bytes || file.size || null,
     });
 
     return jsonResponse(
-      { ok: true, deleted: true, requestId },
+      {
+        ok: true,
+        deleted: true,
+        trashed: true,
+        requestId,
+        file: publicOrganizationFile(trashed),
+      },
       { headers: { "X-Request-Id": requestId } },
     );
   } catch (error) {

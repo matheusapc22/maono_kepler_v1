@@ -278,6 +278,18 @@ export function publicOrganizationFile(row) {
     projectId: row.project_id || null,
     projectName: row.project_name || null,
     folderId: row.folder_id ?? null,
+    trashedFromFolderId: row.trashed_from_folder_id ?? null,
+    trashedFromFolderName: row.trashed_from_folder_name || null,
+    deletedAt: row.deleted_at || null,
+    deletedBy: row.deleted_by
+      ? {
+          id: row.deleted_by,
+          name: row.deleted_by_name || null,
+          email: row.deleted_by_email || null,
+        }
+      : null,
+    purgeAfter: row.purge_after || null,
+    purgedAt: row.purged_at || null,
     name: row.original_name || row.name || row.file_name || "Documento",
     fileName: row.file_name || null,
     fileType: row.file_type || "other",

@@ -72,6 +72,20 @@ export async function onRequestGet({ env, request, params }) {
       throw error;
     }
 
+    const unavailable =
+      file.deleted_at ||
+      file.purged_at ||
+      file.active === 0 ||
+      String(file.status || "").toUpperCase() === "TRASHED";
+    if (unavailable) {
+      const error = new Error("Arquivo não encontrado.");
+      error.status = 404;
+      error.code = "ORGANIZATION_FILE_NOT_FOUND";
+      error.stage = "file.lookup";
+      error.publicMessage = error.message;
+      throw error;
+    }
+
     await requireProjectGeoJsonAccess(
       env,
       request,
