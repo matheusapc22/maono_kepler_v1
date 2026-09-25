@@ -10,6 +10,7 @@ import {
   listOrganizationDocumentFolders,
   listOrganizationFiles,
   moveOrganizationFileToFolder,
+  purgeOrganizationFilePermanently,
   restoreOrganizationFile,
   updateOrganizationDocumentFolder,
   type OrganizationDocumentFolder,
@@ -980,6 +981,44 @@ function OrganizationDocuments({
     }
   }
 
+  async function handlePermanentPurge(file: OrganizationFile) {
+    if (!organizationId || !canDelete || !canManage) return;
+
+    const confirmation = window.prompt(
+      `Excluir permanentemente "${file.name}"? Esta ação remove o binário do armazenamento e não pode ser desfeita. Digite EXCLUIR PERMANENTEMENTE para confirmar.`,
+    );
+    if (confirmation?.trim() !== "EXCLUIR PERMANENTEMENTE") return;
+
+    setBusyFileId(file.id);
+    setError(null);
+    showFeedback("loading", "Excluindo documento permanentemente...");
+
+    try {
+      await purgeOrganizationFilePermanently(
+        organizationId,
+        file.id,
+        confirmation.trim(),
+      );
+      if (!mountedRef.current) return;
+      setFiles((current) =>
+        current.filter((item) => String(item.id) !== String(file.id)),
+      );
+      await loadFiles({ background: true });
+      if (!mountedRef.current) return;
+      showFeedback("success", "Documento excluído permanentemente.", 4200);
+    } catch (requestError) {
+      setFeedback(null);
+      setError(
+        formatRequestError(
+          requestError,
+          "Não foi possível excluir permanentemente o documento.",
+        ),
+      );
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
   async function handleRestore(file: OrganizationFile) {
     if (!organizationId || !canDelete) return;
 
@@ -1597,17 +1636,30 @@ function OrganizationDocuments({
                           <td>{formatDate(file.deletedAt)}</td>
                           <td>{formatDate(file.purgeAfter)}</td>
                           <td>
-                            {canDelete ? (
-                              <button
-                                type="button"
-                                className="mm-button secondary"
-                                disabled={busy || expired}
-                                onClick={() => void handleRestore(file)}
-                                title={expired ? "Prazo de restauração expirado." : undefined}
-                              >
-                                {busy ? "Restaurando..." : expired ? "Prazo expirado" : "Restaurar"}
-                              </button>
-                            ) : "—"}
+                            <div className="projects-row-actions">
+                              {canDelete ? (
+                                <button
+                                  type="button"
+                                  className="mm-button secondary"
+                                  disabled={busy || expired}
+                                  onClick={() => void handleRestore(file)}
+                                  title={expired ? "Prazo de restauração expirado." : undefined}
+                                >
+                                  {busy ? "Processando..." : expired ? "Prazo expirado" : "Restaurar"}
+                                </button>
+                              ) : null}
+                              {canManage && canDelete ? (
+                                <button
+                                  type="button"
+                                  className="mm-button danger"
+                                  disabled={busy}
+                                  onClick={() => void handlePermanentPurge(file)}
+                                >
+                                  Excluir permanentemente
+                                </button>
+                              ) : null}
+                              {!canDelete ? "—" : null}
+                            </div>
                           </td>
                         </tr>
                       );

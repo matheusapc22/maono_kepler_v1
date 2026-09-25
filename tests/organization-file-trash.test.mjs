@@ -148,7 +148,7 @@ test("DELETE não chama Dropbox e restore repete autorização GeoJSON", async (
   assert.match(downloadRoute, /TRASHED/);
 });
 
-test("UI separa Lixeira e não antecipa purge permanente", async () => {
+test("UI da Lixeira preserva restore e permite que a S5 acrescente purge permanente", async () => {
   const source = await readFile(
     new URL("../src/pages/Projects/components/DocumentsSection.tsx", import.meta.url), "utf8",
   );
@@ -156,5 +156,6 @@ test("UI separa Lixeira e não antecipa purge permanente", async () => {
   assert.match(source, /Restaurar/);
   assert.match(source, /restoreOrganizationFile/);
   assert.match(source, /10 dias/);
-  assert.doesNotMatch(source, /Excluir permanentemente/);
+  assert.match(source, /Excluir permanentemente/);
+  assert.match(source, /purgeOrganizationFilePermanently/);
 });

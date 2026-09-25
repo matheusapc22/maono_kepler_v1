@@ -660,7 +660,7 @@
 
 .documents-trash-table th:first-child,
 .documents-trash-table td:first-child {
-  width: 28%;
+  width: 24%;
 }
 
 .documents-trash-table th:nth-child(2),
@@ -679,7 +679,11 @@
 
 .documents-trash-table th:nth-child(6),
 .documents-trash-table td:nth-child(6) {
-  width: 10%;
+  width: 14%;
+}
+
+.documents-trash-table .projects-row-actions {
+  flex-wrap: wrap;
 }
 
 @media (max-width: 760px) {
