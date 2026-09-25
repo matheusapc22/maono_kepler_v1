@@ -224,13 +224,14 @@ test("Worker nasce disabled + kill switch + dry-run e dry-run não toca provider
   });
 
   const audits = [];
+  Object.assign(env, {
+    MAONO_DOCUMENT_PURGE_ENABLED: "true",
+    MAONO_DOCUMENT_PURGE_KILL_SWITCH: "false",
+    MAONO_DOCUMENT_PURGE_DRY_RUN: "true",
+  });
+
   const result = await runScheduledDocumentPurge(
-    {
-      ...env,
-      MAONO_DOCUMENT_PURGE_ENABLED: "true",
-      MAONO_DOCUMENT_PURGE_KILL_SWITCH: "false",
-      MAONO_DOCUMENT_PURGE_DRY_RUN: "true",
-    },
+    env,
     {
       nowFn: () => new Date("2026-09-25T00:00:00.000Z").getTime(),
       audit: async (_env, event) => audits.push(event),
@@ -275,14 +276,15 @@ test("Worker apply remove somente vencidos e finaliza tombstone", async (t) => {
   });
 
   const audits = [];
+  Object.assign(env, {
+    MAONO_DOCUMENT_PURGE_ENABLED: "true",
+    MAONO_DOCUMENT_PURGE_KILL_SWITCH: "false",
+    MAONO_DOCUMENT_PURGE_DRY_RUN: "false",
+    MAONO_DOCUMENT_PURGE_BATCH_SIZE: "25",
+  });
+
   const result = await runScheduledDocumentPurge(
-    {
-      ...env,
-      MAONO_DOCUMENT_PURGE_ENABLED: "true",
-      MAONO_DOCUMENT_PURGE_KILL_SWITCH: "false",
-      MAONO_DOCUMENT_PURGE_DRY_RUN: "false",
-      MAONO_DOCUMENT_PURGE_BATCH_SIZE: "25",
-    },
+    env,
     {
       nowFn: () => new Date("2026-09-25T00:00:00.000Z").getTime(),
       audit: async (_env, event) => audits.push(event),
