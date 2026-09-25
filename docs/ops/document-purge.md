@@ -102,3 +102,34 @@ Isso interrompe novas execuções antes de buscar candidatos.
 
 A 08-S5 não reaplica migrations, não habilita automaticamente o cron em
 Production e não toca nas migrations 0020/0021/0022/0023.
+
+
+## Hardening 08-S6 — feature flag e rollout
+
+O purge manual permanente é fail-closed por padrão:
+
+- `MAONO_DOCUMENT_PURGE_MANUAL_ENABLED=false` ou ausente: endpoint retorna
+  `DOCUMENT_PURGE_FEATURE_DISABLED` e a UI não exibe a ação;
+- somente após acceptance autenticado e autorização de rollout definir o flag como
+  `true` no ambiente Pages correspondente;
+- rollback imediato: voltar o flag para `false`.
+
+Operações físicas de purge, manuais ou automáticas, exigem que o storage da
+organização esteja `READY`. Listagem/filtros continuam D1-only e disponíveis
+quando o provider não está READY; upload/download/purge falham explicitamente
+pelo contrato de readiness.
+
+O operador `.github/workflows/document-purge-operator.yml` usa a sequência
+`validate → deploy_disabled → deploy_dry_run → deploy_apply`. Antes dos modos
+mutáveis ele valida o D1 Production, a migration 0024, o índice de purge e um
+bookmark Time Travel.
+
+### Rollback 08-S6
+
+1. definir `MAONO_DOCUMENT_PURGE_MANUAL_ENABLED=false` no Pages;
+2. definir `MAONO_DOCUMENT_PURGE_KILL_SWITCH=true` no Worker;
+3. definir `MAONO_DOCUMENT_PURGE_ENABLED=false`;
+4. não reverter nem reaplicar 0024;
+5. preservar tombstones `PURGED` e claims `PURGE_PENDING`;
+6. investigar por requestId/correlationId;
+7. reativar primeiro em dry-run.

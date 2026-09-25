@@ -103,6 +103,9 @@ export type OrganizationFileListPagination = {
 
 export type OrganizationFileListResponse = {
   ok: boolean;
+  capabilities?: {
+    permanentPurgeEnabled: boolean;
+  };
   files: OrganizationFile[];
   facets: OrganizationFileListFacets;
   pagination: OrganizationFileListPagination;

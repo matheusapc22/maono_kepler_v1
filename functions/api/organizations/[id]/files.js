@@ -33,6 +33,9 @@ import {
   listOrganizationFilesPage,
   parseOrganizationFileListQuery,
 } from "../../../_lib/organization-file-query.js";
+import {
+  publicOrganizationFileCapabilities,
+} from "../../../_lib/organization-file-rollout.js";
 
 export async function onRequest(context) {
   const { request } = context;
@@ -106,6 +109,7 @@ export async function onRequestGet({ env, request, params }) {
         ok: true,
         requestId,
         storage: publicOrganizationStorageReadiness(storage),
+        capabilities: publicOrganizationFileCapabilities(env),
         files: page.rows.map(publicOrganizationFile),
         facets: page.facets,
         pagination: page.pagination,

@@ -397,6 +397,7 @@ function OrganizationDocuments({
   const loadSequenceRef = useRef(0);
   const mountedRef = useRef(true);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
+  const [permanentPurgeEnabled, setPermanentPurgeEnabled] = useState(false);
   const [documentState, setDocumentState] = useState<"active" | "trash">("active");
   const [folders, setFolders] = useState<OrganizationDocumentFolder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
@@ -736,6 +737,7 @@ function OrganizationDocuments({
       setFiles([]);
       setFacets(EMPTY_DOCUMENT_FACETS);
       setPagination(EMPTY_DOCUMENT_PAGINATION);
+      setPermanentPurgeEnabled(false);
       return;
     }
 
@@ -763,6 +765,9 @@ function OrganizationDocuments({
       );
       setFacets(response.facets ?? EMPTY_DOCUMENT_FACETS);
       setPagination(response.pagination ?? EMPTY_DOCUMENT_PAGINATION);
+      setPermanentPurgeEnabled(
+        Boolean(response.capabilities?.permanentPurgeEnabled),
+      );
     } catch (requestError) {
       if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
       setError(
@@ -1648,7 +1653,7 @@ function OrganizationDocuments({
                                   {busy ? "Processando..." : expired ? "Prazo expirado" : "Restaurar"}
                                 </button>
                               ) : null}
-                              {canManage && canDelete ? (
+                              {permanentPurgeEnabled && canManage && canDelete ? (
                                 <button
                                   type="button"
                                   className="mm-button danger"

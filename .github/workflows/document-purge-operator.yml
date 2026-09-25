@@ -1,0 +1,242 @@
+name: Document purge operator
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "validate | deploy_disabled | deploy_dry_run | deploy_apply"
+        required: true
+        default: "validate"
+        type: choice
+        options:
+          - validate
+          - deploy_disabled
+          - deploy_dry_run
+          - deploy_apply
+      confirmation:
+        description: "Confirmação exata correspondente ao modo"
+        required: true
+        type: string
+      migration_0024_confirmation:
+        description: "Para dry-run/apply: digite MIGRATION_0024_APPLIED_TO_TARGET_D1"
+        required: false
+        type: string
+      release_ref:
+        description: "Branch/ref já validada"
+        required: true
+        default: "mano_kepler_v1"
+        type: string
+      batch_size:
+        description: "Documentos por execução (1–25)"
+        required: true
+        default: 25
+        type: number
+
+permissions:
+  contents: read
+
+concurrency:
+  group: document-purge-operator
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate explicit operator confirmation
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          MIGRATION_CONFIRMATION: ${{ inputs.migration_0024_confirmation }}
+          RELEASE_REF: ${{ inputs.release_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            validate) expected="VALIDATE_DOCUMENT_PURGE_OPERATOR" ;;
+            deploy_disabled) expected="DEPLOY_DOCUMENT_PURGE_DISABLED" ;;
+            deploy_dry_run) expected="DEPLOY_DOCUMENT_PURGE_DRY_RUN" ;;
+            deploy_apply) expected="DEPLOY_DOCUMENT_PURGE_APPLY" ;;
+            *) echo "Modo inválido." >&2; exit 2 ;;
+          esac
+          test "$CONFIRMATION" = "$expected"
+          if [[ "$MODE" == "deploy_dry_run" || "$MODE" == "deploy_apply" ]]; then
+            test "$MIGRATION_CONFIRMATION" = "MIGRATION_0024_APPLIED_TO_TARGET_D1"
+          fi
+          if [[ "$MODE" != "validate" ]]; then
+            [[ "$RELEASE_REF" == "mano_kepler_v1" || "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]
+          fi
+
+  validate:
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      release_sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - name: Checkout requested release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+          fetch-depth: 0
+
+      - name: Pin audited release SHA
+        id: pin
+        env:
+          MODE: ${{ inputs.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$MODE" != "validate" ]]; then
+            git merge-base --is-ancestor "$sha" origin/mano_kepler_v1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Validate document hardening contracts
+        run: |
+          node --test tests/organization-file-purge.test.mjs
+          node --test tests/organization-file-hardening.test.mjs
+          node --test tests/document-purge-operator.test.mjs
+
+      - name: Syntax-check purge operator
+        run: |
+          node --check workers/organization-file-purge.js
+          node --check scripts/document-purge/render-wrangler-config.mjs
+          node --check scripts/document-purge/verify-d1-evidence.mjs
+
+      - name: Bundle every purge mode without deployment
+        env:
+          MAONO_PURGE_D1_DATABASE_ID: 5bc4dc32-f3bd-4c92-bbd1-cbda63e467db
+          MAONO_DOCUMENT_PURGE_BATCH_SIZE: ${{ inputs.batch_size }}
+          WRANGLER_SEND_METRICS: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in disabled dry-run apply; do
+            MAONO_PURGE_OPERATOR_MODE="$mode" MAONO_PURGE_CONFIG_PATH=".tmp/purge-$mode.toml" node scripts/document-purge/render-wrangler-config.mjs
+            npx --yes wrangler@4.139.0 deploy --dry-run --config ".tmp/purge-$mode.toml" --outdir ".tmp/purge-bundle-$mode"
+          done
+
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    if: ${{ inputs.mode != 'validate' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      MODE: ${{ inputs.mode }}
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+      RELEASE_REF: ${{ inputs.release_ref }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MAONO_PURGE_D1_DATABASE_ID: ${{ secrets.MAONO_PRODUCTION_D1_DATABASE_ID }}
+      MAONO_DOCUMENT_PURGE_BATCH_SIZE: ${{ inputs.batch_size }}
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+      DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+    steps:
+      - name: Checkout validated release SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Refuse release ref drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
+          if [[ "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]; then current="$RELEASE_REF"; fi
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test "$CLOUDFLARE_ACCOUNT_ID" = "09d455fa1cf988b0d9db89987b73eaff"
+          test "$MAONO_PURGE_D1_DATABASE_ID" = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
+          if [[ "$MODE" == "deploy_apply" ]]; then
+            test -n "$DROPBOX_APP_KEY"
+            test -n "$DROPBOX_APP_SECRET"
+            test -n "$DROPBOX_REFRESH_TOKEN"
+          fi
+
+      - name: Render safe disabled config
+        env:
+          MAONO_PURGE_OPERATOR_MODE: disabled
+          MAONO_PURGE_CONFIG_PATH: .tmp/document-purge.toml
+        run: node scripts/document-purge/render-wrangler-config.mjs
+
+      - name: Verify live D1 identity and 0024 without writes
+        if: ${{ inputs.mode == 'deploy_dry_run' || inputs.mode == 'deploy_apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.139.0 d1 info maono_maps --config .tmp/document-purge.toml --json > .tmp/purge-d1-info.json
+          npx --yes wrangler@4.139.0 d1 execute maono_maps --remote --config .tmp/document-purge.toml --json --command "SELECT name, applied_at FROM d1_migrations WHERE name = '0024_document_folders_trash.sql'; PRAGMA table_info(organization_files); PRAGMA index_list(organization_files); PRAGMA index_info(idx_organization_files_purge_queue);" > .tmp/purge-d1-prerequisite.json
+          npx --yes wrangler@4.139.0 d1 time-travel info maono_maps --config .tmp/document-purge.toml --json > .tmp/purge-d1-bookmark.json
+          node scripts/document-purge/verify-d1-evidence.mjs .tmp/purge-d1-info.json .tmp/purge-d1-prerequisite.json .tmp/purge-d1-bookmark.json
+
+      - name: Retain read-only D1 evidence
+        if: ${{ always() && (inputs.mode == 'deploy_dry_run' || inputs.mode == 'deploy_apply') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-purge-d1-prerequisite-${{ github.run_id }}
+          path: .tmp/purge-d1-*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Deploy disabled baseline first
+        id: baseline
+        run: npx --yes wrangler@4.139.0 deploy --config .tmp/document-purge.toml
+
+      - name: Configure Dropbox secrets before apply
+        if: ${{ inputs.mode == 'deploy_apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$DROPBOX_APP_KEY" | npx --yes wrangler@4.139.0 secret put DROPBOX_APP_KEY --config .tmp/document-purge.toml
+          printf '%s' "$DROPBOX_APP_SECRET" | npx --yes wrangler@4.139.0 secret put DROPBOX_APP_SECRET --config .tmp/document-purge.toml
+          printf '%s' "$DROPBOX_REFRESH_TOKEN" | npx --yes wrangler@4.139.0 secret put DROPBOX_REFRESH_TOKEN --config .tmp/document-purge.toml
+
+      - name: Render requested final config
+        if: ${{ inputs.mode != 'deploy_disabled' }}
+        env:
+          MAONO_PURGE_CONFIG_PATH: .tmp/document-purge.toml
+          MAONO_PURGE_OPERATOR_MODE: ${{ inputs.mode == 'deploy_apply' && 'apply' || 'dry-run' }}
+        run: node scripts/document-purge/render-wrangler-config.mjs
+
+      - name: Deploy requested final mode
+        if: ${{ inputs.mode != 'deploy_disabled' }}
+        run: npx --yes wrangler@4.139.0 deploy --config .tmp/document-purge.toml
+
+      - name: Restore disabled mode after incomplete activation
+        if: ${{ failure() && steps.baseline.outcome == 'success' }}
+        env:
+          MAONO_PURGE_CONFIG_PATH: .tmp/document-purge.toml
+          MAONO_PURGE_OPERATOR_MODE: disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/document-purge/render-wrangler-config.mjs
+          npx --yes wrangler@4.139.0 deploy --config .tmp/document-purge.toml

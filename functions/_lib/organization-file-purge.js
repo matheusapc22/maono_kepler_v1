@@ -1,9 +1,13 @@
 import {
   getDb,
   getFileDropboxPath,
+  getOrganizationOrThrow,
 } from "./organizations.js";
 import { requireDocumentFoldersSchema } from "./organization-file-folders.js";
 import { deleteOrganizationBinary } from "./organization-files.js";
+import {
+  requireOrganizationStorageReady,
+} from "./organization-storage-readiness.js";
 
 export const ORGANIZATION_FILE_PURGE_DEFAULT_BATCH_SIZE = 25;
 export const ORGANIZATION_FILE_PURGE_MAX_BATCH_SIZE = 100;
@@ -321,6 +325,23 @@ export async function purgeOrganizationFile(
   },
 ) {
   await requireDocumentFoldersSchema(env);
+
+  const initial = await rowById(env, organizationId, fileId);
+  if (
+    initial?.purged_at ||
+    String(initial?.status || "").toUpperCase() === "PURGED"
+  ) {
+    return {
+      file: initial,
+      idempotent: true,
+      remoteDeleteConfirmed: true,
+    };
+  }
+
+  const organization = await getOrganizationOrThrow(env, organizationId);
+  requireOrganizationStorageReady(organization, {
+    operation: "document.purge.readiness",
+  });
 
   const claimed = await claimForPurge(env, {
     organizationId,
