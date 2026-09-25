@@ -419,7 +419,7 @@ export default function TicketDetailDrawer({
                         idPrefix="detail-ticket-triage"
                         reasonRequired={ticketTriageReasonRequired(priority as typeof ticket.priority, ticket, triageForm.demandNature, category as typeof ticket.category)}
                         disabled={saving}
-                        error={triageError}
+                        validationIssue={triageError}
                       />
                     ) : priority !== ticket.priority || category !== ticket.category ? (
                       <label className="ticket-triage-reason" htmlFor="ticket-priority-change-reason">

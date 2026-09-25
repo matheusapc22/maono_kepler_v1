@@ -8,8 +8,8 @@ transforming...
 [plugin vite:resolve] Module "assert" has been externalized for browser compatibility, imported by "/workspace/scratch/9bf5f7a8ed15/cc01-repo/node_modules/@kepler.gl/utils/dist/data-utils.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
 [plugin vite:resolve] Module "assert" has been externalized for browser compatibility, imported by "/workspace/scratch/9bf5f7a8ed15/cc01-repo/node_modules/@kepler.gl/utils/dist/dataset-utils.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
 [plugin vite:resolve] Module "events" has been externalized for browser compatibility, imported by "/workspace/scratch/9bf5f7a8ed15/cc01-repo/node_modules/thrift/lib/nodejs/lib/thrift/ws_connection.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-[plugin vite:resolve] Module "events" has been externalized for browser compatibility, imported by "/workspace/scratch/9bf5f7a8ed15/cc01-repo/node_modules/thrift/lib/nodejs/lib/thrift/xhr_connection.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
 [plugin vite:resolve] Module "events" has been externalized for browser compatibility, imported by "/workspace/scratch/9bf5f7a8ed15/cc01-repo/node_modules/thrift/lib/nodejs/lib/thrift/ohos_connection.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+[plugin vite:resolve] Module "events" has been externalized for browser compatibility, imported by "/workspace/scratch/9bf5f7a8ed15/cc01-repo/node_modules/thrift/lib/nodejs/lib/thrift/xhr_connection.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
 node_modules/zod/v4/core/util.cjs (470:0): A comment
 
 "// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
@@ -23,11 +23,6 @@ node_modules/zod/v4/core/regexes.cjs (107:0): A comment
 
 in "node_modules/zod/v4/core/regexes.cjs" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
 node_modules/react-virtualized/dist/es/WindowScroller/utils/onScroll.js (1:0): Module level directives cause errors when bundled, "no babel-plugin-flow-react-proptypes" in "node_modules/react-virtualized/dist/es/WindowScroller/utils/onScroll.js" was ignored.
-node_modules/zod/v4/core/util.js (400:0): A comment
-
-"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
-
-in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
 node_modules/zod/v4/core/regexes.js (74:0): A comment
 
 "/** Anchors a pattern source. The interpolation lives here rather than at the call site because
@@ -35,6 +30,11 @@ node_modules/zod/v4/core/regexes.js (74:0): A comment
  * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
 
 in "node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/zod/v4/core/util.js (400:0): A comment
+
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+
+in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
 node_modules/@loaders.gl/parquet/dist/parquetjs/utils/file-utils.js (36:32): "createWriteStream" is not exported by "__vite-browser-external", imported by "node_modules/@loaders.gl/parquet/dist/parquetjs/utils/file-utils.js".
 ✓ 12429 modules transformed.
 rendering chunks...
@@ -52,36 +52,36 @@ dist/assets/Projects-CqKEjsjV.css                              35.93 kB
 dist/assets/index-CdByxZEV.css                                201.12 kB
 dist/assets/index-BCT6fLKP.css                                410.48 kB
 dist/assets/core_false-PB1cQjNW.js                              0.13 kB
-dist/assets/index-ChF0qO7b.js                                   0.15 kB
-dist/assets/useCompleteLoadingHandoff-CgQNdtQ6.js               0.20 kB
-dist/assets/mapbox-gl-DMg-A6ZK.js                               0.47 kB
-dist/assets/prepare-project-map-destination-CB9c8zdz.js         0.83 kB
-dist/assets/MapManagementPage-Bq6VCvxG.js                       1.11 kB
-dist/assets/index-C_iia_dp.js                                   1.29 kB
-dist/assets/index-DsvDJ5zt.js                                   1.52 kB
-dist/assets/EditorRequestInboxPage-meQvINDi.js                  3.51 kB
-dist/assets/react-audio-visualize.es-69216c73-C7eTYclA.js       3.90 kB
-dist/assets/map-panel-context-handoff-CyIYV894.js               8.38 kB
-dist/assets/index-BsGgmNmp.js                                  11.39 kB
-dist/assets/index-yEeIEyzv.js                                  13.91 kB
+dist/assets/index-DNDsaqlw.js                                   0.15 kB
+dist/assets/useCompleteLoadingHandoff-BsDHNqNw.js               0.20 kB
+dist/assets/mapbox-gl-BjXZHlkR.js                               0.47 kB
+dist/assets/prepare-project-map-destination-CUc82Z25.js         0.83 kB
+dist/assets/MapManagementPage-Byhi8EZG.js                       1.11 kB
+dist/assets/index-jEqVDZNe.js                                   1.29 kB
+dist/assets/index-501Eyrw_.js                                   1.52 kB
+dist/assets/EditorRequestInboxPage-BnOq8mIg.js                  3.51 kB
+dist/assets/react-audio-visualize.es-69216c73-uowzcV2v.js       3.90 kB
+dist/assets/map-panel-context-handoff-CNcf18XG.js               8.38 kB
+dist/assets/index-6hOL-yNw.js                                  11.39 kB
+dist/assets/index-j4U0eMeC.js                                  13.91 kB
 dist/assets/index-1c988149-BCCA3fci.js                         14.12 kB
-dist/assets/index-BcHYTHVX.js                                  14.24 kB
-dist/assets/index-J267YuL-.js                                  14.64 kB
-dist/assets/index-D5g3JruQ.js                                  17.45 kB
-dist/assets/OrganizationPermissionManager-1BSH8dVk.js          19.10 kB
-dist/assets/ChangeRequestReviewPage-CPmqtwy4.js                19.88 kB
+dist/assets/index-5uabr4OE.js                                  14.24 kB
+dist/assets/index-FztUgH4K.js                                  14.64 kB
+dist/assets/index-ChyOCyru.js                                  17.45 kB
+dist/assets/OrganizationPermissionManager-DZrJFSuq.js          19.10 kB
+dist/assets/ChangeRequestReviewPage-Bpgc6v_W.js                19.88 kB
 dist/assets/is-svg-component-B0gEvQvf.js                       32.17 kB
-dist/assets/index-B6SnqIIA.js                                  33.91 kB
-dist/assets/Admin-RO8YLT71.js                                  33.97 kB
-dist/assets/features-animation-DF5XEV5Z.js                     39.95 kB
-dist/assets/schemas-BQ_nHlsI.js                                97.04 kB
-dist/assets/index-Dm4HxQYq.js                                 105.87 kB
-dist/assets/Projects-BxRGiCft.js                              194.44 kB
-dist/assets/index-BGLAGlgo.js                               1,635.34 kB
-dist/assets/index-BKFmKA9u.js                              19,964.01 kB
+dist/assets/index-CEFi_M7s.js                                  33.91 kB
+dist/assets/Admin-Dl3RAVGa.js                                  33.97 kB
+dist/assets/features-animation-UnvGDvHB.js                     39.95 kB
+dist/assets/schemas-DaMCsw8o.js                                97.04 kB
+dist/assets/index-YaqtFR3o.js                                 105.87 kB
+dist/assets/Projects-CK-QKehC.js                              194.47 kB
+dist/assets/index-CmKW-X3x.js                               1,635.34 kB
+dist/assets/index-JfM0fnJZ.js                              19,964.01 kB
 
 (!) Some chunks are larger than 2500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-✓ built in 1m 11s
+✓ built in 1m 14s

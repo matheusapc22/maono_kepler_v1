@@ -11,6 +11,7 @@ Execução local em 25/09/2026, sobre a base pós-merge da CC-01 `b0f62ba6d00b16
 | Segurança Preview | 23 testes e assert estático passaram | [preview-safety.log](evidence/preview-safety.log) |
 | Regressão Change Requests | 98 testes passaram | [cr-regression.log](evidence/cr-regression.log) |
 | Build completo | TypeScript e Vite passaram | [build.log](evidence/build.log) |
+| Auditor de mensagens de erro | Gate estrito passou sem ampliar baseline ou exceções | [error-sink-ratchet.log](evidence/error-sink-ratchet.log) |
 | Componentes React em navegador local | Dez combinações, falha/retry, perfil somente leitura, classificação legada e geometria mobile passaram | [ui-smoke.json](evidence/ui-smoke.json) |
 | Revisão independente | Sem P0/P1 identificado após correções descritas abaixo; diff sem erro de whitespace | Revisão do diff final e dos três testes determinísticos de concorrência |
 
@@ -48,6 +49,7 @@ npm run test:change-requests
 npm run build
 node scripts/central-chamados/smoke-triage-ui.mjs
 git diff --check
+node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
 ```
 
 O ensaio de interface requer as dependências do projeto e o Chromium do Playwright instalado. `CC02_EVIDENCE_DIR` pode apontar para uma pasta local para salvar as duas capturas. O script cria servidor em `127.0.0.1`, intercepta as respostas da API, bloqueia chamadas inesperadas e encerra os recursos ao terminar. [Desktop](evidence/triage-desktop.png) e [celular 390 px](evidence/triage-mobile.png) foram inspecionados visualmente.
@@ -61,3 +63,9 @@ O ensaio de interface requer as dependências do projeto e o Chromium do Playwri
 - Migrations históricas 0021/0022/0023 continuam sob seus gates próprios, sem aplicação ou ativação por esta entrega.
 
 Procedimento de expansão, conferência, ativação e rollback: [migration-runbook.md](migration-runbook.md). Hashes dos artefatos locais: [manifest.json](evidence/manifest.json).
+
+## Correção motivada pelo CI da publicação inicial
+
+O primeiro commit publicado, `15198112625d921b0405970dbfcf369cc29e9293`, passou nos checks de CC-01/CC-02, mas os checks globais [recovery-readiness](https://github.com/matheusapc22/maono_kepler_v1/actions/runs/36152078029/job/108127557483) e [reliability-ux-gate](https://github.com/matheusapc22/maono_kepler_v1/actions/runs/36152078057/job/108127556274) reprovaram o mesmo padrão `error.message` no componente novo. A reprodução em snapshots confirmou: base b0f62ba passa; publicação inicial falha nesse único delta.
+
+A prop representava `TicketTriageFieldError`, com textos locais produzidos pelo validador e sem conteúdo de exceção/resposta remota. O contrato do componente e seus dois consumidores agora usam o nome explícito `validationIssue`, distinguindo validação de formulário de erro remoto. Baseline, regras e exclusões do auditor permanecem intactos. O mesmo gate foi acrescentado ao job rápido da CC-02. Os testes de triagem, o browser e o build foram repetidos após essa correção; as evidências desta pasta refletem essa validação. Foi necessário um segundo commit corretivo; resultados e SHA final dos checks remotos ficam no controle, sem reescrever como sucesso a execução anterior que falhou.

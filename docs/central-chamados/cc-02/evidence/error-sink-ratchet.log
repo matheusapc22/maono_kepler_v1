@@ -1,0 +1,13 @@
+Command: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
+Exit code: 0
+Summary only; the 2720 discovery findings are omitted below.
+Full-output SHA-256: 076142232a9c58302b513fa4873bba74796d8990eaf802052da9828791679594
+
+# Product Reliability / UX error-sink audit
+Total candidate findings: 2720
+- diagnostic-id: 113 (ratchet)
+- implementation-copy: 2578 (review-only)
+- raw-error-message: 25 (ratchet)
+- raw-response-text: 4 (ratchet)
+
+Ratchet estrito OK: baseline e inventário high-signal estão idênticos.

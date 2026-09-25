@@ -19,11 +19,12 @@ type Props = {
   idPrefix: string;
   reasonRequired: boolean;
   disabled?: boolean;
-  error?: TicketTriageFieldError | null;
+  // Local field guidance from validateTicketTriageForm, never an API/Error payload.
+  validationIssue?: TicketTriageFieldError | null;
 };
 
 export default function TicketTriageFields({
-  value, onChange, idPrefix, reasonRequired, disabled = false, error,
+  value, onChange, idPrefix, reasonRequired, disabled = false, validationIssue,
 }: Props) {
   const [pendingNature, setPendingNature] = useState<TicketDemandNature | "" | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -32,7 +33,7 @@ export default function TicketTriageFields({
 
   function fieldId(key: string) { return `${idPrefix}-${key}`; }
   function describedBy(key: string) {
-    return `${fieldId(key)}-help${error?.field === key ? ` ${idPrefix}-error` : ""}`;
+    return `${fieldId(key)}-help${validationIssue?.field === key ? ` ${idPrefix}-error` : ""}`;
   }
   function textField(key: "expectedResult" | "context" | "priorityReason", label: string, help: string, required: boolean) {
     return (
@@ -41,7 +42,7 @@ export default function TicketTriageFields({
         <textarea
           id={fieldId(key)} value={value[key]} required={required} rows={3}
           maxLength={TICKET_TRIAGE_LIMITS[key]} disabled={disabled}
-          aria-describedby={describedBy(key)} aria-invalid={error?.field === key || undefined}
+          aria-describedby={describedBy(key)} aria-invalid={validationIssue?.field === key || undefined}
           onChange={(event) => onChange({ ...value, [key]: event.target.value })}
         />
         <small id={`${fieldId(key)}-help`}>{help} · {value[key].length}/{TICKET_TRIAGE_LIMITS[key]}</small>
@@ -58,7 +59,7 @@ export default function TicketTriageFields({
           <span>Natureza da demanda *</span>
           <select
             ref={natureRef} id={fieldId("demandNature")} value={value.demandNature} required
-            aria-describedby={describedBy("demandNature")} aria-invalid={error?.field === "demandNature" || undefined}
+            aria-describedby={describedBy("demandNature")} aria-invalid={validationIssue?.field === "demandNature" || undefined}
             onChange={(event) => {
               const next = event.target.value as TicketDemandNature | "";
               if (next === value.demandNature) return;
@@ -96,7 +97,7 @@ export default function TicketTriageFields({
         <label htmlFor={fieldId("impact")}>
           <span>Quem foi afetado? *</span>
           <select id={fieldId("impact")} value={value.impact} required aria-describedby={describedBy("impact")}
-            aria-invalid={error?.field === "impact" || undefined} onChange={(event) => onChange({ ...value, impact: event.target.value as TicketTriageForm["impact"] })}>
+            aria-invalid={validationIssue?.field === "impact" || undefined} onChange={(event) => onChange({ ...value, impact: event.target.value as TicketTriageForm["impact"] })}>
             <option value="">Selecione o impacto</option>
             {Object.entries(IMPACT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
           </select>
@@ -105,7 +106,7 @@ export default function TicketTriageFields({
         <label htmlFor={fieldId("urgency")}>
           <span>A atividade pode continuar? *</span>
           <select id={fieldId("urgency")} value={value.urgency} required aria-describedby={describedBy("urgency")}
-            aria-invalid={error?.field === "urgency" || undefined} onChange={(event) => onChange({ ...value, urgency: event.target.value as TicketTriageForm["urgency"] })}>
+            aria-invalid={validationIssue?.field === "urgency" || undefined} onChange={(event) => onChange({ ...value, urgency: event.target.value as TicketTriageForm["urgency"] })}>
             <option value="">Selecione a urgência</option>
             {Object.entries(URGENCY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
           </select>
@@ -116,7 +117,7 @@ export default function TicketTriageFields({
             <span>{question.label}{question.required ? " *" : " (opcional)"}</span>
             <textarea id={fieldId(question.key)} rows={3} value={value.triageAnswers[question.key] || ""}
               required={question.required} maxLength={TICKET_TRIAGE_LIMITS.answer}
-              aria-describedby={describedBy(question.key)} aria-invalid={error?.field === question.key || undefined}
+              aria-describedby={describedBy(question.key)} aria-invalid={validationIssue?.field === question.key || undefined}
               onChange={(event) => onChange({ ...value, triageAnswers: { ...value.triageAnswers, [question.key]: event.target.value } })} />
             <small id={`${fieldId(question.key)}-help`}>{question.help} · {(value.triageAnswers[question.key] || "").length}/{TICKET_TRIAGE_LIMITS.answer}</small>
           </label>
@@ -124,7 +125,7 @@ export default function TicketTriageFields({
         {textField("priorityReason", "Justificativa da classificação e prioridade", "Explique a escolha. Impacto e urgência não alteram a prioridade automaticamente.", reasonRequired)}
         {textField("context", "Contexto adicional", "Inclua apenas o necessário: tela, projeto, camada, horário ou referência do erro. Não envie senhas, tokens ou dados pessoais desnecessários.", false)}
       </div>
-      {error ? <p id={`${idPrefix}-error`} className="ticket-triage-error" role="alert">{error.message}</p> : null}
+      {validationIssue ? <p id={`${idPrefix}-error`} className="ticket-triage-error" role="alert">{validationIssue.message}</p> : null}
       <span className="ticket-triage-sr-only" role="status">{announcement}</span>
     </fieldset>
   );

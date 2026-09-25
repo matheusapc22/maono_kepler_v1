@@ -1,6 +1,6 @@
 {
   "test": "CC-02 real React components with mocked HTTP",
-  "executedAt": "2026-09-25T15:03:56.393Z",
+  "executedAt": "2026-09-25T15:11:41.516Z",
   "browser": "140.0.7339.16",
   "combinations": 10,
   "legacyCapability": "passed",

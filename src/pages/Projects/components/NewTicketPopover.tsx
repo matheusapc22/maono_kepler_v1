@@ -535,7 +535,7 @@ export default function NewTicketPopover({
                 idPrefix="new-ticket-triage"
                 reasonRequired={form.priority !== "normal"}
                 disabled={busy}
-                error={triageError}
+                validationIssue={triageError}
               />
             ) : null}
 

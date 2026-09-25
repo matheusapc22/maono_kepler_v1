@@ -23,12 +23,17 @@
     {
       "path": "build.log",
       "bytes": 7590,
-      "sha256": "68df5a21b4a787f85a87e8255709b88344a6fb531d85f13c90c3cf8284c52a05"
+      "sha256": "176cdff63a8f320ee5d7b712601870b130526ab790a7efd5943167ef4f9d7fa4"
     },
     {
       "path": "cr-regression.log",
       "bytes": 16070,
       "sha256": "4c1bc0cc8be18fdcd0976bedf0a15b244ef69e63c687b8fea29f630da2ffbb51"
+    },
+    {
+      "path": "error-sink-ratchet.log",
+      "bytes": 567,
+      "sha256": "39c941b98f97f5a2d4bc3fe305a3d3e17cfc37e4afbdc14f81721f639040cdcc"
     },
     {
       "path": "preview-safety.log",
@@ -47,13 +52,15 @@
     },
     {
       "path": "triage-tests.log",
-      "bytes": 5249,
-      "sha256": "8eae0462482591b03ee7515005c281b0c853ffa43cb8cabaece489f73243da9e"
+      "bytes": 5253,
+      "sha256": "7098cc5dd8ae0538b0b6587be97fd36a9de895dc150b4cf64178e8fbf8b05748"
     },
     {
       "path": "ui-smoke.json",
       "bytes": 536,
-      "sha256": "ee92968f7dfea0e12cce6904a0ae91daceb70220895dfc10ada2bfd44f94a693"
+      "sha256": "07da5175093ed5a89faed0eb0c858324da07f64b0fce3b2bc7cc3835d6a2a4c3"
     }
-  ]
+  ],
+  "initialPublishedHead": "15198112625d921b0405970dbfcf369cc29e9293",
+  "ciCorrection": "Typed local validation prop; strict ratchet unchanged and passing; build, 52 tests and browser rerun."
 }
