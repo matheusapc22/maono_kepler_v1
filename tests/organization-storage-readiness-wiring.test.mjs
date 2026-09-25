@@ -88,13 +88,12 @@ test("GET de documentos é D1-only e não dispara healing", () => {
   assert.ok(listPage > getReadiness);
 });
 
-test("operações físicas de documentos têm readiness gate explícito", () => {
+test("operações físicas de documentos têm readiness gate; soft-trash permanece D1-only", () => {
   assert.match(
     organizationFilesSource,
     /requireOrganizationStorageReady\(organization/,
   );
   assert.match(downloadSource, /requireOrganizationStorageReady\(organization/);
-  assert.match(deleteSource, /requireOrganizationStorageReady\(organization/);
 
   const gate = organizationFilesSource.indexOf(
     "requireOrganizationStorageReady(organization",
@@ -103,6 +102,13 @@ test("operações físicas de documentos têm readiness gate explícito", () => 
     "uploadOrganizationBinary(",
   );
   assert.ok(gate >= 0 && upload > gate);
+
+  // A partir da 08-S4, DELETE normal é retenção lógica por 10 dias.
+  // Exigir readiness/Dropbox aqui reintroduziria a exclusão física que o
+  // contrato da Lixeira explicitamente removeu.
+  assert.match(deleteSource, /trashOrganizationFile/);
+  assert.doesNotMatch(deleteSource, /requireOrganizationStorageReady\(organization/);
+  assert.doesNotMatch(deleteSource, /deleteOrganizationBinary\(/);
 });
 
 test("ticket attachments deixam de fazer healing de organização no request", () => {
