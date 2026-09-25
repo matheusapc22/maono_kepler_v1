@@ -249,6 +249,69 @@ test("Worker nasce disabled + kill switch + dry-run e dry-run não toca provider
   assert.ok(audits.some((event) => event.result === "dry_run"));
 });
 
+test("Worker apply remove somente vencidos e finaliza tombstone", async (t) => {
+  const expiredPath = "/offline/a/documents/expired.pdf";
+  const futurePath = "/offline/a/documents/future.pdf";
+  const { env, db, store, objects } = persistenceFixture(t);
+
+  await store(expiredPath, new TextEncoder().encode("expired"));
+  await store(futurePath, new TextEncoder().encode("future"));
+
+  insertFile(db, {
+    id: 501,
+    path: expiredPath,
+    status: "TRASHED",
+    active: 0,
+    deletedAt: "2026-09-10T00:00:00.000Z",
+    purgeAfter: "2026-09-20T00:00:00.000Z",
+  });
+  insertFile(db, {
+    id: 502,
+    path: futurePath,
+    status: "TRASHED",
+    active: 0,
+    deletedAt: "2026-09-24T00:00:00.000Z",
+    purgeAfter: "2026-10-04T00:00:00.000Z",
+  });
+
+  const audits = [];
+  const result = await runScheduledDocumentPurge(
+    {
+      ...env,
+      MAONO_DOCUMENT_PURGE_ENABLED: "true",
+      MAONO_DOCUMENT_PURGE_KILL_SWITCH: "false",
+      MAONO_DOCUMENT_PURGE_DRY_RUN: "false",
+      MAONO_DOCUMENT_PURGE_BATCH_SIZE: "25",
+    },
+    {
+      nowFn: () => new Date("2026-09-25T00:00:00.000Z").getTime(),
+      audit: async (_env, event) => audits.push(event),
+      correlationId: "purge-apply-test",
+    },
+  );
+
+  assert.equal(result.executed, true);
+  assert.equal(result.result.checked, 1);
+  assert.equal(result.result.purged, 1);
+  assert.equal(result.result.failed, 0);
+  assert.equal(objects.has(expiredPath), false);
+  assert.equal(objects.has(futurePath), true);
+
+  const expired = db.prepare("SELECT status, purged_at FROM organization_files WHERE id = 501").get();
+  const future = db.prepare("SELECT status, purged_at FROM organization_files WHERE id = 502").get();
+  assert.equal(expired.status, "PURGED");
+  assert.ok(expired.purged_at);
+  assert.equal(future.status, "TRASHED");
+  assert.equal(future.purged_at, null);
+  assert.ok(
+    audits.some(
+      (event) =>
+        event.action === "document.purge.automatic" &&
+        event.result === "success",
+    ),
+  );
+});
+
 test("contrato manual exige duas permissões, confirmação forte e GeoJSON; UI não antecipa purge fora da Lixeira", async () => {
   const route = await readFile(
     new URL("../functions/api/organizations/[id]/files/[fileId]/purge.js", import.meta.url),
