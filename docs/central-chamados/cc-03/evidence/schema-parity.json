@@ -1,0 +1,18 @@
+{
+  "result": "passed",
+  "tables": [
+    "organization_tickets",
+    "ticket_events",
+    "ticket_commands",
+    "ticket_cycles",
+    "ticket_wait_intervals",
+    "ticket_command_backfills",
+    "ticket_command_outbox"
+  ],
+  "checks": [
+    "column types/defaults/nullability/primary key",
+    "foreign key definitions",
+    "foreign_key_check fresh and upgraded"
+  ],
+  "note": "SQLite local with permission base prerequisite, no remote D1"
+}

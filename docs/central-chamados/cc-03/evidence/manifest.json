@@ -1,0 +1,293 @@
+{
+  "baseCommit": "ddaabcb1ea6038b62da9d90a7d1acd20634bd236",
+  "generatedAt": "2026-09-25T16:47:04.792769+00:00",
+  "testTotal": 316,
+  "scope": "Local implementation, verification and review; remote migration/activation/authenticated QA not performed",
+  "files": [
+    {
+      "path": ".github/workflows/central-chamados-contracts.yml",
+      "bytes": 3324,
+      "sha256": "7ae32d874cec9cead4ce97087d6aa3dd36ebcd9cea8ab71d7ee24abb6be33301"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/README.md",
+      "bytes": 6083,
+      "sha256": "da87addf9dce630c8aaa5df59eef042613be490408fdd1c316dba2ccfc062a00"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/acceptance.md",
+      "bytes": 6247,
+      "sha256": "c259e292e4c5a9dbba0de09b0dcae5e9bdc7b0bdd4306fbf56ae37fccc468009"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/api-contract.md",
+      "bytes": 9530,
+      "sha256": "a4ae7c24d14d4a5d9baeedac52785e8dc58c07b6e5b251ae6672fea84d89a1a9"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/backfill-runbook.md",
+      "bytes": 8027,
+      "sha256": "5c87d326f499897cb29a1f1bf93b61ae050bae42b15ea27a938d6fd9f1d95ea8"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/build.log",
+      "bytes": 7590,
+      "sha256": "d0abc4a1ac194d958767a27f39bdc250f90566c830607bbab4b5efea2492d4c5"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/cc01-regression.log",
+      "bytes": 262,
+      "sha256": "a99fe9587fe3ab7f537eff0b162cdd9957a7557f0a39458d8f768d31041ece71"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/change-request-regression.log",
+      "bytes": 16077,
+      "sha256": "8fe1cec08948ef896a5adebf69d0baf2a0f31a81d52aa438ebd02e02331002c4"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/command-conflict-desktop.png",
+      "bytes": 98497,
+      "sha256": "0d1d357e55f50276d2c87173ab3bc5c17b00617261819523bac5d4d0440a3c92"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/command-create-uncertain.png",
+      "bytes": 105224,
+      "sha256": "feb19e82df9b4578d177a01d5a2fdbf3d9cabc4168d6c9953b0587ac5d04a9b2"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/command-mobile.png",
+      "bytes": 49460,
+      "sha256": "03f9ea97928fd914cc8eb0d90fdb1609a417e6cd7cab8bf7c2e425a2915adf63"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/command-tests.log",
+      "bytes": 16818,
+      "sha256": "5a46c072b4ce0f8670f9ca7e7615df36425cf8dacc414151ca7a7ca2e802b0da"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/command-ui-smoke.json",
+      "bytes": 1119,
+      "sha256": "d8b397d08bd20ad2098b17e27df3b59b5f4d121f8e4c40a05b8ec2db18df70a4"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/compatibility-tests.log",
+      "bytes": 5241,
+      "sha256": "d47ecc20dc391c440f7b5ade7678dcec1abe8ec029aed23b2157043fb8ae5f56"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/error-presentation.json",
+      "bytes": 447,
+      "sha256": "c3ae9cbd2884986d57daf8d447825f6e0a4d31bf0387ab1c8a6f62d1db235bfa"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/http-tests.log",
+      "bytes": 4867,
+      "sha256": "a7a373f7a752ad16c45e11986f352c23462129138b497424cf6dc2335c7d0987"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/preview-safety.log",
+      "bytes": 2344,
+      "sha256": "bfe6da375dfd069c928ccaae862ac499c7fcfb132f105ccbcadb85e7b702878c"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/schema-parity.json",
+      "bytes": 446,
+      "sha256": "b30531578452021a8c8248d28b88aed0cad95a041f4b7dbfdfc3e6d58ac33d0e"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/triage-browser-regression.log",
+      "bytes": 536,
+      "sha256": "448ed67057559b24af621c29ba8b85105b063cf3b9e7d7265c26566b5b130886"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/ui-qa.md",
+      "bytes": 1648,
+      "sha256": "5ea7a8838e35384d3af7be238bca625b9ff7104c89d250688a2561b8c454169c"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/migration-runbook.md",
+      "bytes": 7858,
+      "sha256": "f1c6355e1d4badead2322b6c6c7e31b459e5c976cacccc6e1acc181aa7ee260c"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/review.md",
+      "bytes": 7890,
+      "sha256": "a00fede697a621f57331b3d114d8921d8ca746ed7747bee2abe34a553919289a"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/roadmap-alignment.md",
+      "bytes": 23068,
+      "sha256": "38603b28d8232caf7c86a0776454f3dc9f88586be7772090e4ff4c79852b2e32"
+    },
+    {
+      "path": "functions/_lib/ticket-center.js",
+      "bytes": 60571,
+      "sha256": "709d55b61cb4f0b748a10afea662855da5b4ef8cb34a5a9b2f090bcb691e861e"
+    },
+    {
+      "path": "functions/_lib/ticket-command-http.js",
+      "bytes": 2747,
+      "sha256": "bc8982fcac5170583f7c80a286bda9a24ddbec5fd4d6fde1950129a7c4d9e489"
+    },
+    {
+      "path": "functions/_lib/ticket-commands.js",
+      "bytes": 33650,
+      "sha256": "5c5007cb7cc3a9dfd1d51e9f59743f21ec8449cb752d29754ffb473b30b97c7c"
+    },
+    {
+      "path": "functions/_lib/ticket-legacy-backfill.js",
+      "bytes": 14099,
+      "sha256": "b939d6e54c3b00984f15805557e94278a01fbab3dc4e77988b5e64970384e621"
+    },
+    {
+      "path": "functions/api/admin/users/[id].js",
+      "bytes": 12939,
+      "sha256": "f2c2f8d405dd05eb0484924d68cbaca3f141d900818ed116af904277975aead3"
+    },
+    {
+      "path": "functions/api/organizations/[id]/tickets.js",
+      "bytes": 3670,
+      "sha256": "cb5d1b67c6c10531ef40ef884a5dcfd5366900dc9a7fb5af4f2fe56c1288117d"
+    },
+    {
+      "path": "functions/api/organizations/[id]/tickets/[ticketId].js",
+      "bytes": 4171,
+      "sha256": "78733634d4b48280727dfbeb8375534cfe229c09d26a5eefee8c44f9cbbd2cf2"
+    },
+    {
+      "path": "functions/api/organizations/[id]/tickets/[ticketId]/events/[eventId]/corrections.js",
+      "bytes": 558,
+      "sha256": "b35b8c4b73b67d2483f834ad7dd234d636b413c51a9bbe63a9810d9110f5ceb4"
+    },
+    {
+      "path": "functions/api/organizations/[id]/tickets/[ticketId]/reopen.js",
+      "bytes": 500,
+      "sha256": "42d98ed05295af74e1bd02d161af4e5f26cd0a71d91718257eaa90a9aef06d1e"
+    },
+    {
+      "path": "functions/api/organizations/[id]/tickets/[ticketId]/state.js",
+      "bytes": 385,
+      "sha256": "5e3990a1f2f834cf6cc16e3ab45a988cb5be87946eb00fa6da0c624e00161773"
+    },
+    {
+      "path": "functions/api/organizations/[id]/tickets/[ticketId]/transitions.js",
+      "bytes": 508,
+      "sha256": "fe8431739010a83a35b6bb6c00526ea4d9bbcf18e38f4cfe3fbfc507570269b7"
+    },
+    {
+      "path": "functions/api/organizations/[id]/tickets/[ticketId]/waits.js",
+      "bytes": 496,
+      "sha256": "733a2bdb3f5a61534abda482729e01ad66234d3f0ed0a18572768f957656488a"
+    },
+    {
+      "path": "migrations/0026_ticket_command_lifecycle.sql",
+      "bytes": 8920,
+      "sha256": "803e2095a6f7bc53b41af0a1dfd64e01ad27844c883779fd5237d40acf7a9621"
+    },
+    {
+      "path": "schema.sql",
+      "bytes": 34139,
+      "sha256": "6d3c9fab2774509b7ba92413714471c45cfceae56ce296b52d169fadb517038b"
+    },
+    {
+      "path": "scripts/central-chamados/backfill-ticket-legacy.mjs",
+      "bytes": 6701,
+      "sha256": "eb206ecb9925cfd961e9fa1ab75d0c058ed33dc4effd424d6623669acaa40c5d"
+    },
+    {
+      "path": "scripts/central-chamados/command-ui-harness.tsx",
+      "bytes": 3398,
+      "sha256": "8694179e18e2d4f9265e25c28be0a432723c99a9a8b4f9569f894b8980235acd"
+    },
+    {
+      "path": "scripts/central-chamados/smoke-command-ui.mjs",
+      "bytes": 16157,
+      "sha256": "372cdbfa8c09a90f13611b0759fefb1743550efce1d25ef8c537eecbc085d747"
+    },
+    {
+      "path": "src/pages/Projects/components/NewTicketPopover.tsx",
+      "bytes": 26100,
+      "sha256": "c4c48ac21ae9a052ae80e08bd97fcca9b5b0aee8770699b0b04787bfca62baeb"
+    },
+    {
+      "path": "src/pages/Projects/components/TicketDetailDrawer.tsx",
+      "bytes": 22744,
+      "sha256": "81f347d797aca22fe8d6508f936faed612ccda52af783093ce071b64f382c0e9"
+    },
+    {
+      "path": "src/pages/Projects/components/TicketErrorNotice.tsx",
+      "bytes": 3641,
+      "sha256": "8972abf444148a66b30edd2356bdd899d53051812656f0b5e7d075c1b6accca5"
+    },
+    {
+      "path": "src/pages/Projects/components/TicketLifecyclePanel.tsx",
+      "bytes": 13570,
+      "sha256": "6d2b2868d501cb2c51381cf322a0d8f29109cbf95c64001f2a9f209d17404823"
+    },
+    {
+      "path": "src/pages/Projects/components/TicketsSection.tsx",
+      "bytes": 24083,
+      "sha256": "f188607b855d12be0b007365e7aa614c7bfc5f4d151b828232eaf02a041214c7"
+    },
+    {
+      "path": "src/pages/Projects/components/ticket-command-form.ts",
+      "bytes": 7657,
+      "sha256": "0d8830d1e26825bc53667c0358786e6b09857027f8770a2e78254bbe311b4db0"
+    },
+    {
+      "path": "src/pages/Projects/components/ticket-lifecycle.css",
+      "bytes": 2563,
+      "sha256": "c66d547d0de3aba0654e1eb5b4c0a9ee525cd33d7fbb3d08801d78a4534e3b0a"
+    },
+    {
+      "path": "src/pages/Projects/components/ticket-types.ts",
+      "bytes": 6422,
+      "sha256": "e0565104389c398ce09fb3faf64dcf797d06e0c9699c372891fdaf282aef602f"
+    },
+    {
+      "path": "src/pages/Projects/components/tickets-api.ts",
+      "bytes": 11753,
+      "sha256": "e10d574d164be2acf0760c7b21aaab649a5d70a9372e6165148543d09acb599c"
+    },
+    {
+      "path": "tests/helpers/ticket-command-db.mjs",
+      "bytes": 6881,
+      "sha256": "563329cddb2183c1094b34544281dd3677862e59abccd77d5594d775e9daea5d"
+    },
+    {
+      "path": "tests/ticket-command-admin-retention.test.mjs",
+      "bytes": 6216,
+      "sha256": "094537433241d781a8276b68bef86c369c265788f3ce73720bb21bb1d8b94587"
+    },
+    {
+      "path": "tests/ticket-command-form.test.mjs",
+      "bytes": 8767,
+      "sha256": "9847220df888fda6a26bd511c72c226b5584b0e22d6d7ab480281084d24d57c0"
+    },
+    {
+      "path": "tests/ticket-command-http.test.mjs",
+      "bytes": 8797,
+      "sha256": "ca8a0f85055f899c1725bcebdca6f5af65fce845d5e42dbf7bf137466340c675"
+    },
+    {
+      "path": "tests/ticket-commands-integration.test.mjs",
+      "bytes": 28334,
+      "sha256": "eed55566c740acd1adaa4ca6fb46502787737630f196fd1b9a6f96546212d141"
+    },
+    {
+      "path": "tests/ticket-commands.test.mjs",
+      "bytes": 6561,
+      "sha256": "de430119e55c678b30ebbb11ac92c8827409401426606409896d397283a5184b"
+    },
+    {
+      "path": "tests/ticket-legacy-backfill.test.mjs",
+      "bytes": 13705,
+      "sha256": "3668137554f71b7aa40736b653bcbcfe9fb39edfb11df799bd3e6e855af59602"
+    },
+    {
+      "path": "tests/ticket-triage-integration.test.mjs",
+      "bytes": 27791,
+      "sha256": "23874cfbb08a5ee479f4da90e9b2e137062a0aa36aa63f9132c41cf016e3e8cc"
+    }
+  ]
+}

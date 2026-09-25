@@ -1,0 +1,35 @@
+✔ strict CLI defaults to inventory and refuses implicit/malformed application (1.79021ms)
+✔ read-only wrapper rejects run/batch and SQL writes through first/all before reaching D1 (1.446391ms)
+✔ inventory covers active organizations, leaves every table unchanged and narrows fallback candidates (34.192839ms)
+✔ preflight blocks apply when ledger is incomplete without creating a marker (15.783715ms)
+✔ preflight blocks apply when trigger is incomplete without creating a marker (16.765936ms)
+✔ preflight blocks apply when index is incomplete without creating a marker (17.428055ms)
+✔ preflight blocks apply when source contract is incomplete without creating a marker (17.0675ms)
+✔ apply rejects owner is not a super admin before any mutation (15.734561ms)
+✔ apply rejects inactive operator before any mutation (15.732417ms)
+✔ apply rejects inactive fallback before any mutation (18.609747ms)
+✔ apply rejects fallback from another organization before any mutation (17.879615ms)
+✔ apply rejects inactive organization before any mutation (17.023856ms)
+✔ apply uses one run ID across bounded pages, exits 2 while incomplete, resumes and replays ready without writes (34.212293ms)
+✔ a zero-pending inconsistent marker is reconciled instead of falsely treated as a no-op (23.098567ms)
+✔ page failure preserves earlier durable totals without ticket text or raw SQL (19.954635ms)
+✔ a lost response after a committed batch reports uncertainty and durable counts, then reruns safely (22.824623ms)
+✔ report persistence failure before apply blocks all database writes (16.103798ms)
+✔ CLI inventory verifies identity, uses isolated remote binding, saves report and cleans up (22.653756ms)
+✔ CLI apply captures the current bookmark before DML and never invokes migrations or sequential execute (21.934941ms)
+✔ local fallback metadata is rejected and proxy is disposed without creating markers (20.84602ms)
+✔ unavailable or existing report aborts before authentication and preserves existing content (26.385053ms)
+✔ wrong control-plane identity fails before proxy creation and without leaking command stderr (17.642969ms)
+✔ inventory completion never implies release readiness and uses the same reconciled marker predicate (26.803916ms)
+✔ report failure after a committed page preserves that page and prevents further pages (20.374859ms)
+✔ a source row arriving before final inspection cannot produce complete=true (19.138344ms)
+✔ mismatched injected identity is not reported as verified (12.751281ms)
+✔ preflight rejects a real SQLite expansion with DEFAULT 10 instead of DEFAULT 1 (16.115956ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 632.51947

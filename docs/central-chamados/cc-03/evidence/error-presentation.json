@@ -1,0 +1,8 @@
+{
+  "command": "node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline",
+  "exitCode": 0,
+  "fullOutputSHA256": "7ee7d2be7b3bbf909e5de131a16916fddba2b9ab3c1a435f10eb2d1cb5bb873d",
+  "fullOutputBytes": 346668,
+  "result": "Ratchet estrito OK: baseline e inventário high-signal estão idênticos.",
+  "note": "Resumo do gate; inventário extenso reproduzível, scanner e baseline inalterados."
+}

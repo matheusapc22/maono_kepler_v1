@@ -23,6 +23,7 @@ import TicketsToolbar from "./TicketsToolbar";
 import TicketErrorNotice from "./TicketErrorNotice";
 import {
   getTicketDetails,
+  runTicketCommand,
   listTickets,
   TicketApiError,
   toTicketApiError,
@@ -32,6 +33,7 @@ import {
   DEFAULT_TICKET_ATTACHMENT_LIMITS,
   DEFAULT_TICKET_FILTERS,
   type Ticket,
+  type TicketCommand,
   type TicketAttachmentLimits,
   type TicketDetailResponse,
   type TicketFacets,
@@ -99,6 +101,8 @@ export default function TicketsSection({
 }: TicketsSectionProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [triageEnabled, setTriageEnabled] = useState(false);
+  const [lifecycleEnabled, setLifecycleEnabled] = useState(false);
+  const [suggestedStatus, setSuggestedStatus] = useState<TicketStatus | null>(null);
   const [filters, setFilters] = useState<TicketFilters>(
     DEFAULT_TICKET_FILTERS,
   );
@@ -138,6 +142,8 @@ export default function TicketsSection({
   const detailControllerRef = useRef<AbortController | null>(null);
   const organizationKeyRef = useRef(String(organizationId ?? ""));
   const newTicketButtonRef = useRef<HTMLButtonElement | null>(null);
+  const selectedTicketKeyRef = useRef(String(selectedTicketId ?? ""));
+  selectedTicketKeyRef.current = String(selectedTicketId ?? "");
 
   organizationKeyRef.current = String(organizationId ?? "");
 
@@ -180,7 +186,7 @@ export default function TicketsSection({
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  useEffect(() => { setTriageEnabled(false); }, [organizationId]);
+  useEffect(() => { setTriageEnabled(false); setLifecycleEnabled(false); }, [organizationId]);
 
   const loadTicketsPage = useCallback(
     async (
@@ -231,6 +237,7 @@ export default function TicketsSection({
             : response.tickets,
         );
         setTriageEnabled(response.triageEnabled === true);
+        setLifecycleEnabled(response.lifecycleEnabled === true);
         setFacets(response.facets);
         setPagination(response.pagination);
         setAssignees(response.assignees);
@@ -309,6 +316,7 @@ export default function TicketsSection({
         }
 
         setDetail(response);
+        setLifecycleEnabled(response.lifecycleEnabled === true);
         setAttachmentLimits(
           response.attachmentLimits || DEFAULT_TICKET_ATTACHMENT_LIMITS,
         );
@@ -342,6 +350,7 @@ export default function TicketsSection({
   const openTicket = useCallback(
     (ticket: Ticket) => {
       setSelectedTicketId(ticket.id);
+      setSuggestedStatus(null);
       setDetail(null);
       void loadDetail(ticket.id);
     },
@@ -352,6 +361,7 @@ export default function TicketsSection({
     detailRequestSequenceRef.current += 1;
     detailControllerRef.current?.abort();
     setSelectedTicketId(null);
+    setSuggestedStatus(null);
     setDetail(null);
     setDetailError(null);
   }, []);
@@ -362,6 +372,12 @@ export default function TicketsSection({
 
   async function changeStatus(ticket: Ticket, status: TicketStatus) {
     if (!organizationId || !canManage || ticket.status === status) return;
+    if (lifecycleEnabled) {
+      openTicket(ticket);
+      setSuggestedStatus(status);
+      setToast("Complete os campos e confirme a mudança no detalhe do chamado.");
+      return;
+    }
 
     const previous = ticket;
     const ticketKey = String(ticket.id);
@@ -379,6 +395,8 @@ export default function TicketsSection({
         organizationId,
         ticket.id,
         { status },
+        undefined,
+        { etag: ticket.etag },
       );
       if (requestOrganizationKey !== organizationKeyRef.current) return;
       setTickets((current) => replaceTicket(current, updated));
@@ -388,9 +406,9 @@ export default function TicketsSection({
     } catch (requestError) {
       if (requestOrganizationKey !== organizationKeyRef.current) return;
       setTickets((current) => replaceTicket(current, previous));
-      setError(
-        toTicketApiError(requestError, "Não foi possível alterar a situação."),
-      );
+      const statusError = toTicketApiError(requestError, "Não foi possível alterar a situação.");
+      setError(statusError);
+      if (statusError.status === 428 || statusError.status === 412) void loadTicketsPage(pagination.page, { background: true });
     } finally {
       if (requestOrganizationKey === organizationKeyRef.current) {
         setBusyTicketIds((current) => {
@@ -402,26 +420,31 @@ export default function TicketsSection({
     }
   }
 
-  async function updateSelectedTicket(payload: UpdateTicketPayload) {
-    if (!organizationId || !selectedTicketId || !canManage) return;
-
+  async function mutateSelectedTicket(write: (organization: number | string, ticketId: number | string) => Promise<Ticket>) {
+    if (!organizationId || !selectedTicketId || !canManage || detailSaving) return;
     setDetailSaving(true);
     const requestOrganizationKey = String(organizationId);
+    const requestTicketId = selectedTicketId;
     try {
-      const updated = await updateTicket(
-        organizationId,
-        selectedTicketId,
-        payload,
-      );
+      const updated = await write(organizationId, requestTicketId);
       if (requestOrganizationKey !== organizationKeyRef.current) return;
       setTickets((current) => replaceTicket(current, updated));
-      await loadDetail(selectedTicketId);
-      setToast(`${updated.code} atualizado com sucesso.`);
-    } finally {
-      if (requestOrganizationKey === organizationKeyRef.current) {
-        setDetailSaving(false);
+      if (String(requestTicketId) === selectedTicketKeyRef.current) {
+        setDetail((current) => current && String(current.ticket.id) === String(requestTicketId) ? { ...current, ticket: updated } : current);
+        await loadDetail(requestTicketId);
       }
+      setToast(`${updated.code}: ação registrada no chamado.`);
+    } finally {
+      if (requestOrganizationKey === organizationKeyRef.current) setDetailSaving(false);
     }
+  }
+
+  async function updateSelectedTicket(payload: UpdateTicketPayload, etag?: string) {
+    await mutateSelectedTicket((organization, ticketId) => updateTicket(organization, ticketId, payload, undefined, { etag }));
+  }
+
+  async function commandSelectedTicket(command: TicketCommand, etag: string) {
+    await mutateSelectedTicket((organization, ticketId) => runTicketCommand(organization, ticketId, command, etag));
   }
 
   function handleCreated(ticket: Ticket, failedFiles: File[]) {
@@ -674,6 +697,8 @@ export default function TicketsSection({
         organizationId={organizationId}
         assignees={assignees}
         triageEnabled={triageEnabled}
+        lifecycleEnabled={lifecycleEnabled}
+        onRefreshCapabilities={() => void loadTicketsPage(pagination.page, { background: true })}
         canManage={canManage}
         attachmentLimits={attachmentLimits}
         onClose={closeNewTicket}
@@ -703,6 +728,8 @@ export default function TicketsSection({
           }
         }}
         onUpdate={updateSelectedTicket}
+        onCommand={commandSelectedTicket}
+        suggestedStatus={suggestedStatus}
       />
     </section>
   );

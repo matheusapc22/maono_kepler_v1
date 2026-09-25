@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import TicketAttachmentList from "./TicketAttachmentList";
 import TicketErrorNotice from "./TicketErrorNotice";
+import TicketLifecyclePanel from "./TicketLifecyclePanel";
+import { ticketDraftSnapshot, ticketWriteNeedsReview } from "./ticket-command-form";
 import TicketTriageFields, { TicketTriageSummary } from "./TicketTriageFields";
 import {
   buildTicketTriagePayload,
@@ -27,6 +29,8 @@ import {
   PRIORITY_LABELS,
   STATUS_LABELS,
   type TicketDetailResponse,
+  type Ticket,
+  type TicketCommand,
   type TicketAttachmentLimits,
   type TicketStatus,
   type UpdateTicketPayload,
@@ -46,11 +50,19 @@ type TicketDetailDrawerProps = {
   onClose: () => void;
   onRetry: () => void;
   onReload: () => void;
-  onUpdate: (payload: UpdateTicketPayload) => Promise<void>;
+  onUpdate: (payload: UpdateTicketPayload, etag?: string) => Promise<void>;
+  onCommand: (command: TicketCommand, etag: string) => Promise<void>;
+  suggestedStatus?: TicketStatus | null;
 };
 
 const EVENT_LABELS: Record<string, string> = {
   "ticket.created": "Chamado criado",
+  "ticket.transitioned": "Etapa do atendimento alterada",
+  "ticket.closed": "Conclusão registrada",
+  "ticket.reopened": "Chamado reaberto em novo ciclo",
+  "ticket.wait.started": "Espera iniciada",
+  "ticket.wait.ended": "Espera encerrada",
+  "ticket.history.corrected": "Correção registrada no histórico",
   "ticket.status.changed": "Situação alterada",
   "ticket.assigned": "Atendente alterado",
   "ticket.due.changed": "Prazo alterado",
@@ -77,6 +89,8 @@ export default function TicketDetailDrawer({
   onRetry,
   onReload,
   onUpdate,
+  onCommand,
+  suggestedStatus,
 }: TicketDetailDrawerProps) {
   const [status, setStatus] = useState<TicketStatus>("open");
   const [priority, setPriority] = useState("normal");
@@ -90,17 +104,26 @@ export default function TicketDetailDrawer({
   const [priorityReason, setPriorityReason] = useState("");
   const [savedDraftVersion, setSavedDraftVersion] = useState(0);
   const dirtyRef = useRef(false);
+  const writeSnapshotRef = useRef<Ticket | null>(null);
+  const [attributeDraftDirty, setAttributeDraftDirty] = useState(false);
+  const [lifecycleDraftDirty, setLifecycleDraftDirty] = useState(false);
+  const lifecycleEnabled = detail?.lifecycleEnabled === true;
+  function markDirty() { dirtyRef.current = true; setAttributeDraftDirty(true); }
   const formTicketKeyRef = useRef("");
   const triageEnabled = detail?.triageEnabled === true;
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  useEffect(() => { if (!lifecycleEnabled) setLifecycleDraftDirty(false); }, [lifecycleEnabled]);
+
   useEffect(() => {
     if (!detail?.ticket) return;
     const key = `${detail.ticket.organizationId}:${detail.ticket.id}`;
+    writeSnapshotRef.current = ticketDraftSnapshot(writeSnapshotRef.current, detail.ticket, formTicketKeyRef.current === key && dirtyRef.current);
     if (formTicketKeyRef.current === key && dirtyRef.current) return;
     formTicketKeyRef.current = key;
     dirtyRef.current = false;
+    setAttributeDraftDirty(false);
     setTriageForm(createTicketTriageForm(detail.ticket));
     setTriageEditing(false);
     setTriageError(null);
@@ -162,15 +185,19 @@ export default function TicketDetailDrawer({
   const ticket = detail?.ticket;
 
   async function handleSave() {
-    if (!ticket) return;
+    if (!ticket || saving || lifecycleDraftDirty) return;
+    const original = writeSnapshotRef.current || ticket;
+    if (lifecycleEnabled && !original.etag) {
+      setSaveError("Atualize o chamado antes de salvar as alterações."); onReload(); return;
+    }
     setSaveError(null);
     setTriageError(null);
-    const classificationChanged = priority !== ticket.priority || category !== ticket.category;
+    const classificationChanged = priority !== original.priority || category !== original.category;
     let triagePayload: Partial<UpdateTicketPayload> = {};
     if (triageEnabled && triageEditing) {
       const validation = validateTicketTriageForm(triageForm, {
-        priority: priority as typeof ticket.priority,
-        reasonRequired: ticketTriageReasonRequired(priority as typeof ticket.priority, ticket, triageForm.demandNature, category as typeof ticket.category),
+        priority: priority as typeof original.priority,
+        reasonRequired: ticketTriageReasonRequired(priority as typeof original.priority, original, triageForm.demandNature, category as typeof original.category),
       });
       if (validation) {
         setTriageError(validation);
@@ -188,17 +215,18 @@ export default function TicketDetailDrawer({
     }
     try {
       const payload: UpdateTicketPayload = { ...triagePayload };
-      if (status !== ticket.status) payload.status = status;
-      if (priority !== ticket.priority) payload.priority = priority as typeof ticket.priority;
-      if (category !== ticket.category) payload.category = category as typeof ticket.category;
-      if (dueDate !== dateInputValue(ticket.dueAt)) payload.dueAt = dateInputToIso(dueDate);
-      if (assignedTo !== (ticket.assignedTo ? String(ticket.assignedTo.id) : "")) payload.assignedTo = assignedTo || null;
+      if (!lifecycleEnabled && status !== original.status) payload.status = status;
+      if (priority !== original.priority) payload.priority = priority as typeof original.priority;
+      if (category !== original.category) payload.category = category as typeof original.category;
+      if (dueDate !== dateInputValue(original.dueAt)) payload.dueAt = dateInputToIso(dueDate);
+      if (assignedTo !== (original.assignedTo ? String(original.assignedTo.id) : "")) payload.assignedTo = assignedTo || null;
       if (Object.keys(payload).length === 0) {
         setSaveError("Nenhuma alteração para salvar.");
         return;
       }
-      await onUpdate(payload);
+      await onUpdate(payload, lifecycleEnabled ? original.etag : undefined);
       dirtyRef.current = false;
+      setAttributeDraftDirty(false);
       setTriageEditing(false);
       setSavedDraftVersion((current) => current + 1);
     } catch (requestError) {
@@ -242,7 +270,7 @@ export default function TicketDetailDrawer({
           </button>
         </header>
 
-        {loading ? (
+        {loading && !ticket ? (
           <div className="ticket-detail-loading" aria-busy="true">
             <span />
             <span />
@@ -252,12 +280,14 @@ export default function TicketDetailDrawer({
               Carregando detalhes do chamado.
             </p>
           </div>
-        ) : error ? (
+        ) : error && !ticket ? (
           <div className="ticket-detail-error" role="alert">
             <TicketErrorNotice error={error} onRetry={onRetry} />
           </div>
         ) : ticket && detail ? (
-          <div className="ticket-detail-content">
+          <div className="ticket-detail-content" aria-busy={loading || saving}>
+            {loading ? <p role="status">Atualizando versão do chamado. Seus rascunhos serão preservados.</p> : null}
+            {error ? <TicketErrorNotice error={error} onRetry={onRetry} /> : null}
             <section className="ticket-detail-summary">
               <div>
                 <span
@@ -312,14 +342,15 @@ export default function TicketDetailDrawer({
             {canManage ? (
               <section className="ticket-detail-management">
                 <h4>Gerenciar chamado</h4>
+                {lifecycleDraftDirty ? <p role="status">Conclua ou descarte o rascunho da ação de atendimento antes de salvar outros campos.</p> : null}
                 <div>
-                  <label>
+                  {!lifecycleEnabled ? <label>
                     <span>Situação</span>
                     <select
                       value={status}
-                      disabled={saving}
+                      disabled={saving || loading || lifecycleDraftDirty}
                       onChange={(event) => {
-                        dirtyRef.current = true;
+                        markDirty();
                         setStatus(event.target.value as TicketStatus);
                       }}
                     >
@@ -329,15 +360,15 @@ export default function TicketDetailDrawer({
                         </option>
                       ))}
                     </select>
-                  </label>
+                  </label> : null}
 
                   <label>
                     <span>Prioridade</span>
                     <select
                       value={priority}
-                      disabled={saving}
+                      disabled={saving || loading || lifecycleDraftDirty}
                       onChange={(event) => {
-                        dirtyRef.current = true;
+                        markDirty();
                         setPriority(event.target.value);
                         setPriorityReason("");
                         setTriageForm((current) => ({ ...current, priorityReason: "" }));
@@ -356,9 +387,9 @@ export default function TicketDetailDrawer({
                     <span>{triageEnabled ? "Domínio afetado" : "Categoria"}</span>
                     <select
                       value={category}
-                      disabled={saving}
+                      disabled={saving || loading || lifecycleDraftDirty}
                       onChange={(event) => {
-                        dirtyRef.current = true;
+                        markDirty();
                         setCategory(event.target.value);
                         setPriorityReason("");
                         setTriageForm((current) => ({ ...current, priorityReason: "" }));
@@ -378,8 +409,8 @@ export default function TicketDetailDrawer({
                     <input
                       type="date"
                       value={dueDate}
-                      disabled={saving}
-                      onChange={(event) => { dirtyRef.current = true; setDueDate(event.target.value); }}
+                      disabled={saving || loading || lifecycleDraftDirty}
+                      onChange={(event) => { markDirty(); setDueDate(event.target.value); }}
                     />
                   </label>
 
@@ -387,8 +418,8 @@ export default function TicketDetailDrawer({
                     <span>Atendente</span>
                     <select
                       value={assignedTo}
-                      disabled={saving}
-                      onChange={(event) => { dirtyRef.current = true; setAssignedTo(event.target.value); }}
+                      disabled={saving || loading || lifecycleDraftDirty}
+                      onChange={(event) => { markDirty(); setAssignedTo(event.target.value); }}
                     >
                       <option value="">Não atribuído</option>
                       {detail.assignees.map((assignee) => (
@@ -403,7 +434,7 @@ export default function TicketDetailDrawer({
                 {triageEnabled ? (
                   <>
                     <div className="ticket-triage-edit-actions">
-                      <button type="button" className="ticket-secondary-action" disabled={saving}
+                      <button type="button" className="ticket-secondary-action" disabled={saving || loading || lifecycleDraftDirty}
                         onClick={() => {
                           setTriageForm({ ...createTicketTriageForm(ticket), ...(priority !== ticket.priority || category !== ticket.category ? { priorityReason } : {}) });
                           setTriageError(null);
@@ -415,19 +446,19 @@ export default function TicketDetailDrawer({
                     {triageEditing ? (
                       <TicketTriageFields
                         value={triageForm}
-                        onChange={(next) => { dirtyRef.current = true; setTriageForm(next); setTriageError(null); setSaveError(null); }}
+                        onChange={(next) => { markDirty(); setTriageForm(next); setTriageError(null); setSaveError(null); }}
                         idPrefix="detail-ticket-triage"
                         reasonRequired={ticketTriageReasonRequired(priority as typeof ticket.priority, ticket, triageForm.demandNature, category as typeof ticket.category)}
-                        disabled={saving}
+                        disabled={saving || loading || lifecycleDraftDirty}
                         validationIssue={triageError}
                       />
                     ) : priority !== ticket.priority || category !== ticket.category ? (
                       <label className="ticket-triage-reason" htmlFor="ticket-priority-change-reason">
                         <span>Motivo da mudança de classificação ou prioridade *</span>
                         <textarea id="ticket-priority-change-reason" value={priorityReason} rows={3} required
-                          maxLength={TICKET_TRIAGE_LIMITS.priorityReason} disabled={saving}
+                          maxLength={TICKET_TRIAGE_LIMITS.priorityReason} disabled={saving || loading || lifecycleDraftDirty}
                           aria-describedby="ticket-priority-change-help"
-                          onChange={(event) => { dirtyRef.current = true; setPriorityReason(event.target.value); setSaveError(null); }} />
+                          onChange={(event) => { markDirty(); setPriorityReason(event.target.value); setSaveError(null); }} />
                         <small id="ticket-priority-change-help">Explique a nova classificação ou prioridade. A natureza e o prazo permanecem independentes. · {priorityReason.length}/1.000</small>
                       </label>
                     ) : null}
@@ -438,16 +469,29 @@ export default function TicketDetailDrawer({
                   <TicketErrorNotice error={saveError} compact />
                 ) : null}
 
+                {lifecycleEnabled && ticketWriteNeedsReview(saveError) ? <div className="ticket-command-conflict" role="status">
+                  <strong>Seu rascunho foi preservado.</strong><p>Consulte a versão atual e revise os campos antes de salvar novamente.</p>
+                  <button type="button" className="ticket-secondary-action" disabled={loading || saving} onClick={onReload}>Consultar versão atual</button>
+                  {ticket.etag && ticket !== writeSnapshotRef.current ? <>
+                    <p>Situação atual: {STATUS_LABELS[ticket.status]}. Responsável: {ticketPersonName(ticket.assignedTo)}. Prazo: {formatTicketDateTime(ticket.dueAt)}.</p>
+                    <button type="button" className="ticket-secondary-action" disabled={loading || saving} onClick={() => { writeSnapshotRef.current = ticket; setSaveError(null); setTriageError(null); }}>Usar versão atual e manter rascunho</button>
+                  </> : null}
+                </div> : null}
                 <button
                   type="button"
                   className="ticket-primary-action"
-                  disabled={saving}
+                  disabled={saving || loading || lifecycleDraftDirty || lifecycleEnabled && ticketWriteNeedsReview(saveError)}
                   onClick={() => void handleSave()}
                 >
                   {saving ? "Salvando..." : "Salvar alterações"}
                 </button>
+                {lifecycleEnabled && attributeDraftDirty ? <button type="button" className="ticket-secondary-action" disabled={saving || loading || lifecycleDraftDirty} onClick={() => { dirtyRef.current = false; setAttributeDraftDirty(false); setSavedDraftVersion((version) => version + 1); }}>Descartar rascunho dos campos</button> : null}
               </section>
             ) : null}
+
+            {lifecycleEnabled ? <TicketLifecyclePanel detail={detail} canManage={canManage} saving={saving} refreshing={loading}
+              attributeDraftDirty={attributeDraftDirty} suggestedStatus={suggestedStatus} onDirtyChange={setLifecycleDraftDirty}
+              onReload={onReload} onCommand={onCommand} /> : null}
 
             <TicketAttachmentList
               organizationId={organizationId}

@@ -1,0 +1,42 @@
+✔ strict CLI defaults to inventory and refuses implicit/malformed application (1.837321ms)
+✔ read-only wrapper rejects run/batch and SQL writes through first/all before reaching D1 (1.365009ms)
+✔ inventory covers active organizations, leaves every table unchanged and narrows fallback candidates (37.21677ms)
+✔ preflight blocks apply when ledger is incomplete without creating a marker (16.733742ms)
+✔ preflight blocks apply when trigger is incomplete without creating a marker (19.037192ms)
+✔ preflight blocks apply when index is incomplete without creating a marker (18.2371ms)
+✔ preflight blocks apply when source contract is incomplete without creating a marker (20.131818ms)
+✔ apply rejects owner is not a super admin before any mutation (18.469681ms)
+✔ apply rejects inactive operator before any mutation (19.825215ms)
+✔ apply rejects inactive fallback before any mutation (17.724537ms)
+✔ apply rejects fallback from another organization before any mutation (21.223705ms)
+✔ apply rejects inactive organization before any mutation (16.803838ms)
+✔ apply uses one run ID across bounded pages, exits 2 while incomplete, resumes and replays ready without writes (28.130474ms)
+✔ a zero-pending inconsistent marker is reconciled instead of falsely treated as a no-op (19.863002ms)
+✔ page failure preserves earlier durable totals without ticket text or raw SQL (19.429709ms)
+✔ a lost response after a committed batch reports uncertainty and durable counts, then reruns safely (22.68222ms)
+✔ report persistence failure before apply blocks all database writes (16.814885ms)
+✔ CLI inventory verifies identity, uses isolated remote binding, saves report and cleans up (21.105677ms)
+✔ CLI apply captures the current bookmark before DML and never invokes migrations or sequential execute (20.306792ms)
+✔ local fallback metadata is rejected and proxy is disposed without creating markers (19.541658ms)
+✔ unavailable or existing report aborts before authentication and preserves existing content (13.943944ms)
+✔ wrong control-plane identity fails before proxy creation and without leaking command stderr (14.623258ms)
+✔ inventory completion never implies release readiness and uses the same reconciled marker predicate (23.426568ms)
+✔ report failure after a committed page preserves that page and prevents further pages (17.711858ms)
+✔ a source row arriving before final inspection cannot produce complete=true (16.338767ms)
+✔ mismatched injected identity is not reported as verified (12.7749ms)
+✔ preflight rejects a real SQLite expansion with DEFAULT 10 instead of DEFAULT 1 (15.985704ms)
+✔ pinned Wrangler database identity preserves JSON output and invokes Node without a shell (1.036834ms)
+✔ pinned Wrangler current bookmark preserves JSON output and invokes Node without a shell (0.274213ms)
+✔ pinned Wrangler command failures redact stdout, stderr, command text and tokens (0.615007ms)
+✔ successful Wrangler invocation with empty stdout has a distinct safe diagnostic (0.485693ms)
+✔ Wrangler malformed JSON and non-object shapes fail without echoing output (1.389916ms)
+✔ missing or unreadable pinned installation aborts before executing Wrangler (0.248495ms)
+✔ an unpinned Wrangler version aborts before authentication or execution (0.163858ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 607.250959

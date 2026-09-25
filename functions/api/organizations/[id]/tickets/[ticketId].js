@@ -4,6 +4,9 @@ import {
   isTicketTriageEnabled,
 } from "../../../../_lib/ticket-triage.js";
 import { getTicketReviewLink } from "../../../../_lib/project-change-request-inbox.js";
+import {
+  assertTicketCommandReady, executeTicketUpdate, isTicketCommandsEnabled,
+} from "../../../../_lib/ticket-commands.js";
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import {
   getOrganizationOrThrow,
@@ -62,7 +65,9 @@ export async function onRequestGet({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
-    if (!isTicketTriageEnabled(env) || await getTicketTriageCapability(env)) {
+    if (isTicketCommandsEnabled(env)) {
+      await assertTicketCommandReady(env, organizationId);
+    } else if (!isTicketTriageEnabled(env) || await getTicketTriageCapability(env)) {
       await migrateLegacyTickets(env, organizationId, user.id);
     }
 
@@ -70,6 +75,9 @@ export async function onRequestGet({ env, request, params }) {
     const changeRequest = await getTicketReviewLink(env, request, organizationId, ticketId);
     const response = jsonResponse({ ok: true, ...detail, changeRequest });
     response.headers.set("Cache-Control", "private, no-store");
+    if (detail.lifecycleEnabled) {
+      response.headers.set("Link", `</api/organizations/${organizationId}/tickets/${ticketId}/state>; rel="describedby"`);
+    }
     return response;
   } catch (error) {
     return ticketCenterErrorResponse(error, request);
@@ -91,6 +99,8 @@ export async function onRequestPatch({ env, request, params }) {
       },
       {
         audit: false,
+        // The domain service records successful mutation after persistence.
+        auditOnSuccess: false,
         resourceType: "ticket",
       },
     );
@@ -98,6 +108,13 @@ export async function onRequestPatch({ env, request, params }) {
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
     const payload = await readJsonBody(request);
+    if (isTicketCommandsEnabled(env) || request.headers.has("If-Match")) {
+      await assertTicketCommandReady(env, organizationId);
+      const result = await executeTicketUpdate(env, organizationId, ticketId, user, payload, request);
+      return jsonResponse({ ok: true, ticket: result.ticket }, { status: result.status || 200,
+        headers: { "Cache-Control": "private, no-store" },
+      });
+    }
     await assertTicketTriageWriteReady(env, payload);
     await migrateLegacyTickets(env, organizationId, user.id);
 

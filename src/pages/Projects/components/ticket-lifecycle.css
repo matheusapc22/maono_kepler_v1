@@ -1,0 +1,25 @@
+.ticket-lifecycle { display: grid; gap: 14px; border: 1px solid #363d48; border-radius: 12px; padding: 18px; background: #11151c; }
+.ticket-lifecycle h4 { margin: 0; color: var(--maono-accent-text, #f3d58a); }
+.ticket-lifecycle-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
+.ticket-lifecycle-summary > div:last-child { grid-column: 1 / -1; }
+.ticket-lifecycle dt, .ticket-command-conflict dt { color: #abb4c2; font-size: 12px; }
+.ticket-lifecycle dd, .ticket-command-conflict dd { margin: 3px 0 10px; color: #f0f2f5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ticket-lifecycle p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ticket-lifecycle-wait, .ticket-command-conflict { padding: 14px; border: 1px solid #776037; border-radius: 9px; background: #211d15; }
+.ticket-lifecycle-closure { padding: 14px; border: 1px solid #37404b; border-radius: 9px; margin-top: 8px; }
+.ticket-lifecycle small, .ticket-lifecycle-help, .ticket-lifecycle-feedback { color: #b8c1cf; font-size: 12px; }
+.ticket-command-form, .ticket-command-field { display: grid; gap: 8px; }
+.ticket-command-form { gap: 14px; }
+.ticket-command-field > span { font-size: 13px; font-weight: 700; }
+.ticket-command-field textarea, .ticket-command-field select, .ticket-command-field input { width: 100%; min-height: 42px; box-sizing: border-box; border: 1px solid #48515f; border-radius: 8px; background: #0b0f15; color: #f0f2f5; padding: 10px; font: inherit; }
+.ticket-command-field textarea { resize: vertical; }
+.ticket-command-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
+.ticket-command-check input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--maono-accent, #c5a059); }
+.ticket-command-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ticket-command-validation { color: #ffc0bc; font-size: 13px; }
+.ticket-lifecycle :is(button,input,textarea,select):focus-visible, .ticket-lifecycle h4:focus-visible { outline: 3px solid var(--maono-focus-ring, #f2c766); outline-offset: 3px; }
+.ticket-command-field [aria-invalid=true] { border-color: #f49b92; }
+.ticket-create-intent { grid-column: 1 / -1; padding: 14px; border: 1px solid #776037; border-radius: 9px; background: #211d15; color: #f0f2f5; }
+.ticket-create-intent p { margin: 8px 0; }
+.ticket-new-form > fieldset { display: contents; border: 0; padding: 0; margin: 0; min-width: 0; }
+@media (max-width: 600px) { .ticket-command-actions > button { width: 100%; } .ticket-lifecycle-summary { grid-template-columns: 1fr; } }

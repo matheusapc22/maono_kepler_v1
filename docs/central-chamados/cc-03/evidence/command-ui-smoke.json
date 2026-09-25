@@ -1,0 +1,24 @@
+{
+  "test": "CC-03 real React components with mocked local HTTP",
+  "executedAt": "2026-09-25T16:39:15.723Z",
+  "browser": "140.0.7339.16",
+  "result": "passed",
+  "locale": "pt-BR",
+  "timezone": "America/Sao_Paulo",
+  "cases": {
+    "waitResume": "passed: preserves canonical status and records next actions",
+    "closeReopen": "passed: explicit change acknowledgement, cycle 2 and previous conclusion preserved",
+    "conflict412": "passed: draft retained, no retry on reload or explicit rebase, new confirmation uses new If-Match",
+    "viewer": "passed: lifecycle readable, commands absent",
+    "mobile390": "passed: no horizontal overflow and controls contained",
+    "lostCreateResponse": "passed: same key and payload across close/reopen/retry, one simulated server commit"
+  },
+  "commandRequests": 6,
+  "creationRequests": 2,
+  "simulatedCreationCommits": 1,
+  "pageErrors": [],
+  "externalRequests": [],
+  "authenticatedQA": "not_run",
+  "remoteMigration": "not_run",
+  "limitations": "Browser check uses fictional responses and does not replace API/SQLite tests or authenticated D1/Preview acceptance."
+}

@@ -1,0 +1,19 @@
+{
+  "mode": "local_native_binding",
+  "remoteBindings": false,
+  "remoteD1Access": false,
+  "node": "v24.19.0",
+  "wrangler": "4.140.0",
+  "startedAt": "2026-09-25T17:37:54.719Z",
+  "checks": [
+    "inventory leaves all tables unchanged",
+    "bounded native D1 batches import and resume with all mandatory effects",
+    "replay is a no-op and organization 2 remains untouched",
+    "native batch rolls back mandatory outbox failure and resumes after correction",
+    "global inventory still blocks release for the untouched organization"
+  ],
+  "phase": "finished",
+  "servedBy": "miniflare.db",
+  "ok": true,
+  "finishedAt": "2026-09-25T17:38:04.765Z"
+}

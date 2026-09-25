@@ -1,0 +1,105 @@
+{
+  "baseCommit": "cdc2277774ffe89a944761d5738b40b0d038cb73",
+  "generatedAt": "2026-09-25T17:39:34.416425+00:00",
+  "unitAndRegressionTests": 166,
+  "nativeLocalScenarios": 5,
+  "remoteBackfillExecuted": false,
+  "migrationFilesChanged": false,
+  "files": [
+    {
+      "path": ".github/workflows/central-chamados-contracts.yml",
+      "bytes": 3876,
+      "sha256": "2b15ed9de03d1603ee6a179b8f3a9d290e9f0fa13f33325486969e25a1df9e2e"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/README.md",
+      "bytes": 7196,
+      "sha256": "6f87d4a2a94390967504be2096eedc9757479e93e1b046b270745f0a89a91828"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/acceptance.md",
+      "bytes": 6567,
+      "sha256": "fe14cb6cc2a049fb414a28bc6109034941a6705024950036d8b1591e71c5513a"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/backfill-runbook.md",
+      "bytes": 8419,
+      "sha256": "fde46a517a1a438ba57adfec60db4898ce23c6c514c9fbc914aed4996e8843af"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/operator-core-regression.log",
+      "bytes": 16515,
+      "sha256": "abe3198e218af36bc1bfb7be59e2f179130af360f9ace9f69a831d928e93f05a"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/operator-runtime.json",
+      "bytes": 656,
+      "sha256": "4525eb43280a66ff4c6b35703345ef119f35446678515e7743149379412be135"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/evidence/operator-tests.log",
+      "bytes": 2753,
+      "sha256": "1b84c03c15b0dcedd5e0248749b5b1f680b13e5ff6e8c383adcdfd26aa29625a"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/migration-runbook.md",
+      "bytes": 8373,
+      "sha256": "551283c405514ff5c02ca54bdfee6267498a03ec9a6a437c3eb877ae0ff55591"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/operator-acceptance.md",
+      "bytes": 4762,
+      "sha256": "7849f5dd966252986d8dcbe5ed3bffc73f534c1ebc8a3dc57bc11da802c220c0"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/operator-review.md",
+      "bytes": 11538,
+      "sha256": "140bf4ea2e962377751d45db60d3478609b1a37bf56d7492083644fc1c6ec741"
+    },
+    {
+      "path": "docs/central-chamados/cc-03/remote-operator-runbook.md",
+      "bytes": 11487,
+      "sha256": "05d37156ec21d157e2187f65cf587e34940d3d0f7ce4cb7903667fab158d3861"
+    },
+    {
+      "path": "functions/_lib/ticket-legacy-backfill.js",
+      "bytes": 14099,
+      "sha256": "b939d6e54c3b00984f15805557e94278a01fbab3dc4e77988b5e64970384e621"
+    },
+    {
+      "path": "migrations/0026_ticket_command_lifecycle.sql",
+      "bytes": 8920,
+      "sha256": "803e2095a6f7bc53b41af0a1dfd64e01ad27844c883779fd5237d40acf7a9621"
+    },
+    {
+      "path": "scripts/central-chamados/operator/backfill-d1.mjs",
+      "bytes": 9820,
+      "sha256": "51cff88a44d221eeaf9150978955bb07492e0ceeab913d72b1ef00804c257a9f"
+    },
+    {
+      "path": "scripts/central-chamados/operator/lib.mjs",
+      "bytes": 19936,
+      "sha256": "bca5f6d47681222a5e946010dd5bff6b4322a391463d246cdb6c7d935a2df79d"
+    },
+    {
+      "path": "scripts/central-chamados/operator/package-lock.json",
+      "bytes": 47810,
+      "sha256": "3e36011494988f2f72850e8e1eeeba48dabbd359e1bce79e48bf4ddaa1e2e35b"
+    },
+    {
+      "path": "scripts/central-chamados/operator/package.json",
+      "bytes": 203,
+      "sha256": "c10cd5c2b2235159c83330196c6b51ebef991d5d120d34eab0a66b82183f883a"
+    },
+    {
+      "path": "scripts/central-chamados/operator/smoke-local.mjs",
+      "bytes": 7921,
+      "sha256": "ba24e226fea06c7f739e3a75d3f47dbe244b30b7cd58ea47afed5c80020534e9"
+    },
+    {
+      "path": "tests/ticket-backfill-operator.test.mjs",
+      "bytes": 17669,
+      "sha256": "dffde007868a02d770186f276da8de3212e26081b12bc28f5dc6f8bce99f3c47"
+    }
+  ]
+}

@@ -78,6 +78,22 @@ export type TicketEvent = {
   actor?: TicketPerson | null;
 };
 
+export type TicketClosureOutcome = "resolved" | "answered" | "fulfilled" | "rejected" | "duplicate" | "withdrawn" | "no_action";
+export type TicketClosurePayload = {
+  outcomeCode: TicketClosureOutcome;
+  summary: string;
+  evidence: string;
+  communication: string;
+  pendingChangeAcknowledged?: boolean;
+};
+export type TicketClosure = TicketClosurePayload & { closedAt: string; closedBy?: number | string | null; cycleNumber?: number };
+export type TicketCycle = { number: number; origin: "created" | "observed_baseline" | "reopened"; openedAt: string; openedBy?: number | string | null };
+export type TicketWait = { id: number | string; reason: string; responsibleId: number | string; startedAt: string; expectedAt?: string | null; nextAction: string };
+export type TicketTransitionPayload = { status: TicketStatus; nextAction?: string; reason?: string; evidence?: string; closure?: TicketClosurePayload };
+export type TicketWaitPayload = { action: "start"; reason: string; responsibleId: number | string; nextAction: string; expectedAt?: string | null } | { action: "end"; reason?: string; nextAction: string };
+export type TicketReopenPayload = { reason: string; nextAction: string };
+export type TicketCommand = { kind: "transition"; payload: TicketTransitionPayload } | { kind: "wait"; payload: TicketWaitPayload } | { kind: "reopen"; payload: TicketReopenPayload };
+
 export type Ticket = {
   id: number | string;
   organizationId: number | string;
@@ -94,6 +110,13 @@ export type Ticket = {
   createdBy?: TicketPerson | null;
   assignedTo?: TicketPerson | null;
   attachmentsCount: number;
+  version?: number;
+  /** Opaque write token supplied for the canonical core ticket, never the detail envelope. */
+  etag?: string;
+  cycle?: TicketCycle | null;
+  nextAction?: string;
+  wait?: TicketWait | null;
+  closure?: TicketClosure | null;
   demandNature?: TicketDemandNature | null;
   expectedResult?: string | null;
   context?: string | null;
@@ -135,6 +158,7 @@ export type TicketPagination = {
 export type TicketListResponse = {
   ok: boolean;
   triageEnabled?: boolean;
+  lifecycleEnabled?: boolean;
   tickets: Ticket[];
   pagination: TicketPagination;
   facets: TicketFacets;
@@ -147,7 +171,10 @@ export type TicketListResponse = {
 };
 
 export type TicketDetailResponse = {
+  hasPendingChange?: boolean;
+  closureHistory?: TicketClosure[];
   triageEnabled?: boolean;
+  lifecycleEnabled?: boolean;
   changeRequest?: { id: string; status: string; reviewUrl: string } | null;
   ok: boolean;
   ticket: Ticket;

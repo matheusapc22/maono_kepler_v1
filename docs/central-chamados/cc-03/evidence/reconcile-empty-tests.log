@@ -1,0 +1,253 @@
+✔ empty mode requires explicit mutation gates and rejects a fallback identity (2.209743ms)
+✔ empty organization without members gains only a marker and replay changes nothing (39.68986ms)
+✔ ordinary apply still requires a fallback member even when the source is empty (22.822063ms)
+✔ empty mode rejects nonempty source (already imported: false) without effects (21.594281ms)
+✔ empty mode rejects nonempty source (already imported: true) without effects (23.860639ms)
+✔ empty mode preserves non-super-admin gate (24.346212ms)
+✔ empty mode preserves inactive organization gate (24.588437ms)
+✔ empty mode preserves missing bookmark gate (27.066856ms)
+✔ a source appearing after the helper result blocks final completion without claiming rollback (25.203485ms)
+✔ report persistence failure after the marker preserves a known durable result (24.68948ms)
+✔ CLI empty mode verifies identity and captures a bookmark before writing, without fallback or migrations (32.426901ms)
+✔ strict CLI defaults to inventory and refuses implicit/malformed application (2.430556ms)
+✔ read-only wrapper rejects run/batch and SQL writes through first/all before reaching D1 (1.948099ms)
+✔ inventory covers active organizations, leaves every table unchanged and narrows fallback candidates (47.402979ms)
+✔ preflight blocks apply when ledger is incomplete without creating a marker (20.014338ms)
+✔ preflight blocks apply when trigger is incomplete without creating a marker (19.11429ms)
+✔ preflight blocks apply when index is incomplete without creating a marker (16.975524ms)
+✔ preflight blocks apply when source contract is incomplete without creating a marker (15.981576ms)
+✔ apply rejects owner is not a super admin before any mutation (21.550826ms)
+✔ apply rejects inactive operator before any mutation (21.632509ms)
+✔ apply rejects inactive fallback before any mutation (24.515157ms)
+✔ apply rejects fallback from another organization before any mutation (26.049762ms)
+✔ apply rejects inactive organization before any mutation (25.997573ms)
+✔ apply uses one run ID across bounded pages, exits 2 while incomplete, resumes and replays ready without writes (35.882593ms)
+✔ a zero-pending inconsistent marker is reconciled instead of falsely treated as a no-op (20.994236ms)
+✔ page failure preserves earlier durable totals without ticket text or raw SQL (22.428599ms)
+✔ a lost response after a committed batch reports uncertainty and durable counts, then reruns safely (22.826831ms)
+✔ report persistence failure before apply blocks all database writes (17.925527ms)
+✔ CLI inventory verifies identity, uses isolated remote binding, saves report and cleans up (23.347616ms)
+✔ CLI apply captures the current bookmark before DML and never invokes migrations or sequential execute (22.492465ms)
+✔ local fallback metadata is rejected and proxy is disposed without creating markers (17.560097ms)
+✔ unavailable or existing report aborts before authentication and preserves existing content (15.847163ms)
+✔ wrong control-plane identity fails before proxy creation and without leaking command stderr (20.288191ms)
+✔ inventory completion never implies release readiness and uses the same reconciled marker predicate (24.271649ms)
+✔ report failure after a committed page preserves that page and prevents further pages (16.401509ms)
+✔ a source row arriving before final inspection cannot produce complete=true (18.237869ms)
+✔ mismatched injected identity is not reported as verified (25.274362ms)
+✔ preflight rejects a real SQLite expansion with DEFAULT 10 instead of DEFAULT 1 (18.343298ms)
+✔ pinned Wrangler database identity preserves JSON output and invokes Node without a shell (1.009122ms)
+✔ pinned Wrangler current bookmark preserves JSON output and invokes Node without a shell (0.279622ms)
+✔ pinned Wrangler command failures redact stdout, stderr, command text and tokens (0.778204ms)
+✔ successful Wrangler invocation with empty stdout has a distinct safe diagnostic (0.457229ms)
+✔ Wrangler malformed JSON and non-object shapes fail without echoing output (1.277507ms)
+✔ missing or unreadable pinned installation aborts before executing Wrangler (0.219692ms)
+✔ an unpinned Wrangler version aborts before authentication or execution (0.140742ms)
+[Maono HTTP error] {
+  correlationId: '0100f846-3659-406f-8d77-3157a43367ff',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE returns a retention conflict for event author protected against SET NULL, preserving the whole batch; deactivation still works (57.735314ms)
+[Maono HTTP error] {
+  correlationId: '974d4ec2-bce7-4e7c-bfaa-345b9de86f6e',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE returns a retention conflict for ticket auditor protected against SET NULL, preserving the whole batch; deactivation still works (25.525481ms)
+[Maono HTTP error] {
+  correlationId: '2805e939-1e78-4f1d-9f4e-00b6d788d577',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE returns a retention conflict for command actor protected by its restrictive foreign key, preserving the whole batch; deactivation still works (32.701014ms)
+[Maono HTTP error] {
+  correlationId: 'bc36b031-308c-46df-ad28-4872644382fa',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE recognizes a wrapped D1 append-only cause after rollback (29.251931ms)
+✔ admin DELETE keeps ordinary deletion available when the target has no retained Ticket history (26.011874ms)
+[Maono HTTP error] {
+  correlationId: 'f2eecc9c-2fb5-4140-bf8e-c68745990e00',
+  code: 'ERR_SQLITE_ERROR',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 500
+}
+✔ an unrelated foreign-key failure is not mislabeled as Ticket history retention (27.385136ms)
+✔ cinco estados conservados: reabertura não aparece como PATCH livre de status (1.457228ms)
+✔ avançar exige responsável e próxima ação; revisão exige evidência, retorno exige motivo (0.226952ms)
+✔ fechamento exige resultado, evidência e comunicação em todos outcomes, inclusive sem execução (0.50385ms)
+✔ espera é comando independente, requer responsável, não muda estado nem configura SLA (0.61697ms)
+✔ reabrir exige motivo e próximo passo e não reenvia fechamento ou histórico anterior (0.313303ms)
+✔ limites coincidem com comandos sem truncar campos silenciosamente (0.27816ms)
+✔ rascunho sujo conserva token core original após reload e conflito; nova identidade nunca herda token (0.214143ms)
+✔ resposta perdida repete intenção e payload congelados sem gerar chave nova ou incorporar edições (0.297269ms)
+✔ incerteza nunca autoriza nova intenção por erro posterior de sessão; apenas rejeição inicial definitiva (0.431461ms)
+✔ HTTP create requires a key and persists one success audit through replay (56.425018ms)
+✔ HTTP state owns its ETag; list, detail and state GET perform no DML after cutover (55.992475ms)
+[Maono ticket center][30b8e8b4-ee1a-4fef-a641-d5aff9cfd90a][TICKET_COMMANDS_DISABLED] Error: Este fluxo de atendimento ainda não está habilitado. Recarregue a Central.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:108:44)
+    at onRequestPost (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets.js:104:13)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:74:17)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_DISABLED',
+  publicMessage: 'Este fluxo de atendimento ainda não está habilitado. Recarregue a Central.'
+}
+✔ HTTP retry after disabling commands cannot fall through to non-idempotent legacy creation (31.940306ms)
+✔ HTTP mutation rejects missing and stale validators with no successful audit or side effects (55.917151ms)
+[Maono ticket center][40683c03-ce41-4a03-ba39-d02fdd7f0e5b][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async onRequestGet (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets.js:59:7)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+[Maono ticket center][93567ebf-8295-406c-b403-bbd11cfadeba][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async onRequestGet (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets/%5BticketId%5D.js:69:7)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+[Maono ticket center][2b492672-9ac7-4bbb-8aad-c0d5eb513123][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async authorize (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-command-http.js:23:3)
+    at async ticketCommandStateResponse (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-command-http.js:32:5)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+✔ HTTP GET fails closed on a new legacy source row without importing it (37.345915ms)
+✔ HTTP authorization denies cross-organization reads and viewer commands before mutation (27.385557ms)
+✔ HTTP correction scopes the event from the route and preserves the original event (34.876485ms)
+✔ CT-07: create replay returns its persisted result after later edits, without duplicating durable records (60.747302ms)
+✔ CT-07: parallel retries with the same key persist one creation and return the same result (20.303855ms)
+✔ CT-08: a divergent payload conflicts within its key scope, while actors and tenants remain independent (29.302869ms)
+✔ creation requires an idempotency key before any persistent effect (20.472619ms)
+✔ CT-09: absent, stale and foreign If-Match validators reject updates without events, audit or outbox (39.35162ms)
+✔ CT-09: a competing command between server read and batch wins once; the losing CAS creates no records (26.411668ms)
+✔ an isolated next-action edit uses CAS and records one command without changing status or triage (25.653293ms)
+✔ flag-off remains compatible with CC-02 on the schema before 0026 (11.210389ms)
+✔ flag-on fails closed with missing schema, without compatibility writes (10.060985ms)
+✔ flag-on fails closed with missing marker, without compatibility writes (18.250357ms)
+✔ commands remain unavailable if the prerequisite triage flag is disabled (15.981525ms)
+✔ a marker with running cannot enable commands or trigger compatibility writes (16.294067ms)
+✔ a marker with failed cannot enable commands or trigger compatibility writes (17.393164ms)
+✔ a marker with pending rows cannot enable commands or trigger compatibility writes (16.351153ms)
+✔ a marker with skipped rows cannot enable commands or trigger compatibility writes (20.571919ms)
+✔ a marker with missing completion cannot enable commands or trigger compatibility writes (16.194306ms)
+✔ a new eligible legacy row invalidates a ready marker until explicit backfill reconciles it (25.314713ms)
+✔ CT-06: closure requires outcome, result and communication; reopening preserves the prior closed cycle (42.01316ms)
+✔ CT-06: state path enforces triage, assignment, next action, review evidence and return justification (42.666625ms)
+▶ CT-06: transition matrix from new, with reopening kept as an explicit command
+  ✔ new -> new (20.575594ms)
+  ✔ new -> open (18.248414ms)
+  ✔ new -> in_progress (37.315394ms)
+  ✔ new -> in_review (19.580904ms)
+  ✔ new -> closed (19.858152ms)
+✔ CT-06: transition matrix from new, with reopening kept as an explicit command (116.506721ms)
+▶ CT-06: transition matrix from open, with reopening kept as an explicit command
+  ✔ open -> new (21.890418ms)
+  ✔ open -> open (20.789568ms)
+  ✔ open -> in_progress (28.856555ms)
+  ✔ open -> in_review (19.656769ms)
+  ✔ open -> closed (19.596748ms)
+✔ CT-06: transition matrix from open, with reopening kept as an explicit command (111.435922ms)
+▶ CT-06: transition matrix from in_progress, with reopening kept as an explicit command
+  ✔ in_progress -> new (22.134396ms)
+  ✔ in_progress -> open (25.017775ms)
+  ✔ in_progress -> in_progress (21.372116ms)
+  ✔ in_progress -> in_review (22.251893ms)
+  ✔ in_progress -> closed (22.222059ms)
+✔ CT-06: transition matrix from in_progress, with reopening kept as an explicit command (113.889242ms)
+▶ CT-06: transition matrix from in_review, with reopening kept as an explicit command
+  ✔ in_review -> new (25.891633ms)
+  ✔ in_review -> open (26.044624ms)
+  ✔ in_review -> in_progress (23.275617ms)
+  ✔ in_review -> in_review (21.715635ms)
+  ✔ in_review -> closed (24.247614ms)
+✔ CT-06: transition matrix from in_review, with reopening kept as an explicit command (121.946956ms)
+▶ CT-06: transition matrix from closed, with reopening kept as an explicit command
+  ✔ closed -> new (18.478301ms)
+  ✔ closed -> open (19.379841ms)
+  ✔ closed -> in_progress (19.675256ms)
+  ✔ closed -> in_review (18.730402ms)
+  ✔ closed -> closed (18.627717ms)
+✔ CT-06: transition matrix from closed, with reopening kept as an explicit command (95.719997ms)
+✔ CT-06: waiting records responsible person, dates and reasons independently of status or SLA (34.609503ms)
+✔ state ETag excludes event/attachment aggregates but changes when a legacy writer updates a core field (19.383487ms)
+✔ CT-49: past events and ticket audit cannot be edited/deleted; scoped correction appends a new event (23.414087ms)
+▶ CT-10: create rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/8 (15.351446ms)
+  ✔ statement 2/8 (15.178584ms)
+  ✔ statement 3/8 (15.559288ms)
+  ✔ statement 4/8 (15.198705ms)
+  ✔ statement 5/8 (15.32811ms)
+  ✔ statement 6/8 (17.667969ms)
+  ✔ statement 7/8 (16.068987ms)
+  ✔ statement 8/8 (17.29736ms)
+✔ CT-10: create rolls back at every transaction statement, including mandatory audit and outbox (143.613076ms)
+▶ CT-10: update rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/5 (18.645173ms)
+  ✔ statement 2/5 (17.629311ms)
+  ✔ statement 3/5 (20.592611ms)
+  ✔ statement 4/5 (17.59588ms)
+  ✔ statement 5/5 (18.968671ms)
+✔ CT-10: update rolls back at every transaction statement, including mandatory audit and outbox (111.851139ms)
+▶ CT-10: close rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/7 (18.353493ms)
+  ✔ statement 2/7 (20.847224ms)
+  ✔ statement 3/7 (17.349218ms)
+  ✔ statement 4/7 (17.076867ms)
+  ✔ statement 5/7 (18.096515ms)
+  ✔ statement 6/7 (16.994823ms)
+  ✔ statement 7/7 (19.12061ms)
+✔ CT-10: close rolls back at every transaction statement, including mandatory audit and outbox (146.415493ms)
+▶ CT-10: wait rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/6 (20.290745ms)
+  ✔ statement 2/6 (20.606902ms)
+  ✔ statement 3/6 (19.156074ms)
+  ✔ statement 4/6 (21.47378ms)
+  ✔ statement 5/6 (20.06197ms)
+  ✔ statement 6/6 (18.954089ms)
+✔ CT-10: wait rolls back at every transaction statement, including mandatory audit and outbox (147.962446ms)
+▶ CT-10: reopen rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/6 (21.540781ms)
+  ✔ statement 2/6 (19.6906ms)
+  ✔ statement 3/6 (19.427533ms)
+  ✔ statement 4/6 (21.555322ms)
+  ✔ statement 5/6 (19.807667ms)
+  ✔ statement 6/6 (19.698102ms)
+✔ CT-10: reopen rolls back at every transaction statement, including mandatory audit and outbox (141.93159ms)
+▶ CT-10: correction rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/5 (19.567234ms)
+  ✔ statement 2/5 (19.086218ms)
+  ✔ statement 3/5 (18.049415ms)
+  ✔ statement 4/5 (17.751856ms)
+  ✔ statement 5/5 (18.220032ms)
+✔ CT-10: correction rolls back at every transaction statement, including mandatory audit and outbox (109.626783ms)

@@ -1,0 +1,2 @@
+CC-01: 16 current endpoint contracts; 3 enums; 10 source references; 12 proposed invariants; source/Preview/production separation verified.
+This is source consistency evidence. CT-02 human validation, authenticated QA and release approval remain separate gates.
