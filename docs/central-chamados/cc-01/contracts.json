@@ -1,0 +1,1312 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "sha": "eec3a7a8fa78ab259b5522d3531d3cec942cb63f",
+    "branch": "mano_kepler_v1",
+    "date": "2026-09-25",
+    "evidence": "Leitura estática do checkout. Sem build/teste de produto, consulta D1 remota ou certificação do deploy neste inventário.",
+    "newMigration": false,
+    "productionVerified": false
+  },
+  "actual": {
+    "ticket": {
+      "statuses": [
+        "new",
+        "open",
+        "in_progress",
+        "in_review",
+        "closed"
+      ],
+      "priorities": [
+        "low",
+        "normal",
+        "high"
+      ],
+      "categories": [
+        "map",
+        "database",
+        "permission",
+        "export",
+        "support",
+        "other"
+      ],
+      "statusAliases": {
+        "pending": "open",
+        "progress": "in_progress",
+        "review": "in_review",
+        "resolved": "closed"
+      },
+      "createStatus": "new",
+      "priorityDefault": "normal",
+      "categoryDefault": "support",
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "frontendTypes": "src/pages/Projects/components/ticket-types.ts",
+      "createPayload": {
+        "subject": {
+          "type": "string",
+          "required": true,
+          "maxLength": 160,
+          "alias": "title"
+        },
+        "description": {
+          "type": "string",
+          "required": true,
+          "maxLength": 5000,
+          "alias": "body"
+        },
+        "priority": {
+          "type": "TicketPriority",
+          "default": "normal"
+        },
+        "category": {
+          "type": "TicketCategory",
+          "default": "support"
+        },
+        "dueAt": {
+          "type": "parseable date|string|null",
+          "normalization": "ISO UTC ou null"
+        },
+        "assignedTo": {
+          "type": "positive integer|string|null",
+          "constraint": "usuário ativo membro da organização; null/vazio sem responsável"
+        }
+      },
+      "patchPayload": {
+        "fields": [
+          "subject",
+          "description",
+          "status",
+          "priority",
+          "category",
+          "dueAt",
+          "assignedTo"
+        ],
+        "behavior": "campos presentes validados; desconhecidos ignorados; nenhum campo válido gera EMPTY_PATCH; sem version/If-Match",
+        "authorization": "ticket.manage"
+      },
+      "publicFields": [
+        "id",
+        "organizationId",
+        "code",
+        "subject",
+        "description",
+        "status",
+        "priority",
+        "category",
+        "dueAt",
+        "closedAt",
+        "createdAt",
+        "updatedAt",
+        "createdBy",
+        "assignedTo",
+        "attachmentsCount"
+      ],
+      "missingInCurrentContract": [
+        "demandNature",
+        "expectedResult",
+        "impact",
+        "urgency",
+        "waitIntervals",
+        "cycles",
+        "version",
+        "SLA policy",
+        "message composer/endpoint",
+        "private-ticket ACL"
+      ]
+    },
+    "endpoints": [
+      {
+        "id": "ACT-HTTP-01",
+        "method": "GET",
+        "path": "/api/organizations/:id/tickets",
+        "sourceFile": "functions/api/organizations/[id]/tickets.js",
+        "handler": "onRequestGet",
+        "permission": "ticket.view",
+        "request": {
+          "query": [
+            "q",
+            "status",
+            "priority",
+            "assigneeId",
+            "from",
+            "to",
+            "overdueOnly",
+            "sort",
+            "page",
+            "limit",
+            "includeUndated"
+          ],
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok,tickets,pagination,facets,range,assignees,attachmentLimits}"
+        },
+        "errorCodes": [
+          "INVALID_STATUS",
+          "INVALID_PRIORITY",
+          "INVALID_ASSIGNEE",
+          "INVALID_DATE",
+          "FIELD_TOO_LONG"
+        ],
+        "notes": [
+          "GET chama migrateLegacyTickets e pode gravar legado.",
+          "Facetas usam os filtros, exceto status; intervalo é due_at em UTC."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-02",
+        "method": "POST",
+        "path": "/api/organizations/:id/tickets",
+        "sourceFile": "functions/api/organizations/[id]/tickets.js",
+        "handler": "onRequestPost",
+        "permission": "ticket.create",
+        "request": {
+          "contentType": "application/json",
+          "body": "CreateTicketPayload"
+        },
+        "response": {
+          "status": [
+            201
+          ],
+          "shape": "{ok:true,ticket:Ticket}"
+        },
+        "errorCodes": [
+          "REQUIRED_FIELD",
+          "FIELD_TOO_LONG",
+          "INVALID_PRIORITY",
+          "INVALID_CATEGORY",
+          "INVALID_DATE",
+          "INVALID_ASSIGNEE",
+          "ASSIGNEE_NOT_IN_ORGANIZATION",
+          "TICKET_RATE_LIMITED"
+        ],
+        "notes": [
+          "Não lê Idempotency-Key neste fluxo.",
+          "Insere new; código TKT- com id preenchido até seis dígitos; mutação/evento/auditoria sequenciais."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-03",
+        "method": "GET",
+        "path": "/api/organizations/:id/tickets/:ticketId",
+        "sourceFile": "functions/api/organizations/[id]/tickets/[ticketId].js",
+        "handler": "onRequestGet",
+        "permission": "ticket.view",
+        "request": {
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok,ticket,attachments,events,assignees,attachmentLimits,changeRequest}",
+          "headers": {
+            "Cache-Control": "private, no-store"
+          }
+        },
+        "errorCodes": [
+          "TICKET_NOT_FOUND"
+        ],
+        "notes": [
+          "GET também pode importar legado.",
+          "changeRequest null sem tabela/vínculo ou autorização de Review; link não autoriza.",
+          "Eventos limitados aos 200 mais recentes no helper."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-04",
+        "method": "PATCH",
+        "path": "/api/organizations/:id/tickets/:ticketId",
+        "sourceFile": "functions/api/organizations/[id]/tickets/[ticketId].js",
+        "handler": "onRequestPatch",
+        "permission": "ticket.manage",
+        "request": {
+          "contentType": "application/json",
+          "body": "UpdateTicketPayload"
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,ticket:Ticket}"
+        },
+        "errorCodes": [
+          "TICKET_NOT_FOUND",
+          "EMPTY_PATCH",
+          "REQUIRED_FIELD",
+          "FIELD_TOO_LONG",
+          "INVALID_STATUS",
+          "INVALID_PRIORITY",
+          "INVALID_CATEGORY",
+          "INVALID_DATE",
+          "INVALID_ASSIGNEE",
+          "ASSIGNEE_NOT_IN_ORGANIZATION"
+        ],
+        "notes": [
+          "Não exige If-Match/version; valida status-alvo, sem matriz origem/destino.",
+          "closed_at é preenchido ao fechar e limpo ao sair de closed.",
+          "Não verifica CR vinculado para autorizar transição."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-05",
+        "method": "GET",
+        "path": "/api/organizations/:id/tickets/:ticketId/attachments",
+        "sourceFile": "functions/api/organizations/[id]/tickets/[ticketId]/attachments.js",
+        "handler": "onRequestGet",
+        "permission": "ticket.view",
+        "request": {
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,attachments:TicketAttachment[]}"
+        },
+        "errorCodes": [
+          "TICKET_NOT_FOUND"
+        ],
+        "notes": [
+          "Retorna somente ACTIVE não apagados, no escopo organização/ticket."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-06",
+        "method": "POST",
+        "path": "/api/organizations/:id/tickets/:ticketId/attachments",
+        "sourceFile": "functions/api/organizations/[id]/tickets/[ticketId]/attachments.js",
+        "handler": "onRequestPost",
+        "permission": "ticket.view AND (ticket.create OR ticket.manage)",
+        "request": {
+          "variants": [
+            {
+              "contentType": "application/json",
+              "body": {
+                "name": "string; fileName aceito como alias",
+                "mimeType": "string; type aceito como alias",
+                "size": "inteiro positivo até 83886080"
+              }
+            },
+            {
+              "contentType": "multipart/form-data",
+              "body": {
+                "file": "File até 10485760 bytes"
+              }
+            }
+          ]
+        },
+        "response": {
+          "status": [
+            201
+          ],
+          "variants": [
+            "{ok:true,attachment,upload:{attachmentId,offset:0,chunkSize,size}}",
+            "{ok:true,attachment}"
+          ]
+        },
+        "errorCodes": [
+          "ATTACHMENT_UPLOAD_FORBIDDEN",
+          "TICKET_CLOSED",
+          "ATTACHMENT_COUNT_LIMIT",
+          "ATTACHMENT_TOTAL_LIMIT",
+          "ATTACHMENT_TYPE_NOT_ALLOWED",
+          "ATTACHMENT_MIME_NOT_ALLOWED",
+          "ATTACHMENT_SIGNATURE_INVALID",
+          "ATTACHMENT_EMPTY",
+          "ATTACHMENT_TOO_LARGE",
+          "ATTACHMENT_FORM_INVALID",
+          "ATTACHMENT_REQUIRED",
+          "ATTACHMENT_CHUNK_UPLOAD_REQUIRED",
+          "TICKET_RATE_LIMITED",
+          "ATTACHMENT_UPLOAD_SESSION_INVALID"
+        ],
+        "notes": [
+          "Sessão exige storage READY; multipart faz upload completo e assinatura.",
+          "Início em partes valida metadados e reserva PENDING após checar capacidade; não é reserva atômica.",
+          "MIME application/octet-stream tem tolerância no caminho JSON que não é idêntica ao multipart."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-07",
+        "method": "PATCH",
+        "path": "/api/organizations/:id/tickets/:ticketId/attachments/:attachmentId",
+        "sourceFile": "functions/api/organizations/[id]/tickets/[ticketId]/attachments/[attachmentId].js",
+        "handler": "onRequestPatch",
+        "permission": "ticket.view AND (ticket.create OR ticket.manage) AND dono da sessão",
+        "request": {
+          "contentType": "application/octet-stream",
+          "headers": {
+            "Upload-Offset": "inteiro >=0; cliente envia; parser atual Number(null) aceita 0 quando ausente"
+          },
+          "body": "bytes; 1..8388608 por chunk"
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,attachment:TicketAttachment|null,offset:number,complete:boolean}"
+        },
+        "errorCodes": [
+          "TICKET_CLOSED",
+          "ATTACHMENT_UPLOAD_NOT_FOUND",
+          "ATTACHMENT_UPLOAD_FORBIDDEN",
+          "ATTACHMENT_UPLOAD_OFFSET_INVALID",
+          "ATTACHMENT_UPLOAD_OFFSET_MISMATCH",
+          "ATTACHMENT_CHUNK_EMPTY",
+          "ATTACHMENT_CHUNK_TOO_LARGE",
+          "ATTACHMENT_UPLOAD_SIZE_MISMATCH",
+          "ATTACHMENT_SIGNATURE_INVALID",
+          "ATTACHMENT_UPLOAD_SESSION_INVALID"
+        ],
+        "notes": [
+          "Assinatura verificada no primeiro chunk; offset salvo em dropbox_rev enquanto PENDING.",
+          "Erro de offset possui expectedOffset internamente, mas serializador Ticket não expõe campo estruturado extra.",
+          "Não há endpoint HEAD atual nem retomada persistida no cliente; não alegar conformidade tus."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-08",
+        "method": "DELETE",
+        "path": "/api/organizations/:id/tickets/:ticketId/attachments/:attachmentId",
+        "sourceFile": "functions/api/organizations/[id]/tickets/[ticketId]/attachments/[attachmentId].js",
+        "handler": "onRequestDelete",
+        "permission": "ticket.view AND (ticket.manage OR autor elegível do anexo)",
+        "request": {
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,deleted:true}"
+        },
+        "errorCodes": [
+          "TICKET_NOT_FOUND",
+          "ATTACHMENT_NOT_FOUND",
+          "ATTACHMENT_DELETE_FORBIDDEN"
+        ],
+        "notes": [
+          "Autor pode cancelar seu PENDING mesmo em ticket fechado; remover ACTIVE próprio apenas enquanto aberto.",
+          "Gestor pode remover ACTIVE fechado; exclusão ACTIVE exige storage READY.",
+          "PENDING vira FAILED; ACTIVE vira DELETED; segunda exclusão não é comprovadamente idempotente e pode retornar 404."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-09",
+        "method": "GET",
+        "path": "/api/organizations/:id/tickets/:ticketId/attachments/:attachmentId/download",
+        "sourceFile": "functions/api/organizations/[id]/tickets/[ticketId]/attachments/[attachmentId]/download.js",
+        "handler": "onRequestGet",
+        "permission": "ticket.view",
+        "request": {
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "stream binário",
+          "headers": "fileDownloadHeaders: Content-Type, Content-Disposition attachment e Cache-Control private/no-store"
+        },
+        "errorCodes": [
+          "TICKET_NOT_FOUND",
+          "ATTACHMENT_NOT_FOUND"
+        ],
+        "notes": [
+          "Exige ACTIVE e storage READY; verifica organização/ticket/anexo e registra download na auditoria."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-10",
+        "method": "GET",
+        "path": "/api/projects/:slug/change-requests",
+        "sourceFile": "functions/api/projects/[slug]/change-requests.js",
+        "handler": "onRequestGet",
+        "permission": "sessão + projeto autorizado + project.view + filtro requested_by_user_id",
+        "request": {
+          "query": [
+            "limit"
+          ],
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,items:ProjectChangeRequest[]}"
+        },
+        "errorCodes": [
+          "PROJECT_NOT_FOUND",
+          "PROJECT_VIEW_FORBIDDEN",
+          "PROJECT_CHANGE_REQUEST_SCHEMA_OUTDATED"
+        ],
+        "notes": [
+          "Lista próprias solicitações; limite padrão50, clamp1..100; não é inbox geral."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-11",
+        "method": "POST",
+        "path": "/api/projects/:slug/change-requests",
+        "sourceFile": "functions/api/projects/[slug]/change-requests.js",
+        "handler": "onRequestPost",
+        "permission": "sessão + projeto autorizado + project.view + rota efetiva Viewer",
+        "request": {
+          "contentType": "application/json",
+          "headers": {
+            "Idempotency-Key": "obrigatória; máximo200 caracteres"
+          },
+          "body": {
+            "baseRevision": "inteiro >=0",
+            "reason": "texto obrigatório até2000",
+            "operations": "1..100 operações tipadas; cada JSON normalizado até262144 bytes"
+          }
+        },
+        "response": {
+          "status": [
+            200,
+            201
+          ],
+          "shape": "{ok:true,replayed:boolean,changeRequest:ProjectChangeRequest}"
+        },
+        "errorCodes": [
+          "PROJECT_NOT_FOUND",
+          "PROJECT_VIEW_FORBIDDEN",
+          "CHANGE_REQUEST_VIEWER_ROUTE_REQUIRED",
+          "CHANGE_REQUEST_FIELD_REQUIRED",
+          "CHANGE_REQUEST_FIELD_TOO_LONG",
+          "CHANGE_REQUEST_BASE_REVISION_INVALID",
+          "CHANGE_REQUEST_OPERATION_COUNT_INVALID",
+          "CHANGE_REQUEST_OPERATION_INVALID",
+          "CHANGE_REQUEST_OPERATION_UNSUPPORTED",
+          "CHANGE_REQUEST_OPERATION_VERSION_UNSUPPORTED",
+          "CHANGE_REQUEST_OPERATION_TOO_LARGE",
+          "CHANGE_REQUEST_IDEMPOTENCY_KEY_REUSED",
+          "PROJECT_CHANGE_REQUEST_SCHEMA_OUTDATED"
+        ],
+        "notes": [
+          "Rota chama submitAnalysisAwareProjectChangeRequest, não apenas o registro base de operações.",
+          "Valida operações de análise/lifecycle/visualização/mutação persistente nos módulos próprios; não executar código arbitrário.",
+          "Criação CR+ticket+operações em batch; idempotência já existe aqui, diferente do POST Ticket."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-12",
+        "method": "GET",
+        "path": "/api/projects/:slug/change-requests/:id",
+        "sourceFile": "functions/api/projects/[slug]/change-requests/[id].js",
+        "handler": "onRequest",
+        "permission": "sessão + projeto autorizado + project.view + autor da CR",
+        "request": {
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,changeRequest:ProjectChangeRequest com operations}"
+        },
+        "errorCodes": [
+          "PROJECT_NOT_FOUND",
+          "PROJECT_VIEW_FORBIDDEN",
+          "CHANGE_REQUEST_NOT_FOUND",
+          "PROJECT_CHANGE_REQUEST_SCHEMA_OUTDATED"
+        ],
+        "notes": [
+          "Não substitui endpoint Review de editor."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-13",
+        "method": "GET",
+        "path": "/api/projects/:slug/change-requests/:id/review",
+        "sourceFile": "functions/api/projects/[slug]/change-requests/[id]/review.js",
+        "handler": "onRequestGet",
+        "permission": "project.view + rota Editor + project.map.edit",
+        "request": {
+          "body": null
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,review:workspace}",
+          "headers": {
+            "Cache-Control": "private, no-store, max-age=0",
+            "Pragma": "no-cache",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+            "X-Request-Id": "id da requisição"
+          }
+        },
+        "errorCodes": [
+          "PROJECT_NOT_FOUND",
+          "PROJECT_VIEW_FORBIDDEN",
+          "CHANGE_REQUEST_REVIEW_FORBIDDEN",
+          "PROJECT_CHANGE_REQUEST_SCHEMA_OUTDATED"
+        ],
+        "notes": [
+          "canApply é calculado via project.save; GET não concede permissão."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-14",
+        "method": "POST",
+        "path": "/api/projects/:slug/change-requests/:id/review",
+        "sourceFile": "functions/api/projects/[slug]/change-requests/[id]/review.js",
+        "handler": "onRequestPost",
+        "permission": "project.view + rota Editor + project.map.edit",
+        "request": {
+          "contentType": "application/json",
+          "body": {
+            "action": "start|approve|reject",
+            "comment": "motivo obrigatório em reject"
+          }
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,review:workspace}",
+          "headers": "mesmos headers privados de GET Review"
+        },
+        "errorCodes": [
+          "PROJECT_VIEW_FORBIDDEN",
+          "CHANGE_REQUEST_REVIEW_FORBIDDEN",
+          "CHANGE_REQUEST_REJECTION_REASON_REQUIRED",
+          "CHANGE_REQUEST_REVIEW_STATE_CONFLICT"
+        ],
+        "notes": [
+          "approve verifica conflito de revisão e ensureApproved; reject aceita submitted/under_review; transição usa condição de estado.",
+          "Comentários/decisões no Ticket são best-effort; não há conversa geral de Ticket."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-15",
+        "method": "POST",
+        "path": "/api/projects/:slug/change-requests/:id/apply",
+        "sourceFile": "functions/api/projects/[slug]/change-requests/[id]/apply.js",
+        "handler": "onRequest",
+        "permission": "project.view + rota Editor + project.map.edit + project.save",
+        "request": {
+          "body": "rota não lê body; projeto/CR vêm do path"
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,appliedRevision:number,idempotent:boolean,projectIdentity:object|null,review:workspace}"
+        },
+        "errorCodes": [
+          "PROJECT_VIEW_FORBIDDEN",
+          "CHANGE_REQUEST_REVIEW_FORBIDDEN",
+          "CHANGE_REQUEST_APPLY_FORBIDDEN",
+          "CHANGE_REQUEST_REVIEW_STATE_CONFLICT"
+        ],
+        "notes": [
+          "Apply pode chamar ensureApproved; não confundir com aprovação via vínculo.",
+          "Revisão base é materializada/parsing integral no helper atual; retry applied usa revisão corrente do projeto.",
+          "Erros de conflito/storage/base/validação adicionais dependem dos helpers; catálogo aqui é recorte essencial, não enum exaustivo."
+        ]
+      },
+      {
+        "id": "ACT-HTTP-16",
+        "method": "GET",
+        "path": "/api/projects/:slug/change-requests/inbox",
+        "sourceFile": "functions/api/projects/[slug]/change-requests/inbox.js",
+        "handler": "onRequest",
+        "permission": "project.view + rota Editor + project.map.edit",
+        "request": {
+          "query": {
+            "status": "pending (padrão)|all|estadoCR",
+            "page": "inteiro1..10000 (padrão1)",
+            "limit": "inteiro1..100 (padrão25)"
+          }
+        },
+        "response": {
+          "status": [
+            200
+          ],
+          "shape": "{ok:true,project,items,pagination:{page,limit,hasMore}}",
+          "headers": {
+            "Cache-Control": "private, no-store"
+          }
+        },
+        "errorCodes": [
+          "CHANGE_REQUEST_INBOX_INVALID_OPTIONS",
+          "CHANGE_REQUEST_REVIEW_FORBIDDEN",
+          "PROJECT_VIEW_FORBIDDEN"
+        ],
+        "notes": [
+          "Consulta limit+1; pending=submitted/under_review/approved/applying; não traz payload completo de operação."
+        ]
+      }
+    ],
+    "listContract": {
+      "searchMaxCharacters": 160,
+      "searchFields": [
+        "code",
+        "subject",
+        "description"
+      ],
+      "sort": [
+        "updated_desc",
+        "updated_asc",
+        "due_asc",
+        "priority_desc"
+      ],
+      "pageDefault": 1,
+      "limitDefault": 50,
+      "limitMax": 100,
+      "assigneeSpecialValue": "unassigned",
+      "dateField": "due_at",
+      "fromBoundary": "T00:00:00.000Z",
+      "toBoundary": "T23:59:59.999Z",
+      "facets": "todos os filtros exceto status",
+      "pagination": "OFFSET/LIMIT; due_asc e priority_desc não têm id como desempate final",
+      "rateLimit": "10 tickets e20 inícios de anexo por usuário/organização por10min; verificação por COUNT anterior à escrita",
+      "sourceFile": "functions/_lib/ticket-center.js"
+    },
+    "attachments": {
+      "maxFiles": 5,
+      "maxFileBytes": 83886080,
+      "maxTicketBytes": 157286400,
+      "chunkBytes": 8388608,
+      "multipartMaxBytes": 10485760,
+      "pendingTtlMs": 7200000,
+      "extensions": [
+        "pdf",
+        "png",
+        "jpg",
+        "jpeg",
+        "webp",
+        "csv",
+        "xls",
+        "xlsx",
+        "zip",
+        "docx",
+        "txt"
+      ],
+      "states": [
+        "PENDING",
+        "ACTIVE",
+        "FAILED",
+        "DELETED"
+      ],
+      "capacityStates": [
+        "ACTIVE",
+        "PENDING"
+      ],
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "notes": [
+        "Limites são MiB embora mensagens atuais usem MB.",
+        "TTL aplicado durante próxima checagem de capacidade, não comprovadamente por job.",
+        "Sessão/offset sobrecarregam dropbox_file_id/dropbox_rev enquanto PENDING.",
+        "XHR tem cancelamento e progresso até99;100 após confirmação final, sem timeout explícito no helper.",
+        "Assinatura não certifica ausência de malware; não há scanner demonstrado neste recorte."
+      ]
+    },
+    "errorEnvelope": {
+      "ticket": {
+        "shape": "{ok:false,error:string,code:string,requestId:string,stage?:string}",
+        "header": "X-Request-Id",
+        "status": "error.status/statusCode entre400..599, senão500",
+        "message5xx": "publicMessage ou texto interno genérico; detalhes internos só log",
+        "sourceFile": "functions/_lib/ticket-center.js"
+      },
+      "reviewApply": {
+        "shape": "{ok:false,error:{code,message,retryable,requestId,details?}}",
+        "sourceFile": "functions/api/projects/[slug]/change-requests/[id]/review.js"
+      },
+      "common": [
+        "sessão autenticada exigida via requireSession",
+        "FORBIDDEN403 para negação do motor",
+        "IDs positivos e JSON válido pelos helpers organizations",
+        "método não permitido405 com Allow",
+        "TICKET_CENTER_SCHEMA_OUTDATED503 quando tabelas Ticket ausentes",
+        "erro storage readiness pode vir do helper compartilhado"
+      ],
+      "nonExhaustive": true
+    },
+    "authorization": {
+      "sourceFile": "functions/_lib/permissions.js",
+      "catalog": [
+        "ticket.view",
+        "ticket.create",
+        "ticket.comment",
+        "ticket.manage",
+        "ticket.close",
+        "ticket.assign"
+      ],
+      "effectiveChecks": [
+        "ticket.view",
+        "ticket.create",
+        "ticket.manage"
+      ],
+      "notGranularInPatch": [
+        "ticket.comment",
+        "ticket.close",
+        "ticket.assign"
+      ],
+      "evaluationOrder": [
+        "validar usuário/permissão/contexto",
+        "super_admin retorna allow antes das negações de usuário",
+        "demais perfis exigem organização de contexto igual à ativa",
+        "negação explícita precede grant para não-super_admin",
+        "relação organizacional+permissões nativas/configuradas/explícitas",
+        "handlers validam identidade completa do recurso"
+      ],
+      "roleMatrix": [
+        {
+          "role": "super_admin",
+          "current": "can() permite todas as capacidades normalizadas; recursos, schema e estado ainda são validados",
+          "future": "não remover acesso global nativo por inferência; ações sensíveis auditadas; grants globais delegados são escopo separado"
+        },
+        {
+          "role": "admin",
+          "current": "membro da organização ativa tem permissões nativas OWNER_ORGANIZATION_PERMISSIONS, incluindo seis ticket.*; negação explícita prevalece",
+          "future": "capacidade por ação mais ACL por objeto/audiência; governança de privados explícita"
+        },
+        {
+          "role": "owner",
+          "current": "exige relação isOwner na organização ativa; permissões nativas ticket.*; negação explícita prevalece",
+          "future": "não tornar ticket.manage bypass implícito de privado; eventual exceção exige política explícita"
+        },
+        {
+          "role": "editor",
+          "current": "membro da ativa; view/create via grant configurado/explícito (0010 semeia role); management requer grant explícito; negar explícito prevalece",
+          "future": "atendente não é novo role obrigatório; responde/atribui/fecha conforme capacidade e ACL"
+        },
+        {
+          "role": "viewer",
+          "current": "membro da ativa; grant explícito/configurado pode permitir; 0010 não semeia Ticket; não afirmar proibição absoluta por role",
+          "future": "solicitante com create/read/comment/reopen_own explicitamente concedidos e audiência adequada"
+        }
+      ],
+      "migrationSeed": {
+        "sourceFile": "migrations/0010_ticket_center.sql",
+        "owner": [
+          "ticket.view",
+          "ticket.create",
+          "ticket.manage"
+        ],
+        "editor": [
+          "ticket.view",
+          "ticket.create"
+        ],
+        "viewer": [],
+        "note": "Seed não substitui can() atual nem prova aplicação no D1."
+      }
+    },
+    "changeRequest": {
+      "sourceFile": "functions/_lib/project-change-requests.js",
+      "statuses": [
+        "submitted",
+        "under_review",
+        "approved",
+        "rejected",
+        "conflict",
+        "applying",
+        "applied",
+        "superseded"
+      ],
+      "technicalScope": "MapConfig de um projeto; operações tipadas estendidas pelo submitAnalysisAwareProjectChangeRequest",
+      "ticketCardinality": "project_change_requests.ticket_id UNIQUE:1:1 atual",
+      "ticketLinkRule": "getTicketReviewLink exige requireReviewerProject; sem autorização retorna null para403/404",
+      "approvalRule": "Apply pode completar aprovação via ensureApproved; não depende de status/vínculo Ticket",
+      "sourceOfTruth": "CR técnico guarda estado e proposta; metadados de decisão completos/applied_revision estável ainda são lacunas do plano",
+      "schemaFile": "migrations/0020_project_change_requests.sql"
+    }
+  },
+  "proposed": {
+    "status": "proposed_not_implemented",
+    "scope": "Especificação para CC02/03/04/08 e integração futura; esta PR somente documenta/prototipa.",
+    "invariants": [
+      {
+        "id": "PROP-INV-01",
+        "pr": "CC-02",
+        "rule": "Preservar cinco estados e seis categorias; natureza é campo separado com cinco valores sem reinterpretar legado automaticamente."
+      },
+      {
+        "id": "PROP-INV-02",
+        "pr": "CC-03",
+        "rule": "Ticket fechado exige resultado/motivo e comunicação verificável; CR aplicado não fecha Ticket automaticamente, e fechar Ticket não cancela/aprova CR."
+      },
+      {
+        "id": "PROP-INV-03",
+        "pr": "CC-03",
+        "rule": "Idempotência da criação Ticket, versão/CAS e transação local são garantias independentes; nenhum evento de alteração quando CAS afeta zero linhas."
+      },
+      {
+        "id": "PROP-INV-04",
+        "pr": "CC-03",
+        "rule": "Reabertura preserva histórico e abre ciclo; espera tem motivo/início/fim/próxima ação e não pausa SLA automaticamente."
+      },
+      {
+        "id": "PROP-INV-05",
+        "pr": "CC-04",
+        "rule": "ACL de objeto e audiência entram antes de lista/facetas/busca/download/notificação/exportação; etiqueta comum nunca concede privilégio."
+      },
+      {
+        "id": "PROP-INV-06",
+        "pr": "CC-04",
+        "rule": "Negação por padrão; concessão administrativa controlada; revisão humana da matriz futura antes de ativar privados; manter regra super_admin explicitamente avaliada."
+      },
+      {
+        "id": "PROP-INV-07",
+        "pr": "CC-08",
+        "rule": "Vincular ou ler Ticket não concede review/Apply/mapa/GeoJSON, gestão de usuários ou grants."
+      },
+      {
+        "id": "PROP-INV-08",
+        "pr": "CC-08",
+        "rule": "map_project tem decisão/revisão/applied_revision canônicas no CR técnico; registro geral só projeta com sequence/version, sem segunda aprovação ou segunda execução."
+      },
+      {
+        "id": "PROP-INV-09",
+        "pr": "CC-08",
+        "rule": "platform/database têm decisão canônica no change_record geral e execução externa por PR/runbook autorizado; nenhum executor arbitrário de SQL/código/grants."
+      },
+      {
+        "id": "PROP-INV-10",
+        "pr": "CC-08",
+        "rule": "Concessão global não cria membership/permissão de projeto; contexto explícito revalida projeto sem alterar organização ativa da sessão."
+      },
+      {
+        "id": "PROP-INV-11",
+        "pr": "CC-08",
+        "rule": "Não portar 0021 intacta: trigger histórico de fechamento em applied conflita com atendimento independente; primeiro verificar ledger/schema e compatibilidade de writers."
+      },
+      {
+        "id": "PROP-INV-12",
+        "pr": "CC-01",
+        "rule": "Nenhuma migration, flag Preview, rollout CR ou promessa SLA é autorizada implicitamente por estes documentos."
+      }
+    ],
+    "ticket": {
+      "preserveStatuses": [
+        "new",
+        "open",
+        "in_progress",
+        "in_review",
+        "closed"
+      ],
+      "demandNatures": [
+        "question_request",
+        "incident",
+        "defect",
+        "improvement_change",
+        "recurring_problem"
+      ],
+      "newFields": [
+        "demandNature",
+        "expectedResult",
+        "impact",
+        "urgency",
+        "priorityReason",
+        "triageAnswers",
+        "version",
+        "visibility",
+        "queueId",
+        "nextAction",
+        "outcomeCode",
+        "outcomeSummary"
+      ],
+      "migrationBackfill": "não inferir natureza; legados ficam não classificados com provenance para triagem",
+      "wait": "atributo/intervalo, não sexto status",
+      "priority": "low/normal/high com impacto+urgência+justificativa; sem SLA numérico pré-fixado"
+    },
+    "http": {
+      "ticketCreation": "Idempotency-Key com organization/actor/operation/fingerprint e resultado durável;422/400 de validação seguir convenção final revisada",
+      "ticketMutation": "ETag forte/If-Match e CAS;412 conflito,428 precondição ausente; código/campo futuros ainda não implantados",
+      "errorEnvelope": "evoluir sem romper formatos atuais; cliente deve aceitar Ticket e Review/Apply durante compatibilidade",
+      "reads": "retirar DML legado do GET só após job de backfill idempotente e reconciliação",
+      "notImplementedRoutes": [
+        "/api/organizations/:id/tickets/:ticketId/transitions",
+        "/api/organizations/:id/tickets/:ticketId/waits",
+        "/api/organizations/:id/tickets/:ticketId/reopen",
+        "/api/organizations/:id/tickets/:ticketId/messages",
+        "/api/organizations/:id/tickets/:ticketId/access",
+        "/api/organizations/:id/change-records"
+      ]
+    },
+    "actionMatrix": [
+      {
+        "action": "listar/ler Ticket",
+        "current": "ticket.view organizacional",
+        "future": "ticket.view + ACL item; filtros de dados antes de contagem"
+      },
+      {
+        "action": "abrir Ticket",
+        "current": "ticket.create; recebe new",
+        "future": "ticket.create + triagem progressiva e idempotência; não conceder read de tudo"
+      },
+      {
+        "action": "editar atributos",
+        "current": "ticket.manage",
+        "future": "ticket.manage + ACL de edição + If-Match"
+      },
+      {
+        "action": "atribuir",
+        "current": "PATCH exige ticket.manage",
+        "future": "ticket.assign + ACL + responsável/grupo autorizado; revogar alcance anterior quando necessário"
+      },
+      {
+        "action": "responder/nota",
+        "current": "ticket.comment catalogada; endpoint/compositor não implementados",
+        "future": "ticket.comment + ACL; audiência response/internal explícita; nota não é respostaSLA"
+      },
+      {
+        "action": "fechar",
+        "current": "PATCH exige ticket.manage; status-alvo validado",
+        "future": "ticket.close + ACL + resultado/motivo/comunicação; bloqueio independente de CR"
+      },
+      {
+        "action": "reabrir",
+        "current": "PATCH ticket.manage limpa closed_at ao sair de closed",
+        "future": "ticket.reopen_own proposta para autor ou capacidade de gestão aprovada; motivo+novo ciclo"
+      },
+      {
+        "action": "anexar/baixar/remover",
+        "current": "ACT-HTTP-05..09",
+        "future": "ACL ticket/mensagem/audiência mais ação; manter limites e autor/estado; reserva atômica emCC06"
+      },
+      {
+        "action": "gerir ACL/etiqueta de acesso",
+        "current": "sem objeto privado/policy específico encontrado",
+        "future": "capacidade administrativa distinta e auditada; etiqueta comum apenas classifica"
+      },
+      {
+        "action": "revisar mudança de mapa",
+        "current": "project.view + rota Editor + project.map.edit",
+        "future": "mesmos gates de projeto; decisão canônica no CR; projeção geral não decide"
+      },
+      {
+        "action": "aplicar mapa",
+        "current": "review + project.save; ensureApproved pode aprovar durante Apply",
+        "future": "aprovação explícita e Apply auditáveis; atalho combinado somente com duas ações claras; pipeline grande e revisão estável"
+      },
+      {
+        "action": "revisar mudança plataforma/banco",
+        "current": "sem registro genérico executável encontrado",
+        "future": "change_record.read/create/link/review/decide/manage por organização+ACL; entrega por PR/runbook com autorização própria"
+      },
+      {
+        "action": "ver painel global",
+        "current": "painel não implementado; /admin super_admin-only",
+        "future": "concessão exclusiva de super_admin, revogável, sem promover role nem herdar direitos de projeto"
+      }
+    ],
+    "transitions": [
+      {
+        "from": "new",
+        "to": "open",
+        "guard": "triagem, fila/responsável, prioridade justificada e próximo passo"
+      },
+      {
+        "from": "open",
+        "to": "in_progress",
+        "guard": "trabalho assumido, ação definida, WIP conforme política"
+      },
+      {
+        "from": "in_progress",
+        "to": "open",
+        "guard": "redistribuição justificada e próximo responsável/fila"
+      },
+      {
+        "from": "in_progress",
+        "to": "in_review",
+        "guard": "resultado/evidência e pessoa que verifica"
+      },
+      {
+        "from": "in_review",
+        "to": "in_progress",
+        "guard": "correção/informação solicitada com motivo"
+      },
+      {
+        "from": "new|open|in_progress|in_review",
+        "to": "closed",
+        "guard": "resultado, motivo/outcome e comunicação; checar trabalho CR pendente sem cancelar/aprovar CR"
+      },
+      {
+        "from": "closed",
+        "to": "open",
+        "guard": "ator autorizado e motivo; abrir ciclo e manter fechamento anterior"
+      }
+    ],
+    "pendingDecisions": [
+      "ratificar grants por perfil e ACL privada sem alterar super_admin implicitamente",
+      "parâmetros SLA/WIP/retencão e orçamento de performance; não inventar metas",
+      "cardinalidade ponte Ticket–change_record e compatibilidade1:1 técnica",
+      "contrato de aprovação separada/atalho combinado",
+      "binding/ledger/schema por ambiente e base de release real"
+    ]
+  },
+  "messageCatalog": [
+    {
+      "id": "MSG-ACT-01",
+      "status": "actual",
+      "code": "REQUIRED_FIELD",
+      "httpStatus": 400,
+      "message": "Campo obrigatório ausente.",
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "symbol": "cleanText",
+      "behavior": "Preencher campo obrigatório; não limpar rascunho."
+    },
+    {
+      "id": "MSG-ACT-02",
+      "status": "actual",
+      "code": "TICKET_NOT_FOUND",
+      "httpStatus": 404,
+      "message": "Chamado não encontrado.",
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "symbol": "getTicketOrThrow",
+      "behavior": "Não revelar ticket de outro contexto."
+    },
+    {
+      "id": "MSG-ACT-03",
+      "status": "actual",
+      "code": "TICKET_CLOSED",
+      "httpStatus": 409,
+      "message": "Não é possível anexar arquivos a um chamado concluído.",
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "symbol": "initiateTicketAttachmentUpload",
+      "behavior": "Orientar reabertura autorizada ou atendimento; não recriar automaticamente."
+    },
+    {
+      "id": "MSG-ACT-04",
+      "status": "actual",
+      "code": "ATTACHMENT_COUNT_LIMIT",
+      "httpStatus": 409,
+      "message": "O chamado já possui o limite de 5 anexos.",
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "symbol": "assertAttachmentCapacity",
+      "behavior": "Selecionar arquivos dentro do limite."
+    },
+    {
+      "id": "MSG-ACT-05",
+      "status": "actual",
+      "code": "ATTACHMENT_TOTAL_LIMIT",
+      "httpStatus": 413,
+      "message": "Os anexos do chamado não podem ultrapassar 150 MB.",
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "symbol": "assertAttachmentCapacity",
+      "behavior": "Texto atual usa MB; limite técnico157286400bytes (150MiB)."
+    },
+    {
+      "id": "MSG-ACT-06",
+      "status": "actual",
+      "code": "TICKET_RATE_LIMITED",
+      "httpStatus": 429,
+      "message": "Muitas solicitações em pouco tempo. Aguarde alguns minutos e tente novamente.",
+      "sourceFile": "functions/_lib/ticket-center.js",
+      "symbol": "enforceRateLimit",
+      "behavior": "Não presumir header Retry-After: serializador Ticket não repassa retryAfter."
+    },
+    {
+      "id": "MSG-ACT-07",
+      "status": "actual",
+      "code": "PARTIAL_CREATION_UI",
+      "httpStatus": null,
+      "message": "O chamado {code} foi criado, mas {count} anexo(s) falharam.",
+      "sourceFile": "src/pages/Projects/components/NewTicketPopover.tsx",
+      "symbol": "texto de sucesso parcial em NewTicketPopover",
+      "behavior": "Preservar número e repetir apenas arquivos falhos; template semanticamente equivalente à interpolação."
+    },
+    {
+      "id": "MSG-PROP-01",
+      "status": "proposed",
+      "code": "TICKET_VERSION_CONFLICT",
+      "httpStatus": 412,
+      "message": "Este chamado mudou enquanto você editava. Compare a versão atual e reaplique sua alteração.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "Mostrar diferença somente se ainda autorizado; preservar rascunho."
+    },
+    {
+      "id": "MSG-PROP-02",
+      "status": "proposed",
+      "code": "TICKET_CREATED_WITH_UPLOADS",
+      "httpStatus": null,
+      "message": "Chamado {code} criado. Os anexos ainda estão sendo enviados.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "Anunciar sem deslocar foco; não marcar100% antes do servidor."
+    },
+    {
+      "id": "MSG-PROP-03",
+      "status": "proposed",
+      "code": "TICKET_WAITING",
+      "httpStatus": null,
+      "message": "Aguardando {motivo}. Próximo passo: {ação}.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "Não prometer prazo sem fundamento; espera não implica pausaSLA."
+    },
+    {
+      "id": "MSG-PROP-04",
+      "status": "proposed",
+      "code": "TICKET_OUTCOME_REQUIRED",
+      "httpStatus": 422,
+      "message": "Registre o resultado e a comunicação ao solicitante antes de concluir.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "Manter status atual e os dados digitados."
+    },
+    {
+      "id": "MSG-PROP-05",
+      "status": "proposed",
+      "code": "TICKET_CR_PENDING",
+      "httpStatus": null,
+      "message": "Este chamado possui uma alteração pendente. Concluir o atendimento não cancela nem aprova essa alteração.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "Exigir resultado explícito de atendimento; CR conserva gates."
+    },
+    {
+      "id": "MSG-PROP-06",
+      "status": "proposed",
+      "code": "RESOURCE_ACCESS_CHANGED",
+      "httpStatus": 403,
+      "message": "Você não tem acesso a este conteúdo ou seu acesso mudou.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "Limpar conteúdo sensível local; nenhuma pista sobre outrotenant."
+    },
+    {
+      "id": "MSG-PROP-07",
+      "status": "proposed",
+      "code": "UPLOAD_OFFSET_CHECK",
+      "httpStatus": null,
+      "message": "A conexão parou. Vamos conferir a parte recebida antes de continuar.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "HEAD/retomada futuro emCC06; não alegar disponível hoje."
+    },
+    {
+      "id": "MSG-PROP-08",
+      "status": "proposed",
+      "code": "SLA_UNCONFIGURED",
+      "httpStatus": null,
+      "message": "Sem política de SLA definida.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "due_at permanece prazo de calendário, não compromissoSLA."
+    },
+    {
+      "id": "MSG-PROP-09",
+      "status": "proposed",
+      "code": "METRIC_UNAVAILABLE",
+      "httpStatus": null,
+      "message": "Indicador indisponível para este período: falta evento elegível.",
+      "sourceFile": null,
+      "symbol": null,
+      "behavior": "Não inferir primeira resposta pelo assignee/histórico parcial."
+    }
+  ],
+  "sources": [
+    {
+      "id": "SRC-TICKET",
+      "path": "functions/_lib/ticket-center.js",
+      "symbols": [
+        "TICKET_STATUSES",
+        "validateTicketCreatePayload",
+        "validateTicketPatchPayload",
+        "createTicket",
+        "updateTicket",
+        "listTickets",
+        "ticketCenterErrorResponse"
+      ]
+    },
+    {
+      "id": "SRC-ACL",
+      "path": "functions/_lib/permissions.js",
+      "symbols": [
+        "can",
+        "organizationPermissionAllows",
+        "requireOrganizationPermission"
+      ]
+    },
+    {
+      "id": "SRC-CR",
+      "path": "functions/_lib/project-change-requests.js",
+      "symbols": [
+        "CHANGE_REQUEST_STATUSES",
+        "publicChangeRequest",
+        "getOwnProjectChangeRequest"
+      ]
+    },
+    {
+      "id": "SRC-CR-SUBMIT",
+      "path": "functions/_lib/project-change-request-analysis-submission.js",
+      "symbols": [
+        "normalizeAnalysisAwareChangeRequestSubmission",
+        "submitAnalysisAwareProjectChangeRequest"
+      ]
+    },
+    {
+      "id": "SRC-REVIEW",
+      "path": "functions/_lib/project-change-request-review.js",
+      "symbols": [
+        "requireReviewerProject",
+        "ensureApproved",
+        "reviewProjectChangeRequestAction",
+        "applyProjectChangeRequest"
+      ]
+    },
+    {
+      "id": "SRC-INBOX",
+      "path": "functions/_lib/project-change-request-inbox.js",
+      "symbols": [
+        "getTicketReviewLink",
+        "parseInboxOptions"
+      ]
+    },
+    {
+      "id": "SRC-TYPES",
+      "path": "src/pages/Projects/components/ticket-types.ts",
+      "symbols": [
+        "Ticket",
+        "TicketStatus",
+        "CreateTicketPayload"
+      ]
+    },
+    {
+      "id": "SRC-CLIENT",
+      "path": "src/pages/Projects/components/tickets-api.ts",
+      "symbols": [
+        "listTickets",
+        "uploadAttachmentChunk"
+      ]
+    },
+    {
+      "id": "SRC-SCHEMA-TICKET",
+      "path": "migrations/0010_ticket_center.sql",
+      "symbols": []
+    },
+    {
+      "id": "SRC-SCHEMA-CR",
+      "path": "migrations/0020_project_change_requests.sql",
+      "symbols": []
+    }
+  ],
+  "migrationGate": {
+    "status": "migration pendente de confirmação nos ambientes relacionados; nenhuma nova migration emCC01",
+    "dependencies": [
+      "0002_organizations_files.sql",
+      "0009_organization_storage_invariant.sql",
+      "0010_ticket_center.sql",
+      "0020_project_change_requests.sql"
+    ],
+    "historicalRestricted": [
+      "0021_change_request_lifecycle.sql",
+      "0022_change_request_apply_artifacts.sql",
+      "0023_change_request_resubmissions.sql"
+    ],
+    "rule": "Inventariar ledger/schema por ambiente; confirmação explícita/evidência equivalente; nenhuma aplicação/flag Preview por inferência.0024_document_folders_trash.sql já ocupa numeração."
+  }
+}

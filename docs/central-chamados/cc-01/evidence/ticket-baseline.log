@@ -1,0 +1,16 @@
+✔ normaliza aliases legados para o domínio canônico (1.382957ms)
+✔ importação legada tolera valores antigos sem bloquear a Central (0.857463ms)
+✔ limites canônicos aceitam 80 MB por arquivo e 150 MB por chamado (0.398551ms)
+✔ valida criação, prazo e limites dos filtros (0.613706ms)
+✔ valida assinatura e bloqueia arquivo executável ou MIME fraudado (20.272184ms)
+✔ impede acesso cruzado por organização, chamado e anexo (0.749611ms)
+✔ criador exclui o próprio anexo ativo aberto e sempre cancela upload pendente (0.206391ms)
+✔ migration cria tabelas e índices de isolamento (1.474725ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 119.678006
