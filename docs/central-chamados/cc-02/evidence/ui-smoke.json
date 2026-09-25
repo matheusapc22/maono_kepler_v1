@@ -1,0 +1,18 @@
+{
+  "test": "CC-02 real React components with mocked HTTP",
+  "executedAt": "2026-09-25T15:03:56.393Z",
+  "browser": "140.0.7339.16",
+  "combinations": 10,
+  "legacyCapability": "passed",
+  "readOnlyProfile": "passed",
+  "legacyClassification": "passed",
+  "unchangedTicketFields": "preserved",
+  "domainReason": "required",
+  "failedRequestDraft": "preserved and retried",
+  "natureSwitchClearsAnswers": "passed",
+  "mobileWidth": 390,
+  "pageErrors": 0,
+  "externalRequests": 0,
+  "authenticatedQA": "not_run",
+  "result": "passed"
+}

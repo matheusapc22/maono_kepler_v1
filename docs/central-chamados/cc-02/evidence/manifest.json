@@ -1,0 +1,59 @@
+{
+  "baseline": "b0f62ba6d00b1627ad9fcec45125da9ea3544232",
+  "node": "v24.19.0",
+  "tests": {
+    "triage_and_ticket": 52,
+    "preview": 23,
+    "change_requests": 98
+  },
+  "migration": {
+    "path": "migrations/0025_ticket_triage_classification.sql",
+    "sha256": "07a00cce68f24f059f47254e127a02d07450e60b2579e4160bb6d777e09d2a7b",
+    "remoteApplication": "not_run"
+  },
+  "authenticatedQA": "not_run",
+  "productionValidation": "not_run",
+  "featureFlagDefault": false,
+  "artifacts": [
+    {
+      "path": "baseline.log",
+      "bytes": 262,
+      "sha256": "a99fe9587fe3ab7f537eff0b162cdd9957a7557f0a39458d8f768d31041ece71"
+    },
+    {
+      "path": "build.log",
+      "bytes": 7590,
+      "sha256": "68df5a21b4a787f85a87e8255709b88344a6fb531d85f13c90c3cf8284c52a05"
+    },
+    {
+      "path": "cr-regression.log",
+      "bytes": 16070,
+      "sha256": "4c1bc0cc8be18fdcd0976bedf0a15b244ef69e63c687b8fea29f630da2ffbb51"
+    },
+    {
+      "path": "preview-safety.log",
+      "bytes": 2344,
+      "sha256": "706eccee0bb9d1f71dbced3bcfe620d83e5523bb2987ac492ee92136228059f5"
+    },
+    {
+      "path": "triage-desktop.png",
+      "bytes": 111617,
+      "sha256": "3c315d0e7fe3a6b0909f401d009e4fe429820e90a8a008651282253f4fedaf33"
+    },
+    {
+      "path": "triage-mobile.png",
+      "bytes": 59692,
+      "sha256": "4ca3874ba1f993f78ad4fa0998ad058529f5f574de2dac471d75551dd50a73cb"
+    },
+    {
+      "path": "triage-tests.log",
+      "bytes": 5249,
+      "sha256": "8eae0462482591b03ee7515005c281b0c853ffa43cb8cabaece489f73243da9e"
+    },
+    {
+      "path": "ui-smoke.json",
+      "bytes": 536,
+      "sha256": "ee92968f7dfea0e12cce6904a0ae91daceb70220895dfc10ada2bfd44f94a693"
+    }
+  ]
+}

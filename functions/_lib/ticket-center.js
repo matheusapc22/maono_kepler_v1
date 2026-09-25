@@ -1,4 +1,13 @@
 import {
+  assertTicketTriageWriteReady,
+  getTicketTriageCapability,
+  hasTicketTriagePayload,
+  normalizeTicketTriage,
+  publicTicketTriage,
+  ticketTriageEventStatement,
+  ticketTriageSnapshotGuard,
+} from "./ticket-triage.js";
+import {
   appendOrganizationBinaryUpload,
   buildStoredFileName,
   deleteOrganizationBinary,
@@ -285,7 +294,7 @@ function publicPerson(id, name, email) {
   };
 }
 
-export function publicTicket(row) {
+export function publicTicket(row, { triageEnabled = false } = {}) {
   return {
     id: row.id,
     organizationId: row.organization_id,
@@ -312,6 +321,7 @@ export function publicTicket(row) {
         row.assignee_email,
       ) || null,
     attachmentsCount: Number(row.attachments_count || 0),
+    ...(triageEnabled ? publicTicketTriage(row) : {}),
   };
 }
 
@@ -677,6 +687,7 @@ async function listTicketAssignees(env, organizationId) {
 }
 
 export async function listTickets(env, organizationId, options) {
+  const triageEnabled = await getTicketTriageCapability(env);
   const where = buildTicketWhere(organizationId, options);
   const facetsWhere = buildTicketWhere(organizationId, options, {
     includeStatus: false,
@@ -754,7 +765,8 @@ export async function listTickets(env, organizationId, options) {
   const total = Number(countRow?.total || 0);
 
   return {
-    tickets: (result?.results || []).map(publicTicket),
+    tickets: (result?.results || []).map((row) => publicTicket(row, { triageEnabled })),
+    triageEnabled,
     attachmentLimits: TICKET_ATTACHMENT_LIMITS,
     pagination: {
       page: options.page,
@@ -859,10 +871,12 @@ async function listTicketEvents(env, organizationId, ticketId) {
 }
 
 export async function getTicketDetails(env, organizationId, ticketId) {
+  const triageEnabled = await getTicketTriageCapability(env);
   const row = await getTicketOrThrow(env, organizationId, ticketId);
 
   return {
-    ticket: publicTicket(row),
+    ticket: publicTicket(row, { triageEnabled }),
+    triageEnabled,
     attachments: await listTicketAttachments(env, organizationId, ticketId),
     events: await listTicketEvents(env, organizationId, ticketId),
     assignees: await listTicketAssignees(env, organizationId),
@@ -925,7 +939,7 @@ export function validateTicketCreatePayload(payload = {}) {
   };
 }
 
-export function validateTicketPatchPayload(payload = {}) {
+export function validateTicketPatchPayload(payload = {}, { allowTriageOnly = false } = {}) {
   const patch = {};
 
   if (payload.subject !== undefined) {
@@ -970,7 +984,7 @@ export function validateTicketPatchPayload(payload = {}) {
     }
   }
 
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && !(allowTriageOnly && hasTicketTriagePayload(payload))) {
     throw apiError("Nenhuma alteração válida informada.", 400, "EMPTY_PATCH");
   }
 
@@ -1026,11 +1040,18 @@ export async function createTicket(
   payload,
   request,
 ) {
+  const triageEnabled = await assertTicketTriageWriteReady(env, payload);
   const data = validateTicketCreatePayload(payload);
+  const triage = triageEnabled ? normalizeTicketTriage(payload, {
+    creating: true, priority: data.priority, actorId: user.id,
+  }) : null;
   await validateAssignee(env, organizationId, data.assignedTo);
   await enforceRateLimit(env, "create", organizationId, user.id);
 
   const timestamp = isoNow();
+  if (triageEnabled) {
+    return createTicketWithTriage(env, organizationId, user, data, triage, timestamp, request);
+  }
   const inserted = await insertRow(env, "organization_tickets", {
     organization_id: organizationId,
     subject: data.subject,
@@ -1090,8 +1111,12 @@ export async function updateTicket(
   payload,
   request,
 ) {
+  const triageEnabled = await assertTicketTriageWriteReady(env, payload);
   const current = await getTicketOrThrow(env, organizationId, ticketId);
-  const patch = validateTicketPatchPayload(payload);
+  const patch = validateTicketPatchPayload(payload, { allowTriageOnly: triageEnabled });
+  const triage = triageEnabled ? normalizeTicketTriage(payload, {
+    current, priority: patch.priority || current.priority, category: patch.category || current.category, actorId: user.id,
+  }) : null;
 
   if (Object.prototype.hasOwnProperty.call(patch, "assignedTo")) {
     await validateAssignee(env, organizationId, patch.assignedTo);
@@ -1114,6 +1139,13 @@ export async function updateTicket(
     updates.closed_at = null;
   }
 
+  if (triageEnabled) {
+    // An explicitly unchanged priority is a no-op, not permission to overwrite
+    // a priority concurrently changed since the initial read without a reason.
+    if (patch.priority === current.priority) delete updates.priority;
+    if (patch.category === current.category) delete updates.category;
+    return updateTicketWithTriage(env, organizationId, ticketId, user, updates, triage, request, current);
+  }
   await updateRow(env, "organization_tickets", ticketId, updates);
 
   const events = [];
@@ -1172,6 +1204,106 @@ export async function updateTicket(
   });
 
   return publicTicket(await getTicketOrThrow(env, organizationId, ticketId));
+}
+
+// CC-02 keeps triage data and its domain events atomic in D1. This does not
+// introduce CC-03 version/CAS, idempotent creation, or mandatory audit/outbox.
+async function createTicketWithTriage(env, organizationId, user, data, triage, timestamp, request) {
+  const db = getDb(env);
+  const pendingCode = `TRIAGE-${crypto.randomUUID()}`;
+  const values = {
+    organization_id: organizationId, code: pendingCode,
+    subject: data.subject, description: data.description, status: "new",
+    priority: data.priority, category: data.category, assigned_to: data.assignedTo,
+    due_at: data.dueAt, created_by: user.id, active: 1,
+    created_at: timestamp, updated_at: timestamp, ...triage.updates,
+  };
+  const entries = Object.entries(values);
+  const createdMetadata = JSON.stringify({
+    priority: data.priority, category: data.category, assignedTo: data.assignedTo,
+    dueAt: data.dueAt,
+  });
+  const statements = [
+    db.prepare(`INSERT INTO organization_tickets (${entries.map(([key]) => key).join(", ")})
+      VALUES (${entries.map(() => "?").join(", ")}) RETURNING id`)
+      .bind(...entries.map(([, value]) => value)),
+    db.prepare(`INSERT INTO ticket_events
+      (organization_id, ticket_id, event_type, actor_user_id, metadata, created_at)
+      SELECT organization_id, id, 'ticket.created', ?,
+        json_set(?, '$.code', 'TKT-' || printf('%06d', id)), ?
+      FROM organization_tickets WHERE organization_id = ? AND code = ?`)
+      .bind(user.id, createdMetadata, timestamp, organizationId, pendingCode),
+  ];
+  if (triage.hasChanges) {
+    statements.push(db.prepare(`INSERT INTO ticket_events
+      (organization_id, ticket_id, event_type, actor_user_id, metadata, created_at)
+      SELECT organization_id, id, 'ticket.triage.changed', ?, ?, ?
+      FROM organization_tickets WHERE organization_id = ? AND code = ?`)
+      .bind(user.id, JSON.stringify({ from: null, to: publicTicketTriage(triage.updates) }),
+        timestamp, organizationId, pendingCode));
+  }
+  statements.push(db.prepare(`UPDATE organization_tickets
+    SET code = 'TKT-' || printf('%06d', id)
+    WHERE organization_id = ? AND code = ?`).bind(organizationId, pendingCode));
+  const result = await db.batch(statements);
+  const id = result?.[0]?.results?.[0]?.id || result?.[0]?.meta?.last_row_id;
+  if (!id) throw apiError("Não foi possível confirmar o chamado criado.", 500, "TICKET_CREATE_RESULT_INVALID");
+  await recordAuditLog(env, {
+    actorUserId: user.id, organizationId, action: "ticket.created", resourceType: "ticket",
+    resourceId: id, metadata: { triageSource: triage.hasChanges ? "human" : "legacy" }, request,
+  });
+  return publicTicket(await getTicketOrThrow(env, organizationId, id), { triageEnabled: true });
+}
+
+async function updateTicketWithTriage(env, organizationId, ticketId, user, ticketUpdates, triage, request, current) {
+  const db = getDb(env);
+  const now = ticketUpdates.updated_at;
+  // Protect the server read/validate -> batch interval against concurrent triage
+  // writes, including same-nature answers. An already-stale client form has no
+  // version token yet; its protection remains part of CC-03 general ticket CAS.
+  const guard = triage.updates.triage_source === "human"
+    ? ticketTriageSnapshotGuard(current)
+    : null;
+  const guardSql = guard?.sql || "";
+  const guardValues = guard?.values || [];
+  const updates = Object.fromEntries(Object.entries({ ...ticketUpdates, ...triage.updates })
+    .filter(([, value]) => value !== undefined));
+  const statements = [];
+  const eventFields = [
+    ["status", "ticket.status.changed"], ["assigned_to", "ticket.assigned"],
+    ["due_at", "ticket.due.changed"], ["priority", "ticket.priority.changed"],
+    ["category", "ticket.category.changed"],
+  ];
+  for (const [column, type] of eventFields) {
+    if (!Object.prototype.hasOwnProperty.call(updates, column)) continue;
+    const reason = ["priority", "category"].includes(column) ? (triage.updates.priority_reason || "") : null;
+    statements.push(db.prepare(`INSERT INTO ticket_events
+      (organization_id, ticket_id, event_type, actor_user_id, metadata, created_at)
+      SELECT organization_id, id, ?, ?,
+        json_object('from', ${column}, 'to', ?, 'reason', ?), ?
+      FROM organization_tickets
+      WHERE organization_id = ? AND id = ? AND active = 1 AND ${column} IS NOT ?${guardSql}`)
+      .bind(type, user.id, updates[column], reason, now, organizationId, ticketId, updates[column], ...guardValues));
+  }
+  if (triage.hasChanges) {
+    statements.push(ticketTriageEventStatement(env, {
+      organizationId, ticketId, actorId: user.id, updates: triage.updates, now, guard,
+    }));
+  }
+  const entries = Object.entries(updates);
+  statements.push(db.prepare(`UPDATE organization_tickets
+    SET ${entries.map(([key]) => `${key} = ?`).join(", ")}
+    WHERE organization_id = ? AND id = ? AND active = 1${guardSql}`)
+    .bind(...entries.map(([, value]) => value), organizationId, ticketId, ...guardValues));
+  const results = await db.batch(statements);
+  if (guard && Number(results.at(-1)?.meta?.changes || 0) !== 1) {
+    throw apiError("A triagem deste chamado mudou enquanto a atualização era processada. Recarregue e revise as respostas antes de tentar novamente.", 409, "TICKET_TRIAGE_CONFLICT");
+  }
+  await recordAuditLog(env, {
+    actorUserId: user.id, organizationId, action: triage.hasChanges ? "ticket.triage.changed" : "ticket.updated",
+    resourceType: "ticket", resourceId: ticketId, metadata: { fields: Object.keys(updates) }, request,
+  });
+  return publicTicket(await getTicketOrThrow(env, organizationId, ticketId), { triageEnabled: true });
 }
 
 export async function readTicketAttachmentUpload(request) {

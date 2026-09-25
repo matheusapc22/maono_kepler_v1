@@ -431,6 +431,32 @@ CREATE TABLE IF NOT EXISTS organization_tickets (
     CHECK (priority IN ('low', 'normal', 'high')),
   category TEXT NOT NULL DEFAULT 'support'
     CHECK (category IN ('map', 'database', 'permission', 'export', 'support', 'other')),
+  demand_nature TEXT
+    CHECK (demand_nature IS NULL OR demand_nature IN
+      ('question_request', 'incident', 'defect', 'improvement_change', 'recurring_problem')),
+  expected_result TEXT NOT NULL DEFAULT ''
+    CHECK (length(expected_result) <= 2000),
+  context TEXT NOT NULL DEFAULT ''
+    CHECK (length(context) <= 2000),
+  impact TEXT
+    CHECK (impact IS NULL OR impact IN ('individual', 'team', 'organization')),
+  urgency TEXT
+    CHECK (urgency IS NULL OR urgency IN ('flexible', 'soon', 'blocked')),
+  priority_reason TEXT NOT NULL DEFAULT ''
+    CHECK (length(priority_reason) <= 1000),
+  triage_answers TEXT NOT NULL DEFAULT '{}'
+    CHECK (json_valid(triage_answers) AND json_type(triage_answers) = 'object'
+      AND length(triage_answers) <= 14000),
+  triage_form_version INTEGER
+    CHECK (triage_form_version IS NULL OR triage_form_version = 1),
+  triage_source TEXT NOT NULL DEFAULT 'legacy'
+    CHECK ((triage_source = 'legacy' AND demand_nature IS NULL) OR
+      (triage_source = 'human' AND demand_nature IS NOT NULL
+        AND length(trim(expected_result)) > 0 AND impact IS NOT NULL
+        AND urgency IS NOT NULL AND triage_form_version = 1)),
+  triaged_at TEXT,
+  triaged_by INTEGER
+    REFERENCES users(id) ON DELETE SET NULL,
   assigned_to INTEGER,
   due_at TEXT,
   closed_at TEXT,
@@ -489,6 +515,8 @@ CREATE INDEX IF NOT EXISTS idx_organization_tickets_updated
   ON organization_tickets(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_organization_tickets_assignee
   ON organization_tickets(organization_id, assigned_to);
+CREATE INDEX IF NOT EXISTS idx_organization_tickets_triage
+  ON organization_tickets(organization_id, demand_nature, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_ticket_attachments_scope
   ON ticket_attachments(organization_id, ticket_id, status);
 CREATE INDEX IF NOT EXISTS idx_ticket_attachments_uploaded_by

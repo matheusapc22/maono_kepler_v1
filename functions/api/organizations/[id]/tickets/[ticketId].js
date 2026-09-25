@@ -1,3 +1,8 @@
+import {
+  assertTicketTriageWriteReady,
+  getTicketTriageCapability,
+  isTicketTriageEnabled,
+} from "../../../../_lib/ticket-triage.js";
 import { getTicketReviewLink } from "../../../../_lib/project-change-request-inbox.js";
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import {
@@ -57,7 +62,9 @@ export async function onRequestGet({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
-    await migrateLegacyTickets(env, organizationId, user.id);
+    if (!isTicketTriageEnabled(env) || await getTicketTriageCapability(env)) {
+      await migrateLegacyTickets(env, organizationId, user.id);
+    }
 
     const detail = await getTicketDetails(env, organizationId, ticketId);
     const changeRequest = await getTicketReviewLink(env, request, organizationId, ticketId);
@@ -90,6 +97,8 @@ export async function onRequestPatch({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    const payload = await readJsonBody(request);
+    await assertTicketTriageWriteReady(env, payload);
     await migrateLegacyTickets(env, organizationId, user.id);
 
     const ticket = await updateTicket(
@@ -97,7 +106,7 @@ export async function onRequestPatch({ env, request, params }) {
       organizationId,
       ticketId,
       user,
-      await readJsonBody(request),
+      payload,
       request,
     );
 

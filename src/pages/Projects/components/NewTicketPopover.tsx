@@ -8,6 +8,13 @@ import {
 } from "./tickets-api";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import TicketErrorNotice from "./TicketErrorNotice";
+import TicketTriageFields from "./TicketTriageFields";
+import {
+  buildTicketTriagePayload,
+  createTicketTriageForm,
+  validateTicketTriageForm,
+  type TicketTriageFieldError,
+} from "./ticket-triage-form";
 import { dateInputToIso } from "./ticket-format";
 import {
   CATEGORY_LABELS,
@@ -25,6 +32,7 @@ type NewTicketPopoverProps = {
   organizationId: number | string;
   assignees: TicketPerson[];
   canManage: boolean;
+  triageEnabled?: boolean;
   attachmentLimits: TicketAttachmentLimits;
   onClose: () => void;
   onCreated: (ticket: Ticket, failedFiles: File[]) => void;
@@ -94,11 +102,14 @@ export default function NewTicketPopover({
   organizationId,
   assignees,
   canManage,
+  triageEnabled = false,
   attachmentLimits,
   onClose,
   onCreated,
 }: NewTicketPopoverProps) {
   const [form, setForm] = useState(INITIAL_FORM);
+  const [triageForm, setTriageForm] = useState(createTicketTriageForm);
+  const [triageError, setTriageError] = useState<TicketTriageFieldError | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const [createdTicket, setCreatedTicket] = useState<Ticket | null>(null);
@@ -178,6 +189,8 @@ export default function NewTicketPopover({
   function resetAndClose() {
     abortControllerRef.current?.abort();
     setForm(INITIAL_FORM);
+    setTriageForm(createTicketTriageForm());
+    setTriageError(null);
     setFiles([]);
     setFailedFiles([]);
     setCreatedTicket(null);
@@ -335,6 +348,16 @@ export default function NewTicketPopover({
     event.preventDefault();
     if (busy || createdTicket) return;
 
+    setTriageError(null);
+    if (triageEnabled) {
+      const validation = validateTicketTriageForm(triageForm, { priority: form.priority });
+      if (validation) {
+        setTriageError(validation);
+        document.getElementById(`new-ticket-triage-${validation.field}`)?.focus();
+        return;
+      }
+    }
+
     const fileError = validateFiles(files, attachmentLimits);
     if (fileError) {
       setError(fileError);
@@ -347,6 +370,7 @@ export default function NewTicketPopover({
     abortControllerRef.current = controller;
 
     const payload: CreateTicketPayload = {
+      ...(triageEnabled ? buildTicketTriagePayload(triageForm) : {}),
       subject: form.subject,
       description: form.description,
       priority: form.priority,
@@ -504,16 +528,26 @@ export default function NewTicketPopover({
               <small>{form.description.length}/5.000</small>
             </label>
 
+            {triageEnabled ? (
+              <TicketTriageFields
+                value={triageForm}
+                onChange={(next) => { setTriageForm(next); setTriageError(null); setError(null); }}
+                idPrefix="new-ticket-triage"
+                reasonRequired={form.priority !== "normal"}
+                disabled={busy}
+                error={triageError}
+              />
+            ) : null}
+
             <label className="ticket-field">
               <span>Prioridade *</span>
               <select
                 value={form.priority}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    priority: event.target.value as TicketPriority,
-                  }))
-                }
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, priority: event.target.value as TicketPriority }));
+                  setTriageForm((current) => ({ ...current, priorityReason: "" }));
+                  setTriageError(null);
+                }}
               >
                 {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -524,7 +558,7 @@ export default function NewTicketPopover({
             </label>
 
             <label className="ticket-field">
-              <span>Categoria</span>
+              <span>{triageEnabled ? "Domínio afetado" : "Categoria"}</span>
               <select
                 value={form.category}
                 onChange={(event) =>
@@ -652,7 +686,7 @@ export default function NewTicketPopover({
               <button
                 type="submit"
                 className="ticket-primary-action"
-                disabled={busy || Boolean(error)}
+                disabled={busy}
               >
                 {phase === "creating"
                   ? "Criando chamado..."
