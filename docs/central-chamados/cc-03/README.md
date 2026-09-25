@@ -1,5 +1,7 @@
 # CC-03 — transições, concorrência e trilha consistente
 
+> **Decisão operacional de 25/09/2026, 17:04:56 BRT:** homologação isolada dispensada neste ciclo. O próximo gate é [Production Acceptance controlado](production-acceptance.md), ainda pendente de execução. A reconciliação de Produção já foi concluída para as seis organizações; migrations 0025/0026 confirmadas permanecem válidas. Comandos ficam desligados fora da janela explicitamente necessária. Os registros abaixo preservam a cronologia da implementação.
+
 ## Atualização operacional de 25/09/2026
 
 O inventário corrigido confirmou fonte elegível vazia nas seis organizações ativas. MRA (4) e Cliente Beta (8) não têm fallback membro. O [modo explícito de reconciliação vazia](reconcile-empty.md) grava somente o marcador mediante guarda atômica de fonte zero e super admin ativo; preserva os dois canônicos da Demo Maono e todas as regras de `apply`. A execução remota e o replay ainda precisam de evidência.

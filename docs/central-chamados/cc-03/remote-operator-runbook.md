@@ -1,5 +1,7 @@
 # CC-03 — próximo passo após aplicar a 0026
 
+> **Etapa concluída / decisão posterior:** o inventário final `0ff77c11-2f5d-477c-9ec6-51c68e38ba0b` comprovou as seis organizações de Produção reconciliadas. Em 25/09/2026 às 17:04:56 BRT o usuário dispensou homologação isolada; seguir agora [Production Acceptance controlado](production-acceptance.md). Esse gate continua pendente e as flags permanecem desligadas fora da janela autorizada. Este runbook preserva o procedimento de reconciliação, inclusive para futuras mudanças da fonte.
+
 ## Situação confirmada em 25/09/2026
 
 O usuário esclareceu: **foi feita a migration, não o merge**. A PR #196 continua separada. O banco informado é `maono_maps`, binding `DB`, UUID `5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`.

@@ -1,5 +1,7 @@
 # CC-03 — implantação, validação e rollback
 
+> **Política atual — 25/09/2026, 17:04:56 BRT:** o usuário dispensou homologação isolada e definiu [Production Acceptance controlado](production-acceptance.md). A dispensa não é bloqueio, não autoriza migrations adicionais e não transforma CI/merge em aceite. A reconciliação de Produção das seis organizações foi concluída; 0025/0026 continuam confirmadas. Os passos históricos abaixo só se aplicam a evidências ainda não obtidas no respectivo alvo.
+
 > **Atualização de 25/09/2026:** a 0026 de produção foi aplicada e validada pelo usuário no D1 `maono_maps` (`5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`), ledger ID 20 às `17:10:33` UTC. `foreign_key_check` vazio; `quick_check = ok`. Não reaplicar. A PR #196 permanece em revisão: migration não significa merge. A próxima operação está em [remote-operator-runbook.md](remote-operator-runbook.md); os passos de aplicação abaixo continuam pertinentes somente a ambientes ainda não confirmados.
 
 ## Estado desta entrega

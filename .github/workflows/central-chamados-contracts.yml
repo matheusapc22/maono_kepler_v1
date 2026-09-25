@@ -29,6 +29,7 @@ on:
       - 'tests/ticket-command*.test.mjs'
       - 'tests/ticket-legacy-backfill.test.mjs'
       - 'tests/ticket-backfill*.test.mjs'
+      - 'tests/ticket-production-preflight.test.mjs'
       - 'tests/helpers/ticket-command*.mjs'
       - 'migrations/0010_ticket_center.sql'
       - 'migrations/0020_project_change_requests.sql'
@@ -83,7 +84,7 @@ jobs:
         with:
           node-version: 22
       - name: Validate commands, concurrency, lifecycle and controlled backfill
-        run: node --experimental-strip-types --test tests/ticket-command*.test.mjs tests/ticket-legacy-backfill.test.mjs tests/ticket-backfill*.test.mjs
+        run: node --experimental-strip-types --test tests/ticket-command*.test.mjs tests/ticket-legacy-backfill.test.mjs tests/ticket-backfill*.test.mjs tests/ticket-production-preflight.test.mjs
 
   cc03-d1-binding-smoke:
     runs-on: ubuntu-latest
