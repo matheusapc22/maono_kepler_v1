@@ -1,0 +1,147 @@
+{
+  "execution": "CC-01",
+  "recordedAt": "2026-09-25T14:18:53.303654+00:00",
+  "sourceSha": "eec3a7a8fa78ab259b5522d3531d3cec942cb63f",
+  "nodeVersion": "v24.19.0",
+  "checks": [
+    {
+      "command": "node scripts/central-chamados/validate-cc01.mjs",
+      "result": "passed",
+      "evidence": "validation.log",
+      "scope": "16 endpoint contracts, 3 enums, 10 source references, 12 proposed invariants; historical baseline separation"
+    },
+    {
+      "command": "node --test tests/ticket-center.test.mjs",
+      "result": "passed",
+      "tests": 8,
+      "evidence": "ticket-baseline.log"
+    },
+    {
+      "command": "npm run test:preview-safety",
+      "result": "passed",
+      "tests": 23,
+      "evidence": "preview-safety.log"
+    },
+    {
+      "command": "node scripts/central-chamados/smoke-prototype.mjs",
+      "result": "passed",
+      "evidence": "prototype-smoke.json",
+      "runtime": "Playwright 1.55.0; Chromium 140.0.7339.16; dependency provided by execution environment, not new application dependency"
+    },
+    {
+      "command": "negative control: temporary contract with mismatched method/handler",
+      "result": "rejected_as_expected"
+    },
+    {
+      "command": "git diff --cached --check",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --cached --name-only -- migrations schema.sql functions src",
+      "result": "empty"
+    }
+  ],
+  "migration": {
+    "required": false,
+    "created": false,
+    "changed": false,
+    "applied": false,
+    "environmentsAffected": [],
+    "historical0021to0023": "pending confirmation; no authorization granted"
+  },
+  "acceptance": {
+    "CT-01": "passed_source_and_gaps_recorded",
+    "CT-02": "pending_human_walkthrough",
+    "authenticatedQA": "not_run",
+    "production": "unverified",
+    "merge": "not_performed",
+    "deploy": "not_performed"
+  },
+  "artifacts": [
+    {
+      "path": ".github/workflows/central-chamados-contracts.yml",
+      "sha256": "39f368de9ead8a610c2fa76ca3132a4a7a512eed3c445b9482676ff53681055b",
+      "bytes": 1536
+    },
+    {
+      "path": "docs/central-chamados/cc-01/README.md",
+      "sha256": "2d7b1a728b2c393e0428cbd7f1902fceb012c40f33d1b884bd00103284cce516",
+      "bytes": 8122
+    },
+    {
+      "path": "docs/central-chamados/cc-01/acceptance.md",
+      "sha256": "65e66ea6944ba948f192bb67f3d8185907163a05b91d280a81d8952e0952bd08",
+      "bytes": 3741
+    },
+    {
+      "path": "docs/central-chamados/cc-01/baseline.json",
+      "sha256": "1616da75026cdbde0478b13f8fd67ad13a2637f24e9d155e0d68f187088e9c31",
+      "bytes": 44218
+    },
+    {
+      "path": "docs/central-chamados/cc-01/baseline.md",
+      "sha256": "6340be5b679f98b24eff5fb4362db1f559827f4a3ae4582d77e9a548351b6579",
+      "bytes": 15974
+    },
+    {
+      "path": "docs/central-chamados/cc-01/contracts.json",
+      "sha256": "a8941dc7c1484a49f766ea8c33c8c1894153339ba7130d10979e05b574927642",
+      "bytes": 46563
+    },
+    {
+      "path": "docs/central-chamados/cc-01/contracts.md",
+      "sha256": "022418df43a44fe633afbe1c08db64a67c6051812819ed387051a887f49e4784",
+      "bytes": 37328
+    },
+    {
+      "path": "docs/central-chamados/cc-01/evidence/incident-mobile.png",
+      "sha256": "e3151cbbceb2e5b625f3bf579419c1956b130c70d52656c83a7115020f0350c4",
+      "bytes": 371233
+    },
+    {
+      "path": "docs/central-chamados/cc-01/evidence/preview-safety.log",
+      "sha256": "28d51cf2ca77de7c6ceb7bc7e3a2e44d45f329c41210bd0453dfa3d5ca8345ee",
+      "bytes": 2344
+    },
+    {
+      "path": "docs/central-chamados/cc-01/evidence/prototype-smoke.json",
+      "sha256": "656f1ff1765e2ce4565b0f0ed1a274a1476e63b5a4f4a309c9011b6a2eb9c169",
+      "bytes": 586
+    },
+    {
+      "path": "docs/central-chamados/cc-01/evidence/question-desktop.png",
+      "sha256": "66bac66a1cc934c2fb2d827fab0245200a94b558cc5f5adb0f1c5ab0f3dc9eea",
+      "bytes": 497942
+    },
+    {
+      "path": "docs/central-chamados/cc-01/evidence/ticket-baseline.log",
+      "sha256": "07bbb186df447cb1321afd5b7662c8ab84c1d68b6ac0d6cb9aa14b1cbf252fe7",
+      "bytes": 731
+    },
+    {
+      "path": "docs/central-chamados/cc-01/evidence/validation.log",
+      "sha256": "a99fe9587fe3ab7f537eff0b162cdd9957a7557f0a39458d8f768d31041ece71",
+      "bytes": 262
+    },
+    {
+      "path": "docs/central-chamados/cc-01/journey.md",
+      "sha256": "260d68fb449e839b4e58d2167613396fa2ffc5d2c4c209708571edb7e953a73e",
+      "bytes": 18138
+    },
+    {
+      "path": "docs/central-chamados/cc-01/prototype.html",
+      "sha256": "31b5e2874f6975d01183a56c9e763c5229240c4d4729a1135fe881d7cd68c75d",
+      "bytes": 30500
+    },
+    {
+      "path": "scripts/central-chamados/smoke-prototype.mjs",
+      "sha256": "11551e38ea27470e17026a8cdaa5c6dc312a642b02814ef39b2ba0a2e070c1af",
+      "bytes": 5889
+    },
+    {
+      "path": "scripts/central-chamados/validate-cc01.mjs",
+      "sha256": "8b4ace62db19c6018308818a92a11239571bcf5f32a575f3968e6a0532d272b3",
+      "bytes": 4509
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+name: Central de Chamados contracts
+
+on:
+  pull_request:
+    paths:
+      - 'docs/central-chamados/cc-01/**'
+      - 'scripts/central-chamados/**'
+      - 'functions/_lib/ticket-center.js'
+      - 'functions/_lib/project-change-requests.js'
+      - 'functions/_lib/project-change-request-review.js'
+      - 'functions/_lib/project-change-request-inbox.js'
+      - 'functions/_lib/project-change-request-analysis-submission.js'
+      - 'functions/_lib/permissions.js'
+      - 'src/access-control/permissions.ts'
+      - 'src/pages/Projects/components/ticket-types.ts'
+      - 'src/pages/Projects/components/tickets-api.ts'
+      - 'migrations/0010_ticket_center.sql'
+      - 'migrations/0020_project_change_requests.sql'
+      - 'functions/api/organizations/*/tickets/**'
+      - 'functions/api/organizations/*/tickets.js'
+      - 'functions/api/projects/*/change-requests/**'
+      - 'functions/api/projects/*/change-requests.js'
+      - '.github/workflows/central-chamados-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cc01-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify published source contracts
+        run: node scripts/central-chamados/validate-cc01.mjs
+      - name: Run existing ticket regression tests
+        run: node --test tests/ticket-center.test.mjs
+      - name: Verify Preview safety policy
+        run: npm run test:preview-safety

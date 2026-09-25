@@ -1,0 +1,37 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> maono@0.0.0 test:preview-safety
+> node --test tests/preview-write-policy.test.mjs tests/preview-middleware.test.mjs tests/preview-golden-builder.test.mjs tests/buffer-preview-policy.test.mjs && node scripts/preview/assert-preview-safety.mjs
+
+✔ isócronas e buffers são classificados como análises transitórias (1.196762ms)
+✔ análise transitória é permitida mesmo com mutations=false (0.506864ms)
+✔ save de projeto continua bloqueado com mutations=false (0.248264ms)
+✔ middleware deixa POST de Buffer chegar ao endpoint e publica diagnóstico (4.662662ms)
+✔ builder Golden gera MapConfig v1 e manifesto reproduzível a partir de GeoJSON (82.662423ms)
+✔ middleware extrai slug de projeto sem confundir subrotas (1.42026ms)
+✔ fallback reconhece URL de deployment Pages como Preview quando runtime está ausente (0.280353ms)
+✔ runtime Production explícito prevalece sobre URL única com hash do Pages (3.87037ms)
+✔ middleware resolve organização do projeto diretamente no D1 (0.719835ms)
+✔ GET de preview segue para a Function e recebe diagnóstico (1.160477ms)
+✔ mutação no Golden QA passa pela barreira (1.218755ms)
+✔ mutação em projeto real é bloqueada antes do endpoint (0.708827ms)
+✔ mutação administrativa é bloqueada mesmo com kill switch liberado (0.419232ms)
+✔ kill switch bloqueia escrita QA sem impedir login/session (1.767913ms)
+✔ URL Pages Preview sem MAONO_RUNTIME_ENV continua fail-closed (0.636579ms)
+✔ runtime diferencia production, preview e configuração ausente (1.589154ms)
+✔ production não sofre restrição da política de preview (0.202846ms)
+✔ preview permite leitura real do banco de produção (0.122424ms)
+✔ kill switch bloqueia mutações de domínio no preview (0.211849ms)
+✔ autenticação e sessão continuam operacionais no preview (0.220712ms)
+✔ preview permite escrita de projeto somente na organização QA (0.458891ms)
+✔ preview bloqueia mutações administrativas e de storage mesmo na organização QA (0.469277ms)
+✔ preview falha fechado quando não consegue resolver a organização QA (0.119409ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 167.540683
+Preview safety gate: OK

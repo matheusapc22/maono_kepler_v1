@@ -1,0 +1,969 @@
+{
+  "schemaVersion": 1,
+  "repository": "matheusapc22/maono_kepler_v1",
+  "capturedAt": "2026-09-25T14:14:29+00:00",
+  "scope": "CC-01 / REQ-CC-01: baseline documental e somente leitura; nenhum aceite de produção ou CT-02.",
+  "source": {
+    "branch": "mano_kepler_v1",
+    "sha": "eec3a7a8fa78ab259b5522d3531d3cec942cb63f",
+    "treeSha": "263bc3d342e11d72361f62d1c311f538ed61d892",
+    "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/eec3a7a8fa78ab259b5522d3531d3cec942cb63f"
+  },
+  "defaultBranch": {
+    "name": "main",
+    "sha": "6a2827cfb5f3474f201c8092ce92d8a957dd93e8",
+    "treeSha": "0ca52bd048d1a8c38f01ba7cb6f7aee8d2f91e09",
+    "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/6a2827cfb5f3474f201c8092ce92d8a957dd93e8"
+  },
+  "workingBranch": {
+    "name": "feat/cc-01-baseline-contracts",
+    "baseSha": "eec3a7a8fa78ab259b5522d3531d3cec942cb63f",
+    "target": "mano_kepler_v1"
+  },
+  "comparison": {
+    "status": "diverged",
+    "ahead": 1863,
+    "behind": 22,
+    "mergeBase": "a1d6d2526361d6b6d1b455e39056809c26ada87f",
+    "semantics": "ahead/behind da source funcional em relação à defaultBranch",
+    "method": "Git local com histórico completo; git rev-list, merge-base, diff e diff-tree",
+    "shallowRepository": false,
+    "completeDiff": true,
+    "changedFiles": 819,
+    "insertions": 178467,
+    "deletions": 1820,
+    "binaryFiles": 20,
+    "apiComparisonFileLimit": 300,
+    "apiLimitedListUsedAsComplete": false,
+    "mainOnlyCommits": [
+      {
+        "sha": "7365e0626f45adf3d529f62d0d2fd9592a73380f",
+        "committedAt": "2025-10-07T22:29:42-03:00",
+        "subject": "Update index.tsx",
+        "parents": [
+          "a1d6d2526361d6b6d1b455e39056809c26ada87f"
+        ],
+        "firstParentChangedPaths": [
+          "src/pages/Kepler/index.tsx"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/7365e0626f45adf3d529f62d0d2fd9592a73380f"
+      },
+      {
+        "sha": "9b0bbd0a7fbc37251ae44cd9cb9b0b4ce68d9357",
+        "committedAt": "2025-10-07T22:31:40-03:00",
+        "subject": "Merge pull request #2 from matheusapc22/matheusapc22-patch-1",
+        "parents": [
+          "a1d6d2526361d6b6d1b455e39056809c26ada87f",
+          "7365e0626f45adf3d529f62d0d2fd9592a73380f"
+        ],
+        "firstParentChangedPaths": [
+          "src/pages/Kepler/index.tsx"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/9b0bbd0a7fbc37251ae44cd9cb9b0b4ce68d9357"
+      },
+      {
+        "sha": "5e40b2b124167dec10106d77f2434220fc8e7e50",
+        "committedAt": "2026-05-21T16:37:32-03:00",
+        "subject": "Add files via upload",
+        "parents": [
+          "9b0bbd0a7fbc37251ae44cd9cb9b0b4ce68d9357"
+        ],
+        "firstParentChangedPaths": [
+          "src/assets/images/Logo_Maono.png"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/5e40b2b124167dec10106d77f2434220fc8e7e50"
+      },
+      {
+        "sha": "804b490be66dc3f75bacd96e0846b465fe69b6f6",
+        "committedAt": "2026-05-21T16:41:15-03:00",
+        "subject": "Update panel-header.tsx",
+        "parents": [
+          "5e40b2b124167dec10106d77f2434220fc8e7e50"
+        ],
+        "firstParentChangedPaths": [
+          "src/pages/Kepler/factories/panel-header.tsx"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/804b490be66dc3f75bacd96e0846b465fe69b6f6"
+      },
+      {
+        "sha": "dbb389d4d79f6155df82986cf1fd788acb51e864",
+        "committedAt": "2026-05-27T15:59:01-03:00",
+        "subject": "feat(projects): add Dropbox thumbnail projects page",
+        "parents": [
+          "804b490be66dc3f75bacd96e0846b465fe69b6f6"
+        ],
+        "firstParentChangedPaths": [
+          "src/pages/Projects/index.tsx"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/dbb389d4d79f6155df82986cf1fd788acb51e864"
+      },
+      {
+        "sha": "33c9de149b07bcafb08128976d17a481236f15f2",
+        "committedAt": "2026-05-27T15:59:49-03:00",
+        "subject": "style(projects): add projects cockpit thumbnail layout",
+        "parents": [
+          "dbb389d4d79f6155df82986cf1fd788acb51e864"
+        ],
+        "firstParentChangedPaths": [
+          "src/pages/Projects/projects.css"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/33c9de149b07bcafb08128976d17a481236f15f2"
+      },
+      {
+        "sha": "68ed82dd38222fae74a8b4700ab7e081781d6748",
+        "committedAt": "2026-05-27T16:00:16-03:00",
+        "subject": "feat(projects): route Dropbox-backed projects dashboard",
+        "parents": [
+          "33c9de149b07bcafb08128976d17a481236f15f2"
+        ],
+        "firstParentChangedPaths": [
+          "src/Routes.tsx"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/68ed82dd38222fae74a8b4700ab7e081781d6748"
+      },
+      {
+        "sha": "f4b718c079a2109f8b7b5444a76069ed878e8254",
+        "committedAt": "2026-05-27T16:13:23-03:00",
+        "subject": "feat(dropbox): replace thumbnail on save without duplicating json",
+        "parents": [
+          "68ed82dd38222fae74a8b4700ab7e081781d6748"
+        ],
+        "firstParentChangedPaths": [
+          "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/f4b718c079a2109f8b7b5444a76069ed878e8254"
+      },
+      {
+        "sha": "9919d0bda0e15ed01fe7dc06e50ddcd2066e01ec",
+        "committedAt": "2026-05-27T16:27:16-03:00",
+        "subject": "feat(dropbox): capture map canvas when saving thumbnail",
+        "parents": [
+          "f4b718c079a2109f8b7b5444a76069ed878e8254"
+        ],
+        "firstParentChangedPaths": [
+          "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts"
+        ],
+        "group": "Frontend/assets anteriores",
+        "disposition": "Arquivos ainda existem, com blobs diferentes e evolução funcional posterior. Não presumir equivalência semântica nem importar versões antigas; sem port no escopo CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/9919d0bda0e15ed01fe7dc06e50ddcd2066e01ec"
+      },
+      {
+        "sha": "aa477af0031b50c2659688872b87973931f61740",
+        "committedAt": "2026-09-06T11:58:17-03:00",
+        "subject": "ops(pr147): register guarded manual Preview QA dispatch",
+        "parents": [
+          "9919d0bda0e15ed01fe7dc06e50ddcd2066e01ec"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/pr147-preview-config.yml"
+        ],
+        "group": "Preview QA #147",
+        "disposition": "Manter histórico somente em main; workflow faz PATCH no Pages e fica fora da autorização CC-01.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/aa477af0031b50c2659688872b87973931f61740"
+      },
+      {
+        "sha": "e8f3edde39830c1bb2552c09aa53c08e7e67586c",
+        "committedAt": "2026-09-06T18:10:58-03:00",
+        "subject": "ci(change-requests): add default-branch release dispatcher",
+        "parents": [
+          "aa477af0031b50c2659688872b87973931f61740"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/change-request-release-operator.yml"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/e8f3edde39830c1bb2552c09aa53c08e7e67586c"
+      },
+      {
+        "sha": "d98be2120bad320153fbd906985e49791db546c7",
+        "committedAt": "2026-09-06T18:12:26-03:00",
+        "subject": "ci(change-requests): pin validated release SHA",
+        "parents": [
+          "e8f3edde39830c1bb2552c09aa53c08e7e67586c"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/change-request-release-operator.yml"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/d98be2120bad320153fbd906985e49791db546c7"
+      },
+      {
+        "sha": "09c92f8214abc4d485317e735f226b0f20654637",
+        "committedAt": "2026-09-06T18:13:31-03:00",
+        "subject": "ci(change-requests): validate Viewer tracking contract in release operator",
+        "parents": [
+          "d98be2120bad320153fbd906985e49791db546c7"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/change-request-release-operator.yml"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/09c92f8214abc4d485317e735f226b0f20654637"
+      },
+      {
+        "sha": "06ae952ef2f53d3f72b89d0e5ea5728805f930b0",
+        "committedAt": "2026-09-06T18:24:09-03:00",
+        "subject": "ci(change-requests): add controlled migration phase",
+        "parents": [
+          "09c92f8214abc4d485317e735f226b0f20654637"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/change-request-release-operator.yml"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/06ae952ef2f53d3f72b89d0e5ea5728805f930b0"
+      },
+      {
+        "sha": "ff488328597553f2ab0f3689a372716503855bc6",
+        "committedAt": "2026-09-06T18:25:03-03:00",
+        "subject": "ci(change-requests): syntax-check release branch operators",
+        "parents": [
+          "06ae952ef2f53d3f72b89d0e5ea5728805f930b0"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/change-request-release-operator.yml"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/ff488328597553f2ab0f3689a372716503855bc6"
+      },
+      {
+        "sha": "660f66a90f91f3d800a69b92e316c125ecfc659e",
+        "committedAt": "2026-09-06T18:30:32-03:00",
+        "subject": "test(change-requests): validate default-branch release operator",
+        "parents": [
+          "ff488328597553f2ab0f3689a372716503855bc6"
+        ],
+        "firstParentChangedPaths": [
+          "tests/change-request-release-operator.test.mjs"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/660f66a90f91f3d800a69b92e316c125ecfc659e"
+      },
+      {
+        "sha": "5ff585fb21d9aeed254d06e1cac99ca163ac42b2",
+        "committedAt": "2026-09-06T18:30:38-03:00",
+        "subject": "ci(change-requests): validate release operator on pull requests",
+        "parents": [
+          "660f66a90f91f3d800a69b92e316c125ecfc659e"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/change-request-release-operator-validation.yml"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/5ff585fb21d9aeed254d06e1cac99ca163ac42b2"
+      },
+      {
+        "sha": "6bc000ed46cc2c4f91ad1bc1e3e11166aadecc74",
+        "committedAt": "2026-09-07T00:36:55-03:00",
+        "subject": "Merge pull request #152 from matheusapc22/ops/change-request-release-workflow-bootstrap",
+        "parents": [
+          "aa477af0031b50c2659688872b87973931f61740",
+          "5ff585fb21d9aeed254d06e1cac99ca163ac42b2"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/change-request-release-operator-validation.yml",
+          ".github/workflows/change-request-release-operator.yml",
+          "tests/change-request-release-operator.test.mjs"
+        ],
+        "group": "CR bootstrap #152",
+        "disposition": "Manter somente em main; não portar nem executar no CC-01. Reconciliar scripts/tests e gates do stack fechado antes de qualquer rollout CR.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/6bc000ed46cc2c4f91ad1bc1e3e11166aadecc74"
+      },
+      {
+        "sha": "ce721dd71d05827f938d2c5b25773c740d747f8b",
+        "committedAt": "2026-09-09T14:34:47-03:00",
+        "subject": "ci(create): bootstrap Large CREATE Preview acceptance operator",
+        "parents": [
+          "6bc000ed46cc2c4f91ad1bc1e3e11166aadecc74"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/large-create-preview-acceptance.yml"
+        ],
+        "group": "Large CREATE #158",
+        "disposition": "Capacidade já está na funcional; diferença final é apenas default release_ref=mano_kepler_v1. Nenhum cherry-pick necessário neste lote.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/ce721dd71d05827f938d2c5b25773c740d747f8b"
+      },
+      {
+        "sha": "d7b9295719d782451fc097f8760a72831b7f0fe7",
+        "committedAt": "2026-09-10T05:01:52-03:00",
+        "subject": "Merge pull request #158 from matheusapc22/ops/large-create-preview-acceptance-bootstrap",
+        "parents": [
+          "6bc000ed46cc2c4f91ad1bc1e3e11166aadecc74",
+          "ce721dd71d05827f938d2c5b25773c740d747f8b"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/large-create-preview-acceptance.yml"
+        ],
+        "group": "Large CREATE #158",
+        "disposition": "Capacidade já está na funcional; diferença final é apenas default release_ref=mano_kepler_v1. Nenhum cherry-pick necessário neste lote.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/d7b9295719d782451fc097f8760a72831b7f0fe7"
+      },
+      {
+        "sha": "cc28d65eb0271442dd00700fb514fc27a575937f",
+        "committedAt": "2026-09-19T12:02:22-03:00",
+        "subject": "chore(ops): bootstrap storage recovery operator workflow",
+        "parents": [
+          "d7b9295719d782451fc097f8760a72831b7f0fe7"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/organization-storage-recovery-operator.yml"
+        ],
+        "group": "Storage recovery #183",
+        "disposition": "Workflow final tem blob idêntico em main e funcional. Nenhum cherry-pick necessário neste lote.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/cc28d65eb0271442dd00700fb514fc27a575937f"
+      },
+      {
+        "sha": "6a2827cfb5f3474f201c8092ce92d8a957dd93e8",
+        "committedAt": "2026-09-19T12:47:56-03:00",
+        "subject": "Merge pull request #183 from matheusapc22/ops/prh08-recovery-operator-bootstrap",
+        "parents": [
+          "d7b9295719d782451fc097f8760a72831b7f0fe7",
+          "cc28d65eb0271442dd00700fb514fc27a575937f"
+        ],
+        "firstParentChangedPaths": [
+          ".github/workflows/organization-storage-recovery-operator.yml"
+        ],
+        "group": "Storage recovery #183",
+        "disposition": "Workflow final tem blob idêntico em main e funcional. Nenhum cherry-pick necessário neste lote.",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/commit/6a2827cfb5f3474f201c8092ce92d8a957dd93e8"
+      }
+    ],
+    "mainDeltaPathComparison": [
+      {
+        "path": ".github/workflows/change-request-release-operator-validation.yml",
+        "defaultBranchBlob": "7fd8efabcba5c68d93ba34c06383a1ac2c847628",
+        "sourceBlob": null,
+        "sameBlob": false,
+        "existsInSource": false
+      },
+      {
+        "path": ".github/workflows/change-request-release-operator.yml",
+        "defaultBranchBlob": "6fb84a0ca056228ee2c668fd9699cbc07d7c1d0a",
+        "sourceBlob": null,
+        "sameBlob": false,
+        "existsInSource": false
+      },
+      {
+        "path": ".github/workflows/large-create-preview-acceptance.yml",
+        "defaultBranchBlob": "2c36ebeb44a4a42c35a2062666969d606bf553b4",
+        "sourceBlob": "175eb5102758f758898754704a7e90667a1614b6",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": ".github/workflows/organization-storage-recovery-operator.yml",
+        "defaultBranchBlob": "f5f1fb1345aa9ded84dff4dced721bef9074a2cf",
+        "sourceBlob": "f5f1fb1345aa9ded84dff4dced721bef9074a2cf",
+        "sameBlob": true,
+        "existsInSource": true
+      },
+      {
+        "path": ".github/workflows/pr147-preview-config.yml",
+        "defaultBranchBlob": "07caefb0c422b7c5d3cdf95b0358a4c9e5e12652",
+        "sourceBlob": null,
+        "sameBlob": false,
+        "existsInSource": false
+      },
+      {
+        "path": "src/Routes.tsx",
+        "defaultBranchBlob": "0851e6f2b5a511f32c3a8343ec5fb2b6789c261d",
+        "sourceBlob": "00ceb0a7da9f240011c4383ae22c532b6a561881",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": "src/assets/images/Logo_Maono.png",
+        "defaultBranchBlob": "088f4cb4c1f31bf6343717f50adedc0639c897a9",
+        "sourceBlob": "30c4e6abf66afbcc2e314b2620dd83a2b9dfac0a",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts",
+        "defaultBranchBlob": "33caa019b3dc229467b34c829206d80662546f6f",
+        "sourceBlob": "efb7e26ac69e1cf942ed18f2600be8fc92959cd5",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": "src/pages/Kepler/factories/panel-header.tsx",
+        "defaultBranchBlob": "a868184ee98248acd6cd3f3d609697d9b05a762c",
+        "sourceBlob": "cca4b3fb21119a990bd247fb59943fdaa4132b72",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": "src/pages/Kepler/index.tsx",
+        "defaultBranchBlob": "d49de6b30110e50f3cd16e8a588f1df38017ad69",
+        "sourceBlob": "60a837dccee253a6b0c92fb437c84e7b1b91b8fa",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": "src/pages/Projects/index.tsx",
+        "defaultBranchBlob": "21516fbaf14271264cdfe147438cdffdb9788490",
+        "sourceBlob": "2b9d3cf89c5b549627ba4da59e0857ff4eaac319",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": "src/pages/Projects/projects.css",
+        "defaultBranchBlob": "57b83709497033160275a2631be6c4dbd1e75154",
+        "sourceBlob": "b02681de98356b5b047127fa6ef88d13bef39fd5",
+        "sameBlob": false,
+        "existsInSource": true
+      },
+      {
+        "path": "tests/change-request-release-operator.test.mjs",
+        "defaultBranchBlob": "7060358f5984624504e469c3787c8d1cfc20cf57",
+        "sourceBlob": null,
+        "sameBlob": false,
+        "existsInSource": false
+      }
+    ]
+  },
+  "integrationDecision": {
+    "id": "ADR-CC-01",
+    "decision": "Usar source funcional fixada como base e mano_kepler_v1 como target de CC-01. Reconciliar por inventário; não fazer merge/cherry-pick/retarget automático de main.",
+    "rationale": "A default branch preserva bootstraps manuais e frontend antigo; não contém a árvore funcional atual. Os 22 commits foram classificados individualmente.",
+    "sourceReleaseEquivalence": "unverified",
+    "futureRequirement": "Mudança de base/target exige diff completo atualizado, revisão e gates; configuração Production precisa evidência própria."
+  },
+  "environments": {
+    "preview": {
+      "status": "github_deployment_check_observed",
+      "url": "https://e7e63b4f.maono-kepler-v1.pages.dev",
+      "sourceSha": "eec3a7a8fa78ab259b5522d3531d3cec942cb63f",
+      "check": {
+        "name": "Cloudflare Pages",
+        "conclusion": "success",
+        "completedAt": "2026-09-25T13:12:28Z",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/runs/108085556422"
+      },
+      "authenticatedAcceptance": "not_run",
+      "httpHealthProbe": "not_run_by_this_baseline",
+      "runtimeEnvironment": "unverified",
+      "domainMutationsFlag": "unverified",
+      "schema": "unverified",
+      "binding": "unverified",
+      "limitation": "Preview URL é o rótulo fornecido pelo check; hostname não certifica runtime Preview nem Production."
+    },
+    "production": {
+      "status": "unverified",
+      "url": null,
+      "deploymentSha": null,
+      "configuredBranch": null,
+      "authenticatedAcceptance": "not_run",
+      "schema": "unverified",
+      "binding": "unverified"
+    }
+  },
+  "bindings": {
+    "sourceLookupOrder": [
+      "DB",
+      "D1",
+      "MAONO_DB"
+    ],
+    "primaryHealthBinding": "DB",
+    "documentedProductionName": "maono_maps",
+    "documentedPreviewName": "maono_maps",
+    "localDatabaseName": "maono_maps_local",
+    "remoteDatabaseId": null,
+    "remoteConsulted": false,
+    "configFiles": [
+      "wrangler.toml.example",
+      "wrangler.preview.toml.example",
+      "wrangler.local.toml"
+    ],
+    "notes": [
+      "Arquivos .example usam placeholders para database_id; não comprovam configuração remota.",
+      "Exemplo Preview compartilha D1 produção; confirmar bindings de ambos separadamente antes de qualquer operação.",
+      "Operadores de storage/document purge contêm ID esperado no código; isso é contrato de configuração, não verificação remota atual.",
+      "Health SELECT 1 não confirma aplicação de migrations nem integridade dos domínios."
+    ]
+  },
+  "schema": {
+    "sourceFiles": [
+      {
+        "path": "schema.sql",
+        "blobSha": "d538315ead7a35d61127e4f9266cfebd37280eb8",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/schema.sql"
+      },
+      {
+        "path": "functions/_lib/ticket-center.js",
+        "blobSha": "a4302b1e95f37ea1069151f33bb1d4e4ffedca74",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/functions/_lib/ticket-center.js"
+      },
+      {
+        "path": "functions/_lib/permissions.js",
+        "blobSha": "82755595fdf58772cba8e2c3a3ad29c3bae15908",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/functions/_lib/permissions.js"
+      },
+      {
+        "path": "functions/_lib/project-change-requests.js",
+        "blobSha": "3f1357d9a5ab74711074f65775d60c7c8340fd20",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/functions/_lib/project-change-requests.js"
+      },
+      {
+        "path": "functions/_lib/project-change-request-review.js",
+        "blobSha": "73fb91e995b87c82bc48976ac8c65df0b49575a5",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/functions/_lib/project-change-request-review.js"
+      },
+      {
+        "path": "functions/_lib/project-change-request-inbox.js",
+        "blobSha": "ea29ee457949dce0ba7a3bb5358758912d6e8bfa",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/functions/_lib/project-change-request-inbox.js"
+      },
+      {
+        "path": "functions/_lib/preview-write-policy.js",
+        "blobSha": "4b27be13596eecaa899c204360f2b76e5521fe5e",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/functions/_lib/preview-write-policy.js"
+      },
+      {
+        "path": "functions/_middleware.js",
+        "blobSha": "538db0412539daa38c359b74070d5a2cbf15da24",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/functions/_middleware.js"
+      },
+      {
+        "path": "src/Routes.tsx",
+        "blobSha": "00ceb0a7da9f240011c4383ae22c532b6a561881",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/src/Routes.tsx"
+      },
+      {
+        "path": "src/pages/Projects/components/TicketsSection.tsx",
+        "blobSha": "dada4bca74061f68448e62ee96ddd2d65be6a289",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/src/pages/Projects/components/TicketsSection.tsx"
+      },
+      {
+        "path": "src/pages/Projects/components/ticket-types.ts",
+        "blobSha": "3fa47e26583ca6e75d01f607950fef28d75491a1",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/src/pages/Projects/components/ticket-types.ts"
+      },
+      {
+        "path": "wrangler.toml.example",
+        "blobSha": "3973d90b7d3589fed70582e2aa9397182bf3bd41",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/wrangler.toml.example"
+      },
+      {
+        "path": "wrangler.preview.toml.example",
+        "blobSha": "c7fe0ab234ae5820736b5b389238912e6f0a4d72",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/wrangler.preview.toml.example"
+      },
+      {
+        "path": "wrangler.local.toml",
+        "blobSha": "265b94f0dc3fc08a1b6c82a40efb1acc29cd0887",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/wrangler.local.toml"
+      },
+      {
+        "path": "docs/operations/production-db-preview-testing.md",
+        "blobSha": "dd389b99ce8d6dc0bc729e00821891c2feb7253a",
+        "url": "https://github.com/matheusapc22/maono_kepler_v1/blob/eec3a7a8fa78ab259b5522d3531d3cec942cb63f/docs/operations/production-db-preview-testing.md"
+      }
+    ],
+    "canonicalTables": [
+      "organization_tickets",
+      "ticket_attachments",
+      "ticket_events"
+    ],
+    "changeRequestTables": [
+      "project_change_requests",
+      "project_change_operations"
+    ],
+    "bootstrapSchemaIncludesChangeRequestTables": false,
+    "remoteLedgerRead": false,
+    "remoteSchemaRead": false,
+    "limitations": [
+      "O snapshot schema.sql e os arquivos migrations devem ser reconciliados; o bootstrap isolado não substitui o ledger.",
+      "Não há natureza separada, conversas, SLA versionado ou painel global delegado neste baseline."
+    ]
+  },
+  "routes": [
+    {
+      "method": "GET, POST",
+      "path": "/api/organizations/:id/tickets",
+      "file": "functions/api/organizations/[id]/tickets.js",
+      "authorization": "ticket.view / ticket.create",
+      "note": "GET ainda chama migrateLegacyTickets; leitura HTTP não garante ausência de DML legado.",
+      "blobSha": "bb1084ecab4535b0f61e44f5691d542eb6b642bf"
+    },
+    {
+      "method": "GET, PATCH",
+      "path": "/api/organizations/:id/tickets/:ticketId",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId].js",
+      "authorization": "ticket.view / ticket.manage",
+      "note": "Detalhe pode retornar link CR somente após avaliação do revisor.",
+      "blobSha": "924c78b9d70e8b385be7545b6b3b7e451c6c7caf"
+    },
+    {
+      "method": "GET, POST",
+      "path": "/api/organizations/:id/tickets/:ticketId/attachments",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId]/attachments.js",
+      "authorization": "ticket.view; POST também ticket.create ou ticket.manage",
+      "blobSha": "725c9e201b13deaa519efc86a08ef62d571f4d05"
+    },
+    {
+      "method": "PATCH, DELETE",
+      "path": "/api/organizations/:id/tickets/:ticketId/attachments/:attachmentId",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId]/attachments/[attachmentId].js",
+      "authorization": "Leitura, contexto composto, autoria/gestão e estado",
+      "blobSha": "8cc8fe288e32e8ad8d30173f2e0d7cf2c898fec7"
+    },
+    {
+      "method": "GET",
+      "path": "/api/organizations/:id/tickets/:ticketId/attachments/:attachmentId/download",
+      "file": "functions/api/organizations/[id]/tickets/[ticketId]/attachments/[attachmentId]/download.js",
+      "authorization": "ticket.view e contexto organização/ticket/anexo",
+      "blobSha": "0fac983439dc1ac7fd37900850ae4f07422833d2"
+    },
+    {
+      "method": "GET, POST",
+      "path": "/api/projects/:slug/change-requests",
+      "file": "functions/api/projects/[slug]/change-requests.js",
+      "authorization": "Domínio Viewer/projeto",
+      "blobSha": "244c15f691f2dd57fc7ac8a96fda235baac3cc50"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:slug/change-requests/:id",
+      "file": "functions/api/projects/[slug]/change-requests/[id].js",
+      "authorization": "Solicitante/projeto",
+      "blobSha": "6bf979d819af180383d5166291f9d53867b99bd3"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:slug/change-requests/inbox",
+      "file": "functions/api/projects/[slug]/change-requests/inbox.js",
+      "authorization": "Revisor autorizado do projeto",
+      "blobSha": "41a1dcb9be936035e664b594206505a83ff602e8"
+    },
+    {
+      "method": "GET, POST",
+      "path": "/api/projects/:slug/change-requests/:id/review",
+      "file": "functions/api/projects/[slug]/change-requests/[id]/review.js",
+      "authorization": "project.view + rota Editor + project.map.edit",
+      "blobSha": "bbec063028e6346a9d65951d606fcad4fee010cd"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:slug/change-requests/:id/apply",
+      "file": "functions/api/projects/[slug]/change-requests/[id]/apply.js",
+      "authorization": "Revisor e project.save; gates independentes do Ticket",
+      "blobSha": "cdf532a21b8cd3d916cff394b3181c3b72fa5daa"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "file": "functions/api/health.js",
+      "authorization": "Health básico, sem certificação de schema completo",
+      "blobSha": "6ec96d3cb04279f6c7f2b8a43bd978cdd6dc30d0"
+    }
+  ],
+  "ui": {
+    "ticketEntry": "/projects; sidebarSection=requests",
+    "changeRequestInbox": "/projects/:projectSlug/requests",
+    "changeRequestReview": "/projects/:projectSlug/review/:changeRequestId",
+    "ticketStatuses": [
+      "new",
+      "open",
+      "in_progress",
+      "in_review",
+      "closed"
+    ],
+    "domains": [
+      "map",
+      "database",
+      "permission",
+      "export",
+      "support",
+      "other"
+    ],
+    "attachmentLimits": {
+      "maxFiles": 5,
+      "maxFileBytes": 83886080,
+      "maxTicketBytes": 157286400,
+      "chunkBytes": 8388608,
+      "multipartBytes": 10485760
+    }
+  },
+  "migrations": {
+    "newFiles": [],
+    "remoteApplied": false,
+    "remoteAppliedMeaning": "Nenhuma migration foi aplicada por este trabalho; não é uma declaração sobre o histórico real do banco.",
+    "remoteHistoricalState": "unverified",
+    "sourceInventory": [
+      {
+        "path": "migrations/0002_organizations_files.sql",
+        "blobSha": "8ea1accd67cb1462089261a5965d98f2cb2ffbd6",
+        "sha256": "4fd20c1d27a6e7030e28ffa84188b3fd5193ffe57b33dee3063467e68d26bd4d",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0006_create_organization_exports.sql",
+        "blobSha": "342897b7a722933f2093f3474ed2a6295e068adf",
+        "sha256": "f3ff0e6d830ceeb5ad3abb9de84b29ba17bee231212990940a66c4a953fbeca0",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0007_create_organization_limit_requests.sql",
+        "blobSha": "00900d9f6748b3a16cb1cfaafdd729952af65fc5",
+        "sha256": "b1f3c6c598fd54bcd8e6a52f05b27b1131a117ffbafad90b0383579b34319ebb",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0007_project_save_role_permissions.sql",
+        "blobSha": "1765a6d475fc36e5ab98a53dafb409a58521b2c6",
+        "sha256": "6058b6172cf2f969406b5c4fda7ebbd65451beb0e2797014ad876b38efc0c2b9",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0008_harden_organization_files.sql",
+        "blobSha": "0adffc62ed74f342396ea74cf6b54fa1da041634",
+        "sha256": "547625bd7e0e8b59a6e32429a7c00d791352ffec5f341ecd624147442eb09e8a",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0008_session_active_organization.sql",
+        "blobSha": "2a6a3e15d4aa1d7f6d7513cd4b5740dbb75c0385",
+        "sha256": "696def7708ec3dfffff8e5f0c722a4acc76c10b43f199e93e0603d0e91854301",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0009_organization_storage_invariant.sql",
+        "blobSha": "853a2dd8152a4245d0c20ef9a1d7ccb0a15fbc3a",
+        "sha256": "1dd135c0e516598025ae79d6de0c7a1dfedbcee24cf1d73682584dfb2ddb82fb",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0010_ticket_center.sql",
+        "blobSha": "a3ba43b99d624c8c892d4f2976d5d6fe1d1176b8",
+        "sha256": "c3f6edff110762236c42244fb9cb86ec81472dbda724eb93324b9e8b984cc66d",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0011_roadmap_gantt.sql",
+        "blobSha": "a8dcf3df4bb0f4aa746bd3b3164389a59ab55e0e",
+        "sha256": "fefeec24f519f5ff0f08b1b0e88f37d51209faa7880265fe38c26a5616edbbd9",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0012_access_delegation_policy.sql",
+        "blobSha": "1d07dd46a03500abae9204f22cce02659a14926a",
+        "sha256": "22616a5ead980a7887016879583c05c361d5c672a84d3b418d63f4091e8dec58",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0013_user_permission_denials.sql",
+        "blobSha": "c593dbb27c63caa742413e653d8dc2f9ba6aeb84",
+        "sha256": "ca9b75ea30cbe72b28df5add1b2399372213a7cb517bc08eb03cfdb442dba9d3",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0014_project_metadata_ownership.sql",
+        "blobSha": "62fd6492dfe2087d271ad6d5b5dee20e3baf6024",
+        "sha256": "3f5e7289d8e9b5db87b86a7f640ff1e0727570384729d1468240fea99a8f77b5",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0015_project_preview_lifecycle.sql",
+        "blobSha": "2fd6b15b37d2da49d21abc36759e0f3bc6f86830",
+        "sha256": "8f53ccb3fdc6d913a963fb796fc04a012c552b8d614426a749c919d4aeffd1ca",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0016_map_panel_navigation_and_quota.sql",
+        "blobSha": "254fb6bd9e08eccba37e74d35c8331f73fd3e030",
+        "sha256": "f5617b81fe7a9335cddd446a88bff2a8cd04d1ecd258207b43c96c5e9f7408d8",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0017_map_isochrone_rate_limit.sql",
+        "blobSha": "7abb5933abf7fa6fad04a9f677684d541accb608",
+        "sha256": "c78e1dc56a2dc52b6551626c1ff495c5455e643a70d165045ca44eb7e0c15bdf",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0018_project_lifecycle.sql",
+        "blobSha": "5f4135a73ac06b58e12c5b3cb0dced24355140d7",
+        "sha256": "00884086df5afe422a8ce18bfbe69b6128f5048f7a59d794e089d65418c92438",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0019_save_deploy_contract.sql",
+        "blobSha": "ff26ffb75256cea5b96b035ae8d04164180725cc",
+        "sha256": "94023f5533eb9c36cfe54cea1c85d578a10dcfc386c3da08756a49c1f4f79bf5",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0020_project_change_requests.sql",
+        "blobSha": "309ec84016218ef079a2b2bb4e5a5f37dddd8556",
+        "sha256": "7aa533440829bca8da3404fc57cdedf7c193da34677b2562c51c3c9e827ddac8",
+        "remoteStatus": "unverified"
+      },
+      {
+        "path": "migrations/0024_document_folders_trash.sql",
+        "blobSha": "89bcaa79b17310557dda0643187620dcdc9d82e6",
+        "sha256": "a57f321a77cafba48b77f4ea934d7bcecf6c6c870c0d90b44dfc790671c1066b",
+        "remoteStatus": "unverified"
+      }
+    ],
+    "requiredExisting": [
+      "0002_organizations_files.sql",
+      "0009_organization_storage_invariant.sql",
+      "0010_ticket_center.sql",
+      "0020_project_change_requests.sql"
+    ],
+    "lockedHistorical": [
+      {
+        "file": "0021_change_request_lifecycle.sql",
+        "effect": "Lifecycle, decisões, journal e triggers de sincronização CR/Ticket; incompatibilidade de writers exige revisão.",
+        "presentInSource": false,
+        "remoteStatus": "migration pendente de confirmação",
+        "applyAuthorized": false,
+        "prerequisite": "Reconciliar ledger/schema, código compatível e acceptance autenticado; autorização explícita antes de aplicação."
+      },
+      {
+        "file": "0022_change_request_apply_artifacts.sql",
+        "effect": "Artefato e identidade por tentativa de Apply.",
+        "presentInSource": false,
+        "remoteStatus": "migration pendente de confirmação",
+        "applyAuthorized": false,
+        "prerequisite": "Reconciliar ledger/schema, código compatível e acceptance autenticado; autorização explícita antes de aplicação."
+      },
+      {
+        "file": "0023_change_request_resubmissions.sql",
+        "effect": "Lineage imutável de resubmissões.",
+        "presentInSource": false,
+        "remoteStatus": "migration pendente de confirmação",
+        "applyAuthorized": false,
+        "prerequisite": "Reconciliar ledger/schema, código compatível e acceptance autenticado; autorização explícita antes de aplicação."
+      }
+    ],
+    "reservedNumberWarning": "0024_document_folders_trash.sql já existe na source; não reutilizar 0021–0024.",
+    "rule": "Migration pendente de confirmação até evidência/confirmacão explícita no ambiente; CI/Preview/merge não substituem esse gate."
+  },
+  "gates": {
+    "newMigrationRequired": false,
+    "d1MutationAuthorized": false,
+    "historicalCrRolloutAuthorized": false,
+    "mayCreateAcceptanceBranch": false,
+    "mayEnablePreviewMutations": false,
+    "productionAcceptance": "pending_external_evidence",
+    "ct01": {
+      "status": "read_only_baseline_recorded",
+      "verified": [
+        "source/main SHA e árvore",
+        "histórico completo e 22 commits exclusivos main",
+        "check Pages observado e limite da evidência",
+        "rotas/schema/configuração fonte"
+      ],
+      "unverified": [
+        "Production deployment/SHA/branch",
+        "D1 binding/schema/ledger",
+        "runtime Preview/flags/secrets",
+        "acceptance autenticado"
+      ]
+    },
+    "ct02": {
+      "status": "not_run",
+      "reason": "Exige solicitante e atendente executando dúvida/incidente no protótipo; inventário de código não substitui esse ensaio."
+    }
+  },
+  "historicalPullRequests": [
+    {
+      "number": 147,
+      "state": "closed",
+      "merged": false,
+      "headSha": "927aebe1f118a94674e6d29185492bf4a171e666",
+      "url": "https://github.com/matheusapc22/maono_kepler_v1/pull/147",
+      "evidence": "Metadados GitHub consultados somente leitura em 25/09/2026; checks antigos não cobrem CC-01."
+    },
+    {
+      "number": 149,
+      "state": "closed",
+      "merged": false,
+      "headSha": "6d8c273379b386b238cc17fe20764b2aa8927bc5",
+      "url": "https://github.com/matheusapc22/maono_kepler_v1/pull/149",
+      "evidence": "Metadados GitHub consultados somente leitura em 25/09/2026; checks antigos não cobrem CC-01."
+    },
+    {
+      "number": 150,
+      "state": "closed",
+      "merged": false,
+      "headSha": "926bfd13d9a6cb9c5cd15cf10b4827e646776c3e",
+      "url": "https://github.com/matheusapc22/maono_kepler_v1/pull/150",
+      "evidence": "Metadados GitHub consultados somente leitura em 25/09/2026; checks antigos não cobrem CC-01."
+    },
+    {
+      "number": 151,
+      "state": "closed",
+      "merged": false,
+      "headSha": "36dac99e88486f8adfdabc828d97f7bc30f3c6f7",
+      "url": "https://github.com/matheusapc22/maono_kepler_v1/pull/151",
+      "evidence": "Metadados GitHub consultados somente leitura em 25/09/2026; checks antigos não cobrem CC-01."
+    },
+    {
+      "number": 152,
+      "state": "closed",
+      "merged": true,
+      "headSha": "5ff585fb21d9aeed254d06e1cac99ca163ac42b2",
+      "url": "https://github.com/matheusapc22/maono_kepler_v1/pull/152",
+      "evidence": "Metadados GitHub consultados somente leitura em 25/09/2026; checks antigos não cobrem CC-01."
+    }
+  ],
+  "historicalOperator": {
+    "path": ".github/workflows/change-request-release-operator.yml",
+    "branch": "main",
+    "blobSha": "6fb84a0ca056228ee2c668fd9699cbc07d7c1d0a",
+    "existsInSource": false,
+    "trigger": "workflow_dispatch",
+    "modes": [
+      "migrate",
+      "acceptance",
+      "closure"
+    ],
+    "releaseRef": "ops/change-request-release-acceptance",
+    "executed": false,
+    "operationalReadiness": "unverified",
+    "historicalAcceptanceAndClosure": "#151: skipped, não aprovados",
+    "compatibilityWarning": "Operador referencia scripts/testes do stack fechado; não está pronto para ser inferido como operador de CC-01."
+  },
+  "evidenceCommands": [
+    "git rev-parse HEAD <source>^{tree} <main>^{tree}",
+    "git rev-parse --is-shallow-repository",
+    "git rev-list --left-right --count <main>...<source>",
+    "git merge-base <main> <source>",
+    "git log --reverse --format=<sha,date,subject> <source>..<main>",
+    "git diff --shortstat <main> <source>",
+    "git diff-tree --no-commit-id --name-only -r <first-parent> <main-only-commit>",
+    "git show <main>:.github/workflows/change-request-release-operator.yml"
+  ],
+  "nonActions": [
+    "Nenhum push ou commit neste subtrabalho.",
+    "Nenhuma troca de HEAD/branch; apenas fetch read-only de main.",
+    "Nenhuma consulta/escrita D1, execução de operador remoto ou alteração de flags.",
+    "Nenhuma alegação de CT-02, aprovação humana ou produção aceita."
+  ]
+}
