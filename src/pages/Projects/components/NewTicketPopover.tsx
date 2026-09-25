@@ -8,6 +8,8 @@ import {
 } from "./tickets-api";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import TicketErrorNotice from "./TicketErrorNotice";
+import { ticketCreationDefinitelyRejected, ticketCreationIntent, type TicketCreationIntent } from "./ticket-command-form";
+import "./ticket-lifecycle.css";
 import TicketTriageFields from "./TicketTriageFields";
 import {
   buildTicketTriagePayload,
@@ -33,6 +35,8 @@ type NewTicketPopoverProps = {
   assignees: TicketPerson[];
   canManage: boolean;
   triageEnabled?: boolean;
+  lifecycleEnabled?: boolean;
+  onRefreshCapabilities?: () => void;
   attachmentLimits: TicketAttachmentLimits;
   onClose: () => void;
   onCreated: (ticket: Ticket, failedFiles: File[]) => void;
@@ -103,6 +107,8 @@ export default function NewTicketPopover({
   assignees,
   canManage,
   triageEnabled = false,
+  lifecycleEnabled = false,
+  onRefreshCapabilities,
   attachmentLimits,
   onClose,
   onCreated,
@@ -125,6 +131,10 @@ export default function NewTicketPopover({
   const abortControllerRef = useRef<AbortController | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const busyRef = useRef(false);
+  const creationIntentRef = useRef<TicketCreationIntent | null>(null);
+  const creationUncertainRef = useRef(false);
+  const [hasCreationIntent, setHasCreationIntent] = useState(false);
+  const [creationRejected, setCreationRejected] = useState(false);
 
   const busy =
     phase === "creating" || phase === "uploading" || retryingFileKey !== null;
@@ -188,6 +198,16 @@ export default function NewTicketPopover({
 
   function resetAndClose() {
     abortControllerRef.current?.abort();
+    if (creationIntentRef.current && !createdTicket) {
+      // Closing a panel cannot turn an uncertain server result into a second intention.
+      setPhase("idle");
+      onClose();
+      return;
+    }
+    creationIntentRef.current = null;
+    creationUncertainRef.current = false;
+    setHasCreationIntent(false);
+    setCreationRejected(false);
     setForm(INITIAL_FORM);
     setTriageForm(createTicketTriageForm());
     setTriageError(null);
@@ -346,10 +366,15 @@ export default function NewTicketPopover({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || createdTicket) return;
+    if (busyRef.current || createdTicket) return;
+    if (creationIntentRef.current && !lifecycleEnabled) {
+      setError("Os requisitos de criação mudaram. Atualize-os antes de verificar esta intenção; seus dados foram preservados.");
+      onRefreshCapabilities?.();
+      return;
+    }
 
     setTriageError(null);
-    if (triageEnabled) {
+    if (triageEnabled && !creationIntentRef.current) {
       const validation = validateTicketTriageForm(triageForm, { priority: form.priority });
       if (validation) {
         setTriageError(validation);
@@ -364,6 +389,7 @@ export default function NewTicketPopover({
       return;
     }
 
+    busyRef.current = true;
     setPhase("creating");
     setError(null);
     const controller = new AbortController();
@@ -380,22 +406,36 @@ export default function NewTicketPopover({
         canManage && form.assignedTo ? form.assignedTo : null,
     };
 
+    const intent = lifecycleEnabled || creationIntentRef.current
+      ? ticketCreationIntent(creationIntentRef.current, payload, () => crypto.randomUUID()) : null;
+    if (intent) { creationIntentRef.current = intent; setHasCreationIntent(true); }
     try {
       const ticket = await createTicket(
         organizationId,
-        payload,
+        intent?.payload || payload,
         controller.signal,
+        { idempotencyKey: intent?.key },
       );
+      if (abortControllerRef.current !== controller) return;
+      creationIntentRef.current = null;
+      creationUncertainRef.current = false;
+      setHasCreationIntent(false);
+      setCreationRejected(false);
       setCreatedTicket(ticket);
       await uploadFiles(ticket, files);
     } catch (requestError) {
+      if (intent && !ticketCreationDefinitelyRejected(requestError, creationUncertainRef.current)) creationUncertainRef.current = true;
+      if (abortControllerRef.current !== controller) return;
       if (
         requestError instanceof DOMException &&
         requestError.name === "AbortError"
       ) {
+        setPhase("idle");
         return;
       }
       setPhase("idle");
+      setCreationRejected(ticketCreationDefinitelyRejected(requestError, creationUncertainRef.current));
+      if (toTicketApiError(requestError).status === 428) onRefreshCapabilities?.();
       setError(
         toTicketApiError(requestError, "Não foi possível criar o chamado."),
       );
@@ -494,6 +534,13 @@ export default function NewTicketPopover({
           </section>
         ) : (
           <form className="ticket-new-form" onSubmit={handleSubmit}>
+            {hasCreationIntent ? <div className="ticket-create-intent" role="status">
+              <strong>{!lifecycleEnabled ? "A verificação desta intenção está temporariamente indisponível." : creationRejected ? "A criação foi recusada." : "Verifique o resultado desta intenção antes de criar outra."}</strong>
+              <p>{creationRejected ? "Você pode repetir os mesmos dados ou escolher explicitamente editar uma nova intenção." : "Os dados desta tentativa foram preservados. Repetir usa a mesma intenção e recupera o chamado se ele já tiver sido criado, inclusive após perda da resposta."}</p>
+              {creationRejected ? <button type="button" className="ticket-secondary-action" disabled={busy} onClick={() => { creationIntentRef.current = null; creationUncertainRef.current = false; setHasCreationIntent(false); setCreationRejected(false); setError(null); }}>Editar como nova intenção</button> : null}
+              {onRefreshCapabilities ? <button type="button" className="ticket-secondary-action" disabled={busy} onClick={onRefreshCapabilities}>Atualizar requisitos</button> : null}
+            </div> : null}
+            <fieldset disabled={busy || hasCreationIntent} aria-label="Dados do chamado">
             <label className="ticket-field ticket-field-wide">
               <span>Assunto *</span>
               <input
@@ -669,6 +716,7 @@ export default function NewTicketPopover({
               <span>{(totalBytes / 1024 / 1024).toFixed(2)} MB</span>
             </div>
 
+            </fieldset>
             {error ? (
               <div className="ticket-field-wide">
                 <TicketErrorNotice error={error} compact />
@@ -686,13 +734,13 @@ export default function NewTicketPopover({
               <button
                 type="submit"
                 className="ticket-primary-action"
-                disabled={busy}
+                disabled={busy || hasCreationIntent && !lifecycleEnabled}
               >
                 {phase === "creating"
                   ? "Criando chamado..."
                   : phase === "uploading"
                     ? "Enviando anexos..."
-                    : "Criar chamado"}
+                    : hasCreationIntent ? "Repetir criação com os mesmos dados" : "Criar chamado"}
               </button>
             </div>
           </form>

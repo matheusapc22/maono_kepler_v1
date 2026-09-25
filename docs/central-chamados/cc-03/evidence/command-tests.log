@@ -1,0 +1,242 @@
+[Maono HTTP error] {
+  correlationId: '2e9c4838-5f31-47b7-881d-5fd0f3b159d1',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE returns a retention conflict for event author protected against SET NULL, preserving the whole batch; deactivation still works (46.186751ms)
+[Maono HTTP error] {
+  correlationId: 'f7ea594c-5244-458a-a15e-e03dc69b2ab2',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE returns a retention conflict for ticket auditor protected against SET NULL, preserving the whole batch; deactivation still works (25.221321ms)
+[Maono HTTP error] {
+  correlationId: '942032f1-aa4b-4a22-a5cb-9fb1f8c5be70',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE returns a retention conflict for command actor protected by its restrictive foreign key, preserving the whole batch; deactivation still works (24.95509ms)
+[Maono HTTP error] {
+  correlationId: '62fafbfc-77c7-4708-98dd-2a81168e2ed8',
+  code: 'USER_TICKET_HISTORY_RETAINED',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 409
+}
+✔ admin DELETE recognizes a wrapped D1 append-only cause after rollback (20.857996ms)
+✔ admin DELETE keeps ordinary deletion available when the target has no retained Ticket history (19.504975ms)
+[Maono HTTP error] {
+  correlationId: '4848dded-d7b1-45a2-81da-6848b879dad6',
+  code: 'ERR_SQLITE_ERROR',
+  category: 'INFRASTRUCTURE',
+  retryable: false,
+  status: 500
+}
+✔ an unrelated foreign-key failure is not mislabeled as Ticket history retention (20.145272ms)
+✔ cinco estados conservados: reabertura não aparece como PATCH livre de status (1.748268ms)
+✔ avançar exige responsável e próxima ação; revisão exige evidência, retorno exige motivo (0.338551ms)
+✔ fechamento exige resultado, evidência e comunicação em todos outcomes, inclusive sem execução (0.49048ms)
+✔ espera é comando independente, requer responsável, não muda estado nem configura SLA (0.60328ms)
+✔ reabrir exige motivo e próximo passo e não reenvia fechamento ou histórico anterior (0.191999ms)
+✔ limites coincidem com comandos sem truncar campos silenciosamente (0.265671ms)
+✔ rascunho sujo conserva token core original após reload e conflito; nova identidade nunca herda token (0.170407ms)
+✔ resposta perdida repete intenção e payload congelados sem gerar chave nova ou incorporar edições (0.172601ms)
+✔ incerteza nunca autoriza nova intenção por erro posterior de sessão; apenas rejeição inicial definitiva (0.246192ms)
+✔ HTTP create requires a key and persists one success audit through replay (72.010903ms)
+✔ HTTP state owns its ETag; list, detail and state GET perform no DML after cutover (46.224608ms)
+[Maono ticket center][9e436f2c-e6fe-4671-ba22-60fd2b0cb4d2][TICKET_COMMANDS_DISABLED] Error: Este fluxo de atendimento ainda não está habilitado. Recarregue a Central.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:108:44)
+    at onRequestPost (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets.js:104:13)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:74:17)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_DISABLED',
+  publicMessage: 'Este fluxo de atendimento ainda não está habilitado. Recarregue a Central.'
+}
+✔ HTTP retry after disabling commands cannot fall through to non-idempotent legacy creation (26.265627ms)
+✔ HTTP mutation rejects missing and stale validators with no successful audit or side effects (40.514802ms)
+[Maono ticket center][741db799-4dcf-498c-b6ba-2cf703a11758][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async onRequestGet (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets.js:59:7)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+[Maono ticket center][573833ed-e0a2-4f67-b4f0-2bec1c126fb5][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async onRequestGet (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets/%5BticketId%5D.js:69:7)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+[Maono ticket center][808f0104-a01e-4300-b5b9-0885fe13d4bb][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async authorize (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-command-http.js:23:3)
+    at async ticketCommandStateResponse (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-command-http.js:32:5)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+✔ HTTP GET fails closed on a new legacy source row without importing it (31.914878ms)
+✔ HTTP authorization denies cross-organization reads and viewer commands before mutation (21.318763ms)
+✔ HTTP correction scopes the event from the route and preserves the original event (25.790866ms)
+✔ CT-07: create replay returns its persisted result after later edits, without duplicating durable records (66.980011ms)
+✔ CT-07: parallel retries with the same key persist one creation and return the same result (27.587412ms)
+✔ CT-08: a divergent payload conflicts within its key scope, while actors and tenants remain independent (38.825081ms)
+✔ creation requires an idempotency key before any persistent effect (25.526292ms)
+✔ CT-09: absent, stale and foreign If-Match validators reject updates without events, audit or outbox (45.932577ms)
+✔ CT-09: a competing command between server read and batch wins once; the losing CAS creates no records (33.365162ms)
+✔ an isolated next-action edit uses CAS and records one command without changing status or triage (27.858371ms)
+✔ flag-off remains compatible with CC-02 on the schema before 0026 (12.108663ms)
+✔ flag-on fails closed with missing schema, without compatibility writes (8.497003ms)
+✔ flag-on fails closed with missing marker, without compatibility writes (13.792114ms)
+✔ commands remain unavailable if the prerequisite triage flag is disabled (14.94261ms)
+✔ a marker with running cannot enable commands or trigger compatibility writes (19.36976ms)
+✔ a marker with failed cannot enable commands or trigger compatibility writes (16.746452ms)
+✔ a marker with pending rows cannot enable commands or trigger compatibility writes (21.812167ms)
+✔ a marker with skipped rows cannot enable commands or trigger compatibility writes (15.568765ms)
+✔ a marker with missing completion cannot enable commands or trigger compatibility writes (16.123782ms)
+✔ a new eligible legacy row invalidates a ready marker until explicit backfill reconciles it (26.911193ms)
+✔ CT-06: closure requires outcome, result and communication; reopening preserves the prior closed cycle (35.933408ms)
+✔ CT-06: state path enforces triage, assignment, next action, review evidence and return justification (40.815426ms)
+▶ CT-06: transition matrix from new, with reopening kept as an explicit command
+  ✔ new -> new (21.936466ms)
+  ✔ new -> open (23.766135ms)
+  ✔ new -> in_progress (20.143078ms)
+  ✔ new -> in_review (19.688022ms)
+  ✔ new -> closed (20.963125ms)
+✔ CT-06: transition matrix from new, with reopening kept as an explicit command (107.500781ms)
+▶ CT-06: transition matrix from open, with reopening kept as an explicit command
+  ✔ open -> new (21.278551ms)
+  ✔ open -> open (22.283018ms)
+  ✔ open -> in_progress (31.971643ms)
+  ✔ open -> in_review (20.184611ms)
+  ✔ open -> closed (19.635111ms)
+✔ CT-06: transition matrix from open, with reopening kept as an explicit command (116.053212ms)
+▶ CT-06: transition matrix from in_progress, with reopening kept as an explicit command
+  ✔ in_progress -> new (21.802102ms)
+  ✔ in_progress -> open (23.332712ms)
+  ✔ in_progress -> in_progress (22.689506ms)
+  ✔ in_progress -> in_review (26.394183ms)
+  ✔ in_progress -> closed (25.878884ms)
+✔ CT-06: transition matrix from in_progress, with reopening kept as an explicit command (121.086458ms)
+▶ CT-06: transition matrix from in_review, with reopening kept as an explicit command
+  ✔ in_review -> new (26.886404ms)
+  ✔ in_review -> open (26.86359ms)
+  ✔ in_review -> in_progress (23.895671ms)
+  ✔ in_review -> in_review (26.55214ms)
+  ✔ in_review -> closed (27.439344ms)
+✔ CT-06: transition matrix from in_review, with reopening kept as an explicit command (132.528655ms)
+▶ CT-06: transition matrix from closed, with reopening kept as an explicit command
+  ✔ closed -> new (19.053504ms)
+  ✔ closed -> open (18.887743ms)
+  ✔ closed -> in_progress (21.014944ms)
+  ✔ closed -> in_review (19.175899ms)
+  ✔ closed -> closed (18.905019ms)
+✔ CT-06: transition matrix from closed, with reopening kept as an explicit command (97.948025ms)
+✔ CT-06: waiting records responsible person, dates and reasons independently of status or SLA (35.41796ms)
+✔ state ETag excludes event/attachment aggregates but changes when a legacy writer updates a core field (23.709866ms)
+✔ CT-49: past events and ticket audit cannot be edited/deleted; scoped correction appends a new event (29.427309ms)
+▶ CT-10: create rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/8 (17.801544ms)
+  ✔ statement 2/8 (31.212248ms)
+  ✔ statement 3/8 (24.760105ms)
+  ✔ statement 4/8 (24.380804ms)
+  ✔ statement 5/8 (25.248142ms)
+  ✔ statement 6/8 (25.671051ms)
+  ✔ statement 7/8 (21.288666ms)
+  ✔ statement 8/8 (16.357255ms)
+✔ CT-10: create rolls back at every transaction statement, including mandatory audit and outbox (207.328727ms)
+▶ CT-10: update rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/5 (18.197562ms)
+  ✔ statement 2/5 (19.000453ms)
+  ✔ statement 3/5 (22.843443ms)
+  ✔ statement 4/5 (21.329238ms)
+  ✔ statement 5/5 (18.816586ms)
+✔ CT-10: update rolls back at every transaction statement, including mandatory audit and outbox (119.365987ms)
+▶ CT-10: close rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/7 (18.387839ms)
+  ✔ statement 2/7 (20.685166ms)
+  ✔ statement 3/7 (18.549122ms)
+  ✔ statement 4/7 (18.16352ms)
+  ✔ statement 5/7 (19.147253ms)
+  ✔ statement 6/7 (18.438685ms)
+  ✔ statement 7/7 (19.328808ms)
+✔ CT-10: close rolls back at every transaction statement, including mandatory audit and outbox (150.843965ms)
+▶ CT-10: wait rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/6 (25.072785ms)
+  ✔ statement 2/6 (20.292231ms)
+  ✔ statement 3/6 (20.006811ms)
+  ✔ statement 4/6 (20.859207ms)
+  ✔ statement 5/6 (22.737362ms)
+  ✔ statement 6/6 (20.532494ms)
+✔ CT-10: wait rolls back at every transaction statement, including mandatory audit and outbox (150.536184ms)
+▶ CT-10: reopen rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/6 (22.998606ms)
+  ✔ statement 2/6 (19.775873ms)
+  ✔ statement 3/6 (20.275356ms)
+  ✔ statement 4/6 (20.528918ms)
+  ✔ statement 5/6 (20.715871ms)
+  ✔ statement 6/6 (19.589641ms)
+✔ CT-10: reopen rolls back at every transaction statement, including mandatory audit and outbox (144.972478ms)
+▶ CT-10: correction rolls back at every transaction statement, including mandatory audit and outbox
+  ✔ statement 1/5 (17.449472ms)
+  ✔ statement 2/5 (19.864176ms)
+  ✔ statement 3/5 (18.387728ms)
+  ✔ statement 4/5 (17.769114ms)
+  ✔ statement 5/5 (20.466865ms)
+✔ CT-10: correction rolls back at every transaction statement, including mandatory audit and outbox (111.493737ms)
+✔ existing original CR writer uses additive defaults and lazy cycles without authorization or automatic CR approval (29.083934ms)
+✔ existing analysis-aware CR writer uses additive defaults and lazy cycles without authorization or automatic CR approval (25.853283ms)
+✔ canonical state hashes semantic JSON consistently and excludes display/envelope fields (8.466407ms)
+✔ a partial migration missing ticket_events_no_update cannot enable commands (40.601813ms)
+✔ a partial migration missing ticket_lifecycle_requires_command cannot enable commands (31.284052ms)
+✔ a partial migration missing idx_ticket_wait_open cannot enable commands (27.04273ms)
+✔ rollback blocks core edits to adopted tickets and preserves previous closure on reenable (45.926899ms)
+✔ a keyed direct retry after rollback cannot create a legacy duplicate (30.622583ms)
+✔ a pending CR arriving between validation and close batch requires acknowledgement with no phantom effects (36.191176ms)
+✔ invalid next action lengths/types reject before writes (39.444837ms)
+✔ CT-49: bounded pages reconcile only eligible source identities and preserve organization scope (29.975777ms)
+✔ CT-49: replay after completion is idempotent and counts actual INSERT changes (11.110276ms)
+✔ CT-49: partial failure keeps earlier commits, rolls back failed ticket/event/audit/outbox, and resumes without duplicates (16.82418ms)
+✔ mandatory audit failure rolls back the import and leaves marker failed (9.80046ms)
+✔ provenance records substituted author and inferred timestamps without inventing triage, response or historic cycles (9.94607ms)
+✔ real legacy author, assignment and timestamps remain intact (10.308968ms)
+✔ concurrent earlier import produces zero new events and migrated=0 (7.694922ms)
+✔ inventory is read-only and exposes source additions after a ready marker (8.196709ms)
+✔ absent legacy table requires an explicit zero-source reconciliation (6.455096ms)
+✔ incompatible source schema and missing 0026 fail without claiming readiness (4.262843ms)
+✔ invalid operator and invalid pagination are rejected before writes (4.859033ms)
+✔ CLI defaults to read-only, accepts only explicit local execution and rejects --remote (251.802093ms)
+✔ alterações de senha usam hash e invalidam sessões (1.241844ms)
+✔ exclusões protegem conta em uso e último responsável (0.180232ms)
+✔ somente super admin gerencia organizações de usuário (0.220913ms)
+✔ painel oferece criação, edição, senha, exclusão e organizações (0.383088ms)
+ℹ tests 143
+ℹ suites 0
+ℹ pass 143
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2250.174593

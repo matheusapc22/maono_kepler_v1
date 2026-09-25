@@ -16,6 +16,7 @@ import { normalizeUserError } from "../../../lib/user-error-catalog";
 
 import type {
   CreateTicketPayload,
+  TicketCommand,
   Ticket,
   TicketAttachment,
   TicketDetailResponse,
@@ -105,20 +106,31 @@ export function listTickets(
   );
 }
 
+function validatedTicketResponse(ticket: Ticket | undefined, organizationId: number | string, expectedId?: number | string, requireEtag = false): Ticket {
+  if (!ticket || ticket.id == null || String(ticket.organizationId) !== String(organizationId) ||
+      expectedId != null && String(ticket.id) !== String(expectedId) ||
+      typeof ticket.code !== "string" || requireEtag && !ticket.etag) {
+    throw toTicketApiError(buildClientApiError({ status: 502, code: "TICKET_RESPONSE_INVALID", category: "INFRASTRUCTURE", retryable: true }));
+  }
+  return ticket;
+}
+
 export async function createTicket(
   organizationId: number | string,
   payload: CreateTicketPayload,
   signal?: AbortSignal,
+  options: { idempotencyKey?: string } = {},
 ) {
   const response = await requestJson<{ ok: boolean; ticket: Ticket }>(
     ticketsPath(organizationId),
     {
       method: "POST",
+      headers: options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : undefined,
       body: JSON.stringify(payload),
       signal,
     },
   );
-  return response.ticket;
+  return validatedTicketResponse(response.ticket, organizationId, undefined, Boolean(options.idempotencyKey));
 }
 
 export function getTicketDetails(
@@ -137,16 +149,33 @@ export async function updateTicket(
   ticketId: number | string,
   payload: UpdateTicketPayload,
   signal?: AbortSignal,
+  options: { etag?: string } = {},
 ) {
   const response = await requestJson<{ ok: boolean; ticket: Ticket }>(
     `${ticketsPath(organizationId)}/${pathSegment(ticketId)}`,
     {
       method: "PATCH",
+      headers: options.etag ? { "If-Match": options.etag } : undefined,
       body: JSON.stringify(payload),
       signal,
     },
   );
-  return response.ticket;
+  return validatedTicketResponse(response.ticket, organizationId, ticketId, Boolean(options.etag));
+}
+
+export async function runTicketCommand(
+  organizationId: number | string,
+  ticketId: number | string,
+  command: TicketCommand,
+  etag: string,
+  signal?: AbortSignal,
+) {
+  const suffix = command.kind === "transition" ? "transitions" : command.kind === "wait" ? "waits" : "reopen";
+  const response = await requestJson<{ ok: boolean; ticket: Ticket }>(
+    `${ticketsPath(organizationId)}/${pathSegment(ticketId)}/${suffix}`,
+    { method: "POST", headers: { "If-Match": etag }, body: JSON.stringify(command.payload), signal },
+  );
+  return validatedTicketResponse(response.ticket, organizationId, ticketId, true);
 }
 
 type UploadStartResponse = {

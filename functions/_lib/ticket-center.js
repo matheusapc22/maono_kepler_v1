@@ -1,4 +1,13 @@
 import {
+  assertTicketCommandReady,
+  executeTicketCreate,
+  executeTicketUpdate,
+  getTicketCommandCapability,
+  isTicketCommandsEnabled,
+  readTicketLifecycleDetails,
+  ticketLifecycleProjection,
+} from "./ticket-commands.js";
+import {
   assertTicketTriageWriteReady,
   getTicketTriageCapability,
   hasTicketTriagePayload,
@@ -687,6 +696,7 @@ async function listTicketAssignees(env, organizationId) {
 }
 
 export async function listTickets(env, organizationId, options) {
+  const lifecycleEnabled = await getTicketCommandCapability(env, organizationId);
   const triageEnabled = await getTicketTriageCapability(env);
   const where = buildTicketWhere(organizationId, options);
   const facetsWhere = buildTicketWhere(organizationId, options, {
@@ -765,8 +775,12 @@ export async function listTickets(env, organizationId, options) {
   const total = Number(countRow?.total || 0);
 
   return {
-    tickets: (result?.results || []).map((row) => publicTicket(row, { triageEnabled })),
+    tickets: await Promise.all((result?.results || []).map(async (row) => ({
+      ...publicTicket(row, { triageEnabled }),
+      ...(lifecycleEnabled ? await ticketLifecycleProjection(row) : {}),
+    }))),
     triageEnabled,
+    lifecycleEnabled,
     attachmentLimits: TICKET_ATTACHMENT_LIMITS,
     pagination: {
       page: options.page,
@@ -873,10 +887,12 @@ async function listTicketEvents(env, organizationId, ticketId) {
 export async function getTicketDetails(env, organizationId, ticketId) {
   const triageEnabled = await getTicketTriageCapability(env);
   const row = await getTicketOrThrow(env, organizationId, ticketId);
+  const lifecycle = await readTicketLifecycleDetails(env, organizationId, ticketId);
 
   return {
-    ticket: publicTicket(row, { triageEnabled }),
+    ticket: { ...publicTicket(row, { triageEnabled }), ...(lifecycle.lifecycleEnabled ? await ticketLifecycleProjection(row) : {}) },
     triageEnabled,
+    ...lifecycle,
     attachments: await listTicketAttachments(env, organizationId, ticketId),
     events: await listTicketEvents(env, organizationId, ticketId),
     assignees: await listTicketAssignees(env, organizationId),
@@ -1040,6 +1056,10 @@ export async function createTicket(
   payload,
   request,
 ) {
+  if (isTicketCommandsEnabled(env)) return (await executeTicketCreate(env, organizationId, user, payload, request)).ticket;
+  // A lost response followed by a flag change must never fall back to a second
+  // non-idempotent creation. Old clients without a key retain CC-02 behavior.
+  if (request?.headers?.has("Idempotency-Key")) await assertTicketCommandReady(env, organizationId);
   const triageEnabled = await assertTicketTriageWriteReady(env, payload);
   const data = validateTicketCreatePayload(payload);
   const triage = triageEnabled ? normalizeTicketTriage(payload, {
@@ -1111,8 +1131,13 @@ export async function updateTicket(
   payload,
   request,
 ) {
+  if (isTicketCommandsEnabled(env)) return (await executeTicketUpdate(env, organizationId, ticketId, user, payload, request)).ticket;
+  if (request?.headers?.has("If-Match")) await assertTicketCommandReady(env, organizationId);
   const triageEnabled = await assertTicketTriageWriteReady(env, payload);
   const current = await getTicketOrThrow(env, organizationId, ticketId);
+  // Rollback suspends core writes to adopted tickets. Falling back to CC-02
+  // would bypass their lifecycle history and required atomic side effects.
+  if (Number(current.current_cycle_number || 0) > 0) await assertTicketCommandReady(env, organizationId);
   const patch = validateTicketPatchPayload(payload, { allowTriageOnly: triageEnabled });
   const triage = triageEnabled ? normalizeTicketTriage(payload, {
     current, priority: patch.priority || current.priority, category: patch.category || current.category, actorId: user.id,

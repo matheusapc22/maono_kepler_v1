@@ -10,6 +10,11 @@ type TicketErrorNoticeProps = {
 };
 
 function userMessage(error: TicketApiError) {
+  if (error.status === 412) return "O chamado mudou desde sua última leitura. Seu rascunho foi preservado; confira a versão atual antes de tentar novamente.";
+  if (error.status === 428) return "Atualize o chamado para obter os requisitos atuais desta ação. Seus dados não serão descartados.";
+  if (error.status === 409 && error.code?.includes("IDEMPOTENCY")) return "Esta tentativa de criação já está em processamento ou possui dados diferentes. Repita a intenção original para verificar o resultado.";
+  if (error.status === 409) return "A ação não pôde ser concluída no estado atual. Confira o chamado antes de decidir como continuar.";
+  if (error.code === "TICKET_LIFECYCLE_DISABLED") return "O acompanhamento por etapas ainda não está disponível neste ambiente. Atualize o chamado.";
   if (error.code === "TICKET_CENTER_SCHEMA_OUTDATED") {
     return "A Central ainda não está disponível neste ambiente.";
   }

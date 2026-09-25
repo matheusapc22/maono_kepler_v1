@@ -7,22 +7,32 @@ on:
       - 'scripts/central-chamados/**'
       - 'functions/_lib/ticket-center.js'
       - 'functions/_lib/ticket-triage.js'
+      - 'functions/_lib/ticket-commands.js'
+      - 'functions/_lib/ticket-command-http.js'
+      - 'functions/_lib/ticket-legacy-backfill.js'
       - 'functions/_lib/project-change-requests.js'
       - 'functions/_lib/project-change-request-review.js'
       - 'functions/_lib/project-change-request-inbox.js'
       - 'functions/_lib/project-change-request-analysis-submission.js'
       - 'functions/_lib/permissions.js'
+      - 'functions/api/admin/users/*.js'
       - 'src/access-control/permissions.ts'
       - 'src/pages/Projects/components/ticket-types.ts'
       - 'src/pages/Projects/components/tickets-api.ts'
       - 'src/pages/Projects/components/*Ticket*.tsx'
       - 'src/pages/Projects/components/ticket-triage-form.ts'
       - 'src/pages/Projects/components/ticket-triage.css'
+      - 'src/pages/Projects/components/ticket-command-form.ts'
+      - 'src/pages/Projects/components/ticket-lifecycle.css'
       - 'tests/ticket-triage*.test.mjs'
       - 'tests/helpers/ticket-triage*.mjs'
+      - 'tests/ticket-command*.test.mjs'
+      - 'tests/ticket-legacy-backfill.test.mjs'
+      - 'tests/helpers/ticket-command*.mjs'
       - 'migrations/0010_ticket_center.sql'
       - 'migrations/0020_project_change_requests.sql'
       - 'migrations/0025_ticket_triage_classification.sql'
+      - 'migrations/0026_ticket_command_lifecycle.sql'
       - 'schema.sql'
       - 'functions/api/organizations/*/tickets/**'
       - 'functions/api/organizations/*/tickets.js'
@@ -62,3 +72,14 @@ jobs:
         run: node --experimental-strip-types --test tests/ticket-triage*.test.mjs
       - name: Verify product error presentation ratchet
         run: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
+
+  cc03-commands:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate commands, concurrency, lifecycle and controlled backfill
+        run: node --experimental-strip-types --test tests/ticket-command*.test.mjs tests/ticket-legacy-backfill.test.mjs

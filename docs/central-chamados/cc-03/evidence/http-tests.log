@@ -1,0 +1,60 @@
+✔ HTTP create requires a key and persists one success audit through replay (51.48363ms)
+✔ HTTP state owns its ETag; list, detail and state GET perform no DML after cutover (35.389667ms)
+[Maono ticket center][e5551eed-f86d-4b17-a6e7-c0b8cf98b642][TICKET_COMMANDS_DISABLED] Error: Este fluxo de atendimento ainda não está habilitado. Recarregue a Central.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:108:44)
+    at onRequestPost (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets.js:104:13)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:74:17)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_DISABLED',
+  publicMessage: 'Este fluxo de atendimento ainda não está habilitado. Recarregue a Central.'
+}
+✔ HTTP retry after disabling commands cannot fall through to non-idempotent legacy creation (20.272201ms)
+✔ HTTP mutation rejects missing and stale validators with no successful audit or side effects (34.89452ms)
+[Maono ticket center][fab7dad9-d80d-4e42-9741-9e7d45ffbcf8][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async onRequestGet (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets.js:59:7)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+[Maono ticket center][9d4a965b-d116-4cc6-a2ed-66402730f4bf][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async onRequestGet (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/api/organizations/%5Bid%5D/tickets/%5BticketId%5D.js:69:7)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+[Maono ticket center][1102eba6-5f96-4e13-b895-93092bf99637][TICKET_COMMANDS_NOT_READY] Error: O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.
+    at commandError (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:40:24)
+    at assertTicketCommandReady (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-commands.js:110:11)
+    at async authorize (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-command-http.js:23:3)
+    at async ticketCommandStateResponse (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/functions/_lib/ticket-command-http.js:32:5)
+    at async TestContext.<anonymous> (file:///workspace/scratch/9bf5f7a8ed15/cc01-repo/tests/ticket-command-http.test.mjs:106:22)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 503,
+  code: 'TICKET_COMMANDS_NOT_READY',
+  publicMessage: 'O fluxo de atendimento está temporariamente indisponível. Contate a equipe responsável.'
+}
+✔ HTTP GET fails closed on a new legacy source row without importing it (26.45885ms)
+✔ HTTP authorization denies cross-organization reads and viewer commands before mutation (22.321283ms)
+✔ HTTP correction scopes the event from the route and preserves the original event (23.264275ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 370.650167

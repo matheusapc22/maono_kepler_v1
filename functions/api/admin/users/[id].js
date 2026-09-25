@@ -7,6 +7,7 @@ import {
 import { hashPassword, normalizeEmail } from "../../../_lib/auth.js";
 import { requirePermission } from "../../../_lib/permissions.js";
 import { logAudit } from "../../../_lib/projects.js";
+import { tableExists } from "../../../_lib/organizations.js";
 
 const ALLOWED_ROLES = new Set(["admin", "client", "viewer", "editor"]);
 
@@ -359,20 +360,58 @@ async function deleteUser(env, targetUserId, actingUser) {
     return policy;
   }
 
-  await env.DB.batch([
-    env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(
-      targetUserId,
-    ),
-    env.DB.prepare(`DELETE FROM user_projects WHERE user_id = ?`).bind(
-      targetUserId,
-    ),
-    env.DB.prepare(`DELETE FROM organization_users WHERE user_id = ?`).bind(
-      targetUserId,
-    ),
-    env.DB.prepare(`DELETE FROM users WHERE id = ?`).bind(targetUserId),
-  ]);
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(
+        targetUserId,
+      ),
+      env.DB.prepare(`DELETE FROM user_projects WHERE user_id = ?`).bind(
+        targetUserId,
+      ),
+      env.DB.prepare(`DELETE FROM organization_users WHERE user_id = ?`).bind(
+        targetUserId,
+      ),
+      env.DB.prepare(`DELETE FROM users WHERE id = ?`).bind(targetUserId),
+    ]);
+  } catch (error) {
+    // D1 rolls the whole batch back before this catch. Preserve all links and
+    // sessions: append-only Ticket history must never be bypassed to delete a user.
+    if (await isTicketHistoryRetentionError(env, targetUserId, error)) {
+      return {
+        error: errorResponse(
+          "Este usuário possui histórico de chamados que deve ser preservado. Desative o usuário para impedir novos acessos, mantendo seus registros.",
+          409,
+          "USER_TICKET_HISTORY_RETAINED",
+        ),
+      };
+    }
+    throw error;
+  }
 
   return { user: current };
+}
+
+async function isTicketHistoryRetentionError(env, userId, error) {
+  const messages = [];
+  const seen = new Set();
+  for (let cause = error; cause && !seen.has(cause); cause = cause.cause) {
+    seen.add(cause);
+    messages.push(String(cause.message || ""), String(cause.code || ""));
+  }
+  const diagnostic = messages.join("\n");
+  if (/\b(?:TICKET_EVENTS_APPEND_ONLY|TICKET_AUDIT_APPEND_ONLY)\b/.test(diagnostic)) {
+    return true;
+  }
+  // A generic FK failure may have an unrelated cause. Classify it as Ticket
+  // retention only when the new command ledger actually references this actor.
+  if (!/FOREIGN KEY constraint failed|SQLITE_CONSTRAINT_FOREIGNKEY/i.test(diagnostic) ||
+      !(await tableExists(env, "ticket_commands"))) {
+    return false;
+  }
+  const retained = await env.DB.prepare(
+    "SELECT 1 AS retained FROM ticket_commands WHERE actor_user_id = ? LIMIT 1",
+  ).bind(userId).first();
+  return Boolean(retained);
 }
 
 export async function onRequest(context) {

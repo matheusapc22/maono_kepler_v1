@@ -5,6 +5,9 @@ import {
 } from "../../../_lib/ticket-triage.js";
 import { requireOrganizationPermission } from "../../../_lib/permissions.js";
 import {
+  assertTicketCommandReady, executeTicketCreate, isTicketCommandsEnabled,
+} from "../../../_lib/ticket-commands.js";
+import {
   getOrganizationOrThrow,
   getRouteParam,
   jsonResponse,
@@ -52,7 +55,9 @@ export async function onRequestGet({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
-    if (!isTicketTriageEnabled(env) || await getTicketTriageCapability(env)) {
+    if (isTicketCommandsEnabled(env)) {
+      await assertTicketCommandReady(env, organizationId);
+    } else if (!isTicketTriageEnabled(env) || await getTicketTriageCapability(env)) {
       await migrateLegacyTickets(env, organizationId, user.id);
     }
 
@@ -62,7 +67,7 @@ export async function onRequestGet({ env, request, params }) {
       parseTicketListOptions(request.url),
     );
 
-    return jsonResponse({ ok: true, ...data });
+    return jsonResponse({ ok: true, ...data }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return ticketCenterErrorResponse(error, request);
   }
@@ -86,6 +91,8 @@ export async function onRequestPost({ env, request, params }) {
       },
       {
         audit: false,
+        // The domain service records successful creation after persistence.
+        auditOnSuccess: false,
         resourceType: "ticket",
       },
     );
@@ -93,6 +100,13 @@ export async function onRequestPost({ env, request, params }) {
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
     const payload = await readJsonBody(request);
+    if (isTicketCommandsEnabled(env) || request.headers.has("Idempotency-Key")) {
+      await assertTicketCommandReady(env, organizationId);
+      const result = await executeTicketCreate(env, organizationId, user, payload, request);
+      return jsonResponse({ ok: true, ticket: result.ticket }, { status: result.status || 201,
+        headers: { "Cache-Control": "private, no-store", "Idempotency-Replayed": String(Boolean(result.replayed)) },
+      });
+    }
     await assertTicketTriageWriteReady(env, payload);
     await migrateLegacyTickets(env, organizationId, user.id);
 

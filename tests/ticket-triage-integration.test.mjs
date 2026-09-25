@@ -24,11 +24,13 @@ function fixture(t, { expanded = true, enabled = true } = {}) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
   t.after(() => sqlite.close());
-  sqlite.exec(source("../schema.sql"));
-  // schema.sql is a fresh-install snapshot that already includes CC-02. Rebuild
-  // only the empty ticket tables from the actual 0010 migration to exercise an
-  // upgrade of the old schema, not a hand-written approximation of its columns.
-  sqlite.exec("DROP TABLE ticket_attachments; DROP TABLE ticket_events; DROP TABLE organization_tickets;");
+  // Keep this upgrade fixture anchored before the Ticket snapshot. Loading the
+  // latest snapshot and dropping three tables leaves future foreign keys and
+  // triggers behind, which would no longer represent a database before CC-02.
+  const snapshot = source("../schema.sql");
+  const ticketStart = snapshot.indexOf("-- Central de Chamados (migration 0010_ticket_center.sql)");
+  assert.ok(ticketStart > 0, "Fresh schema must identify its Ticket section");
+  sqlite.exec(snapshot.slice(0, ticketStart));
   sqlite.exec(`
     CREATE TABLE role_permissions (
       id INTEGER PRIMARY KEY, role TEXT, permission TEXT,
