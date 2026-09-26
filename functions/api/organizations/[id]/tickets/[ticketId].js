@@ -8,6 +8,7 @@ import {
   assertTicketCommandReady, executeTicketUpdate, isTicketCommandsEnabled,
 } from "../../../../_lib/ticket-commands.js";
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
+import { requireTicketAccess } from "../../../../_lib/ticket-access.js";
 import {
   getOrganizationOrThrow,
   getRouteParam,
@@ -65,6 +66,7 @@ export async function onRequestGet({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    await requireTicketAccess(env, organizationId, ticketId, user, "ticket.view");
     if (isTicketCommandsEnabled(env)) {
       await assertTicketCommandReady(env, organizationId);
     } else if (!isTicketTriageEnabled(env) || await getTicketTriageCapability(env)) {
@@ -107,6 +109,7 @@ export async function onRequestPatch({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    await requireTicketAccess(env, organizationId, ticketId, user, "ticket.manage");
     const payload = await readJsonBody(request);
     if (isTicketCommandsEnabled(env) || request.headers.has("If-Match")) {
       await assertTicketCommandReady(env, organizationId);

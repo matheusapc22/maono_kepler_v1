@@ -2,6 +2,7 @@ import {
   recordAuditLog,
   requireOrganizationPermission,
 } from "../../../../../../../_lib/permissions.js";
+import { requireTicketAccess } from "../../../../../../../_lib/ticket-access.js";
 import {
   getOrganizationOrThrow,
   getRouteParam,
@@ -52,6 +53,7 @@ export async function onRequestGet({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    await requireTicketAccess(env, organizationId, ticketId, user, "ticket.view");
     const download = await downloadTicketAttachment(
       env,
       organizationId,

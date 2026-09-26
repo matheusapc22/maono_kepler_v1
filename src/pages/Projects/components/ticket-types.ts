@@ -8,6 +8,8 @@ export type TicketStatus =
   | "closed";
 
 export type TicketPriority = "low" | "normal" | "high";
+export type TicketVisibility = "organization" | "private";
+export type TicketLabel = { id: string; name: string };
 
 export type TicketDemandNature =
   | "question_request"
@@ -110,6 +112,8 @@ export type Ticket = {
   createdBy?: TicketPerson | null;
   assignedTo?: TicketPerson | null;
   attachmentsCount: number;
+  visibility?: TicketVisibility;
+  labels?: TicketLabel[];
   version?: number;
   /** Opaque write token supplied for the canonical core ticket, never the detail envelope. */
   etag?: string;
