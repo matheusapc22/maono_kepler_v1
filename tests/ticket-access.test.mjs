@@ -159,3 +159,12 @@ test("cross-org grants are rejected and a private config cannot be orphaned", as
   assert.equal(configured.acl.length, 1);
   assert.equal((await getTicketAccessConfiguration(f.env, 1, 102)).acl[0].principalId, "3");
 });
+
+
+test("CT-12 client clears stale drawer data when object access is revoked", () => {
+  const sourceText = source("../src/pages/Projects/components/TicketsSection.tsx");
+  assert.match(sourceText, /detailFailure\.status === 404 \|\| detailFailure\.status === 403/);
+  assert.match(sourceText, /setDetail\(null\);[\s\S]*setSelectedTicketId\(null\);[\s\S]*setToast\("O chamado não está mais disponível para seu acesso\."\)/);
+  assert.match(sourceText, /current\.filter\(\(ticket\) => String\(ticket\.id\) !== String\(ticketId\)\)/);
+  assert.match(sourceText, /mutationFailure\.status === 404 \|\| mutationFailure\.status === 403/);
+});
