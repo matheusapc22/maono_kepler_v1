@@ -39,3 +39,6 @@ playwright/auth.json
 /dev-seeds/
 .wrangler/
 !.env.example
+
+# production migration operator local evidence
+.tmp/production-migrations/
