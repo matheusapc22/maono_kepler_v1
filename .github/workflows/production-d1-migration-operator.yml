@@ -1,0 +1,237 @@
+name: Production D1 migration operator
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/production-d1-migration-operator.yml'
+      - 'tests/production-migration-actions-workflow.test.mjs'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "audit | apply | postvalidate"
+        required: true
+        type: choice
+        options:
+          - audit
+          - apply
+          - postvalidate
+      migration:
+        description: "Exact migration filename, e.g. 0027_example.sql"
+        required: true
+        type: string
+      approval_hash:
+        description: "Required only for apply: 64-hex approval hash emitted by the prior audit"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maono-production-d1-migrations
+  cancel-in-progress: false
+
+env:
+  PRODUCT_BRANCH: mano_kepler_v1
+  CLOUDFLARE_ACCOUNT_ID: 09d455fa1cf988b0d9db89987b73eaff
+  PRODUCTION_D1_NAME: maono_maps
+  PRODUCTION_D1_ID: 5bc4dc32-f3bd-4c92-bbd1-cbda63e467db
+
+jobs:
+  contracts:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Validate workflow safety contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=".github/workflows/production-d1-migration-operator.yml"
+          grep -Fq "workflow_dispatch:" "$file"
+          ! grep -Eq '^[[:space:]]+push:' "$file"
+          ! grep -Eq '^[[:space:]]+schedule:' "$file"
+          grep -Fq "environment: production-d1-migrations" "$file"
+          grep -Fq "secrets.MAONO_D1_MIGRATION_API_TOKEN" "$file"
+          grep -Fq "needs.validate.outputs.release_sha" "$file"
+          grep -Fq "git ls-remote origin" "$file"
+          grep -Fq "migration:audit:production" "$file"
+          grep -Fq "migration:apply:production" "$file"
+          grep -Fq "migration:postvalidate:production" "$file"
+          ! grep -Eq 'wrangler[[:space:]]+d1[[:space:]]+migrations[[:space:]]+apply' "$file"
+
+  validate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      release_sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - name: Validate owner, dispatch ref and explicit inputs
+        shell: bash
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          DISPATCH_REF: ${{ github.ref_name }}
+          MODE: ${{ inputs.mode }}
+          MIGRATION: ${{ inputs.migration }}
+          APPROVAL_HASH: ${{ inputs.approval_hash }}
+        run: |
+          set -euo pipefail
+          test "$ACTOR" = "$OWNER"
+          test "$DISPATCH_REF" = "main"
+          [[ "$MIGRATION" =~ ^[0-9]{4}_[A-Za-z0-9][A-Za-z0-9_-]*\.sql$ ]]
+          case "$MODE" in
+            audit|postvalidate)
+              test -z "$APPROVAL_HASH"
+              ;;
+            apply)
+              [[ "$APPROVAL_HASH" =~ ^[0-9a-fA-F]{64}$ ]]
+              ;;
+            *)
+              exit 2
+              ;;
+          esac
+
+      - name: Checkout canonical product branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.PRODUCT_BRANCH }}
+          fetch-depth: 0
+
+      - name: Pin product SHA
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Pinned product SHA: $sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Validate operator contracts without Cloudflare credentials
+        shell: bash
+        env:
+          MIGRATION: ${{ inputs.migration }}
+        run: |
+          set -euo pipefail
+          test -f "migrations/$MIGRATION"
+          test -f AGENTS.md
+          test -f scripts/migrations/production-migration-lib.mjs
+          test -f scripts/migrations/audit-production.mjs
+          test -f scripts/migrations/apply-production.mjs
+          test -f scripts/migrations/post-validate-production.mjs
+          node --check scripts/migrations/production-migration-lib.mjs
+          node --check scripts/migrations/audit-production.mjs
+          node --check scripts/migrations/apply-production.mjs
+          node --check scripts/migrations/post-validate-production.mjs
+          npm run test:production-migration-gate
+
+  remote:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production-d1-migrations
+    env:
+      MODE: ${{ inputs.mode }}
+      MIGRATION: ${{ inputs.migration }}
+      APPROVAL_HASH: ${{ inputs.approval_hash }}
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Checkout exactly the validated product SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Refuse product-branch drift before remote access
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${PRODUCT_BRANCH}" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Validate protected credential presence and fixed target
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MAONO_D1_MIGRATION_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test "$CLOUDFLARE_ACCOUNT_ID" = "09d455fa1cf988b0d9db89987b73eaff"
+          test "$PRODUCTION_D1_NAME" = "maono_maps"
+          test "$PRODUCTION_D1_ID" = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
+
+      - name: Execute protected migration operation
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MAONO_D1_MIGRATION_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/production-migrations
+
+          case "$MODE" in
+            audit)
+              report=".tmp/production-migrations/audit.json"
+              npm run migration:audit:production -- --migration "$MIGRATION" --report "$report"
+              approval_hash="$(node -e "const r=require('./$report'); process.stdout.write(r.approval.hash)")"
+              REPORT_PATH="$report" node -e "const fs=require('node:fs'); const p=process.env.REPORT_PATH; const r=JSON.parse(fs.readFileSync(p,'utf8')); if(r.approval) delete r.approval.token; delete r.applyCommand; fs.writeFileSync(p, JSON.stringify(r,null,2)+'\n');"
+              echo "### Production D1 migration audit" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "- migration: $MIGRATION" >> "$GITHUB_STEP_SUMMARY"
+              echo "- product SHA: $VALIDATED_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+              echo "- approval hash: $approval_hash" >> "$GITHUB_STEP_SUMMARY"
+              echo "- status: AWAITING EXPLICIT PRODUCTION AUTHORIZATION" >> "$GITHUB_STEP_SUMMARY"
+              echo "- writes performed: NO" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            apply)
+              fresh=".tmp/production-migrations/fresh-audit.json"
+              post=".tmp/production-migrations/post-apply.json"
+              npm run migration:audit:production -- --migration "$MIGRATION" --report "$fresh"
+              current_hash="$(node -e "const r=require('./$fresh'); process.stdout.write(r.approval.hash)")"
+              supplied_hash="$(printf '%s' "$APPROVAL_HASH" | tr '[:upper:]' '[:lower:]')"
+              test "$current_hash" = "$supplied_hash"
+              REPORT_PATH="$fresh" node -e "const fs=require('node:fs'); const p=process.env.REPORT_PATH; const r=JSON.parse(fs.readFileSync(p,'utf8')); if(r.approval) delete r.approval.token; delete r.applyCommand; fs.writeFileSync(p, JSON.stringify(r,null,2)+'\n');"
+              approval_token="MAONO_PROD_MIGRATION_APPROVED:${MIGRATION}:${supplied_hash}"
+              npm run migration:apply:production -- --migration "$MIGRATION" --audit-report "$fresh" --approval "$approval_token" --report "$post"
+              echo "### Production D1 migration applied" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "- migration: $MIGRATION" >> "$GITHUB_STEP_SUMMARY"
+              echo "- product SHA: $VALIDATED_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+              echo "- approval hash revalidated: $supplied_hash" >> "$GITHUB_STEP_SUMMARY"
+              echo "- status: APPLIED AND POST-VALIDATED" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            postvalidate)
+              report=".tmp/production-migrations/postvalidate.json"
+              npm run migration:postvalidate:production -- --migration "$MIGRATION" --report "$report"
+              echo "### Production D1 migration post-validation" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "- migration: $MIGRATION" >> "$GITHUB_STEP_SUMMARY"
+              echo "- product SHA: $VALIDATED_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+              echo "- writes performed: NO" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+
+      - name: Retain sanitized migration evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-d1-${{ inputs.mode }}-${{ inputs.migration }}-${{ github.run_id }}
+          path: .tmp/production-migrations/*.json
+          if-no-files-found: ignore
+          retention-days: 14
