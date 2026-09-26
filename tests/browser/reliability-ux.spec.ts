@@ -3,6 +3,20 @@ import { expect, test, type Page } from "@playwright/test";
 const fixture = "/tests/browser/fixtures/reliability-ux.html";
 const technicalMessage = "Dropbox D1 provider-token=secret /private/storage trace=internal-123";
 
+// DocumentsSection now loads its folder tree independently from the files list.
+// Keep that unrelated dependency healthy: an unhandled Vite 404 can race with
+// the intended storage error and overwrite the alert under test. Only mock GET;
+// folder mutations must still be provided explicitly by their own scenarios.
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/api\/organizations\/[1-9]\d*\/document-folders(?:\?.*)?$/, async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ json: { ok: true, folders: [] } });
+  });
+});
+
 function storageFailure(code: string, retryable: boolean) {
   return {
     ok: false,
