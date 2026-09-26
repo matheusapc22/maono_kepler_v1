@@ -7,6 +7,8 @@ on:
       - 'package.json'
       - 'scripts/migrations/**'
       - 'tests/production-migration-gate.test.mjs'
+      - 'tests/production-migration-actions-workflow.test.mjs'
+      - '.github/workflows/production-d1-migration-operator.yml'
       - 'docs/runbooks/production-migrations-codex.md'
       - '.github/workflows/production-migration-contracts.yml'
   push:
@@ -17,6 +19,8 @@ on:
       - 'package.json'
       - 'scripts/migrations/**'
       - 'tests/production-migration-gate.test.mjs'
+      - 'tests/production-migration-actions-workflow.test.mjs'
+      - '.github/workflows/production-d1-migration-operator.yml'
       - 'docs/runbooks/production-migrations-codex.md'
       - '.github/workflows/production-migration-contracts.yml'
 
@@ -39,4 +43,4 @@ jobs:
           node --check scripts/migrations/apply-production.mjs
           node --check scripts/migrations/post-validate-production.mjs
       - name: Validate migration gates
-        run: node --test tests/production-migration-gate.test.mjs
+        run: node --test tests/production-migration-gate.test.mjs tests/production-migration-actions-workflow.test.mjs

@@ -50,7 +50,7 @@
     "test:reliability-browser": "playwright test --project=chromium",
     "test:reliability": "npm run test:organization-storage && npm run test:organization-lifecycle && npm run test:organization-readiness && npm run test:organization-drift && npm run test:dropbox-resilience && npm run test:reliability-chaos && npm run test:reliability-slo && node --test tests/user-error-catalog.test.mjs tests/api-error-client.test.mjs tests/file-transfer-resilience.test.mjs tests/ticket-center.test.mjs",
     "test:expanded": "node --experimental-strip-types --test tests/*.test.mjs scripts/audit-user-error-sinks.test.mjs",
-    "test:production-migration-gate": "node --test tests/production-migration-gate.test.mjs",
+    "test:production-migration-gate": "node --test tests/production-migration-gate.test.mjs tests/production-migration-actions-workflow.test.mjs",
     "migration:audit:production": "node scripts/migrations/audit-production.mjs",
     "migration:apply:production": "node scripts/migrations/apply-production.mjs",
     "migration:postvalidate:production": "node scripts/migrations/post-validate-production.mjs"

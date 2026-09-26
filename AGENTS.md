@@ -6,6 +6,16 @@ This repository uses Cloudflare D1. The canonical production database is:
 - database UUID: `5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`
 - product / production branch: `mano_kepler_v1`
 
+## Production credential boundary
+
+The Cloudflare production D1 write token MUST NOT be supplied to ChatGPT, Codex Cloud, prompts, repository files, or a general agent runtime.
+
+Normal production audit/apply/post-validation must run through the GitHub Actions workflow `.github/workflows/production-d1-migration-operator.yml`, dispatched from the default branch `main`, using the protected GitHub Environment `production-d1-migrations`.
+
+The environment secret is named `MAONO_D1_MIGRATION_API_TOKEN`. GitHub exposes it only to the protected job after the environment approval gate. The workflow maps that secret to `CLOUDFLARE_API_TOKEN` only inside the runner steps that require Cloudflare access.
+
+The local `migration:*:production` scripts remain the implementation used by the protected workflow and may be used locally only as an explicitly authorized break-glass procedure. Do not request or infer a Cloudflare production token for Codex itself.
+
 Production migrations are a human-gated operation. Preparing code, merging a PR, passing CI, publishing Preview, or receiving a generic instruction such as “continue” never authorizes a production migration.
 
 ## Mandatory lifecycle
@@ -14,10 +24,10 @@ Every production migration must follow this exact sequence:
 
 1. **PREPARE** — create/review the SQL and its tests.
 2. **LOCAL VALIDATE** — run the relevant migration tests and application gates.
-3. **AUDIT READ-ONLY** — run `npm run migration:audit:production -- --migration <file.sql>`.
+3. **AUDIT READ-ONLY** — use the protected GitHub Actions operator in `audit` mode for `<file.sql>`. The workflow executes the underlying `migration:audit:production` script on a pinned `mano_kepler_v1` SHA.
 4. **REPORT AND STOP** — show the user the exact migration, SHA-256, Git SHA, production D1 identity, risk classification, pending-migration digest, earlier pending migrations, integrity result, Time Travel bookmark, audit report path, and approval hash/text. Do not apply anything yet.
 5. **WAIT FOR EXPLICIT HUMAN AUTHORIZATION** — authorization must be given after the audit and must explicitly identify the audited migration and approval hash (or the exact authorization text emitted by the audit).
-6. **APPLY ONLY THE AUTHORIZED MIGRATION** — run `npm run migration:apply:production` using the audit report and its exact approval token.
+6. **APPLY ONLY THE AUTHORIZED MIGRATION** — after the user explicitly authorizes the exact audit hash, use the protected GitHub Actions operator in `apply` mode with the migration filename and approval hash. The workflow re-audits, rejects drift, then invokes the isolated apply script.
 7. **POST-VALIDATE** — confirm the D1 ledger, `PRAGMA quick_check`, `PRAGMA foreign_key_check`, and report the recovery bookmark.
 8. **STOP AGAIN** — authorization is single-use in scope. A different migration always requires a new audit and new explicit authorization.
 
@@ -47,7 +57,7 @@ Never manufacture, infer, or self-grant the human authorization. The apply token
 - run SELECT/read-only PRAGMAs;
 - read the `d1_migrations` ledger;
 - run D1 Time Travel `info`;
-- execute `migration:audit:production`;
+- dispatch the protected GitHub Actions operator in `audit` mode;
 - prepare rollback/recovery guidance;
 - open/update a PR containing migration tooling or migration SQL.
 
