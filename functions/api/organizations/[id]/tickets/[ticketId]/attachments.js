@@ -4,6 +4,10 @@ import {
 } from "../../../../../_lib/permissions.js";
 import { requireTicketAccess } from "../../../../../_lib/ticket-access.js";
 import {
+  assertConversationDraftAttachmentWrite,
+  resolveTicketConversationContext,
+} from "../../../../../_lib/ticket-conversations.js";
+import {
   getOrganizationOrThrow,
   getRouteParam,
   jsonResponse,
@@ -67,12 +71,16 @@ export async function onRequestGet({ env, request, params }) {
     await requireTicketAccess(env, organizationId, ticketId, user, "ticket.view");
     await getTicketOrThrow(env, organizationId, ticketId);
 
+    const conversationContext = await resolveTicketConversationContext(
+      env, organizationId, ticketId, user, { ticketView: true },
+    );
     return jsonResponse({
       ok: true,
       attachments: await listTicketAttachments(
         env,
         organizationId,
         ticketId,
+        { canViewInternal: conversationContext.noteView },
       ),
     });
   } catch (error) {
@@ -99,36 +107,43 @@ export async function onRequestPost({ env, request, params }) {
       resourceType: "ticket",
       resourceId: ticketId,
     };
-    const createDecision = await can(
-      env,
-      user,
-      "ticket.create",
-      permissionContext,
-    );
-    const manageDecision = await can(
-      env,
-      user,
-      "ticket.manage",
-      permissionContext,
-    );
+    const contentType = request.headers.get("Content-Type") || "";
+    if (contentType.toLowerCase().includes("application/json")) {
+      const payload = await readJsonBody(request);
+      if (payload?.draftId) {
+        const conversationContext = await resolveTicketConversationContext(
+          env, organizationId, ticketId, user, { ticketView: true },
+        );
+        const draft = await assertConversationDraftAttachmentWrite(
+          env, conversationContext, payload.draftId,
+        );
+        const result = await initiateTicketAttachmentUpload(
+          env, organizationId, ticketId, user, payload, { draftId: draft.id },
+        );
+        return jsonResponse({ ok: true, ...result }, { status: 201 });
+      }
 
+      const createDecision = await can(env, user, "ticket.create", permissionContext);
+      const manageDecision = await can(env, user, "ticket.manage", permissionContext);
+      if (!createDecision.allowed && !manageDecision.allowed) {
+        const error = new Error("Você não pode adicionar anexos a este chamado.");
+        error.status = 403;
+        error.code = "ATTACHMENT_UPLOAD_FORBIDDEN";
+        throw error;
+      }
+      const result = await initiateTicketAttachmentUpload(
+        env, organizationId, ticketId, user, payload,
+      );
+      return jsonResponse({ ok: true, ...result }, { status: 201 });
+    }
+
+    const createDecision = await can(env, user, "ticket.create", permissionContext);
+    const manageDecision = await can(env, user, "ticket.manage", permissionContext);
     if (!createDecision.allowed && !manageDecision.allowed) {
       const error = new Error("Você não pode adicionar anexos a este chamado.");
       error.status = 403;
       error.code = "ATTACHMENT_UPLOAD_FORBIDDEN";
       throw error;
-    }
-
-    const contentType = request.headers.get("Content-Type") || "";
-    if (contentType.toLowerCase().includes("application/json")) {
-      const result = await initiateTicketAttachmentUpload(
-        env,
-        organizationId,
-        ticketId,
-        user,
-        await readJsonBody(request),
-      );
-      return jsonResponse({ ok: true, ...result }, { status: 201 });
     }
 
     const attachment = await createTicketAttachment(

@@ -19,6 +19,10 @@ import type {
   TicketCommand,
   Ticket,
   TicketAttachment,
+  TicketConversationDraft,
+  TicketConversationKind,
+  TicketConversationMessage,
+  TicketConversationRevision,
   TicketDetailResponse,
   TicketFilters,
   TicketListResponse,
@@ -27,6 +31,7 @@ import type {
 
 type UploadOptions = {
   signal?: AbortSignal;
+  draftId?: string;
   onProgress?: (progress: number) => void;
   onPhase?: (phase: "uploading" | "finalizing") => void;
 };
@@ -142,6 +147,124 @@ export function getTicketDetails(
     `${ticketsPath(organizationId)}/${pathSegment(ticketId)}`,
     { signal },
   );
+}
+
+function ticketConversationPath(
+  organizationId: number | string,
+  ticketId: number | string,
+) {
+  return `${ticketsPath(organizationId)}/${pathSegment(ticketId)}`;
+}
+
+export function listTicketConversationMessages(
+  organizationId: number | string,
+  ticketId: number | string,
+  cursor?: string | null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ limit: "30" });
+  if (cursor) params.set("cursor", cursor);
+  return requestJson<{
+    ok: boolean;
+    messages: TicketConversationMessage[];
+    nextCursor?: string | null;
+    hasMore: boolean;
+  }>(`${ticketConversationPath(organizationId, ticketId)}/messages?${params.toString()}`, { signal });
+}
+
+export function createTicketConversationDraft(
+  organizationId: number | string,
+  ticketId: number | string,
+  payload: { kind: TicketConversationKind; body?: string },
+  signal?: AbortSignal,
+) {
+  return requestJson<{ ok: boolean; draft: TicketConversationDraft }>(
+    `${ticketConversationPath(organizationId, ticketId)}/drafts`,
+    { method: "POST", body: JSON.stringify(payload), signal },
+  ).then((response) => response.draft);
+}
+
+export function updateTicketConversationDraft(
+  organizationId: number | string,
+  ticketId: number | string,
+  draftId: string,
+  body: string,
+  etag: string,
+  signal?: AbortSignal,
+) {
+  return requestJson<{ ok: boolean; draft: TicketConversationDraft }>(
+    `${ticketConversationPath(organizationId, ticketId)}/drafts/${pathSegment(draftId)}`,
+    { method: "PATCH", headers: { "If-Match": etag }, body: JSON.stringify({ body }), signal },
+  ).then((response) => response.draft);
+}
+
+export function discardTicketConversationDraft(
+  organizationId: number | string,
+  ticketId: number | string,
+  draftId: string,
+  etag: string,
+  signal?: AbortSignal,
+) {
+  return requestJson<{ ok: boolean; discarded: boolean }>(
+    `${ticketConversationPath(organizationId, ticketId)}/drafts/${pathSegment(draftId)}`,
+    { method: "DELETE", headers: { "If-Match": etag }, signal },
+  );
+}
+
+export function sendTicketConversationMessage(
+  organizationId: number | string,
+  ticketId: number | string,
+  payload: {
+    kind: TicketConversationKind;
+    body: string;
+    attachmentIds?: Array<number | string>;
+    draftId?: string;
+    draftVersion?: number;
+  },
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) {
+  return requestJson<{ ok: boolean; message: TicketConversationMessage }>(
+    `${ticketConversationPath(organizationId, ticketId)}/messages`,
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(payload),
+      signal,
+    },
+  ).then((response) => response.message);
+}
+
+export function editTicketConversationMessage(
+  organizationId: number | string,
+  ticketId: number | string,
+  messageId: string,
+  payload: { body: string; reason: string },
+  etag: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) {
+  return requestJson<{ ok: boolean; message: TicketConversationMessage }>(
+    `${ticketConversationPath(organizationId, ticketId)}/messages/${pathSegment(messageId)}`,
+    {
+      method: "PATCH",
+      headers: { "If-Match": etag, "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(payload),
+      signal,
+    },
+  ).then((response) => response.message);
+}
+
+export function listTicketConversationRevisions(
+  organizationId: number | string,
+  ticketId: number | string,
+  messageId: string,
+  signal?: AbortSignal,
+) {
+  return requestJson<{ ok: boolean; revisions: TicketConversationRevision[] }>(
+    `${ticketConversationPath(organizationId, ticketId)}/messages/${pathSegment(messageId)}/revisions`,
+    { signal },
+  ).then((response) => response.revisions);
 }
 
 export async function updateTicket(
@@ -316,6 +439,7 @@ export async function uploadTicketAttachment(
       name: file.name,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
+      ...(options.draftId ? { draftId: options.draftId } : {}),
     }),
     signal: options.signal,
   });

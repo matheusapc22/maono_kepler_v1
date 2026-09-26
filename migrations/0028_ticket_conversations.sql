@@ -1,8 +1,8 @@
--- CC-05A: conversation foundation. PREPARE ONLY; no remote application authorized.
+-- CC-05: conversations, internal notes and server drafts. PREPARE ONLY; no remote application authorized.
 -- MIGRATION PENDENTE DE CONFIRMACAO. Canonical production: D1 maono_maps.
 -- Requires the schema of 0010, 0026 and 0027, NOT their feature flags.
--- Reader integration, catalog and composer remain release gates in CC-05B.
--- Do not enable MAONO_TICKET_CONVERSATIONS_ENABLED with this foundation alone.
+-- Functional readers, authorization, routes and composer are integrated in PR #202.
+-- Do not enable MAONO_TICKET_CONVERSATIONS_ENABLED before migration post-validation and authenticated acceptance.
 
 CREATE UNIQUE INDEX idx_cc05_command_scope
   ON ticket_commands(id, organization_id, actor_user_id);

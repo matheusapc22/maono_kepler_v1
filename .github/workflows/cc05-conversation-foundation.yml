@@ -1,9 +1,19 @@
-name: CC-05 conversation foundation
+name: CC-05 conversation validation
 
 on:
   pull_request:
     paths:
       - 'functions/_lib/ticket-conversation*.js'
+      - 'functions/_lib/ticket-center.js'
+      - 'functions/_lib/permissions.js'
+      - 'functions/api/organizations/**/tickets*.js'
+      - 'functions/api/organizations/**/tickets/**'
+      - 'src/access-control/**'
+      - 'src/pages/Projects/components/TicketConversationPanel.tsx'
+      - 'src/pages/Projects/components/TicketDetailDrawer.tsx'
+      - 'src/pages/Projects/components/ticket-types.ts'
+      - 'src/pages/Projects/components/tickets-api.ts'
+      - 'src/pages/Projects/components/ticket-lifecycle.css'
       - 'tests/ticket-conversation*.test.mjs'
       - 'migrations/0028_ticket_conversations.sql'
       - 'schema.sql'
@@ -26,7 +36,7 @@ jobs:
         with:
           node-version: 22
       - name: Validate conversation contracts and isolated SQLite migration
-        run: node --test tests/ticket-conversation*.test.mjs
+        run: node --test tests/ticket-conversation*.test.mjs tests/ticket-conversations-integration.test.mjs
       - name: Preserve the exact source snapshot for reproducible validation
         if: always()
         shell: bash

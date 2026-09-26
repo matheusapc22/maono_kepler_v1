@@ -4,6 +4,10 @@ import {
 } from "../../../../../../../_lib/permissions.js";
 import { requireTicketAccess } from "../../../../../../../_lib/ticket-access.js";
 import {
+  assertConversationAttachmentRead,
+  resolveTicketConversationContext,
+} from "../../../../../../../_lib/ticket-conversations.js";
+import {
   getOrganizationOrThrow,
   getRouteParam,
   methodNotAllowed,
@@ -12,6 +16,7 @@ import {
 import {
   downloadTicketAttachment,
   ensureTicketCenterSchema,
+  getTicketAttachmentRecordOrThrow,
   ticketCenterErrorResponse,
 } from "../../../../../../../_lib/ticket-center.js";
 
@@ -54,6 +59,13 @@ export async function onRequestGet({ env, request, params }) {
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
     await requireTicketAccess(env, organizationId, ticketId, user, "ticket.view");
+    const attachment = await getTicketAttachmentRecordOrThrow(
+      env, organizationId, ticketId, attachmentId, ["ACTIVE"],
+    );
+    const conversationContext = await resolveTicketConversationContext(
+      env, organizationId, ticketId, user, { ticketView: true },
+    );
+    await assertConversationAttachmentRead(env, conversationContext, attachment);
     const download = await downloadTicketAttachment(
       env,
       organizationId,

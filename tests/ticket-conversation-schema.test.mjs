@@ -167,10 +167,20 @@ test('repeat application stops instead of silently masking a prior application',
   const db = fixture(t); assert.throws(() => db.exec(migration), /already exists/);
 });
 const fullSchema = new URL('../schema.sql', import.meta.url);
-test('full repository schema.sql accepts the isolated 0028 expansion', { skip: !existsSync(fullSchema) }, t => {
+test('fresh-install schema.sql already contains the complete 0028 conversation schema', { skip: !existsSync(fullSchema) }, t => {
   const db = new DatabaseSync(':memory:'); t.after(() => db.close());
   db.exec(readFileSync(fullSchema, 'utf8'));
-  db.exec(migration);
+  const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN
+    ('ticket_messages','ticket_message_revisions','ticket_drafts') ORDER BY name`).all().map((row) => row.name);
+  assert.deepEqual(tables, ['ticket_drafts', 'ticket_message_revisions', 'ticket_messages']);
+  const attachmentColumns = new Set(db.prepare('PRAGMA table_info(ticket_attachments)').all().map((row) => row.name));
+  assert.equal(attachmentColumns.has('audience'), true);
+  assert.equal(attachmentColumns.has('message_id'), true);
+  assert.equal(attachmentColumns.has('draft_id'), true);
+  const eventColumns = new Set(db.prepare('PRAGMA table_info(ticket_events)').all().map((row) => row.name));
+  assert.equal(eventColumns.has('audience'), true);
+  assert.equal(eventColumns.has('message_id'), true);
+  assert.equal(db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'cc05_%'`).get().n > 0, true);
   assert.equal(db.prepare('PRAGMA quick_check').get().quick_check, 'ok');
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
 });

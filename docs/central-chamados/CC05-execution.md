@@ -2,72 +2,174 @@
 
 ## Estado de execução
 
-EM IMPLEMENTAÇÃO / PR DRAFT. Não equivale a funcionalidade entregue.
-Base de produto: `mano_kepler_v1` em `49c9a9a09cd674fcc83cb6befa340e1d5a477cc1`.
+**DESENVOLVIMENTO FUNCIONAL CONCLUÍDO / PR #202 DRAFT / RELEASE BLOQUEADO.**
 
-Esta primeira publicação consolida o schema aditivo e contratos puros de audiência,
-validação, precondições e rascunhos. Não integra ainda rotas, catálogo de permissões,
-leitores legados ou compositor. Não disponibiliza uma API de mensagens nem uma UI.
-Nenhuma flag foi criada/alterada. Nenhum dado remoto foi escrito.
+Base de produto: `mano_kepler_v1` em
+`49c9a9a09cd674fcc83cb6befa340e1d5a477cc1` (merge da CC-04 / PR #200).
+A implementação funcional permanece na branch `feat/cc-05-ticket-conversations` e
+não equivale a ativação, migration aplicada ou acceptance em Produção.
 
-MIGRATION PENDENTE DE CONFIRMAÇÃO: `0028_ticket_conversations.sql`.
-Alvo futuro: D1 `maono_maps`, UUID `5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`.
-Não aplicar por build, Preview, merge ou autorização da migration 0027.
-Auditoria e autorização específica seguirão o `AGENTS.md`, através do operador
-protegido na default `main`. A migration não está no SHA de produto atual;
-portanto não existe aprovação de audit de Produção para este conteúdo.
+A CC-05 agora integra os contratos de dados ao produto: autorização canônica,
+leitores seguros, serviço transacional, rotas HTTP, mensagens públicas, notas
+internas, revisões, rascunhos com ETag/CAS, anexos de rascunho e compositor na
+Central de Chamados. A flag continua opt-in: nenhuma operação desta execução
+habilita Produção ou altera as flags da CC-03/CC-04.
 
-## Implementado nesta fundação
+## Migration
 
-- Mensagens e revisões com integridade composta de organização/chamado/autor.
-- Revisão inicial e revisões de edição geradas por triggers na mesma transação.
-  O futuro serviço NÃO deve inserir uma revisão inicial duplicada no batch.
-- Audiência, autoria e data original imutáveis; edição exige novo comando, motivo
-  e incremento exato de versão. Revisões append-only.
-- Rascunho ativo único por organização/chamado/usuário/audiência e atualização CAS.
-- Anexo privado desde o início do rascunho; promoção apenas após upload ACTIVE,
-  no mesmo escopo e para audiência coerente; não reclassificar arquivo legado.
-- Classificação de eventos e relações de mensagem sem alterar conteúdo legado.
-- Contratos puros de leitura, escrita, edição, drafts, anexos, eventos e ETag.
+**MIGRATION PENDENTE DE CONFIRMAÇÃO**
 
-As funções de política recebem capacidades resolvidas no servidor. Não são um
-substituto da autenticação, do resolvedor canônico ou da ACL CC-04. Não aceitam
-papel, autoria ou atribuição como atalho para `ticket.note.view/create`. A flag de
-conversas não participa da autorização de dados persistidos.
+- Nome: `0028_ticket_conversations.sql`.
+- Finalidade: criar `ticket_messages`, `ticket_message_revisions` e
+  `ticket_drafts`; adicionar `audience`, `message_id` e `draft_id` a
+  `ticket_attachments`; adicionar `audience` e `message_id` a `ticket_events`;
+  criar índices, FKs e triggers de integridade, revisão append-only, retenção,
+  versionamento CAS e promoção controlada de anexos.
+- Banco/ambiente alvo futuro: Produção / Cloudflare D1 `maono_maps`, UUID
+  `5bc4dc32-f3bd-4c92-bbd1-cbda63e467db`.
+- Pré-requisito: torna-se obrigatória antes de habilitar
+  `MAONO_TICKET_CONVERSATIONS_ENABLED=true` e antes do acceptance funcional da
+  CC-05 em Produção.
+- Estado: preparada no repositório; **não aplicada nesta execução**. Build verde,
+  Preview, CI, merge ou autorização da migration 0027 não autorizam a 0028.
+- Aplicação futura: somente pelo operador protegido descrito em `AGENTS.md`, com
+  audit somente leitura, relatório e parada, autorização humana específica com
+  migration/hash aprovado, aplicação isolada e pós-validação. **Não reaplicar
+  0027 e não aplicar migrations anteriores em lote.**
 
-## Evidências e limites
+O `schema.sql` foi atualizado com o snapshot de instalação nova correspondente à
+0028 para que uma instalação limpa e um upgrade converjam para o mesmo contrato.
 
-Teste local inicial: Node 22.16.0, SQLite 3.49.1, 57 testes aprovados, zero falhas,
-1 teste de schema completo não executado por ausência do checkout completo.
-A fixture local declara explicitamente o subconjunto de colunas parentais que usa;
-não representa audit D1 ou teste de todas as migrations anteriores.
+## Implementação funcional concluída
 
-O CI executa também a expansão sobre `schema.sql` real. Seu resultado deve ser
-consultado antes de classificar esse gate. O workflow conserva snapshot Git sem
-`.git`, credenciais ou dados de Produção para validação reproduzível. O download
-público do checkout falhou no ambiente local; o snapshot do CI é uma alternativa
-para completar a inspeção e a execução técnica. Não é acceptance autenticado.
+### Autorização e confidencialidade
 
-## Próxima integração e gates (não concluídos)
+- Catálogo canônico recebeu `ticket.note.view` e `ticket.note.create`.
+- Super admin preserva o contrato global existente; owner/admin possuem acesso
+  nativo organizacional; editor/viewer dependem do resolvedor granular existente.
+- Nenhuma autorização deriva de autoria, solicitante, responsável, etiqueta ou
+  nome de papel como atalho para nota interna.
+- A ACL de objeto CC-04 e as permissões de organização são reavaliadas em cada
+  request e replay idempotente; revogação fecha o acesso imediatamente.
+- Leitores de anexos, downloads, eventos, detalhe e contadores filtram audiência
+  mesmo quando a feature de conversas está OFF, desde que o schema 0028 exista.
+  Isso evita transformar a própria flag em bypass de confidencialidade.
 
-1. Completar inventário de leitores: detalhe, anexos, downloads, listagens,
-   contadores, eventos, arquivos alternativos, erros, logs e outbox. Proteger antes
-   de criar conteúdo interno. Código OFF precisa preservar confidencialidade.
-2. Integrar catálogo `ticket.note.view` e `ticket.note.create`, sem concessão ampla
-   por inferência, e resolvedor por request/retry. Acesso fechado após revogação.
-3. Implementar rotas de mensagens/revisões e draft CAS; receipt, mensagem,
-   anexos, evento, audit e intenção de notificação no mesmo batch validado.
-   Resultado idempotente precisa reautorizar; zero-row CAS é conflito.
-4. Integrar compositor, notas explícitas e autosave, preservando texto mais recente
-   e sem armazenamento local de notas. Testar perda de resposta e duas abas.
-5. Atualizar instalação nova e testar upgrade, HTTP, navegador, typecheck/build,
-   regressões e CI. Não transformar testes escritos em testes executados.
-6. Publicar OFF somente após revisão completa. Preparar audit protegido, parar para
-   autorização da 0028, pós-validar, acceptance próprio e decisão de ativação.
+### Serviço, transação e idempotência
 
-CC-03/CC-04: acceptance continua adiado, não aprovado. A ativação CC-04 foi
-confirmada pelo operador, não reconferida por esta execução. Não habilitar
-`MAONO_TICKET_TRIAGE_ENABLED` ou `MAONO_TICKET_COMMANDS_ENABLED` por consequência.
+- Serviço `ticket-conversations` integrado ao D1 com detecção explícita do schema
+  necessário antes de permitir escrita.
+- Reuso de `ticket_commands` e `ticket_command_outbox` da Central de Chamados,
+  evitando um segundo mecanismo de receipts/idempotência.
+- Envio cria, no mesmo batch validado: receipt, mensagem, promoção de anexos,
+  consumo do rascunho, evento classificado, audit sanitizado e intenção de outbox.
+- Fingerprint do comando é SHA-256; corpo de mensagem/nota não é persistido em
+  receipt, audit ou outbox.
+- Replay idempotente reautoriza o recurso antes de devolver o resultado.
+- Edição exige `If-Match`, motivo e incremento exato da versão; as revisões são
+  criadas por triggers e permanecem append-only.
 
-CC-05 permanece a próxima etapa correta. Não avançar mecanicamente para CC-06
-com o compositor, os leitores ou a validação desta entrega incompletos.
+### Rascunhos e anexos
+
+- Rascunho ativo único por usuário/organização/chamado/audiência.
+- Autosave é server-side, com ETag/CAS; zero-row CAS é conflito, nunca sucesso.
+- Não há persistência de corpo sensível em `localStorage` ou `sessionStorage`.
+- Upload de conversa nasce com audiência `draft`, privado ao autor; só pode ser
+  promovido após upload `ACTIVE`, para uma mensagem do mesmo escopo/audiência.
+- Anexos legados permanecem públicos no contexto do chamado e não podem ser
+  silenciosamente reclassificados como confidenciais.
+- Download e exclusão de anexos fazem verificação de audiência/autorização antes
+  de tocar no binário ou gerar audit público.
+
+### API HTTP
+
+Foram integradas rotas para:
+
+- listar/criar mensagens;
+- editar mensagem com precondição de versão;
+- consultar revisões;
+- listar/criar/ler/atualizar/descartar rascunhos;
+- upload de anexos vinculado ao rascunho existente.
+
+As rotas reutilizam sessão, autorização de organização, ACL do chamado e catálogo
+canônico. Falhas de autorização de conteúdo interno fecham em 403/404 conforme o
+contexto sem expor corpo, nome de arquivo ou existência por caminho lateral.
+
+### Interface
+
+O `TicketDetailDrawer` recebeu o compositor de conversa entre o ciclo de
+atendimento e os anexos/histórico. A interface:
+
+- separa visualmente `Resposta ao solicitante` de `Nota interna`;
+- só oferece a aba interna quando o bundle autorizado pelo servidor permite;
+- salva rascunho no servidor com estado de salvamento explícito;
+- preserva o texto mais recente diante de respostas tardias e conflitos;
+- permite anexar/remover arquivos no rascunho;
+- permite envio idempotente, edição própria com motivo e consulta do histórico;
+- descarta rascunho explicitamente;
+- invalida/recarrega estado após revogação ou conflito de ETag;
+- não depende de inferência de papel no cliente para liberar nota interna.
+
+## Evidência local desta consolidação
+
+Ambiente de validação: Node `22.16.0`, SQLite `3.49.1`, snapshot completo do
+repositório proveniente do artifact do workflow da própria PR.
+
+- `node --test tests/ticket-conversation*.test.mjs tests/ticket-conversations-integration.test.mjs`:
+  **67/67 aprovados, 0 falhas**.
+- `node --test tests/access-delegation.test.mjs`:
+  **11/11 aprovados, 0 falhas**.
+- `git diff --check`: aprovado.
+- `node --check` nos módulos JS novos/alterados da CC-05: aprovado.
+- Transpilação sintática TypeScript dos 7 arquivos TS/TSX alterados: **7/7**.
+
+Cobertura executada inclui instalação nova, migration isolada, integridade/FK,
+isolamento por organização, respostas públicas, notas internas, revogação,
+idempotência, revisões, CAS de rascunhos, promoção de anexos, filtros de eventos,
+downloads e contadores sem inferência, feature OFF segura, rotas HTTP e wiring do
+compositor.
+
+### Limites da evidência local
+
+O artifact reproduzível não inclui `node_modules` e não possui `package-lock.json`
+na raiz. Uma tentativa de instalar dependências no ambiente efêmero não concluiu
+dentro da janela disponível; portanto **typecheck/build completos não são
+classificados como aprovados localmente**. O CI/Preview do novo commit é o gate
+remoto para instalação, typecheck/build e integração de bundling.
+
+Uma suíte legada que usa o helper de backfill apresenta no Node 22 local um erro
+`column index out of range` ligado a placeholders numerados do `node:sqlite`. O
+problema ocorre no fixture anterior à CC-05 e não foi mascarado por mudança de
+produção. Os testes próprios da CC-05 usam o SQL e os caminhos reais relevantes e
+passaram. O CI existente continua sendo a evidência complementar para regressão.
+
+## Gates que permanecem abertos
+
+1. Publicar o estado consolidado da branch e observar os workflows/Preview do novo
+   commit; qualquer falha real deve ser tratada antes de avançar.
+2. Revisão final da PR #202 mantendo-a Draft enquanto os gates operacionais
+   estiverem bloqueados.
+3. **MIGRATION PENDENTE DE CONFIRMAÇÃO**: audit protegido da 0028, relatório e
+   parada; autorização humana específica; aplicação isolada; pós-validação.
+4. Acceptance autenticado da CC-05 em Produção com organização/usuários controlados:
+   resposta pública, nota interna, revogação, duas abas/CAS, anexos, edição/revisão,
+   perda de resposta e não inferência em contadores/downloads.
+5. Decisão operacional específica para habilitar
+   `MAONO_TICKET_CONVERSATIONS_ENABLED=true`. Não ativar por consequência de merge
+   ou migration.
+6. Atualizar a Planilha de Controle e registrar evidências finais. PDF de Conclusão
+   Final só deve ser emitido quando o objetivo final e os gates operacionais forem
+   efetivamente encerrados.
+
+## Reconfronto com o objetivo final
+
+A sequência anterior precisava de pivotamento: os itens CC05-01–05 que eram
+pendências de implementação foram incorporados na própria PR #202, em vez de
+abrir PRs paralelas que aumentariam Preview/CI e risco de divergência. Com isso, a
+próxima etapa correta deixa de ser desenvolvimento funcional e passa a ser
+**validação remota + migration protegida + acceptance + decisão de ativação**.
+
+Não avançar mecanicamente para CC-06 enquanto a #202 não tiver seus gates de
+migration e acceptance registrados. CC-03/CC-04 acceptance permanece conforme o
+registro anterior (adiado/não aprovado); esta execução não altera triage/commands
+nem reclassifica aqueles gates.
