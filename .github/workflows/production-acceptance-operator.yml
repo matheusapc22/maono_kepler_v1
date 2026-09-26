@@ -1,0 +1,233 @@
+name: Production Acceptance Operator
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/production-acceptance-operator.yml'
+      - 'scripts/acceptance/**'
+      - 'tests/production-acceptance-operator.test.mjs'
+      - 'docs/runbooks/production-acceptance-operator.md'
+      - 'AGENTS.md'
+      - 'package.json'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preflight | run | closure"
+        required: true
+        type: choice
+        options:
+          - preflight
+          - run
+          - closure
+      suite:
+        description: "Registered suite id, e.g. cc04-selective-access"
+        required: true
+        type: string
+      organization_id:
+        description: "Dedicated QA organization id"
+        required: true
+        type: string
+      project_slug:
+        description: "Optional project slug for suites that need one"
+        required: false
+        default: ""
+        type: string
+      confirmation:
+        description: "preflight=PREPARE_PRODUCTION_ACCEPTANCE | run=RUN_PRODUCTION_ACCEPTANCE | closure=RESTORE_PRODUCTION_ACCEPTANCE_SAFE_STATE"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maono-production-acceptance
+  cancel-in-progress: false
+
+env:
+  PRODUCT_BRANCH: mano_kepler_v1
+
+jobs:
+  contracts:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Syntax-check generic acceptance framework
+        run: |
+          node --check scripts/acceptance/production-acceptance-lib.mjs
+          node --check scripts/acceptance/registry.mjs
+          node --check scripts/acceptance/operator.mjs
+          node --check scripts/acceptance/suites/cc04-selective-access.mjs
+      - name: Validate acceptance operator contracts
+        run: node --test tests/production-acceptance-operator.test.mjs
+
+  validate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      release_sha: ${{ steps.pin.outputs.sha }}
+      browser_required: ${{ steps.suite.outputs.browser_required }}
+    steps:
+      - name: Validate owner, default ref and explicit confirmation
+        shell: bash
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          DISPATCH_REF: ${{ github.ref_name }}
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          ORG_ID: ${{ inputs.organization_id }}
+        run: |
+          set -euo pipefail
+          test "$ACTOR" = "$OWNER"
+          test "$DISPATCH_REF" = "main"
+          [[ "$ORG_ID" =~ ^[1-9][0-9]*$ ]]
+          case "$MODE" in
+            preflight) test "$CONFIRMATION" = "PREPARE_PRODUCTION_ACCEPTANCE" ;;
+            run) test "$CONFIRMATION" = "RUN_PRODUCTION_ACCEPTANCE" ;;
+            closure) test "$CONFIRMATION" = "RESTORE_PRODUCTION_ACCEPTANCE_SAFE_STATE" ;;
+            *) exit 2 ;;
+          esac
+
+      - name: Checkout canonical product branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.PRODUCT_BRANCH }}
+          fetch-depth: 0
+
+      - name: Pin audited product SHA
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Pinned product SHA: $sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Validate suite registration and contracts without production secrets
+        id: suite
+        shell: bash
+        env:
+          SUITE: ${{ inputs.suite }}
+        run: |
+          set -euo pipefail
+          node --check scripts/acceptance/production-acceptance-lib.mjs
+          node --check scripts/acceptance/registry.mjs
+          node --check scripts/acceptance/operator.mjs
+          description="$(node scripts/acceptance/operator.mjs --mode describe --suite "$SUITE")"
+          browser_required="$(node -e 'const fs=require("node:fs"); const d=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(String(d.requiresBrowser===true));' <<<"$description")"
+          echo "browser_required=$browser_required" >> "$GITHUB_OUTPUT"
+          node --test tests/production-acceptance-operator.test.mjs
+
+  protected:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production-acceptance
+    env:
+      MODE: ${{ inputs.mode }}
+      SUITE: ${{ inputs.suite }}
+      ORG_ID: ${{ inputs.organization_id }}
+      PROJECT_SLUG: ${{ inputs.project_slug }}
+      VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+    steps:
+      - name: Checkout exactly the validated product SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Refuse product-branch drift before protected access
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/${PRODUCT_BRANCH}" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$VALIDATED_RELEASE_SHA"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install isolated browser runtime before any Production secret is exposed
+        if: needs.validate.outputs.browser_required == 'true' && inputs.mode == 'run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix scripts/acceptance \
+            --no-save --no-package-lock --ignore-scripts --no-audit --no-fund \
+            @playwright/test@1.55.0
+          ./scripts/acceptance/node_modules/.bin/playwright install --with-deps chromium
+          git diff --exit-code -- .
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Execute protected Production acceptance operation
+        shell: bash
+        env:
+          MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: ${{ secrets.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN }}
+          MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: ${{ inputs.mode == 'run' && secrets.MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/production-acceptance
+          args=(
+            --mode "$MODE"
+            --suite "$SUITE"
+            --organization-id "$ORG_ID"
+            --expected-commit "$VALIDATED_RELEASE_SHA"
+            --report ".tmp/production-acceptance/report.json"
+          )
+          if [[ -n "$PROJECT_SLUG" ]]; then
+            args+=(--project-slug "$PROJECT_SLUG")
+          fi
+          node scripts/acceptance/operator.mjs "${args[@]}"
+
+      - name: Summarize sanitized acceptance result
+        if: always()
+        shell: bash
+        run: |
+          if [[ ! -f .tmp/production-acceptance/report.json ]]; then
+            echo "No acceptance report produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const r = JSON.parse(fs.readFileSync(".tmp/production-acceptance/report.json", "utf8"));
+          const lines = [
+            "### Production Acceptance Operator",
+            "",
+            `- suite: \`${r.suite}\``,
+            `- mode: \`${r.mode}\``,
+            `- product SHA: \`${r.expectedCommit}\``,
+            `- acceptance executed: \`${r.acceptanceExecuted}\``,
+            `- configuration restored: \`${r.configurationRestored}\``,
+            `- cleanup complete: \`${r.cleanupComplete}\``,
+            `- result: **${r.ok && r.complete ? "PASS" : "FAIL"}**`,
+          ];
+          for (const c of r.cases || []) lines.push(`- ${c.id}: **${c.status}**`);
+          if (r.error) lines.push(`- error: \`${r.error.code}\` — ${r.error.message}`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          NODE
+
+      - name: Retain sanitized acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-acceptance-${{ inputs.mode }}-${{ inputs.suite }}-${{ github.run_id }}
+          path: .tmp/production-acceptance/report.json
+          if-no-files-found: ignore
+          retention-days: 14

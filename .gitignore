@@ -42,3 +42,6 @@ playwright/auth.json
 
 # production migration operator local evidence
 .tmp/production-migrations/
+
+# protected Production acceptance local evidence
+.tmp/production-acceptance/
