@@ -1011,6 +1011,4 @@ BEGIN
   UPDATE organization_tickets SET version = OLD.version + 1 WHERE id = NEW.id;
 END;
 
-INSERT OR IGNORE INTO role_permissions(role, permission, scope_type, active)
-VALUES ('owner', 'ticket.access.manage', 'organization', 1);
 

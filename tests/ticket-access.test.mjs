@@ -30,7 +30,10 @@ async function fixture(t) {
 
 async function listedIds(f, user = COMMAND_ACTORS.viewer) {
   const data = await listTickets(f.env, 1, parseTicketListOptions("https://maono.test/api/organizations/1/tickets?limit=100&q="), user);
-  return data.tickets.filter((ticket) => ticket.id >= 100).map((ticket) => Number(ticket.id));
+  return data.tickets
+    .filter((ticket) => ticket.id >= 100)
+    .map((ticket) => Number(ticket.id))
+    .sort((a, b) => a - b);
 }
 
 function acl(f, { principalType = "user", principalId = "3", action = "ticket.view", effect = "allow" } = {}) {
