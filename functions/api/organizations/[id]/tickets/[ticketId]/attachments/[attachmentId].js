@@ -2,6 +2,7 @@ import {
   can,
   requireOrganizationPermission,
 } from "../../../../../../_lib/permissions.js";
+import { requireTicketAccess } from "../../../../../../_lib/ticket-access.js";
 import {
   getOrganizationOrThrow,
   getRouteParam,
@@ -55,6 +56,7 @@ export async function onRequestPatch({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    await requireTicketAccess(env, organizationId, ticketId, user, "ticket.comment");
     const createDecision = await can(
       env,
       user,
@@ -121,6 +123,7 @@ export async function onRequestDelete({ env, request, params }) {
 
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    await requireTicketAccess(env, organizationId, ticketId, user, "ticket.comment");
     const ticket = await getTicketOrThrow(env, organizationId, ticketId);
     const attachment = await getTicketAttachmentRecordOrThrow(
       env,

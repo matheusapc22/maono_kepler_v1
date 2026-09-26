@@ -202,6 +202,13 @@ export const COMMERCIAL_ACCESSES: CommercialAccess[] = [
     risk: "operational",
   },
   {
+    code: "ticket.access.manage",
+    name: "Administrar acesso seletivo a chamados",
+    description: "Gerenciar grupos, políticas e privacidade de chamados.",
+    group: "Central de chamados",
+    risk: "sensitive",
+  },
+  {
     code: "ticket.close",
     name: "Fechar chamados",
     description: "Concluir o atendimento de um chamado.",

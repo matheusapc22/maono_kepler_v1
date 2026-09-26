@@ -65,6 +65,7 @@ export async function onRequestGet({ env, request, params }) {
       env,
       organizationId,
       parseTicketListOptions(request.url),
+      user,
     );
 
     return jsonResponse({ ok: true, ...data }, { headers: { "Cache-Control": "private, no-store" } });

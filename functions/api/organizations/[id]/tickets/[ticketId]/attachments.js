@@ -2,6 +2,7 @@ import {
   can,
   requireOrganizationPermission,
 } from "../../../../../_lib/permissions.js";
+import { requireTicketAccess } from "../../../../../_lib/ticket-access.js";
 import {
   getOrganizationOrThrow,
   getRouteParam,
@@ -60,9 +61,10 @@ async function ticketViewContext(env, request, organizationId, ticketId) {
 export async function onRequestGet({ env, request, params }) {
   try {
     const { organizationId, ticketId } = routeIds(params);
-    await ticketViewContext(env, request, organizationId, ticketId);
+    const { user } = await ticketViewContext(env, request, organizationId, ticketId);
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    await requireTicketAccess(env, organizationId, ticketId, user, "ticket.view");
     await getTicketOrThrow(env, organizationId, ticketId);
 
     return jsonResponse({
@@ -89,6 +91,7 @@ export async function onRequestPost({ env, request, params }) {
     );
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
+    await requireTicketAccess(env, organizationId, ticketId, user, "ticket.comment");
 
     const permissionContext = {
       organizationId,

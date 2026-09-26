@@ -17,6 +17,11 @@ import {
   ticketTriageSnapshotGuard,
 } from "./ticket-triage.js";
 import {
+  buildTicketAccessPredicate,
+  isTicketSelectiveAccessEnabled,
+  publicTicketLabels,
+} from "./ticket-access.js";
+import {
   appendOrganizationBinaryUpload,
   buildStoredFileName,
   deleteOrganizationBinary,
@@ -330,6 +335,8 @@ export function publicTicket(row, { triageEnabled = false } = {}) {
         row.assignee_email,
       ) || null,
     attachmentsCount: Number(row.attachments_count || 0),
+    visibility: row.visibility === "private" ? "private" : "organization",
+    labels: publicTicketLabels(row),
     ...(triageEnabled ? publicTicketTriage(row) : {}),
   };
 }
@@ -695,13 +702,30 @@ async function listTicketAssignees(env, organizationId) {
   );
 }
 
-export async function listTickets(env, organizationId, options) {
+function ticketLabelsProjectionSql(env) {
+  if (!isTicketSelectiveAccessEnabled(env)) return "";
+  return `, COALESCE((
+    SELECT json_group_array(json_object('id', l.id, 'name', l.name))
+    FROM ticket_label_links ll
+    INNER JOIN ticket_labels l
+      ON l.id = ll.label_id AND l.organization_id = ll.organization_id AND l.active = 1
+    WHERE ll.organization_id = t.organization_id AND ll.ticket_id = t.id
+  ), '[]') AS labels_json`;
+}
+
+export async function listTickets(env, organizationId, options, user = null) {
   const lifecycleEnabled = await getTicketCommandCapability(env, organizationId);
   const triageEnabled = await getTicketTriageCapability(env);
+  const access = await buildTicketAccessPredicate(env, organizationId, user, "ticket.view");
   const where = buildTicketWhere(organizationId, options);
   const facetsWhere = buildTicketWhere(organizationId, options, {
     includeStatus: false,
   });
+  where.sql = `(${where.sql}) AND (${access.sql})`;
+  where.values.push(...access.values);
+  facetsWhere.sql = `(${facetsWhere.sql}) AND (${access.sql})`;
+  facetsWhere.values.push(...access.values);
+  const labelProjection = ticketLabelsProjectionSql(env);
   const offset = (options.page - 1) * options.limit;
 
   const countRow = await getDb(env)
@@ -731,6 +755,7 @@ export async function listTickets(env, organizationId, options) {
             AND a.status = 'ACTIVE'
             AND a.deleted_at IS NULL
         ) AS attachments_count
+        ${labelProjection}
        FROM organization_tickets t
        LEFT JOIN users creator ON creator.id = t.created_by
        LEFT JOIN users assignee ON assignee.id = t.assigned_to
@@ -802,6 +827,7 @@ export async function listTickets(env, organizationId, options) {
 }
 
 async function findTicketRow(env, organizationId, ticketId) {
+  const labelProjection = ticketLabelsProjectionSql(env);
   return getDb(env)
     .prepare(
       `SELECT
@@ -820,6 +846,7 @@ async function findTicketRow(env, organizationId, ticketId) {
             AND a.status = 'ACTIVE'
             AND a.deleted_at IS NULL
         ) AS attachments_count
+        ${labelProjection}
        FROM organization_tickets t
        LEFT JOIN users creator ON creator.id = t.created_by
        LEFT JOIN users assignee ON assignee.id = t.assigned_to

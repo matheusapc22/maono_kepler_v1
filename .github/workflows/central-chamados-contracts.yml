@@ -9,6 +9,7 @@ on:
       - 'functions/_lib/ticket-triage.js'
       - 'functions/_lib/ticket-commands.js'
       - 'functions/_lib/ticket-command-http.js'
+      - 'functions/_lib/ticket-access.js'
       - 'functions/_lib/ticket-legacy-backfill.js'
       - 'functions/_lib/project-change-requests.js'
       - 'functions/_lib/project-change-request-review.js'
@@ -27,6 +28,7 @@ on:
       - 'tests/ticket-triage*.test.mjs'
       - 'tests/helpers/ticket-triage*.mjs'
       - 'tests/ticket-command*.test.mjs'
+      - 'tests/ticket-access*.test.mjs'
       - 'tests/ticket-legacy-backfill.test.mjs'
       - 'tests/ticket-backfill*.test.mjs'
       - 'tests/ticket-production-preflight.test.mjs'
@@ -35,7 +37,10 @@ on:
       - 'migrations/0020_project_change_requests.sql'
       - 'migrations/0025_ticket_triage_classification.sql'
       - 'migrations/0026_ticket_command_lifecycle.sql'
+      - 'migrations/0027_ticket_selective_access.sql'
       - 'schema.sql'
+      - 'functions/api/organizations/*/ticket-access/**'
+      - 'functions/api/organizations/*/ticket-access/*.js'
       - 'functions/api/organizations/*/tickets/**'
       - 'functions/api/organizations/*/tickets.js'
       - 'functions/api/projects/*/change-requests/**'
@@ -85,6 +90,17 @@ jobs:
           node-version: 22
       - name: Validate commands, concurrency, lifecycle and controlled backfill
         run: node --experimental-strip-types --test tests/ticket-command*.test.mjs tests/ticket-legacy-backfill.test.mjs tests/ticket-backfill*.test.mjs tests/ticket-production-preflight.test.mjs
+
+  cc04-selective-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate private-ticket authorization, ACL precedence and schema isolation
+        run: node --experimental-strip-types --test tests/ticket-access*.test.mjs
 
   cc03-d1-binding-smoke:
     runs-on: ubuntu-latest

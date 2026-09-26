@@ -29,6 +29,7 @@ const ADMIN_OWNER_NATIVE_ACCESS_CODES = new Set([
   "ticket.create",
   "ticket.comment",
   "ticket.manage",
+  "ticket.access.manage",
   "ticket.close",
   "ticket.assign",
   "roadmap.view",

@@ -1,4 +1,5 @@
 import { requireOrganizationPermission } from "./permissions.js";
+import { requireTicketAccess } from "./ticket-access.js";
 import {
   getOrganizationOrThrow, getRouteParam, jsonResponse,
   parsePositiveInteger, readJsonBody,
@@ -21,6 +22,7 @@ async function authorize(env, request, ids, permission) {
   await getOrganizationOrThrow(env, ids.organizationId);
   await ensureTicketCenterSchema(env);
   await assertTicketCommandReady(env, ids.organizationId);
+  await requireTicketAccess(env, ids.organizationId, ids.ticketId, user, permission);
   return user;
 }
 
@@ -41,8 +43,8 @@ export async function ticketCommandStateResponse({ env, request, params }) {
 export async function ticketCommandResponse({ env, request, params }, execute, { correction = false } = {}) {
   try {
     const ids = ticketCommandRouteIds(params);
-    // Keep the existing organizational management gate until CC-04 defines
-    // granular action permissions and object ACLs. Never grant from a link.
+    // Organizational permission remains the coarse gate; authorize() adds the
+    // CC-04 object-level gate before executing any lifecycle command.
     const user = await authorize(env, request, ids, "ticket.manage");
     const payload = await readJsonBody(request);
     const commandPayload = correction ? {

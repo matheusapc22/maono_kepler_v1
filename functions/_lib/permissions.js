@@ -20,7 +20,7 @@ export const PERMISSIONS = [
   "ticket.create",
   "ticket.comment",
   "ticket.manage",
-  "ticket.manage",
+  "ticket.access.manage",
   "ticket.close",
   "ticket.assign",
 
@@ -140,6 +140,7 @@ const OWNER_ORGANIZATION_PERMISSIONS = new Set([
   "ticket.create",
   "ticket.comment",
   "ticket.manage",
+  "ticket.access.manage",
   "ticket.close",
   "ticket.assign",
 
@@ -192,6 +193,7 @@ const SENSITIVE_ACTIONS = new Set([
   "ticket.create",
   "ticket.comment",
   "ticket.manage",
+  "ticket.access.manage",
   "ticket.close",
   "ticket.assign",
 
@@ -400,8 +402,11 @@ function isOrganizationScopedPermission(permission) {
 }
 
 function isManagementPermission(permission) {
-  return MANAGEMENT_PERMISSION_PREFIXES.some((prefix) =>
-    String(permission || "").startsWith(prefix),
+  return (
+    permission === "ticket.access.manage" ||
+    MANAGEMENT_PERMISSION_PREFIXES.some((prefix) =>
+      String(permission || "").startsWith(prefix),
+    )
   );
 }
 

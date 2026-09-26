@@ -334,9 +334,22 @@ export default function TicketsSection({
           return;
         }
 
-        setDetailError(
-          toTicketApiError(requestError, "Não foi possível carregar o chamado."),
+        const detailFailure = toTicketApiError(
+          requestError,
+          "Não foi possível carregar o chamado.",
         );
+        if (detailFailure.status === 404 || detailFailure.status === 403) {
+          setTickets((current) =>
+            current.filter((ticket) => String(ticket.id) !== String(ticketId)),
+          );
+          setDetail(null);
+          setSelectedTicketId(null);
+          setSuggestedStatus(null);
+          setDetailError(null);
+          setToast("O chamado não está mais disponível para seu acesso.");
+          return;
+        }
+        setDetailError(detailFailure);
       } finally {
         if (requestSequence === detailRequestSequenceRef.current) {
           setDetailLoading(false);
@@ -434,6 +447,23 @@ export default function TicketsSection({
         await loadDetail(requestTicketId);
       }
       setToast(`${updated.code}: ação registrada no chamado.`);
+    } catch (requestError) {
+      if (requestOrganizationKey !== organizationKeyRef.current) throw requestError;
+      const mutationFailure = toTicketApiError(
+        requestError,
+        "Não foi possível atualizar o chamado.",
+      );
+      if (mutationFailure.status === 404 || mutationFailure.status === 403) {
+        setTickets((current) =>
+          current.filter((ticket) => String(ticket.id) !== String(requestTicketId)),
+        );
+        setDetail(null);
+        setSelectedTicketId(null);
+        setSuggestedStatus(null);
+        setDetailError(null);
+        setToast("O chamado não está mais disponível para seu acesso.");
+      }
+      throw mutationFailure;
     } finally {
       if (requestOrganizationKey === organizationKeyRef.current) setDetailSaving(false);
     }
