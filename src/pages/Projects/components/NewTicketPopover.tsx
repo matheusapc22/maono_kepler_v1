@@ -44,7 +44,7 @@ type NewTicketPopoverProps = {
 
 type UploadState = {
   progress: number;
-  status: "queued" | "uploading" | "finalizing" | "done" | "failed";
+  status: "queued" | "hashing" | "resuming" | "uploading" | "finalizing" | "done" | "failed";
   error?: TicketApiError;
 };
 
@@ -506,9 +506,13 @@ export default function NewTicketPopover({
                       onClick={() => void retryFile(createdTicket, file)}
                     >
                       {retryingFileKey === key
-                        ? uploadStates[key]?.status === "finalizing"
-                          ? "Finalizando..."
-                          : `${uploadStates[key]?.progress || 0}%`
+                        ? uploadStates[key]?.status === "hashing"
+                          ? "Verificando..."
+                          : uploadStates[key]?.status === "resuming"
+                            ? "Reconectando..."
+                            : uploadStates[key]?.status === "finalizing"
+                              ? "Finalizando..."
+                              : `${uploadStates[key]?.progress || 0}%`
                         : "Tentar novamente este arquivo"}
                     </button>
                   </li>
@@ -699,6 +703,10 @@ export default function NewTicketPopover({
                           ? state.error ? normalizeUserError(state.error).message : undefined
                           : state?.status === "done"
                             ? "Concluído"
+                            : state?.status === "hashing"
+                              ? "Verificando arquivo..."
+                            : state?.status === "resuming"
+                              ? "Reconectando ao envio..."
                             : state?.status === "finalizing"
                               ? "Finalizando anexo..."
                             : state?.status === "uploading"

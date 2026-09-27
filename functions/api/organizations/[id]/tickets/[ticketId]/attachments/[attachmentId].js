@@ -4,6 +4,9 @@ import {
 } from "../../../../../../_lib/permissions.js";
 import { requireTicketAccess } from "../../../../../../_lib/ticket-access.js";
 import {
+  cancelTicketAttachmentUploadByAttachment,
+} from "../../../../../../_lib/ticket-attachment-uploads.js";
+import {
   assertConversationAttachmentMutation,
   resolveTicketConversationContext,
 } from "../../../../../../_lib/ticket-conversations.js";
@@ -70,6 +73,12 @@ export async function onRequestPatch({ env, request, params }) {
     const scope = await assertConversationAttachmentMutation(
       env, conversationContext, attachment,
     );
+    if (attachment.upload_session_id) {
+      const error = new Error("Este upload usa uma sessão retomável. Atualize o estado da sessão antes de continuar.");
+      error.status = 409;
+      error.code = "ATTACHMENT_UPLOAD_SESSION_ENDPOINT_REQUIRED";
+      throw error;
+    }
     if (scope.conversationScoped) {
       const result = await uploadTicketAttachmentChunk(
         env, organizationId, ticketId, attachmentId, user, request,
@@ -155,6 +164,13 @@ export async function onRequestDelete({ env, request, params }) {
       env, organizationId, ticketId, user, { ticketView: true },
     );
     await assertConversationAttachmentMutation(env, conversationContext, attachment);
+
+    if (attachment.upload_session_id && String(attachment.uploaded_by) === String(user.id)) {
+      const cancelled = await cancelTicketAttachmentUploadByAttachment(
+        env, conversationContext, attachmentId,
+      );
+      if (cancelled) return jsonResponse({ ok: true, deleted: true, cancelledUpload: true });
+    }
 
     const manageDecision = await can(env, user, "ticket.manage", {
       organizationId,

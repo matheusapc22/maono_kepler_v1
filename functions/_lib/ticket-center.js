@@ -267,6 +267,10 @@ export function normalizeTicketStatus(value, fallback = "open") {
   return canonical;
 }
 
+export function assertTicketAttachmentFirstChunk(fileName, arrayBuffer) {
+  return assertFileSignature(extensionFromName(fileName), arrayBuffer);
+}
+
 function normalizePriority(value, fallback = "normal") {
   const priority = String(value || fallback).trim().toLowerCase();
 
@@ -360,6 +364,8 @@ export function publicTicketAttachment(row) {
     audience: row.audience || "ticket",
     messageId: row.message_id || null,
     draftId: row.draft_id || null,
+    uploadSessionId: row.upload_session_id || null,
+    providerContentHash: row.provider_content_hash || null,
   };
 }
 
@@ -1103,6 +1109,10 @@ async function enforceRateLimit(env, kind, organizationId, userId) {
       { retryAfter: 600 },
     );
   }
+}
+
+export async function enforceTicketAttachmentRateLimit(env, organizationId, userId) {
+  return enforceRateLimit(env, "attachment", organizationId, userId);
 }
 
 export async function recordTicketEvent(

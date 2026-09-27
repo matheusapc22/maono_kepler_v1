@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  cancelTicketAttachmentUpload,
   createTicketConversationDraft,
   deleteTicketAttachment,
   discardTicketConversationDraft,
   downloadTicketAttachment,
   editTicketConversationMessage,
+  listTicketAttachmentUploadSessions,
   listTicketConversationMessages,
   listTicketConversationRevisions,
+  resumeTicketAttachmentUpload,
   sendTicketConversationMessage,
   toTicketApiError,
   updateTicketConversationDraft,
@@ -18,6 +21,7 @@ import type {
   Ticket,
   TicketAttachment,
   TicketAttachmentLimits,
+  TicketAttachmentUploadSession,
   TicketConversationBundle,
   TicketConversationDraft,
   TicketConversationKind,
@@ -85,6 +89,8 @@ export default function TicketConversationPanel({
   const [sending, setSending] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState<TicketAttachmentUploadSession[]>([]);
+  const [busyUploadId, setBusyUploadId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
@@ -180,6 +186,36 @@ export default function TicketConversationPanel({
     return apiError;
   }
 
+  async function refreshPendingUploads(draftId?: string | null, signal?: AbortSignal) {
+    if (!enabled || !canRespond) {
+      setPendingUploads([]);
+      return [];
+    }
+    try {
+      const sessions = await listTicketAttachmentUploadSessions(organizationId, ticket.id, signal);
+      const target = draftId ?? draftsRef.current[kindRef.current]?.id ?? null;
+      const filtered = target ? sessions.filter((session) => session.draftId === target) : [];
+      if (!signal?.aborted) setPendingUploads(filtered);
+      return filtered;
+    } catch (requestError) {
+      if (signal?.aborted) return [];
+      const apiError = toTicketApiError(requestError);
+      if ([403, 404, 503].includes(Number(apiError.status || 0))) {
+        setPendingUploads([]);
+        return [];
+      }
+      setError(apiError.message || "Não foi possível consultar os envios pendentes.");
+      return [];
+    }
+  }
+
+  useEffect(() => {
+    const draft = draftsRef.current[kind];
+    const controller = new AbortController();
+    void refreshPendingUploads(draft?.id, controller.signal);
+    return () => controller.abort();
+  }, [organizationId, ticket.id, kind, activeDraft?.id, enabled, canRespond]);
+
   async function persistCurrentDraft() {
     if (!enabled || !canRespond || !dirtyRef.current) return draftsRef.current[kindRef.current] || null;
     if (persistPromiseRef.current) return persistPromiseRef.current;
@@ -257,7 +293,8 @@ export default function TicketConversationPanel({
         draft = await persistCurrentDraft();
       }
       if (!draft) throw new Error("Rascunho indisponível para anexos.");
-      const room = Math.max(0, attachmentLimits.maxFiles - draft.attachments.length);
+      const currentPending = await refreshPendingUploads(draft.id);
+      const room = Math.max(0, attachmentLimits.maxFiles - draft.attachments.length - currentPending.length);
       const selected = Array.from(files).slice(0, room);
       for (const file of selected) {
         const attachment = await uploadTicketAttachment(
@@ -271,14 +308,62 @@ export default function TicketConversationPanel({
           attachments: [...draft.attachments, attachment],
         };
         setDraft(kindRef.current, draft);
+        await refreshPendingUploads(draft.id);
       }
       if (files.length > selected.length) {
         setError(`O chamado aceita até ${attachmentLimits.maxFiles} anexos.`);
       }
     } catch (requestError) {
-      handleRequestFailure(requestError, "Não foi possível anexar o arquivo ao rascunho.");
+      const draft = draftsRef.current[kindRef.current];
+      const sessions = draft ? await refreshPendingUploads(draft.id) : [];
+      if (sessions.length) {
+        setError("O envio foi interrompido, mas a sessão foi preservada. Use Retomar e selecione o mesmo arquivo.");
+      } else {
+        handleRequestFailure(requestError, "Não foi possível anexar o arquivo ao rascunho.");
+      }
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function resumeDraftUpload(session: TicketAttachmentUploadSession, file: File) {
+    setBusyUploadId(session.id);
+    setUploading(true);
+    setError(null);
+    try {
+      const attachment = await resumeTicketAttachmentUpload(
+        organizationId,
+        ticket.id,
+        session,
+        file,
+      );
+      const current = draftsRef.current[kindRef.current];
+      if (current && current.id === session.draftId) {
+        setDraft(kindRef.current, {
+          ...current,
+          attachments: [...current.attachments.filter((item) => String(item.id) !== String(attachment.id)), attachment],
+        });
+      }
+      await refreshPendingUploads(session.draftId);
+    } catch (requestError) {
+      handleRequestFailure(requestError, "Não foi possível retomar o anexo do rascunho.");
+      await refreshPendingUploads(session.draftId);
+    } finally {
+      setBusyUploadId(null);
+      setUploading(false);
+    }
+  }
+
+  async function cancelDraftUpload(session: TicketAttachmentUploadSession) {
+    setBusyUploadId(session.id);
+    setError(null);
+    try {
+      await cancelTicketAttachmentUpload(organizationId, ticket.id, session.id);
+      await refreshPendingUploads(session.draftId);
+    } catch (requestError) {
+      handleRequestFailure(requestError, "Não foi possível cancelar o envio pendente.");
+    } finally {
+      setBusyUploadId(null);
     }
   }
 
@@ -307,6 +392,10 @@ export default function TicketConversationPanel({
     }
     setError(null);
     try {
+      const sessions = await refreshPendingUploads(current.id);
+      for (const session of sessions) {
+        await cancelTicketAttachmentUpload(organizationId, ticket.id, session.id);
+      }
       await discardTicketConversationDraft(organizationId, ticket.id, current.id, current.etag);
       setDraft(kindRef.current, undefined);
       bodyRef.current = "";
@@ -327,6 +416,10 @@ export default function TicketConversationPanel({
       const draft = await persistCurrentDraft();
       if (!draft || draft.body !== bodyRef.current) {
         throw new Error("O rascunho ainda não foi confirmado pelo servidor.");
+      }
+      const sessions = await refreshPendingUploads(draft.id);
+      if (sessions.length) {
+        throw new Error("Conclua ou cancele os envios pendentes antes de enviar a mensagem.");
       }
       const attachmentIds = draft.attachments
         .map((attachment) => Number(attachment.id))
@@ -470,7 +563,36 @@ export default function TicketConversationPanel({
                 <div className="ticket-conversation-editor">
                   <textarea value={editBody} maxLength={20_000} onChange={(event) => setEditBody(event.target.value)} />
                   <input value={editReason} maxLength={1_000} placeholder="Motivo da edição" onChange={(event) => setEditReason(event.target.value)} />
-                  <div className="ticket-conversation-actions">
+                  {pendingUploads.length ? (
+            <ul className="ticket-conversation-draft-attachments ticket-conversation-pending-uploads">
+              {pendingUploads.map((session) => {
+                const progress = Math.round((session.offset / Math.max(1, session.size)) * 100);
+                const busy = busyUploadId === session.id;
+                return (
+                  <li key={session.id}>
+                    <span>{session.name} · {progress}% de {readableBytes(session.size)}</span>
+                    <span>
+                      <label className="ticket-secondary-action ticket-file-action">
+                        Retomar
+                        <input
+                          type="file"
+                          hidden
+                          disabled={busy}
+                          onChange={(event) => {
+                            const file = event.currentTarget.files?.[0];
+                            if (file) void resumeDraftUpload(session, file);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      <button type="button" disabled={busy} onClick={() => void cancelDraftUpload(session)}>Cancelar envio</button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          <div className="ticket-conversation-actions">
                     <button type="button" className="ticket-secondary-action" onClick={() => setEditingId(null)}>Cancelar</button>
                     <button type="button" className="ticket-primary-action" disabled={editingSaving || !editBody.trim() || !editReason.trim()} onClick={() => void saveEdit(message)}>
                       {editingSaving ? "Salvando…" : "Salvar edição"}
@@ -558,7 +680,7 @@ export default function TicketConversationPanel({
                 type="file"
                 multiple
                 hidden
-                disabled={uploading || attachments.length >= attachmentLimits.maxFiles}
+                disabled={uploading || attachments.length + pendingUploads.length >= attachmentLimits.maxFiles}
                 onChange={(event) => {
                   void attachFiles(event.currentTarget.files);
                   event.currentTarget.value = "";
@@ -570,7 +692,7 @@ export default function TicketConversationPanel({
                 Descartar rascunho
               </button>
             ) : null}
-            <button type="button" className="ticket-primary-action" disabled={sending || savingDraft || uploading || !body.trim()} onClick={() => void sendMessage()}>
+            <button type="button" className="ticket-primary-action" disabled={sending || savingDraft || uploading || pendingUploads.length > 0 || !body.trim()} onClick={() => void sendMessage()}>
               {sending ? "Enviando…" : kind === "internal" ? "Registrar nota interna" : "Enviar resposta"}
             </button>
           </div>
