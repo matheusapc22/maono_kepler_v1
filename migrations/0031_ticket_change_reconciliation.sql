@@ -1,5 +1,6 @@
 -- CC-08. PRECONDITIONS: exact 0020 base schema + 0026/0027/0028/0030.
--- 0020 is pending in production ledger: audit actual schema before any apply.
+-- Verify 0020 in the production ledger and audit the actual schema before apply.
+-- Parenthesized CASE expressions avoid ambiguity with trigger END in D1 remote parsing.
 -- NOT compatible with historical 0021/0022/0023; do not auto-drop their guards.
 -- No Ticket state is changed. No historical notifications are created.
 ALTER TABLE project_change_requests ADD COLUMN lifecycle_version INTEGER NOT NULL DEFAULT 0 CHECK (lifecycle_version >= 0);
@@ -27,32 +28,32 @@ CREATE TRIGGER cc08_cr_lifecycle_guard
 BEFORE UPDATE OF status, lifecycle_version, decision, feedback, decided_by_user_id, decided_at, applied_revision ON project_change_requests
 BEGIN
   -- Preserve attribution; FK ON DELETE SET NULL remains allowed after user deletion.
-  SELECT CASE WHEN NEW.decided_by_user_id IS NOT OLD.decided_by_user_id
+  SELECT (CASE WHEN NEW.decided_by_user_id IS NOT OLD.decided_by_user_id
     AND (OLD.decision IS NOT NULL OR NEW.status = OLD.status)
     AND (NEW.decided_by_user_id IS NOT NULL OR EXISTS (SELECT 1 FROM users WHERE id = OLD.decided_by_user_id))
-    THEN RAISE(ABORT, 'CHANGE_REQUEST_DECISION_IMMUTABLE') END;
-  SELECT CASE WHEN NEW.status <> OLD.status AND NOT (
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_DECISION_IMMUTABLE') END);
+  SELECT (CASE WHEN NEW.status <> OLD.status AND NOT (
     (OLD.status = 'submitted' AND NEW.status IN ('under_review','rejected','superseded')) OR
     (OLD.status = 'under_review' AND NEW.status IN ('approved','rejected','conflict','superseded')) OR
     (OLD.status = 'approved' AND NEW.status IN ('applying','conflict')) OR
     (OLD.status = 'applying' AND NEW.status IN ('applied','conflict'))
-  ) THEN RAISE(ABORT, 'CHANGE_REQUEST_INVALID_TRANSITION') END;
-  SELECT CASE WHEN NEW.status <> OLD.status AND NEW.lifecycle_version <> OLD.lifecycle_version + 1
-    THEN RAISE(ABORT, 'CHANGE_REQUEST_LIFECYCLE_VERSION_REQUIRED') END;
-  SELECT CASE WHEN NEW.status = OLD.status AND (
+  ) THEN RAISE(ABORT, 'CHANGE_REQUEST_INVALID_TRANSITION') END);
+  SELECT (CASE WHEN NEW.status <> OLD.status AND NEW.lifecycle_version <> OLD.lifecycle_version + 1
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_LIFECYCLE_VERSION_REQUIRED') END);
+  SELECT (CASE WHEN NEW.status = OLD.status AND (
     NEW.lifecycle_version <> OLD.lifecycle_version OR NEW.decision IS NOT OLD.decision OR
     NEW.feedback IS NOT OLD.feedback OR NEW.decided_at IS NOT OLD.decided_at OR NEW.applied_revision IS NOT OLD.applied_revision)
-    THEN RAISE(ABORT, 'CHANGE_REQUEST_LIFECYCLE_IMMUTABLE') END;
-  SELECT CASE WHEN OLD.decision IS NOT NULL AND (NEW.decision IS NOT OLD.decision OR
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_LIFECYCLE_IMMUTABLE') END);
+  SELECT (CASE WHEN OLD.decision IS NOT NULL AND (NEW.decision IS NOT OLD.decision OR
     NEW.feedback IS NOT OLD.feedback OR NEW.decided_at IS NOT OLD.decided_at)
-    THEN RAISE(ABORT, 'CHANGE_REQUEST_DECISION_IMMUTABLE') END;
-  SELECT CASE WHEN NEW.status IN ('approved','applying','applied') AND NEW.decision IS NOT 'approved'
-    THEN RAISE(ABORT, 'CHANGE_REQUEST_APPROVAL_REQUIRED') END;
-  SELECT CASE WHEN NEW.status = 'rejected' AND OLD.status <> 'rejected' AND
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_DECISION_IMMUTABLE') END);
+  SELECT (CASE WHEN NEW.status IN ('approved','applying','applied') AND NEW.decision IS NOT 'approved'
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_APPROVAL_REQUIRED') END);
+  SELECT (CASE WHEN NEW.status = 'rejected' AND OLD.status <> 'rejected' AND
     (NEW.decision IS NOT 'rejected' OR length(trim(COALESCE(NEW.feedback,''))) = 0)
-    THEN RAISE(ABORT, 'CHANGE_REQUEST_REJECTION_REASON_REQUIRED') END;
-  SELECT CASE WHEN NEW.status = 'applied' AND NEW.applied_revision IS NOT NEW.base_revision + 1
-    THEN RAISE(ABORT, 'CHANGE_REQUEST_APPLIED_REVISION_REQUIRED') END;
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_REJECTION_REASON_REQUIRED') END);
+  SELECT (CASE WHEN NEW.status = 'applied' AND NEW.applied_revision IS NOT NEW.base_revision + 1
+    THEN RAISE(ABORT, 'CHANGE_REQUEST_APPLIED_REVISION_REQUIRED') END);
 END;
 
 
@@ -103,9 +104,9 @@ CREATE TRIGGER cc08_record_created AFTER INSERT ON change_records BEGIN
  VALUES(NEW.id,NEW.version,NEW.status,NEW.proposal,NEW.feedback,NEW.evidence_url,NEW.actor_id);
 END;
 CREATE TRIGGER cc08_record_guard BEFORE UPDATE ON change_records BEGIN
- SELECT CASE WHEN NEW.id IS NOT OLD.id OR NEW.organization_id IS NOT OLD.organization_id OR NEW.domain IS NOT OLD.domain
+ SELECT (CASE WHEN NEW.id IS NOT OLD.id OR NEW.organization_id IS NOT OLD.organization_id OR NEW.domain IS NOT OLD.domain
  OR NEW.change_request_id IS NOT OLD.change_request_id OR NEW.created_by IS NOT OLD.created_by OR NEW.version<>OLD.version+1
- THEN RAISE(ABORT,'CHANGE_RECORD_VERSION_OR_IDENTITY') END;
+ THEN RAISE(ABORT,'CHANGE_RECORD_VERSION_OR_IDENTITY') END);
 END;
 CREATE TRIGGER cc08_record_updated AFTER UPDATE ON change_records BEGIN
  INSERT INTO change_record_events(record_id,version,status,proposal,feedback,evidence_url,actor_id)
@@ -131,7 +132,7 @@ CREATE TRIGGER cc08_link_created AFTER INSERT ON ticket_change_links BEGIN
  INSERT INTO ticket_change_link_events(ticket_id,record_id,version,active,actor_id) VALUES(NEW.ticket_id,NEW.record_id,NEW.version,NEW.active,NEW.actor_id);
 END;
 CREATE TRIGGER cc08_link_updated AFTER UPDATE OF active ON ticket_change_links WHEN OLD.active<>NEW.active BEGIN
- SELECT CASE WHEN NEW.version<>OLD.version+1 THEN RAISE(ABORT,'CHANGE_LINK_VERSION_REQUIRED') END;
+ SELECT (CASE WHEN NEW.version<>OLD.version+1 THEN RAISE(ABORT,'CHANGE_LINK_VERSION_REQUIRED') END);
  INSERT INTO ticket_change_link_events(ticket_id,record_id,version,active,actor_id) VALUES(NEW.ticket_id,NEW.record_id,NEW.version,NEW.active,NEW.actor_id);
 END;
 CREATE TRIGGER cc08_link_events_no_update BEFORE UPDATE ON ticket_change_link_events BEGIN SELECT RAISE(ABORT,'CHANGE_HISTORY_APPEND_ONLY'); END;
