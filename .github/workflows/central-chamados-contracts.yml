@@ -135,3 +135,14 @@ jobs:
           node-version: 22
       - name: Validate durable delivery, migration and authorization
         run: node --test tests/ticket-notifications*.test.mjs
+
+  cc08-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate CR reconciliation, authorization, lineage and 90MiB stream
+        run: node --experimental-strip-types --test tests/ticket-changes.test.mjs tests/project-change-request*.test.mjs tests/project-large-save.test.mjs

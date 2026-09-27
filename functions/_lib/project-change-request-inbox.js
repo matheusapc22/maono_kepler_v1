@@ -1,3 +1,5 @@
+import {can} from './permissions.js';
+import {requireTicketAccess} from './ticket-access.js';
 import { getDb, tableExists } from "./organizations.js";
 import { CHANGE_REQUEST_STATUSES } from "./project-change-requests.js";
 import { requireReviewerProject } from "./project-change-request-review.js";
@@ -23,7 +25,7 @@ export function reviewPath(slug, id) {
 }
 
 export async function listEditorProjectChangeRequests(env, request, slug, options) {
-  const { project } = await requireReviewerProject(env, request, slug);
+  const { project, user } = await requireReviewerProject(env, request, slug);
   const { status, page, limit } = options;
   const statusSql = status === "pending"
     ? "AND r.status IN ('submitted', 'under_review', 'approved', 'applying')"
@@ -45,6 +47,12 @@ export async function listEditorProjectChangeRequests(env, request, slug, option
      ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?
   `).bind(...parameters, limit + 1, (page - 1) * limit).all();
   const rows = result?.results || [];
+  const ticketAllowed=(await can(env,user,'ticket.view',{organizationId:project.organization_id,scopeType:'organization'})).allowed;
+  for(const row of rows) {
+    if(!row.ticket_id)continue;
+    if(!ticketAllowed){row.ticket_code=null;row.ticket_subject=null;continue;}
+    try{await requireTicketAccess(env,project.organization_id,row.ticket_id,user);}catch(error){if(![403,404].includes(error.status))throw error;row.ticket_code=null;row.ticket_subject=null;}
+  }
   return {
     project: { id: project.id, slug: project.slug, name: project.name },
     items: rows.slice(0, limit).map(row => ({

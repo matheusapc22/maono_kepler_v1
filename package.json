@@ -54,7 +54,8 @@
     "migration:audit:production": "node scripts/migrations/audit-production.mjs",
     "migration:apply:production": "node scripts/migrations/apply-production.mjs",
     "migration:postvalidate:production": "node scripts/migrations/post-validate-production.mjs",
-    "test:ticket-notifications": "node --test tests/ticket-notifications*.test.mjs"
+    "test:ticket-notifications": "node --test tests/ticket-notifications*.test.mjs",
+    "test:ticket-changes": "node --experimental-strip-types --test tests/ticket-changes.test.mjs tests/project-change-request*.test.mjs tests/project-large-save.test.mjs"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

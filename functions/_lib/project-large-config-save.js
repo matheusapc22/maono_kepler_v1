@@ -82,7 +82,7 @@ export function assertInlineProjectConfigRequestSize(request) {
   return true;
 }
 
-function validateLargeSaveHeaders(request) {
+function validateLargeSaveHeaders(request, allowSmall = false) {
   if (!isLargeProjectConfigRequest(request)) {
     throw saveError(
       "Contrato de save grande não informado.",
@@ -123,7 +123,7 @@ function validateLargeSaveHeaders(request) {
       { field: "version" },
     );
   }
-  if (declaredSize <= LARGE_CONFIG_THRESHOLD_BYTES) {
+  if (!allowSmall && declaredSize <= LARGE_CONFIG_THRESHOLD_BYTES) {
     throw saveError(
       "Payload não requer o modo de save grande.",
       400,
@@ -415,6 +415,8 @@ export async function saveLargeProjectConfigStream(
     expectedLifecycleState = PROJECT_LIFECYCLE_STATES.ACTIVE,
     syncOrganizationFile = true,
     afterPublish = null,
+    expectedContentHash = null,
+    allowSmall = false,
   },
 ) {
   if (!request?.body || typeof request.body.getReader !== "function") {
@@ -439,7 +441,7 @@ export async function saveLargeProjectConfigStream(
     );
   }
 
-  const manifest = validateLargeSaveHeaders(request);
+  const manifest = validateLargeSaveHeaders(request, allowSmall);
   if (operation === "create" && manifest.expectedRevision !== 0) {
     throw saveError(
       "A criação inicial deve publicar exatamente a revisão 1.",
@@ -550,6 +552,7 @@ export async function saveLargeProjectConfigStream(
       blockDigests.push(await dropboxContentHashBlockDigest(finalBlock));
     }
     const contentHash = await dropboxContentHashFromBlockDigestsHex(blockDigests);
+    if(expectedContentHash && contentHash!==expectedContentHash) throw saveError("O conteúdo diverge da proposta aprovada.",409,"CHANGE_REQUEST_APPLY_CHECKSUM_MISMATCH");
     const artifact = {
       checksum: contentHash,
       contentHash,
