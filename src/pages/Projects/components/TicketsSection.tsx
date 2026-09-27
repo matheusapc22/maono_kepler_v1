@@ -20,6 +20,7 @@ import TicketListView, {
   TICKET_LIST_HEADERS,
 } from "./TicketListView";
 import TicketsToolbar from "./TicketsToolbar";
+import TicketNotifications from "./TicketNotifications";
 import TicketErrorNotice from "./TicketErrorNotice";
 import {
   getTicketDetails,
@@ -519,6 +520,9 @@ export default function TicketsSection({
 
   return (
     <section className="ticket-center-shell">
+      <TicketNotifications key={`${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
+        setSelectedTicketId(id); setSuggestedStatus(null); setDetail(null); void loadDetail(id);
+      }} />
       <TicketsToolbar
         organizationId={organizationId}
         organizationName={organizationName}
