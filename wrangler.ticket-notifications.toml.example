@@ -1,0 +1,19 @@
+# Copy and bind only after the CC-07 migration/acceptance/rollout gates.
+name = "maono-ticket-notifications"
+main = "workers/ticket-notifications.js"
+compatibility_date = "2026-09-27"
+[triggers]
+crons = ["* * * * *"]
+[vars]
+MAONO_RUNTIME_ENV = "production"
+MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED = "false"
+MAONO_TICKET_NOTIFICATIONS_ENABLED = "false"
+MAONO_TICKET_SELECTIVE_ACCESS_ENABLED = "false"
+# Required fixed ISO UTC cutoff. Set during the authorized rollout, never rewind.
+MAONO_TICKET_NOTIFICATION_START_AT = ""
+# Explicit canary allowlist, e.g. the authorized QA organization.
+MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS = ""
+[[d1_databases]]
+binding = "DB"
+database_name = "maono_maps"
+database_id = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"

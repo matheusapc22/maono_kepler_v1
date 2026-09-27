@@ -53,7 +53,8 @@
     "test:production-migration-gate": "node --test tests/production-migration-gate.test.mjs tests/production-migration-actions-workflow.test.mjs",
     "migration:audit:production": "node scripts/migrations/audit-production.mjs",
     "migration:apply:production": "node scripts/migrations/apply-production.mjs",
-    "migration:postvalidate:production": "node scripts/migrations/post-validate-production.mjs"
+    "migration:postvalidate:production": "node scripts/migrations/post-validate-production.mjs",
+    "test:ticket-notifications": "node --test tests/ticket-notifications*.test.mjs"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

@@ -5,6 +5,16 @@ on:
     paths:
       - 'docs/central-chamados/**'
       - 'scripts/central-chamados/**'
+      - 'functions/_lib/ticket-notification*.js'
+      - 'workers/ticket-notifications.js'
+      - 'wrangler.ticket-notifications.toml.example'
+      - 'migrations/0030_ticket_notifications.sql'
+      - 'tests/ticket-notifications*.test.mjs'
+      - 'tests/browser/ticket-notifications.spec.ts'
+      - 'tests/browser/fixtures/ticket-notifications*'
+      - 'src/pages/Projects/components/ticket-notifications.css'
+      - 'functions/api/organizations/*/ticket-notifications*'
+      - 'functions/api/organizations/*/ticket-notifications/**'
       - 'functions/_lib/ticket-center.js'
       - 'functions/_lib/ticket-triage.js'
       - 'functions/_lib/ticket-commands.js'
@@ -114,3 +124,14 @@ jobs:
         run: npm ci --prefix scripts/central-chamados/operator --no-audit --no-fund
       - name: Verify native D1 binding locally without remote access
         run: node scripts/central-chamados/operator/smoke-local.mjs
+
+  cc07-notifications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate durable delivery, migration and authorization
+        run: node --test tests/ticket-notifications*.test.mjs
