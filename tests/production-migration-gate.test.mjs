@@ -138,3 +138,28 @@ test('write path never passes repository migrations directory to migrations appl
   assert.match(source, /repositoryMigrationsDirectoryPassedToApply: false/);
   assert.doesNotMatch(source, /migrations apply maono_maps --remote/);
 });
+
+
+test('apply diagnostics classify both CLI streams without exposing raw data', async () => {
+  const { runProcess, safeError, gateError } = await import('../scripts/migrations/production-migration-lib.mjs');
+  let captured;
+  try {
+    await runProcess(process.execPath, ['-e', 'process.stdout.write("SQLITE_AUTH not authorized secret-value");process.stderr.write("Bearer private-value");process.exit(1)'],
+      { errorCode: 'WRANGLER_APPLY_FAILED', safeMessage: 'Apply failed' });
+  } catch (error) { captured = error; }
+  const safe = safeError(captured);
+  assert.deepEqual(safe.diagnostic.categories, ['SQLITE_AUTH']);
+  assert.equal(safe.diagnostic.exitCode, 1);
+  assert.equal(safe.diagnostic.stdoutCaptured, true);
+  assert.equal(safe.diagnostic.stderrCaptured, true);
+  assert.doesNotMatch(JSON.stringify(safe), /secret-value|private-value|Bearer|process.stdout/);
+  assert.deepEqual(safeError(gateError('WRANGLER_APPLY_FAILED', 'failed', {stderr:'unknown private response'})).diagnostic.categories, ['UNCLASSIFIED']);
+});
+
+test('apply failure evidence is retained separately without retrying writes', async () => {
+  const source = await readFile(new URL('../scripts/migrations/apply-production.mjs', import.meta.url), 'utf8');
+  const failure = source.slice(source.indexOf('} catch (error) {'));
+  assert.match(failure, /writeJsonReport\(failurePath, failure\)/);
+  assert.match(failure, /failure\.json/);
+  assert.doesNotMatch(failure, /runWranglerApply\(/);
+});
