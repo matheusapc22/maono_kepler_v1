@@ -6,6 +6,7 @@ import {
   gateError,
 } from "./production-migration-lib.mjs";
 export const CC08_MIGRATION = "0031_ticket_change_reconciliation.sql";
+export const CC08_SCHEMA_QUERY = "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name LIKE '%change_request%' OR name LIKE '%change_operations%' OR tbl_name IN ('project_change_requests','project_change_operations') OR name='cc08_schema' ORDER BY type,name;";
 export function evaluateCC08Schema(objects, ledger) {
   const names = new Set(objects.map((r) => r.name)),
     applied = new Set(ledger.map((r) => r.name));
@@ -75,7 +76,7 @@ export async function readCC08Schema(configPath, ledger) {
       PRODUCTION_DATABASE_NAME,
       "--remote",
       "--command",
-      "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name LIKE '%change_request%' OR name='cc08_schema' ORDER BY type,name;",
+      CC08_SCHEMA_QUERY,
     ],
     configPath,
   );

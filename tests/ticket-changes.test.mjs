@@ -646,3 +646,30 @@ test("production0031 preflight blocks pending0020 and historical lifecycle expan
   assert.equal(legacy.hasLegacyExpansion, true);
   assert.equal(legacy.compatible, false);
 });
+
+
+test("production0031 query inventories the complete0020 schema without false missing operations", async () => {
+  const { CC08_SCHEMA_QUERY, evaluateCC08Schema } = await import("../scripts/migrations/cc08-schema-preflight.mjs");
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(sql("migrations/0020_project_change_requests.sql"));
+    const objects = db.prepare(CC08_SCHEMA_QUERY).all();
+    for (const name of ["project_change_operations", "idx_project_change_operations_request", "trg_project_change_operations_no_update", "trg_project_change_operations_no_direct_delete"]) {
+      assert.ok(objects.some(row => row.name === name), name);
+    }
+    const ledger = ["0020_project_change_requests.sql", "0026_ticket_command_lifecycle.sql", "0027_ticket_selective_access.sql", "0028_ticket_conversations.sql", "0030_ticket_notifications.sql"].map(name => ({name}));
+    const ready = evaluateCC08Schema(objects, ledger);
+    assert.equal(ready.compatible, true);
+    assert.deepEqual(ready.missingObjects, []);
+    assert.deepEqual(ready.missingColumns, []);
+    const pending = evaluateCC08Schema(objects, ledger.slice(1));
+    assert.equal(pending.compatible, false);
+    assert.deepEqual(pending.missingLedger, ["0020_project_change_requests.sql"]);
+    assert.deepEqual(pending.missingObjects, []);
+    db.exec("DROP TRIGGER trg_project_change_operations_no_update");
+    const missing = evaluateCC08Schema(db.prepare(CC08_SCHEMA_QUERY).all(), ledger);
+    assert.equal(missing.compatible, false);
+    assert.deepEqual(missing.missingObjects, ["trg_project_change_operations_no_update"]);
+    assert.notEqual(missing.digest, ready.digest);
+  } finally { db.close(); }
+});
