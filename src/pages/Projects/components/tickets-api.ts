@@ -374,16 +374,41 @@ export async function dropboxContentHashFile(file: File, signal?: AbortSignal) {
   return bytesToHex(await digestSha256(joined.buffer));
 }
 
+type TicketAttachmentUploadCapabilityResponse = {
+  ok: boolean;
+  configured?: boolean;
+  schemaReady?: boolean;
+  sessions?: TicketAttachmentUploadSession[];
+};
+
+export async function getTicketAttachmentUploadCapability(
+  organizationId: number | string,
+  ticketId: number | string,
+  signal?: AbortSignal,
+) {
+  const response = await requestJson<TicketAttachmentUploadCapabilityResponse>(
+    attachmentUploadPath(organizationId, ticketId),
+    { signal },
+  );
+  return {
+    configured: response.configured === true,
+    schemaReady: response.schemaReady === true,
+    sessions: Array.isArray(response.sessions) ? response.sessions : [],
+  };
+}
+
 export async function listTicketAttachmentUploadSessions(
   organizationId: number | string,
   ticketId: number | string,
   signal?: AbortSignal,
 ) {
-  const response = await requestJson<{ ok: boolean; sessions: TicketAttachmentUploadSession[] }>(
-    attachmentUploadPath(organizationId, ticketId),
-    { signal },
-  );
-  return Array.isArray(response.sessions) ? response.sessions : [];
+  return (
+    await getTicketAttachmentUploadCapability(
+      organizationId,
+      ticketId,
+      signal,
+    )
+  ).sessions;
 }
 
 export async function headTicketAttachmentUpload(
@@ -472,7 +497,7 @@ async function reconcileAfterChunkFailure(
   const head = await headTicketAttachmentUpload(organizationId, ticketId, sessionId, signal);
   if (head.offset >= expectedEnd) return { accepted: true, head };
   if (head.offset === previousOffset) return { accepted: false, head };
-  throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_OFFSET_DIVERGED", category: "CONFLICT", retryable: false }));
+  throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_OFFSET_DIVERGED", category: "PROJECT", retryable: false }));
 }
 
 async function continueResumableUpload(
@@ -535,17 +560,17 @@ export async function resumeTicketAttachmentUpload(
 ) {
   abortIfNeeded(options.signal);
   if (file.size !== session.size) {
-    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "CONFLICT", retryable: false }));
+    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "PROJECT", retryable: false }));
   }
   options.onPhase?.("hashing");
   const hash = await dropboxContentHashFile(file, options.signal);
   if (hash !== session.expectedContentHash) {
-    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "CONFLICT", retryable: false }));
+    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "PROJECT", retryable: false }));
   }
   options.onPhase?.("resuming");
   const head = await headTicketAttachmentUpload(organizationId, ticketId, session.id, options.signal);
   if (head.size !== file.size) {
-    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "CONFLICT", retryable: false }));
+    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "PROJECT", retryable: false }));
   }
   return continueResumableUpload(
     organizationId, ticketId, session.id, file, head.offset, head.etag,
@@ -572,8 +597,16 @@ export async function uploadTicketAttachment(
   options: UploadOptions = {},
 ) {
   abortIfNeeded(options.signal);
-  options.onPhase?.("hashing");
-  const contentHash = await dropboxContentHashFile(file, options.signal);
+  const capability = await getTicketAttachmentUploadCapability(
+    organizationId,
+    ticketId,
+    options.signal,
+  );
+  let contentHash: string | undefined;
+  if (capability.configured) {
+    options.onPhase?.("hashing");
+    contentHash = await dropboxContentHashFile(file, options.signal);
+  }
   const basePath = attachmentsPath(organizationId, ticketId);
   const started = await requestJson<UploadStartResponse>(basePath, {
     method: "POST",
@@ -581,7 +614,7 @@ export async function uploadTicketAttachment(
       name: file.name,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
-      contentHash,
+      ...(contentHash ? { contentHash } : {}),
       ...(options.draftId ? { draftId: options.draftId } : {}),
     }),
     signal: options.signal,

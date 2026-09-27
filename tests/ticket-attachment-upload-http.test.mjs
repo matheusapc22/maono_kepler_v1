@@ -119,11 +119,13 @@ test("CC-06 legacy attachment PATCH cannot bypass the dedicated resumable sessio
   assert.equal(payload.code, "ATTACHMENT_UPLOAD_SESSION_ENDPOINT_REQUIRED");
 });
 
-test("CC-06 flag OFF preserves legacy path and does not expose upload-session API", async (t) => {
+test("CC-06 flag OFF reports capability OFF and preserves the legacy upload path", async (t) => {
   const { db, ticket, cookie } = await fixture(t, { apply0029: true, flag: false });
   insertSession(db, ticket.id);
   const list = await uploadList(ctx(db, cookie, ticket.id, { path: "/uploads" }));
-  assert.equal(list.status, 503);
+  assert.equal(list.status, 200, await list.clone().text());
   const payload = await list.json();
-  assert.equal(payload.code, "TICKET_RESUMABLE_UPLOADS_DISABLED");
+  assert.equal(payload.configured, false);
+  assert.equal(payload.schemaReady, false);
+  assert.deepEqual(payload.sessions, []);
 });

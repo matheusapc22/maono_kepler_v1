@@ -670,8 +670,19 @@ export async function cancelTicketAttachmentUpload(env, context, uploadId, reaso
       .bind(timestamp, timestamp, timestamp, row.id, row.version),
     db.prepare(`UPDATE ticket_attachments
       SET status='FAILED', error_message=?, deleted_at=COALESCE(deleted_at,?), updated_at=?
-      WHERE upload_session_id=? AND status='PENDING'`)
-      .bind(String(reason).slice(0,1000), timestamp, timestamp, row.id),
+      WHERE upload_session_id=? AND status='PENDING'
+        AND EXISTS (
+          SELECT 1 FROM ticket_attachment_upload_sessions s
+          WHERE s.id=? AND s.state='CANCELLED' AND s.version=?
+        )`)
+      .bind(
+        String(reason).slice(0,1000),
+        timestamp,
+        timestamp,
+        row.id,
+        row.id,
+        Number(row.version) + 1,
+      ),
   ]);
   if (changes(results?.[0]) !== 1) throw uploadError("A sessão mudou antes do cancelamento.", 409, "ATTACHMENT_UPLOAD_CONFLICT");
   return { cancelled: true };

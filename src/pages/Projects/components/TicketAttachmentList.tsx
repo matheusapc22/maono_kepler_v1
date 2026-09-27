@@ -36,10 +36,10 @@ type TicketAttachmentListProps = {
 
 type UploadStage = "hashing" | "resuming" | "uploading" | "finalizing";
 
-function stageLabel(stage: UploadStage, progress: number) {
-  if (stage === "hashing") return "Verificando arquivo...";
-  if (stage === "resuming") return "Reconectando ao envio...";
-  if (stage === "finalizing") return "Finalizando e verificando anexo...";
+function phaseLabel(phase: UploadStage, progress: number) {
+  if (phase === "hashing") return "Verificando arquivo...";
+  if (phase === "resuming") return "Reconectando ao envio...";
+  if (phase === "finalizing") return "Finalizando e verificando anexo...";
   return `${progress}%`;
 }
 
@@ -285,7 +285,7 @@ export default function TicketAttachmentList({
           <div>
             <span style={{ width: `${uploadProgress}%` }} />
           </div>
-          <span>{stageLabel(uploadStage, uploadProgress)}</span>
+          <span>{phaseLabel(uploadStage, uploadProgress)}</span>
           <button
             type="button"
             onClick={() => uploadControllerRef.current?.abort()}

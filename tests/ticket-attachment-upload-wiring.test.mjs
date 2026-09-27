@@ -12,7 +12,9 @@ const sessionRoute = read("../functions/api/organizations/[id]/tickets/[ticketId
 const service = read("../functions/_lib/ticket-attachment-uploads.js");
 const migration = read("../migrations/0029_ticket_attachment_upload_sessions.sql");
 
-test("CC-06 client computes Dropbox hash in 4 MiB blocks and never persists provider/session secrets in browser storage", () => {
+test("CC-06 client computes Dropbox hash in 4 MiB blocks only when capability is configured and never persists provider/session secrets in browser storage", () => {
+  assert.match(api, /getTicketAttachmentUploadCapability/);
+  assert.match(api, /if \(capability\.configured\)/);
   assert.match(api, /DROPBOX_HASH_BLOCK_BYTES\s*=\s*4\s*\*\s*1024\s*\*\s*1024/);
   assert.match(api, /crypto\.subtle\.digest\("SHA-256"/);
   assert.match(api, /expectedContentHash/);
@@ -57,4 +59,11 @@ test("CC-06 migration encodes authoritative capacity and terminal retention", ()
   assert.match(migration, /83886080/);
   assert.match(migration, /CREATE TRIGGER cc06_upload_no_delete/);
   assert.match(migration, /TICKET_ATTACHMENT_UPLOAD_RETENTION_REQUIRED/);
+});
+
+test("CC-06 ordinary-session mutations revalidate create/manage and cancellation is CAS-guarded", () => {
+  assert.match(sessionRoute, /ticket\.create/);
+  assert.match(sessionRoute, /ticket\.manage/);
+  assert.match(sessionRoute, /requireStandardUploadMutationPermission/);
+  assert.match(service, /s\.state='CANCELLED' AND s\.version=\?/);
 });

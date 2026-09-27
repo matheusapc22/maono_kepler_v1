@@ -1,4 +1,4 @@
-import { requireOrganizationPermission } from "../../../../../../../_lib/permissions.js";
+import { can, requireOrganizationPermission } from "../../../../../../../_lib/permissions.js";
 import { requireTicketAccess } from "../../../../../../../_lib/ticket-access.js";
 import { resolveTicketConversationContext } from "../../../../../../../_lib/ticket-conversations.js";
 import {
@@ -49,6 +49,32 @@ async function authorizedContext(env, request, organizationId, ticketId) {
   };
 }
 
+async function requireStandardUploadMutationPermission(
+  env,
+  user,
+  organizationId,
+  ticketId,
+  session,
+) {
+  if (session.draftId) return;
+  const permissionContext = {
+    organizationId,
+    scopeType: "organization",
+    resourceType: "ticket",
+    resourceId: ticketId,
+  };
+  const [createDecision, manageDecision] = await Promise.all([
+    can(env, user, "ticket.create", permissionContext),
+    can(env, user, "ticket.manage", permissionContext),
+  ]);
+  if (!createDecision.allowed && !manageDecision.allowed) {
+    const error = new Error("Você não pode continuar este envio.");
+    error.status = 403;
+    error.code = "ATTACHMENT_UPLOAD_FORBIDDEN";
+    throw error;
+  }
+}
+
 function sessionHeaders(session) {
   return {
     "Cache-Control": "private, no-store",
@@ -74,6 +100,10 @@ export async function onRequestPatch({ env, request, params }) {
   try {
     const { organizationId, ticketId, uploadId } = routeIds(params);
     const { user, conversation } = await authorizedContext(env, request, organizationId, ticketId);
+    const session = await getTicketAttachmentUploadSession(env, conversation, uploadId);
+    await requireStandardUploadMutationPermission(
+      env, user, organizationId, ticketId, session,
+    );
     const result = await uploadTicketAttachmentSessionChunk(env, conversation, uploadId, user, request);
     return jsonResponse({ ok: true, ...result }, { headers: sessionHeaders(result.session) });
   } catch (error) {
@@ -87,6 +117,10 @@ export async function onRequestPost({ env, request, params }) {
   try {
     const { organizationId, ticketId, uploadId } = routeIds(params);
     const { user, conversation } = await authorizedContext(env, request, organizationId, ticketId);
+    const session = await getTicketAttachmentUploadSession(env, conversation, uploadId);
+    await requireStandardUploadMutationPermission(
+      env, user, organizationId, ticketId, session,
+    );
     const result = await reconcileTicketAttachmentUpload(env, conversation, uploadId, user, request);
     return jsonResponse({ ok: true, ...result }, { headers: sessionHeaders(result.session) });
   } catch (error) {

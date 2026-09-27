@@ -2,6 +2,7 @@ import { requireOrganizationPermission } from "../../../../../../_lib/permission
 import { requireTicketAccess } from "../../../../../../_lib/ticket-access.js";
 import { resolveTicketConversationContext } from "../../../../../../_lib/ticket-conversations.js";
 import {
+  getTicketResumableUploadCapability,
   listTicketAttachmentUploadSessions,
 } from "../../../../../../_lib/ticket-attachment-uploads.js";
 import {
@@ -33,8 +34,18 @@ export async function onRequestGet({ env, request, params }) {
     await ensureTicketCenterSchema(env);
     await requireTicketAccess(env, organizationId, ticketId, user, "ticket.comment");
     const context = await resolveTicketConversationContext(env, organizationId, ticketId, user, { ticketView: true });
+    const capability = await getTicketResumableUploadCapability(env);
+    if (!capability.configured) {
+      return jsonResponse(
+        { ok: true, configured: false, schemaReady: false, sessions: [] },
+        { headers: { "Cache-Control": "private, no-store" } },
+      );
+    }
     const sessions = await listTicketAttachmentUploadSessions(env, context);
-    return jsonResponse({ ok: true, sessions }, { headers: { "Cache-Control": "private, no-store" } });
+    return jsonResponse(
+      { ok: true, configured: true, schemaReady: true, sessions },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   } catch (error) {
     return ticketCenterErrorResponse(error, request);
   }
