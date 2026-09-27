@@ -59,14 +59,30 @@ export async function createTicketCommandDb(t, {
   let failureIndex = null;
   function execute(sql, args, kind) {
     statements.push({ sql, args: [...args], kind });
-    const statement = sqlite.prepare(sql);
+    // Cloudflare D1 accepts SQLite numbered placeholders (?1, ?2...) and lets
+    // the same parameter be referenced multiple times. node:sqlite's positional
+    // binding path treats those placeholders differently, so normalize only this
+    // fixture adapter to equivalent anonymous placeholders. Production SQL stays
+    // byte-for-byte unchanged.
+    const numbered = [...sql.matchAll(/\?(\d+)/g)];
+    let sqliteSql = sql;
+    let sqliteArgs = args;
+    if (numbered.length) {
+      const withoutNumbered = sql.replace(/\?\d+/g, "");
+      if (withoutNumbered.includes("?")) {
+        throw new Error("Fixture does not support mixing numbered and anonymous SQLite placeholders.");
+      }
+      sqliteSql = sql.replace(/\?(\d+)/g, "?");
+      sqliteArgs = numbered.map((match) => args[Number(match[1]) - 1]);
+    }
+    const statement = sqlite.prepare(sqliteSql);
     if (kind === "first") {
-      const row = statement.get(...args);
+      const row = statement.get(...sqliteArgs);
       return row ? { ...row } : null;
     }
-    if (kind === "all") return { success: true, results: statement.all(...args).map((row) => ({ ...row })) };
-    const results = statement.columns().length ? statement.all(...args).map((row) => ({ ...row })) : [];
-    if (!statement.columns().length) statement.run(...args);
+    if (kind === "all") return { success: true, results: statement.all(...sqliteArgs).map((row) => ({ ...row })) };
+    const results = statement.columns().length ? statement.all(...sqliteArgs).map((row) => ({ ...row })) : [];
+    if (!statement.columns().length) statement.run(...sqliteArgs);
     const meta = sqlite.prepare("SELECT changes() AS changes, last_insert_rowid() AS last_row_id").get();
     return { success: true, results, meta: { ...meta } };
   }

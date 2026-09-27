@@ -4,6 +4,10 @@ import {
 } from "../../../../../_lib/permissions.js";
 import { requireTicketAccess } from "../../../../../_lib/ticket-access.js";
 import {
+  getTicketResumableUploadCapability,
+  initiateResumableTicketAttachmentUpload,
+} from "../../../../../_lib/ticket-attachment-uploads.js";
+import {
   assertConversationDraftAttachmentWrite,
   resolveTicketConversationContext,
 } from "../../../../../_lib/ticket-conversations.js";
@@ -117,9 +121,14 @@ export async function onRequestPost({ env, request, params }) {
         const draft = await assertConversationDraftAttachmentWrite(
           env, conversationContext, payload.draftId,
         );
-        const result = await initiateTicketAttachmentUpload(
-          env, organizationId, ticketId, user, payload, { draftId: draft.id },
-        );
+        const resumable = await getTicketResumableUploadCapability(env);
+        const result = resumable.configured
+          ? await initiateResumableTicketAttachmentUpload(
+              env, organizationId, ticketId, user, payload, { draft },
+            )
+          : await initiateTicketAttachmentUpload(
+              env, organizationId, ticketId, user, payload, { draftId: draft.id },
+            );
         return jsonResponse({ ok: true, ...result }, { status: 201 });
       }
 
@@ -131,10 +140,25 @@ export async function onRequestPost({ env, request, params }) {
         error.code = "ATTACHMENT_UPLOAD_FORBIDDEN";
         throw error;
       }
-      const result = await initiateTicketAttachmentUpload(
-        env, organizationId, ticketId, user, payload,
-      );
+      const resumable = await getTicketResumableUploadCapability(env);
+      const result = resumable.configured
+        ? await initiateResumableTicketAttachmentUpload(
+            env, organizationId, ticketId, user, payload,
+          )
+        : await initiateTicketAttachmentUpload(
+            env, organizationId, ticketId, user, payload,
+          );
       return jsonResponse({ ok: true, ...result }, { status: 201 });
+    }
+
+    const resumable = await getTicketResumableUploadCapability(env);
+    if (resumable.configured) {
+      const error = new Error("Este ambiente exige o fluxo resumível para novos anexos.");
+      error.status = resumable.schemaReady ? 409 : 503;
+      error.code = resumable.schemaReady
+        ? "ATTACHMENT_RESUMABLE_UPLOAD_REQUIRED"
+        : "TICKET_RESUMABLE_UPLOADS_SCHEMA_OUTDATED";
+      throw error;
     }
 
     const createDecision = await can(env, user, "ticket.create", permissionContext);

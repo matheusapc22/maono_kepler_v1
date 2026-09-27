@@ -4,6 +4,7 @@ import {
   downloadDropboxBinaryFile,
   ensureDropboxFolder,
   finishDropboxUploadSession,
+  getDropboxMetadata,
   joinDropboxPath,
   normalizeDropboxFolderPath,
   startDropboxUploadSession,
@@ -421,6 +422,18 @@ export async function finishOrganizationBinaryUpload(
     error.code = error.code || "DROPBOX_UPLOAD_SESSION_FAILED";
     error.stage = error.stage || "dropbox.upload_session.finish";
     error.publicMessage = "Não foi possível concluir o envio do arquivo.";
+    throw error;
+  }
+}
+
+export async function getOrganizationBinaryMetadata(env, rootPath, fileName) {
+  try {
+    return await getDropboxMetadata(env, rootPath, fileName);
+  } catch (error) {
+    error.status = error.status >= 400 ? error.status : 502;
+    error.code = error.code || "DROPBOX_METADATA_FAILED";
+    error.stage = error.stage || "dropbox.metadata";
+    error.publicMessage = "Não foi possível confirmar o arquivo no Dropbox.";
     throw error;
   }
 }

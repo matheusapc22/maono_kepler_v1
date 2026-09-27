@@ -19,6 +19,7 @@ import type {
   TicketCommand,
   Ticket,
   TicketAttachment,
+  TicketAttachmentUploadSession,
   TicketConversationDraft,
   TicketConversationKind,
   TicketConversationMessage,
@@ -33,7 +34,7 @@ type UploadOptions = {
   signal?: AbortSignal;
   draftId?: string;
   onProgress?: (progress: number) => void;
-  onPhase?: (phase: "uploading" | "finalizing") => void;
+  onPhase?: (phase: "hashing" | "resuming" | "uploading" | "finalizing") => void;
 };
 
 export class TicketApiError extends ApiError {
@@ -306,18 +307,32 @@ type UploadStartResponse = {
   attachment: TicketAttachment;
   upload: {
     attachmentId: number | string;
+    sessionId?: string;
     offset: number;
     chunkSize: number;
     size: number;
+    etag?: string;
+    expiresAt?: string;
+    resumable?: boolean;
   };
 };
 
 type UploadChunkResponse = {
   ok: boolean;
   attachment: TicketAttachment | null;
-  offset: number;
+  session?: TicketAttachmentUploadSession;
+  offset?: number;
   complete: boolean;
 };
+
+type UploadHead = {
+  offset: number;
+  size: number;
+  etag: string;
+  expiresAt: string | null;
+};
+
+const DROPBOX_HASH_BLOCK_BYTES = 4 * 1024 * 1024;
 
 function attachmentsPath(
   organizationId: number | string,
@@ -326,11 +341,104 @@ function attachmentsPath(
   return `${ticketsPath(organizationId)}/${pathSegment(ticketId)}/attachments`;
 }
 
+function attachmentUploadPath(
+  organizationId: number | string,
+  ticketId: number | string,
+  sessionId?: string,
+) {
+  const base = `${attachmentsPath(organizationId, ticketId)}/uploads`;
+  return sessionId ? `${base}/${pathSegment(sessionId)}` : base;
+}
+
+function abortIfNeeded(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Upload cancelado.", "AbortError");
+}
+
+async function digestSha256(bytes: ArrayBuffer) {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+}
+
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes).map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+export async function dropboxContentHashFile(file: File, signal?: AbortSignal) {
+  const digests: Uint8Array[] = [];
+  for (let offset = 0; offset < file.size; offset += DROPBOX_HASH_BLOCK_BYTES) {
+    abortIfNeeded(signal);
+    const end = Math.min(file.size, offset + DROPBOX_HASH_BLOCK_BYTES);
+    digests.push(await digestSha256(await file.slice(offset, end).arrayBuffer()));
+  }
+  const joined = new Uint8Array(digests.length * 32);
+  digests.forEach((digest, index) => joined.set(digest, index * 32));
+  return bytesToHex(await digestSha256(joined.buffer));
+}
+
+type TicketAttachmentUploadCapabilityResponse = {
+  ok: boolean;
+  configured?: boolean;
+  schemaReady?: boolean;
+  sessions?: TicketAttachmentUploadSession[];
+};
+
+export async function getTicketAttachmentUploadCapability(
+  organizationId: number | string,
+  ticketId: number | string,
+  signal?: AbortSignal,
+) {
+  const response = await requestJson<TicketAttachmentUploadCapabilityResponse>(
+    attachmentUploadPath(organizationId, ticketId),
+    { signal },
+  );
+  return {
+    configured: response.configured === true,
+    schemaReady: response.schemaReady === true,
+    sessions: Array.isArray(response.sessions) ? response.sessions : [],
+  };
+}
+
+export async function listTicketAttachmentUploadSessions(
+  organizationId: number | string,
+  ticketId: number | string,
+  signal?: AbortSignal,
+) {
+  return (
+    await getTicketAttachmentUploadCapability(
+      organizationId,
+      ticketId,
+      signal,
+    )
+  ).sessions;
+}
+
+export async function headTicketAttachmentUpload(
+  organizationId: number | string,
+  ticketId: number | string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<UploadHead> {
+  const response = await fetch(attachmentUploadPath(organizationId, ticketId, sessionId), {
+    method: "HEAD",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+    signal,
+  });
+  if (!response.ok) throw await responseError(response);
+  const offset = Number(response.headers.get("Upload-Offset"));
+  const size = Number(response.headers.get("Upload-Length"));
+  const etag = String(response.headers.get("ETag") || "").trim();
+  if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(size) || size <= 0 || !etag) {
+    throw toTicketApiError(buildClientApiError({ status: 502, code: "ATTACHMENT_UPLOAD_HEAD_INVALID", category: "INFRASTRUCTURE", retryable: true }));
+  }
+  return { offset, size, etag, expiresAt: response.headers.get("Upload-Expires") };
+}
+
 function uploadAttachmentChunk(
   url: string,
   chunk: Blob,
   offset: number,
   totalSize: number,
+  etag: string | null,
   options: UploadOptions,
 ) {
   return new Promise<UploadChunkResponse>((resolve, reject) => {
@@ -343,83 +451,143 @@ function uploadAttachmentChunk(
     xhr.setRequestHeader("Accept", "application/json");
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.setRequestHeader("Upload-Offset", String(offset));
+    if (etag) xhr.setRequestHeader("If-Match", etag);
 
     xhr.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable) return;
       options.onPhase?.("uploading");
       options.onProgress?.(
-        Math.max(
-          0,
-          Math.min(
-            99,
-            Math.round(((offset + event.loaded) / totalSize) * 100),
-          ),
-        ),
+        Math.max(0, Math.min(99, Math.round(((offset + event.loaded) / totalSize) * 100))),
       );
     });
-
     xhr.upload.addEventListener("load", () => {
-      if (offset + chunk.size >= totalSize) {
-        options.onPhase?.("finalizing");
-      }
+      if (offset + chunk.size >= totalSize) options.onPhase?.("finalizing");
     });
-
     xhr.addEventListener("load", () => {
       cleanup();
-      let payload: Partial<UploadChunkResponse> & {
-        error?: unknown;
-        code?: string;
-      } = {};
-      try {
-        payload = JSON.parse(xhr.responseText || "{}");
-      } catch {
-        // A mensagem abaixo é suficiente para respostas não JSON.
-      }
-
-      if (
-        xhr.status >= 200 &&
-        xhr.status < 300 &&
-        typeof payload.offset === "number"
-      ) {
+      let payload: Partial<UploadChunkResponse> & { error?: unknown; code?: string } = {};
+      try { payload = JSON.parse(xhr.responseText || "{}"); } catch { /* handled below */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
         resolve(payload as UploadChunkResponse);
         return;
       }
-
-      reject(
-        toTicketApiError(
-          buildHttpApiError(
-            xhr.status,
-            payload,
-            {},
-            getXhrErrorReference(xhr),
-          ),
-        ),
-      );
+      reject(toTicketApiError(buildHttpApiError(xhr.status, payload, {}, getXhrErrorReference(xhr))));
     });
-
     xhr.addEventListener("error", () => {
       cleanup();
-      reject(
-        toTicketApiError(
-          buildClientApiError({
-            status: 503,
-            code: "TICKET_UPLOAD_NETWORK_ERROR",
-            category: "INFRASTRUCTURE",
-            retryable: true,
-          }),
-        ),
-      );
+      reject(toTicketApiError(buildClientApiError({ status: 0, code: "ATTACHMENT_UPLOAD_NETWORK_ERROR", category: "INFRASTRUCTURE", retryable: true })));
     });
-
     xhr.addEventListener("abort", () => {
       cleanup();
       reject(new DOMException("Upload cancelado.", "AbortError"));
     });
-
     options.signal?.addEventListener("abort", abort, { once: true });
-
     xhr.send(chunk);
   });
+}
+
+async function reconcileAfterChunkFailure(
+  organizationId: number | string,
+  ticketId: number | string,
+  sessionId: string,
+  previousOffset: number,
+  expectedEnd: number,
+  signal?: AbortSignal,
+) {
+  const head = await headTicketAttachmentUpload(organizationId, ticketId, sessionId, signal);
+  if (head.offset >= expectedEnd) return { accepted: true, head };
+  if (head.offset === previousOffset) return { accepted: false, head };
+  throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_OFFSET_DIVERGED", category: "PROJECT", retryable: false }));
+}
+
+async function continueResumableUpload(
+  organizationId: number | string,
+  ticketId: number | string,
+  sessionId: string,
+  file: File,
+  initialOffset: number,
+  initialEtag: string,
+  chunkSize: number,
+  options: UploadOptions,
+) {
+  const url = attachmentUploadPath(organizationId, ticketId, sessionId);
+  let offset = initialOffset;
+  let etag = initialEtag;
+
+  while (offset < file.size) {
+    abortIfNeeded(options.signal);
+    const end = Math.min(file.size, offset + chunkSize);
+    const chunk = file.slice(offset, end);
+    let response: UploadChunkResponse | null = null;
+    try {
+      response = await uploadAttachmentChunk(url, chunk, offset, file.size, etag, options);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      options.onPhase?.("resuming");
+      const reconciliation = await reconcileAfterChunkFailure(
+        organizationId, ticketId, sessionId, offset, end, options.signal,
+      );
+      offset = reconciliation.head.offset;
+      etag = reconciliation.head.etag;
+      if (reconciliation.accepted) continue;
+      // Provider did not acknowledge the chunk; one bounded retry with the
+      // freshly observed server ETag/offset is safe. A response-lost write will
+      // be reconciled by the server through Dropbox correct_offset.
+      response = await uploadAttachmentChunk(url, chunk, offset, file.size, etag, options);
+    }
+
+    const nextOffset = Number(response?.session?.offset ?? response?.offset);
+    if (!Number.isInteger(nextOffset) || nextOffset <= offset) {
+      throw toTicketApiError(buildClientApiError({ status: 502, code: "ATTACHMENT_UPLOAD_PROGRESS_INVALID", category: "INFRASTRUCTURE", retryable: true }));
+    }
+    offset = nextOffset;
+    etag = String(response?.session?.etag || etag);
+    if (response?.complete) {
+      if (!response.attachment) throw new Error("O servidor concluiu o envio sem retornar o anexo.");
+      options.onProgress?.(100);
+      return response.attachment;
+    }
+  }
+  throw new Error("O upload terminou sem confirmação do anexo.");
+}
+
+export async function resumeTicketAttachmentUpload(
+  organizationId: number | string,
+  ticketId: number | string,
+  session: TicketAttachmentUploadSession,
+  file: File,
+  options: UploadOptions = {},
+) {
+  abortIfNeeded(options.signal);
+  if (file.size !== session.size) {
+    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "PROJECT", retryable: false }));
+  }
+  options.onPhase?.("hashing");
+  const hash = await dropboxContentHashFile(file, options.signal);
+  if (hash !== session.expectedContentHash) {
+    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "PROJECT", retryable: false }));
+  }
+  options.onPhase?.("resuming");
+  const head = await headTicketAttachmentUpload(organizationId, ticketId, session.id, options.signal);
+  if (head.size !== file.size) {
+    throw toTicketApiError(buildClientApiError({ status: 409, code: "ATTACHMENT_UPLOAD_FILE_MISMATCH", category: "PROJECT", retryable: false }));
+  }
+  return continueResumableUpload(
+    organizationId, ticketId, session.id, file, head.offset, head.etag,
+    Math.max(1, Math.min(8 * 1024 * 1024, file.size || 1)), options,
+  );
+}
+
+export async function cancelTicketAttachmentUpload(
+  organizationId: number | string,
+  ticketId: number | string,
+  sessionId: string,
+  signal?: AbortSignal,
+) {
+  return requestJson<{ ok: boolean; cancelled: boolean }>(
+    attachmentUploadPath(organizationId, ticketId, sessionId),
+    { method: "DELETE", signal },
+  );
 }
 
 export async function uploadTicketAttachment(
@@ -428,10 +596,17 @@ export async function uploadTicketAttachment(
   file: File,
   options: UploadOptions = {},
 ) {
-  if (options.signal?.aborted) {
-    throw new DOMException("Upload cancelado.", "AbortError");
+  abortIfNeeded(options.signal);
+  const capability = await getTicketAttachmentUploadCapability(
+    organizationId,
+    ticketId,
+    options.signal,
+  );
+  let contentHash: string | undefined;
+  if (capability.configured) {
+    options.onPhase?.("hashing");
+    contentHash = await dropboxContentHashFile(file, options.signal);
   }
-
   const basePath = attachmentsPath(organizationId, ticketId);
   const started = await requestJson<UploadStartResponse>(basePath, {
     method: "POST",
@@ -439,6 +614,7 @@ export async function uploadTicketAttachment(
       name: file.name,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
+      ...(contentHash ? { contentHash } : {}),
       ...(options.draftId ? { draftId: options.draftId } : {}),
     }),
     signal: options.signal,
@@ -447,6 +623,15 @@ export async function uploadTicketAttachment(
   const chunkSize = Math.max(1, started.upload.chunkSize);
   let offset = started.upload.offset;
 
+  if (started.upload.resumable && started.upload.sessionId && started.upload.etag) {
+    options.onPhase?.("uploading");
+    return continueResumableUpload(
+      organizationId, ticketId, started.upload.sessionId, file, offset,
+      started.upload.etag, chunkSize, options,
+    );
+  }
+
+  // Legacy path remains available while CC-06 flag is OFF.
   try {
     while (offset < file.size) {
       const end = Math.min(file.size, offset + chunkSize);
@@ -456,24 +641,21 @@ export async function uploadTicketAttachment(
         file.slice(offset, end),
         offset,
         file.size,
+        null,
         options,
       );
-
-      if (response.offset <= offset) {
+      const legacyOffset = Number(response.offset);
+      if (!Number.isInteger(legacyOffset) || legacyOffset <= offset) {
         throw new Error("O servidor não confirmou o avanço do upload.");
       }
-      offset = response.offset;
-
+      offset = legacyOffset;
       if (response.complete) {
-        if (!response.attachment) {
-          throw new Error("O servidor concluiu o envio sem retornar o anexo.");
-        }
+        if (!response.attachment) throw new Error("O servidor concluiu o envio sem retornar o anexo.");
         options.onProgress?.(100);
         return response.attachment;
       }
     }
-
-    throw new Error("O upload terminou antes da confirmação do servidor.");
+    throw new Error("O upload terminou sem confirmação do anexo.");
   } catch (error) {
     void fetch(`${basePath}/${pathSegment(attachmentId)}`, {
       method: "DELETE",

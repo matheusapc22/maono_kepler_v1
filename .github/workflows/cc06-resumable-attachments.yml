@@ -1,0 +1,81 @@
+name: CC-06 resumable attachment validation
+
+on:
+  pull_request:
+    branches:
+      - mano_kepler_v1
+    paths:
+      - 'functions/_lib/ticket-attachment-uploads.js'
+      - 'functions/_lib/ticket-center.js'
+      - 'functions/_lib/organization-files.js'
+      - 'functions/_lib/dropbox.js'
+      - 'functions/api/organizations/**/tickets/**/attachments/**'
+      - 'functions/api/organizations/**/tickets/**/attachments.js'
+      - 'src/pages/Projects/components/TicketAttachmentList.tsx'
+      - 'src/pages/Projects/components/TicketConversationPanel.tsx'
+      - 'src/pages/Projects/components/NewTicketPopover.tsx'
+      - 'src/pages/Projects/components/ticket-types.ts'
+      - 'src/pages/Projects/components/tickets-api.ts'
+      - 'src/pages/Projects/projects.css'
+      - 'tests/ticket-attachment-upload*.test.mjs'
+      - 'tests/ticket-attachment-uploads-integration.test.mjs'
+      - 'tests/helpers/ticket-command-db.mjs'
+      - 'migrations/0029_ticket_attachment_upload_sessions.sql'
+      - 'schema.sql'
+      - 'docs/central-chamados/CC06*'
+      - '.github/workflows/cc06-resumable-attachments.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  resumable-attachment-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate CC-06 schema, HTTP, wiring, concurrency and provider reconciliation
+        run: >-
+          node --test
+          tests/ticket-attachment-upload-schema.test.mjs
+          tests/ticket-attachment-uploads-integration.test.mjs
+          tests/ticket-attachment-upload-http.test.mjs
+          tests/ticket-attachment-upload-wiring.test.mjs
+          tests/dropbox-content-hash.test.mjs
+          tests/dropbox-resilience.test.mjs
+          tests/dropbox-resilience-wiring.test.mjs
+          tests/ticket-center.test.mjs
+      - name: Validate CC-03/04/05 regression contracts touched by attachment authorization
+        run: >-
+          node --test
+          tests/ticket-access.test.mjs
+          tests/ticket-commands.test.mjs
+          tests/ticket-commands-integration.test.mjs
+          tests/ticket-conversation-schema.test.mjs
+          tests/ticket-conversations-integration.test.mjs
+          tests/ticket-conversation-http.test.mjs
+          tests/ticket-conversation-wiring.test.mjs
+      - name: Preserve exact source and migration evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > "$RUNNER_TEMP/cc06-source-sha.txt"
+          sha256sum migrations/0029_ticket_attachment_upload_sessions.sql > "$RUNNER_TEMP/cc06-migration-sha256.txt"
+          git archive --format=tar --output="$RUNNER_TEMP/cc06-source.tar" HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cc06-source-${{ github.event.pull_request.head.sha }}
+          path: |
+            ${{ runner.temp }}/cc06-source.tar
+            ${{ runner.temp }}/cc06-source-sha.txt
+            ${{ runner.temp }}/cc06-migration-sha256.txt
+          retention-days: 3
+          if-no-files-found: error

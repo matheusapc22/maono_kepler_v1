@@ -544,6 +544,24 @@ export async function uploadDropboxBinaryFile(
   return await response.json();
 }
 
+function parseUploadSessionProviderPayload(text) {
+  try {
+    return JSON.parse(String(text || ""));
+  } catch {
+    return null;
+  }
+}
+
+function findUploadSessionCorrectOffset(value) {
+  if (!value || typeof value !== "object") return null;
+  if (Number.isInteger(Number(value.correct_offset))) return Number(value.correct_offset);
+  for (const nested of Object.values(value)) {
+    const found = findUploadSessionCorrectOffset(nested);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 async function uploadSessionRequest(
   env,
   url,
@@ -574,10 +592,19 @@ async function uploadSessionRequest(
 
   if (!response.ok) {
     const text = await response.text();
+    const providerPayload = parseUploadSessionProviderPayload(text);
+    const correctOffset = findUploadSessionCorrectOffset(providerPayload);
     const error = new Error(`${errorMessage}: ${response.status} ${text}`);
-    error.status = 502;
-    error.code = "DROPBOX_UPLOAD_SESSION_FAILED";
+    error.status = Number(response.status) === 409 && correctOffset !== null ? 409 : 502;
+    error.code = Number(response.status) === 409 && correctOffset !== null
+      ? "DROPBOX_UPLOAD_SESSION_OFFSET_CONFLICT"
+      : "DROPBOX_UPLOAD_SESSION_FAILED";
     error.dropboxStatus = response.status;
+    error.details = {
+      provider: "dropbox",
+      providerStatus: Number(response.status || 0) || null,
+      ...(correctOffset !== null ? { correctOffset } : {}),
+    };
     throw error;
   }
 

@@ -68,6 +68,25 @@ export type TicketAttachmentLimits = {
   chunkBytes: number;
 };
 
+export type TicketAttachmentUploadSession = {
+  id: string;
+  organizationId: number | string;
+  ticketId: number | string;
+  attachmentId?: number | string | null;
+  name: string;
+  mimeType?: string | null;
+  size: number;
+  expectedContentHash: string;
+  targetAudience: "ticket" | "internal";
+  draftId?: string | null;
+  offset: number;
+  version: number;
+  state: "RESERVED" | "UPLOADING" | "FINALIZING" | "RECONCILE";
+  expiresAt: string;
+  hardExpiresAt: string;
+  etag: string;
+};
+
 export const DEFAULT_TICKET_ATTACHMENT_LIMITS: TicketAttachmentLimits = {
   maxFiles: 5,
   maxFileBytes: 80 * 1024 * 1024,
