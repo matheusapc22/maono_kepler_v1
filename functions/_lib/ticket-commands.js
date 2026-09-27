@@ -133,6 +133,13 @@ export async function ticketLifecycleProjection(row) {
   };
 }
 async function pendingChange(env, organizationId, ticketId) {
+  if(await tableExists(env,'cc08_schema')) {
+    const pending=await getDb(env).prepare(`SELECT 1 AS pending FROM ticket_change_links l JOIN change_records c ON c.id=l.record_id
+      LEFT JOIN project_change_requests r ON r.id=c.change_request_id
+      WHERE l.organization_id=? AND l.ticket_id=? AND l.active=1 AND
+      ((c.domain='map_project' AND r.status NOT IN('applied','rejected','superseded')) OR (c.domain<>'map_project' AND c.status NOT IN('delivered','rejected'))) LIMIT 1`).bind(organizationId,ticketId).first();
+    if(pending)return true;
+  }
   if (!(await tableExists(env, "project_change_requests"))) return false;
   const found = await getDb(env).prepare(`SELECT 1 AS pending FROM project_change_requests
     WHERE organization_id = ? AND ticket_id = ?

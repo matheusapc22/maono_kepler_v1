@@ -1,3 +1,8 @@
+import {requestChangeInformation} from './project-change-request-feedback.js';
+import { resolveChangeProjectContext } from './change-project-context.js';
+import { isChangeRequestLifecycleSchemaReady, transitionRequestLifecycle, publicRequestLifecycle, cc08Enabled } from './project-change-request-lifecycle.js';
+import { INLINE_CONFIG_HARD_LIMIT_BYTES, isLargeProjectConfigRequest, saveLargeProjectConfigStream } from './project-large-config-save.js';
+import { bindApplyArtifact, readApplyArtifact, recoverAppliedArtifact } from './project-change-request-apply-artifact.js';
 import { requireSession } from "./auth.js";
 import { can, recordAuditLog } from "./permissions.js";
 import { getAuthorizedProject } from "./projects.js";
@@ -78,6 +83,7 @@ function projectContext(project) {
 
 function publicChangeRequest(row, operations = undefined) {
   const result = {
+    ...publicRequestLifecycle(row),
     id: row.id,
     organizationId: Number(row.organization_id),
     projectId: Number(row.project_id),
@@ -127,8 +133,8 @@ async function loadOperations(db, requestId) {
 
 export async function requireReviewerProject(env, request, slug, { apply = false } = {}) {
   await ensureProjectChangeRequestSchema(env);
-  const user = await requireSession(env, request);
-  const project = await getAuthorizedProject(env, user, slug);
+  const sessionUser = await requireSession(env, request);
+  const {user, project} = await resolveChangeProjectContext(env, sessionUser, slug);
   if (!project) {
     throw reviewError("Projeto não encontrado.", 404, "PROJECT_NOT_FOUND");
   }
@@ -198,7 +204,7 @@ async function requireReviewerChangeRequest(
     );
   }
   const operations = await loadOperations(db, row.id);
-  return { ...context, db, row, operations };
+  return { ...context, db, row, operations, canonical: await isChangeRequestLifecycleSchemaReady(env) };
 }
 
 async function baseRevisionLedger(env, project, revision) {
@@ -216,6 +222,7 @@ async function baseRevisionLedger(env, project, revision) {
 
 async function readVerifiedBaseRevisionForApply(env, project, revision) {
   const ledger = await baseRevisionLedger(env, project, revision);
+  if(Number(ledger.size_bytes)>INLINE_CONFIG_HARD_LIMIT_BYTES) throw reviewError('Use o transporte em blocos para aplicar este mapa.',413,'CHANGE_REQUEST_LARGE_APPLY_REQUIRED');
   const repository = resolveMapConfigRepository(env);
   const stored = await repository.getRevision({
     project,
@@ -271,9 +278,13 @@ async function buildWorkspace(env, request, context) {
   });
   const conflict = revisionConflict(context.row, context.project);
   const status = context.row.status;
+  const information=context.canonical ? await context.db.prepare('SELECT feedback,version,created_at FROM project_change_request_feedback WHERE change_request_id=? ORDER BY version DESC LIMIT 1').bind(context.row.id).first():null;
 
   return {
     contractVersion: REVIEW_CONTRACT_VERSION,
+    changesEnabled: cc08Enabled(env),
+    canonicalLifecycle: context.canonical,
+    informationRequested: information,
     changeRequest: publicChangeRequest(context.row),
     project: {
       id: context.project.id,
@@ -293,6 +304,7 @@ async function buildWorkspace(env, request, context) {
     permissions: {
       canApprove:
         context.permissions.canReview &&
+        !information &&
         !conflict &&
         (status === "submitted" || status === "under_review"),
       canReject:
@@ -301,12 +313,13 @@ async function buildWorkspace(env, request, context) {
       canApply:
         context.permissions.canApply &&
         !conflict &&
-        ["under_review", "approved", "applying"].includes(status),
+        (context.canonical ? ["approved","applying"] : ["under_review", "approved", "applying"]).includes(status),
     },
   };
 }
 
-async function transitionStatus(db, row, fromStatuses, nextStatus) {
+async function transitionStatus(db, row, fromStatuses, nextStatus, options = {}) {
+  if (row.lifecycle_version !== undefined) return transitionRequestLifecycle(db,row,fromStatuses,nextStatus,options);
   const expected = Array.isArray(fromStatuses) ? fromStatuses : [fromStatuses];
   if (row.status === nextStatus) return row;
   if (!expected.includes(row.status)) return null;
@@ -347,7 +360,7 @@ function isSamePublishedProposal(head, baseRevision, checksum) {
 }
 
 async function safeTicketEvent(db, row, actor, eventType, metadata = {}) {
-  if (!row.ticket_id) return;
+  if (!row.ticket_id || row.lifecycle_version !== undefined) return;
   try {
     await db
       .prepare(
@@ -414,7 +427,7 @@ async function safeAudit(
 async function ensureUnderReview(env, request, context) {
   let row = context.row;
   if (row.status !== "submitted") return row;
-  const updated = await transitionStatus(context.db, row, "submitted", "under_review");
+  const updated = await transitionStatus(context.db, row, "submitted", "under_review", {actor:context.user});
   row = updated || (await reloadRow(context.db, row));
   if (updated && row?.status === "under_review") {
     await Promise.all([
@@ -453,7 +466,7 @@ async function ensureApproved(env, request, context) {
       { status: row.status },
     );
   }
-  const updated = await transitionStatus(context.db, row, "under_review", "approved");
+  const updated = await transitionStatus(context.db, row, "under_review", "approved", {actor:context.user});
   row = updated || (await reloadRow(context.db, row));
   if (updated && row?.status === "approved") {
     await Promise.all([
@@ -481,6 +494,7 @@ async function markConflict(env, request, context, row, error, details = {}) {
     row,
     ["under_review", "approved", "applying"],
     "conflict",
+    {actor:context.user},
   );
   const current = updated || (await reloadRow(context.db, row));
   if (!updated && current?.status !== "conflict") return current;
@@ -520,15 +534,21 @@ export async function reviewProjectChangeRequestAction(
   requestId,
   input,
 ) {
+  assertMutationOrigin(request);
   const action = text(input?.action).toLowerCase();
   const context = await requireReviewerChangeRequest(env, request, slug, requestId);
 
+  if(action==='request_information' && context.canonical && cc08Enabled(env)) {
+    await requestChangeInformation(context,input?.comment);
+    return buildWorkspace(env,request,context);
+  }
   if (action === "start") {
     context.row = await ensureUnderReview(env, request, context);
     return buildWorkspace(env, request, context);
   }
 
   if (action === "approve") {
+    if(context.canonical && await context.db.prepare('SELECT 1 FROM project_change_request_feedback WHERE change_request_id=? LIMIT 1').bind(context.row.id).first()) throw reviewError('Aguarde o reenvio da proposta.',409,'CHANGE_INFORMATION_PENDING');
     const conflict = revisionConflict(context.row, context.project);
     if (conflict) {
       throw reviewError(
@@ -537,6 +557,9 @@ export async function reviewProjectChangeRequestAction(
         conflict.code,
         conflict,
       );
+    }
+    if(context.canonical && cc08Enabled(env)) {
+      await bindApplyArtifact(context, input?.artifact);
     }
     context.row = await ensureApproved(env, request, context);
     return buildWorkspace(env, request, context);
@@ -564,6 +587,7 @@ export async function reviewProjectChangeRequestAction(
       context.row,
       ["submitted", "under_review"],
       "rejected",
+      {actor:context.user,feedback:comment},
     );
     context.row = updated || (await reloadRow(context.db, context.row));
     if (context.row?.status !== "rejected") {
@@ -604,7 +628,17 @@ export async function reviewProjectChangeRequestAction(
   );
 }
 
+function canonicalAppliedRevision(context) {
+ const revision=context.row.applied_revision;
+ if(context.canonical && !Number.isSafeInteger(revision)) throw reviewError('A revisão aplicada histórica exige reconciliação com evidências.',409,'CHANGE_REQUEST_APPLIED_REVISION_UNKNOWN');
+ return context.canonical ? revision : Number(context.row.base_revision)+1;
+}
+function assertMutationOrigin(request) {
+ const origin=request.headers.get('Origin');
+ if(origin && origin!==new URL(request.url).origin) throw reviewError('Origem inválida.',403,'CHANGE_REQUEST_ORIGIN_DENIED');
+}
 export async function applyProjectChangeRequest(env, request, slug, requestId) {
+  assertMutationOrigin(request);
   const context = await requireReviewerChangeRequest(env, request, slug, requestId, {
     apply: true,
   });
@@ -612,7 +646,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   if (context.row.status === "applied") {
     return {
       workspace: await buildWorkspace(env, request, context),
-      appliedRevision: Number(context.project.config_revision || 0),
+      appliedRevision: canonicalAppliedRevision(context),
       idempotent: true,
       projectIdentity: {
         id: context.project.id,
@@ -638,28 +672,30 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   }
 
   const baseRevision = Number(context.row.base_revision || 0);
-  const base = await readVerifiedBaseRevisionForApply(
-    env,
-    context.project,
-    baseRevision,
-  );
-  let proposal;
-  try {
-    proposal = buildProjectChangeProposal({
-      baseConfig: base.config,
-      operations: context.operations,
-    });
-  } catch (error) {
-    if (isProjectChangeOperationConflict(error)) {
-      context.row = await ensureUnderReview(env, request, context);
-      await markConflict(env, request, context, context.row, error, {
-        currentRevision: Number(context.project.config_revision || 0),
-      });
+  if(context.canonical && !['approved','applying'].includes(context.row.status)) throw reviewError('Aprove a proposta antes de aplicar.',409,'CHANGE_REQUEST_APPROVAL_REQUIRED');
+  const streaming=isLargeProjectConfigRequest(request);
+  if(context.canonical && cc08Enabled(env) && !streaming) throw reviewError("Use o artefato aprovado para aplicar.",409,"CHANGE_REQUEST_APPROVED_ARTIFACT_REQUIRED");
+  let proposal, artifact;
+  if(streaming) {
+    if(!context.canonical || !cc08Enabled(env)) throw reviewError('Apply em blocos indisponível.',409,'CHANGE_REQUEST_STREAM_DISABLED');
+    artifact=await readApplyArtifact(context,request);
+  } else {
+    const base=await readVerifiedBaseRevisionForApply(env,context.project,baseRevision);
+    try {proposal=buildProjectChangeProposal({baseConfig:base.config,operations:context.operations});}
+    catch(error){if(isProjectChangeOperationConflict(error)){context.row=await ensureUnderReview(env,request,context);await markConflict(env,request,context,context.row,error);}throw error;}
+    artifact=await buildProjectConfigArtifact(proposal.config);
+    if(context.canonical){
+      await context.db.prepare('INSERT INTO project_change_request_apply_artifacts(change_request_id,checksum,size_bytes,base_revision,approved_by) VALUES(?,?,?,?,?) ON CONFLICT(change_request_id) DO NOTHING').bind(context.row.id,artifact.checksum,artifact.sizeBytes,baseRevision,context.user.id).run();
+      const claimed=await context.db.prepare('SELECT checksum FROM project_change_request_apply_artifacts WHERE change_request_id=?').bind(context.row.id).first();
+      if(claimed.checksum!==artifact.checksum)throw reviewError('O artefato diverge da proposta aprovada.',409,'CHANGE_REQUEST_APPLY_ARTIFACT_CONFLICT');
     }
-    throw error;
   }
-
-  const artifact = await buildProjectConfigArtifact(proposal.config);
+  const recovered=context.canonical ? await recoverAppliedArtifact(env,context) : null;
+  if(recovered) {
+    const applied=await transitionStatus(context.db,context.row,'applying','applied',{actor:context.user,appliedRevision:recovered.revision});
+    context.row=applied || await reloadRow(context.db,context.row);
+    return {workspace:await buildWorkspace(env,request,context),appliedRevision:canonicalAppliedRevision(context),idempotent:true,projectIdentity:{id:context.project.id,slug:context.project.slug}};
+  }
   const currentRevision = Number(context.project.config_revision || 0);
   const recoveryAttempt =
     context.row.status === "applying" && currentRevision === baseRevision + 1;
@@ -685,6 +721,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
       context.row,
       "approved",
       "applying",
+      {actor:context.user},
     );
     context.row = updated || (await reloadRow(context.db, context.row));
   }
@@ -702,7 +739,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
   if (context.row.status === "applied") {
     return {
       workspace: await buildWorkspace(env, request, context),
-      appliedRevision: Number(context.project.config_revision || 0),
+      appliedRevision: canonicalAppliedRevision(context),
       idempotent: true,
       projectIdentity: {
         id: context.project.id,
@@ -731,9 +768,10 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
 
   let saved;
   try {
-    saved = await saveVersionedProjectConfig(env, {
+    saved = streaming ? await saveLargeProjectConfigStream(env,{request,project:context.project,user:context.user,expectedContentHash:artifact.checksum,allowSmall:true,saveTrace:{saveId:`cc08:${context.row.id}`,updateContext(){}}}) : await saveVersionedProjectConfig(env, {
       project: context.project,
       config: proposal.config,
+      changeRequestTransitionId: context.canonical ? `cc08:${context.row.id}` : null,
       expectedConfigRevision: baseRevision,
       actor: {
         id: context.user.id,
@@ -743,9 +781,11 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     });
   } catch (error) {
     let recoveredConcurrentApply = false;
+    const ownPublished=context.canonical ? await recoverAppliedArtifact(env,{...context,project:{...context.project,config_revision:Number(error?.details?.currentConfigRevision ?? context.project.config_revision)}}) : null;
+    if(ownPublished){saved={revision:ownPublished.revision,idempotent:true};recoveredConcurrentApply=true;}
     if (error?.code === "PROJECT_CONFIG_REVISION_CONFLICT") {
       const publishedHead = await loadPublishedProposalHead(context.db, context.row);
-      if (isSamePublishedProposal(publishedHead, baseRevision, artifact.checksum)) {
+      if (!context.canonical && isSamePublishedProposal(publishedHead, baseRevision, artifact.checksum)) {
         context.project = {
           ...context.project,
           config_revision: Number(publishedHead.config_revision),
@@ -802,6 +842,7 @@ export async function applyProjectChangeRequest(env, request, slug, requestId) {
     context.row,
     "applying",
     "applied",
+    {actor:context.user,appliedRevision:saved.revision},
   );
   context.row = appliedTransition || (await reloadRow(context.db, context.row));
   if (context.row?.status !== "applied") {

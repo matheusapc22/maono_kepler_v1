@@ -1,3 +1,5 @@
+import {resubmissionStatements} from './project-change-request-feedback.js';
+import {resolveChangeProjectContext} from './change-project-context.js';
 import { requireSession } from "./auth.js";
 import { getDb, jsonResponse, tableExists } from "./organizations.js";
 import { can, recordAuditLog } from "./permissions.js";
@@ -213,6 +215,7 @@ export async function buildChangeRequestSubmissionHash(projectId, submission) {
       baseRevision: submission.baseRevision,
       reason: submission.reason,
       operations: submission.operations,
+      ...(submission.supersedes ? {supersedes:submission.supersedes} : {}),
     }),
   );
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
@@ -249,8 +252,8 @@ function projectContext(project) {
 }
 
 async function requireChangeRequestProject(env, request, slug, { viewerOnly = false } = {}) {
-  const user = await requireSession(env, request);
-  const project = await getAuthorizedProject(env, user, slug);
+  const sessionUser = await requireSession(env, request);
+  const {user,project}=await resolveChangeProjectContext(env,sessionUser,slug);
   if (!project) {
     throw domainError("Projeto não encontrado.", 404, "PROJECT_NOT_FOUND");
   }
@@ -354,7 +357,7 @@ export async function submitProjectChangeRequest(env, request, slug, input) {
     required: true,
     maxLength: MAX_IDEMPOTENCY_KEY_LENGTH,
   });
-  const submissionHash = await buildChangeRequestSubmissionHash(project.id, submission);
+  const submissionHash = await buildChangeRequestSubmissionHash(project.id, {...submission, ...(input?.supersedes ? {supersedes:String(input.supersedes)} : {})});
   const db = getDb(env);
 
   const existing = await db
@@ -466,6 +469,7 @@ export async function submitProjectChangeRequest(env, request, slug, input) {
       ),
   ];
 
+  statements.push(...await resubmissionStatements(env,user,project,input,changeRequestId));
   await db.batch(statements);
 
   const row = await loadOwnedRequest(db, project.id, user.id, changeRequestId);

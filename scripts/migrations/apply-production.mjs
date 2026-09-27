@@ -1,3 +1,4 @@
+import {CC08_MIGRATION,readCC08Schema,assertCC08Schema} from './cc08-schema-preflight.mjs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
@@ -56,6 +57,10 @@ try {
 
   preflightTemporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(preflightTemporary.configPath, migration.name);
+  if(migration.name===CC08_MIGRATION){
+    const currentSchema=await readCC08Schema(preflightTemporary.configPath,remote.ledger);assertCC08Schema(currentSchema);
+    if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC08_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
+  }
   const approval = buildApproval({
     migration: migration.name,
     migrationSha256: migration.sha256,

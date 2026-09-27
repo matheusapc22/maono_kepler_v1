@@ -1,3 +1,4 @@
+import {CC08_MIGRATION,readCC08Schema,assertCC08Schema} from './cc08-schema-preflight.mjs';
 import { resolve } from 'node:path';
 import {
   PRODUCTION_DATABASE_ID,
@@ -44,6 +45,13 @@ try {
     throw gateError('DATABASE_INTEGRITY_FAILED', 'O preflight encontrou falha de integridade; autorização de produção foi bloqueada.');
   }
 
+  const schemaPreflight=migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : null;
+  if(schemaPreflight && !schemaPreflight.compatible){
+    await ensureReportDir();
+    const blockedPath=args.report ? resolve(args.report) : defaultAuditReportPath(migration.name,git.sha);
+    await writeJsonReport(blockedPath,{phase:'schema-preflight-blocked',writesPerformed:false,readyForAuthorization:false,git,database:remote.identity,schemaPreflight,integrity,backup});
+    assertCC08Schema(schemaPreflight);
+  }
   const approval = buildApproval({
     migration: migration.name,
     migrationSha256: migration.sha256,
@@ -88,6 +96,7 @@ try {
     },
     integrity,
     backup,
+    schemaPreflight,
     approval: {
       required: true,
       hash: approval.approvalHash,

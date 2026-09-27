@@ -1,3 +1,4 @@
+import {TicketChanges} from './TicketChanges';
 import { Link } from "react-router";
 import { useEffect, useRef, useState } from "react";
 
@@ -497,6 +498,8 @@ export default function TicketDetailDrawer({
             {lifecycleEnabled ? <TicketLifecyclePanel detail={detail} canManage={canManage} saving={saving} refreshing={loading}
               attributeDraftDirty={attributeDraftDirty} suggestedStatus={suggestedStatus} onDirtyChange={setLifecycleDraftDirty}
               onReload={onReload} onCommand={onCommand} /> : null}
+
+            <TicketChanges key={`${organizationId}:${ticket.id}`} organizationId={organizationId} ticketId={ticket.id} canManage={canManage} />
 
             <TicketConversationPanel
               organizationId={organizationId}

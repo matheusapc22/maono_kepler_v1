@@ -741,6 +741,11 @@ function ReviewWorkspaceOverlay({
     }
   }
 
+  async function requestInformation() {
+    if(!rejectComment.trim()||busy)return;setBusyAction('reject');setError(null);
+    try{setReview(await changeProjectChangeReviewState(projectSlug,changeRequestId,{action:'request_information',comment:rejectComment}));setRejectOpen(false);setRejectComment('');setToast('Informações solicitadas. Aguarde o reenvio da proposta.');}
+    catch(actionError){setError(safeMessage(actionError));}finally{setBusyAction(null);}
+  }
   async function reject() {
     if (!rejectComment.trim() || busy) return;
     setBusyAction("reject");
@@ -971,6 +976,7 @@ function ReviewWorkspaceOverlay({
               <p>{review.changeRequest.reason}</p>
             </div>
 
+            {review.informationRequested?<p role="status">Informações solicitadas: {review.informationRequested.feedback}</p>:null}
             <footer className="maono-review-actions">
               <button
                 type="button"
@@ -1004,7 +1010,7 @@ function ReviewWorkspaceOverlay({
                     accessibleLabel="Aplicando solicitação"
                   />
                 ) : null}
-                <span>Aprovar e aplicar</span>
+                <span>{review.canonicalLifecycle ? "Aplicar proposta aprovada" : "Aprovar e aplicar"}</span>
               </button>
             </footer>
           </div>
@@ -1018,7 +1024,7 @@ function ReviewWorkspaceOverlay({
       {rejectOpen ? (
         <div className="maono-review-dialog-backdrop" role="presentation">
           <section className="maono-review-dialog" role="dialog" aria-modal="true">
-            <h2>Rejeitar solicitação</h2>
+            <h2>Registrar feedback</h2>
             <p>
               Informe o motivo. O conteúdo enviado pelo Viewer permanecerá imutável.
             </p>
@@ -1030,6 +1036,7 @@ function ReviewWorkspaceOverlay({
               placeholder="Motivo da rejeição"
             />
             <div>
+              {review?.changesEnabled?<button type="button" disabled={busy||!rejectComment.trim()} onClick={()=>void requestInformation()}>Pedir informações</button>:null}
               <button
                 type="button"
                 disabled={busy}

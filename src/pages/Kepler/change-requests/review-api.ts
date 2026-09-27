@@ -48,7 +48,14 @@ type ClientProposal = {
 
 export type ProjectChangeReview = {
   contractVersion: 2;
+  changesEnabled?: boolean;
+  informationRequested?: {feedback:string;version:number;created_at:string}|null;
+  canonicalLifecycle?: boolean;
   changeRequest: {
+    lifecycleVersion?: number;
+    appliedRevision?: number | null;
+    decision?: string | null;
+    feedback?: string | null;
     id: string;
     organizationId: number;
     projectId: number;
@@ -254,15 +261,17 @@ export function getProjectChangeReview(
 export async function changeProjectChangeReviewState(
   projectSlug: string,
   changeRequestId: string,
-  input: { action: "start" | "approve" | "reject"; comment?: string },
+  input: { action: "start" | "approve" | "reject" | "request_information"; comment?: string },
 ) {
   const key = cacheKey(projectSlug, changeRequestId);
+  const current=await getProjectChangeReview(projectSlug,changeRequestId);
+  const artifact=input.action==='approve' && current.changesEnabled ? (await (await import('./review-apply-artifact')).prepareReviewApplyArtifact(projectSlug,changeRequestId)).artifact : undefined;
   const response = await fetch(`${itemUrl(projectSlug, changeRequestId)}/review`, {
     method: "POST",
     credentials: "include",
     cache: "no-store",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify({...input,artifact}),
   });
   const payload = await parseResponse(response);
   if (!payload.review) {
@@ -284,10 +293,14 @@ export async function applyProjectChangeReview(
   changeRequestId: string,
 ) {
   const key = cacheKey(projectSlug, changeRequestId);
+  const current=await getProjectChangeReview(projectSlug,changeRequestId);
+  const prepared=current.changesEnabled && current.changeRequest.status!=='applied' ? await (await import('./review-apply-artifact')).prepareReviewApplyArtifact(projectSlug,changeRequestId) : null;
   const response = await fetch(`${itemUrl(projectSlug, changeRequestId)}/apply`, {
     method: "POST",
     credentials: "include",
     cache: "no-store",
+    headers: prepared?.headers,
+    body: prepared?.body,
   });
   const payload = await parseResponse(response);
   if (!payload.review || !Number.isInteger(Number(payload.appliedRevision))) {

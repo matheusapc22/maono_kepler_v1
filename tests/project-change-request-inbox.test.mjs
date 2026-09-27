@@ -11,7 +11,7 @@ const migration = await readFile(new URL('../migrations/0020_project_change_requ
 function fixture(t, role = 'editor') {
   const db = new DatabaseSync(':memory:');
   t.after(() => db.close());
-  db.exec(schema);
+  db.exec(schema.split("-- CR base (0020_project_change_requests.sql)")[0]);
   db.exec(migration);
   db.exec(`
     INSERT INTO organizations (id,name,slug,dropbox_root_path) VALUES (1,'Org A','a','/a'),(2,'Org B','b','/b');
@@ -50,7 +50,7 @@ async function inbox(f, query = '', slug = 'mapa', authenticated = true) {
   return onRequest({ env: f.env, request: f.request(query, authenticated), params: { slug } });
 }
 
-test('Editor sees other requesters, stable pages and lightweight ticket metadata', async t => {
+test('Editor sees CR pages without ticket metadata when ticket.view is absent', async t => {
   const f = fixture(t);
   const first = await inbox(f, '?limit=1');
   assert.equal(first.status, 200);
@@ -60,7 +60,7 @@ test('Editor sees other requesters, stable pages and lightweight ticket metadata
   assert.equal(a.pagination.hasMore, true);
   assert.equal(a.items[0].ticket, null);
   const b = await (await inbox(f, '?limit=1&page=2')).json();
-  assert.equal(b.items[0].ticket.code, 'TKT-1');
+  assert.equal(b.items[0].ticket, null); // Project review alone grants no Ticket visibility.
   assert.equal(b.items[0].requesterName, 'Viewer');
   assert.equal(b.items[0].operationCount, 1);
   assert.equal(b.items[0].reviewUrl, '/projects/mapa/review/cr-1');
@@ -120,3 +120,5 @@ test('regular tickets work before the change request migration', async t => {
   f.db.exec('DROP TABLE project_change_operations; DROP TABLE project_change_requests;');
   assert.equal(await getTicketReviewLink(f.env, f.request(), 1, 100), null);
 });
+
+test('authorized ticket reader retains lightweight ticket metadata',async t=>{const f=fixture(t,'owner');const response=await (await inbox(f,'?limit=1&page=2')).json();assert.equal(response.items[0].ticket.code,'TKT-1');});

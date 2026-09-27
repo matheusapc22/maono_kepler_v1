@@ -314,6 +314,7 @@ export async function saveVersionedProjectConfig(
     allowedLifecycleStates = [PROJECT_LIFECYCLE_STATES.ACTIVE],
     markPreviewPending = true,
     mapConfigRepository = null,
+    changeRequestTransitionId = null,
   },
 ) {
   const repository = resolveMapConfigRepository(env, mapConfigRepository);
@@ -354,7 +355,7 @@ export async function saveVersionedProjectConfig(
 
   const nextRevision = expected + 1;
   trace?.updateContext({ candidateRevision: nextRevision });
-  const id = transitionId();
+  const id = changeRequestTransitionId || transitionId();
   const storageRef = createMapConfigStorageRef(project.id, nextRevision);
   const storageProvider = repository.provider;
   let reservation = null;
