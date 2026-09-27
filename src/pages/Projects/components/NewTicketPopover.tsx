@@ -129,6 +129,7 @@ export default function NewTicketPopover({
   const [error, setError] = useState<TicketApiError | string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { abortControllerRef.current?.abort(); abortControllerRef.current = null; }, []);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const busyRef = useRef(false);
   const creationIntentRef = useRef<TicketCreationIntent | null>(null);

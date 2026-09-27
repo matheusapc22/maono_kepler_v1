@@ -173,12 +173,13 @@ export type TicketClosurePayload = {
 export type TicketClosure = TicketClosurePayload & { closedAt: string; closedBy?: number | string | null; cycleNumber?: number };
 export type TicketCycle = { number: number; origin: "created" | "observed_baseline" | "reopened"; openedAt: string; openedBy?: number | string | null };
 export type TicketWait = { id: number | string; reason: string; responsibleId: number | string; startedAt: string; expectedAt?: string | null; nextAction: string };
-export type TicketTransitionPayload = { status: TicketStatus; nextAction?: string; reason?: string; evidence?: string; closure?: TicketClosurePayload };
+export type TicketTransitionPayload = { wipExceptionReason?: string; status: TicketStatus; nextAction?: string; reason?: string; evidence?: string; closure?: TicketClosurePayload };
 export type TicketWaitPayload = { action: "start"; reason: string; responsibleId: number | string; nextAction: string; expectedAt?: string | null } | { action: "end"; reason?: string; nextAction: string };
 export type TicketReopenPayload = { reason: string; nextAction: string };
 export type TicketCommand = { kind: "transition"; payload: TicketTransitionPayload } | { kind: "wait"; payload: TicketWaitPayload } | { kind: "reopen"; payload: TicketReopenPayload };
 
 export type Ticket = {
+  queueEnteredAt?: string | null;
   id: number | string;
   organizationId: number | string;
   code: string;
@@ -234,6 +235,10 @@ export type TicketFacets = {
 };
 
 export type TicketPagination = {
+  snapshot?: string | null;
+  snapshotAt?: string | null;
+  expiresAt?: string | null;
+  loaded?: number;
   page: number;
   limit: number;
   total: number;
@@ -241,7 +246,11 @@ export type TicketPagination = {
   hasMore: boolean;
 };
 
+export type TicketQueuePolicy = { queue: "in_progress" | "in_review"; wipLimit: number | null; version: number };
+
 export type TicketListResponse = {
+  flowEnabled?: boolean;
+  queuePolicies?: TicketQueuePolicy[];
   ok: boolean;
   triageEnabled?: boolean;
   lifecycleEnabled?: boolean;

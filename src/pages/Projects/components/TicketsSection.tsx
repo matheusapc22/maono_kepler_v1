@@ -1,3 +1,6 @@
+import "./ticket-flow.css";
+import TicketFlowSettings from "./TicketFlowSettings";
+import { readTicketNavigation, ticketNavigationUrl } from "./ticket-navigation";
 import {
   useCallback,
   useEffect,
@@ -15,7 +18,7 @@ import {
 import NewTicketPopover from "./NewTicketPopover";
 import TicketCalendarView from "./TicketCalendarView";
 import TicketDetailDrawer from "./TicketDetailDrawer";
-import TicketKanbanView from "./TicketKanbanView";
+import TicketKanbanBoard from "./TicketKanbanBoard";
 import TicketListView, {
   TICKET_LIST_HEADERS,
 } from "./TicketListView";
@@ -32,7 +35,6 @@ import {
 } from "./tickets-api";
 import {
   DEFAULT_TICKET_ATTACHMENT_LIMITS,
-  DEFAULT_TICKET_FILTERS,
   type Ticket,
   type TicketCommand,
   type TicketAttachmentLimits,
@@ -95,20 +97,28 @@ function storedViewMode(organizationId: number | string | null | undefined) {
   return stored === "kanban" || stored === "calendar" ? stored : "list";
 }
 
-export default function TicketsSection({
+export default function TicketsSection(props: TicketsSectionProps) {
+  return <TicketsSectionContent key={`${props.organizationId ?? ''}:${props.user?.id ?? ''}`} {...props} />;
+}
+
+function TicketsSectionContent({
   user,
   organizationId,
   organizationName,
 }: TicketsSectionProps) {
+  const navigation = useRef(readTicketNavigation(window.location.href, String(organizationId ?? ''))).current;
+  const snapshotRef = useRef<string | null>(null);
+  const [flowEnabled, setFlowEnabled] = useState(false);
+  const [queuePolicies, setQueuePolicies] = useState<import('./ticket-types').TicketQueuePolicy[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [triageEnabled, setTriageEnabled] = useState(false);
   const [lifecycleEnabled, setLifecycleEnabled] = useState(false);
   const [suggestedStatus, setSuggestedStatus] = useState<TicketStatus | null>(null);
   const [filters, setFilters] = useState<TicketFilters>(
-    DEFAULT_TICKET_FILTERS,
+    navigation.filters,
   );
   const [debouncedFilters, setDebouncedFilters] = useState<TicketFilters>(
-    DEFAULT_TICKET_FILTERS,
+    navigation.filters,
   );
   const [facets, setFacets] = useState<TicketFacets>(EMPTY_FACETS);
   const [pagination, setPagination] =
@@ -119,7 +129,7 @@ export default function TicketsSection({
   const [attachmentLimits, setAttachmentLimits] =
     useState<TicketAttachmentLimits>(DEFAULT_TICKET_ATTACHMENT_LIMITS);
   const [viewMode, setViewMode] = useState<TicketViewMode>(() =>
-    storedViewMode(organizationId),
+    new URL(window.location.href).searchParams.get("cc_org") === String(organizationId) ? navigation.view : storedViewMode(organizationId),
   );
   const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -127,7 +137,7 @@ export default function TicketsSection({
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<
     number | string | null
-  >(null);
+  >(navigation.ticketId);
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<TicketApiError | null>(null);
@@ -170,7 +180,7 @@ export default function TicketsSection({
   }, [debouncedFilters.q, filters]);
 
   useEffect(() => {
-    setViewMode(storedViewMode(organizationId));
+    setViewMode(new URL(window.location.href).searchParams.get("cc_org") === String(organizationId) ? navigation.view : storedViewMode(organizationId));
   }, [organizationId]);
 
   useEffect(() => {
@@ -220,8 +230,9 @@ export default function TicketsSection({
           targetPage,
           controller.signal,
           {
-            limit: viewMode === "list" ? 50 : 100,
-            includeUndated: viewMode === "calendar",
+            limit: 50,
+            includeUndated: true,
+            snapshot: targetPage > 1 ? snapshotRef.current : null,
           },
         );
 
@@ -237,6 +248,9 @@ export default function TicketsSection({
             ? mergeTickets(current, response.tickets)
             : response.tickets,
         );
+        snapshotRef.current = response.pagination.snapshot || null;
+        setFlowEnabled(response.flowEnabled === true);
+        setQueuePolicies(response.queuePolicies || []);
         setTriageEnabled(response.triageEnabled === true);
         setLifecycleEnabled(response.lifecycleEnabled === true);
         setFacets(response.facets);
@@ -277,6 +291,7 @@ export default function TicketsSection({
   );
 
   useEffect(() => {
+    snapshotRef.current = null;
     setTickets([]);
     setPagination(EMPTY_PAGINATION);
     setFacets(EMPTY_FACETS);
@@ -447,6 +462,7 @@ export default function TicketsSection({
         setDetail((current) => current && String(current.ticket.id) === String(requestTicketId) ? { ...current, ticket: updated } : current);
         await loadDetail(requestTicketId);
       }
+      void loadTicketsPage(1, { background: true });
       setToast(`${updated.code}: ação registrada no chamado.`);
     } catch (requestError) {
       if (requestOrganizationKey !== organizationKeyRef.current) throw requestError;
@@ -479,6 +495,7 @@ export default function TicketsSection({
   }
 
   function handleCreated(ticket: Ticket, failedFiles: File[]) {
+    if (String(ticket.organizationId) !== organizationKeyRef.current) return;
     setTickets((current) => replaceTicket(current, ticket));
     setToast(
       failedFiles.length > 0
@@ -495,6 +512,28 @@ export default function TicketsSection({
         : { ...current, from, to, sort: "due_asc" },
     );
   }, []);
+
+  useEffect(() => {
+    const restore = () => {
+      const next = readTicketNavigation(window.location.href, String(organizationId ?? ''));
+      setFilters(next.filters); setDebouncedFilters(next.filters); setViewMode(next.view);
+      setSelectedTicketId(next.ticketId); setDetail(null); setSuggestedStatus(null);
+      detailControllerRef.current?.abort(); detailRequestSequenceRef.current += 1;
+      if (next.ticketId) void loadDetail(next.ticketId);
+    };
+    if (navigation.ticketId) void loadDetail(navigation.ticketId);
+    window.addEventListener('popstate',restore);
+    return () => { window.removeEventListener('popstate',restore); detailRequestSequenceRef.current += 1; detailControllerRef.current?.abort(); };
+  }, [organizationId, loadDetail, navigation]);
+  const navigationInitialized = useRef(false);
+  useEffect(() => {
+    const next = ticketNavigationUrl(window.location.href, String(organizationId ?? ''), debouncedFilters, viewMode, selectedTicketId);
+    if (next !== window.location.href) {
+      if (navigationInitialized.current) window.history.pushState(window.history.state, '', next);
+      else window.history.replaceState(window.history.state, '', next);
+    }
+    navigationInitialized.current = true;
+  }, [debouncedFilters, viewMode, selectedTicketId, organizationId]);
 
   if (!organizationId) {
     return (
@@ -515,7 +554,7 @@ export default function TicketsSection({
   }
 
   const openCount =
-    facets.byStatus.new + facets.byStatus.open;
+    facets.byStatus.open;
   const showInitialSkeleton = initialLoading && tickets.length === 0;
 
   return (
@@ -622,6 +661,11 @@ export default function TicketsSection({
         </section>
       )}
 
+      {flowEnabled && canManage ? <TicketFlowSettings organizationId={organizationId} policies={queuePolicies} onSaved={() => void loadTicketsPage(1, { background: true })} /> : null}
+      <p role="status">{viewMode === "kanban" ? "Carregamento por fila" : `${tickets.length} carregados`} · {pagination.total} acessíveis nesta consulta{viewMode !== 'kanban' && tickets.length < pagination.total ? ' · Exibição parcial' : ''}.
+        {pagination.snapshotAt ? ' Ordem preservada por até 15 minutos; atualize para incluir novos chamados.' : ''}
+        <button type="button" disabled={refreshing} onClick={() => void loadTicketsPage(1, { background: true })}>Atualizar consulta</button>
+      </p>
       {error ? (
         <TicketErrorNotice
           error={error}
@@ -648,7 +692,7 @@ export default function TicketsSection({
               </p>
             </div>
           )
-        ) : tickets.length === 0 ? (
+        ) : tickets.length === 0 && viewMode === "list" && !pagination.hasMore ? (
           <div className="ticket-empty-state">
             <span aria-hidden="true">▧</span>
             <h3>Nenhum chamado encontrado</h3>
@@ -677,8 +721,11 @@ export default function TicketsSection({
             }
           />
         ) : viewMode === "kanban" ? (
-          <TicketKanbanView
-            tickets={tickets}
+          <TicketKanbanBoard
+            key={`${organizationId}:${pagination.snapshot || JSON.stringify(debouncedFilters)}`}
+            organizationId={organizationId}
+            filters={debouncedFilters}
+            policies={queuePolicies}
             canManage={canManage}
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
@@ -688,6 +735,7 @@ export default function TicketsSection({
           />
         ) : (
           <TicketCalendarView
+            from={filters.from}
             tickets={tickets}
             onOpen={openTicket}
             onRangeChange={handleCalendarRange}
@@ -695,7 +743,7 @@ export default function TicketsSection({
         )}
 
         {!showInitialSkeleton &&
-        viewMode !== "list" &&
+        viewMode === "calendar" &&
         pagination.hasMore ? (
           <button
             type="button"

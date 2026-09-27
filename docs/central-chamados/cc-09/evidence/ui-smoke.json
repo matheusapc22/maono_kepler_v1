@@ -1,0 +1,15 @@
+{
+  "localOnly": true,
+  "authenticatedAcceptance": false,
+  "results": {
+    "list250": true,
+    "kanban250": true,
+    "urlBackReload": true,
+    "deniedDeepLink": true,
+    "staleDetailDiscarded": true,
+    "uploadScopeAbort": true,
+    "keyboardPagination": true,
+    "mobileCalendar": true
+  },
+  "errors": []
+}

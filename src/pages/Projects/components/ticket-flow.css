@@ -1,0 +1,8 @@
+.ticket-kanban-stack { max-height: 70vh; overflow: auto; overscroll-behavior: contain; }
+.ticket-flow-settings { padding: 14px; border: 1px solid var(--mm-border, #30343b); border-radius: 10px; }
+.ticket-flow-settings summary { cursor: pointer; font-weight: 600; }
+.ticket-flow-settings form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+.ticket-flow-settings label { display: grid; gap: 6px; flex: 1 1 220px; }
+.ticket-flow-settings input { color: inherit; background: var(--mm-surface, #14181f); border: 1px solid var(--mm-border, #30343b); padding: 9px; border-radius: 6px; min-width: 0; }
+.ticket-flow-settings button { padding: 9px 14px; }
+.ticket-flow-settings h4 { flex-basis: 100%; margin: 0; }

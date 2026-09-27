@@ -1,3 +1,4 @@
+import { isTicketFlowEnabled, ticketQuerySnapshot, readQueuePolicies } from "./ticket-flow.js";
 import {
   assertTicketCommandReady,
   executeTicketCreate,
@@ -314,6 +315,7 @@ function publicPerson(id, name, email) {
 
 export function publicTicket(row, { triageEnabled = false } = {}) {
   return {
+    queueEnteredAt: row.queue_entered_at || null,
     id: row.id,
     organizationId: row.organization_id,
     code: row.code || `TKT-${String(row.id || "").padStart(6, "0")}`,
@@ -612,6 +614,8 @@ export function parseTicketListOptions(requestUrl) {
   }
 
   return {
+    snapshot: url.searchParams.get("snapshot") || null,
+    queue: ["open","in_progress","in_review","closed"].includes(url.searchParams.get("queue")) ? url.searchParams.get("queue") : null,
     q,
     status: rawStatus ? normalizeTicketStatus(rawStatus) : null,
     priority: rawPriority ? normalizePriority(rawPriority) : null,
@@ -635,6 +639,10 @@ function buildTicketWhere(organizationId, options, { includeStatus = true } = {}
   const clauses = ["t.organization_id = ?", "t.active = 1"];
   const values = [organizationId];
 
+  if (options.queue) {
+    if (options.queue === 'open') clauses.push("t.status IN ('new','open')");
+    else { clauses.push("t.status = ?"); values.push(options.queue); }
+  }
   if (options.q) {
     clauses.push(
       "(LOWER(t.code) LIKE ? ESCAPE '\\' OR LOWER(t.subject) LIKE ? ESCAPE '\\' OR LOWER(t.description) LIKE ? ESCAPE '\\')",
@@ -736,6 +744,16 @@ export async function listTickets(env, organizationId, options, user = null, { c
   where.values.push(...access.values);
   facetsWhere.sql = `(${facetsWhere.sql}) AND (${access.sql})`;
   facetsWhere.values.push(...access.values);
+  const flowEnabled = isTicketFlowEnabled(env, organizationId);
+  const snapshot = flowEnabled ? await ticketQuerySnapshot(env, organizationId, user, options, where, SORT_SQL[options.sort]) : null;
+  if (snapshot) {
+    // Freeze query membership; retain live ACL and active checks.
+    where.sql = `t.organization_id = ? AND t.active = 1 AND (${access.sql}) AND EXISTS (
+      SELECT 1 FROM ticket_query_snapshot_items si WHERE si.snapshot_id = ? AND si.ticket_id = t.id)`;
+    where.values = [organizationId, ...access.values, snapshot.id];
+    facetsWhere.sql = where.sql;
+    facetsWhere.values = [...where.values];
+  }
   const labelProjection = ticketLabelsProjectionSql(env);
   const attachmentColumns = await getTableColumns(env, "ticket_attachments");
   const attachmentAudienceSql = attachmentColumns.has("audience")
@@ -754,6 +772,10 @@ export async function listTickets(env, organizationId, options, user = null, { c
     .bind(...where.values)
     .first();
 
+  const pageWhere = snapshot ? `${where.sql} AND EXISTS(SELECT 1 FROM ticket_query_snapshot_items si
+    WHERE si.snapshot_id = ? AND si.ticket_id = t.id AND si.ordinal > ? AND si.ordinal <= ?)` : where.sql;
+  const pageValues = snapshot ? [...where.values, snapshot.id, offset, offset + options.limit] : where.values;
+  const order = snapshot ? `(SELECT si.ordinal FROM ticket_query_snapshot_items si WHERE si.snapshot_id = ? AND si.ticket_id = t.id)` : `${SORT_SQL[options.sort]}, t.id DESC`;
   const result = await getDb(env)
     .prepare(
       `SELECT
@@ -777,11 +799,11 @@ export async function listTickets(env, organizationId, options, user = null, { c
        FROM organization_tickets t
        LEFT JOIN users creator ON creator.id = t.created_by
        LEFT JOIN users assignee ON assignee.id = t.assigned_to
-       WHERE ${where.sql}
-       ORDER BY ${SORT_SQL[options.sort]}
+       WHERE ${pageWhere}
+       ORDER BY ${order}
        LIMIT ? OFFSET ?`,
     )
-    .bind(...where.values, options.limit, offset)
+    .bind(...pageValues, ...(snapshot ? [snapshot.id] : []), options.limit, snapshot ? 0 : offset)
     .all();
 
   const facetResult = await getDb(env)
@@ -816,6 +838,7 @@ export async function listTickets(env, organizationId, options, user = null, { c
   }
 
   const total = Number(countRow?.total || 0);
+  const snapshotSize = snapshot ? Number((await getDb(env).prepare("SELECT COUNT(*) AS total FROM ticket_query_snapshot_items WHERE snapshot_id = ?").bind(snapshot.id).first()).total) : total;
 
   return {
     tickets: await Promise.all((result?.results || []).map(async (row) => ({
@@ -824,13 +847,19 @@ export async function listTickets(env, organizationId, options, user = null, { c
     }))),
     triageEnabled,
     lifecycleEnabled,
+    flowEnabled,
+    queuePolicies: flowEnabled ? await readQueuePolicies(env, organizationId) : [],
     attachmentLimits: TICKET_ATTACHMENT_LIMITS,
     pagination: {
       page: options.page,
       limit: options.limit,
       total,
-      hasMore: offset + (result?.results?.length || 0) < total,
-      totalPages: Math.max(1, Math.ceil(total / options.limit)),
+      hasMore: offset + options.limit < snapshotSize,
+      totalPages: Math.max(1, Math.ceil(snapshotSize / options.limit)),
+      snapshot: snapshot?.id || null,
+      snapshotAt: snapshot?.created_at || null,
+      expiresAt: snapshot?.expires_at || null,
+      loaded: result?.results?.length || 0,
     },
     facets: {
       byStatus,

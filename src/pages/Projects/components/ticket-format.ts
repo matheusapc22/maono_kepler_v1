@@ -6,6 +6,7 @@ export function formatTicketDate(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "—";
 
   return date.toLocaleDateString("pt-BR", {
+    timeZone: "UTC",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -55,7 +56,8 @@ export function dateInputToIso(value: string) {
 }
 
 export function ticketDueDateKey(ticket: Ticket) {
-  return dateInputValue(ticket.dueAt);
+  if (!ticket.dueAt || !Number.isFinite(Date.parse(ticket.dueAt))) return null;
+  return new Date(ticket.dueAt).toISOString().slice(0, 10);
 }
 
 export function isTicketOverdue(ticket: Ticket) {

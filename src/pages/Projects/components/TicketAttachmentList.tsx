@@ -62,6 +62,7 @@ export default function TicketAttachmentList({
   const [failedFile, setFailedFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const uploadControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { uploadControllerRef.current?.abort(); uploadControllerRef.current = null; }, []);
 
   async function refreshPendingUploads(signal?: AbortSignal) {
     if (!canUpload || ticket.status === "closed") {
@@ -280,6 +281,7 @@ export default function TicketAttachmentList({
         ) : null}
       </header>
 
+      <p>Ao trocar de organização, o envio neste navegador é interrompido. Confira ou retome a sessão na organização de origem.</p>
       {uploadProgress !== null ? (
         <div className="ticket-detail-upload" role="status">
           <div>

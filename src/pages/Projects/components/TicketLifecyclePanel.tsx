@@ -30,6 +30,7 @@ export default function TicketLifecyclePanel({ detail, canManage, saving, refres
   const [validationIssue, setValidationIssue] = useState<TicketCommandValidationIssue | null>(null);
   const [requestError, setRequestError] = useState<TicketApiError | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [wipExceptionReason, setWipExceptionReason] = useState("");
   const [feedback, setFeedback] = useState("");
   const dirtyRef = useRef(false);
   const submittingRef = useRef(false);
@@ -66,7 +67,10 @@ export default function TicketLifecyclePanel({ detail, canManage, saving, refres
     dirtyRef.current = true; setDirty(true); onDirtyChange(true); submittingRef.current = true;
     setRequestError(null);
     try {
-      await onCommand(buildTicketCommand(form), snapshot.etag);
+      const command = buildTicketCommand(form);
+      if (command.kind === 'transition' && wipExceptionReason.trim()) command.payload.wipExceptionReason = wipExceptionReason.trim();
+      await onCommand(command, snapshot.etag);
+      setWipExceptionReason('');
       dirtyRef.current = false; setDirty(false); onDirtyChange(false);
       setFeedback("Ação registrada no chamado. Nenhuma alteração vinculada foi aprovada ou aplicada.");
       headingRef.current?.focus();
@@ -109,6 +113,10 @@ export default function TicketLifecyclePanel({ detail, canManage, saving, refres
         {snapshot.status === "closed" ? <option value="reopen">Reabrir em novo ciclo</option> : <><option value="transition">Mudar situação / concluir</option>{snapshot.wait ? <option value="wait_end">Encerrar espera</option> : <option value="wait_start">Registrar espera</option>}</>}
       </select></label>
       {form.action === "transition" ? <label className="ticket-command-field" htmlFor="ticket-command-status"><span>Próxima situação</span><select id="ticket-command-status" value={form.status} disabled={disabled} onChange={(event) => edit("status", event.target.value as Ticket["status"])}>{ticketTransitionTargets(snapshot.status).map((status) => <option value={status} key={status}>{STATUS_LABELS[status]}</option>)}</select></label> : null}
+      {form.action === 'transition' && ['in_progress','in_review'].includes(form.status) ? <label className="ticket-command-field">Exceção de WIP (opcional)
+        <textarea value={wipExceptionReason} minLength={10} maxLength={1000} disabled={disabled} onChange={event => { setWipExceptionReason(event.target.value); dirtyRef.current = true; setDirty(true); onDirtyChange(true); }} />
+        <small>Preencha somente para exceder o limite da fila. A justificativa ficará registrada no histórico.</small>
+      </label> : null}
       {!close ? textField("nextAction", "Próxima ação *", "Descreva o que acontecerá em seguida. Não prometa um prazo sem fundamento.") : null}
       {form.action === "reopen" || form.action === "wait_start" || form.action === "wait_end" || returning ? textField("reason", `Motivo${form.action === "wait_end" ? " (opcional)" : " *"}`, form.action === "reopen" ? "Reabra pelo mesmo problema. O histórico e a conclusão anterior serão preservados." : undefined) : null}
       {form.action === "wait_start" ? <><label className="ticket-command-field" htmlFor="ticket-command-responsibleId"><span>Quem acompanha a espera *</span><select id="ticket-command-responsibleId" value={form.responsibleId} disabled={disabled} onChange={(event) => edit("responsibleId", event.target.value)}><option value="">Selecione</option>{detail.assignees.map((person) => <option key={person.id} value={String(person.id)}>{ticketPersonName(person)}</option>)}</select></label><label className="ticket-command-field" htmlFor="ticket-command-expectedAt"><span>Próxima verificação (opcional)</span><input id="ticket-command-expectedAt" type="datetime-local" value={form.expectedAt} disabled={disabled} onChange={(event) => edit("expectedAt", event.target.value)} /><small>Horário local do navegador. Não representa um compromisso de SLA.</small></label></> : null}

@@ -12,6 +12,7 @@ import {
 
 type TicketCalendarViewProps = {
   tickets: Ticket[];
+  from?: string;
   onOpen: (ticket: Ticket) => void;
   onRangeChange: (from: string, to: string) => void;
 };
@@ -64,19 +65,20 @@ function monthTitle(date: Date) {
 }
 
 export default function TicketCalendarView({
-  tickets,
+  tickets, from,
   onOpen,
   onRangeChange,
 }: TicketCalendarViewProps) {
-  const [month, setMonth] = useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  const [month, setMonthState] = useState(
+    () => from ? new Date(Number(from.slice(0,4)), Number(from.slice(5,7)) - 1, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
+  function setMonth(value: Date | ((previous: Date) => Date)) {
+    const next = typeof value === 'function' ? value(month) : value;
+    setMonthState(next); const nextRange = monthRange(next); onRangeChange(nextRange.from,nextRange.to);
+  }
+  useEffect(() => { if (from) setMonthState(new Date(Number(from.slice(0,4)),Number(from.slice(5,7))-1,1)); }, [from]);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
-  const range = useMemo(() => monthRange(month), [month]);
 
-  useEffect(() => {
-    onRangeChange(range.from, range.to);
-  }, [onRangeChange, range.from, range.to]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, Ticket[]>();
@@ -110,7 +112,7 @@ export default function TicketCalendarView({
       <header className="ticket-calendar-toolbar">
         <div>
           <h3>{monthTitle(month)}</h3>
-          <p>Chamados posicionados pelo prazo operacional.</p>
+          <p>Prazo operacional em UTC. A agenda inclui os itens carregados da consulta; os botões de mês ajustam o período.</p>
         </div>
         <div>
           <button

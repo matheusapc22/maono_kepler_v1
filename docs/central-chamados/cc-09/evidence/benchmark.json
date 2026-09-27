@@ -1,0 +1,48 @@
+{
+  "localOnly": true,
+  "engine": "node:sqlite",
+  "records": 1000,
+  "pageSize": 50,
+  "budget": {
+    "localPerPageMs": 500,
+    "productionP95Ms": 1500,
+    "productionBudgetUnverified": true
+  },
+  "samples": [
+    {
+      "firstMs": 12.64,
+      "nextMs": 6.54,
+      "returned": 50,
+      "total": 1000,
+      "nextReturned": 50
+    },
+    {
+      "firstMs": 7.73,
+      "nextMs": 6.41,
+      "returned": 50,
+      "total": 1000,
+      "nextReturned": 50
+    },
+    {
+      "firstMs": 7.71,
+      "nextMs": 5.46,
+      "returned": 50,
+      "total": 1000,
+      "nextReturned": 50
+    },
+    {
+      "firstMs": 9.15,
+      "nextMs": 5.18,
+      "returned": 50,
+      "total": 1000,
+      "nextReturned": 50
+    },
+    {
+      "firstMs": 8.48,
+      "nextMs": 5.61,
+      "returned": 50,
+      "total": 1000,
+      "nextReturned": 50
+    }
+  ]
+}

@@ -538,6 +538,7 @@ export default function TicketDetailDrawer({
                         <strong>
                           {EVENT_LABELS[event.type] || event.type}
                         </strong>
+                        {typeof (event.metadata?.wipException as {reason?: unknown} | undefined)?.reason === 'string' ? <p>Exceção de WIP: {String((event.metadata?.wipException as {reason: string}).reason)}</p> : null}
                         <small>
                           {ticketPersonName(event.actor)} ·{" "}
                           {formatTicketDateTime(event.createdAt)}

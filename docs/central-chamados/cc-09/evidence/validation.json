@@ -1,0 +1,45 @@
+{
+  "baseGitSha": "19657297397c9b06aed5cf54841f39011464b3db",
+  "generatedAt": "2026-09-27T23:53:36.471857+00:00",
+  "localOnly": true,
+  "productionWrites": false,
+  "authenticatedProductionAcceptance": false,
+  "migration": {
+    "file": "0032_ticket_flow_navigation.sql",
+    "sha256": "39e6ac98c07265ecf9f91414af72b6a098059dec97b2249b70232052ce900175",
+    "productionStatus": "pending audit and explicit hash authorization"
+  },
+  "checks": [
+    {
+      "command": "node --experimental-strip-types --test tests/ticket-flow*.test.mjs tests/ticket-center.test.mjs tests/ticket-command*.test.mjs tests/ticket-access*.test.mjs tests/ticket-changes.test.mjs tests/production-migration*.test.mjs",
+      "passed": 212,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:preview-safety",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "command": "node node_modules/typescript/bin/tsc -b",
+      "result": "passed"
+    },
+    {
+      "command": "npm run build",
+      "result": "passed",
+      "note": "Existing dependency/chunk-size warnings; final login/link guard adjustment also typechecked."
+    },
+    {
+      "command": "node scripts/central-chamados/validate-cc01.mjs",
+      "result": "passed"
+    },
+    {
+      "command": "node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline",
+      "result": "strict ratchet passed"
+    },
+    {
+      "command": "node scripts/central-chamados/smoke-flow-ui.mjs",
+      "result": "8 local browser scenarios passed; HTTP fixtures; see ui-smoke.json"
+    }
+  ]
+}
