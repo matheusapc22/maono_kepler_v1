@@ -10,6 +10,10 @@ import {
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
 import { requireTicketAccess } from "../../../../_lib/ticket-access.js";
 import {
+  readTicketConversationBundle,
+  resolveTicketConversationContext,
+} from "../../../../_lib/ticket-conversations.js";
+import {
   getOrganizationOrThrow,
   getRouteParam,
   jsonResponse,
@@ -73,9 +77,17 @@ export async function onRequestGet({ env, request, params }) {
       await migrateLegacyTickets(env, organizationId, user.id);
     }
 
-    const detail = await getTicketDetails(env, organizationId, ticketId);
-    const changeRequest = await getTicketReviewLink(env, request, organizationId, ticketId);
-    const response = jsonResponse({ ok: true, ...detail, changeRequest });
+    const conversationContext = await resolveTicketConversationContext(
+      env, organizationId, ticketId, user, { ticketView: true },
+    );
+    const detail = await getTicketDetails(env, organizationId, ticketId, {
+      canViewInternal: conversationContext.noteView,
+    });
+    const [changeRequest, conversation] = await Promise.all([
+      getTicketReviewLink(env, request, organizationId, ticketId),
+      readTicketConversationBundle(env, conversationContext),
+    ]);
+    const response = jsonResponse({ ok: true, ...detail, changeRequest, conversation });
     response.headers.set("Cache-Control", "private, no-store");
     if (detail.lifecycleEnabled) {
       response.headers.set("Link", `</api/organizations/${organizationId}/tickets/${ticketId}/state>; rel="describedby"`);

@@ -357,6 +357,9 @@ export function publicTicketAttachment(row) {
         row.uploader_name,
         row.uploader_email,
       ) || null,
+    audience: row.audience || "ticket",
+    messageId: row.message_id || null,
+    draftId: row.draft_id || null,
   };
 }
 
@@ -366,6 +369,8 @@ export function publicTicketEvent(row) {
     type: row.event_type,
     metadata: safeJsonParse(row.metadata, {}),
     createdAt: row.created_at,
+    audience: row.audience || "ticket",
+    messageId: row.message_id || null,
     actor:
       publicPerson(
         row.actor_id || row.actor_user_id,
@@ -713,7 +718,7 @@ function ticketLabelsProjectionSql(env) {
   ), '[]') AS labels_json`;
 }
 
-export async function listTickets(env, organizationId, options, user = null) {
+export async function listTickets(env, organizationId, options, user = null, { canViewInternal = false } = {}) {
   const lifecycleEnabled = await getTicketCommandCapability(env, organizationId);
   const triageEnabled = await getTicketTriageCapability(env);
   const access = await buildTicketAccessPredicate(env, organizationId, user, "ticket.view");
@@ -726,6 +731,12 @@ export async function listTickets(env, organizationId, options, user = null) {
   facetsWhere.sql = `(${facetsWhere.sql}) AND (${access.sql})`;
   facetsWhere.values.push(...access.values);
   const labelProjection = ticketLabelsProjectionSql(env);
+  const attachmentColumns = await getTableColumns(env, "ticket_attachments");
+  const attachmentAudienceSql = attachmentColumns.has("audience")
+    ? canViewInternal
+      ? "AND a.audience IN ('ticket', 'internal')"
+      : "AND a.audience = 'ticket'"
+    : "";
   const offset = (options.page - 1) * options.limit;
 
   const countRow = await getDb(env)
@@ -754,6 +765,7 @@ export async function listTickets(env, organizationId, options, user = null) {
             AND a.ticket_id = t.id
             AND a.status = 'ACTIVE'
             AND a.deleted_at IS NULL
+            ${attachmentAudienceSql}
         ) AS attachments_count
         ${labelProjection}
        FROM organization_tickets t
@@ -869,7 +881,19 @@ export async function getTicketOrThrow(env, organizationId, ticketId) {
   return row;
 }
 
-export async function listTicketAttachments(env, organizationId, ticketId) {
+export async function listTicketAttachments(
+  env,
+  organizationId,
+  ticketId,
+  { canViewInternal = false } = {},
+) {
+  const columns = await getTableColumns(env, "ticket_attachments");
+  const scopedAudience = columns.has("audience");
+  const audienceSql = scopedAudience
+    ? canViewInternal
+      ? "AND a.audience IN ('ticket', 'internal')"
+      : "AND a.audience = 'ticket'"
+    : "";
   const result = await getDb(env)
     .prepare(
       `SELECT
@@ -883,6 +907,7 @@ export async function listTicketAttachments(env, organizationId, ticketId) {
          AND a.ticket_id = ?
          AND a.status = 'ACTIVE'
          AND a.deleted_at IS NULL
+         ${audienceSql}
        ORDER BY a.created_at DESC, a.id DESC`,
     )
     .bind(organizationId, ticketId)
@@ -891,7 +916,19 @@ export async function listTicketAttachments(env, organizationId, ticketId) {
   return (result?.results || []).map(publicTicketAttachment);
 }
 
-async function listTicketEvents(env, organizationId, ticketId) {
+async function listTicketEvents(
+  env,
+  organizationId,
+  ticketId,
+  { canViewInternal = false } = {},
+) {
+  const columns = await getTableColumns(env, "ticket_events");
+  const scopedAudience = columns.has("audience");
+  const audienceSql = scopedAudience
+    ? canViewInternal
+      ? "AND e.audience IN ('ticket', 'internal')"
+      : "AND e.audience = 'ticket'"
+    : "";
   const result = await getDb(env)
     .prepare(
       `SELECT
@@ -902,6 +939,7 @@ async function listTicketEvents(env, organizationId, ticketId) {
        FROM ticket_events e
        LEFT JOIN users actor ON actor.id = e.actor_user_id
        WHERE e.organization_id = ? AND e.ticket_id = ?
+         ${audienceSql}
        ORDER BY e.created_at DESC, e.id DESC
        LIMIT 200`,
     )
@@ -911,7 +949,12 @@ async function listTicketEvents(env, organizationId, ticketId) {
   return (result?.results || []).map(publicTicketEvent);
 }
 
-export async function getTicketDetails(env, organizationId, ticketId) {
+export async function getTicketDetails(
+  env,
+  organizationId,
+  ticketId,
+  { canViewInternal = false } = {},
+) {
   const triageEnabled = await getTicketTriageCapability(env);
   const row = await getTicketOrThrow(env, organizationId, ticketId);
   const lifecycle = await readTicketLifecycleDetails(env, organizationId, ticketId);
@@ -920,8 +963,8 @@ export async function getTicketDetails(env, organizationId, ticketId) {
     ticket: { ...publicTicket(row, { triageEnabled }), ...(lifecycle.lifecycleEnabled ? await ticketLifecycleProjection(row) : {}) },
     triageEnabled,
     ...lifecycle,
-    attachments: await listTicketAttachments(env, organizationId, ticketId),
-    events: await listTicketEvents(env, organizationId, ticketId),
+    attachments: await listTicketAttachments(env, organizationId, ticketId, { canViewInternal }),
+    events: await listTicketEvents(env, organizationId, ticketId, { canViewInternal }),
     assignees: await listTicketAssignees(env, organizationId),
     attachmentLimits: TICKET_ATTACHMENT_LIMITS,
   };
@@ -1064,16 +1107,22 @@ async function enforceRateLimit(env, kind, organizationId, userId) {
 
 export async function recordTicketEvent(
   env,
-  { organizationId, ticketId, type, actorUserId, metadata = {} },
+  { organizationId, ticketId, type, actorUserId, metadata = {}, audience = null, messageId = null },
 ) {
-  return insertRow(env, "ticket_events", {
+  const values = {
     organization_id: organizationId,
     ticket_id: ticketId,
     event_type: type,
     actor_user_id: actorUserId || null,
     metadata: JSON.stringify(metadata),
     created_at: isoNow(),
-  });
+  };
+  if (audience || messageId) {
+    const columns = await getTableColumns(env, "ticket_events");
+    if (columns.has("audience")) values.audience = audience || "ticket";
+    if (columns.has("message_id")) values.message_id = messageId || null;
+  }
+  return insertRow(env, "ticket_events", values);
 }
 
 export async function createTicket(
@@ -1522,6 +1571,7 @@ export async function initiateTicketAttachmentUpload(
   ticketId,
   user,
   payload,
+  { draftId = null } = {},
 ) {
   const ticket = await getTicketOrThrow(env, organizationId, ticketId);
   if (ticket.status === "closed") {
@@ -1561,6 +1611,7 @@ export async function initiateTicketAttachmentUpload(
       dropbox_rev: "0",
       created_at: timestamp,
       updated_at: timestamp,
+      ...(draftId ? { audience: "draft", draft_id: String(draftId) } : {}),
     });
 
     const session = await startOrganizationBinaryUpload(env, rootPath);
@@ -1774,26 +1825,30 @@ export async function uploadTicketAttachmentChunk(
       updated_at: isoNow(),
     });
 
-    await recordTicketEvent(env, {
-      organizationId,
-      ticketId,
-      type: "ticket.attachment.added",
-      actorUserId: user.id,
-      metadata: {
-        attachmentId,
-        fileName: pending.original_name,
-        size: expectedSize,
-      },
-    });
-    await recordAuditLog(env, {
-      actorUserId: user.id,
-      organizationId,
-      action: "ticket.attachment.added",
-      resourceType: "ticket_attachment",
-      resourceId: attachmentId,
-      metadata: { ticketId, fileName: pending.original_name },
-      request,
-    });
+    if (pending.audience !== "draft") {
+      await recordTicketEvent(env, {
+        organizationId,
+        ticketId,
+        type: "ticket.attachment.added",
+        actorUserId: user.id,
+        metadata: {
+          attachmentId,
+          fileName: pending.original_name,
+          size: expectedSize,
+        },
+        audience: pending.audience || "ticket",
+        messageId: pending.message_id || null,
+      });
+      await recordAuditLog(env, {
+        actorUserId: user.id,
+        organizationId,
+        action: "ticket.attachment.added",
+        resourceType: "ticket_attachment",
+        resourceId: attachmentId,
+        metadata: { ticketId, fileName: pending.original_name },
+        request,
+      });
+    }
 
     return {
       attachment: publicTicketAttachment(active || { ...pending, status: "ACTIVE" }),
@@ -2053,30 +2108,33 @@ export async function deleteTicketAttachment(
     updated_at: isoNow(),
   });
 
-  await recordTicketEvent(env, {
-    organizationId,
-    ticketId,
-    type:
-      attachment.status === "PENDING"
-        ? "ticket.attachment.upload_cancelled"
-        : "ticket.attachment.deleted",
-    actorUserId: user.id,
-    metadata: {
-      attachmentId,
-      fileName: attachment.original_name,
-    },
-  });
+  const action = attachment.status === "PENDING"
+    ? "ticket.attachment.upload_cancelled"
+    : "ticket.attachment.deleted";
+  if (attachment.audience !== "draft") {
+    await recordTicketEvent(env, {
+      organizationId,
+      ticketId,
+      type: action,
+      actorUserId: user.id,
+      metadata: {
+        attachmentId,
+        fileName: attachment.original_name,
+      },
+      audience: attachment.audience || "ticket",
+      messageId: attachment.message_id || null,
+    });
+  }
 
   await recordAuditLog(env, {
     actorUserId: user.id,
     organizationId,
-    action:
-      attachment.status === "PENDING"
-        ? "ticket.attachment.upload_cancelled"
-        : "ticket.attachment.deleted",
+    action: attachment.audience === "draft" ? "ticket.draft.attachment.deleted" : action,
     resourceType: "ticket_attachment",
     resourceId: attachmentId,
-    metadata: { ticketId, fileName: attachment.original_name },
+    metadata: attachment.audience === "draft"
+      ? { ticketId, draftId: attachment.draft_id || null }
+      : { ticketId, fileName: attachment.original_name },
     request,
   });
 }

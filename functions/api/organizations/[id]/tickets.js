@@ -3,7 +3,7 @@ import {
   getTicketTriageCapability,
   isTicketTriageEnabled,
 } from "../../../_lib/ticket-triage.js";
-import { requireOrganizationPermission } from "../../../_lib/permissions.js";
+import { can, requireOrganizationPermission } from "../../../_lib/permissions.js";
 import {
   assertTicketCommandReady, executeTicketCreate, isTicketCommandsEnabled,
 } from "../../../_lib/ticket-commands.js";
@@ -61,11 +61,17 @@ export async function onRequestGet({ env, request, params }) {
       await migrateLegacyTickets(env, organizationId, user.id);
     }
 
+    const noteView = await can(env, user, "ticket.note.view", {
+      organizationId,
+      scopeType: "organization",
+      resourceType: "ticket",
+    });
     const data = await listTickets(
       env,
       organizationId,
       parseTicketListOptions(request.url),
       user,
+      { canViewInternal: noteView.allowed },
     );
 
     return jsonResponse({ ok: true, ...data }, { headers: { "Cache-Control": "private, no-store" } });

@@ -1,0 +1,57 @@
+name: CC-05 conversation validation
+
+on:
+  pull_request:
+    paths:
+      - 'functions/_lib/ticket-conversation*.js'
+      - 'functions/_lib/ticket-center.js'
+      - 'functions/_lib/permissions.js'
+      - 'functions/api/organizations/**/tickets*.js'
+      - 'functions/api/organizations/**/tickets/**'
+      - 'src/access-control/**'
+      - 'src/pages/Projects/components/TicketConversationPanel.tsx'
+      - 'src/pages/Projects/components/TicketDetailDrawer.tsx'
+      - 'src/pages/Projects/components/ticket-types.ts'
+      - 'src/pages/Projects/components/tickets-api.ts'
+      - 'src/pages/Projects/components/ticket-lifecycle.css'
+      - 'tests/ticket-conversation*.test.mjs'
+      - 'migrations/0028_ticket_conversations.sql'
+      - 'schema.sql'
+      - 'docs/central-chamados/CC05*'
+      - '.github/workflows/cc05-conversation-foundation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  conversation-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate conversation contracts and isolated SQLite migration
+        run: node --test tests/ticket-conversation*.test.mjs tests/ticket-conversations-integration.test.mjs
+      - name: Preserve the exact source snapshot for reproducible validation
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > "$RUNNER_TEMP/cc05-source-sha.txt"
+          sha256sum migrations/0028_ticket_conversations.sql > "$RUNNER_TEMP/cc05-migration-sha256.txt"
+          git archive --format=tar --output="$RUNNER_TEMP/cc05-source.tar" HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cc05-source-${{ github.event.pull_request.head.sha }}
+          path: |
+            ${{ runner.temp }}/cc05-source.tar
+            ${{ runner.temp }}/cc05-source-sha.txt
+            ${{ runner.temp }}/cc05-migration-sha256.txt
+          retention-days: 3
+          if-no-files-found: error

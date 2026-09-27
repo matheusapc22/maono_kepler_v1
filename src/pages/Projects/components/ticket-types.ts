@@ -56,6 +56,9 @@ export type TicketAttachment = {
   status: string;
   createdAt?: string | null;
   uploadedBy?: TicketPerson | null;
+  audience?: "ticket" | "internal" | "draft";
+  messageId?: string | null;
+  draftId?: string | null;
 };
 
 export type TicketAttachmentLimits = {
@@ -78,6 +81,66 @@ export type TicketEvent = {
   metadata?: Record<string, unknown>;
   createdAt?: string | null;
   actor?: TicketPerson | null;
+  audience?: "ticket" | "internal";
+  messageId?: string | null;
+};
+
+
+export type TicketConversationKind = "response" | "internal";
+export type TicketConversationAudience = "ticket" | "internal";
+
+export type TicketConversationMessage = {
+  id: string;
+  organizationId: number | string;
+  ticketId: number | string;
+  kind: TicketConversationKind;
+  audience: TicketConversationAudience;
+  body: string;
+  version: number;
+  createdAt: string;
+  editedAt?: string | null;
+  editReason?: string | null;
+  author?: TicketPerson | null;
+  attachments: TicketAttachment[];
+  etag: string;
+};
+
+export type TicketConversationDraft = {
+  id: string;
+  organizationId: number | string;
+  ticketId: number | string;
+  kind: TicketConversationKind;
+  audience: TicketConversationAudience;
+  body: string;
+  version: number;
+  state: "active";
+  createdAt: string;
+  updatedAt: string;
+  attachments: TicketAttachment[];
+  etag: string;
+};
+
+export type TicketConversationRevision = {
+  messageId: string;
+  version: number;
+  body: string;
+  reason?: string | null;
+  createdAt: string;
+  editor?: TicketPerson | null;
+};
+
+export type TicketConversationBundle = {
+  enabled: boolean;
+  schemaReady: boolean;
+  permissions: {
+    comment: boolean;
+    noteView: boolean;
+    noteCreate: boolean;
+  };
+  messages: TicketConversationMessage[];
+  drafts: TicketConversationDraft[];
+  nextCursor?: string | null;
+  hasMore: boolean;
 };
 
 export type TicketClosureOutcome = "resolved" | "answered" | "fulfilled" | "rejected" | "duplicate" | "withdrawn" | "no_action";
@@ -186,6 +249,7 @@ export type TicketDetailResponse = {
   events: TicketEvent[];
   assignees: TicketPerson[];
   attachmentLimits: TicketAttachmentLimits;
+  conversation?: TicketConversationBundle;
 };
 
 export type CreateTicketPayload = Partial<TicketTriagePayload> & {

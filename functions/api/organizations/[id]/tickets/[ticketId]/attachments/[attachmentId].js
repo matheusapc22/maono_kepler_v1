@@ -4,6 +4,10 @@ import {
 } from "../../../../../../_lib/permissions.js";
 import { requireTicketAccess } from "../../../../../../_lib/ticket-access.js";
 import {
+  assertConversationAttachmentMutation,
+  resolveTicketConversationContext,
+} from "../../../../../../_lib/ticket-conversations.js";
+import {
   getOrganizationOrThrow,
   getRouteParam,
   jsonResponse,
@@ -57,6 +61,21 @@ export async function onRequestPatch({ env, request, params }) {
     await getOrganizationOrThrow(env, organizationId);
     await ensureTicketCenterSchema(env);
     await requireTicketAccess(env, organizationId, ticketId, user, "ticket.comment");
+    const attachment = await getTicketAttachmentRecordOrThrow(
+      env, organizationId, ticketId, attachmentId, ["PENDING", "ACTIVE"],
+    );
+    const conversationContext = await resolveTicketConversationContext(
+      env, organizationId, ticketId, user, { ticketView: true },
+    );
+    const scope = await assertConversationAttachmentMutation(
+      env, conversationContext, attachment,
+    );
+    if (scope.conversationScoped) {
+      const result = await uploadTicketAttachmentChunk(
+        env, organizationId, ticketId, attachmentId, user, request,
+      );
+      return jsonResponse({ ok: true, ...result });
+    }
     const createDecision = await can(
       env,
       user,
@@ -132,6 +151,10 @@ export async function onRequestDelete({ env, request, params }) {
       attachmentId,
       ["ACTIVE", "PENDING"],
     );
+    const conversationContext = await resolveTicketConversationContext(
+      env, organizationId, ticketId, user, { ticketView: true },
+    );
+    await assertConversationAttachmentMutation(env, conversationContext, attachment);
 
     const manageDecision = await can(env, user, "ticket.manage", {
       organizationId,

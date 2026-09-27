@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { useEffect, useRef, useState } from "react";
 
 import TicketAttachmentList from "./TicketAttachmentList";
+import TicketConversationPanel from "./TicketConversationPanel";
 import TicketErrorNotice from "./TicketErrorNotice";
 import TicketLifecyclePanel from "./TicketLifecyclePanel";
 import { ticketDraftSnapshot, ticketWriteNeedsReview } from "./ticket-command-form";
@@ -72,6 +73,10 @@ const EVENT_LABELS: Record<string, string> = {
   "ticket.triage.changed": "Classificação alterada",
   "ticket.attachment.added": "Anexo adicionado",
   "ticket.attachment.deleted": "Anexo excluído",
+  "ticket.message.created": "Resposta registrada",
+  "ticket.message.edited": "Resposta editada",
+  "ticket.note.created": "Nota interna registrada",
+  "ticket.note.edited": "Nota interna editada",
 };
 
 export default function TicketDetailDrawer({
@@ -492,6 +497,15 @@ export default function TicketDetailDrawer({
             {lifecycleEnabled ? <TicketLifecyclePanel detail={detail} canManage={canManage} saving={saving} refreshing={loading}
               attributeDraftDirty={attributeDraftDirty} suggestedStatus={suggestedStatus} onDirtyChange={setLifecycleDraftDirty}
               onReload={onReload} onCommand={onCommand} /> : null}
+
+            <TicketConversationPanel
+              organizationId={organizationId}
+              ticket={ticket}
+              bundle={detail.conversation}
+              currentUserId={currentUserId}
+              attachmentLimits={attachmentLimits}
+              onReload={onReload}
+            />
 
             <TicketAttachmentList
               organizationId={organizationId}

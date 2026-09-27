@@ -17,6 +17,8 @@ export const PERMISSION = {
   TICKET_VIEW: "ticket.view",
   TICKET_CREATE: "ticket.create",
   TICKET_COMMENT: "ticket.comment",
+  TICKET_NOTE_VIEW: "ticket.note.view",
+  TICKET_NOTE_CREATE: "ticket.note.create",
   TICKET_MANAGE: "ticket.manage",
   TICKET_ACCESS_MANAGE: "ticket.access.manage",
   TICKET_CLOSE: "ticket.close",

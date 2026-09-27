@@ -62,6 +62,8 @@ const OWNER_NATIVE_PERMISSIONS: readonly Permission[] = [
   "ticket.view",
   "ticket.create",
   "ticket.comment",
+  "ticket.note.view",
+  "ticket.note.create",
   "ticket.manage",
   "ticket.close",
   "ticket.assign",

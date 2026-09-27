@@ -81,6 +81,8 @@ const OWNER_ORGANIZATION_POLICY_PERMISSIONS: ReadonlySet<Permission> =
     "ticket.view",
     "ticket.create",
     "ticket.comment",
+    "ticket.note.view",
+    "ticket.note.create",
     "ticket.manage",
     "ticket.close",
     "ticket.assign",
