@@ -184,6 +184,14 @@ try {
     backup,
     error: safe,
   };
+  // Persist failure evidence even when apply failed before post-validation.
+  // A separate filename preserves any successful report already written.
+  const failurePath = args.report ? `${resolve(args.report)}.failure.json`
+    : (migration && git ? `${defaultPostReportPath(migration.name, git.sha)}.failure.json` : null);
+  if (failurePath) {
+    try { await writeJsonReport(failurePath, failure); }
+    catch { failure.failureReportSaved = false; }
+  }
   process.stderr.write(`${JSON.stringify(failure, null, 2)}\n`);
   process.exitCode = 1;
 } finally {

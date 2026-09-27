@@ -306,7 +306,7 @@ export async function runProcess(command, args, options = {}) {
       return rejectPromise(gateError(
         options.errorCode || 'COMMAND_FAILED',
         options.safeMessage || `${command} encerrou com código ${code}.`,
-        { command, args, exitCode: code, stderr: stderr.slice(-2000) },
+        { command, args, exitCode: code, stderr: stderr.slice(-4000), stdout: stdout.slice(-4000) },
       ));
     });
   });
@@ -452,9 +452,30 @@ export async function writeJsonReport(path, value) {
   return path;
 }
 
+export function classifyWranglerFailure(details = {}) {
+  // Only fixed labels escape this boundary. Never return SQL, credentials, URLs,
+  // process arguments, identifiers or arbitrary text from the CLI streams.
+  const output = `${details.stdout || ''}\n${details.stderr || ''}`;
+  const patterns = [
+    ['SQLITE_AUTH', /SQLITE_AUTH|not authorized/i],
+    ['SQLITE_CONSTRAINT', /SQLITE_CONSTRAINT|constraint failed/i],
+    ['SQLITE_SYNTAX', /syntax error|incomplete input/i],
+    ['SQLITE_MISSING_OBJECT', /no such (?:table|column|trigger)/i],
+    ['SQLITE_ALREADY_EXISTS', /already exists|duplicate column/i],
+    ['SQLITE_LIMIT', /too many|too large|statement.*limit|SQLITE_TOOBIG/i],
+    ['SQLITE_BUSY', /SQLITE_BUSY|database is locked/i],
+    ['CLOUDFLARE_AUTH', /authentication error|authorization failed|\b10000\b/i],
+    ['NETWORK_TIMEOUT', /timed? ?out|ETIMEDOUT|ECONNRESET|fetch failed/i],
+  ];
+  const categories = patterns.filter(([, re]) => re.test(output)).map(([label]) => label);
+  return { exitCode: Number.isInteger(details.exitCode) ? details.exitCode : null,
+    categories: categories.length ? categories : ['UNCLASSIFIED'],
+    stdoutCaptured: Boolean(details.stdout), stderrCaptured: Boolean(details.stderr) };
+}
+
 export function safeError(error) {
   if (error instanceof MigrationGateError) {
-    return { code: error.code, message: error.message };
+    return { code: error.code, message: error.message, ...(error.code === 'WRANGLER_APPLY_FAILED' ? { diagnostic: classifyWranglerFailure(error.details) } : {}) };
   }
   return { code: 'MIGRATION_GATE_UNEXPECTED', message: 'Falha inesperada no operador; revise o ambiente antes de repetir.' };
 }
