@@ -131,3 +131,26 @@ test('partial flow schema cannot advertise readiness',async t=>{
  const f=await fixture(t);f.sqlite.exec('DROP TRIGGER ticket_flow_queue_entry');
  await assert.rejects(query(f),{code:'TICKET_FLOW_NOT_READY'});
 });
+
+test('CT31 columns share one immutable partition: a concurrent move cannot duplicate or lose a card',async t=>{
+ const f=await fixture(t);seed(f,250);
+ const root=await query(f,'includeUndated=1');const snapshot=root.pagination.snapshot;
+ f.sqlite.exec("UPDATE organization_tickets SET status='in_progress' WHERE id=1");
+ const ids=[];
+ for(const queue of ['open','in_progress','in_review','closed']){
+  let response;
+  for(let page=1;!response || response.pagination.hasMore;page++){
+   response=await query(f,`includeUndated=1&limit=25&queue=${queue}&page=${page}&snapshot=${snapshot}`);ids.push(...response.tickets.map(t=>t.id));
+  }
+ }
+ assert.equal(ids.length,250);assert.equal(new Set(ids).size,250);
+ assert.equal((await query(f,`includeUndated=1&queue=in_progress&snapshot=${snapshot}`)).pagination.total,0);
+ assert.equal((await query(f,'includeUndated=1&queue=in_progress')).pagination.total,1);
+});
+
+test('turning flow off never silently downgrades a snapshot to mutable OFFSET',async t=>{
+ const f=await fixture(t);seed(f,3);const first=await query(f,'limit=2');
+ f.env.MAONO_TICKET_FLOW_ENABLED='false';
+ await assert.rejects(query(f,`limit=2&page=2&snapshot=${first.pagination.snapshot}`),{code:'TICKET_QUERY_EXPIRED'});
+ assert.equal((await query(f)).flowEnabled,false);
+});

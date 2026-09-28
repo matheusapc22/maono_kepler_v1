@@ -202,7 +202,7 @@ function TicketsSectionContent({
   const loadTicketsPage = useCallback(
     async (
       targetPage = 1,
-      options: { append?: boolean; background?: boolean } = {},
+      options: { append?: boolean; background?: boolean; reuseSnapshot?: boolean } = {},
     ) => {
       if (!organizationId || !canView) {
         setTickets([]);
@@ -232,7 +232,7 @@ function TicketsSectionContent({
           {
             limit: 50,
             includeUndated: true,
-            snapshot: targetPage > 1 ? snapshotRef.current : null,
+            snapshot: targetPage > 1 || options.reuseSnapshot ? snapshotRef.current : null,
           },
         );
 
@@ -287,7 +287,7 @@ function TicketsSectionContent({
         }
       }
     },
-    [canView, debouncedFilters, organizationId, viewMode],
+    [canView, debouncedFilters, organizationId],
   );
 
   useEffect(() => {
@@ -302,6 +302,13 @@ function TicketsSectionContent({
       listControllerRef.current?.abort();
     };
   }, [loadTicketsPage]);
+
+  const previousView = useRef(viewMode);
+  useEffect(() => {
+    if (previousView.current === viewMode) return;
+    previousView.current = viewMode;
+    if (viewMode !== 'kanban') void loadTicketsPage(1, { background: true, reuseSnapshot: true });
+  }, [viewMode, loadTicketsPage]);
 
   const loadDetail = useCallback(
     async (ticketId: number | string) => {
@@ -717,7 +724,7 @@ function TicketsSectionContent({
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
             onPageChange={(targetPage) =>
-              void loadTicketsPage(targetPage, { background: true })
+              void loadTicketsPage(targetPage, { background: true, reuseSnapshot: true })
             }
           />
         ) : viewMode === "kanban" ? (
@@ -725,6 +732,7 @@ function TicketsSectionContent({
             key={`${organizationId}:${pagination.snapshot || JSON.stringify(debouncedFilters)}`}
             organizationId={organizationId}
             filters={debouncedFilters}
+            snapshot={pagination.snapshot}
             policies={queuePolicies}
             canManage={canManage}
             busyTicketIds={busyTicketIds}

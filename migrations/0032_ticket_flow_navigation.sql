@@ -9,8 +9,10 @@ CREATE INDEX idx_ticket_snapshot_owner ON ticket_query_snapshots(organization_id
 CREATE TABLE ticket_query_snapshot_items (
  snapshot_id TEXT NOT NULL REFERENCES ticket_query_snapshots(id) ON DELETE CASCADE,
  ordinal INTEGER NOT NULL, ticket_id INTEGER NOT NULL,
+ queue TEXT NOT NULL, queue_ordinal INTEGER NOT NULL,
  PRIMARY KEY(snapshot_id, ordinal), UNIQUE(snapshot_id, ticket_id)
 );
+CREATE INDEX idx_ticket_snapshot_queue ON ticket_query_snapshot_items(snapshot_id,queue,queue_ordinal);
 CREATE TABLE ticket_queue_policies (
  organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
  queue TEXT NOT NULL CHECK(queue IN ('in_progress','in_review')),

@@ -31,11 +31,11 @@ await page.route('**/api/**',async route=>{
  if(req.method()==='POST' && path.endsWith('/attachments')){await new Promise(r=>setTimeout(r,1000));return respond(200,{ok:true,upload:{attachmentId:1,chunkSize:1024,offset:0}});}
  if(path.endsWith('/tickets')){
    const org=path.includes('/organizations/1/');let items=org?tickets:[];
-   if(p.get('queue')&&p.get('queue')!=='open')items=[];
    if(p.get('q'))items=items.filter(x=>x.subject.includes(p.get('q')));
    if(p.get('status'))items=items.filter(x=>x.status===p.get('status'));
    const token=p.get('snapshot') || `local-${++snapshotCounter}`;
    if(snapshots.has(token))items=snapshots.get(token);else snapshots.set(token,items);
+   if(p.get('queue')&&p.get('queue')!=='open')items=[];
    const n=Number(p.get('page')||1),limit=Number(p.get('limit')||50),offset=(n-1)*limit;
    return respond(200,{ok:true,flowEnabled:true,queuePolicies:[{queue:'in_progress',wipLimit:null,version:0},{queue:'in_review',wipLimit:null,version:0}],triageEnabled:false,lifecycleEnabled:false,
     tickets:items.slice(offset,offset+limit),pagination:{page:n,limit,total:items.length,totalPages:Math.max(1,Math.ceil(items.length/limit)),hasMore:offset+limit<items.length,snapshot:token,snapshotAt:'2026-09-27T00:00:00Z'},
@@ -52,6 +52,7 @@ try{
  await page.getByLabel('Visualização dos chamados').selectOption('kanban');
  const open=page.locator('.column-open');await expect(open.locator('.ticket-kanban-card')).toHaveCount(25);
  for(let n=2;n<=10;n++){if(n===2){await open.getByRole('button',{name:'Carregar mais nesta fila'}).focus();await page.keyboard.press('Enter');}else await open.getByRole('button',{name:'Carregar mais nesta fila'}).click();await expect(open.locator('.ticket-kanban-card')).toHaveCount(n*25);}
+ assert.equal(new Set(requests.filter(x=>x.queue).map(x=>x.snapshot)).size,1);
  results.kanban250=true;
  await page.getByPlaceholder('Código, assunto ou descrição').fill('Chamado QA 250');await expect(open.locator('.ticket-kanban-card')).toHaveCount(1);
  assert.equal(new URL(page.url()).searchParams.get('cc_q'),'Chamado QA 250');

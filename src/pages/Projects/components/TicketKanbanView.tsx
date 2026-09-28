@@ -144,6 +144,7 @@ export default function TicketKanbanView({
                         {ticket.subject}
                       </button>
 
+                      {!column.statuses.includes(ticket.status) ? <p role="status">Situação atual: {STATUS_LABELS[ticket.status]}. Atualize a consulta para reposicionar.</p> : null}
                       <dl>
                         <div><dt>Próxima ação</dt><dd>{ticket.nextAction || 'Não informada'}</dd></div>
                         <div><dt>Idade na fila</dt><dd>{ticketQueueAge(ticket.queueEnteredAt)}</dd></div>

@@ -5,8 +5,8 @@ import { listTickets, toTicketApiError, type TicketApiError } from './tickets-ap
 import type { Ticket, TicketFilters, TicketPagination, TicketQueuePolicy, TicketStatus } from './ticket-types';
 const queues = ['open','in_progress','in_review','closed'];
 type Column = {tickets: Ticket[]; total: number; hasMore: boolean; loading: boolean; pagination?: TicketPagination; error?: TicketApiError};
-export default function TicketKanbanBoard({organizationId,filters,policies,canManage,busyTicketIds,onOpen,onStatusChange}: {
- organizationId: number | string; filters: TicketFilters; policies: TicketQueuePolicy[]; canManage: boolean;
+export default function TicketKanbanBoard({organizationId,snapshot,filters,policies,canManage,busyTicketIds,onOpen,onStatusChange}: {
+ organizationId: number | string; snapshot?: string | null; filters: TicketFilters; policies: TicketQueuePolicy[]; canManage: boolean;
  busyTicketIds: ReadonlySet<string>; onOpen: (ticket: Ticket) => void; onStatusChange: (ticket: Ticket,status: TicketStatus) => void;
 }) {
  const [columns,setColumns] = useState<Record<string,Column>>({});
@@ -19,7 +19,7 @@ export default function TicketKanbanBoard({organizationId,filters,policies,canMa
    const page=more ? (previous?.pagination?.page || 0)+1 : 1;
    setColumns(state=>({...state,[queue]:{...(state[queue] || {tickets:[],total:0,hasMore:false}),loading:true,error:undefined}}));
    try {
-     const data=await listTickets(organizationId,filters,page,controller.signal,{limit:25,includeUndated:true,queue,snapshot:more?previous?.pagination?.snapshot:null});
+     const data=await listTickets(organizationId,filters,page,controller.signal,{limit:25,includeUndated:true,queue,snapshot:more?previous?.pagination?.snapshot:snapshot});
      if(controller.signal.aborted || epoch!==generation.current) return;
      setColumns(state=>({...state,[queue]:{tickets:more?[...(previous?.tickets || []),...data.tickets]:data.tickets,total:data.pagination.total,hasMore:data.pagination.hasMore,loading:false,pagination:data.pagination}}));
    } catch(error) {

@@ -13,8 +13,8 @@ export async function assertTicketFlowReady(env, organizationId) {
       !(await tableExists(env, "ticket_queue_policies"))) {
     throw failure("Gestão de fluxo aguarda preparação do ambiente.", 503, "TICKET_FLOW_NOT_READY");
   }
-  const objects = await getDb(env).prepare("SELECT name FROM sqlite_master WHERE name IN ('ticket_flow_queue_entry','ticket_flow_initial_entry','idx_ticket_flow_queue','idx_ticket_snapshot_expiry','idx_ticket_snapshot_owner')").all();
-  if (objects.results.length !== 5) throw failure('Gestão de fluxo aguarda validação do schema.',503,'TICKET_FLOW_NOT_READY');
+  const objects = await getDb(env).prepare("SELECT name FROM sqlite_master WHERE name IN ('ticket_flow_queue_entry','ticket_flow_initial_entry','idx_ticket_flow_queue','idx_ticket_snapshot_expiry','idx_ticket_snapshot_owner','idx_ticket_snapshot_queue')").all();
+  if (objects.results.length !== 6) throw failure('Gestão de fluxo aguarda validação do schema.',503,'TICKET_FLOW_NOT_READY');
 }
 // Membership and ordering are fixed for 15 minutes, not ticket content/authorization.
 // Re-check ACL on EVERY read. Revoked/deleted records leave ordinal holes; never fill
@@ -23,7 +23,7 @@ export async function ticketQuerySnapshot(env, organizationId, user, options, wh
   await assertTicketFlowReady(env, organizationId);
   if (!user?.id) throw failure("Autenticação necessária.", 401, "UNAUTHENTICATED");
   const db = getDb(env);
-  const { page, snapshot, limit, ...query } = options;
+  const { page, snapshot, limit, queue, ...query } = options;
   const queryKey = JSON.stringify(query);
   const timestamp = new Date().toISOString();
   if (snapshot) {
@@ -40,8 +40,11 @@ export async function ticketQuerySnapshot(env, organizationId, user, options, wh
     db.prepare("DELETE FROM ticket_query_snapshots WHERE expires_at <= ?").bind(timestamp),
     db.prepare(`INSERT INTO ticket_query_snapshots(id,organization_id,user_id,query_key,created_at,expires_at) VALUES(?,?,?,?,?,?)`)
       .bind(id, organizationId, user.id, queryKey, timestamp, expiresAt),
-    db.prepare(`INSERT INTO ticket_query_snapshot_items(snapshot_id,ordinal,ticket_id)
-      SELECT ?, ROW_NUMBER() OVER(ORDER BY ${order}, t.id DESC), t.id FROM organization_tickets t WHERE ${where.sql}`)
+    db.prepare(`INSERT INTO ticket_query_snapshot_items(snapshot_id,ordinal,ticket_id,queue,queue_ordinal)
+      SELECT ?, ROW_NUMBER() OVER(ORDER BY ${order}, t.id DESC), t.id,
+        CASE WHEN t.status IN ('new','open') THEN 'open' ELSE t.status END,
+        ROW_NUMBER() OVER(PARTITION BY CASE WHEN t.status IN ('new','open') THEN 'open' ELSE t.status END ORDER BY ${order}, t.id DESC)
+      FROM organization_tickets t WHERE ${where.sql}`)
       .bind(id, ...where.values),
   ]);
   return { id, created_at: timestamp, expires_at: expiresAt };

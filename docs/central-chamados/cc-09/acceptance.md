@@ -4,10 +4,10 @@
 
 - SQLite real:250 itens com empates nos4 sorts, inserção e edição entre páginas; nenhum ID omitido/duplicado na composição congelada.
 - ACL reavaliada, contagem sem privados, revogação, token de outro ator/org/query/expirado rejeitado, rollback e limpeza cascade.
-- Paginação por coluna até250 itens; filtros de prazo/sem data; CAS concorrente na última vaga, exceção auditada, edição concorrente de política e HTTP sem ticket.manage rejeitado.
+- Paginação por coluna até250 itens sobre snapshot compartilhado; mudança concorrente de fila sem duplicar/perder cartões; filtros de prazo/sem data; CAS concorrente na última vaga, exceção auditada, edição concorrente de política e HTTP sem ticket.manage rejeitado.
 - Chromium com componentes reais/cliente HTTP real e respostas fictícias: lista até250, Kanban até250, filtros/voltar/reload, deep-link404, resposta atrasada descartada na troca de organização upload interrompido na troca de organização, paginação por teclado e calendário mobile. Não equivale a login/aceite em ambiente remoto.
 - TypeScript, build e regressões anteriores. Comandos/resultados exatos em `evidence/validation.json`.
-- Benchmark SQLite com1000 itens, página50,5 amostras: primeira página7–13ms, seguinte5–7ms nesta máquina. Orçamento local proposto500ms/página; P95 remoto proposto1500ms, **ainda não medido/validado**. Não usar benchmark local como SLA.
+- Benchmark SQLite com1000 itens, página50,5 amostras: primeira página9–18ms, seguinte5–9ms nesta máquina. Orçamento local proposto500ms/página; P95 remoto proposto1500ms, **ainda não medido/validado**. Não usar benchmark local como SLA.
 
 ## Pendências com responsável
 

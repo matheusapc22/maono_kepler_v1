@@ -736,7 +736,9 @@ export async function listTickets(env, organizationId, options, user = null, { c
   const lifecycleEnabled = await getTicketCommandCapability(env, organizationId);
   const triageEnabled = await getTicketTriageCapability(env);
   const access = await buildTicketAccessPredicate(env, organizationId, user, "ticket.view");
-  const where = buildTicketWhere(organizationId, options);
+  const flowEnabled = isTicketFlowEnabled(env, organizationId);
+  if (options.snapshot && !flowEnabled) throw apiError("A consulta não está mais disponível. Atualize a lista.", 409, "TICKET_QUERY_EXPIRED");
+  const where = buildTicketWhere(organizationId, flowEnabled ? { ...options, queue: null } : options);
   const facetsWhere = buildTicketWhere(organizationId, options, {
     includeStatus: false,
   });
@@ -744,13 +746,12 @@ export async function listTickets(env, organizationId, options, user = null, { c
   where.values.push(...access.values);
   facetsWhere.sql = `(${facetsWhere.sql}) AND (${access.sql})`;
   facetsWhere.values.push(...access.values);
-  const flowEnabled = isTicketFlowEnabled(env, organizationId);
   const snapshot = flowEnabled ? await ticketQuerySnapshot(env, organizationId, user, options, where, SORT_SQL[options.sort]) : null;
   if (snapshot) {
     // Freeze query membership; retain live ACL and active checks.
     where.sql = `t.organization_id = ? AND t.active = 1 AND (${access.sql}) AND EXISTS (
-      SELECT 1 FROM ticket_query_snapshot_items si WHERE si.snapshot_id = ? AND si.ticket_id = t.id)`;
-    where.values = [organizationId, ...access.values, snapshot.id];
+      SELECT 1 FROM ticket_query_snapshot_items si WHERE si.snapshot_id = ? AND si.ticket_id = t.id ${options.queue ? "AND si.queue = ?" : ""})`;
+    where.values = [organizationId, ...access.values, snapshot.id, ...(options.queue ? [options.queue] : [])];
     facetsWhere.sql = where.sql;
     facetsWhere.values = [...where.values];
   }
@@ -773,9 +774,9 @@ export async function listTickets(env, organizationId, options, user = null, { c
     .first();
 
   const pageWhere = snapshot ? `${where.sql} AND EXISTS(SELECT 1 FROM ticket_query_snapshot_items si
-    WHERE si.snapshot_id = ? AND si.ticket_id = t.id AND si.ordinal > ? AND si.ordinal <= ?)` : where.sql;
+    WHERE si.snapshot_id = ? AND si.ticket_id = t.id AND si.${options.queue ? "queue_ordinal" : "ordinal"} > ? AND si.${options.queue ? "queue_ordinal" : "ordinal"} <= ?)` : where.sql;
   const pageValues = snapshot ? [...where.values, snapshot.id, offset, offset + options.limit] : where.values;
-  const order = snapshot ? `(SELECT si.ordinal FROM ticket_query_snapshot_items si WHERE si.snapshot_id = ? AND si.ticket_id = t.id)` : `${SORT_SQL[options.sort]}, t.id DESC`;
+  const order = snapshot ? `(SELECT si.${options.queue ? "queue_ordinal" : "ordinal"} FROM ticket_query_snapshot_items si WHERE si.snapshot_id = ? AND si.ticket_id = t.id)` : `${SORT_SQL[options.sort]}, t.id DESC`;
   const result = await getDb(env)
     .prepare(
       `SELECT
@@ -838,7 +839,7 @@ export async function listTickets(env, organizationId, options, user = null, { c
   }
 
   const total = Number(countRow?.total || 0);
-  const snapshotSize = snapshot ? Number((await getDb(env).prepare("SELECT COUNT(*) AS total FROM ticket_query_snapshot_items WHERE snapshot_id = ?").bind(snapshot.id).first()).total) : total;
+  const snapshotSize = snapshot ? Number((await getDb(env).prepare(`SELECT COUNT(*) AS total FROM ticket_query_snapshot_items WHERE snapshot_id = ? ${options.queue ? "AND queue = ?" : ""}`).bind(snapshot.id, ...(options.queue ? [options.queue] : [])).first()).total) : total;
 
   return {
     tickets: await Promise.all((result?.results || []).map(async (row) => ({
