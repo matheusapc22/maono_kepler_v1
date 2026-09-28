@@ -41,6 +41,7 @@
     "src/pages/Kepler/save-observability.ts::raw-error-message": 1,
     "src/pages/Kepler/thumbnail/capture-thumbnail.ts::raw-error-message": 1,
     "src/pages/Kepler/thumbnail/thumbnail-api.ts::raw-response-text": 1,
+    "src/pages/Projects/components/TicketMetricsPanel.tsx::diagnostic-id": 1,
     "src/pages/Projects/components/TicketSlaPanel.tsx::diagnostic-id": 3
   }
 }

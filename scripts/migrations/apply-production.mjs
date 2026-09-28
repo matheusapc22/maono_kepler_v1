@@ -1,3 +1,4 @@
+import {CC11_MIGRATION,readCC11Schema,assertCC11Schema} from './cc11-schema-preflight.mjs';
 import {CC10_MIGRATION,readCC10Schema,assertCC10Schema} from './cc10-schema-preflight.mjs';
 import {CC09_MIGRATION,readCC09Schema,assertCC09Schema} from './cc09-schema-preflight.mjs';
 import {CC08_MIGRATION,readCC08Schema,assertCC08Schema} from './cc08-schema-preflight.mjs';
@@ -66,6 +67,10 @@ try {
   if(migration.name===CC09_MIGRATION){
     const currentSchema=await readCC09Schema(preflightTemporary.configPath,remote.ledger);assertCC09Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC09_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
+  }
+  if(migration.name===CC11_MIGRATION){
+    const currentSchema=await readCC11Schema(preflightTemporary.configPath,remote.ledger);assertCC11Schema(currentSchema);
+    if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC11_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
   }
   if(migration.name===CC10_MIGRATION){
     const currentSchema=await readCC10Schema(preflightTemporary.configPath,remote.ledger);assertCC10Schema(currentSchema);

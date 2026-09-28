@@ -1,3 +1,4 @@
+import TicketMetricsPanel from './TicketMetricsPanel';
 import "./ticket-flow.css";
 import TicketFlowSettings from "./TicketFlowSettings";
 import { readTicketNavigation, ticketNavigationUrl } from "./ticket-navigation";
@@ -668,6 +669,7 @@ function TicketsSectionContent({
         </section>
       )}
 
+      <TicketMetricsPanel organizationId={organizationId} canManage={canManage} />
       {flowEnabled && canManage ? <TicketFlowSettings organizationId={organizationId} policies={queuePolicies} onSaved={() => void loadTicketsPage(1, { background: true })} /> : null}
       <p role="status">{viewMode === "kanban" ? "Carregamento por fila" : `${tickets.length} carregados`} · {pagination.total} acessíveis nesta consulta{viewMode !== 'kanban' && tickets.length < pagination.total ? ' · Exibição parcial' : ''}.
         {pagination.snapshotAt ? ' Ordem preservada por até 15 minutos; atualize para incluir novos chamados.' : ''}

@@ -9,6 +9,12 @@ on:
       - 'workers/ticket-notifications.js'
       - 'wrangler.ticket-notifications.toml.example'
       - 'migrations/0030_ticket_notifications.sql'
+      - 'migrations/0034_ticket_metric_rollups.sql'
+      - 'functions/_lib/ticket-metrics*.js'
+      - 'tests/ticket-metrics*.test.mjs'
+      - 'src/pages/Projects/components/ticket-metrics.css'
+      - 'scripts/migrations/cc11-schema-preflight.mjs'
+      - 'functions/api/organizations/*/tickets/metrics.js'
       - 'tests/ticket-notifications*.test.mjs'
       - 'tests/browser/ticket-notifications.spec.ts'
       - 'tests/browser/fixtures/ticket-notifications*'
@@ -180,3 +186,14 @@ jobs:
           node-version: 22
       - name: Validate versioned SLA calendars, replay, ACL and additive migration
         run: node --test tests/ticket-sla*.test.mjs
+
+  cc11-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate metric populations, deterministic replay, ACL and migration
+        run: node --test tests/ticket-metrics*.test.mjs
