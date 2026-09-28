@@ -49,6 +49,11 @@ on:
       - 'migrations/0026_ticket_command_lifecycle.sql'
       - 'migrations/0027_ticket_selective_access.sql'
       - 'schema.sql'
+      - 'functions/_lib/ticket-sla*.js'
+      - 'tests/ticket-sla*.test.mjs'
+      - 'src/pages/Projects/components/ticket-sla.css'
+      - 'migrations/0033_ticket_sla_policies.sql'
+      - 'scripts/migrations/cc10-schema-preflight.mjs'
       - 'functions/_lib/ticket-flow.js'
       - 'src/pages/Projects.tsx'
       - 'src/pages/Projects/components/ticket-flow.css'
@@ -164,3 +169,14 @@ jobs:
           node-version: 22
       - name: Validate stable navigation and atomic WIP
         run: node --experimental-strip-types --test tests/ticket-flow*.test.mjs
+
+  cc10-sla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate versioned SLA calendars, replay, ACL and additive migration
+        run: node --test tests/ticket-sla*.test.mjs
