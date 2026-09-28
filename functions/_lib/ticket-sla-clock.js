@@ -205,7 +205,7 @@ export function projectSla({ cycles, assignments, policies, waits, messages, req
         // Baselines are not historical starts. Explicit assignment starts contractual
         // coverage; expose the uncovered prefix instead of pretending it was zero.
         for (const [key, c] of Object.entries(clocks)) {
-            c.status = !c.enabled ? 'no_sla' : !c.known ? 'unknown' : c.consumed > 1 ? 'breached' : ((key === 'response' && globalResponse && instant(globalResponse.at) <= stop) || cycle.closed_at) ? 'completed' : 'running';
+            c.status = !c.enabled ? 'no_sla' : !c.known ? 'unknown' : c.consumed > 1 ? 'breached' : ((key === 'response' && globalResponse && instant(globalResponse.at) <= stop) || (key === 'resolution' && cycle.closed_at)) ? 'completed' : key === 'response' && cycle.closed_at ? 'awaiting_response' : 'running';
             if (!c.known) {
                 c.elapsedMs = null;
                 c.pausedMs = null;

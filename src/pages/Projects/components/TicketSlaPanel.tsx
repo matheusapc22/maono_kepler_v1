@@ -51,7 +51,7 @@ type Policy = {
         through: string;
     };
 };
-const labels: Record<string, string> = { running: 'Em andamento', completed: 'Concluído', breached: 'Prazo excedido', no_sla: 'Sem SLA', unknown: 'Cálculo indisponível' };
+const labels: Record<string, string> = { awaiting_response: 'Sem primeira resposta', running: 'Em andamento', completed: 'Concluído', breached: 'Prazo excedido', no_sla: 'Sem SLA', unknown: 'Cálculo indisponível' };
 const duration = (ms: number | null) => ms === null ? 'Indisponível' : `${Math.round(ms / 60000)} min úteis`;
 const date = (s: string) => new Date(s).toLocaleString('pt-BR');
 export function TicketSlaPanel({ organizationId, ticketId, canManage, revision }: {
