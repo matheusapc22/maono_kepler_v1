@@ -20,3 +20,9 @@ Sem escrita remota, migration, política operacional, alteração de flags ou da
 
 Artefato10950260208, run36372536511, `post-apply.json` verificado nesta execução: 0033 aplicada2026-09-28 03:09:59UTC, Git d7a9af6625f8c73f95c2736d31088469a193405b, SQL c80427c6b092e30885cb2358b76c7e1db5d025edf168a3218086ab50681d7060, complete/ok=true, tokenMatched=true, isolated=true, quick_check ok/FK0.
 Bookmark `000003ad-00000000-000050f4-bfe98c07e3aa7f70425d74e2fc85b5a5`. Não houve reapply. Acceptance/rollout CC10 e todas as pendências CC09 preservados.
+
+## Ajuste do gate de navegador
+
+No primeiro CI, 19/20 checks passaram; a suíte geral encontrou uma corrida preexistente na fixture de documentos: `/files` respondia503 simulado, enquanto `/document-folders` não era simulado e respondia404, sobrescrevendo a mensagem em ordem variável. Trace do run36374343420 confirma ambas as respostas. A fixture agora responde a dependência de pastas com lista vazia válida; nenhuma asserção foi removida ou relaxada e o código de produto não mudou.
+
+Após o ajuste, `node node_modules/@playwright/test/cli.js test --project=chromium`: **31/31 aprovados** localmente, incluindo os3 da CC11. O resultado remoto final deve ser consultado no SHA atualizado da PR211.
