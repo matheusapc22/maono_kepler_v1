@@ -10,6 +10,10 @@ type TicketErrorNoticeProps = {
 };
 
 function userMessage(error: TicketApiError) {
+  if (error.code === "TICKET_SLA_HISTORY_LIMIT") return "Este histórico precisa de revisão para calcular o SLA. Nenhum período foi descartado.";
+  if (error.code === "TICKET_SLA_VERSION_CONFLICT") return "A política ou o ciclo mudou. Atualize o SLA e confira os dados antes de tentar novamente.";
+  if (error.code === "TICKET_SLA_NOT_READY" || error.code === "TICKET_SLA_DISABLED") return "O SLA ainda não está disponível nesta organização.";
+  if (error.code === "TICKET_SLA_INVALID") return "Confira metas, datas, fuso, expediente, atendentes e justificativa. O calendário deve cobrir o período e seus intervalos não podem se sobrepor.";
   if (error.status === 412) return "O chamado mudou desde sua última leitura. Seu rascunho foi preservado; confira a versão atual antes de tentar novamente.";
   if (error.status === 428) return "Atualize o chamado para obter os requisitos atuais desta ação. Seus dados não serão descartados.";
   if (error.status === 409 && error.code?.includes("IDEMPOTENCY")) return "Esta tentativa de criação já está em processamento ou possui dados diferentes. Repita a intenção original para verificar o resultado.";
