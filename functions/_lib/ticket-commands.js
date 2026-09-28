@@ -1,3 +1,4 @@
+import { ticketWipGuard } from "./ticket-flow.js";
 import { getDb, getTableColumns, tableExists } from "./organizations.js";
 import {
   assertTicketTriageWriteReady, isTicketTriageEnabled, normalizeTicketTriage,
@@ -251,11 +252,12 @@ async function mutate(env, organizationId, ticketId, user, payload, request, bui
   }
   const after = { ...current, ...updates };
   const db = getDb(env);
+  const wipGuard = await ticketWipGuard(env, organizationId, current, updates, payload);
   const entries = Object.entries(updates);
   const statements = [db.prepare(`UPDATE organization_tickets SET ${entries.map(([column]) => `${column} = ?`).join(", ")}
-    WHERE organization_id = ? AND id = ? AND active = 1 AND version = ?
+    WHERE organization_id = ? AND id = ? AND active = 1 AND version = ? ${wipGuard.sql}
     ${change.guardPendingChange ? "AND NOT EXISTS(SELECT 1 FROM project_change_requests cr WHERE cr.organization_id = organization_tickets.organization_id AND cr.ticket_id = organization_tickets.id AND cr.status NOT IN ('applied','rejected','superseded'))" : ""}`)
-    .bind(...entries.map(([, value]) => value), organizationId, ticketId, current.version)];
+    .bind(...entries.map(([, value]) => value), organizationId, ticketId, current.version, ...wipGuard.values)];
   const scope = [organizationId, ticketId, commandId];
   const where = "t.organization_id = ? AND t.id = ? AND t.last_command_id = ?";
   if (lifecycle.isNew) {
@@ -286,12 +288,16 @@ async function mutate(env, organizationId, ticketId, user, payload, request, bui
     .bind(commandId, user.id, operation, await hash(payload), timestamp, ...scope));
   statements.push(...sideEffects(db, {
     commandId, organizationId, ticketId, userId: user.id, operation, timestamp,
-    metadata: { before: canonicalTicketState(current), after: canonicalTicketState(after), ...change.metadata },
+    metadata: { before: canonicalTicketState(current), after: canonicalTicketState(after), ...change.metadata, ...wipGuard.metadata },
     correctsEventId: change.correctsEventId,
   }));
   await db.batch(statements);
   const persisted = await loadCommand(env, commandId);
   if (!persisted) {
+    if (wipGuard.sql) {
+      const latest = await getTicketOrThrow(env, organizationId, ticketId);
+      if (Number(latest.version) === Number(current.version)) throw commandError("O limite de WIP da fila foi atingido. Libere capacidade ou registre uma exceção justificada.", 409, "TICKET_WIP_LIMIT_REACHED");
+    }
     if (change.guardPendingChange) {
       const latest = await getTicketOrThrow(env, organizationId, ticketId);
       if (Number(latest.version) === Number(current.version) && await pendingChange(env, organizationId, ticketId)) {

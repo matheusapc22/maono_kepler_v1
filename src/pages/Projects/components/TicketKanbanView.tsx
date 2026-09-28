@@ -1,3 +1,4 @@
+import { ticketQueueAge } from "./ticket-navigation";
 import {
   formatTicketDate,
   isTicketOverdue,
@@ -12,6 +13,12 @@ import {
 
 type TicketKanbanViewProps = {
   tickets: Ticket[];
+  columnPages?: Record<string, { tickets: Ticket[]; total: number; hasMore: boolean; loading: boolean }>;
+  totals: Record<TicketStatus, number>;
+  policies: import('./ticket-types').TicketQueuePolicy[];
+  hasMore: boolean;
+  loading: boolean;
+  onLoadMore: (column: string) => void;
   canManage: boolean;
   busyTicketIds: ReadonlySet<string>;
   onOpen: (ticket: Ticket) => void;
@@ -51,7 +58,7 @@ const COLUMNS: Array<{
 ];
 
 export default function TicketKanbanView({
-  tickets,
+  tickets, columnPages, totals, policies, hasMore, loading, onLoadMore,
   canManage,
   busyTicketIds,
   onOpen,
@@ -65,10 +72,12 @@ export default function TicketKanbanView({
   return (
     <section className="ticket-kanban" aria-label="Kanban de chamados">
       {COLUMNS.map((column) => {
-        const columnTickets = tickets.filter((ticket) =>
+        const columnTickets = columnPages?.[column.id]?.tickets || tickets.filter((ticket) =>
           column.statuses.includes(ticket.status),
         );
 
+        const total = columnPages?.[column.id]?.total ?? column.statuses.reduce((sum, status) => sum + (totals[status] || 0), 0);
+        const policy = policies.find(item => item.queue === column.id);
         return (
           <section
             key={column.id}
@@ -90,14 +99,16 @@ export default function TicketKanbanView({
           >
             <header>
               <h3 id={`ticket-column-${column.id}`}>{column.label}</h3>
-              <span aria-label={`${columnTickets.length} chamados`}>
-                {columnTickets.length}
+              <span aria-label={`${columnTickets.length} carregados de ${total} acessíveis`}>
+                {columnTickets.length} / {total}
               </span>
             </header>
 
+            <p>WIP: {policy?.wipLimit ?? 'sem limite'} · {columnTickets.length < total ? 'Parcial' : 'Carregados'}</p>
+            {(columnPages?.[column.id]?.hasMore ?? hasMore) ? <button type="button" disabled={columnPages?.[column.id]?.loading ?? loading} onClick={() => onLoadMore(column.id)}>Carregar mais nesta fila</button> : null}
             <div className="ticket-kanban-stack">
               {columnTickets.length === 0 ? (
-                <p className="ticket-kanban-empty">Nenhum chamado</p>
+                <p className="ticket-kanban-empty">{total > 0 ? "Chamados ainda não carregados" : "Nenhum chamado acessível"}</p>
               ) : (
                 columnTickets.map((ticket) => {
                   const overdue = isTicketOverdue(ticket);
@@ -133,7 +144,11 @@ export default function TicketKanbanView({
                         {ticket.subject}
                       </button>
 
+                      {!column.statuses.includes(ticket.status) ? <p role="status">Situação atual: {STATUS_LABELS[ticket.status]}. Atualize a consulta para reposicionar.</p> : null}
                       <dl>
+                        <div><dt>Próxima ação</dt><dd>{ticket.nextAction || 'Não informada'}</dd></div>
+                        <div><dt>Idade na fila</dt><dd>{ticketQueueAge(ticket.queueEnteredAt)}</dd></div>
+                        {ticket.wait ? <div><dt>Espera</dt><dd>{ticket.wait.reason}</dd></div> : null}
                         <div>
                           <dt>Solicitante</dt>
                           <dd>{ticketPersonName(ticket.createdBy)}</dd>

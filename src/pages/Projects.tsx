@@ -345,6 +345,40 @@ const ProjectsPage: React.FC = () => {
       getOrganizationIdFromContext(organizationContext),
     [activeOrganization?.id, organizationContext],
   );
+  const [ticketLinkRestoring, setTicketLinkRestoring] = useState(false);
+  const [ticketLinkError, setTicketLinkError] = useState<string | null>(null);
+  const ticketLinkInitialized = useRef(false);
+  const ticketLinkEpoch = useRef(0);
+  const ticketLinkMounted = useRef(true);
+  useEffect(() => { ticketLinkMounted.current = true; return () => { ticketLinkMounted.current = false; }; }, []);
+  useEffect(() => {
+    if (loading || !authenticated) return;
+    async function restoreTicketLink() {
+      const href = window.location.href;
+      const target = new URL(href).searchParams.get('cc_org');
+      if (!target) return;
+      const epoch = ++ticketLinkEpoch.current;
+      if (!/^[1-9]\d*$/.test(target) || !organizations.some(org => String(org.id) === target)) {
+        setTicketLinkError('A organização deste link não está disponível para seu acesso.');
+        return;
+      }
+      setTicketLinkError(null); setTicketLinkRestoring(true);
+      try {
+        // Session endpoint validates membership; URL parameters never grant access.
+        if (String(activeOrganizationId) !== target) await switchOrganization(target);
+        if (epoch !== ticketLinkEpoch.current || !ticketLinkMounted.current) return;
+        window.history.replaceState(window.history.state, '', href);
+        setSidebarSection('requests');
+      } catch {
+        if (epoch === ticketLinkEpoch.current && ticketLinkMounted.current) setTicketLinkError('Não foi possível abrir a organização do link. Confira seu acesso e tente novamente.');
+      } finally { if (epoch === ticketLinkEpoch.current && ticketLinkMounted.current) setTicketLinkRestoring(false); }
+    }
+    if (!ticketLinkInitialized.current) { ticketLinkInitialized.current = true; void restoreTicketLink(); }
+    const listener = () => { void restoreTicketLink(); };
+    window.addEventListener('popstate', listener);
+    return () => window.removeEventListener('popstate', listener);
+  }, [loading, authenticated, organizations, activeOrganizationId, switchOrganization]);
+
   const activeOrganizationKey = String(activeOrganizationId ?? "");
   const activeOrganizationKeyRef = useRef(activeOrganizationKey);
   activeOrganizationKeyRef.current = activeOrganizationKey;
@@ -472,7 +506,7 @@ const ProjectsPage: React.FC = () => {
   ]);
 
   const organizationTransitionActive =
-    switchingOrganization || organizationTransitionPending;
+    switchingOrganization || organizationTransitionPending || ticketLinkRestoring;
   const visibleProjectItems = projectContextIsCurrent ? projectItems : [];
 
   const activeProjects = useMemo(() => {
@@ -486,7 +520,9 @@ const ProjectsPage: React.FC = () => {
 
   useEffect(() => {
     if (!loading && !authenticated) {
-      navigate("/login?next=/projects", { replace: true });
+      const linked = new URLSearchParams(window.location.search).has('cc_org');
+      const next = linked ? `/login?next=${encodeURIComponent(`/projects${window.location.search}${window.location.hash}`)}` : '/login?next=/projects';
+      navigate(next, { replace: true });
     }
   }, [authenticated, loading, navigate]);
 
@@ -519,6 +555,10 @@ const ProjectsPage: React.FC = () => {
   }
 
   async function handleOrganizationSwitch(organizationId: number | string) {
+    ticketLinkEpoch.current += 1; setTicketLinkRestoring(false); setTicketLinkError(null);
+    const nextUrl = new URL(window.location.href);
+    for (const key of [...nextUrl.searchParams.keys()]) if (key.startsWith('cc_')) nextUrl.searchParams.delete(key);
+    window.history.replaceState(window.history.state, '', nextUrl.href);
     setOrganizationTransitionPending(true);
     await switchOrganization(organizationId);
 
@@ -624,7 +664,14 @@ const ProjectsPage: React.FC = () => {
           searchQuery={searchQuery}
           sidebarSection={sidebarSection}
           onSearchQueryChange={setSearchQuery}
-          onSidebarSectionChange={setSidebarSection}
+          onSidebarSectionChange={next => {
+            setSidebarSection(next);
+            if (next !== 'requests') {
+              const url = new URL(window.location.href);
+              for (const key of [...url.searchParams.keys()]) if (key.startsWith('cc_')) url.searchParams.delete(key);
+              window.history.pushState(window.history.state, '', url.href);
+            }
+          }}
           onOrganizationSwitch={handleOrganizationSwitch}
           onDismissOrganizationSwitchError={clearOrganizationSwitchError}
           onLogout={handleLogout}
@@ -666,7 +713,8 @@ const ProjectsPage: React.FC = () => {
           )}
 
           <div className="mm-projects-content">
-            {!activeOrganization ? (
+            {ticketLinkError ? <p role="alert">{ticketLinkError}</p> : null}
+            {ticketLinkRestoring ? <p role="status">Abrindo contexto do chamado…</p> : !activeOrganization ? (
               <section className="mm-empty-state">
                 <div>◇</div>
                 <h2>Nenhuma organização disponível</h2>

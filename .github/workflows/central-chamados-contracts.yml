@@ -49,6 +49,13 @@ on:
       - 'migrations/0026_ticket_command_lifecycle.sql'
       - 'migrations/0027_ticket_selective_access.sql'
       - 'schema.sql'
+      - 'functions/_lib/ticket-flow.js'
+      - 'src/pages/Projects.tsx'
+      - 'src/pages/Projects/components/ticket-flow.css'
+      - 'scripts/migrations/cc09-schema-preflight.mjs'
+      - 'src/pages/Projects/components/ticket-navigation.ts'
+      - 'migrations/0032_ticket_flow_navigation.sql'
+      - 'tests/ticket-flow*.test.mjs'
       - 'functions/api/organizations/*/ticket-access/**'
       - 'functions/api/organizations/*/ticket-access/*.js'
       - 'functions/api/organizations/*/tickets/**'
@@ -146,3 +153,14 @@ jobs:
           node-version: 22
       - name: Validate CR reconciliation, authorization, lineage and 90MiB stream
         run: node --experimental-strip-types --test tests/ticket-changes.test.mjs tests/project-change-request*.test.mjs tests/project-large-save.test.mjs
+
+  cc09-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate stable navigation and atomic WIP
+        run: node --experimental-strip-types --test tests/ticket-flow*.test.mjs

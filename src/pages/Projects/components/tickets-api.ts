@@ -91,6 +91,8 @@ export function listTickets(
   options: {
     limit?: number;
     includeUndated?: boolean;
+    snapshot?: string | null;
+    queue?: string;
   } = {},
 ) {
   const params = new URLSearchParams();
@@ -104,6 +106,8 @@ export function listTickets(
   params.set("sort", filters.sort);
   params.set("page", String(page));
   params.set("limit", String(options.limit || 50));
+  if (options.queue) params.set("queue", options.queue);
+  if (options.snapshot) params.set("snapshot", options.snapshot);
   if (options.includeUndated) params.set("includeUndated", "1");
 
   return requestJson<TicketListResponse>(
@@ -719,4 +723,10 @@ export function deleteTicketAttachment(
     `${ticketsPath(organizationId)}/${pathSegment(ticketId)}/attachments/${pathSegment(attachmentId)}`,
     { method: "DELETE" },
   );
+}
+
+export function saveTicketQueuePolicy(organizationId: number | string, payload: import('./ticket-types').TicketQueuePolicy & { reason: string }, signal?: AbortSignal) {
+  return requestJson<{ok: boolean; policies: import('./ticket-types').TicketQueuePolicy[]}>(`${ticketsPath(organizationId)}/flow`, {
+    method: 'PUT', body: JSON.stringify(payload), signal,
+  });
 }

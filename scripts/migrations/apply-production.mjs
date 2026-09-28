@@ -1,3 +1,4 @@
+import {CC09_MIGRATION,readCC09Schema,assertCC09Schema} from './cc09-schema-preflight.mjs';
 import {CC08_MIGRATION,readCC08Schema,assertCC08Schema} from './cc08-schema-preflight.mjs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -60,6 +61,10 @@ try {
   if(migration.name===CC08_MIGRATION){
     const currentSchema=await readCC08Schema(preflightTemporary.configPath,remote.ledger);assertCC08Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC08_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
+  }
+  if(migration.name===CC09_MIGRATION){
+    const currentSchema=await readCC09Schema(preflightTemporary.configPath,remote.ledger);assertCC09Schema(currentSchema);
+    if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC09_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
   }
   const approval = buildApproval({
     migration: migration.name,

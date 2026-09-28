@@ -1,0 +1,48 @@
+{
+  "baseGitSha": "19657297397c9b06aed5cf54841f39011464b3db",
+  "generatedAt": "2026-09-27T23:53:36.471857+00:00",
+  "localOnly": true,
+  "productionWrites": false,
+  "authenticatedProductionAcceptance": false,
+  "migration": {
+    "file": "0032_ticket_flow_navigation.sql",
+    "sha256": "f610a2564d056683e5750b1b17d9d392921d0dc2ece763e1f3017471f831773d",
+    "productionStatus": "pending audit and explicit hash authorization"
+  },
+  "checks": [
+    {
+      "command": "node --experimental-strip-types --test tests/ticket-flow*.test.mjs tests/ticket-center.test.mjs tests/ticket-command*.test.mjs tests/ticket-access*.test.mjs tests/ticket-changes.test.mjs tests/production-migration*.test.mjs",
+      "passed": 214,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:preview-safety",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "command": "node node_modules/typescript/bin/tsc -b",
+      "result": "passed"
+    },
+    {
+      "command": "npm run build",
+      "result": "passed",
+      "note": "Build com snapshots compartilhados entre colunas; avisos existentes de dependências e tamanho de chunks."
+    },
+    {
+      "command": "node scripts/central-chamados/validate-cc01.mjs",
+      "result": "passed"
+    },
+    {
+      "command": "node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline",
+      "result": "strict ratchet passed"
+    },
+    {
+      "command": "node scripts/central-chamados/smoke-flow-ui.mjs",
+      "result": "8 local browser scenarios passed; HTTP fixtures; see ui-smoke.json"
+    }
+  ],
+  "notes": [
+    "CT31 adicional: mudança concorrente de fila não duplica nem perde cartão; colunas compartilham o snapshot raiz e partições fixas."
+  ]
+}
