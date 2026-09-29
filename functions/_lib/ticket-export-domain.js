@@ -95,7 +95,7 @@ export function exportConfig(env) {
     throw exportError("CSV_PROFILE_REQUIRED", 503);
   return config;
 }
-export function normalizeExportInput(body) {
+export function normalizeExportInput(body, { cases = false } = {}) {
   if (
     !body ||
     typeof body.idempotencyKey !== "string" ||
@@ -115,13 +115,15 @@ export function normalizeExportInput(body) {
   if (Object.keys(body).some((k) => !allowed.has(k)))
     throw exportError("INVALID_FILTER");
   const report = body.report || "all";
-  if (["causes", "incidents"].includes(report))
+  if (["causes", "incidents"].includes(report) && !cases)
     throw exportError(
       "CC13_REQUIRED",
       409,
       "Relatórios de incidentes e causas aguardam a CC-13.",
     );
-  if (!["all", "backlog", "cycles", "sla"].includes(report))
+  if (
+    !["all", "backlog", "cycles", "sla", "causes", "incidents"].includes(report)
+  )
     throw exportError("INVALID_REPORT");
   const domain = body.domain || null,
     nature = body.nature || null;
@@ -188,7 +190,7 @@ export function csvCell(value) {
 }
 export const csvLine = (values) => values.map(csvCell).join(",") + "\r\n";
 export function ticketCsvRow(ticket, fact, definition, policyVersions, hash) {
-  return csvLine([
+  const values = [
     ticket.id,
     ticket.code,
     ticket.subject,
@@ -215,5 +217,7 @@ export function ticketCsvRow(ticket, fact, definition, policyVersions, hash) {
     hash,
     fact.cycles,
     fact.waitIntervals,
-  ]);
+  ];
+  if (fact.cases) values.push(fact.cases);
+  return csvLine(values);
 }

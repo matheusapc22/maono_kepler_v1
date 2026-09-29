@@ -39,3 +39,7 @@ Fatos reutilizam a projeção CC-11: resposta pública elegível, resolução po
 - [Migration e operação](migration-runbook.md)
 - [Pasta CC-12](https://drive.google.com/drive/folders/1JLmoaf4Jd21byxImSh8Q64B3giUbwJ1g)
 - [Controle CC-12](https://docs.google.com/spreadsheets/d/1Lj8aklS15RWTf-OiO5sYrej2B7RiLW2XkGWHI5kU_6A/edit)
+
+## Atualização CC13 — 29/09/2026
+
+A implementação CC13 adiciona os relatórios `incidents`/`causes` sob suas próprias flags, allowlist e migration0036. Ver [contrato CC12-C](../cc-13/decisions.md) e [aceite pendente](../cc-13/acceptance.md). Esta atualização não transforma os testes locais em aceite de produção nem altera o registro histórico da entrega CC12-A/B acima. A migration0035 já está aplicada; 0036 possui autorização própria.
