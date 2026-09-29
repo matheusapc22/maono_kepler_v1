@@ -1,3 +1,4 @@
+import {feedbackDeliveryAllowed,feedbackFence} from './ticket-feedback.js';
 import { getDb, getTableColumns, tableExists } from './organizations.js';
 import { can } from './permissions.js';
 import { buildTicketAccessPredicate, getTicketSelectiveAccessCapability, requireTicketAccess } from './ticket-access.js';
@@ -48,6 +49,7 @@ async function recipientAllowed(env, event, userId) {
     JOIN organizations o ON o.id=ou.organization_id AND o.active=1
     WHERE u.id=? AND u.active=1 AND ou.organization_id=?`).bind(userId, event.organization_id).first();
   if (!user) return false;
+  if (event.event_type === 'ticket.feedback.invited' && !await feedbackDeliveryAllowed(env,event,userId)) return false;
   user.activeOrganizationId = event.organization_id;
   if (!(await can(env, user, 'ticket.view', scope(event.organization_id))).allowed) return false;
   if (event.audience === 'internal' && !(await can(env, user, 'ticket.note.view', scope(event.organization_id))).allowed) return false;
@@ -93,9 +95,10 @@ export async function consumeTicketNotifications(env, { now = Date.now, batchSiz
         WHERE o.id=?`).bind(row.id).first();
       if (!event || !['ticket','internal'].includes(event.audience)) throw notificationError('TICKET_NOTIFICATION_EVENT_INVALID');
       const candidates = (await db.prepare(`SELECT recipient_id FROM ticket_notification_candidates WHERE outbox_id=?`).bind(row.id).all()).results || [];
+      const feedbackGuard = event.event_type === 'ticket.feedback.invited' ? await feedbackFence(db,candidates.map(c=>c.recipient_id)) : null;
       const decisions = [];
       for (const candidate of candidates) decisions.push({ id: candidate.recipient_id, allowed: await recipientAllowed(env,event,candidate.recipient_id) });
-      const completedAt = iso(now()), writes = [], deliveryIndexes = [];
+      const completedAt = iso(now()), writes = feedbackGuard ? [...feedbackGuard.statements] : [], deliveryIndexes = [];
       for (const decision of decisions) {
         if (decision.allowed) { deliveryIndexes.push(writes.length); writes.push(db.prepare(`INSERT INTO ticket_notifications
           (outbox_id,organization_id,ticket_id,event_id,recipient_id,audience,created_at)

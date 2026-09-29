@@ -1,3 +1,4 @@
+import TicketFeedbackPanel from "./TicketFeedbackPanel";
 import TicketKnowledgePanel from "./TicketKnowledgePanel";
 import TicketMetricsPanel from './TicketMetricsPanel';
 import TicketExportsPanel from './TicketExportsPanel';
@@ -672,6 +673,7 @@ function TicketsSectionContent({
         </section>
       )}
 
+      <TicketFeedbackPanel key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />
       <TicketMetricsPanel organizationId={organizationId} canManage={canManage} />
       <TicketKnowledgePanel key={`knowledge:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} reviewers={assignees} />
       <TicketCasesPanel key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />

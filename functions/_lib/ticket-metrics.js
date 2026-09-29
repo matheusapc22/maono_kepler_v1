@@ -1,3 +1,5 @@
+import {feedbackMetricSource} from './ticket-feedback.js';
+import {aggregateFeedback} from './ticket-feedback-domain.js';
 import { getDb } from './organizations.js';
 import { buildTicketAccessPredicate } from './ticket-access.js';
 import { assertSlaReady } from './ticket-sla.js';
@@ -50,6 +52,7 @@ export async function publishMetricDefinition(env, org, actor, body) {
 async function capture(env, org, actor, input) {
     await ready(env, org, actor);
     const db = getDb(env), window = metricWindow(input);
+    const feedback = await feedbackMetricSource(env, org, actor);
     if (input.definitionVersion != null && (!Number.isSafeInteger(Number(input.definitionVersion)) || Number(input.definitionVersion) < 0))
         throw metricsError('Versão inválida.');
     const def = await definition(db, org, input.definitionVersion == null ? null : Number(input.definitionVersion));
@@ -68,23 +71,24 @@ async function capture(env, org, actor, input) {
     if (rows[0].length > 200 || rows.slice(1, 7).some(x => x.length >= cap))
         throw metricsError('Universo excede o limite da consulta síncrona. Relatório assíncrono necessário.', 503, 'TICKET_METRICS_LIMIT');
     const [tickets, cycles, events, waits, messages, assignments, policies, rollups] = rows;
-    const partitions = await Promise.all(tickets.map(async (ticket) => { const subset = xs => xs.filter(x => x.ticket_id === ticket.id); const source = { ticket, cycles: subset(cycles), events: subset(events), waits: subset(waits), messages: subset(messages), assignments: subset(assignments), policies: policies.filter(p => subset(assignments).some(s => s.policy_version === p.version)) }; const hash = await digest({ source, window, definition: { version: def.version, reopen_hours: def.reopen_hours } }), fact = projectMetricTicket(source, window, def), stored = rollups.find(r => r.ticket_id === ticket.id); return { ticket, hash, fact, stored, matched: stored?.source_hash === hash && stored.facts_json === JSON.stringify(fact) }; }));
+    const partitions = await Promise.all(tickets.map(async (ticket) => { const subset = xs => xs.filter(x => x.ticket_id === ticket.id); const source = { ...(feedback ? {feedback: subset(feedback.rows)} : {}), ticket, cycles: subset(cycles), events: subset(events), waits: subset(waits), messages: subset(messages), assignments: subset(assignments), policies: policies.filter(p => subset(assignments).some(s => s.policy_version === p.version)) }; const hash = await digest({ source, window, definition: { version: def.version, reopen_hours: def.reopen_hours } }), fact = {...projectMetricTicket(source, window, def), ...(feedback ? {feedback:source.feedback} : {})}, stored = rollups.find(r => r.ticket_id === ticket.id); return { ticket, hash, fact, stored, matched: stored?.source_hash === hash && stored.facts_json === JSON.stringify(fact) }; }));
     // Rebuild the predicate after the snapshot: group/ACL revocation must invalidate the whole response.
     const recheck = await visible(env, org, actor);
     const still = await db.prepare(`SELECT t.id FROM organization_tickets t WHERE ${recheck.sql} AND julianday(t.created_at)<=julianday(?) ORDER BY t.id LIMIT 201`).bind(...recheck.values, window.asOf).all();
     if (JSON.stringify(still.results.map(x => x.id)) !== JSON.stringify(tickets.map(x => x.id)))
         throw metricsError('Acesso alterado. Atualize a consulta.', 409, 'TICKET_METRICS_ACCESS_CHANGED');
     await ready(env, org, actor);
-    return { db, window, def, partitions };
+    if (feedback) await feedback.verify();
+    return { db, window, def, partitions, feedbackEnabled: !!feedback };
 }
 export async function readMetrics(env, org, actor, input) {
     if (!isMetricsEnabled(env, org))
         return { enabled: false };
-    const { window, def, partitions } = await capture(env, org, actor, input);
+    const { window, def, partitions, feedbackEnabled } = await capture(env, org, actor, input);
     // A stale rollup is never trusted. Raw projection is the reconciliation oracle for this bounded release.
     const result = aggregateMetricFacts(partitions.map(p => p.fact), window, def);
     const built = partitions.filter(p => p.matched).map(p => p.stored.built_at).sort()[0] || null;
-    return { enabled: true, ...result, aggregation: { mode: 'authorized_raw_verified', matched: partitions.filter(p => p.matched).length, pending: partitions.filter(p => !p.matched).length, builtAt: built, lagMs: built ? Math.max(0, Date.now() - Date.parse(built)) : null }, dimensions: { nature: 'current', team: 'current_assignee' }, generatedAt: new Date().toISOString() };
+    return { enabled: true, ...result, dictionary: feedbackEnabled ? {...result.dictionary, families:[...result.dictionary.families,'outcome_effort'], effort:'ordinal', extensions:{feedback:1}} : result.dictionary, feedback: feedbackEnabled ? aggregateFeedback(partitions.flatMap(p=>p.fact.feedback || []),window) : {enabled:false}, aggregation: { mode: 'authorized_raw_verified', matched: partitions.filter(p => p.matched).length, pending: partitions.filter(p => !p.matched).length, builtAt: built, lagMs: built ? Math.max(0, Date.now() - Date.parse(built)) : null }, dimensions: { nature: 'current', team: 'current_assignee' }, generatedAt: new Date().toISOString() };
 }
 export async function replayMetrics(env, org, actor, input) {
     const { db, window, def, partitions } = await capture(env, org, actor, input), now = new Date().toISOString();

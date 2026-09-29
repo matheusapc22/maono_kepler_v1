@@ -1,0 +1,48 @@
+.ticket-feedback-panel {
+  margin-block: 1rem;
+  border: 1px solid var(--border-color, #d7dce3);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+.ticket-feedback-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ticket-feedback-panel label {
+  display: grid;
+  gap: 0.4rem;
+  margin-block: 0.75rem;
+}
+.ticket-feedback-panel input:not([type="checkbox"]),
+.ticket-feedback-panel select,
+.ticket-feedback-panel textarea {
+  width: 100%;
+  max-width: 40rem;
+  box-sizing: border-box;
+  padding: 0.65rem;
+  color: inherit;
+  background: transparent;
+  border: 1px solid #858d99;
+  border-radius: 0.4rem;
+}
+.ticket-feedback-panel input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.ticket-feedback-panel button {
+  margin: 0.3rem 0.5rem 0.3rem 0;
+  padding: 0.6rem;
+}
+.ticket-feedback-panel :focus-visible {
+  outline: 3px solid #4263eb;
+  outline-offset: 2px;
+}
+.ticket-feedback-card {
+  border-block-start: 1px solid #858d99;
+  margin-block: 1rem;
+  padding-block: 0.6rem;
+  overflow-wrap: anywhere;
+}
+.ticket-feedback-panel fieldset {
+  min-width: 0;
+}
