@@ -1,0 +1,91 @@
+.ticket-exports {
+  border: 1px solid var(--maono-border, #d5dee3);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 12px 0;
+  min-width: 0;
+  color: inherit;
+}
+.ticket-exports summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.ticket-exports p {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  max-width: 80ch;
+}
+.ticket-exports form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 16px 0;
+}
+.ticket-exports label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+.ticket-exports input,
+.ticket-exports select {
+  border: 1px solid #a7b8c2;
+  border-radius: 6px;
+  padding: 8px;
+  max-width: 100%;
+  background: var(--maono-surface, #fff);
+  color: inherit;
+}
+.ticket-exports button,
+.ticket-exports a {
+  border: 1px solid #a7b8c2;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.ticket-exports button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.ticket-exports button:focus-visible,
+.ticket-exports a:focus-visible,
+.ticket-exports summary:focus-visible {
+  outline: 2px solid #167485;
+  outline-offset: 3px;
+}
+.ticket-exports ul {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.ticket-exports li {
+  border-top: 1px solid #d5dee3;
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+.ticket-exports li > span {
+  display: block;
+  font-size: 0.85rem;
+  margin: 6px 0;
+}
+.ticket-exports-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  .ticket-exports label {
+    width: 100%;
+  }
+  .ticket-exports input,
+  .ticket-exports select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

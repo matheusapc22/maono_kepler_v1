@@ -1,3 +1,4 @@
+import {CC12_MIGRATION,readCC12Schema,assertCC12Schema} from './cc12-schema-preflight.mjs';
 import {CC11_MIGRATION,readCC11Schema,assertCC11Schema} from './cc11-schema-preflight.mjs';
 import {CC10_MIGRATION,readCC10Schema,assertCC10Schema} from './cc10-schema-preflight.mjs';
 import {CC09_MIGRATION,readCC09Schema,assertCC09Schema} from './cc09-schema-preflight.mjs';
@@ -48,12 +49,12 @@ try {
     throw gateError('DATABASE_INTEGRITY_FAILED', 'O preflight encontrou falha de integridade; autorização de produção foi bloqueada.');
   }
 
-  const schemaPreflight=migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
+  const schemaPreflight=migration.name===CC12_MIGRATION ? await readCC12Schema(temporary.configPath,remote.ledger) : migration.name===CC11_MIGRATION ? await readCC11Schema(temporary.configPath,remote.ledger) : migration.name===CC08_MIGRATION ? await readCC08Schema(temporary.configPath,remote.ledger) : migration.name===CC09_MIGRATION ? await readCC09Schema(temporary.configPath,remote.ledger) : migration.name===CC10_MIGRATION ? await readCC10Schema(temporary.configPath,remote.ledger) : null;
   if(schemaPreflight && !schemaPreflight.compatible){
     await ensureReportDir();
     const blockedPath=args.report ? resolve(args.report) : defaultAuditReportPath(migration.name,git.sha);
     await writeJsonReport(blockedPath,{phase:'schema-preflight-blocked',writesPerformed:false,readyForAuthorization:false,git,database:remote.identity,schemaPreflight,integrity,backup});
-    if(migration.name===CC11_MIGRATION) assertCC11Schema(schemaPreflight); else if(migration.name===CC10_MIGRATION) assertCC10Schema(schemaPreflight); else if(migration.name===CC09_MIGRATION) assertCC09Schema(schemaPreflight); else assertCC08Schema(schemaPreflight);
+    if(migration.name===CC12_MIGRATION) assertCC12Schema(schemaPreflight); else if(migration.name===CC11_MIGRATION) assertCC11Schema(schemaPreflight); else if(migration.name===CC10_MIGRATION) assertCC10Schema(schemaPreflight); else if(migration.name===CC09_MIGRATION) assertCC09Schema(schemaPreflight); else assertCC08Schema(schemaPreflight);
   }
   const approval = buildApproval({
     migration: migration.name,
