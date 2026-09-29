@@ -3,6 +3,10 @@ name: Central de Chamados contracts
 on:
   pull_request:
     paths:
+      - 'src/pages/Projects/components/useTicketDialog.ts'
+      - 'src/pages/Projects/components/ticket-accessibility.css'
+      - 'tests/browser/ticket-accessibility.spec.ts'
+      - 'tests/browser/fixtures/ticket-accessibility*'
       - 'functions/_lib/ticket-feedback*.js'
       - 'functions/api/organizations/*/ticket-feedback*'
       - 'functions/api/organizations/*/ticket-feedback/**'
@@ -290,3 +294,26 @@ jobs:
           node-version: 22
       - name: Validate voluntary feedback, cycle uniqueness, delivery ACL and mature cohorts
         run: node --test tests/ticket-feedback*.test.mjs tests/ticket-metrics*.test.mjs tests/ticket-notifications*.test.mjs
+
+  cc16-experience-accessibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Validate keyboard, drafts, conflicts and exact send replay
+        run: npx playwright test tests/browser/ticket-accessibility.spec.ts --project=chromium
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cc16-browser-failures
+          path: test-results/
+          retention-days: 7

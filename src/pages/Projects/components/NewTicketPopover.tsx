@@ -1,3 +1,4 @@
+import { useTicketDialog } from "./useTicketDialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -130,7 +131,6 @@ export default function NewTicketPopover({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   useEffect(() => () => { abortControllerRef.current?.abort(); abortControllerRef.current = null; }, []);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const busyRef = useRef(false);
   const creationIntentRef = useRef<TicketCreationIntent | null>(null);
   const creationUncertainRef = useRef(false);
@@ -145,50 +145,16 @@ export default function NewTicketPopover({
     [files],
   );
 
-  useEffect(() => {
-    if (!open) return undefined;
-
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.setTimeout(() => {
-      panelRef.current?.querySelector<HTMLElement>("input, button")?.focus();
-    }, 0);
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (busyRef.current) abortControllerRef.current?.abort();
-        onClose();
-        return;
-      }
-
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const focusable = Array.from(
-        panelRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href]',
-        ),
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+  function requestClose() {
+    if (busyRef.current) {
+      setError("Aguarde a conclusão da operação antes de fechar. O resultado será informado neste painel.");
+      return;
     }
+    // Retain this panel's local draft when closed; organization/session remounts erase it.
+    onClose();
+  }
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousBodyOverflow;
-      previousFocusRef.current?.focus();
-    };
-  }, [onClose, open]);
+  useTicketDialog(open, panelRef, requestClose);
 
   useEffect(() => {
     if (!open) {
@@ -289,6 +255,7 @@ export default function NewTicketPopover({
       }
     }
 
+    if (controller.signal.aborted || abortControllerRef.current !== controller) return;
     abortControllerRef.current = null;
     setFailedFiles(failures);
     onCreated(ticket, failures);
@@ -342,6 +309,7 @@ export default function NewTicketPopover({
         ...current,
         [key]: { progress: 100, status: "done" },
       }));
+      if (controller.signal.aborted || abortControllerRef.current !== controller) return;
       const remaining = failedFiles.filter((item) => item !== file);
       setFailedFiles(remaining);
       onCreated(ticket, remaining);
@@ -454,7 +422,7 @@ export default function NewTicketPopover({
       className="ticket-overlay"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !busy) resetAndClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <div
@@ -462,6 +430,7 @@ export default function NewTicketPopover({
         className="ticket-new-panel"
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-labelledby="new-ticket-title"
         aria-describedby="new-ticket-description"
       >
@@ -470,21 +439,22 @@ export default function NewTicketPopover({
             <span className="ticket-center-eyebrow">Nova solicitação</span>
             <h3 id="new-ticket-title">Novo chamado</h3>
             <p id="new-ticket-description">
-              Registre o contexto primeiro; os anexos serão enviados em seguida.
+              Registre o contexto primeiro; os anexos serão enviados em seguida. Ao fechar, os campos ficam preservados nesta sessão e organização.
             </p>
           </div>
           <button
             type="button"
             className="ticket-icon-button"
             aria-label="Fechar painel"
-            onClick={resetAndClose}
+            onClick={requestClose}
           >
             ×
           </button>
         </header>
 
+        <p role="status" aria-atomic="true">{phase === "creating" ? "Criando chamado. Aguarde a confirmação." : phase === "uploading" ? "Chamado criado. Enviando anexos." : ""}</p>
         {createdTicket && phase === "partial" ? (
-          <section className="ticket-partial-upload" role="status">
+          <section className="ticket-partial-upload">
             <strong>{createdTicket.code} foi criado.</strong>
             {error ? <TicketErrorNotice error={error} compact /> : null}
             <ul className="ticket-partial-files" aria-label="Anexos com falha">
@@ -524,6 +494,7 @@ export default function NewTicketPopover({
               <button
                 type="button"
                 className="ticket-secondary-action"
+                disabled={busy}
                 onClick={() => void uploadFiles(createdTicket, failedFiles)}
               >
                 Tentar anexar novamente
@@ -531,6 +502,7 @@ export default function NewTicketPopover({
               <button
                 type="button"
                 className="ticket-primary-action"
+                disabled={busy}
                 onClick={resetAndClose}
               >
                 Concluir sem anexos
@@ -696,7 +668,7 @@ export default function NewTicketPopover({
                         <strong>{file.name}</strong>
                         <small>{(file.size / 1024 / 1024).toFixed(2)} MB</small>
                       </div>
-                      <div className="ticket-upload-progress">
+                      <div className="ticket-upload-progress" role="progressbar" aria-label={`Envio de ${file.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={state?.progress || 0}>
                         <span style={{ width: `${state?.progress || 0}%` }} />
                       </div>
                       <small>
@@ -736,7 +708,7 @@ export default function NewTicketPopover({
               <button
                 type="button"
                 className="ticket-secondary-action"
-                onClick={resetAndClose}
+                onClick={requestClose}
               >
                 Cancelar
               </button>

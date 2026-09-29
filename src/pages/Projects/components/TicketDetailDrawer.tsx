@@ -1,3 +1,4 @@
+import { useTicketDialog } from "./useTicketDialog";
 import {TicketSlaPanel} from './TicketSlaPanel';
 import {TicketChanges} from './TicketChanges';
 import { Link } from "react-router";
@@ -119,7 +120,6 @@ export default function TicketDetailDrawer({
   const formTicketKeyRef = useRef("");
   const triageEnabled = detail?.triageEnabled === true;
   const drawerRef = useRef<HTMLDivElement | null>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => { if (!lifecycleEnabled) setLifecycleDraftDirty(false); }, [lifecycleEnabled]);
 
@@ -147,45 +147,22 @@ export default function TicketDetailDrawer({
     setSaveError(null);
   }, [detail?.ticket, savedDraftVersion]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    window.setTimeout(() => {
-      drawerRef.current?.querySelector<HTMLElement>("button")?.focus();
-    }, 0);
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (event.key !== "Tab" || !drawerRef.current) return;
-      const focusable = Array.from(
-        drawerRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href]',
-        ),
-      );
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!first || !last) return;
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+  const [conversationCloseBlocked, setConversationCloseBlocked] = useState(false);
+  const [closeNotice, setCloseNotice] = useState("");
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [conversationDirty, setConversationDirty] = useState(false);
+  function requestClose() {
+    if (saving || conversationCloseBlocked) {
+      setCloseNotice("Aguarde a confirmação da operação. Se o envio ficou incerto, use Verificar envio anterior na conversa antes de fechar.");
+      return;
     }
+    setCloseNotice("");
+    if ((attributeDraftDirty || lifecycleDraftDirty || conversationDirty || attachmentBusy) &&
+        !window.confirm("Há alterações não confirmadas. Fechar pode perder esse conteúdo. Deseja fechar?")) return;
+    onClose();
+  }
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, [onClose, open]);
+  useTicketDialog(open, drawerRef, requestClose);
 
   if (!open) return null;
 
@@ -248,7 +225,7 @@ export default function TicketDetailDrawer({
       className="ticket-drawer-overlay"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <aside
@@ -256,6 +233,7 @@ export default function TicketDetailDrawer({
         className="ticket-detail-drawer"
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-labelledby="ticket-detail-title"
       >
         <header className="ticket-panel-header">
@@ -271,12 +249,13 @@ export default function TicketDetailDrawer({
             type="button"
             className="ticket-icon-button"
             aria-label="Fechar detalhes"
-            onClick={onClose}
+            onClick={requestClose}
           >
             ×
           </button>
         </header>
 
+        {closeNotice ? <p role="status">{closeNotice}</p> : null}
         {loading && !ticket ? (
           <div className="ticket-detail-loading" aria-busy="true">
             <span />
@@ -288,7 +267,7 @@ export default function TicketDetailDrawer({
             </p>
           </div>
         ) : error && !ticket ? (
-          <div className="ticket-detail-error" role="alert">
+          <div className="ticket-detail-error">
             <TicketErrorNotice error={error} onRetry={onRetry} />
           </div>
         ) : ticket && detail ? (
@@ -504,6 +483,8 @@ export default function TicketDetailDrawer({
             <TicketChanges key={`${organizationId}:${ticket.id}`} organizationId={organizationId} ticketId={ticket.id} canManage={canManage} />
 
             <TicketConversationPanel
+              onDirtyChange={setConversationDirty}
+              onCloseBlockedChange={setConversationCloseBlocked}
               organizationId={organizationId}
               ticket={ticket}
               bundle={detail.conversation}
@@ -513,6 +494,7 @@ export default function TicketDetailDrawer({
             />
 
             <TicketAttachmentList
+              onBusyChange={setAttachmentBusy}
               organizationId={organizationId}
               ticket={ticket}
               attachments={detail.attachments}
