@@ -29,6 +29,13 @@ async function mockSession(page: Page) {
   }));
 }
 
+// DocumentsSection loads folders alongside files. Keep the supporting endpoint
+// deterministic; an unmocked Vite 404 must not race the storage error under test.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/organizations/*/document-folders", route =>
+    route.fulfill({ json: { ok: true, folders: [] } }));
+});
+
 async function expectSafeCopy(page: Page) {
   await expect(page.locator("body")).not.toContainText(/Dropbox|provider-token|\/private\/storage|internal-storage-incident|D1/);
   await expect(page.getByRole("button", { name: /reparar|sincronizar armazenamento/i })).toHaveCount(0);

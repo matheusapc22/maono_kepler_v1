@@ -10,6 +10,11 @@ type TicketErrorNoticeProps = {
 };
 
 function userMessage(error: TicketApiError) {
+  if (error.code === "TICKET_METRICS_LIMIT") return "O universo excede o limite desta consulta. Nenhum chamado foi descartado; solicite um relatório assíncrono quando disponível.";
+  if (error.code === "TICKET_METRICS_ACCESS_CHANGED") return "O acesso mudou durante a consulta. Atualize os indicadores.";
+  if (error.code === "TICKET_METRICS_CONFLICT") return "A configuração ou a reconstrução mudou. Atualize antes de tentar novamente.";
+  if (error.code === "TICKET_METRICS_NOT_READY" || error.code === "TICKET_METRICS_DISABLED") return "As métricas ainda aguardam preparação nesta organização.";
+  if (error.code === "TICKET_METRICS_INVALID") return "Confira as datas, a janela aprovada e a justificativa.";
   if (error.code === "TICKET_SLA_HISTORY_LIMIT") return "Este histórico precisa de revisão para calcular o SLA. Nenhum período foi descartado.";
   if (error.code === "TICKET_SLA_VERSION_CONFLICT") return "A política ou o ciclo mudou. Atualize o SLA e confira os dados antes de tentar novamente.";
   if (error.code === "TICKET_SLA_NOT_READY" || error.code === "TICKET_SLA_DISABLED") return "O SLA ainda não está disponível nesta organização.";
