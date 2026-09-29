@@ -1,3 +1,4 @@
+import "./ticket-accessibility.css";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -32,6 +33,7 @@ type TicketAttachmentListProps = {
   attachmentLimits: TicketAttachmentLimits;
   currentUserId?: number | string | null;
   onChanged: () => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 type UploadStage = "hashing" | "resuming" | "uploading" | "finalizing";
@@ -52,6 +54,7 @@ export default function TicketAttachmentList({
   attachmentLimits,
   currentUserId,
   onChanged,
+  onBusyChange,
 }: TicketAttachmentListProps) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadStage, setUploadStage] = useState<UploadStage>("uploading");
@@ -60,6 +63,7 @@ export default function TicketAttachmentList({
   const [pendingUploads, setPendingUploads] = useState<TicketAttachmentUploadSession[]>([]);
   const [error, setError] = useState<TicketApiError | string | null>(null);
   const [failedFile, setFailedFile] = useState<File | null>(null);
+  useEffect(() => { onBusyChange?.(uploadProgress !== null || busySessionId !== null); }, [uploadProgress, busySessionId, onBusyChange]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const uploadControllerRef = useRef<AbortController | null>(null);
   useEffect(() => () => { uploadControllerRef.current?.abort(); uploadControllerRef.current = null; }, []);
@@ -282,10 +286,11 @@ export default function TicketAttachmentList({
       </header>
 
       <p>Ao trocar de organização, o envio neste navegador é interrompido. Confira ou retome a sessão na organização de origem.</p>
+      <p role="status">{uploadProgress !== null ? (uploadStage === "uploading" ? "Enviando arquivo." : phaseLabel(uploadStage, 0)) : ""}</p>
       {uploadProgress !== null ? (
-        <div className="ticket-detail-upload" role="status">
+        <div className="ticket-detail-upload">
           <div>
-            <span style={{ width: `${uploadProgress}%` }} />
+            <span role="progressbar" aria-label="Envio de anexo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress} style={{ width: `${uploadProgress}%` }} />
           </div>
           <span>{phaseLabel(uploadStage, uploadProgress)}</span>
           <button

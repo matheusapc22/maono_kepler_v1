@@ -1,0 +1,55 @@
+/* Keep native file controls keyboard reachable while their labels provide the visual affordance. */
+.ticket-file-picker,
+.ticket-attachment-upload,
+.ticket-file-action {
+  position: relative;
+}
+.ticket-file-picker input[type="file"],
+.ticket-attachment-upload input[type="file"],
+.ticket-file-action input[type="file"] {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.ticket-file-picker:focus-within,
+.ticket-attachment-upload:focus-within,
+.ticket-file-action:focus-within,
+.ticket-overlay :focus-visible {
+  outline: 3px solid #23785a;
+  outline-offset: 3px;
+}
+.ticket-overlay textarea,
+.ticket-overlay select,
+.ticket-overlay input {
+  min-width: 0;
+  max-width: 100%;
+}
+.ticket-conversation-body,
+.ticket-conversation-draft-attachments li,
+.ticket-partial-files li {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .ticket-conversation-actions,
+  .ticket-conversation-draft-meta {
+    flex-wrap: wrap;
+  }
+  .ticket-overlay .ticket-new-panel,
+  .ticket-overlay .ticket-detail-drawer {
+    max-width: 100vw;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticket-overlay *,
+  .ticket-overlay *::before,
+  .ticket-overlay *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
