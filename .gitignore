@@ -42,3 +42,8 @@ playwright/auth.json
 
 # production migration operator local evidence
 .tmp/production-migrations/
+
+# protected Production acceptance local evidence
+.tmp/production-acceptance/
+# Reproducible local CC17 benchmark output; CI publishes it as an artifact.
+.tmp/cc17/

@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "productSha": null,
+  "servedSha": null,
+  "environment": "production",
+  "window": {
+    "approved": false,
+    "approvedBy": null,
+    "approvedAt": null,
+    "evidence": null
+  },
+  "schema": {
+    "verified": false,
+    "evidence": null
+  },
+  "review": {
+    "approved": false,
+    "reviewer": null,
+    "evidence": null
+  },
+  "cleanup": {
+    "complete": false,
+    "evidence": null
+  },
+  "configuration": {
+    "restored": false,
+    "evidence": null
+  },
+  "blockers": [
+    "Janela, atores, budgets, schema, revisão e aceite CT55–58 pendentes."
+  ],
+  "cases": [
+    {
+      "id": "CT55",
+      "status": "PENDING",
+      "productSha": null,
+      "environment": "production",
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "CT56",
+      "status": "PENDING",
+      "productSha": null,
+      "environment": "production",
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "CT57",
+      "status": "PENDING",
+      "productSha": null,
+      "environment": "production",
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "CT58",
+      "status": "PENDING",
+      "productSha": null,
+      "environment": "production",
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    }
+  ],
+  "performance": {
+    "budget": {
+      "approved": false,
+      "approvedBy": null,
+      "approvedAt": null,
+      "evidence": null,
+      "records": null,
+      "concurrency": null,
+      "durationSeconds": null,
+      "samples": null,
+      "maxErrorRate": null,
+      "p95Ms": {
+        "metrics": null,
+        "exports": null,
+        "uploads": null
+      }
+    },
+    "observed": {
+      "records": null,
+      "concurrency": null,
+      "durationSeconds": null
+    },
+    "results": {
+      "metrics": {
+        "samples": null,
+        "p95Ms": null,
+        "errorRate": null
+      },
+      "exports": {
+        "samples": null,
+        "p95Ms": null,
+        "errorRate": null
+      },
+      "uploads": {
+        "samples": null,
+        "p95Ms": null,
+        "errorRate": null
+      }
+    },
+    "invariantsPreserved": false,
+    "evidence": null
+  }
+}
