@@ -1,5 +1,6 @@
 import TicketMetricsPanel from './TicketMetricsPanel';
 import TicketExportsPanel from './TicketExportsPanel';
+import TicketCasesPanel from './TicketCasesPanel';
 import "./ticket-flow.css";
 import TicketFlowSettings from "./TicketFlowSettings";
 import { readTicketNavigation, ticketNavigationUrl } from "./ticket-navigation";
@@ -671,6 +672,7 @@ function TicketsSectionContent({
       )}
 
       <TicketMetricsPanel organizationId={organizationId} canManage={canManage} />
+      <TicketCasesPanel key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />
       {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} />}
       {flowEnabled && canManage ? <TicketFlowSettings organizationId={organizationId} policies={queuePolicies} onSaved={() => void loadTicketsPage(1, { background: true })} /> : null}
       <p role="status">{viewMode === "kanban" ? "Carregamento por fila" : `${tickets.length} carregados`} · {pagination.total} acessíveis nesta consulta{viewMode !== 'kanban' && tickets.length < pagination.total ? ' · Exibição parcial' : ''}.

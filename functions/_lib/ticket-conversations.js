@@ -569,7 +569,7 @@ function auditDetails({ context, action, resourceId, commandId, audience, versio
   });
 }
 
-export async function createTicketMessage(env, context, payload, request) {
+export async function createTicketMessage(env, context, payload, request, { beforeWrite = [], afterWrite = [] } = {}) {
   await assertTicketConversationReady(env);
   const input = normalizeConversationInput(payload);
   if (!canWriteConversation(context, input.audience)) {
@@ -667,7 +667,7 @@ export async function createTicketMessage(env, context, payload, request) {
         input.audience, timestamp, commandId, messageId),
   );
   try {
-    await db.batch(statements);
+    await db.batch([...beforeWrite, ...statements, ...afterWrite]);
   } catch (error) {
     const winner = await priorCommand(env, context, operation, key);
     if (winner) return replay(winner);

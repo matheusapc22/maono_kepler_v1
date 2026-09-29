@@ -1,0 +1,103 @@
+.ticket-cases {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #d5ded9;
+  border-radius: 10px;
+  background: #fff;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.ticket-cases summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ticket-cases form,
+.ticket-cases fieldset,
+.ticket-cases-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+  min-width: 0;
+}
+.ticket-cases h4,
+.ticket-cases form p,
+.ticket-cases legend {
+  flex-basis: 100%;
+  margin: 0;
+}
+.ticket-cases label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 230px;
+  min-width: 0;
+}
+.ticket-cases input,
+.ticket-cases select,
+.ticket-cases textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #a6b9ad;
+  border-radius: 5px;
+  color: #182d21;
+  background: #fff;
+}
+.ticket-cases textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+.ticket-cases button {
+  padding: 8px 12px;
+  cursor: pointer;
+  align-self: end;
+  border: 1px solid #698a76;
+  border-radius: 5px;
+  background: #f2f7f3;
+  color: #173b26;
+}
+.ticket-cases button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ticket-cases :focus-visible {
+  outline: 3px solid #267443;
+  outline-offset: 2px;
+}
+.ticket-cases pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.ticket-cases li {
+  margin: 8px 0;
+}
+.ticket-cases fieldset {
+  flex-basis: 100%;
+  border: 1px solid #ddd;
+}
+.ticket-cases ul,
+.ticket-cases ol {
+  padding-left: 20px;
+}
+@media (max-width: 600px) {
+  .ticket-cases label {
+    flex-basis: 100%;
+  }
+  .ticket-cases button {
+    max-width: 100%;
+  }
+}
+
+.ticket-cases dl {
+  margin: 8px 0;
+}
+.ticket-cases dt {
+  font-weight: 600;
+}
+.ticket-cases dd {
+  margin: 2px 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

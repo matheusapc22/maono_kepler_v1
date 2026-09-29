@@ -22,6 +22,13 @@ import {
   ticketCsvRow,
 } from "./ticket-export-domain.js";
 import { exportStorage } from "./ticket-export-storage.js";
+import {
+  casesEnabled,
+  casesReady,
+  casePredicate,
+  caseFactsForTicket,
+  authorizeCaseSnapshot,
+} from "./ticket-cases.js";
 
 const iso = (ms) => new Date(ms).toISOString();
 const scope = (organizationId) => ({
@@ -91,7 +98,7 @@ async function actorAllowed(env, org, actorId, permissions) {
     if (!(await can(env, user, permission, scope(org))).allowed) throw gone();
   return user;
 }
-function cohort(input, access) {
+function cohort(input, access, actor) {
   const clauses = [
     "t.organization_id=?",
     "t.active=1",
@@ -117,6 +124,13 @@ function cohort(input, access) {
     clauses.push(`EXISTS(SELECT 1 FROM ticket_cycles c WHERE c.ticket_id=t.id AND c.organization_id=t.organization_id
       AND julianday(c.closed_at)>=julianday(?) AND julianday(c.closed_at)<julianday(?))`);
     values.push(input.from, input.to);
+  }
+  if (["incidents", "causes"].includes(input.report)) {
+    const acl = casePredicate(actor);
+    clauses.push(
+      `EXISTS(SELECT 1 FROM ticket_case_links l JOIN ticket_cases c ON c.id=l.case_id AND c.organization_id=l.organization_id WHERE l.ticket_id=t.id AND l.organization_id=t.organization_id AND ${acl.sql} AND (?='causes' OR c.kind='incident'))`,
+    );
+    values.push(...acl.values, input.report);
   }
   return { sql: clauses.join(" AND "), values };
 }
@@ -169,6 +183,8 @@ export async function authorizeExportSnapshot(
     )
     .bind(...access.values, job.id)
     .first();
+  if (["incidents", "causes"].includes(JSON.parse(job.input_json).report))
+    await authorizeCaseSnapshot(env, job.organization_id, user, db, job.id);
   if (before !== (await epoch(db))) throw exportError("ACCESS_CHANGED", 409);
   if (
     Number(check.total) !== Number(check.allowed || 0) ||
@@ -192,7 +208,7 @@ export async function createTicketExport(env, org, actor, body) {
       "export.view",
       "export.download",
     ]);
-  const input = normalizeExportInput(body),
+  const input = normalizeExportInput(body, { cases: casesEnabled(env, org) }),
     requestHash = await sha256(input),
     db = getDb(env);
   const replay = async () =>
@@ -212,11 +228,13 @@ export async function createTicketExport(env, org, actor, body) {
     ]);
     return { job: summary(job), replayed: true };
   };
+  if (["incidents", "causes"].includes(input.report))
+    await casesReady(env, org);
   const prior = await replay();
   if (prior) return respond(prior);
   const generation = await epoch(db),
     access = await buildTicketAccessPredicate(env, org, user),
-    filter = cohort(input, access);
+    filter = cohort(input, access, user);
   const [count, definitions] = await db.batch([
     db
       .prepare(
@@ -439,7 +457,7 @@ async function captureStep(env, job) {
       job.organization_id,
       actor,
     ),
-    filter = cohort(input, access);
+    filter = cohort(input, access, actor);
   const tickets = rows(
     await db
       .prepare(
@@ -448,11 +466,22 @@ async function captureStep(env, job) {
       .bind(job.organization_id, ...filter.values, job.cursor)
       .all(),
   );
-  let csv = job.part_count === 0 ? csvLine(CSV_HEADERS) : "",
+  const caseReport = ["incidents", "causes"].includes(input.report);
+  let csv =
+      job.part_count === 0
+        ? csvLine(caseReport ? [...CSV_HEADERS, "cases_json"] : CSV_HEADERS)
+        : "",
     statements = [];
   for (const { id } of tickets) {
-    const source = await sourceTicket(db, job.organization_id, id),
-      hash = await sha256(source),
+    const source = await sourceTicket(db, job.organization_id, id);
+    if (caseReport)
+      source.cases = await caseFactsForTicket(
+        env,
+        job.organization_id,
+        actor,
+        id,
+      );
+    const hash = await sha256(source),
       fact = projectMetricTicket(source, input, def),
       policies = source.policies.map((p) => p.version);
     // Additional source intervals retain provenance without exporting messages or internal notes.
@@ -472,6 +501,7 @@ async function captureStep(env, job) {
       const { intervals, coverage, ...calendar } = value.calendar || {};
       return { version: p.version, ...value, calendar };
     });
+    if (caseReport) fact.cases = source.cases;
     csv += ticketCsvRow(source.ticket, fact, def, policies, hash);
     statements.push(
       db
@@ -661,8 +691,19 @@ async function manifest(db, job) {
       .bind(job.id)
       .all(),
   );
+  const caseReport = ["incidents", "causes"].includes(
+    JSON.parse(job.input_json).report,
+  );
+  const caseTotals = caseReport
+    ? await db
+        .prepare(
+          `SELECT COUNT(DISTINCT json_extract(x.value,'$.id')) records, COUNT(*) relations, COUNT(DISTINCT CASE WHEN json_extract(x.value,'$.causeStatus')='unknown' THEN json_extract(x.value,'$.id') END) unknownCauses FROM ticket_export_items i,json_each(i.fact_json,'$.cases') x WHERE i.job_id=?`,
+        )
+        .bind(job.id)
+        .first()
+    : null;
   return {
-    version: 1,
+    version: caseReport ? 2 : 1,
     snapshotId: job.id,
     capturedAt: job.created_at,
     sourceGeneration: job.generation,
@@ -686,14 +727,27 @@ async function manifest(db, job) {
       profile: "text-v1",
       strings:
         "remove one leading text: to decode strings; never evaluate decoded text as formulas",
-      columns: CSV_HEADERS,
+      columns: caseReport ? [...CSV_HEADERS, "cases_json"] : CSV_HEADERS,
     },
     totals,
     distributions,
     groups,
     parts,
     expiresAt: job.expires_at,
-    causes: { available: false, dependency: "CC-13" },
+    causes: caseReport
+      ? {
+          available: true,
+          version: 1,
+          grain:
+            "one ticket per row; distinct authorized records in cases_json",
+          population:
+            "current authorized linked records captured consistently; historical asOf applies to ticket metrics only",
+          ...caseTotals,
+        }
+      : {
+          available: false,
+          dependency: "select incidents or causes report with CC13 enabled",
+        },
   };
 }
 

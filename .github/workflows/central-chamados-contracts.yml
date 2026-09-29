@@ -11,6 +11,15 @@ on:
       - 'migrations/0030_ticket_notifications.sql'
       - 'migrations/0034_ticket_metric_rollups.sql'
       - 'migrations/0035_ticket_report_exports.sql'
+      - 'migrations/0036_ticket_incidents_problems.sql'
+      - 'functions/_lib/ticket-case*.js'
+      - 'functions/api/organizations/*/ticket-cases*'
+      - 'functions/api/organizations/*/ticket-cases/**'
+      - 'tests/ticket-cases*.test.mjs'
+      - 'tests/browser/ticket-cases.spec.ts'
+      - 'tests/browser/fixtures/ticket-cases*'
+      - 'src/pages/Projects/components/ticket-cases.css'
+      - 'scripts/migrations/cc13-schema-preflight.mjs'
       - 'functions/_lib/ticket-export*.js'
       - 'functions/api/organizations/*/tickets/exports*'
       - 'functions/api/organizations/*/tickets/exports/**'
@@ -152,7 +161,9 @@ jobs:
       - name: Install the isolated pinned operator runtime
         run: npm ci --prefix scripts/central-chamados/operator --no-audit --no-fund
       - name: Verify native D1 binding locally without remote access
-        run: node scripts/central-chamados/operator/smoke-local.mjs
+        run: |
+          node scripts/central-chamados/operator/smoke-local.mjs
+          node scripts/central-chamados/operator/smoke-cases-local.mjs
 
   cc07-notifications:
     runs-on: ubuntu-latest
@@ -222,3 +233,17 @@ jobs:
           node-version: 22
       - name: Validate complete exports, generation fences, ACL, retries and migration
         run: node --test tests/ticket-exports*.test.mjs
+
+  cc13-incidents-problems:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate cases, independent ACL, concurrency, communications and CC12-C
+        run: node --test tests/ticket-cases*.test.mjs tests/ticket-exports*.test.mjs

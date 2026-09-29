@@ -158,7 +158,7 @@ function Content({ organizationId, canCreate, canDownload }: Props) {
       <summary>Relatórios e exportações</summary>
       <p>
         Relatórios completos dos chamados que você pode acessar. Datas em UTC; o
-        fim do período é exclusivo. Incidentes e causas aguardam a CC-13.
+        fim do período é exclusivo. Incidentes e causas usam os vínculos autorizados atuais e exigem a funcionalidade ativa.
       </p>
       <p>
         CSV seguro: textos recebem o prefixo <code>text:</code>. O manifesto
@@ -202,6 +202,8 @@ function Content({ organizationId, canCreate, canDownload }: Props) {
             Relatório
             <select value={report} onChange={(e) => setReport(e.target.value)}>
               <option value="all">Visão completa</option>
+              <option value="incidents">Chamados com incidentes</option>
+              <option value="causes">Incidentes e causas por chamado</option>
               <option value="backlog">Backlog no instante de referência</option>
               <option value="cycles">Ciclos encerrados no período</option>
               <option value="sla">SLA e cobertura</option>
