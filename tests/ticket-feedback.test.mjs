@@ -385,6 +385,8 @@ test("CT48: 10 mature/4 responses =40%; 3 immature/2 replies kept separate; fail
       i < 4 || i === 10 || i === 11 ? "2026-02-01T12:00:00.000Z" : null,
     delivery_status: i === 9 ? "failed" : "delivered",
   }));
+  rows[0].outcome = "__proto__";
+  rows[1].outcome = "constructor";
   const g = aggregateFeedback(rows, {
     from: "2026-02-01T00:00:00.000Z",
     to: "2026-02-03T00:00:00.000Z",
@@ -402,6 +404,9 @@ test("CT48: 10 mature/4 responses =40%; 3 immature/2 replies kept separate; fail
     ],
     [10, 4, 0.4, 6, 3, 2, 1],
   );
+  assert.equal(g.outcomes.__proto__, 1);
+  assert.equal(g.outcomes.constructor, 1);
+  assert.equal(JSON.parse(JSON.stringify(g.outcomes)).__proto__, 1);
 });
 test("CT48: no eligible cohort is empty; instrument versions remain independent; asOf excludes future replies", () => {
   const w = win();

@@ -102,7 +102,8 @@ export function aggregateFeedback(rows, window) {
         withdrawn: 0,
         deliverySuppressed: 0,
         deliveryFailed: 0,
-        outcomes: {},
+        // Category labels are user-defined, including JS object property names.
+        outcomes: Object.create(null),
         effort: {},
       });
     const g = groups.get(version),
