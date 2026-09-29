@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {validateDocs} from '../scripts/central-chamados/cc18/validate-docs.mjs';
+import {normalizeExportInput} from '../functions/_lib/ticket-export-domain.js';
+const spec=JSON.parse(await readFile(new URL('../docs/central-chamados/cc-18/openapi.json',import.meta.url)));
+test('CC18 covers current routes, methods, source fingerprints, matrix and local links',async()=>{const r=await validateDocs();assert.deepEqual(r.issues,[]);assert.equal(r.routes,51);assert.equal(r.operations,81);});
+test('resumable reservation is attachments POST; uploads collection is GET only',()=>{const p='/api/organizations/{id}/tickets/{ticketId}/attachments';assert.ok(spec.paths[p].post);assert.ok(spec.paths[p+'/uploads'].get);assert.equal(spec.paths[p+'/uploads'].post,undefined);assert.ok(spec.paths[p+'/uploads/{uploadId}'].patch.requestBody.content['application/octet-stream']);});
+test('export request example obeys the actual domain validator',()=>{const x=normalizeExportInput({idempotencyKey:'cc18-export-intent-001',from:'2026-09-01T00:00:00Z',to:'2026-09-28T00:00:00Z',asOf:'2026-09-29T00:00:00Z',report:'backlog'});assert.equal(x.report,'backlog');});
+test('spec keeps resource tokens and export idempotency distinct',()=>{assert.ok(spec.paths['/api/organizations/{id}/tickets/{ticketId}/state'].get.responses['200'].headers.ETag);assert.ok(spec.components.schemas.ExportCreate.properties.idempotencyKey);assert.equal(spec.components.securitySchemes.Session.name,'maono_session');});
