@@ -10,6 +10,17 @@ on:
       - 'wrangler.ticket-notifications.toml.example'
       - 'migrations/0030_ticket_notifications.sql'
       - 'migrations/0034_ticket_metric_rollups.sql'
+      - 'migrations/0035_ticket_report_exports.sql'
+      - 'functions/_lib/ticket-export*.js'
+      - 'functions/api/organizations/*/tickets/exports*'
+      - 'functions/api/organizations/*/tickets/exports/**'
+      - 'workers/ticket-exports.js'
+      - 'wrangler.ticket-exports.toml.example'
+      - 'tests/ticket-exports*.test.mjs'
+      - 'tests/browser/ticket-exports.spec.ts'
+      - 'tests/browser/fixtures/ticket-exports*'
+      - 'src/pages/Projects/components/ticket-exports.css'
+      - 'scripts/migrations/cc12-schema-preflight.mjs'
       - 'functions/_lib/ticket-metrics*.js'
       - 'tests/ticket-metrics*.test.mjs'
       - 'src/pages/Projects/components/ticket-metrics.css'
@@ -197,3 +208,17 @@ jobs:
           node-version: 22
       - name: Validate metric populations, deterministic replay, ACL and migration
         run: node --test tests/ticket-metrics*.test.mjs
+
+  cc12-exports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate complete exports, generation fences, ACL, retries and migration
+        run: node --test tests/ticket-exports*.test.mjs

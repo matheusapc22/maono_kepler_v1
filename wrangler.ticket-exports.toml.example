@@ -1,0 +1,28 @@
+name = "maono-ticket-exports"
+main = "workers/ticket-exports.js"
+compatibility_date = "2026-09-29"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "maono_maps"
+database_id = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db"
+
+[vars]
+MAONO_RUNTIME_ENV = "production"
+MAONO_TICKET_EXPORTS_ENABLED = "false"
+MAONO_TICKET_EXPORT_WORKER_ENABLED = "false"
+MAONO_TICKET_EXPORT_ORGANIZATION_IDS = ""
+MAONO_TICKET_SELECTIVE_ACCESS_ENABLED = "true"
+# Configure identically in Pages and Worker AFTER approval of quotas/retention/CSV profile.
+# No operational defaults are supplied here.
+# MAONO_TICKET_EXPORT_TTL_SECONDS
+# MAONO_TICKET_EXPORT_MAX_ROWS
+# MAONO_TICKET_EXPORT_MAX_BYTES
+# MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG
+# MAONO_TICKET_EXPORT_MAX_ATTEMPTS
+# MAONO_TICKET_EXPORT_CSV_PROFILE = "text-v1"
+# Dropbox secrets follow the existing protected secret provisioning workflow.
+# Namespace /maono-private-ticket-exports-v1 MUST remain private, without shared links.
