@@ -1,4 +1,5 @@
 import { can } from "./permissions.js";
+import { knowledgeProvenance } from "./ticket-knowledge-provenance.js";
 import { requireTicketAccess } from "./ticket-access.js";
 import {
   canEditConversation,
@@ -241,7 +242,7 @@ function publicAuthor(row, prefix = "author") {
   };
 }
 
-function publicMessage(row, attachments = []) {
+function publicMessage(row, attachments = [], knowledge = null) {
   return {
     id: row.id,
     organizationId: row.organization_id,
@@ -255,6 +256,7 @@ function publicMessage(row, attachments = []) {
     editReason: row.edit_reason || null,
     author: publicAuthor(row),
     attachments,
+    knowledge,
     etag: conversationEtag(row.id, Number(row.version || 1)),
   };
 }
@@ -361,8 +363,9 @@ export async function listTicketMessages(env, context, {
   const hasMore = rows.length > pageSize;
   const selected = rows.slice(0, pageSize).filter((row) => canReadConversation(context, row));
   const grouped = await attachmentsForMessages(env, context.organizationId, context.ticketId, selected.map((row) => row.id));
+  const provenance = await knowledgeProvenance(env, context.organizationId, context.ticketId, selected.map(row => row.id));
   return {
-    messages: selected.slice().reverse().map((row) => publicMessage(row, grouped.get(String(row.id)) || [])),
+    messages: selected.slice().reverse().map((row) => publicMessage(row, grouped.get(String(row.id)) || [], provenance.get(row.id) || null)),
     nextCursor: hasMore && selected.length ? encodeCursor(selected.at(-1)) : null,
     hasMore,
   };
@@ -515,7 +518,8 @@ async function messageRow(env, context, messageId) {
 async function messageWithAttachments(env, context, messageId) {
   const row = await messageRow(env, context, messageId);
   const grouped = await attachmentsForMessages(env, context.organizationId, context.ticketId, [row.id]);
-  return publicMessage(row, grouped.get(String(row.id)) || []);
+  const provenance = await knowledgeProvenance(env, context.organizationId, context.ticketId, [row.id]);
+  return publicMessage(row, grouped.get(String(row.id)) || [], provenance.get(row.id) || null);
 }
 
 async function priorCommand(env, context, operation, key) {
@@ -569,7 +573,7 @@ function auditDetails({ context, action, resourceId, commandId, audience, versio
   });
 }
 
-export async function createTicketMessage(env, context, payload, request, { beforeWrite = [], afterWrite = [] } = {}) {
+export async function createTicketMessage(env, context, payload, request, { beforeWrite = [], afterWrite = [], fingerprintContext = null } = {}) {
   await assertTicketConversationReady(env);
   const input = normalizeConversationInput(payload);
   if (!canWriteConversation(context, input.audience)) {
@@ -577,6 +581,7 @@ export async function createTicketMessage(env, context, payload, request, { befo
   }
   const key = idempotencyKey(request);
   const fingerprint = await sha256({
+    ...(fingerprintContext ? { context: fingerprintContext } : {}),
     policy: conversationRequestFingerprint(context, {
       kind: input.kind, body: input.body, attachmentIds: [...input.attachmentIds],
       draftId: input.draftId, draftVersion: input.draftVersion,

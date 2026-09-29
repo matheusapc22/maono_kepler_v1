@@ -1,3 +1,4 @@
+import TicketKnowledgePanel from "./TicketKnowledgePanel";
 import TicketMetricsPanel from './TicketMetricsPanel';
 import TicketExportsPanel from './TicketExportsPanel';
 import TicketCasesPanel from './TicketCasesPanel';
@@ -672,6 +673,7 @@ function TicketsSectionContent({
       )}
 
       <TicketMetricsPanel organizationId={organizationId} canManage={canManage} />
+      <TicketKnowledgePanel key={`knowledge:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} reviewers={assignees} />
       <TicketCasesPanel key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />
       {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} />}
       {flowEnabled && canManage ? <TicketFlowSettings organizationId={organizationId} policies={queuePolicies} onSaved={() => void loadTicketsPage(1, { background: true })} /> : null}

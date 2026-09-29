@@ -109,6 +109,7 @@ export type TicketConversationKind = "response" | "internal";
 export type TicketConversationAudience = "ticket" | "internal";
 
 export type TicketConversationMessage = {
+  knowledge?: {articleId: string; revisionId: string; revisionNumber: number; reviewedAt: string} | null;
   id: string;
   organizationId: number | string;
   ticketId: number | string;
