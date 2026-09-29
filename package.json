@@ -59,7 +59,10 @@
     "test:production-acceptance-operator": "node --test tests/production-acceptance-operator*.test.mjs",
     "test:cc17": "node --test tests/ticket-integrated-gate.test.mjs tests/cc17-evidence.test.mjs tests/production-acceptance-operator*.test.mjs",
     "benchmark:cc17": "node scripts/central-chamados/cc17/benchmark-local.mjs",
-    "gate:cc17": "node scripts/central-chamados/cc17/evidence-gate.mjs"
+    "gate:cc17": "node scripts/central-chamados/cc17/evidence-gate.mjs",
+    "test:cc18": "node --test tests/cc18-delivery.test.mjs tests/cc18-docs.test.mjs",
+    "validate:cc18": "node scripts/central-chamados/cc18/validate-docs.mjs",
+    "gate:cc18": "node scripts/central-chamados/cc18/delivery-gate.mjs"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

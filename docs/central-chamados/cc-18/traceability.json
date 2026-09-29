@@ -1,0 +1,1311 @@
+{
+  "schemaVersion": 1,
+  "source": "https://docs.google.com/spreadsheets/d/1iLrW6EPgJeifKXhaeE85SfKt_PBEGLeqnTGGAe0rFLY/edit",
+  "observedAt": "2026-09-29",
+  "baseline": "f17882fe846b05d97e5b81c7d2547e30574715b4",
+  "note": "Snapshot de rastreabilidade, não certificado de aceite. Status de origem pode referir teste local. Revalidar evidência no SHA final.",
+  "requirements": [
+    {
+      "id": "REQ-CC-01",
+      "stage": "CC-01",
+      "title": "Baseline verificável",
+      "criterion": "SHA, branch, endpoints, binding/schema e deploy separados no registro.",
+      "tests": [
+        "CT-01"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/3d4032375866f16bf357c2f0051e09f4875bd70d/docs/central-chamados/cc-01/baseline.json",
+      "implementationEvidence": "../cc-01/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/194",
+      "implementationSha": "b0f62ba6d00b1627ad9fcec45125da9ea3544232"
+    },
+    {
+      "id": "REQ-CC-02",
+      "stage": "CC-01",
+      "title": "Jornada e critérios de prioridade",
+      "criterion": "Tarefas e critérios de impacto/urgência/conclusão explicitados e revisados.",
+      "tests": [
+        "CT-02"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/3d4032375866f16bf357c2f0051e09f4875bd70d/docs/central-chamados/cc-01/journey.md",
+      "implementationEvidence": "../cc-01/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/194",
+      "implementationSha": "b0f62ba6d00b1627ad9fcec45125da9ea3544232"
+    },
+    {
+      "id": "REQ-CC-03",
+      "stage": "CC-02",
+      "title": "Natureza independente do domínio",
+      "criterion": "Cinco naturezas não substituem map/database/permission/export/support/other.",
+      "tests": [
+        "CT-03",
+        "CT-05"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/1384008d0762704a13bc6d6bc7d9c93043edcd54/docs/central-chamados/cc-02/acceptance.md#rastreabilidade-do-aceite",
+      "implementationEvidence": "../cc-02/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/195",
+      "implementationSha": "ddaabcb1ea6038b62da9d90a7d1acd20634bd236"
+    },
+    {
+      "id": "REQ-CC-04",
+      "stage": "CC-02",
+      "title": "Triagem contextual e resultado esperado",
+      "criterion": "Perguntas variam por natureza; contexto minimizado; prioridade alterada com motivo.",
+      "tests": [
+        "CT-03",
+        "CT-04"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/1384008d0762704a13bc6d6bc7d9c93043edcd54/docs/central-chamados/cc-02/acceptance.md#rastreabilidade-do-aceite",
+      "implementationEvidence": "../cc-02/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/195",
+      "implementationSha": "ddaabcb1ea6038b62da9d90a7d1acd20634bd236"
+    },
+    {
+      "id": "REQ-CC-05",
+      "stage": "CC-03",
+      "title": "Estados e reabertura",
+      "criterion": "Cada transição tem ator, precondição, evidência, resultado e erro; reabertura cria ciclo.",
+      "tests": [
+        "CT-06",
+        "CT-29"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md",
+      "implementationEvidence": "../cc-03/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/196",
+      "implementationSha": "be438e02aa5ecd2a6cb200bd0ca40aed8dafbef8"
+    },
+    {
+      "id": "REQ-CC-06",
+      "stage": "CC-03",
+      "title": "Espera explícita",
+      "criterion": "Motivo, início, fim, responsável e próxima ação rastreáveis sem criar combinações de status.",
+      "tests": [
+        "CT-06"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md",
+      "implementationEvidence": "../cc-03/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/196",
+      "implementationSha": "be438e02aa5ecd2a6cb200bd0ca40aed8dafbef8"
+    },
+    {
+      "id": "REQ-CC-07",
+      "stage": "CC-03",
+      "title": "Criação idempotente",
+      "criterion": "Mesma chave/fingerprint retorna resultado persistido; divergência rejeitada.",
+      "tests": [
+        "CT-07",
+        "CT-08"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md",
+      "implementationEvidence": "../cc-03/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/196",
+      "implementationSha": "be438e02aa5ecd2a6cb200bd0ca40aed8dafbef8"
+    },
+    {
+      "id": "REQ-CC-08",
+      "stage": "CC-03",
+      "title": "Edição concorrente",
+      "criterion": "CAS no banco impede sobrescrita; versão ausente/inválida e conflito têm resposta explícita.",
+      "tests": [
+        "CT-09"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md",
+      "implementationEvidence": "../cc-03/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/196",
+      "implementationSha": "be438e02aa5ecd2a6cb200bd0ca40aed8dafbef8"
+    },
+    {
+      "id": "REQ-CC-09",
+      "stage": "CC-03",
+      "title": "Histórico atômico e preservado",
+      "criterion": "Mutação, evento/auditoria e intenção durável consistentes; correção por novo evento, sem apagar anterior.",
+      "tests": [
+        "CT-09",
+        "CT-10",
+        "CT-49",
+        "CT-57"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md",
+      "implementationEvidence": "../cc-03/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/196",
+      "implementationSha": "be438e02aa5ecd2a6cb200bd0ca40aed8dafbef8"
+    },
+    {
+      "id": "REQ-CC-10",
+      "stage": "CC-03",
+      "title": "Importação legada controlada",
+      "criterion": "Backfill reexecutável com provenance; GET deixa de importar quando cutover aprovado.",
+      "tests": [
+        "CT-05",
+        "CT-49"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md",
+      "implementationEvidence": "../cc-03/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/196",
+      "implementationSha": "be438e02aa5ecd2a6cb200bd0ca40aed8dafbef8"
+    },
+    {
+      "id": "REQ-CC-11",
+      "stage": "CC-04",
+      "title": "ACL seletiva e privado",
+      "criterion": "Grupos/principais/negações avaliados no servidor e por ação; ticket.manage não ignora privado.",
+      "tests": [
+        "CT-11",
+        "CT-12",
+        "CT-14",
+        "CT-25",
+        "CT-44",
+        "CT-50"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "PR #200 / HEAD 268780745c2ad28aa79169b4546a3d2a706a66b2. CC-04 implementa ACL/grupos/policies/deny precedence/list-detail-attachments-lifecycle. CT-11/12/50 aprovados no gate cc04-selective-access. REQ-CC-11 permanece PENDENTE porque sua própria rastreabilidade inclui CT-14, CT-25 e CT-44 de PRs futuras; não inferir fechamento.",
+      "implementationEvidence": "../cc-04/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/200",
+      "implementationSha": "49c9a9a09cd674fcc83cb6befa340e1d5a477cc1"
+    },
+    {
+      "id": "REQ-CC-12",
+      "stage": "CC-04",
+      "title": "Etiquetas sem privilégio implícito",
+      "criterion": "Etiqueta comum não concede direitos; associação a política exige permissão distinta e auditoria.",
+      "tests": [
+        "CT-13"
+      ],
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/actions/runs/36253579261/job/108436043859 — CT-13 aprovado: labels são classificatórias e ausentes do resolvedor; ticket.access.manage é capability distinta; operações administrativas têm auditoria no endpoint.",
+      "implementationEvidence": "../cc-04/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/200",
+      "implementationSha": "49c9a9a09cd674fcc83cb6befa340e1d5a477cc1"
+    },
+    {
+      "id": "REQ-CC-13",
+      "stage": "CC-05",
+      "title": "Conversa e nota interna",
+      "criterion": "Audiência persistida; resposta, nota e evento são distintos; anexos herdam a audiência restrita.",
+      "tests": [
+        "CT-14",
+        "CT-15",
+        "CT-17"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../CC05-execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/202",
+      "implementationSha": "72ed1274274ef456bbc152574c9d2e55b13cf15b"
+    },
+    {
+      "id": "REQ-CC-14",
+      "stage": "CC-05",
+      "title": "Rascunho e falha parcial",
+      "criterion": "Rascunho isolado por organização/autor; envio repetido não duplica; ticket criado é preservado.",
+      "tests": [
+        "CT-16",
+        "CT-17",
+        "CT-23"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../CC05-execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/202",
+      "implementationSha": "72ed1274274ef456bbc152574c9d2e55b13cf15b"
+    },
+    {
+      "id": "REQ-CC-15",
+      "stage": "CC-06",
+      "title": "Capacidade de anexos atômica",
+      "criterion": "ACTIVE/PENDING/reservas contam sem exceder cinco/80 MiB/150 MiB sob concorrência.",
+      "tests": [
+        "CT-18",
+        "CT-19"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../CC06-execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/203",
+      "implementationSha": "9d2f7e26908123f55f8ea379904866b7d1a1904e"
+    },
+    {
+      "id": "REQ-CC-16",
+      "stage": "CC-06",
+      "title": "Retomada e ciclo do binário",
+      "criterion": "Timeout, offset, expiração e compensação verificáveis; órfãos reconciliados; ADR scanner/previews.",
+      "tests": [
+        "CT-19",
+        "CT-20",
+        "CT-21",
+        "CT-22",
+        "CT-23",
+        "CT-51",
+        "CT-57"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../CC06-execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/203",
+      "implementationSha": "9d2f7e26908123f55f8ea379904866b7d1a1904e"
+    },
+    {
+      "id": "REQ-CC-17",
+      "stage": "CC-07",
+      "title": "Notificação durável e autorizada",
+      "criterion": "Outbox deduplicada, revalidação de destinatários, fila de falhas e reprocessamento auditado.",
+      "tests": [
+        "CT-24",
+        "CT-25",
+        "CT-57"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Implementação/merge/migration0030 verificados. 27/09/2026, pós-merge ace9e647d7e1042327c234a891b2d182c33149cc: 26 CC07 + 232 regressões + 23 Preview + 3 Chromium local (API simulada) aprovados; 61 testes CR baseline aprovados. Total345; build/typecheck e ratchet OK. Não substitui acceptance autenticado. Acceptance CT-24/25/15-B pendente: PR201 aberta, apenas suíteCC04; registrarCC07/publicar operador em main, configurar Environment/QA, preflight/janela. Confirmar provisionamento/deploy Worker agendado, flags/cutoff/allowlist; medir lag/p95/CPU/D1; ensaiar cleanup/restauração/rollback. Rollout permanente e aceites herdados CC03/04/05/06 não concluídos.",
+      "implementationEvidence": "../cc07/ENTREGA_E_MANUAL.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/204",
+      "implementationSha": "ace9e647d7e1042327c234a891b2d182c33149cc"
+    },
+    {
+      "id": "REQ-CC-18",
+      "stage": "CC-08",
+      "title": "CR como entidade distinta",
+      "criterion": "Proposta/justificativa/revisão/decisão preservadas no CR; chamado mantém atendimento. Apply grande reutiliza pipeline de save e registra revisão canônica aplicada; retry permanece estável. Alterações não MapConfig usam registro revisável geral e evidência de execução externa, sem Apply genérico.",
+      "tests": [
+        "CT-26",
+        "CT-27",
+        "CT-52"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Implementado na PR205; contratos locais aprovados. Evidências: docs/central-chamados/cc08/EVIDENCIAS.md. Requisito permanece pendente de revisão e acceptance autenticado.",
+      "implementationEvidence": "../cc08/EVIDENCIAS.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/205",
+      "implementationSha": "43b5d72a9117dc0dc043b066e6e4d03bd3b5577a"
+    },
+    {
+      "id": "REQ-CC-19",
+      "stage": "CC-08",
+      "title": "Vínculo e navegação sem autorização",
+      "criterion": "Vincular exige acesso aos dois recursos; histórico e estado agregado não concedem review/Apply. Entradas globais reavaliam membership/permissões de projeto em contexto explícito, sem conceder direitos por painel.",
+      "tests": [
+        "CT-26",
+        "CT-27"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Implementado na PR205; contratos locais aprovados. Evidências: docs/central-chamados/cc08/EVIDENCIAS.md. Requisito permanece pendente de revisão e acceptance autenticado.",
+      "implementationEvidence": "../cc08/EVIDENCIAS.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/205",
+      "implementationSha": "43b5d72a9117dc0dc043b066e6e4d03bd3b5577a"
+    },
+    {
+      "id": "REQ-CC-20",
+      "stage": "CC-08",
+      "title": "Reconciliação Ticket–CR",
+      "criterion": "Eventos repetidos/fora de ordem convergem; nenhuma conclusão técnica fecha atendimento sozinha.",
+      "tests": [
+        "CT-28",
+        "CT-29",
+        "CT-52"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Implementado na PR205; contratos locais aprovados. Evidências: docs/central-chamados/cc08/EVIDENCIAS.md. Requisito permanece pendente de revisão e acceptance autenticado.",
+      "implementationEvidence": "../cc08/EVIDENCIAS.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/205",
+      "implementationSha": "43b5d72a9117dc0dc043b066e6e4d03bd3b5577a"
+    },
+    {
+      "id": "REQ-CC-21",
+      "stage": "CC-09",
+      "title": "Filas e paginação coerentes",
+      "criterion": "Lista/kanban/calendário permitem acessar todos os itens; facetas autorizadas e parcial identificado.",
+      "tests": [
+        "CT-30",
+        "CT-31"
+      ],
+      "sourceStatus": "Em andamento",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-09/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/209",
+      "implementationSha": "9dbe5e1d14e382f198a358a5381ad9aad78d64db"
+    },
+    {
+      "id": "REQ-CC-22",
+      "stage": "CC-09",
+      "title": "Deep-link e contexto estável",
+      "criterion": "URL restaura organização/filtros/item autorizado; resposta antiga nunca atualiza outro contexto.",
+      "tests": [
+        "CT-32"
+      ],
+      "sourceStatus": "Em andamento",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-09/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/209",
+      "implementationSha": "9dbe5e1d14e382f198a358a5381ad9aad78d64db"
+    },
+    {
+      "id": "REQ-CC-23",
+      "stage": "CC-09",
+      "title": "Controle de WIP e próxima ação",
+      "criterion": "Limite por fila definido pela equipe; espera visível; exceção de entrada registrada.",
+      "tests": [
+        "CT-31"
+      ],
+      "sourceStatus": "Em andamento",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-09/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/209",
+      "implementationSha": "9dbe5e1d14e382f198a358a5381ad9aad78d64db"
+    },
+    {
+      "id": "REQ-CC-24",
+      "stage": "CC-10",
+      "title": "SLA versionado e calendário",
+      "criterion": "Versão aplicada imutável, IANA/feriados/expediente e regra de alteração documentados.",
+      "tests": [
+        "CT-33",
+        "CT-35",
+        "CT-36"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-10/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/210",
+      "implementationSha": "d7a9af6625f8c73f95c2736d31088469a193405b"
+    },
+    {
+      "id": "REQ-CC-25",
+      "stage": "CC-10",
+      "title": "Resposta, pausas e reabertura",
+      "criterion": "Só resposta humana elegível conta; intervalos não se sobrepõem; cada reabertura cria ciclo.",
+      "tests": [
+        "CT-33",
+        "CT-34",
+        "CT-35"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-10/README.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/210",
+      "implementationSha": "d7a9af6625f8c73f95c2736d31088469a193405b"
+    },
+    {
+      "id": "REQ-CC-26",
+      "stage": "CC-11",
+      "title": "Métricas com coortes e denominadores",
+      "criterion": "Definições, exclusões, censura, janela e tamanho da amostra disponíveis no painel.",
+      "tests": [
+        "CT-37",
+        "CT-38",
+        "CT-40",
+        "CT-48"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-11/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/211",
+      "implementationSha": "0cb04ade080c097b1d5940baac501767619c51ba"
+    },
+    {
+      "id": "REQ-CC-27",
+      "stage": "CC-11",
+      "title": "Agregados auditáveis e eficientes",
+      "criterion": "Replay idempotente; watermark/lag e comparação eventos×rollups; cache isolado por autorização.",
+      "tests": [
+        "CT-39",
+        "CT-40"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-11/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/211",
+      "implementationSha": "0cb04ade080c097b1d5940baac501767619c51ba"
+    },
+    {
+      "id": "REQ-CC-28",
+      "stage": "CC-12",
+      "title": "Relatórios e exportação completa",
+      "criterion": "Backlog/ciclo/SLA/causas exportáveis com manifesto; totais não se limitam à página carregada.",
+      "tests": [
+        "CT-41"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-12/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/212",
+      "implementationSha": "2eef55614d82b2c205a784c694c663563d3e524a"
+    },
+    {
+      "id": "REQ-CC-29",
+      "stage": "CC-12",
+      "title": "Exportação e download privados",
+      "criterion": "Escopo revalidado ao executar/baixar; expiração; proteção contra fórmulas CSV; trilha.",
+      "tests": [
+        "CT-42"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-12/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/212",
+      "implementationSha": "2eef55614d82b2c205a784c694c663563d3e524a"
+    },
+    {
+      "id": "REQ-CC-30",
+      "stage": "CC-13",
+      "title": "Incidente coordenado",
+      "criterion": "Impacto, responsáveis, mitigação e atualizações ligados aos relatos com visibilidade controlada.",
+      "tests": [
+        "CT-43"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-13/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/213",
+      "implementationSha": "d37cd1e9aa95a5f5ea55fdc400a13e96c0bde461"
+    },
+    {
+      "id": "REQ-CC-31",
+      "stage": "CC-13",
+      "title": "Problema recorrente e causa",
+      "criterion": "Problema distinto vincula incidentes/CR; causa desconhecida explícita; conclusões separadas.",
+      "tests": [
+        "CT-44"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-13/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/213",
+      "implementationSha": "d37cd1e9aa95a5f5ea55fdc400a13e96c0bde461"
+    },
+    {
+      "id": "REQ-CC-32",
+      "stage": "CC-14",
+      "title": "Conhecimento revisado",
+      "criterion": "Artigo versionado com audiência/revisor; publicação e retirada controladas; origem privada preservada.",
+      "tests": [
+        "CT-45",
+        "CT-46"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-14/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/214",
+      "implementationSha": "354d09f828b69de461935b3ea24000a7ceb57a28"
+    },
+    {
+      "id": "REQ-CC-33",
+      "stage": "CC-14",
+      "title": "Resposta reutilizável",
+      "criterion": "Reuso é rascunho com revisão humana; versão da resposta usada rastreável.",
+      "tests": [
+        "CT-46"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-14/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/214",
+      "implementationSha": "354d09f828b69de461935b3ea24000a7ceb57a28"
+    },
+    {
+      "id": "REQ-CC-34",
+      "stage": "CC-15",
+      "title": "Resultado, esforço e não resposta",
+      "criterion": "Convite voluntário por ciclo; resultado/esforço e taxa de resposta separados; sem coerção.",
+      "tests": [
+        "CT-47",
+        "CT-48"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Implementado e validado localmente em 4f34ad9393ec86647d2489f0db5820594b5d2bfd; aceite real ainda pendente. https://github.com/matheusapc22/maono_kepler_v1/tree/4f34ad9393ec86647d2489f0db5820594b5d2bfd/docs/central-chamados/cc-15/evidence.md",
+      "implementationEvidence": "../cc-15/evidence.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/215",
+      "implementationSha": "1f37c8c03c12c003a8b0776dab5d07cf4c5e5552"
+    },
+    {
+      "id": "REQ-CC-35",
+      "stage": "CC-16",
+      "title": "UX acessível e mensagens claras",
+      "criterion": "Teclado, foco e anúncios de criação/falha/conflito/progresso verificados em tarefas completas.",
+      "tests": [
+        "CT-53",
+        "CT-54"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-16/execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/216",
+      "implementationSha": "a9fb981d4122ed2d2ddb9eab906770fdf10e3047"
+    },
+    {
+      "id": "REQ-CC-36",
+      "stage": "CC-16",
+      "title": "Validação com usuários",
+      "criterion": "Cinco naturezas e três papéis observados; dificuldades registradas e bloqueadores resolvidos.",
+      "tests": [
+        "CT-02",
+        "CT-54"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-16/execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/216",
+      "implementationSha": "a9fb981d4122ed2d2ddb9eab906770fdf10e3047"
+    },
+    {
+      "id": "REQ-CC-37",
+      "stage": "CC-17",
+      "title": "Isolamento e confidencialidade",
+      "criterion": "Teste cruzado por organização/ticket/anexo/mensagem/link/exportação sem vazamento de metadados.",
+      "tests": [
+        "CT-11",
+        "CT-50",
+        "CT-51",
+        "CT-55"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-17/execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/217",
+      "implementationSha": "f17882fe846b05d97e5b81c7d2547e30574715b4"
+    },
+    {
+      "id": "REQ-CC-38",
+      "stage": "CC-17",
+      "title": "Resiliência e desempenho medido",
+      "criterion": "Falhas/retries/concorrência e carga representativa preservam invariantes; orçamento formalizado.",
+      "tests": [
+        "CT-56",
+        "CT-57",
+        "CT-58"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "../cc-17/execution.md",
+      "implementationPullRequest": "https://github.com/matheusapc22/maono_kepler_v1/pull/217",
+      "implementationSha": "f17882fe846b05d97e5b81c7d2547e30574715b4"
+    },
+    {
+      "id": "REQ-CC-39",
+      "stage": "CC-18",
+      "title": "Documentação e API interna",
+      "criterion": "Manuais, OpenAPI, exemplos e runbooks atualizados com versão e audiência.",
+      "tests": [
+        "CT-59"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "execution.md"
+    },
+    {
+      "id": "REQ-CC-40",
+      "stage": "CC-18",
+      "title": "Entrega verificável e migrations",
+      "criterion": "Cada requisito vinculado a PR/teste/evidência/deploy; migration confirmada por ambiente; gates preservados.",
+      "tests": [
+        "CT-52",
+        "CT-58",
+        "CT-59",
+        "CT-60"
+      ],
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null,
+      "implementationEvidence": "execution.md"
+    }
+  ],
+  "tests": [
+    {
+      "id": "CT-01",
+      "stage": "CC-01",
+      "requirements": [
+        "REQ-CC-01"
+      ],
+      "scenario": "Comparar SHA funcional, main, preview e deploy sem sessão autenticada.",
+      "expected": "Fonte e lacunas registradas; não declarar produção validada.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/3d4032375866f16bf357c2f0051e09f4875bd70d/docs/central-chamados/cc-01/acceptance.md"
+    },
+    {
+      "id": "CT-02",
+      "stage": "CC-01",
+      "requirements": [
+        "REQ-CC-02",
+        "REQ-CC-36"
+      ],
+      "scenario": "Solicitante e atendente percorrem dúvida e incidente no protótipo.",
+      "expected": "Ambos identificam próximo passo, responsável e resultado esperado; dúvidas viram ajustes.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/3d4032375866f16bf357c2f0051e09f4875bd70d/docs/central-chamados/cc-01/journey.md"
+    },
+    {
+      "id": "CT-03",
+      "stage": "CC-02",
+      "requirements": [
+        "REQ-CC-03",
+        "REQ-CC-04"
+      ],
+      "scenario": "Criar as cinco naturezas em dois domínios diferentes.",
+      "expected": "Classificações independentes e formulário mínimo compatível com cada natureza.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/1384008d0762704a13bc6d6bc7d9c93043edcd54/docs/central-chamados/cc-02/acceptance.md#rastreabilidade-do-aceite"
+    },
+    {
+      "id": "CT-04",
+      "stage": "CC-02",
+      "requirements": [
+        "REQ-CC-04"
+      ],
+      "scenario": "Reclassificar prioridade e domínio após triagem.",
+      "expected": "Motivo/ator/antes/depois preservados; natureza e SLA não mudam silenciosamente.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/1384008d0762704a13bc6d6bc7d9c93043edcd54/docs/central-chamados/cc-02/acceptance.md#rastreabilidade-do-aceite"
+    },
+    {
+      "id": "CT-05",
+      "stage": "CC-02",
+      "requirements": [
+        "REQ-CC-03",
+        "REQ-CC-10"
+      ],
+      "scenario": "Backfill de chamado legado com category=map e descrição ambígua.",
+      "expected": "Natureza não inferida; marcado para triagem, provenance e contagem reconciliáveis.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/1384008d0762704a13bc6d6bc7d9c93043edcd54/docs/central-chamados/cc-02/acceptance.md#rastreabilidade-do-aceite"
+    },
+    {
+      "id": "CT-06",
+      "stage": "CC-03",
+      "requirements": [
+        "REQ-CC-05",
+        "REQ-CC-06"
+      ],
+      "scenario": "Tentar fechar sem resultado, iniciar espera sem motivo, reabrir fechado com motivo.",
+      "expected": "Erros acionáveis nos dois primeiros; reabertura autorizada cria novo ciclo sem apagar fechamento anterior.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md"
+    },
+    {
+      "id": "CT-07",
+      "stage": "CC-03",
+      "requirements": [
+        "REQ-CC-07"
+      ],
+      "scenario": "Perder resposta após commit; reenviar mesma chave e conteúdo em paralelo.",
+      "expected": "Um ticket/um evento de criação; repetição retorna o mesmo ID e resultado.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md"
+    },
+    {
+      "id": "CT-08",
+      "stage": "CC-03",
+      "requirements": [
+        "REQ-CC-07"
+      ],
+      "scenario": "Reusar mesma chave com payload distinto ou com outro ator/organização.",
+      "expected": "Divergência no mesmo escopo rejeitada; chaves de escopos distintos não revelam resultados alheios.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md"
+    },
+    {
+      "id": "CT-09",
+      "stage": "CC-03",
+      "requirements": [
+        "REQ-CC-08",
+        "REQ-CC-09"
+      ],
+      "scenario": "Dois gestores enviam PATCH com mesma versão; perdedor tenta de novo sem ler.",
+      "expected": "Um sucesso; conflito 412 no outro; nenhum evento/outbox/auditoria de alteração inexistente.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md"
+    },
+    {
+      "id": "CT-10",
+      "stage": "CC-03",
+      "requirements": [
+        "REQ-CC-09"
+      ],
+      "scenario": "Falhar cada statement do batch, inclusive auditoria e outbox.",
+      "expected": "Rollback local completo; nenhum ticket/evento inconsistente; referência segura na falha.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md"
+    },
+    {
+      "id": "CT-11",
+      "stage": "CC-04",
+      "requirements": [
+        "REQ-CC-11",
+        "REQ-CC-37"
+      ],
+      "scenario": "Usuário com ticket.view tenta privado sem ACL, inclusive facetas e busca.",
+      "expected": "Sem corpo, título, existência, contagem ou anexo do item negado.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "CT-11: cobertura automatizada anterior preservada (CI 10/10): https://github.com/matheusapc22/maono_kepler_v1/actions/runs/36253579261/job/108436043859 . Nesta rodada, L06/L32/L35 e complemento SQL dentro de 36/36+22/22 locais aprovados. Consultas de lista/count são sintéticas com predicado real; não foram exercitadas todas as rotas HTTP, facetas/anexos/download com sessão real. Camada Aceitação permanece Pendente. Pacote: https://drive.google.com/file/d/1QS8ZEbZ1erAv9xtehfJHBpZ3YkKJITTy/view ."
+    },
+    {
+      "id": "CT-12",
+      "stage": "CC-04",
+      "requirements": [
+        "REQ-CC-11"
+      ],
+      "scenario": "Transferir grupo responsável enquanto antigo agente está com drawer aberto.",
+      "expected": "Próxima requisição negada e conteúdo local do drawer removido. Reautorização de notificações fica no escopo da CC-07/CT-25, quando existir consumidor durável.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "CT-12: CI anterior e contrato estático de limpeza de drawer preservados: https://github.com/matheusapc22/maono_kepler_v1/actions/runs/36253579261/job/108436043859 . Nova rodada L16-L19 confirma revogação backend na próxima chamada local; 36/36 funcionais aprovados. Falta sessão real com drawer aberto e observação da limpeza após 403/404; regex não comprova UI em runtime. Acceptance Pendente. Notificações continuam pivotadas para CC-07/CT-25. Pacote: https://drive.google.com/file/d/1QS8ZEbZ1erAv9xtehfJHBpZ3YkKJITTy/view ."
+    },
+    {
+      "id": "CT-13",
+      "stage": "CC-04",
+      "requirements": [
+        "REQ-CC-12"
+      ],
+      "scenario": "Atendente adiciona etiqueta comum parecida com etiqueta de acesso; tenta editar política.",
+      "expected": "Nenhuma permissão muda; edição de política negada sem capability específica.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "CT-13: CI anterior preservado; novo L22 confirma labels fora do resolvedor e casos de grants/escopo aprovados localmente. Não houve sessão real de atendente sem ticket.access.manage tentando as rotas administrativas; o módulo local não prova o gate RBAC HTTP. Acceptance Pendente. CI: https://github.com/matheusapc22/maono_kepler_v1/actions/runs/36253579261/job/108436043859 ; pacote: https://drive.google.com/file/d/1QS8ZEbZ1erAv9xtehfJHBpZ3YkKJITTy/view ."
+    },
+    {
+      "id": "CT-14",
+      "stage": "CC-05",
+      "requirements": [
+        "REQ-CC-11",
+        "REQ-CC-13"
+      ],
+      "scenario": "Anexo de nota interna acessado pelo autor do ticket em URL direta.",
+      "expected": "Negado apesar da leitura do chamado; audiência da mensagem prevalece.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "PLANEJAMENTO, não execução: CT-14 cobrir URL direta, lista, metadados e caminhos alternativos de storage. Plano CC-05 v1: https://drive.google.com/file/d/1q6A0PWNgO2D3tNCJRLtsMw-AHU7NEJkr/view"
+    },
+    {
+      "id": "CT-15",
+      "stage": "CC-05",
+      "requirements": [
+        "REQ-CC-13"
+      ],
+      "scenario": "CT-15 integrado: enviar nota e resposta com anexos; solicitante lê detalhe e recebe alerta. Subcaso A: conteúdo/audiência CC-05; B: entrega de alerta CC-07; semântica/motor SLA CC-10.",
+      "expected": "Só resposta e anexos autorizados aparecem. Nota/evento automático não é resposta elegível. Intenção outbox não comprova entrega de alerta nem funcionamento de SLA; CT-15 integrado permanece pendente até evidências das entregas dependentes.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "PLANEJAMENTO, não execução: pivot CT-15-A conteúdo em CC-05; entrega em CC-07; SLA em CC-10. Aceite integrado não antecipado. Plano: https://drive.google.com/file/d/1q6A0PWNgO2D3tNCJRLtsMw-AHU7NEJkr/view"
+    },
+    {
+      "id": "CT-16",
+      "stage": "CC-05",
+      "requirements": [
+        "REQ-CC-14"
+      ],
+      "scenario": "Digitar rascunho, trocar organização, recarregar e voltar; sessão é revogada.",
+      "expected": "Rascunho recuperado só no escopo autorizado; revogação impede leitura/envio.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "PLANEJAMENTO, não execução: draft no servidor; recarga recupera última versão confirmada. Duas abas/CAS, revogação, troca de organização e respostas tardias incluídos. Plano CC-05 v1."
+    },
+    {
+      "id": "CT-17",
+      "stage": "CC-05",
+      "requirements": [
+        "REQ-CC-13",
+        "REQ-CC-14"
+      ],
+      "scenario": "Resposta de envio se perde; usuário repete a mensagem.",
+      "expected": "Uma mensagem visível, rascunho marcado enviado após confirmação; sem duplicação.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "PLANEJAMENTO, não execução: receipt persistido, fingerprint, batch condicionado, retry reautorizado e consumo apenas da revisão enviada; não apagar texto novo. Plano CC-05 v1."
+    },
+    {
+      "id": "CT-18",
+      "stage": "CC-06",
+      "requirements": [
+        "REQ-CC-15"
+      ],
+      "scenario": "Uploads simultâneos disputam última vaga/bytes no limite de 150 MiB.",
+      "expected": "Reserva atômica aceita só capacidade disponível; contadores nunca negativos.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-19",
+      "stage": "CC-06",
+      "requirements": [
+        "REQ-CC-15",
+        "REQ-CC-16"
+      ],
+      "scenario": "Testar limites exatos e +1 byte, MIME/assinatura falsa e formato não permitido.",
+      "expected": "Limites respeitados; validação não confia em MIME; JSON/GeoJSON continuam recusados no contrato atual.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-20",
+      "stage": "CC-06",
+      "requirements": [
+        "REQ-CC-16"
+      ],
+      "scenario": "Chunk confirmado tem resposta perdida; cliente timeout e consulta HEAD.",
+      "expected": "Offset confirmado determina continuação; chunk antigo não é anexado novamente.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-21",
+      "stage": "CC-06",
+      "requirements": [
+        "REQ-CC-16"
+      ],
+      "scenario": "Recarregar durante upload e reselecionar arquivo diferente de mesmo nome.",
+      "expected": "Metadados/hash de verificação recusam arquivo divergente; sessão só retoma com arquivo correspondente.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-22",
+      "stage": "CC-06",
+      "requirements": [
+        "REQ-CC-16"
+      ],
+      "scenario": "Expirar/cancelar sessão e repetir DELETE com falha no Dropbox.",
+      "expected": "Reserva liberada uma vez; intenção de limpeza durável; reconciliador conclui sem ressurreição.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-23",
+      "stage": "CC-06",
+      "requirements": [
+        "REQ-CC-14",
+        "REQ-CC-16"
+      ],
+      "scenario": "Ticket criado, um anexo falha e outro finaliza; repetir somente falho.",
+      "expected": "Número do chamado preservado; sucesso parcial explícito; nenhuma duplicação do ticket/anexo ativo.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-24",
+      "stage": "CC-07",
+      "requirements": [
+        "REQ-CC-17"
+      ],
+      "scenario": "Consumidor indisponível; crash depois da entrega antes do ACK; replay e consumidores concorrentes.",
+      "expected": "Entrega posterior e uma notificação visível por destinatário/evento; lease seguro; lag e tentativas observáveis.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "27/09/2026, pós-merge ace9e647d7e1042327c234a891b2d182c33149cc: 26 CC07 + 232 regressões + 23 Preview + 3 Chromium local (API simulada) aprovados; 61 testes CR baseline aprovados. Total345; build/typecheck e ratchet OK. Não substitui acceptance autenticado. CT24 local coberto; Acceptance CT-24/25/15-B pendente: PR201 aberta, apenas suíteCC04; registrarCC07/publicar operador em main, configurar Environment/QA, preflight/janela. Confirmar provisionamento/deploy Worker agendado, flags/cutoff/allowlist; medir lag/p95/CPU/D1; ensaiar cleanup/restauração/rollback. Rollout permanente e aceites herdados CC03/04/05/06 não concluídos."
+    },
+    {
+      "id": "CT-25",
+      "stage": "CC-07",
+      "requirements": [
+        "REQ-CC-17",
+        "REQ-CC-11"
+      ],
+      "scenario": "Revogação após enqueue, audiência interna e cross-org; esgotamento de retries e reprocessamento autorizado.",
+      "expected": "Sem conteúdo/contador indevido; destinatário revogado suprimido; fila de falhas auditável e reprocessamento sem duplicação.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "27/09/2026, pós-merge ace9e647d7e1042327c234a891b2d182c33149cc: 26 CC07 + 232 regressões + 23 Preview + 3 Chromium local (API simulada) aprovados; 61 testes CR baseline aprovados. Total345; build/typecheck e ratchet OK. Não substitui acceptance autenticado. CT25 local coberto; Acceptance CT-24/25/15-B pendente: PR201 aberta, apenas suíteCC04; registrarCC07/publicar operador em main, configurar Environment/QA, preflight/janela. Confirmar provisionamento/deploy Worker agendado, flags/cutoff/allowlist; medir lag/p95/CPU/D1; ensaiar cleanup/restauração/rollback. Rollout permanente e aceites herdados CC03/04/05/06 não concluídos."
+    },
+    {
+      "id": "CT-26",
+      "stage": "CC-08",
+      "requirements": [
+        "REQ-CC-18",
+        "REQ-CC-19"
+      ],
+      "scenario": "Usuário que lê ticket vincula CR sem ter permissão de revisão e tenta Apply direto. Abrir CR de organização não ativa a partir do painel global com dois usuários: um com membership/permissões reais e outro somente com concessão global.",
+      "expected": "Vínculo não eleva acesso; revisão/aplicação negadas pelos gates próprios. Primeiro usuário usa contexto explícito do projeto sem mutar sessão; segundo é negado em Review/Apply.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "27/09/2026: tentativa bloqueada na verificação de prontidão. PR201 aberta; workflow Production Acceptance Operator ausente da main; registry possui apenas cc04-selective-access, sem suíte CC08. CT26–29/52 não executados em produção. Próximo passo: revisar/mergear operador, publicar workflow protegido, registrar suíte CC08 e validar QA/preflight/cleanup. Nenhuma flag alterada nesta tentativa. Cobertura local anterior preservada; migration0031 confirmada no run36358061359."
+    },
+    {
+      "id": "CT-27",
+      "stage": "CC-08",
+      "requirements": [
+        "REQ-CC-18",
+        "REQ-CC-19"
+      ],
+      "scenario": "Criar proposta, pedir informações, reenviar, aceitar/rejeitar/planejar. Registrar mudança de banco/plataforma sem operações MapConfig.",
+      "expected": "Versões e decisões mantidas; resultado de planejamento não equivale a aprovação de aplicar. Registro genérico preserva aprovação/entrega e vínculo à PR/runbook; nenhuma execução automática de SQL, código ou concessão de acesso.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "27/09/2026: tentativa bloqueada na verificação de prontidão. PR201 aberta; workflow Production Acceptance Operator ausente da main; registry possui apenas cc04-selective-access, sem suíte CC08. CT26–29/52 não executados em produção. Próximo passo: revisar/mergear operador, publicar workflow protegido, registrar suíte CC08 e validar QA/preflight/cleanup. Nenhuma flag alterada nesta tentativa. Cobertura local anterior preservada; migration0031 confirmada no run36358061359."
+    },
+    {
+      "id": "CT-28",
+      "stage": "CC-08",
+      "requirements": [
+        "REQ-CC-20"
+      ],
+      "scenario": "Repetir evento de CR aprovado; entregar evento anterior após aplicado.",
+      "expected": "Projeção não regride nem duplica; divergência registrada para reconciliação.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "27/09/2026: tentativa bloqueada na verificação de prontidão. PR201 aberta; workflow Production Acceptance Operator ausente da main; registry possui apenas cc04-selective-access, sem suíte CC08. CT26–29/52 não executados em produção. Próximo passo: revisar/mergear operador, publicar workflow protegido, registrar suíte CC08 e validar QA/preflight/cleanup. Nenhuma flag alterada nesta tentativa. Cobertura local anterior preservada; migration0031 confirmada no run36358061359."
+    },
+    {
+      "id": "CT-29",
+      "stage": "CC-08",
+      "requirements": [
+        "REQ-CC-05",
+        "REQ-CC-20"
+      ],
+      "scenario": "CR aplicado enquanto ticket aguarda validação; ticket encerrado enquanto CR está pendente.",
+      "expected": "CR aplicado não fecha ticket; encerramento exige motivo e aviso explícito do trabalho pendente.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "27/09/2026: tentativa bloqueada na verificação de prontidão. PR201 aberta; workflow Production Acceptance Operator ausente da main; registry possui apenas cc04-selective-access, sem suíte CC08. CT26–29/52 não executados em produção. Próximo passo: revisar/mergear operador, publicar workflow protegido, registrar suíte CC08 e validar QA/preflight/cleanup. Nenhuma flag alterada nesta tentativa. Cobertura local anterior preservada; migration0031 confirmada no run36358061359."
+    },
+    {
+      "id": "CT-30",
+      "stage": "CC-09",
+      "requirements": [
+        "REQ-CC-21"
+      ],
+      "scenario": "Fila com 250 chamados, empates de ordenação e inserção entre páginas.",
+      "expected": "Paginação determinística; todos navegáveis; snapshot/cursor evita duplicações e omissões.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Local aprovado: 250 itens/4 ordenações, empates, inserção/edição entre páginas; SQLite e Chromium lista/Kanban. Acceptance autenticado permanece pendente. https://github.com/matheusapc22/maono_kepler_v1/pull/209 ; SHA 4efb948b9a5841b233ce1c7fb11a99bb23046cf5"
+    },
+    {
+      "id": "CT-31",
+      "stage": "CC-09",
+      "requirements": [
+        "REQ-CC-21",
+        "REQ-CC-23"
+      ],
+      "scenario": "Mesmos filtros em lista/kanban/calendário; mover item acima de WIP.",
+      "expected": "Totais reconciliáveis, parcial identificado; limite aplica política e exceção tem motivo.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Local aprovado: filtros compartilhados, facetas autorizadas, WIP atômico com CAS e exceção auditada. Produção: limites, latência D1 e acceptance pendentes. https://github.com/matheusapc22/maono_kepler_v1/pull/209 ; SHA 4efb948b9a5841b233ce1c7fb11a99bb23046cf5"
+    },
+    {
+      "id": "CT-32",
+      "stage": "CC-09",
+      "requirements": [
+        "REQ-CC-22"
+      ],
+      "scenario": "Abrir deep-link sem permissão e alternar organização durante lista/detalhe/upload.",
+      "expected": "Link não vaza; resposta antiga descartada; transferência mantém escopo ou é cancelada claramente.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Local aprovado: URL/voltar/reload, deep-link404, detalhe atrasado descartado e upload abortado ao trocar organização. Sessão/transferência remotas ainda pendentes. https://github.com/matheusapc22/maono_kepler_v1/pull/209 ; SHA 4efb948b9a5841b233ce1c7fb11a99bb23046cf5"
+    },
+    {
+      "id": "CT-33",
+      "stage": "CC-10",
+      "requirements": [
+        "REQ-CC-24",
+        "REQ-CC-25"
+      ],
+      "scenario": "Abertura fora do expediente, feriado local e calendário com transição de DST.",
+      "expected": "Tempo útil calculado pelos intervalos UTC do calendário versionado; fuso e eventos explicáveis.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cobertura automatizada local aprovada (20 testes CC10; 255 regressão +4 UI). Acceptance autenticado permanece pendente. https://github.com/matheusapc22/maono_kepler_v1/blob/69654c6350e8690f3f3f2e71eb48aabb1c7ca57d/docs/central-chamados/cc-10/evidence.md"
+    },
+    {
+      "id": "CT-34",
+      "stage": "CC-10",
+      "requirements": [
+        "REQ-CC-25"
+      ],
+      "scenario": "Atribuição, autoresposta, nota interna e então resposta humana pública elegível.",
+      "expected": "Só último evento encerra relógio de primeira resposta; aberturas sem resposta continuam pendentes.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cobertura automatizada local aprovada (20 testes CC10; 255 regressão +4 UI). Acceptance autenticado permanece pendente. https://github.com/matheusapc22/maono_kepler_v1/blob/69654c6350e8690f3f3f2e71eb48aabb1c7ca57d/docs/central-chamados/cc-10/evidence.md"
+    },
+    {
+      "id": "CT-35",
+      "stage": "CC-10",
+      "requirements": [
+        "REQ-CC-24",
+        "REQ-CC-25"
+      ],
+      "scenario": "Pausas sobrepostas inválidas, retomada, fechamento e reabertura.",
+      "expected": "Intervalos válidos sem dupla subtração; ciclo novo; primeira resposta global permanece única.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cobertura automatizada local aprovada (20 testes CC10; 255 regressão +4 UI). Acceptance autenticado permanece pendente. https://github.com/matheusapc22/maono_kepler_v1/blob/69654c6350e8690f3f3f2e71eb48aabb1c7ca57d/docs/central-chamados/cc-10/evidence.md"
+    },
+    {
+      "id": "CT-36",
+      "stage": "CC-10",
+      "requirements": [
+        "REQ-CC-24"
+      ],
+      "scenario": "Publicar nova política e alterar prioridade de ticket antigo.",
+      "expected": "Histórico mantém política anterior; eventual migração é evento explícito com regra de segmentação.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cobertura automatizada local aprovada (20 testes CC10; 255 regressão +4 UI). Acceptance autenticado permanece pendente. https://github.com/matheusapc22/maono_kepler_v1/blob/69654c6350e8690f3f3f2e71eb48aabb1c7ca57d/docs/central-chamados/cc-10/evidence.md"
+    },
+    {
+      "id": "CT-37",
+      "stage": "CC-11",
+      "requirements": [
+        "REQ-CC-26"
+      ],
+      "scenario": "Coorte aberta no período com parte sem resposta/resolução.",
+      "expected": "Percentis só de eventos observados com n explícito; censurados e taxa de cobertura exibidos.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cenários locais aprovados:17 CC11,282 regressão,31 Chromium incluindo3 CC11. Acceptance autenticado remoto permanece PENDENTE. https://github.com/matheusapc22/maono_kepler_v1/blob/84b5d5109f1c60eb13e86263df2b9b6c96849c0d/docs/central-chamados/cc-11/evidence.md"
+    },
+    {
+      "id": "CT-38",
+      "stage": "CC-11",
+      "requirements": [
+        "REQ-CC-26"
+      ],
+      "scenario": "Reabrir em janela h, depois da janela e com coorte sem maturação.",
+      "expected": "Numerador/denominador reproduzíveis; ciclos imaturos separados; sem taxa com denominador zero.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cenários locais aprovados:17 CC11,282 regressão,31 Chromium incluindo3 CC11. Acceptance autenticado remoto permanece PENDENTE. https://github.com/matheusapc22/maono_kepler_v1/blob/84b5d5109f1c60eb13e86263df2b9b6c96849c0d/docs/central-chamados/cc-11/evidence.md"
+    },
+    {
+      "id": "CT-39",
+      "stage": "CC-11",
+      "requirements": [
+        "REQ-CC-27"
+      ],
+      "scenario": "Replay completo, evento duplicado e evento atrasado no agregador.",
+      "expected": "Resultados iguais ao cálculo bruto; watermark e correções de partição rastreáveis.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cenários locais aprovados:17 CC11,282 regressão,31 Chromium incluindo3 CC11. Acceptance autenticado remoto permanece PENDENTE. https://github.com/matheusapc22/maono_kepler_v1/blob/84b5d5109f1c60eb13e86263df2b9b6c96849c0d/docs/central-chamados/cc-11/evidence.md"
+    },
+    {
+      "id": "CT-40",
+      "stage": "CC-11",
+      "requirements": [
+        "REQ-CC-26",
+        "REQ-CC-27"
+      ],
+      "scenario": "Legado sem resposta histórica e backlog com longa espera.",
+      "expected": "Tempo desconhecido não vira zero; itens abertos/espera aparecem em distribuição própria.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "Cenários locais aprovados:17 CC11,282 regressão,31 Chromium incluindo3 CC11. Acceptance autenticado remoto permanece PENDENTE. https://github.com/matheusapc22/maono_kepler_v1/blob/84b5d5109f1c60eb13e86263df2b9b6c96849c0d/docs/central-chamados/cc-11/evidence.md"
+    },
+    {
+      "id": "CT-41",
+      "stage": "CC-12",
+      "requirements": [
+        "REQ-CC-28"
+      ],
+      "scenario": "Exportar recorte com 250 registros, filtros e políticas diferentes.",
+      "expected": "Todas as linhas autorizadas, manifesto com período/fuso/filtros/versões/qualidade; totals reconciliam.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "LOCAL aprovado: 250 autorizados, privados/cross-org excluídos, completude, filtros/percentis/manifesto. CT41 autenticado e causas CC13 pendentes; não marcar aprovado global. https://github.com/matheusapc22/maono_kepler_v1/blob/911ad5722908b398d03fe59d7f8837d4f657db2a/docs/central-chamados/cc-12/evidence.md"
+    },
+    {
+      "id": "CT-42",
+      "stage": "CC-12",
+      "requirements": [
+        "REQ-CC-29"
+      ],
+      "scenario": "Revogar acesso depois de gerar CSV; título começa com =, +, - ou @.",
+      "expected": "Download negado após revogação; células perigosas neutralizadas no exportador.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "LOCAL aprovado: revogação pós-ready/entre partições, checksum, isolamento e corpus CSV text-v1. CT42 autenticado e importação/reabertura manual pendentes. https://github.com/matheusapc22/maono_kepler_v1/blob/911ad5722908b398d03fe59d7f8837d4f657db2a/docs/central-chamados/cc-12/evidence.md"
+    },
+    {
+      "id": "CT-43",
+      "stage": "CC-13",
+      "requirements": [
+        "REQ-CC-30"
+      ],
+      "scenario": "Vários relatos viram incidente com mitigação antes da causa conhecida.",
+      "expected": "Restauração e atualização registradas; chamados seguem sua validação; causa desconhecida explícita.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "29/09/2026: cenário local aprovado na PR213; aceite autenticado permanece pendente. https://github.com/matheusapc22/maono_kepler_v1/blob/9657ec6a7e5a1f91e22f70174a3e5c6e578a5749/docs/central-chamados/cc-13/evidence.md"
+    },
+    {
+      "id": "CT-44",
+      "stage": "CC-13",
+      "requirements": [
+        "REQ-CC-31",
+        "REQ-CC-11"
+      ],
+      "scenario": "Problema recorrente reúne chamados privados de grupos diferentes.",
+      "expected": "Cada agente só vê relações autorizadas; nenhuma contagem/título oculto inferível.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "29/09/2026: cenário local aprovado na PR213; aceite autenticado permanece pendente. https://github.com/matheusapc22/maono_kepler_v1/blob/9657ec6a7e5a1f91e22f70174a3e5c6e578a5749/docs/central-chamados/cc-13/evidence.md"
+    },
+    {
+      "id": "CT-45",
+      "stage": "CC-14",
+      "requirements": [
+        "REQ-CC-32"
+      ],
+      "scenario": "Transformar solução privada em artigo e tentar publicar sem revisão.",
+      "expected": "Rascunho com audiência restrita; publicação bloqueada; dados sensíveis exigem remoção/revisão.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-46",
+      "stage": "CC-14",
+      "requirements": [
+        "REQ-CC-32",
+        "REQ-CC-33"
+      ],
+      "scenario": "Reusar artigo v2, editar resposta e depois retirar artigo.",
+      "expected": "Mensagem conserva referência à v2; revisão humana registrada; retirada impede novas sugestões.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-47",
+      "stage": "CC-15",
+      "requirements": [
+        "REQ-CC-34"
+      ],
+      "scenario": "Não responder pesquisa; enviar duas respostas ao mesmo convite e reabrir ticket.",
+      "expected": "Fechamento permanece; unicidade por convite/ciclo; novo ciclo tratado separadamente.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "CT47 local aprovado: ciclo, voluntariedade, unicidade/replay e reabertura. Aceite autenticado Pendente. https://github.com/matheusapc22/maono_kepler_v1/tree/4f34ad9393ec86647d2489f0db5820594b5d2bfd/docs/central-chamados/cc-15/evidence.md"
+    },
+    {
+      "id": "CT-48",
+      "stage": "CC-15",
+      "requirements": [
+        "REQ-CC-34",
+        "REQ-CC-26"
+      ],
+      "scenario": "Calcular esforço/resultado com não respondentes e janela incompleta.",
+      "expected": "n respondentes, convidados elegíveis e taxa de resposta explícitos; não resposta não vira avaliação positiva.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "CT48 local aprovado:40% (4/10), imaturos separados, versões/ausência/retirada. Aceite autenticado Pendente. https://github.com/matheusapc22/maono_kepler_v1/tree/4f34ad9393ec86647d2489f0db5820594b5d2bfd/docs/central-chamados/cc-15/evidence.md"
+    },
+    {
+      "id": "CT-49",
+      "stage": "CC-03",
+      "requirements": [
+        "REQ-CC-09",
+        "REQ-CC-10"
+      ],
+      "scenario": "Reexecutar importação e GET após cutover; tentar editar/remover evento passado.",
+      "expected": "Sem duplicação; GET sem escrita de compatibilidade; histórico só admite correção por novo evento.",
+      "sourceStatus": "Aprovado",
+      "sourceEvidence": "https://github.com/matheusapc22/maono_kepler_v1/blob/cdc2277774ffe89a944761d5738b40b0d038cb73/docs/central-chamados/cc-03/acceptance.md"
+    },
+    {
+      "id": "CT-50",
+      "stage": "CC-04",
+      "requirements": [
+        "REQ-CC-11",
+        "REQ-CC-37"
+      ],
+      "scenario": "Combinar grant de grupo com deny específico, conta suspensa e usuário removido.",
+      "expected": "Negação/revogação prevalece; autenticação e vínculo ativo verificados em toda ação.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "CT-50: 36/36 locais, incluindo deny por usuário/grupo/política, usuário inativo e membership removido (L13-L15/L20-L21/L23-L24/L33). CI histórico: https://github.com/matheusapc22/maono_kepler_v1/actions/runs/36253579261/job/108436043859 . Falta verificar autenticação e revogação nas rotas reais com atores dedicados; não suspender operador nem terceiros. Acceptance Pendente. Pacote: https://drive.google.com/file/d/1QS8ZEbZ1erAv9xtehfJHBpZ3YkKJITTy/view ."
+    },
+    {
+      "id": "CT-51",
+      "stage": "CC-06",
+      "requirements": [
+        "REQ-CC-16",
+        "REQ-CC-37"
+      ],
+      "scenario": "D1 falha após Dropbox finalizar; storage não READY; scanner opcional indisponível.",
+      "expected": "Estado FINALIZING/RECONCILING preserva intenção; nada ACTIVE sem confirmação; quarentena não vira aprovação automática.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-52",
+      "stage": "CC-08",
+      "requirements": [
+        "REQ-CC-18",
+        "REQ-CC-20",
+        "REQ-CC-40"
+      ],
+      "scenario": "Gates de CR fechados, migrations 0021/22/23 não confirmadas e flags de preview desligadas. Validar Apply ~90 MiB com interrupção/retry e projeto alterado depois da primeira aplicação.",
+      "expected": "CR básico conforme schema disponível; rollout/Apply protegido; nenhuma flag ou migration ativada automaticamente. Pipeline de payload grande mantém memória dentro do orçamento e retry aponta applied_revision original, sem reaplicar.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": "27/09/2026: tentativa bloqueada na verificação de prontidão. PR201 aberta; workflow Production Acceptance Operator ausente da main; registry possui apenas cc04-selective-access, sem suíte CC08. CT26–29/52 não executados em produção. Próximo passo: revisar/mergear operador, publicar workflow protegido, registrar suíte CC08 e validar QA/preflight/cleanup. Nenhuma flag alterada nesta tentativa. Cobertura local anterior preservada; migration0031 confirmada no run36358061359."
+    },
+    {
+      "id": "CT-53",
+      "stage": "CC-16",
+      "requirements": [
+        "REQ-CC-35"
+      ],
+      "scenario": "Abrir, preencher, anexar, resolver conflito e fechar usando teclado/leitor de tela.",
+      "expected": "Ordem/foco previsíveis; sucesso, erro e progresso anunciados sem inundar alertas.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-54",
+      "stage": "CC-16",
+      "requirements": [
+        "REQ-CC-35",
+        "REQ-CC-36"
+      ],
+      "scenario": "Três papéis executam as cinco naturezas com falha parcial e reabertura.",
+      "expected": "Resultado e próximo passo compreendidos; evidências de uso registradas; bloqueadores tratados.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-55",
+      "stage": "CC-17",
+      "requirements": [
+        "REQ-CC-37"
+      ],
+      "scenario": "Matriz de autor/editor/owner/admin/super admin e negações em duas organizações.",
+      "expected": "Cada capacidade segue regra efetiva; nenhum acesso implícito por link, role amplo ou ID.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-56",
+      "stage": "CC-17",
+      "requirements": [
+        "REQ-CC-38"
+      ],
+      "scenario": "Carga representativa, consultas de métricas/exportações e uploads em paralelo.",
+      "expected": "Orçamento aprovado em CC-01 registrado com volume, ambiente, p95/erros; invariantes e UX preservados.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-57",
+      "stage": "CC-17",
+      "requirements": [
+        "REQ-CC-38",
+        "REQ-CC-09",
+        "REQ-CC-16",
+        "REQ-CC-17"
+      ],
+      "scenario": "Caos em D1, Dropbox e consumidor; timeout e retries sobre mesma intenção.",
+      "expected": "Sem perda de histórico/capacidade, duplicação ou vazamento; reconciliação e alertas executáveis.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-58",
+      "stage": "CC-17",
+      "requirements": [
+        "REQ-CC-38",
+        "REQ-CC-40"
+      ],
+      "scenario": "Desligar feature flag e voltar app durante schema expandido com jobs pendentes.",
+      "expected": "Cliente compatível lê dados; jobs drenados/pausados com segurança; rollback não destrói evidência.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-59",
+      "stage": "CC-18",
+      "requirements": [
+        "REQ-CC-39",
+        "REQ-CC-40"
+      ],
+      "scenario": "Operador segue runbook sem autor do código e valida deployment SHA/schema.",
+      "expected": "Consegue diagnosticar/reprocessar/restaurar em ensaio; evidências identificam banco e ambiente.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    },
+    {
+      "id": "CT-60",
+      "stage": "CC-18",
+      "requirements": [
+        "REQ-CC-40"
+      ],
+      "scenario": "Tentar marcar entregue com merge verde e migration sem confirmação ou teste sem evidência.",
+      "expected": "Gate impede entrega; pendência humana e motivo visíveis; build nunca substitui confirmação de schema.",
+      "sourceStatus": "Pendente",
+      "sourceEvidence": null
+    }
+  ]
+}

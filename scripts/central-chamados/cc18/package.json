@@ -1,0 +1,6 @@
+{
+  "name": "maono-cc18-doc-contracts",
+  "private": true,
+  "type": "module",
+  "devDependencies": {"@apidevtools/swagger-parser": "13.1.0"}
+}

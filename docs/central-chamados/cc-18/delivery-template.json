@@ -1,0 +1,1539 @@
+{
+  "schemaVersion": 1,
+  "productSha": null,
+  "environment": "production",
+  "code": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null,
+    "merged": false,
+    "pullRequest": null,
+    "author": null
+  },
+  "deployment": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null,
+    "servedSha": null,
+    "canonicalUrl": null
+  },
+  "schema": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null,
+    "environment": "production",
+    "databaseName": "maono_maps",
+    "databaseId": "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db",
+    "quickCheck": null,
+    "foreignKeyViolations": null,
+    "ledgerEvidence": null,
+    "migrationDisposition": null,
+    "migrations": [],
+    "diffEvidence": null
+  },
+  "qa": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null
+  },
+  "review": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null
+  },
+  "documentation": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null
+  },
+  "operations": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null,
+    "rolloutApproved": false,
+    "rolloutEvidence": null,
+    "cohortEvidence": null,
+    "newOrganizationChecklist": null
+  },
+  "handoff": {
+    "status": "PENDING",
+    "productSha": null,
+    "executor": null,
+    "executedAt": null,
+    "evidence": null
+  },
+  "cc17": {
+    "schemaVersion": 1,
+    "productSha": null,
+    "servedSha": null,
+    "environment": "production",
+    "window": {
+      "approved": false,
+      "approvedBy": null,
+      "approvedAt": null,
+      "evidence": null
+    },
+    "schema": {
+      "verified": false,
+      "evidence": null
+    },
+    "review": {
+      "approved": false,
+      "reviewer": null,
+      "evidence": null
+    },
+    "cleanup": {
+      "complete": false,
+      "evidence": null
+    },
+    "configuration": {
+      "restored": false,
+      "evidence": null
+    },
+    "blockers": [
+      "Janela, atores, budgets, schema, revisão e aceite CT55–58 pendentes."
+    ],
+    "cases": [
+      {
+        "id": "CT55",
+        "status": "PENDING",
+        "productSha": null,
+        "environment": "production",
+        "executor": null,
+        "executedAt": null,
+        "evidence": null
+      },
+      {
+        "id": "CT56",
+        "status": "PENDING",
+        "productSha": null,
+        "environment": "production",
+        "executor": null,
+        "executedAt": null,
+        "evidence": null
+      },
+      {
+        "id": "CT57",
+        "status": "PENDING",
+        "productSha": null,
+        "environment": "production",
+        "executor": null,
+        "executedAt": null,
+        "evidence": null
+      },
+      {
+        "id": "CT58",
+        "status": "PENDING",
+        "productSha": null,
+        "environment": "production",
+        "executor": null,
+        "executedAt": null,
+        "evidence": null
+      }
+    ],
+    "performance": {
+      "budget": {
+        "approved": false,
+        "approvedBy": null,
+        "approvedAt": null,
+        "evidence": null,
+        "records": null,
+        "concurrency": null,
+        "durationSeconds": null,
+        "samples": null,
+        "maxErrorRate": null,
+        "p95Ms": {
+          "metrics": null,
+          "exports": null,
+          "uploads": null
+        }
+      },
+      "observed": {
+        "records": null,
+        "concurrency": null,
+        "durationSeconds": null
+      },
+      "results": {
+        "metrics": {
+          "samples": null,
+          "p95Ms": null,
+          "errorRate": null
+        },
+        "exports": {
+          "samples": null,
+          "p95Ms": null,
+          "errorRate": null
+        },
+        "uploads": {
+          "samples": null,
+          "p95Ms": null,
+          "errorRate": null
+        }
+      },
+      "invariantsPreserved": false,
+      "evidence": null
+    }
+  },
+  "requirements": [
+    {
+      "id": "REQ-CC-01",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-01"
+      ]
+    },
+    {
+      "id": "REQ-CC-02",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-02"
+      ]
+    },
+    {
+      "id": "REQ-CC-03",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-03",
+        "CT-05"
+      ]
+    },
+    {
+      "id": "REQ-CC-04",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-03",
+        "CT-04"
+      ]
+    },
+    {
+      "id": "REQ-CC-05",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-06",
+        "CT-29"
+      ]
+    },
+    {
+      "id": "REQ-CC-06",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-06"
+      ]
+    },
+    {
+      "id": "REQ-CC-07",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-07",
+        "CT-08"
+      ]
+    },
+    {
+      "id": "REQ-CC-08",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-09"
+      ]
+    },
+    {
+      "id": "REQ-CC-09",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-09",
+        "CT-10",
+        "CT-49",
+        "CT-57"
+      ]
+    },
+    {
+      "id": "REQ-CC-10",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-05",
+        "CT-49"
+      ]
+    },
+    {
+      "id": "REQ-CC-11",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-11",
+        "CT-12",
+        "CT-14",
+        "CT-25",
+        "CT-44",
+        "CT-50"
+      ]
+    },
+    {
+      "id": "REQ-CC-12",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-13"
+      ]
+    },
+    {
+      "id": "REQ-CC-13",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-14",
+        "CT-15",
+        "CT-17"
+      ]
+    },
+    {
+      "id": "REQ-CC-14",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-16",
+        "CT-17",
+        "CT-23"
+      ]
+    },
+    {
+      "id": "REQ-CC-15",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-18",
+        "CT-19"
+      ]
+    },
+    {
+      "id": "REQ-CC-16",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-19",
+        "CT-20",
+        "CT-21",
+        "CT-22",
+        "CT-23",
+        "CT-51",
+        "CT-57"
+      ]
+    },
+    {
+      "id": "REQ-CC-17",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-24",
+        "CT-25",
+        "CT-57"
+      ]
+    },
+    {
+      "id": "REQ-CC-18",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-26",
+        "CT-27",
+        "CT-52"
+      ]
+    },
+    {
+      "id": "REQ-CC-19",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-26",
+        "CT-27"
+      ]
+    },
+    {
+      "id": "REQ-CC-20",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-28",
+        "CT-29",
+        "CT-52"
+      ]
+    },
+    {
+      "id": "REQ-CC-21",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-30",
+        "CT-31"
+      ]
+    },
+    {
+      "id": "REQ-CC-22",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-32"
+      ]
+    },
+    {
+      "id": "REQ-CC-23",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-31"
+      ]
+    },
+    {
+      "id": "REQ-CC-24",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-33",
+        "CT-35",
+        "CT-36"
+      ]
+    },
+    {
+      "id": "REQ-CC-25",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-33",
+        "CT-34",
+        "CT-35"
+      ]
+    },
+    {
+      "id": "REQ-CC-26",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-37",
+        "CT-38",
+        "CT-40",
+        "CT-48"
+      ]
+    },
+    {
+      "id": "REQ-CC-27",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-39",
+        "CT-40"
+      ]
+    },
+    {
+      "id": "REQ-CC-28",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-41"
+      ]
+    },
+    {
+      "id": "REQ-CC-29",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-42"
+      ]
+    },
+    {
+      "id": "REQ-CC-30",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-43"
+      ]
+    },
+    {
+      "id": "REQ-CC-31",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-44"
+      ]
+    },
+    {
+      "id": "REQ-CC-32",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-45",
+        "CT-46"
+      ]
+    },
+    {
+      "id": "REQ-CC-33",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-46"
+      ]
+    },
+    {
+      "id": "REQ-CC-34",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-47",
+        "CT-48"
+      ]
+    },
+    {
+      "id": "REQ-CC-35",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-53",
+        "CT-54"
+      ]
+    },
+    {
+      "id": "REQ-CC-36",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-02",
+        "CT-54"
+      ]
+    },
+    {
+      "id": "REQ-CC-37",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-11",
+        "CT-50",
+        "CT-51",
+        "CT-55"
+      ]
+    },
+    {
+      "id": "REQ-CC-38",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-56",
+        "CT-57",
+        "CT-58"
+      ]
+    },
+    {
+      "id": "REQ-CC-39",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-59"
+      ]
+    },
+    {
+      "id": "REQ-CC-40",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "pullRequest": null,
+      "tests": [
+        "CT-52",
+        "CT-58",
+        "CT-59",
+        "CT-60"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "id": "CT-01",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Fonte e lacunas registradas; não declarar produção validada.",
+      "observed": null
+    },
+    {
+      "id": "CT-02",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Ambos identificam próximo passo, responsável e resultado esperado; dúvidas viram ajustes.",
+      "observed": null
+    },
+    {
+      "id": "CT-03",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Classificações independentes e formulário mínimo compatível com cada natureza.",
+      "observed": null
+    },
+    {
+      "id": "CT-04",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Motivo/ator/antes/depois preservados; natureza e SLA não mudam silenciosamente.",
+      "observed": null
+    },
+    {
+      "id": "CT-05",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Natureza não inferida; marcado para triagem, provenance e contagem reconciliáveis.",
+      "observed": null
+    },
+    {
+      "id": "CT-06",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Erros acionáveis nos dois primeiros; reabertura autorizada cria novo ciclo sem apagar fechamento anterior.",
+      "observed": null
+    },
+    {
+      "id": "CT-07",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Um ticket/um evento de criação; repetição retorna o mesmo ID e resultado.",
+      "observed": null
+    },
+    {
+      "id": "CT-08",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Divergência no mesmo escopo rejeitada; chaves de escopos distintos não revelam resultados alheios.",
+      "observed": null
+    },
+    {
+      "id": "CT-09",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Um sucesso; conflito 412 no outro; nenhum evento/outbox/auditoria de alteração inexistente.",
+      "observed": null
+    },
+    {
+      "id": "CT-10",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Rollback local completo; nenhum ticket/evento inconsistente; referência segura na falha.",
+      "observed": null
+    },
+    {
+      "id": "CT-11",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Sem corpo, título, existência, contagem ou anexo do item negado.",
+      "observed": null
+    },
+    {
+      "id": "CT-12",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Próxima requisição negada e conteúdo local do drawer removido. Reautorização de notificações fica no escopo da CC-07/CT-25, quando existir consumidor durável.",
+      "observed": null
+    },
+    {
+      "id": "CT-13",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Nenhuma permissão muda; edição de política negada sem capability específica.",
+      "observed": null
+    },
+    {
+      "id": "CT-14",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Negado apesar da leitura do chamado; audiência da mensagem prevalece.",
+      "observed": null
+    },
+    {
+      "id": "CT-15",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Só resposta e anexos autorizados aparecem. Nota/evento automático não é resposta elegível. Intenção outbox não comprova entrega de alerta nem funcionamento de SLA; CT-15 integrado permanece pendente até evidências das entregas dependentes.",
+      "observed": null
+    },
+    {
+      "id": "CT-16",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Rascunho recuperado só no escopo autorizado; revogação impede leitura/envio.",
+      "observed": null
+    },
+    {
+      "id": "CT-17",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Uma mensagem visível, rascunho marcado enviado após confirmação; sem duplicação.",
+      "observed": null
+    },
+    {
+      "id": "CT-18",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Reserva atômica aceita só capacidade disponível; contadores nunca negativos.",
+      "observed": null
+    },
+    {
+      "id": "CT-19",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Limites respeitados; validação não confia em MIME; JSON/GeoJSON continuam recusados no contrato atual.",
+      "observed": null
+    },
+    {
+      "id": "CT-20",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Offset confirmado determina continuação; chunk antigo não é anexado novamente.",
+      "observed": null
+    },
+    {
+      "id": "CT-21",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Metadados/hash de verificação recusam arquivo divergente; sessão só retoma com arquivo correspondente.",
+      "observed": null
+    },
+    {
+      "id": "CT-22",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Reserva liberada uma vez; intenção de limpeza durável; reconciliador conclui sem ressurreição.",
+      "observed": null
+    },
+    {
+      "id": "CT-23",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Número do chamado preservado; sucesso parcial explícito; nenhuma duplicação do ticket/anexo ativo.",
+      "observed": null
+    },
+    {
+      "id": "CT-24",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Entrega posterior e uma notificação visível por destinatário/evento; lease seguro; lag e tentativas observáveis.",
+      "observed": null
+    },
+    {
+      "id": "CT-25",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Sem conteúdo/contador indevido; destinatário revogado suprimido; fila de falhas auditável e reprocessamento sem duplicação.",
+      "observed": null
+    },
+    {
+      "id": "CT-26",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Vínculo não eleva acesso; revisão/aplicação negadas pelos gates próprios. Primeiro usuário usa contexto explícito do projeto sem mutar sessão; segundo é negado em Review/Apply.",
+      "observed": null
+    },
+    {
+      "id": "CT-27",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Versões e decisões mantidas; resultado de planejamento não equivale a aprovação de aplicar. Registro genérico preserva aprovação/entrega e vínculo à PR/runbook; nenhuma execução automática de SQL, código ou concessão de acesso.",
+      "observed": null
+    },
+    {
+      "id": "CT-28",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Projeção não regride nem duplica; divergência registrada para reconciliação.",
+      "observed": null
+    },
+    {
+      "id": "CT-29",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "CR aplicado não fecha ticket; encerramento exige motivo e aviso explícito do trabalho pendente.",
+      "observed": null
+    },
+    {
+      "id": "CT-30",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Paginação determinística; todos navegáveis; snapshot/cursor evita duplicações e omissões.",
+      "observed": null
+    },
+    {
+      "id": "CT-31",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Totais reconciliáveis, parcial identificado; limite aplica política e exceção tem motivo.",
+      "observed": null
+    },
+    {
+      "id": "CT-32",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Link não vaza; resposta antiga descartada; transferência mantém escopo ou é cancelada claramente.",
+      "observed": null
+    },
+    {
+      "id": "CT-33",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Tempo útil calculado pelos intervalos UTC do calendário versionado; fuso e eventos explicáveis.",
+      "observed": null
+    },
+    {
+      "id": "CT-34",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Só último evento encerra relógio de primeira resposta; aberturas sem resposta continuam pendentes.",
+      "observed": null
+    },
+    {
+      "id": "CT-35",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Intervalos válidos sem dupla subtração; ciclo novo; primeira resposta global permanece única.",
+      "observed": null
+    },
+    {
+      "id": "CT-36",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Histórico mantém política anterior; eventual migração é evento explícito com regra de segmentação.",
+      "observed": null
+    },
+    {
+      "id": "CT-37",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Percentis só de eventos observados com n explícito; censurados e taxa de cobertura exibidos.",
+      "observed": null
+    },
+    {
+      "id": "CT-38",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Numerador/denominador reproduzíveis; ciclos imaturos separados; sem taxa com denominador zero.",
+      "observed": null
+    },
+    {
+      "id": "CT-39",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Resultados iguais ao cálculo bruto; watermark e correções de partição rastreáveis.",
+      "observed": null
+    },
+    {
+      "id": "CT-40",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Tempo desconhecido não vira zero; itens abertos/espera aparecem em distribuição própria.",
+      "observed": null
+    },
+    {
+      "id": "CT-41",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Todas as linhas autorizadas, manifesto com período/fuso/filtros/versões/qualidade; totals reconciliam.",
+      "observed": null
+    },
+    {
+      "id": "CT-42",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Download negado após revogação; células perigosas neutralizadas no exportador.",
+      "observed": null
+    },
+    {
+      "id": "CT-43",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Restauração e atualização registradas; chamados seguem sua validação; causa desconhecida explícita.",
+      "observed": null
+    },
+    {
+      "id": "CT-44",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Cada agente só vê relações autorizadas; nenhuma contagem/título oculto inferível.",
+      "observed": null
+    },
+    {
+      "id": "CT-45",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Rascunho com audiência restrita; publicação bloqueada; dados sensíveis exigem remoção/revisão.",
+      "observed": null
+    },
+    {
+      "id": "CT-46",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Mensagem conserva referência à v2; revisão humana registrada; retirada impede novas sugestões.",
+      "observed": null
+    },
+    {
+      "id": "CT-47",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Fechamento permanece; unicidade por convite/ciclo; novo ciclo tratado separadamente.",
+      "observed": null
+    },
+    {
+      "id": "CT-48",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "n respondentes, convidados elegíveis e taxa de resposta explícitos; não resposta não vira avaliação positiva.",
+      "observed": null
+    },
+    {
+      "id": "CT-49",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Sem duplicação; GET sem escrita de compatibilidade; histórico só admite correção por novo evento.",
+      "observed": null
+    },
+    {
+      "id": "CT-50",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Negação/revogação prevalece; autenticação e vínculo ativo verificados em toda ação.",
+      "observed": null
+    },
+    {
+      "id": "CT-51",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Estado FINALIZING/RECONCILING preserva intenção; nada ACTIVE sem confirmação; quarentena não vira aprovação automática.",
+      "observed": null
+    },
+    {
+      "id": "CT-52",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "CR básico conforme schema disponível; rollout/Apply protegido; nenhuma flag ou migration ativada automaticamente. Pipeline de payload grande mantém memória dentro do orçamento e retry aponta applied_revision original, sem reaplicar.",
+      "observed": null
+    },
+    {
+      "id": "CT-53",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Ordem/foco previsíveis; sucesso, erro e progresso anunciados sem inundar alertas.",
+      "observed": null
+    },
+    {
+      "id": "CT-54",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Resultado e próximo passo compreendidos; evidências de uso registradas; bloqueadores tratados.",
+      "observed": null
+    },
+    {
+      "id": "CT-55",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Cada capacidade segue regra efetiva; nenhum acesso implícito por link, role amplo ou ID.",
+      "observed": null
+    },
+    {
+      "id": "CT-56",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Orçamento aprovado em CC-01 registrado com volume, ambiente, p95/erros; invariantes e UX preservados.",
+      "observed": null
+    },
+    {
+      "id": "CT-57",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Sem perda de histórico/capacidade, duplicação ou vazamento; reconciliação e alertas executáveis.",
+      "observed": null
+    },
+    {
+      "id": "CT-58",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Cliente compatível lê dados; jobs drenados/pausados com segurança; rollback não destrói evidência.",
+      "observed": null
+    },
+    {
+      "id": "CT-59",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "diagnosis": null,
+      "reprocess": null,
+      "restore": null,
+      "cleanup": null,
+      "expected": "Consegue diagnosticar/reprocessar/restaurar em ensaio; evidências identificam banco e ambiente.",
+      "observed": null
+    },
+    {
+      "id": "CT-60",
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null,
+      "environment": null,
+      "expected": "Gate impede entrega; pendência humana e motivo visíveis; build nunca substitui confirmação de schema.",
+      "observed": null
+    }
+  ],
+  "pendingItems": [
+    {
+      "id": "C17-P01",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C17-P02",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C17-P03",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C17-P04",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C17-P05",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C17-P06",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C17-P07",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C17-P08",
+      "reason": "Ver pendencias.md e controle CC17",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C18-P01",
+      "reason": "Ver pendencias.md e controle CC18",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C18-P02",
+      "reason": "Ver pendencias.md e controle CC18",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C18-P03",
+      "reason": "Ver pendencias.md e controle CC18",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C18-P04",
+      "reason": "Ver pendencias.md e controle CC18",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    },
+    {
+      "id": "C18-P05",
+      "reason": "Ver pendencias.md e controle CC18",
+      "owner": null,
+      "blocking": true,
+      "status": "PENDING",
+      "productSha": null,
+      "executor": null,
+      "executedAt": null,
+      "evidence": null
+    }
+  ],
+  "blockers": [
+    "CC17 e aceites herdados, CT59, review, schema/SHA servido, decisões e handoff pendentes."
+  ]
+}

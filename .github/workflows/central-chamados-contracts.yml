@@ -117,6 +117,7 @@ on:
       - 'tests/helpers/ticket-integrated-db.mjs'
       - 'tests/helpers/ticket-upload-provider.mjs'
       - 'tests/cc17-evidence.test.mjs'
+      - 'tests/cc18-*.test.mjs'
       - 'tests/production-acceptance-operator*.test.mjs'
       - 'scripts/acceptance/**'
   workflow_dispatch:
@@ -125,6 +126,24 @@ permissions:
   contents: read
 
 jobs:
+  cc18-operational-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install isolated pinned OpenAPI validator
+        run: npm ci --prefix scripts/central-chamados/cc18 --no-audit --no-fund
+      - name: Validate delivery evidence gate and documentation contracts
+        run: |
+          npm run test:cc18
+          npm run validate:cc18
+
   cc01-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 5
