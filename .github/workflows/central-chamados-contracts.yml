@@ -3,6 +3,14 @@ name: Central de Chamados contracts
 on:
   pull_request:
     paths:
+      - 'functions/_lib/ticket-feedback*.js'
+      - 'functions/api/organizations/*/ticket-feedback*'
+      - 'functions/api/organizations/*/ticket-feedback/**'
+      - 'migrations/0038_ticket_feedback.sql'
+      - 'tests/ticket-feedback*.test.mjs'
+      - 'src/pages/Projects/components/TicketFeedbackPanel.tsx'
+      - 'tests/browser/ticket-feedback.spec.ts'
+      - 'tests/browser/fixtures/ticket-feedback*'
       - 'docs/central-chamados/**'
       - 'scripts/central-chamados/**'
       - 'functions/_lib/ticket-notification*.js'
@@ -268,3 +276,17 @@ jobs:
           node-version: 22
       - name: Validate editorial review, private origins, reuse and atomic provenance
         run: node --test tests/ticket-knowledge*.test.mjs tests/ticket-conversation*.test.mjs
+
+  cc15-feedback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate voluntary feedback, cycle uniqueness, delivery ACL and mature cohorts
+        run: node --test tests/ticket-feedback*.test.mjs tests/ticket-metrics*.test.mjs tests/ticket-notifications*.test.mjs

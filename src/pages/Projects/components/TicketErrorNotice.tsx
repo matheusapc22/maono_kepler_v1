@@ -10,6 +10,12 @@ type TicketErrorNoticeProps = {
 };
 
 function userMessage(error: TicketApiError) {
+  if (error.code === "TICKET_FEEDBACK_EXPIRED") return "O prazo desta pesquisa terminou. O chamado permanece disponível para conversa ou reabertura.";
+  if (error.code === "TICKET_FEEDBACK_ALREADY_RESPONDED") return "Este convite já tem uma resposta. Atualize para consultar o recibo.";
+  if (error.code === "TICKET_FEEDBACK_INVALID_INSTRUMENT") return "Confira as perguntas, categorias, escala, prazo, consentimento e aprovação do instrumento.";
+  if (error.code === "TICKET_FEEDBACK_INVALID_RESPONSE") return "Confira resultado, esforço, consentimento e o comentário de até 2.000 caracteres.";
+  if (error.code === "TICKET_FEEDBACK_METRICS_LIMIT") return "A consulta excede o limite de 2.000 convites. Nenhum resultado parcial foi apresentado.";
+
   if (error.code === "TICKET_METRICS_LIMIT") return "O universo excede o limite desta consulta. Nenhum chamado foi descartado; solicite um relatório assíncrono quando disponível.";
   if (error.code === "TICKET_METRICS_ACCESS_CHANGED") return "O acesso mudou durante a consulta. Atualize os indicadores.";
   if (error.code === "TICKET_METRICS_CONFLICT") return "A configuração ou a reconstrução mudou. Atualize antes de tentar novamente.";

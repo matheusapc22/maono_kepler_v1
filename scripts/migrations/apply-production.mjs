@@ -1,3 +1,4 @@
+import {CC15_MIGRATION,readCC15Schema,assertCC15Schema} from './cc15-schema-preflight.mjs';
 import {CC13_MIGRATION,readCC13Schema,assertCC13Schema} from './cc13-schema-preflight.mjs';
 import {CC12_MIGRATION,readCC12Schema,assertCC12Schema} from './cc12-schema-preflight.mjs';
 import {CC11_MIGRATION,readCC11Schema,assertCC11Schema} from './cc11-schema-preflight.mjs';
@@ -62,6 +63,10 @@ try {
 
   preflightTemporary = await makeTemporaryWranglerConfig(accountId);
   const remote = await readRemoteState(preflightTemporary.configPath, migration.name);
+  if(migration.name===CC15_MIGRATION){
+    const currentSchema=await readCC15Schema(preflightTemporary.configPath,remote.ledger);assertCC15Schema(currentSchema);
+    if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC15_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
+  }
   if(migration.name===CC08_MIGRATION){
     const currentSchema=await readCC08Schema(preflightTemporary.configPath,remote.ledger);assertCC08Schema(currentSchema);
     if(!audit.schemaPreflight || audit.schemaPreflight.digest!==currentSchema.digest)throw gateError('CC08_SCHEMA_DRIFT','Schema mudou desde o audit; novo audit obrigatório.');
