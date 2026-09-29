@@ -1,3 +1,4 @@
+import { TicketKnowledgeReuse } from "./TicketKnowledgePanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -547,6 +548,7 @@ export default function TicketConversationPanel({
         ) : null}
       </div>
 
+      {canRespond && <TicketKnowledgeReuse key={`knowledge-reuse:${organizationId}:${ticket.id}:${currentUserId}`} organizationId={organizationId} ticketId={Number(ticket.id)} canUseInternal={canUseInternal} onSent={onReload} />}
       <ol className="ticket-conversation-list">
         {messages.length === 0 ? (
           <li className="ticket-conversation-empty">Nenhuma resposta registrada ainda.</li>
@@ -600,7 +602,8 @@ export default function TicketConversationPanel({
                   </div>
                 </div>
               ) : (
-                <p className="ticket-conversation-body">{message.body}</p>
+                <><p className="ticket-conversation-body">{message.body}</p>
+                {message.knowledge && <small>Base de conhecimento · versão {message.knowledge.revisionNumber} · texto revisado no envio</small>}</>
               )}
               {message.attachments.length ? (
                 <ul className="ticket-conversation-attachments">

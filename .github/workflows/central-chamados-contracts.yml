@@ -16,6 +16,13 @@ on:
       - 'functions/api/organizations/*/ticket-cases*'
       - 'functions/api/organizations/*/ticket-cases/**'
       - 'tests/ticket-cases*.test.mjs'
+      - 'functions/api/organizations/*/ticket-knowledge*'
+      - 'functions/api/organizations/*/ticket-knowledge/**'
+      - 'tests/ticket-knowledge*.test.mjs'
+      - 'tests/browser/ticket-knowledge.spec.ts'
+      - 'tests/browser/fixtures/ticket-knowledge*'
+      - 'src/pages/Projects/components/TicketKnowledgePanel.tsx'
+      - 'src/pages/Projects/components/ticket-knowledge.css'
       - 'tests/browser/ticket-cases.spec.ts'
       - 'tests/browser/fixtures/ticket-cases*'
       - 'src/pages/Projects/components/ticket-cases.css'
@@ -247,3 +254,17 @@ jobs:
           node-version: 22
       - name: Validate cases, independent ACL, concurrency, communications and CC12-C
         run: node --test tests/ticket-cases*.test.mjs tests/ticket-exports*.test.mjs
+
+  cc14-knowledge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate editorial review, private origins, reuse and atomic provenance
+        run: node --test tests/ticket-knowledge*.test.mjs tests/ticket-conversation*.test.mjs

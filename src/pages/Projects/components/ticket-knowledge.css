@@ -1,0 +1,73 @@
+.ticket-knowledge {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #d5dfd8;
+  border-radius: 8px;
+  background: #fff;
+  color: #203b2b;
+}
+.ticket-knowledge summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ticket-knowledge fieldset {
+  border: 0;
+  margin: 12px 0;
+  padding: 0;
+  min-width: 0;
+}
+.ticket-knowledge label {
+  display: block;
+  margin: 10px 0;
+}
+.ticket-knowledge input:not([type="checkbox"]),
+.ticket-knowledge textarea,
+.ticket-knowledge select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #899e90;
+  border-radius: 5px;
+  color: inherit;
+  background: white;
+}
+.ticket-knowledge button {
+  padding: 8px 12px;
+  margin: 4px;
+  border: 1px solid #678d73;
+  border-radius: 5px;
+  background: #f0f7f2;
+  color: #20492d;
+  cursor: pointer;
+}
+.ticket-knowledge button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ticket-knowledge :focus-visible {
+  outline: 3px solid #2a7d49;
+  outline-offset: 2px;
+}
+.ticket-knowledge-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ticket-knowledge-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.ticket-knowledge-comparison > div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #d5dfd8;
+}
+@media (max-width: 700px) {
+  .ticket-knowledge-comparison {
+    grid-template-columns: 1fr;
+  }
+  .ticket-knowledge button {
+    min-height: 44px;
+  }
+}
