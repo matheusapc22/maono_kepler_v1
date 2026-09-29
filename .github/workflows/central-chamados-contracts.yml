@@ -113,6 +113,12 @@ on:
       - 'functions/api/projects/*/change-requests/**'
       - 'functions/api/projects/*/change-requests.js'
       - '.github/workflows/central-chamados-contracts.yml'
+      - 'tests/ticket-integrated-gate.test.mjs'
+      - 'tests/helpers/ticket-integrated-db.mjs'
+      - 'tests/helpers/ticket-upload-provider.mjs'
+      - 'tests/cc17-evidence.test.mjs'
+      - 'tests/production-acceptance-operator*.test.mjs'
+      - 'scripts/acceptance/**'
   workflow_dispatch:
 
 permissions:
@@ -317,3 +323,25 @@ jobs:
           name: cc16-browser-failures
           path: test-results/
           retention-days: 7
+
+  cc17-integrated-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate integrated authorization, faults and evidence gate
+        run: npm run test:cc17
+      - name: Measure local mixed workload (not Production acceptance)
+        run: npm run benchmark:cc17
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cc17-local-baseline
+          path: .tmp/cc17/benchmark.json
+          retention-days: 30

@@ -943,6 +943,17 @@ export async function can(env, user, permission, context = {}) {
     };
   }
 
+  // Ticket access must follow current membership, not the organization retained
+  // in an older session. Keep the explicit super-admin contract above and do
+  // not change legacy organization semantics for unrelated product features.
+  if (normalizedPermission.startsWith("ticket.") && contextOrganizationId &&
+      !await getOrganizationMembership(env, user.id, contextOrganizationId)) {
+    return {
+      allowed: false, reason: "TICKET_ORGANIZATION_MEMBERSHIP_REQUIRED",
+      user, permission: normalizedPermission, context: resolvedContext,
+    };
+  }
+
   if (
     await hasUserPermissionDenial(
       env,

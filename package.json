@@ -55,7 +55,11 @@
     "migration:apply:production": "node scripts/migrations/apply-production.mjs",
     "migration:postvalidate:production": "node scripts/migrations/post-validate-production.mjs",
     "test:ticket-notifications": "node --test tests/ticket-notifications*.test.mjs",
-    "test:ticket-changes": "node --experimental-strip-types --test tests/ticket-changes.test.mjs tests/project-change-request*.test.mjs tests/project-large-save.test.mjs"
+    "test:ticket-changes": "node --experimental-strip-types --test tests/ticket-changes.test.mjs tests/project-change-request*.test.mjs tests/project-large-save.test.mjs",
+    "test:production-acceptance-operator": "node --test tests/production-acceptance-operator*.test.mjs",
+    "test:cc17": "node --test tests/ticket-integrated-gate.test.mjs tests/cc17-evidence.test.mjs tests/production-acceptance-operator*.test.mjs",
+    "benchmark:cc17": "node scripts/central-chamados/cc17/benchmark-local.mjs",
+    "gate:cc17": "node scripts/central-chamados/cc17/evidence-gate.mjs"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

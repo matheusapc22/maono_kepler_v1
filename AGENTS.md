@@ -122,3 +122,65 @@ After a successful apply:
 - list remaining pending migrations without applying them.
 
 If apply may have started but the final result is uncertain, treat the write outcome as unknown, preserve the recovery bookmark, stop, and perform read-only verification before any retry.
+
+# Production Acceptance Policy
+
+Production acceptance is a separate human-gated operation from migrations, merge, deploy and permanent rollout.
+
+## Credential boundary
+
+Production acceptance credentials MUST NOT be supplied to ChatGPT, Codex Cloud, prompts, repository files, comments, artifacts or a general agent runtime.
+
+The normal path is the protected GitHub Actions workflow `.github/workflows/production-acceptance-operator.yml`, dispatched from the default branch `main` and protected by the GitHub Environment `production-acceptance`.
+
+The protected environment may expose only the secrets required by the registered suite. The generic operator currently expects:
+
+- `MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN` — dedicated Pages-control token for the acceptance operator, separate from the D1 migration token;
+- `MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON` — credentials for dedicated synthetic QA accounts.
+
+Never request these secret values in chat.
+
+## Registered-suite rule
+
+Only acceptance suites versioned under `scripts/acceptance/suites/` and registered in `scripts/acceptance/registry.mjs` may execute in Production.
+
+Do not add arbitrary URL, shell command, JavaScript, SQL, HTTP method, flag name or secret name as workflow input. Future features extend the framework by PR with a reviewed suite manifest, tests and cleanup contract.
+
+Suites are one of:
+
+- `read_only` — the framework must block application mutations;
+- `controlled_mutation` — may create only scoped synthetic QA state declared by the suite and must provide cleanup.
+
+## Mandatory lifecycle
+
+1. **NORMAL CI FIRST** — unit, integration, SQLite and static tests remain in normal CI. Do not duplicate them in Production acceptance.
+2. **PREFLIGHT** — use the protected operator in `preflight` mode. Confirm exact `mano_kepler_v1` SHA, canonical Production deployment, expected D1 binding, no non-terminal Production deployment and suite baseline flags.
+3. **REPORT AND STOP** — preflight is not acceptance and does not authorize a feature rollout.
+4. **EXPLICIT WINDOW DECISION** — `run` requires the exact confirmation string `RUN_PRODUCTION_ACCEPTANCE` plus GitHub Environment approval.
+5. **AUTHENTICATE QA IDENTITIES** — generate fresh application sessions from dedicated QA credentials and verify required organization/permissions before changing feature flags.
+6. **CONTROLLED WINDOW** — change only flags declared by the suite, wait for terminal deployment/canonical publication, and use only synthetic data.
+7. **EXECUTE REGISTERED CASES** — real HTTP/UI/storage behavior may be exercised only within the suite contract.
+8. **CLEANUP** — remove/deactivate synthetic resources as declared by the suite.
+9. **RESTORE SAFE STATE** — restore every managed flag to its declared safe value and republish the same audited SHA.
+10. **VERIFY CLOSURE** — the run is complete only when cleanup and configuration restoration are proven.
+11. **STOP AGAIN** — passing acceptance does not authorize permanent feature-flag activation. Permanent rollout remains a separate explicit decision.
+
+## Interruption and recovery
+
+The operator must arm fail-safe restoration before the first remote configuration mutation. It must not start flag changes or retries while a Production deployment is non-terminal.
+
+If a run is interrupted, times out, or reports uncertain restoration, do not start another acceptance window and do not enable the feature permanently. Run the same suite in `closure` mode with confirmation `RESTORE_PRODUCTION_ACCEPTANCE_SAFE_STATE` and verify the safe state first.
+
+Feature flag OFF is not assumed to be a confidentiality rollback for real private data. Acceptance suites that test privacy boundaries must use only synthetic data.
+
+## Authorization boundaries
+
+These are distinct and never imply each other:
+
+- migration authorization;
+- PR merge authorization;
+- Production acceptance-window authorization;
+- temporary feature-flag activation for acceptance;
+- permanent feature rollout.
+
+Generic phrases such as `continue`, `prossiga`, `dê sequência`, merge approval, successful CI or successful acceptance do not authorize permanent rollout.
