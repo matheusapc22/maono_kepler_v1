@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type IconName = "folder" | "file" | "search" | "upload" | "download" | "trash" | "plus" | "more" | "close" | "arrow" | "restore" | "filter";
@@ -26,7 +26,19 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
-  const close = (restoreFocus = false) => { setOpen(false); if (restoreFocus) trigger.current?.focus(); };
+  const focusAfterClose = useRef<HTMLElement | null>(null);
+  const close = (restoreFocus = false) => {
+    if (restoreFocus) focusAfterClose.current = trigger.current;
+    setOpen(false);
+  };
+  useLayoutEffect(() => {
+    if (!open && focusAfterClose.current) {
+      const target = focusAfterClose.current;
+      focusAfterClose.current = null;
+      if (target === trigger.current) trigger.current?.focus();
+      else if (target.isConnected) target.focus();
+    }
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const rect = trigger.current?.getBoundingClientRect();
@@ -37,7 +49,7 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
       left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
       top: rect.bottom + height + 8 > window.innerHeight ? Math.max(8, rect.top - height - 6) : rect.bottom + 6,
     });
-    panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
     const outside = (event: PointerEvent) => {
       if (!panel.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -68,7 +80,14 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
         const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
         items[next]?.focus();
       }
-      if (event.key === "Tab") close(true); // Native tab then advances from the trigger, not from the portal.
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const stops = Array.from(document.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]'))
+          .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0 && !panel.current?.contains(element));
+        const current = stops.indexOf(trigger.current!);
+        focusAfterClose.current = stops[current + (event.shiftKey ? -1 : 1)] ?? trigger.current;
+        close();
+      }
     }}>{actions.map(action => <button key={action.label} type="button" role="menuitem" className={action.danger ? "is-danger" : ""} disabled={action.disabled} onClick={() => { close(true); action.onSelect(); }}>{action.label}</button>)}</div>, document.body)}
   </>;
 }

@@ -939,6 +939,7 @@ function OrganizationDocuments({
         requestError,
         "Não foi possível baixar o documento.",
       );
+
       setError(formattedError);
       setTransfer((current) => ({
         kind: "download",
