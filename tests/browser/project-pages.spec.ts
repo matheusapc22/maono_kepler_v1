@@ -487,22 +487,24 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
           marginEnd: Number.parseFloat(getComputedStyle(element).marginInlineEnd),
         };
       });
-      expect(geometry.height).toBe(48);
+      // DOMRect floats can differ by ~0.000008px after Firefox relayout.
+      // Keep the geometry contract within 0.0005px instead of comparing bits.
+      expect(geometry.height).toBeCloseTo(48, 3);
       if (width > 760) {
-        expect(geometry.width).toBe(164);
+        expect(geometry.width).toBeCloseTo(164, 3);
         expect(geometry.marginEnd).toBe(32);
-        expect(geometry.rightInset).toBe(geometry.paddingRight + 32);
+        expect(geometry.rightInset).toBeCloseTo(geometry.paddingRight + 32, 3);
         // Compare to the former right-aligned position, keeping the same DOM and viewport.
         await cta.evaluate(element => { (element as HTMLElement).style.marginInlineEnd = "0"; });
         const former = await cta.boundingBox();
-        expect(former!.x - geometry.x).toBe(32);
-        expect(former!.width).toBe(geometry.width);
-        expect(former!.height).toBe(geometry.height);
-        expect(former!.y).toBe(geometry.y);
+        expect(former!.x - geometry.x).toBeCloseTo(32, 3);
+        expect(former!.width).toBeCloseTo(geometry.width, 3);
+        expect(former!.height).toBeCloseTo(geometry.height, 3);
+        expect(former!.y).toBeCloseTo(geometry.y, 3);
         await cta.evaluate(element => { (element as HTMLElement).style.removeProperty("margin-inline-end"); });
       } else {
         expect(geometry.marginEnd).toBe(0);
-        expect(geometry.width).toBe(geometry.contentWidth);
+        expect(geometry.width).toBeCloseTo(geometry.contentWidth, 3);
         expect(geometry.rightInset).toBe(geometry.paddingRight);
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
