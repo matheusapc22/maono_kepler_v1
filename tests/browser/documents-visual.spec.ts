@@ -1310,3 +1310,42 @@ test("mover: tabs por setas/Home/End e busca sem acentos preservam navegação a
   await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
 });
+
+for (const kind of ["file", "folder"] as const) {
+  test(`mover: ${kind} mantém foco ao substituir linhas; Enter navega e depois envia uma única vez`, async ({ page }) => {
+    const requests = await setup(page); await openDocuments(page, true);
+    let dialog: Locator;
+    if (kind === "file") ({ dialog } = await openFileAction(page, "Mover"));
+    else {
+      await page.getByRole("button", { name: "Ações da pasta Mês de Setembro", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Mover pasta", exact: true }).click();
+      dialog = page.getByRole("dialog", { name: "Mover pasta", exact: true });
+    }
+    const destination = kind === "file" ? "Mês de Setembro" : "QA_VISUAL";
+    const search = dialog.getByRole("searchbox", { name: "Buscar pastas", exact: true });
+    const breadcrumb = dialog.getByRole("navigation", { name: "Caminho do destino" });
+    const mutations = () => requests.filter(request => request.method === "PATCH");
+
+    // Pointer navigation removes the focused row: focus must move to a stable
+    // control before React replaces the direct children, never to BODY.
+    await dialog.getByRole("button", { name: destination, exact: true }).click();
+    await expect(search).toBeFocused();
+    expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press("Tab");
+    expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+    await breadcrumb.getByRole("button", { name: "Raiz", exact: true }).click();
+    await expect(search).toBeFocused();
+
+    // Enter on a folder row performs navigation, not the surrounding form's
+    // mutation. Enter on the stable search field then confirms the selection.
+    await dialog.getByRole("button", { name: destination, exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(breadcrumb.getByRole("button")).toHaveText(["Raiz", destination]);
+    await expect(search).toBeFocused();
+    await expect(dialog).toBeVisible(); expect(mutations()).toHaveLength(0);
+    await search.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    expect(mutations()).toHaveLength(1);
+    expect(JSON.parse(mutations()[0].body!)).toEqual(kind === "file" ? { folderId: "1" } : { parentId: "2" });
+  });
+}

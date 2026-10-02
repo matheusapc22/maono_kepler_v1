@@ -117,6 +117,9 @@ test('move browser uses real organization-owned folders, ancestry and session-sc
   assert.ok(!dialogs.includes('<select'));
   assert.ok(!dialogs.includes('Todos os documentos'));
   assert.ok(dialogs.includes('Nenhuma pasta encontrada.'));
+  const enter = dialogs.slice(dialogs.indexOf('function enter('), dialogs.indexOf('function changeTab('));
+  assert.ok(enter.includes('document.getElementById(searchId)?.focus({ preventScroll: true })'));
+  assert.ok(enter.indexOf('?.focus(') < enter.indexOf('setBrowsedId('), 'focus stable search before replacing destination rows');
 });
 
 test('modal geometry is viewport centered, responsive and independent of the content panel', () => {

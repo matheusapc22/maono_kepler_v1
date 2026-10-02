@@ -198,6 +198,8 @@ export function DocumentMoveDialog({ kind, name, itemId, currentParentId, folder
   const breadcrumb = byId.get(browsedId)?.path || [];
   function enter(id: string) {
     if (busy) return;
+    // Keep keyboard focus in the modal before the selected row unmounts.
+    document.getElementById(searchId)?.focus({ preventScroll: true });
     setBrowsedId(id);
     setSelectedId(id);
     setQuery("");
