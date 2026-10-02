@@ -32,9 +32,9 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
 
   const closeToTrigger = () => {
     setOpen(false);
-    window.requestAnimationFrame(() => {
+    window.setTimeout(() => {
       trigger.current?.focus({ preventScroll: true });
-    });
+    }, 0);
   };
 
   useLayoutEffect(() => {
