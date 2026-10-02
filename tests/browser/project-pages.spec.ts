@@ -402,7 +402,8 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
           expect(top.paddingBottom, label).toBeLessThanOrEqual(24);
           expect(top.mainHeight, label).toBeGreaterThanOrEqual(viewport.height - 1);
           expect(top.footerTop - top.resultsBottom, label).toBeGreaterThanOrEqual(27.5);
-          expect(top.documentBottom - top.footerBottom, label).toBeCloseTo(top.paddingBottom, 0);
+          // scrollHeight is integer-rounded; WebKit may keep a half-pixel layout edge.
+          expect(Math.abs(top.documentBottom - top.footerBottom - top.paddingBottom), label).toBeLessThanOrEqual(1);
           expect(top.horizontalOverflow, label).toBeLessThanOrEqual(1);
           if (tallSidebar && viewport.width > 760) {
             expect(top.mainBottom, label).toBeGreaterThanOrEqual(top.sidebarBottom - 1);
