@@ -30,7 +30,6 @@ const preserved = {
   'src/pages/Projects/components/ProjectMetadataPanel.tsx': '2f49b53dd47e8e9540b027febab2fb6394b0905c8008905edb4a7632c630dbb8',
   'src/pages/Projects/maono-card-list-accent.css': 'aa117f523564c51956d5d683c00a38389ab1672ed8d3aadd11a82d49336dbd69',
   'src/pages/Projects/projects-api.ts': '658b7edb0a98434bbaade6eed1c8a582d5fe73c0397b079967e9bf48e7d5b0a9',
-  'src/pages/ProjectsSidebar.tsx': '0a696c4f2068b59e55bad14235e65929a6383a604ce03f5d003e11a318ce2cff',
   'functions/api/projects/index.js': 'e0d4cc187c5e02de4d07009e30c39e02981302a1afa512bf3927d59f2bf03036',
   'functions/api/projects/recent.js': '5899804a88b2cb49f0ae66cc607a3285f0890c5dcb048c592777689b5f176b44',
   'functions/api/projects/favorites.js': '865f51ebd6921535e23176d29672bf5b63cba98520eaa8fa1ff46d4afcb69cbd',
@@ -38,7 +37,7 @@ const preserved = {
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 for (const [path, expected] of Object.entries(preserved)) {
   test(`preserves original source: ${path}`, () => {
-    assert.equal(sha256(read(path)), expected, 'no card, action, sidebar or endpoint edits');
+    assert.equal(sha256(read(path)), expected, 'no card, action or endpoint edits');
     if (hasOriginal) {
       const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
       assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');
@@ -192,4 +191,43 @@ test('new-map CTA has the approved modest desktop inset and resets it on mobile'
     { value: '32px', media: null },
     { value: '0', media: '(max-width: 760px)' },
   ]);
+});
+
+// Sidebar presentation is now explicitly in scope. Keep its item registry,
+// icons, labels, hrefs, permission rules and count wiring independently pinned.
+test('sidebar redesign preserves the original navigation and permission contract', () => {
+  const sidebar = read('src/pages/ProjectsSidebar.tsx');
+  assert.equal(sha256(sidebar.split('function SectionTitle(')[0]), 'f9499bd8d0ee1dd8665914086f911ba48eae75ce21976ba781ab8e3782453d46');
+  assert.match(sidebar, /active=\{section === sidebarSection\}/);
+  assert.match(sidebar, /onSidebarSectionChange\(section\)/);
+  assert.match(sidebar, /canShowItem\(user, item, permissionContext\)/);
+  assert.match(sidebar, /to=\{item.href\}/);
+  assert.match(sidebar, /onChange=\{\(event\) => onSearchQueryChange\(event.target.value\)\}/);
+  assert.match(sidebar, /onSwitch=\{onOrganizationSwitch\}/);
+  assert.match(sidebar, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(sidebar, /title=\{expanded \? undefined : item.label\}/);
+});
+
+test('sidebar styling does not modify page, card, table, modal or layout styles', { skip: !hasOriginal }, () => {
+  const path = 'src/pages/Projects/projects.css';
+  const withoutSidebar = source => {
+    const css = postcss.parse(source);
+    css.walkComments(comment => comment.remove());
+    css.walkRules(rule => {
+      if (rule.selector.includes('.mm-sidebar-') || rule.selector.includes('.mm-projects-sidebar') || rule.selector.includes('.mm-organization-trigger')) rule.remove();
+      else if (rule.selector === ':root') rule.walkDecls(declaration => {
+        if (declaration.prop.startsWith('--mm-sidebar-')) declaration.remove();
+      });
+    });
+    // Compare declarations/selector/at-rule context, not whitespace or source offsets.
+    const entries = [];
+    css.walkDecls(declaration => entries.push([
+      declaration.parent.selector,
+      declaration.parent.parent.type === 'atrule' ? declaration.parent.parent.params : null,
+      declaration.prop, declaration.value, declaration.important || false,
+    ]));
+    return entries;
+  };
+  const baseline = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
+  assert.deepEqual(withoutSidebar(read(path)), withoutSidebar(baseline));
 });

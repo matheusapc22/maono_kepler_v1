@@ -383,10 +383,12 @@ function SectionTitle({
 function ItemButton({
   item,
   active,
+  expanded,
   onClick,
 }: {
   item: SidebarItem;
   active?: boolean;
+  expanded: boolean;
   onClick?: () => void;
 }) {
   const className = active ? "mm-sidebar-item active" : "mm-sidebar-item";
@@ -410,8 +412,9 @@ function ItemButton({
       <Link
         to={item.href}
         className={className}
-        title={item.label}
+        title={expanded ? undefined : item.label}
         aria-label={item.label}
+        aria-current={active ? "page" : undefined}
       >
         {content}
       </Link>
@@ -422,8 +425,9 @@ function ItemButton({
     <button
       type="button"
       className={className}
-      title={item.label}
+      title={expanded ? undefined : item.label}
       aria-label={item.label}
+      aria-current={active ? "page" : undefined}
       onClick={onClick}
     >
       {content}
@@ -547,6 +551,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
                   <ItemButton
                     key={item.href || section || item.label}
                     item={item}
+                    expanded={expanded}
                     active={section === sidebarSection}
                     onClick={
                       section

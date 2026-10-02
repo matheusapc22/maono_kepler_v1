@@ -515,3 +515,131 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
     });
   }
 }
+
+// Sidebar-only redesign acceptance. The compiled app and real components run
+// against synthetic HTTP fixtures; this is not authenticated Preview acceptance.
+test('sidebar: flat navigation, existing icons and every section remain functional', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await setup(page, { dataset: projects.slice(1, 2) });
+  await page.route('**/tickets/exports**', route => route.fulfill({ json: { enabled: false, jobs: [], nextCursor: null } }));
+  await page.route(url => /\/api\/organizations\/[^/]+\/tickets$/.test(url.pathname), route => route.fulfill({ json: {
+    ok: true, tickets: [], assignees: [],
+    facets: { byStatus: { new: 0, open: 0, in_progress: 0, in_review: 0, closed: 0 }, overdue: 0 },
+    pagination: { page: 1, limit: 50, total: 0, hasMore: false },
+  } }));
+  const sidebar = page.getByRole('complementary', { name: 'Navegação da área de projetos' });
+  await expect(sidebar.locator('.mm-sidebar-title')).toHaveText(['Projetos', 'Organização', 'Gestão', 'Administração Maõno']);
+  await expect(sidebar.locator('.mm-sidebar-count')).toHaveText('1');
+  await expect(sidebar.locator('.mm-sidebar-user')).toContainText('Operador de demonstração');
+  await expect(sidebar.locator('.mm-sidebar-user')).toContainText('qa@example.test');
+  const routes = [
+    ['Todos os Projetos', '▦'], ['Recentes', '◷'], ['Favoritos', '☆'],
+    ['Arquivos e Documentos', '▤'], ['Central de Chamados', 'svg'], ['Roadmap', '◫'],
+    ['Usuários e Acessos', '☷'], ['Organização', '▥'], ['Limites e Planos', '▧'],
+  ];
+  for (const [name, icon] of routes) {
+    const item = sidebar.getByRole('button', { name, exact: true });
+    await item.click();
+    await expect(item).toHaveAttribute('aria-current', 'page');
+    await expect(sidebar.locator('.mm-sidebar-item.active')).toHaveCount(1);
+    expect(new URL(page.url()).pathname).toBe('/projects'); // Existing internal section router.
+    if (icon === 'svg') await expect(item.locator('svg')).toBeVisible();
+    else await expect(item.locator('.mm-sidebar-icon')).toHaveText(icon);
+    await expect(item).not.toHaveAttribute('title');
+    const visual = await item.evaluate(element => {
+      const style = getComputedStyle(element); const marker = getComputedStyle(element, '::before');
+      return { border: style.borderTopWidth, background: style.backgroundImage, marker: marker.width, markerColor: marker.backgroundColor };
+    });
+    expect(visual.border).toBe('0px');
+    expect(visual.background).toContain('linear-gradient');
+    expect(visual.marker).toBe('3px');
+    expect(visual.markerColor).not.toBe('rgba(0, 0, 0, 0)');
+    await sidebar.getByRole('button', { name: 'Recentes', exact: true }).click();
+    if (name !== 'Recentes') await expect(item).not.toHaveAttribute('aria-current');
+  }
+  await sidebar.getByRole('button', { name: 'Central de Chamados', exact: true }).click();
+  await page.mouse.move(1400, 20);
+  for (const item of await sidebar.locator('.mm-sidebar-item:not(.active)').all()) {
+    await expect(item).toHaveCSS('border-top-width', '0px');
+    await expect(item).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  }
+  await expect(sidebar.getByRole('link', { name: 'Painel Admin' })).toHaveAttribute('href', '/admin');
+  await expect(sidebar.locator('.mm-sidebar-user')).toHaveCSS('border-top-width', '0px');
+  for (const title of await sidebar.locator('.mm-sidebar-title').all()) {
+    expect(await title.evaluate(element => getComputedStyle(element, '::after').content)).toBe('""');
+  }
+  await sidebar.screenshot({ path: testInfo.outputPath('sidebar-expanded.png'), animations: 'disabled' });
+});
+
+test('sidebar: hover, keyboard focus, truncation and collapsed tooltips', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setup(page, { dataset: projects.slice(0, 1) });
+  const sidebar = page.locator('.mm-projects-sidebar');
+  const recent = sidebar.getByRole('button', { name: 'Recentes', exact: true });
+  await recent.hover();
+  await expect(recent).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(recent).toHaveCSS('border-top-width', '0px');
+  await recent.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+  expect(await recent.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+  await expect(recent).toHaveCSS('outline-style', 'solid');
+  const label = sidebar.getByRole('button', { name: 'Arquivos e Documentos', exact: true }).locator('.mm-sidebar-label');
+  await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(label).toHaveCSS('white-space', 'nowrap');
+  // Stress a long label without changing application copy or sidebar width.
+  await label.evaluate(element => { element.textContent += ' com um título muito longo de teste'; });
+  expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+  await expect(sidebar).toHaveCSS('width', '300px');
+  await sidebar.getByRole('button', { name: 'Recolher sidebar' }).click();
+  await expect(sidebar).toHaveCSS('width', '92px');
+  await expect(sidebar.locator('.mm-sidebar-label').first()).toBeHidden();
+  await expect(sidebar.locator('.mm-sidebar-count')).toBeHidden();
+  await expect(sidebar.locator('.mm-sidebar-title')).toHaveCount(0);
+  await expect(sidebar.locator('.mm-sidebar-user')).toHaveCount(0);
+  await expect(recent).toHaveAttribute('title', 'Recentes');
+  await recent.click(); await expect(recent).toHaveAttribute('aria-current', 'page');
+  await expect(recent.locator('.mm-sidebar-icon')).toBeVisible();
+  await sidebar.screenshot({ path: testInfo.outputPath('sidebar-collapsed.png'), animations: 'disabled' });
+  await sidebar.getByRole('button', { name: 'Expandir sidebar' }).click();
+  await expect(sidebar).toHaveCSS('width', '300px');
+  await expect(recent).toHaveAttribute('aria-current', 'page');
+});
+
+test('sidebar: search, organization switching and permission-filtered navigation', async ({ page }) => {
+  await setup(page, { role: 'viewer', deniedPermissions: ['document.view', 'ticket.view', 'roadmap.view', 'users.view', 'organization.view', 'limits.view'] });
+  const sidebar = page.locator('.mm-projects-sidebar');
+  await expect(sidebar.locator('.mm-sidebar-title')).toHaveText(['Projetos']);
+  await expect(sidebar.locator('.mm-sidebar-item')).toHaveCount(3);
+  await sidebar.getByRole('textbox', { name: 'Buscar projetos' }).fill('Projeto 01');
+  await expectCount(page, 1, 1);
+  await sidebar.getByRole('textbox', { name: 'Buscar projetos' }).clear();
+  await expectCount(page, 10, 73);
+  const trigger = sidebar.getByRole('button', { name: /Trocar organização ativa/ });
+  await trigger.click();
+  await page.getByRole('option', { name: /Outra organização/ }).click();
+  await expect(trigger).toContainText('Outra organização');
+  await expectCount(page, 0, 0);
+  await expect(sidebar.locator('.mm-sidebar-count')).toHaveText('0');
+  await trigger.click(); await page.keyboard.press('Escape');
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+for (const viewport of [{ width: 1024, height: 600 }, { width: 390, height: 844 }]) {
+  test(`sidebar: responsive navigation and scroll at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await setup(page, { dataset: projects.slice(0, 1) });
+    const sidebar = page.locator('.mm-projects-sidebar');
+    const limits = sidebar.getByRole('button', { name: 'Limites e Planos', exact: true });
+    await limits.click(); await expect(limits).toHaveAttribute('aria-current', 'page');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    if (viewport.width > 760) {
+      await expect(sidebar).toHaveCSS('height', `${viewport.height}px`);
+      expect(await sidebar.locator('.mm-sidebar-nav').evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    }
+    await sidebar.getByRole('button', { name: 'Recolher sidebar' }).click();
+    await sidebar.getByRole('button', { name: 'Favoritos', exact: true }).click();
+    await expect(sidebar.getByRole('button', { name: 'Favoritos', exact: true })).toHaveAttribute('aria-current', 'page');
+    await sidebar.getByRole('button', { name: 'Expandir sidebar' }).click();
+    await sidebar.screenshot({ path: testInfo.outputPath('sidebar-responsive.png'), animations: 'disabled' });
+  });
+}
