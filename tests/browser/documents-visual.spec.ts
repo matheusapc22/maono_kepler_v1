@@ -75,15 +75,22 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
   await page.goto("/projects");
   return requests;
 }
-async function openDocuments(page: Page) {
+async function openDocuments(page: Page, allFiles = false) {
   await page.locator(".mm-sidebar-item").filter({ hasText: "Arquivos e Documentos" }).click();
   await expect(page.locator("#mm-docs-title")).toBeVisible();
   await expect(page.locator(".mm-docs-folder-card")).toHaveCount(2);
+  if (allFiles) await showAllDocuments(page);
+}
+
+async function showAllDocuments(page: Page) {
+  await page.locator(".mm-docs-folder select").selectOption("");
+  await page.getByRole("button", { name: "Aplicar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Remover filtro Pasta: Todos os documentos", exact: true })).toBeVisible();
 }
 
 async function openRoot(page: Page) {
-  await page.locator(".mm-docs-folder-card").filter({ hasText: "Raiz" }).locator(".mm-docs-folder-select").click();
-  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(4);
+  await page.getByRole("navigation", { name: "Caminho da pasta" }).getByRole("button", { name: "Raiz", exact: true }).click();
+  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(2);
 }
 
 test("workspace real: referência estrutural, ações contextuais e ícones por tipo", async ({ page }, testInfo) => {
@@ -96,10 +103,10 @@ test("workspace real: referência estrutural, ações contextuais e ícones por 
   await expect(page.getByRole("button", { name: "Lixeira", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Visualização em lista" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".mm-docs-file-icon.is-code")).toHaveCount(1);
-  await expect(page.locator(".mm-docs-file-icon.is-pdf")).toHaveCount(1);
-  await expect(page.locator(".mm-docs-row-actions button")).toHaveCount(2);
+  await expect(page.locator(".mm-docs-file-icon.is-pdf")).toHaveCount(0);
+  await expect(page.locator(".mm-docs-row-actions button")).toHaveCount(1);
   await expect(page.locator(".mm-docs-row-actions select")).toHaveCount(0);
-  await expect(page.locator(".mm-docs-row-actions .mm-docs-menu-trigger")).toHaveCount(2);
+  await expect(page.locator(".mm-docs-row-actions .mm-docs-menu-trigger")).toHaveCount(1);
   await expect(page.locator(".mm-docs-move-control")).toHaveCount(0);
   const top = await page.locator(".mm-docs-search").boundingBox();
   const lower = await page.locator(".mm-docs-sort").boundingBox();
@@ -112,7 +119,7 @@ test("workspace real: referência estrutural, ações contextuais e ícones por 
 for (const width of [320, 390, 768, 1024, 1280, 1440, 1920]) {
   test(`reflow ${width}px: formulário sem corte e tabela com rolagem própria`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
-    await setup(page); await openDocuments(page);
+    await setup(page); await openDocuments(page, true);
     const sizes = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
     expect(sizes.scroll).toBeLessThanOrEqual(sizes.client + 1);
     for (const field of await page.locator(".mm-docs-filters input, .mm-docs-filters select").all()) {
@@ -126,7 +133,7 @@ for (const width of [320, 390, 768, 1024, 1280, 1440, 1920]) {
 }
 
 test("filtros preservam rascunho/aplicar e parâmetros server-side", async ({ page }) => {
-  const requests = await setup(page); await openDocuments(page);
+  const requests = await setup(page); await openDocuments(page, true);
   const count = () => requests.filter(request => new URL(request.url).pathname === "/api/organizations/1/files").length;
   const initial = count();
   await page.locator(".mm-docs-search input").fill("  relatório  ");
@@ -143,7 +150,7 @@ test("filtros preservam rascunho/aplicar e parâmetros server-side", async ({ pa
 });
 
 test("navegação real mostra apenas subpastas do nível atual e consulta os arquivos da pasta", async ({ page }, testInfo) => {
-  const requests = await setup(page); await openDocuments(page); await openRoot(page);
+  const requests = await setup(page); await openDocuments(page, true); await openRoot(page);
   await page.screenshot({ path: testInfo.outputPath("documents-root.png"), fullPage: true });
   await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "Relatórios" })).toHaveCount(0);
   await page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" }).locator(".mm-docs-folder-select").click();
@@ -163,35 +170,56 @@ test("navegação real mostra apenas subpastas do nível atual e consulta os arq
   await expect(page.locator(".mm-docs-folder-card")).toHaveCount(1);
   await expect(page.locator(".mm-docs-folder-card")).toContainText("Relatórios");
   await breadcrumb.getByRole("button", { name: "Raiz", exact: true }).click();
-  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(4);
+  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(2);
 });
 
-test("Todos e Raiz são seleções independentes; breadcrumb persiste sem hierarquia falsa", async ({ page }) => {
+test("entrada abre Raiz com filhos diretos e arquivos próprios, sem cards virtuais", async ({ page }) => {
   const requests = await setup(page); await openDocuments(page);
   const breadcrumb = page.getByRole("navigation", { name: "Caminho da pasta" });
   await expect(breadcrumb).toBeVisible();
-  await expect(breadcrumb.getByRole("button")).toHaveCount(1);
-  await expect(breadcrumb.getByRole("button", { name: "Todos", exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(breadcrumb.locator("svg")).toHaveCount(0);
-  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(2);
-
-  for (let repeat = 0; repeat < 2; repeat += 1) {
-    await openRoot(page);
-    await expect(breadcrumb.getByRole("button")).toHaveCount(1);
-    await expect(breadcrumb.getByRole("button", { name: "Raiz", exact: true })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
-    await page.locator(".mm-docs-folder-card").filter({ hasText: "Todos os documentos" }).locator(".mm-docs-folder-select").click();
-    await expect(breadcrumb.getByRole("button", { name: "Todos", exact: true })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".mm-docs-folder-card")).toHaveCount(2);
-    await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(2);
-    await expect(page.locator(".mm-docs-folder-card").filter({ hasText: /Mês de Setembro|QA_VISUAL|Relatórios|2026/ })).toHaveCount(0);
-  }
+  await expect(breadcrumb.getByRole("button")).toHaveText(["Raiz"]);
+  await expect(breadcrumb.getByRole("button", { name: "Raiz", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".mm-docs-folder-card strong")).toHaveText(["Mês de Setembro", "QA_VISUAL"]);
+  await expect(page.locator(".mm-docs-folder-card").filter({ hasText: /Todos os documentos|^Raiz$/ })).toHaveCount(0);
+  await expect(page.locator(".mm-docs-folder select")).toHaveValue("root");
+  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".documents-file-name")).toHaveText("config_kepler.json");
+  await expect(page.locator(".documents-file-origin")).toHaveCount(0);
   const fileQueries = requests.filter(request => new URL(request.url).pathname === "/api/organizations/1/files");
-  expect(new URL(fileQueries.at(-1)!.url).searchParams.has("folderId")).toBe(false);
+  expect(new URL(fileQueries.at(-1)!.url).searchParams.get("folderId")).toBe("root");
+});
+
+test("Todos os documentos é filtro da lista e mostra origem sem mudar a pasta navegada", async ({ page }, testInfo) => {
+  const requests = await setup(page); await openDocuments(page);
+  const breadcrumb = page.getByRole("navigation", { name: "Caminho da pasta" });
+  await page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" }).locator(".mm-docs-folder-select").click();
+  await expect(page.locator(".documents-file-name")).toHaveText("Relatório de mercado e oportunidades.pdf");
+  for (let repeat = 0; repeat < 2; repeat += 1) {
+    await showAllDocuments(page);
+    await expect(breadcrumb.getByRole("button")).toHaveText(["Raiz", "Mês de Setembro"]);
+    await expect(page.locator(".mm-docs-folder-card strong")).toHaveText(["Relatórios"]);
+    await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(2);
+    await expect(page.locator(".documents-file-origin")).toHaveText(["Pasta: Raiz", "Pasta: Raiz / Mês de Setembro"]);
+    const query = [...requests].reverse().find(request => new URL(request.url).pathname === "/api/organizations/1/files")!;
+    expect(new URL(query.url).searchParams.has("folderId")).toBe(false);
+    if (repeat === 0) {
+      await page.locator(".mm-docs-folder select").selectOption("1");
+      await page.getByRole("button", { name: "Aplicar", exact: true }).click();
+      await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
+    }
+  }
+  await page.getByRole("button", { name: "Visualização em grade" }).click();
+  await expect(page.locator(".mm-docs-file-card .documents-file-origin")).toHaveText(["Pasta: Raiz", "Pasta: Raiz / Mês de Setembro"]);
+  await page.screenshot({ path: testInfo.outputPath("documents-all-files-origins.png"), fullPage: true });
+  await page.getByRole("button", { name: "Remover filtro Pasta: Todos os documentos", exact: true }).click();
+  await expect(breadcrumb.getByRole("button")).toHaveText(["Raiz"]);
+  await expect(page.locator(".mm-docs-folder-card strong")).toHaveText(["Mês de Setembro", "QA_VISUAL"]);
+  await expect(page.locator(".mm-docs-folder select")).toHaveValue("root");
+  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
 });
 
 test("mover pasta usa PATCH parentId e a pasta só reaparece dentro do novo pai", async ({ page }) => {
-  const requests = await setup(page); await openDocuments(page); await openRoot(page);
+  const requests = await setup(page); await openDocuments(page, true); await openRoot(page);
   const september = page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" });
   await september.getByRole("button", { name: /Ações da pasta/ }).click();
   await page.getByRole("menuitem", { name: "Mover pasta", exact: true }).click();
@@ -217,7 +245,7 @@ test("mover pasta usa PATCH parentId e a pasta só reaparece dentro do novo pai"
 });
 
 test("modo lista/grade alterna conteúdo sem trocar a consulta", async ({ page }) => {
-  const requests = await setup(page); await openDocuments(page);
+  const requests = await setup(page); await openDocuments(page, true);
   const before = requests.filter(request => new URL(request.url).pathname === "/api/organizations/1/files").length;
   await page.getByRole("button", { name: "Visualização em grade" }).click();
   await expect(page.locator(".mm-docs-file-grid")).toBeVisible();
@@ -228,7 +256,7 @@ test("modo lista/grade alterna conteúdo sem trocar a consulta", async ({ page }
 });
 
 test("menu secundário: teclado, Escape, Tab, clique externo; excluir exige confirmação", async ({ page }) => {
-  const requests = await setup(page); await openDocuments(page);
+  const requests = await setup(page); await openDocuments(page, true);
   const trigger = page.getByRole("button", { name: "Ações de config_kepler.json", exact: true });
   await trigger.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("menuitem", { name: "Renomear", exact: true })).toBeFocused();
@@ -247,7 +275,7 @@ test("menu secundário: teclado, Escape, Tab, clique externo; excluir exige conf
 
 test("menu ignora scroll atrasado da abertura e fecha quando a âncora realmente se move", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await setup(page); await openDocuments(page);
+  await setup(page); await openDocuments(page, true);
   const trigger = page.getByRole("button", { name: "Ações de config_kepler.json", exact: true });
   const item = page.getByRole("menuitem", { name: "Renomear", exact: true });
 
@@ -279,7 +307,7 @@ test("menu ignora scroll atrasado da abertura e fecha quando a âncora realmente
 });
 
 test("menu de pasta preserva a seleção por teclado depois do frame de abertura", async ({ page }) => {
-  await setup(page); await openDocuments(page); await openRoot(page);
+  await setup(page); await openDocuments(page, true); await openRoot(page);
   const trigger = page.getByRole("button", { name: "Ações da pasta Mês de Setembro", exact: true });
   await trigger.focus();
   await trigger.evaluate(async element => {
@@ -302,7 +330,7 @@ test("menu de pasta preserva a seleção por teclado depois do frame de abertura
 });
 
 test("botões contextuais alternam Documentos/Lixeira sem repetir a visão atual", async ({ page }) => {
-  await setup(page); await openDocuments(page);
+  await setup(page); await openDocuments(page, true);
   await page.getByRole("button", { name: "Lixeira", exact: true }).click();
   await expect(page.getByRole("button", { name: "Lixeira", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Documentos", exact: true })).toBeVisible();
@@ -314,7 +342,7 @@ test("botões contextuais alternam Documentos/Lixeira sem repetir a visão atual
 });
 
 test("Lixeira preserva metadados de retenção; purge desligado não aparece", async ({ page }) => {
-  await setup(page); await openDocuments(page);
+  const requests = await setup(page); await openDocuments(page, true);
   await page.getByRole("button", { name: "Lixeira", exact: true }).click();
   await expect(page.getByRole("columnheader", { name: "Pasta anterior" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Excluído por" })).toBeVisible();
@@ -322,10 +350,13 @@ test("Lixeira preserva metadados de retenção; purge desligado não aparece", a
   await expect(page.getByRole("button", { name: "Restaurar", exact: true })).toBeEnabled();
   await expect(page.getByRole("menuitem", { name: "Excluir permanentemente" })).toHaveCount(0);
   await expect(page.locator(".mm-docs-folder-grid")).toHaveCount(0);
+  const query = [...requests].reverse().find(request => new URL(request.url).pathname === "/api/organizations/1/files")!;
+  expect(new URL(query.url).searchParams.get("state")).toBe("trash");
+  expect(new URL(query.url).searchParams.has("folderId")).toBe(false);
 });
 
 test("paginação da referência usa itens por página, página atual e cursor existente", async ({ page }) => {
-  await setup(page, { more: true }); await openDocuments(page);
+  await setup(page, { more: true }); await openDocuments(page, true);
   await expect(page.getByText("Itens por página")).toBeVisible();
   await expect(page.locator(".mm-docs-page-number")).toHaveText("1");
   await page.getByRole("button", { name: "Próxima página" }).click();
@@ -337,13 +368,13 @@ test("paginação da referência usa itens por página, página atual e cursor e
 });
 
 test("sidebar recolhida/aberta e navegação SPA mantêm tema próprio", async ({ page }) => {
-  await setup(page); await openDocuments(page);
+  await setup(page); await openDocuments(page, true);
   const toggle = page.locator(".mm-sidebar-toggle");
   await toggle.click(); await expect(page.locator(".mm-projects-sidebar")).toHaveClass(/collapsed/);
   await toggle.click(); await expect(page.locator(".mm-projects-sidebar")).not.toHaveClass(/collapsed/);
   await page.locator(".mm-sidebar-item").filter({ hasText: "Todos os Projetos" }).click();
   await expect(page.locator(".mm-docs")).toHaveCount(0);
-  await openDocuments(page);
+  await openDocuments(page, true);
 });
 
 test("viewer sem grants não recebe a subaba documental", async ({ page }) => {
@@ -363,7 +394,7 @@ test("vazio e preferências de acessibilidade mantêm controles operáveis", asy
 
 
 test("menu único oferece renomear, baixar, mover e excluir na ordem solicitada", async ({ page }, testInfo) => {
-  await setup(page); await openDocuments(page);
+  await setup(page); await openDocuments(page, true);
   const row = page.locator(".mm-docs-table tbody tr").first();
   await expect(row.locator("td").last().getByRole("button")).toHaveCount(1);
   await row.getByRole("button", { name: "Ações de config_kepler.json" }).click();
@@ -379,7 +410,7 @@ test("menu único oferece renomear, baixar, mover e excluir na ordem solicitada"
 });
 
 test("renomear usa PATCH name e atualiza a lista; cancelar não envia mutação", async ({ page }) => {
-  const requests = await setup(page); await openDocuments(page);
+  const requests = await setup(page); await openDocuments(page, true);
   const trigger = page.getByRole("button", { name: "Ações de config_kepler.json", exact: true });
   page.once("dialog", dialog => dialog.dismiss());
   await trigger.click(); await page.getByRole("menuitem", { name: "Renomear", exact: true }).click();
@@ -392,7 +423,14 @@ test("renomear usa PATCH name e atualiza a lista; cancelar não envia mutação"
 });
 
 test("mover arquivo abre diálogo, conserva foco, cancela e usa PATCH folderId", async ({ page }) => {
-  const requests = await setup(page); await openDocuments(page);
+  const requests = await setup(page); await openDocuments(page, true);
+  await page.evaluate(() => {
+    const nativeClose = HTMLDialogElement.prototype.close;
+    HTMLDialogElement.prototype.close = function (...args) {
+      (window as Window & { documentDialogClosedWhileConnected?: boolean }).documentDialogClosedWhileConnected = this.isConnected;
+      return nativeClose.apply(this, args);
+    };
+  });
   const trigger = page.getByRole("button", { name: "Ações de config_kepler.json", exact: true });
   const dialog = page.getByRole("dialog", { name: "Mover documento" });
   await trigger.click(); await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
@@ -400,7 +438,9 @@ test("mover arquivo abre diálogo, conserva foco, cancela e usa PATCH folderId",
   await expect(dialog.getByRole("combobox", { name: "Pasta de destino" })).toBeFocused();
   await expect(dialog.getByRole("button", { name: "Mover documento", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => (window as Window & { documentDialogClosedWhileConnected?: boolean }).documentDialogClosedWhileConnected)).toBe(true);
+  await expect(trigger).toBeFocused();
   await trigger.click(); await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
   await dialog.getByRole("combobox").selectOption("3");
   await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
@@ -415,10 +455,12 @@ test("mover arquivo abre diálogo, conserva foco, cancela e usa PATCH folderId",
   await page.getByRole("button", { name: "Aplicar", exact: true }).click();
   await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
   await expect(page.locator(".documents-file-name")).toHaveText("config_kepler.json");
+  await showAllDocuments(page);
+  await expect(page.locator(".mm-docs-table tbody tr").filter({ hasText: "config_kepler.json" }).locator(".documents-file-origin")).toHaveText("Pasta: Raiz / Mês de Setembro / Relatórios");
 });
 
 test("mover negado permanece no diálogo com erro e permite cancelar", async ({ page }) => {
-  await setup(page, { failMove: true }); await openDocuments(page);
+  await setup(page, { failMove: true }); await openDocuments(page, true);
   await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
   await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Mover documento" });
@@ -431,7 +473,7 @@ test("mover negado permanece no diálogo com erro e permite cancelar", async ({ 
 });
 
 test("baixar usa endpoint existente e excluir envia documento para Lixeira", async ({ page }) => {
-  const requests = await setup(page); await openDocuments(page);
+  const requests = await setup(page); await openDocuments(page, true);
   const trigger = page.getByRole("button", { name: "Ações de config_kepler.json" });
   await trigger.click();
   const download = page.waitForEvent("download");
@@ -446,7 +488,7 @@ test("baixar usa endpoint existente e excluir envia documento para Lixeira", asy
 });
 
 test("menu respeita grants: somente download sem gestão ou exclusão", async ({ page }) => {
-  const requests = await setup(page, { role: "viewer", permissions: ["document.view", "document.download"] }); await openDocuments(page);
+  const requests = await setup(page, { role: "viewer", permissions: ["document.view", "document.download"] }); await openDocuments(page, true);
   await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
   await expect(page.getByRole("menuitem")).toHaveText(["Baixar"]);
   await expect(page.getByRole("button", { name: "Nova pasta", exact: true })).toHaveCount(0);
@@ -458,7 +500,7 @@ for (const destination of ["root", "trash"] as const) {
   test(`rename atrasado respeita navegação posterior para ${destination}`, async ({ page }) => {
     let finishRename!: () => void;
     const renameGate = new Promise<void>(resolve => { finishRename = resolve; });
-    const requests = await setup(page, { beforeRename: () => renameGate }); await openDocuments(page);
+    const requests = await setup(page, { beforeRename: () => renameGate }); await openDocuments(page, true);
     page.once("dialog", dialog => dialog.accept("Atualizado.json"));
     await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
     await page.getByRole("menuitem", { name: "Renomear", exact: true }).click();
@@ -497,7 +539,7 @@ test("refresh de rename vence consulta anterior sem deixar pasta vazia carregand
     beforeRename: () => renameGate,
     beforeList: async url => { if (url.searchParams.get("folderId") === "3" && ++folderReads === 1) await folderGate; },
   });
-  await openDocuments(page);
+  await openDocuments(page, true);
   page.once("dialog", dialog => dialog.accept("Atualizado.json"));
   await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
   await page.getByRole("menuitem", { name: "Renomear", exact: true }).click();
@@ -513,7 +555,7 @@ test("refresh de rename vence consulta anterior sem deixar pasta vazia carregand
 });
 
 test("mover para fora da pasta atual devolve foco ao breadcrumb persistente", async ({ page }) => {
-  await setup(page); await openDocuments(page); await openRoot(page);
+  await setup(page); await openDocuments(page, true); await openRoot(page);
   await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
   await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Mover documento" });
@@ -521,5 +563,5 @@ test("mover para fora da pasta atual devolve foco ao breadcrumb persistente", as
   await dialog.getByRole("button", { name: "Mover documento", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Caminho da pasta" }).getByRole("button", { name: "Raiz", exact: true })).toBeFocused();
-  await expect(page.getByText("Nenhum documento encontrado com os filtros atuais.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Nenhum documento.", { exact: true })).toBeVisible();
 });

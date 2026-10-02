@@ -51,14 +51,16 @@ test('cursor, permission and purge contracts remain in the real component', () =
   for (const token of ['pagination.hasMore && pagination.nextCursor','permanentPurgeEnabled && canManage && canDelete','EXCLUIR PERMANENTEMENTE','canUpload && documentState === "active"','disabled={busy || expired}','limit: 50','MAX_FILE_BYTES = 50 * 1024 * 1024','Itens por página','Visualização em grade','directFolders']) assert.ok(component.includes(token), token);
   assert.ok(!component.includes('type="checkbox"'));
 });
-test('virtual folders do not receive action menus and lineage stays explicit', () => {
+test('folder navigation omits virtual cards and lineage stays explicit', () => {
   const first = component.slice(component.indexOf('<nav className="mm-docs-folder-grid documents-folder-tree"'), component.indexOf('{foldersLoading ?'));
   assert.ok(!first.includes('DocumentActionMenu'));
   assert.match(component, /const folderPath = \(id: string\) =>/);
   assert.match(component, /documentFolderBreadcrumb\(folders,\s*id\)/);
   assert.ok(component.includes('aria-pressed='));
   assert.ok(component.includes('{ label: "Mover pasta"'));
-  assert.ok(component.includes('appliedFilters.folderId === "" ? <button type="button" aria-current="page"'));
+  assert.ok(component.includes('aria-current={browsedFolderId === "root" ? "page" : undefined}'));
+  assert.ok(!first.includes('Todos os documentos'));
+  assert.ok(!first.includes('mm-docs-folder-select'));
 });
 test('menu supports portal, keyboard, focus return and outside dismissal', () => {
   for (const token of ['createPortal','aria-haspopup="menu"','role="menuitem"','ArrowDown','ArrowUp','Escape','Tab','Home','End','pointerdown']) assert.ok(menu.includes(token), token);
@@ -73,8 +75,13 @@ test('transfer file owns only transfer/feedback presentation', () => {
 });
 
 
-test('all documents is independent from root and file actions live only in the menu', () => {
-  assert.ok(component.includes('const directFolders = (appliedFilters.folderId ? folders : [])'));
+test('root is default, all documents is a list filter, and file actions live only in the menu', () => {
+  assert.ok(component.includes('const [browsedFolderId, setBrowsedFolderId] = useState("root")'));
+  assert.ok(component.includes('<option value="">Todos os documentos</option>'));
+  assert.ok(component.includes('documents-file-origin'));
+  assert.ok(component.includes('folderOrigin={props.folderOrigin?.(file)}'));
+  assert.ok(component.includes('if (next.folderId) setBrowsedFolderId(next.folderId)'));
+  assert.ok(component.includes('folderId: state === "active" ? filters.folderId || undefined : undefined'));
   const actions = component.slice(component.indexOf('function ActiveDocumentActions('), component.indexOf('function DocumentFileMoveDialog('));
   assert.equal((actions.match(/<DocumentActionMenu/g) || []).length, 1);
   for (const label of ['Renomear', 'Baixar', 'Mover', 'Excluir']) assert.ok(actions.includes(`label: "${label}"`));
@@ -87,6 +94,8 @@ test('all documents is independent from root and file actions live only in the m
 
 test('file move restores focus after native modal teardown without stealing a newer focus', () => {
   const dialog = component.slice(component.indexOf('function DocumentFileMoveDialog('), component.indexOf('function ActiveDocumentsResults('));
+  assert.ok(dialog.includes('useLayoutEffect(() => {'));
+  assert.ok(!dialog.includes('useEffect(() => {'));
   assert.ok(dialog.includes('dialog?.close()'));
   assert.ok(dialog.includes('window.setTimeout(() => {'));
   assert.ok(dialog.includes('active !== document.body && active.isConnected'));
