@@ -192,3 +192,37 @@
   .mm-docs .mm-docs-file-card-meta { grid-template-columns: 1fr; }
   .mm-docs .mm-docs-page-controls { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
 }
+
+.mm-docs .mm-docs-breadcrumb { min-height: 34px; }
+.mm-docs .mm-docs-breadcrumb button[aria-current="page"] { color: var(--maono-accent-text); font-weight: 650; }
+.mm-docs-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 180; display: grid; place-items: center;
+  padding: 20px; background: rgba(0,0,0,.68); backdrop-filter: blur(2px);
+}
+.mm-docs-dialog {
+  width: min(520px, calc(100vw - 28px)); display: grid; gap: 18px;
+  padding: 20px; border: 1px solid var(--mm-border-strong, #343b46); border-radius: 12px;
+  background: #10151b; color: var(--mm-text, #f4f1e8); box-shadow: 0 24px 70px rgba(0,0,0,.55);
+  font: 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.mm-docs-dialog .mm-docs-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.mm-docs-dialog h3 { margin: 0; font-size: 17px; }
+.mm-docs-dialog p { margin: 5px 0 0; color: var(--mm-text-soft, #a7adb7); }
+.mm-docs-dialog .mm-docs-dialog-close {
+  width: 34px; height: 34px; border: 1px solid var(--mm-border-strong, #343b46); border-radius: 6px;
+  background: #0b1016; color: var(--mm-text, #f4f1e8); font: 22px/1 system-ui; cursor: pointer;
+}
+.mm-docs-dialog .mm-docs-field { display: grid; gap: 7px; }
+.mm-docs-dialog .mm-docs-field > span { font-size: 12px; font-weight: 600; }
+.mm-docs-dialog select {
+  width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #4b5360; border-radius: 6px;
+  background: #0b1016; color: #f4f1e8; color-scheme: dark; font: inherit;
+}
+.mm-docs-dialog .mm-docs-dialog-note { margin: 0; font-size: 12px; }
+.mm-docs-dialog .mm-docs-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.mm-docs-dialog :is(button, select):focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 3px; }
+@media (max-width: 560px) {
+  .mm-docs-dialog { padding: 16px; }
+  .mm-docs-dialog .mm-docs-dialog-actions { flex-direction: column-reverse; }
+  .mm-docs-dialog .mm-docs-dialog-actions .mm-docs-button { width: 100%; }
+}

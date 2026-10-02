@@ -13,6 +13,7 @@ const files = [
 ];
 async function setup(page: Page, options: { more?: boolean; empty?: boolean; role?: string } = {}) {
   const requests: { method: string; url: string; body: string | null }[] = [];
+  const folderState = folders.map(folder => ({ ...folder }));
   await page.route("**/api/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -20,8 +21,17 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
     if (url.pathname === "/api/session") {
       return route.fulfill({ json: { authenticated: true, user: { id: 1, name: "Operador de demonstração", email: "qa@example.test", role: options.role ?? "super_admin", activeOrganizationId: 1 }, projects: [], organizations: [organization], activeOrganization: organization } });
     }
+    if (request.method() === "PATCH" && /^\/api\/organizations\/1\/document-folders\/\d+$/.test(url.pathname)) {
+      const folderId = Number(url.pathname.split("/").at(-1));
+      const patch = JSON.parse(request.postData() || "{}");
+      const folder = folderState.find(item => item.id === folderId);
+      if (!folder) return route.fulfill({ status: 404, json: { ok: false } });
+      if (Object.prototype.hasOwnProperty.call(patch, "parentId")) folder.parentId = patch.parentId == null ? null : Number(patch.parentId);
+      if (Object.prototype.hasOwnProperty.call(patch, "name")) folder.name = String(patch.name);
+      return route.fulfill({ json: { ok: true, folder } });
+    }
     if (request.method() !== "GET") return route.fulfill({ status: 403, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
-    if (url.pathname.endsWith("/document-folders")) return route.fulfill({ json: { ok: true, folders } });
+    if (url.pathname.endsWith("/document-folders")) return route.fulfill({ json: { ok: true, folders: folderState } });
     if (url.pathname === "/api/organizations/1/files") {
       const trash = url.searchParams.get("state") === "trash";
       const cursor = url.searchParams.get("cursor");
@@ -115,6 +125,50 @@ test("navegação real mostra apenas subpastas do nível atual e consulta os arq
   await expect(page.locator(".mm-docs-folder-card")).toHaveCount(1);
   await expect(page.locator(".mm-docs-folder-card")).toContainText("2026");
   await expect.poll(() => requests.some(request => new URL(request.url).searchParams.get("folderId") === "3")).toBe(true);
+});
+
+test("breadcrumb permanece estável em Todos, Raiz e subpastas", async ({ page }) => {
+  await setup(page); await openDocuments(page);
+  const breadcrumb = page.getByRole("navigation", { name: "Caminho da pasta" });
+  await expect(breadcrumb).toBeVisible();
+  await expect(breadcrumb.getByRole("button", { name: "Todos", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(breadcrumb.getByRole("button", { name: "Raiz", exact: true })).toBeVisible();
+
+  await page.locator(".mm-docs-folder-card").filter({ hasText: "Raiz" }).locator(".mm-docs-folder-select").click();
+  await expect(breadcrumb).toBeVisible();
+  await expect(breadcrumb.getByRole("button", { name: "Raiz", exact: true })).toHaveAttribute("aria-current", "page");
+
+  await breadcrumb.getByRole("button", { name: "Todos", exact: true }).click();
+  await expect(breadcrumb).toBeVisible();
+  await expect(breadcrumb.getByRole("button", { name: "Todos", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "Relatórios" })).toHaveCount(0);
+  await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "2026" })).toHaveCount(0);
+});
+
+test("mover pasta usa PATCH parentId e a pasta só reaparece dentro do novo pai", async ({ page }) => {
+  const requests = await setup(page); await openDocuments(page);
+  const september = page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" });
+  await september.getByRole("button", { name: /Ações da pasta/ }).click();
+  await page.getByRole("menuitem", { name: "Mover pasta", exact: true }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Mover pasta" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("combobox", { name: "Nova pasta pai" }).selectOption("2");
+  await dialog.getByRole("button", { name: "Mover pasta", exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" })).toHaveCount(0);
+  const moveRequest = [...requests].reverse().find(request =>
+    request.method === "PATCH" &&
+    /\/document-folders\/1$/.test(new URL(request.url).pathname)
+  );
+  expect(moveRequest).toBeTruthy();
+  expect(JSON.parse(moveRequest!.body || "{}")).toEqual({ parentId: "2" });
+
+  await page.locator(".mm-docs-folder-card").filter({ hasText: "QA_VISUAL" }).locator(".mm-docs-folder-select").click();
+  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(1);
+  await expect(page.locator(".mm-docs-folder-card")).toContainText("Mês de Setembro");
+  await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "Relatórios" })).toHaveCount(0);
 });
 
 test("modo lista/grade alterna conteúdo sem trocar a consulta", async ({ page }) => {

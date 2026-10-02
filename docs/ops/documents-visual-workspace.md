@@ -49,3 +49,14 @@ The PR must remain Draft until:
 ## Rollback
 
 Reverting AD-VIS-02 must leave AD-VIS-01 / PR #220 in place. No migration rollback is part of this change and no production flag or Worker activation is included.
+
+
+## Round: persistent path + folder move
+
+- The breadcrumb is now always rendered in Documents, including the virtual **Todos** view, so the navigation line never appears/disappears between folder states.
+- Cards continue to render only direct children of the current real folder; nested descendants do not leak into **Todos** or **Raiz**.
+- The three-dot menu of every real folder now exposes **Mover pasta**.
+- No schema change was required: the existing PATCH route already accepts `parentId`.
+- Server invariants reused unchanged: same-organization parent, no self-parent, no descendant cycle, sibling-name uniqueness and maximum depth 5.
+- Moving a folder changes only its logical `parent_id`; descendants and document links stay attached to that folder/subtree.
+- **No new migration.** Migration 0024 is a pre-existing prerequisite only and must not be reapplied by inference.

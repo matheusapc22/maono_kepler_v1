@@ -15,7 +15,7 @@ test('business prefix is unchanged; only presentation imports are added', () => 
   assert.equal(createHash('sha256').update(prefix).digest('hex'), '126eb4eddd554717f51acc5fe1ff9cf1b7f48a6b00d8a84f2b77851f8cc9ea58');
 });
 test('workspace includes real structural blocks, not generated-content headings', () => {
-  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-page-controls','mm-docs-file-grid']) assert.ok(component.includes(name));
+  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-breadcrumb','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-page-controls','mm-docs-file-grid','mm-docs-dialog']) assert.ok(component.includes(name));
   assert.ok(component.includes('Buscar e filtrar'));
   assert.ok(component.includes('Documentos encontrados'));
   assert.ok(!component.includes('role="tree"'));
@@ -38,6 +38,8 @@ test('virtual folders do not receive action menus and lineage stays explicit', (
   assert.match(component, /const folderPath = \(id: string\) =>/);
   assert.match(component, /documentFolderBreadcrumb\(folders,\s*id\)/);
   assert.ok(component.includes('aria-pressed='));
+  assert.ok(component.includes('{ label: "Mover pasta"'));
+  assert.ok(component.includes('aria-current={appliedFilters.folderId === "" ? "page" : undefined}'));
 });
 test('menu supports portal, keyboard, focus return and outside dismissal', () => {
   for (const token of ['createPortal','aria-haspopup="menu"','role="menuitem"','ArrowDown','ArrowUp','Escape','Tab','Home','End','pointerdown','trigger.current?.focus()']) assert.ok(menu.includes(token), token);

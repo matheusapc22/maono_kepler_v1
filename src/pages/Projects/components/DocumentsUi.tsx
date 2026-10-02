@@ -29,75 +29,147 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
-  const focusAfterClose = useRef<HTMLElement | null>(null);
-  const close = (restoreFocus = false) => {
-    if (restoreFocus) focusAfterClose.current = trigger.current;
+
+  const closeToTrigger = () => {
+    trigger.current?.focus({ preventScroll: true });
     setOpen(false);
   };
-  useLayoutEffect(() => {
-    if (!open && focusAfterClose.current) {
-      const target = focusAfterClose.current;
-      focusAfterClose.current = null;
-      if (target === trigger.current) trigger.current?.focus();
-      else if (target.isConnected) target.focus();
-    }
-  }, [open]);
+
   useLayoutEffect(() => {
     if (!open) return;
+
     const rect = trigger.current?.getBoundingClientRect();
     if (!rect) return;
+
     const height = panel.current?.offsetHeight ?? 100;
     const width = panel.current?.offsetWidth ?? 240;
     setPosition({
       left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
       top: rect.bottom + height + 8 > window.innerHeight ? Math.max(8, rect.top - height - 6) : rect.bottom + 6,
     });
-    const focusFirstItem = () => {
-      const firstItem = panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)");
-      if (firstItem && document.activeElement !== firstItem) firstItem.focus({ preventScroll: true });
+
+    const focusFirst = () => {
+      panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
     };
-    focusFirstItem();
-    const focusFrame = window.requestAnimationFrame(focusFirstItem);
-    const outside = (event: PointerEvent) => {
-      if (!panel.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setOpen(false);
+    focusFirst();
+    const frame = window.requestAnimationFrame(focusFirst);
+
+    const outsidePointer = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!panel.current?.contains(target) && !trigger.current?.contains(target)) setOpen(false);
     };
-    const reposition = () => setOpen(false);
-    document.addEventListener("pointerdown", outside);
-    window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
+    const outsideFocus = (event: FocusEvent) => {
+      const target = event.target as Node;
+      if (!panel.current?.contains(target) && !trigger.current?.contains(target)) setOpen(false);
+    };
+    const closeForGeometry = () => setOpen(false);
+
+    document.addEventListener("pointerdown", outsidePointer);
+    document.addEventListener("focusin", outsideFocus);
+    window.addEventListener("resize", closeForGeometry);
+    window.addEventListener("scroll", closeForGeometry, true);
+
     return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener("pointerdown", outside);
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", outsidePointer);
+      document.removeEventListener("focusin", outsideFocus);
+      window.removeEventListener("resize", closeForGeometry);
+      window.removeEventListener("scroll", closeForGeometry, true);
     };
   }, [open]);
-  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
   if (actions.length === 0) return null;
+
   return <>
-    <button ref={trigger} type="button" className="mm-docs-button mm-docs-menu-trigger" aria-label={label} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} disabled={disabled} onClick={() => setOpen(value => !value)} onKeyDown={event => {
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpen(true); }
-      if (event.key === "Tab" && open) { setOpen(false); }
-    }}><DocumentIcon name="more" /></button>
-    {open && createPortal(<div ref={panel} id={id} className="mm-docs-action-menu" role="menu" aria-label={label} style={position} onBlur={event => {
-      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
-    }} onKeyDown={event => {
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); trigger.current?.focus({ preventScroll: true }); setOpen(false); return; }
-      const items = Array.from(panel.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
-      const index = items.indexOf(document.activeElement as HTMLButtonElement);
-      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) && items.length) {
-        event.preventDefault();
-        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-        items[next]?.focus();
-      }
-      if (event.key === "Tab") {
-        event.preventDefault();
-        const stops = Array.from(document.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]'))
-          .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0 && !panel.current?.contains(element));
-        const current = stops.indexOf(trigger.current!);
-        focusAfterClose.current = stops[current + (event.shiftKey ? -1 : 1)] ?? trigger.current;
-        close();
-      }
-    }}>{actions.map(action => <button key={action.label} type="button" role="menuitem" className={action.danger ? "is-danger" : ""} disabled={action.disabled} onClick={() => { close(true); action.onSelect(); }}>{action.label}</button>)}</div>, document.body)}
+    <button
+      ref={trigger}
+      type="button"
+      className="mm-docs-button mm-docs-menu-trigger"
+      aria-label={label}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-controls={open ? id : undefined}
+      disabled={disabled}
+      onClick={() => setOpen(value => !value)}
+      onKeyDown={event => {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          setOpen(true);
+        }
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          closeToTrigger();
+        }
+      }}
+    ><DocumentIcon name="more" /></button>
+    {open && createPortal(
+      <div
+        ref={panel}
+        id={id}
+        className="mm-docs-action-menu"
+        role="menu"
+        aria-label={label}
+        style={position}
+        onKeyDown={event => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            closeToTrigger();
+            return;
+          }
+
+          const items = Array.from(panel.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
+          const index = items.indexOf(document.activeElement as HTMLButtonElement);
+          if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) && items.length) {
+            event.preventDefault();
+            const next = event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? items.length - 1
+                : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+            items[next]?.focus({ preventScroll: true });
+            return;
+          }
+
+          if (event.key === "Tab") {
+            event.preventDefault();
+            const stops = Array.from(document.querySelectorAll<HTMLElement>(
+              'button, a[href], input, select, textarea, [tabindex]'
+            )).filter(element =>
+              element.tabIndex >= 0 &&
+              !element.matches(":disabled") &&
+              element.getClientRects().length > 0 &&
+              !panel.current?.contains(element)
+            );
+            const triggerIndex = stops.indexOf(trigger.current!);
+            const target = stops[triggerIndex + (event.shiftKey ? -1 : 1)] ?? trigger.current;
+            setOpen(false);
+            window.requestAnimationFrame(() => target?.focus({ preventScroll: true }));
+          }
+        }}
+      >
+        {actions.map(action => (
+          <button
+            key={action.label}
+            type="button"
+            role="menuitem"
+            className={action.danger ? "is-danger" : ""}
+            disabled={action.disabled}
+            onClick={() => {
+              setOpen(false);
+              trigger.current?.focus({ preventScroll: true });
+              action.onSelect();
+            }}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>,
+      document.body,
+    )}
   </>;
 }

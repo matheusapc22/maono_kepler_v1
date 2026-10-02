@@ -195,6 +195,27 @@ function flattenDocumentFolderTree(
   return entries;
 }
 
+function documentFolderDescendantIds(
+  folders: OrganizationDocumentFolder[],
+  folderId: number | string,
+) {
+  const descendants = new Set<string>();
+  const queue = [String(folderId)];
+
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    for (const folder of folders) {
+      if (String(folder.parentId ?? "") !== parentId) continue;
+      const childId = String(folder.id);
+      if (descendants.has(childId)) continue;
+      descendants.add(childId);
+      queue.push(childId);
+    }
+  }
+
+  return descendants;
+}
+
 function documentFolderBreadcrumb(
   folders: OrganizationDocumentFolder[],
   folderId: string,
@@ -404,6 +425,10 @@ function OrganizationDocuments({
   const [folders, setFolders] = useState<OrganizationDocumentFolder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [busyFolderId, setBusyFolderId] = useState<number | string | null>(null);
+  const [folderMoveDraft, setFolderMoveDraft] = useState<{
+    folder: OrganizationDocumentFolder;
+    targetParentId: string;
+  } | null>(null);
   const [filterDraft, setFilterDraft] = useState<DocumentFilterState>({
     ...DEFAULT_DOCUMENT_FILTERS,
   });
@@ -461,6 +486,12 @@ function OrganizationDocuments({
     () => documentFolderBreadcrumb(folders, appliedFilters.folderId),
     [folders, appliedFilters.folderId],
   );
+  const folderMoveTargets = useMemo(() => {
+    if (!folderMoveDraft) return [];
+    const blocked = documentFolderDescendantIds(folders, folderMoveDraft.folder.id);
+    blocked.add(String(folderMoveDraft.folder.id));
+    return folderTree.filter(({ folder }) => !blocked.has(String(folder.id)));
+  }, [folderMoveDraft, folderTree, folders]);
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: keyof DocumentFilterState; label: string }> = [];
@@ -1133,6 +1164,47 @@ function OrganizationDocuments({
     }
   }
 
+  function beginMoveFolder(folder: OrganizationDocumentFolder) {
+    if (!canManage) return;
+    setFolderMoveDraft({
+      folder,
+      targetParentId: folder.parentId == null ? "root" : String(folder.parentId),
+    });
+  }
+
+  async function handleMoveFolder() {
+    if (!organizationId || !canManage || !folderMoveDraft) return;
+
+    const { folder, targetParentId } = folderMoveDraft;
+    const currentParentId = folder.parentId == null ? "root" : String(folder.parentId);
+    if (targetParentId === currentParentId) {
+      setFolderMoveDraft(null);
+      return;
+    }
+
+    setBusyFolderId(folder.id);
+    setError(null);
+    showFeedback("loading", "Movendo pasta...");
+
+    try {
+      await updateOrganizationDocumentFolder(organizationId, folder.id, {
+        parentId: targetParentId === "root" ? null : targetParentId,
+      });
+      if (!mountedRef.current) return;
+      await loadFolders();
+      if (!mountedRef.current) return;
+      setFolderMoveDraft(null);
+      showFeedback("success", "Pasta movida.", 3000);
+    } catch (requestError) {
+      setFeedback(null);
+      setError(
+        formatRequestError(requestError, "Não foi possível mover a pasta."),
+      );
+    } finally {
+      setBusyFolderId(null);
+    }
+  }
+
   async function handleDeleteFolder(folder: OrganizationDocumentFolder) {
     if (!organizationId || !canManage) return;
     const confirmed = window.confirm(
@@ -1283,7 +1355,7 @@ function OrganizationDocuments({
 
       {documentState === "active" ? <section className="mm-docs-panel" aria-labelledby="mm-docs-folders-title">
         <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="folder" /><div><h3 id="mm-docs-folders-title">Pastas</h3><p>Organize seus documentos em pastas para facilitar o acesso e a gestão.</p></div></div>{canManage ? <button type="button" className="mm-docs-button is-outlined" disabled={busyFolderId !== null} onClick={() => void handleCreateFolder()}><DocumentIcon name="plus" />Nova pasta</button> : null}</div>
-        {appliedFilters.folderId ? <nav className="mm-docs-breadcrumb documents-folder-breadcrumb" aria-label="Caminho da pasta"><button type="button" onClick={() => selectFolder("")}>Todos</button><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>{breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}</nav> : null}
+        <nav className="mm-docs-breadcrumb documents-folder-breadcrumb" aria-label="Caminho da pasta"><button type="button" aria-current={appliedFilters.folderId === "" ? "page" : undefined} onClick={() => selectFolder("")}>Todos</button><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>{breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}</nav>
         <nav className="mm-docs-folder-grid documents-folder-tree" aria-label={insideFolder ? "Subpastas da pasta atual" : "Pastas de documentos"}>
           {!insideFolder ? <>
             <article className={`mm-docs-folder-card ${appliedFilters.folderId === "" ? "is-active" : ""}`}><button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === ""} onClick={() => selectFolder("")}><DocumentIcon name="folder" /><span><strong>Todos os documentos</strong><span>Todas as pastas</span></span></button></article>
@@ -1294,6 +1366,7 @@ function OrganizationDocuments({
             return <article key={String(folder.id)} className={`mm-docs-folder-card ${appliedFilters.folderId === String(folder.id) ? "is-active" : ""}`}>
               <button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === String(folder.id)} title={path} onClick={() => selectFolder(String(folder.id))}><DocumentIcon name="folder" /><span><strong>{folder.name}</strong><span>{countLabel(folderCountById.get(String(folder.id)) || 0)}</span></span></button>
               {canManage ? <DocumentActionMenu label={`Ações da pasta ${path}`} disabled={String(busyFolderId) === String(folder.id)} actions={[
+                { label: "Mover pasta", onSelect: () => beginMoveFolder(folder) },
                 { label: "Renomear pasta", onSelect: () => void handleRenameFolder(folder) },
                 { label: "Excluir pasta vazia", danger: true, onSelect: () => void handleDeleteFolder(folder) },
               ]} /> : null}
@@ -1302,6 +1375,15 @@ function OrganizationDocuments({
           {!foldersLoading && insideFolder && directFolders.length === 0 ? <p className="mm-docs-folder-empty">Esta pasta não possui subpastas.</p> : null}
         </nav>
       </section> : null}
+
+      {folderMoveDraft ? <div className="mm-docs-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && busyFolderId === null) setFolderMoveDraft(null); }}>
+        <section className="mm-docs-dialog" role="dialog" aria-modal="true" aria-labelledby="mm-docs-move-folder-title" onKeyDown={event => { if (event.key === "Escape" && busyFolderId === null) setFolderMoveDraft(null); }}>
+          <div className="mm-docs-dialog-header"><div><h3 id="mm-docs-move-folder-title">Mover pasta</h3><p>Escolha onde “{folderMoveDraft.folder.name}” deve ficar.</p></div><button type="button" className="mm-docs-dialog-close" aria-label="Fechar" disabled={busyFolderId !== null} onClick={() => setFolderMoveDraft(null)}>×</button></div>
+          <label className="mm-docs-field"><span>Nova pasta pai</span><select autoFocus value={folderMoveDraft.targetParentId} onChange={event => setFolderMoveDraft(current => current ? { ...current, targetParentId: event.target.value } : current)}><option value="root">Raiz</option>{folderMoveTargets.map(({ folder }) => <option key={String(folder.id)} value={String(folder.id)}>{documentFolderBreadcrumb(folders, String(folder.id)).map(item => item.name).join(" / ")}</option>)}</select></label>
+          <p className="mm-docs-dialog-note">Subpastas e documentos permanecem vinculados à pasta movida. Ciclos e profundidade acima de 5 níveis são bloqueados pelo servidor.</p>
+          <div className="mm-docs-dialog-actions"><button type="button" className="mm-docs-button" disabled={busyFolderId !== null} onClick={() => setFolderMoveDraft(null)}>Cancelar</button><button type="button" className="mm-docs-button is-primary" disabled={busyFolderId !== null || folderMoveDraft.targetParentId === (folderMoveDraft.folder.parentId == null ? "root" : String(folderMoveDraft.folder.parentId))} onClick={() => void handleMoveFolder()}>{busyFolderId !== null ? "Movendo..." : "Mover pasta"}</button></div>
+        </section>
+      </div> : null}
 
       <section className="mm-docs-panel" aria-labelledby="mm-docs-filter-title">
         <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="search" /><div><h3 id="mm-docs-filter-title">Buscar e filtrar</h3><p>Encontre documentos rapidamente usando os filtros abaixo.</p></div></div></div>
