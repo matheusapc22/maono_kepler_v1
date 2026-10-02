@@ -195,27 +195,6 @@ function flattenDocumentFolderTree(
   return entries;
 }
 
-function documentFolderDescendantIds(
-  folders: OrganizationDocumentFolder[],
-  folderId: number | string,
-) {
-  const descendants = new Set<string>();
-  const queue = [String(folderId)];
-
-  while (queue.length > 0) {
-    const parentId = queue.shift()!;
-    for (const folder of folders) {
-      if (String(folder.parentId ?? "") !== parentId) continue;
-      const childId = String(folder.id);
-      if (descendants.has(childId)) continue;
-      descendants.add(childId);
-      queue.push(childId);
-    }
-  }
-
-  return descendants;
-}
-
 function documentFolderBreadcrumb(
   folders: OrganizationDocumentFolder[],
   folderId: string,
@@ -1579,4 +1558,26 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
       <div className="mm-docs-pagination"><span role="status">{refreshing || pendingNext ? "Atualizando documentos." : `Exibindo ${firstShown}–${lastShown} de ${pagination.total} documentos.`}</span><div className="mm-docs-page-controls"><label>Itens por página <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageIndex(0); setPendingNext(false); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><button type="button" className="mm-docs-page-arrow is-previous" aria-label="Página anterior" disabled={!canGoPrevious || refreshing || loadingMore || pendingNext} onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}><DocumentIcon name="chevron" /></button><span className="mm-docs-page-number" aria-current="page">{safePageIndex + 1}</span><button type="button" className="mm-docs-page-arrow" aria-label="Próxima página" disabled={!canGoNext || refreshing || loadingMore || pendingNext} onClick={goNext}><DocumentIcon name="chevron" /></button></div></div>
     </>}
   </section>;
+}
+
+
+function documentFolderDescendantIds(
+  folders: OrganizationDocumentFolder[],
+  folderId: number | string,
+) {
+  const descendants = new Set<string>();
+  const queue = [String(folderId)];
+
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    for (const folder of folders) {
+      if (String(folder.parentId ?? "") !== parentId) continue;
+      const childId = String(folder.id);
+      if (descendants.has(childId)) continue;
+      descendants.add(childId);
+      queue.push(childId);
+    }
+  }
+
+  return descendants;
 }
