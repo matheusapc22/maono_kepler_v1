@@ -1549,10 +1549,17 @@ function DocumentFileMoveDialog({
     dialog?.querySelector<HTMLSelectElement>("select")?.focus({ preventScroll: true });
     return () => {
       dialog?.close();
-      const focusTarget = previousFocus?.isConnected
-        ? previousFocus
-        : document.querySelector<HTMLButtonElement>('.mm-docs-breadcrumb button[aria-current="page"]');
-      focusTarget?.focus({ preventScroll: true });
+      // WebKit releases modal inertness after removal. Returning focus during
+      // effect cleanup is too early there; wait until its close task settles.
+      window.setTimeout(() => {
+        if (document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return;
+        const active = document.activeElement;
+        if (active && active !== document.body && active.isConnected && !dialog?.contains(active)) return;
+        const focusTarget = previousFocus?.isConnected
+          ? previousFocus
+          : document.querySelector<HTMLButtonElement>('.mm-docs-breadcrumb button[aria-current="page"]');
+        focusTarget?.focus({ preventScroll: true });
+      }, 0);
     };
   }, []);
 

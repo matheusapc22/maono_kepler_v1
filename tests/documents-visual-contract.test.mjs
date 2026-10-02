@@ -83,3 +83,13 @@ test('all documents is independent from root and file actions live only in the m
   assert.ok(component.includes('renameOrganizationFile(organizationId, file.id, name.trim())'));
   assert.ok(component.includes('dialog?.showModal()'));
 });
+
+
+test('file move restores focus after native modal teardown without stealing a newer focus', () => {
+  const dialog = component.slice(component.indexOf('function DocumentFileMoveDialog('), component.indexOf('function ActiveDocumentsResults('));
+  assert.ok(dialog.includes('dialog?.close()'));
+  assert.ok(dialog.includes('window.setTimeout(() => {'));
+  assert.ok(dialog.includes('active !== document.body && active.isConnected'));
+  assert.ok(dialog.includes('previousFocus?.isConnected'));
+  assert.ok(dialog.includes('focusTarget?.focus({ preventScroll: true })'));
+});
