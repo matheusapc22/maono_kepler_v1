@@ -62,7 +62,9 @@ test('virtual folders do not receive action menus and lineage stays explicit', (
 });
 test('menu supports portal, keyboard, focus return and outside dismissal', () => {
   for (const token of ['createPortal','aria-haspopup="menu"','role="menuitem"','ArrowDown','ArrowUp','Escape','Tab','Home','End','pointerdown']) assert.ok(menu.includes(token), token);
-  assert.match(menu, /trigger\.current\?\.focus/);
+  assert.match(menu, /scheduleFocus\(trigger\.current\)/);
+  assert.match(menu, /target\?\.isConnected\) target\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(menu, /window\.clearTimeout\(focusTimer\.current\)/);
 });
 test('transfer file owns only transfer/feedback presentation', () => {
   assert.ok(!transfer.includes('.documents-filter'));

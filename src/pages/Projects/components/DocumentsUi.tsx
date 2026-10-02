@@ -65,7 +65,10 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
     });
 
     const focusFirst = () => {
-      panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+      // The frame is a fallback, not a reason to reset an early keyboard selection.
+      if (!panel.current?.contains(document.activeElement)) {
+        panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+      }
     };
     focusFirst();
     const frame = window.requestAnimationFrame(focusFirst);
@@ -79,18 +82,27 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
       if (!panel.current?.contains(target) && !trigger.current?.contains(target)) setOpen(false);
     };
     const closeForGeometry = () => setOpen(false);
+    const closeForScroll = () => {
+      const current = trigger.current?.getBoundingClientRect();
+      // Focusing/clicking the trigger can queue a scroll event before the menu
+      // opens. Only dismiss if the anchor actually moved since it was positioned.
+      if (!current || current.top !== rect.top || current.left !== rect.left ||
+        current.bottom !== rect.bottom || current.right !== rect.right) {
+        setOpen(false);
+      }
+    };
 
     document.addEventListener("pointerdown", outsidePointer);
     document.addEventListener("focusin", outsideFocus);
     window.addEventListener("resize", closeForGeometry);
-    window.addEventListener("scroll", closeForGeometry, true);
+    window.addEventListener("scroll", closeForScroll, true);
 
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("pointerdown", outsidePointer);
       document.removeEventListener("focusin", outsideFocus);
       window.removeEventListener("resize", closeForGeometry);
-      window.removeEventListener("scroll", closeForGeometry, true);
+      window.removeEventListener("scroll", closeForScroll, true);
     };
   }, [open]);
 

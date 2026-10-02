@@ -200,6 +200,62 @@ test("menu secundário: teclado, Escape, Tab, clique externo; excluir exige conf
   expect(requests.filter(request => request.method !== "GET")).toEqual([]);
 });
 
+test("menu ignora scroll atrasado da abertura e fecha quando a âncora realmente se move", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await setup(page); await openDocuments(page);
+  const trigger = page.getByRole("button", { name: "Ações de config_kepler.json", exact: true });
+  const item = page.getByRole("menuitem", { name: "Excluir", exact: true });
+
+  // Focusing an offscreen row can queue a document/table scroll before Enter.
+  // Deliver that event after opening without changing the anchor's geometry.
+  for (const key of ["Enter", "Space", "ArrowDown"]) {
+    await trigger.focus(); await page.keyboard.press(key);
+    await expect(item).toBeFocused();
+    await page.locator(".mm-docs-table-scroll").dispatchEvent("scroll");
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    await expect(item).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+  }
+
+  await trigger.click();
+  await expect(item).toBeFocused();
+  const top = (await trigger.boundingBox())!.y;
+  await page.evaluate(() => window.scrollBy(0, window.scrollY > 0 ? -32 : 32));
+  await expect.poll(async () => (await trigger.boundingBox())!.y).not.toBe(top);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
+  await trigger.click(); await page.keyboard.press("Shift+Tab");
+  await expect(trigger.locator("xpath=..").getByRole("button", { name: "Baixar", exact: true })).toBeFocused();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await trigger.click(); await page.keyboard.press("Tab");
+  await expect(page.getByRole("combobox", { name: "Mover Relatório de mercado e oportunidades.pdf para pasta", exact: true })).toBeFocused();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+});
+
+test("menu de pasta preserva a seleção por teclado depois do frame de abertura", async ({ page }) => {
+  await setup(page); await openDocuments(page);
+  const trigger = page.getByRole("button", { name: "Ações da pasta Mês de Setembro", exact: true });
+  await trigger.focus();
+  await trigger.evaluate(async element => {
+    // Let React commit, then navigate before the opening animation frame.
+    element.click();
+    await Promise.resolve();
+    if (document.activeElement?.getAttribute("role") !== "menuitem") {
+      throw new Error("Opening must focus a menu item before keyboard navigation");
+    }
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+  });
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+  await expect(page.getByRole("menuitem", { name: "Excluir pasta vazia", exact: true })).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(page.getByRole("menuitem", { name: "Mover pasta", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "Renomear pasta", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+});
+
 test("botões contextuais alternam Documentos/Lixeira sem repetir a visão atual", async ({ page }) => {
   await setup(page); await openDocuments(page);
   await page.getByRole("button", { name: "Lixeira", exact: true }).click();
