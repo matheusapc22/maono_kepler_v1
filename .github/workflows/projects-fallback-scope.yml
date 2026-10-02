@@ -1,0 +1,27 @@
+name: Projects Fallback Scope
+
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/fallback-ui-styles.ts'
+      - 'tests/projects-fallback-scope.test.mjs'
+      - 'tests/helpers/projects-fallback-fixture.mjs'
+      - 'tests/browser/projects-theme-regression.spec.ts'
+      - '.github/workflows/projects-fallback-scope.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scope-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Projects scope and unchanged legacy declarations
+        run: node --test tests/projects-fallback-scope.test.mjs
