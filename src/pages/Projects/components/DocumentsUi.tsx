@@ -52,9 +52,12 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
       left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
       top: rect.bottom + height + 8 > window.innerHeight ? Math.max(8, rect.top - height - 6) : rect.bottom + 6,
     });
-    const focusFrame = window.requestAnimationFrame(() => {
-      panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
-    });
+    const focusFirstItem = () => {
+      const firstItem = panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)");
+      if (firstItem && document.activeElement !== firstItem) firstItem.focus({ preventScroll: true });
+    };
+    focusFirstItem();
+    const focusFrame = window.requestAnimationFrame(focusFirstItem);
     const outside = (event: PointerEvent) => {
       if (!panel.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -74,6 +77,7 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
   return <>
     <button ref={trigger} type="button" className="mm-docs-button mm-docs-menu-trigger" aria-label={label} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} disabled={disabled} onClick={() => setOpen(value => !value)} onKeyDown={event => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpen(true); }
+      if (event.key === "Tab" && open) { setOpen(false); }
     }}><DocumentIcon name="more" /></button>
     {open && createPortal(<div ref={panel} id={id} className="mm-docs-action-menu" role="menu" aria-label={label} style={position} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
