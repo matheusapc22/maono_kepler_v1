@@ -4,21 +4,47 @@ export const ORGANIZATION_FILE_DEFAULT_LIMIT = 50;
 export const ORGANIZATION_FILE_MAX_LIMIT = 100;
 export const ORGANIZATION_FILE_DEFAULT_SORT = "updated_desc";
 
+// Keep this aligned with the type badge in DocumentsSection: order by the label
+// the user sees, not the storage category (e.g. spreadsheet displays Planilha).
+// publicOrganizationFile normalizes missing/empty types to other before display.
+// The same expression supplies ordering, cursor comparisons and cursor values.
+const TYPE_LABEL_EXPRESSION = `LOWER(CASE LOWER(COALESCE(NULLIF(f.file_type, ''), 'other'))
+  WHEN 'geojson' THEN 'GeoJSON'
+  WHEN 'json' THEN 'JSON'
+  WHEN 'csv' THEN 'CSV'
+  WHEN 'spreadsheet' THEN 'Planilha'
+  WHEN 'pdf' THEN 'PDF'
+  WHEN 'image' THEN 'Imagem'
+  WHEN 'zip' THEN 'ZIP'
+  WHEN 'document' THEN 'Documento'
+  WHEN 'text' THEN 'Texto'
+  WHEN 'other' THEN 'Outro'
+  ELSE f.file_type
+END)`;
+
 const SORTS = Object.freeze({
   updated_desc: {
-    expression: "COALESCE(datetime(f.updated_at), datetime(f.created_at), '')",
+    expression: "COALESCE(strftime('%Y-%m-%d %H:%M:%f', f.updated_at), strftime('%Y-%m-%d %H:%M:%f', f.created_at), '')",
     direction: "DESC",
   },
   updated_asc: {
-    expression: "COALESCE(datetime(f.updated_at), datetime(f.created_at), '')",
+    expression: "COALESCE(strftime('%Y-%m-%d %H:%M:%f', f.updated_at), strftime('%Y-%m-%d %H:%M:%f', f.created_at), '')",
     direction: "ASC",
   },
   name_asc: {
-    expression: "LOWER(COALESCE(f.original_name, f.name, f.file_name, ''))",
+    expression: "LOWER(COALESCE(NULLIF(f.original_name, ''), NULLIF(f.name, ''), NULLIF(f.file_name, ''), 'Documento'))",
     direction: "ASC",
   },
   name_desc: {
-    expression: "LOWER(COALESCE(f.original_name, f.name, f.file_name, ''))",
+    expression: "LOWER(COALESCE(NULLIF(f.original_name, ''), NULLIF(f.name, ''), NULLIF(f.file_name, ''), 'Documento'))",
+    direction: "DESC",
+  },
+  type_asc: {
+    expression: TYPE_LABEL_EXPRESSION,
+    direction: "ASC",
+  },
+  type_desc: {
+    expression: TYPE_LABEL_EXPRESSION,
     direction: "DESC",
   },
   size_asc: {

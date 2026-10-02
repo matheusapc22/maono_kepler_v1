@@ -29,7 +29,7 @@ import { normalizeUserError } from "../../../lib/user-error-catalog";
 
 import "./DocumentsTransferPanel.css";
 import "./DocumentsSection.css";
-import { DocumentActionMenu, DocumentIcon } from "./DocumentsUi";
+import { DocumentActionMenu, DocumentIcon, DocumentSortHeading } from "./DocumentsUi";
 
 type DocumentsSectionProps = {
   user?: AccessControlUser | null;
@@ -56,7 +56,8 @@ type FeedbackState = {
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const PROGRESS_TICK_MS = 24;
-const DOCUMENT_HEADERS = ["Documento", "Tipo", "Tamanho", "Atualizado em", "Ações"];
+const DOCUMENT_HEADERS = ["Nome", "Tipo", "Tamanho", "Atualizado em", "Ações"];
+const DOCUMENT_SORT_COLUMNS = ["name", "type", "size", "updated"] as const;
 const TRASH_HEADERS = [
   "Documento",
   "Pasta anterior",
@@ -120,6 +121,8 @@ const DOCUMENT_SORT_OPTIONS: Array<{ value: OrganizationFileSort; label: string 
   { value: "updated_asc", label: "Mais antigos" },
   { value: "name_asc", label: "Nome A–Z" },
   { value: "name_desc", label: "Nome Z–A" },
+  { value: "type_asc", label: "Tipo A–Z" },
+  { value: "type_desc", label: "Tipo Z–A" },
   { value: "size_desc", label: "Maior tamanho" },
   { value: "size_asc", label: "Menor tamanho" },
 ];
@@ -1312,8 +1315,16 @@ function OrganizationDocuments({
     setAppliedFilters(next);
   }
 
+  function sortDocuments(sort: OrganizationFileSort) {
+    // Keep the same results component and trigger focused while the server
+    // replaces its globally sorted page. Never sort only the cached rows.
+    setRefreshing(true);
+    setFilterDraft(current => ({ ...current, sort }));
+    setAppliedFilters(current => ({ ...current, sort }));
+  }
+
   function loadMoreDocuments() {
-    if (!pagination.hasMore || !pagination.nextCursor || loadingMore) return;
+    if (!pagination.hasMore || !pagination.nextCursor || loadingMore || pagination.sort !== documentQueryRef.current.filters.sort) return;
     void loadFiles({
       background: true,
       append: true,
@@ -1441,7 +1452,9 @@ function OrganizationDocuments({
       {documentState === "active" && pendingUpload?.retryable && canUpload && !uploading && !transferBusy ? <button type="button" className="mm-docs-button is-outlined" onClick={() => void handleUpload(pendingUpload.file, pendingUpload.idempotencyKey)}>Tentar enviar novamente</button> : null}
 
       {documentState === "active" ? <ActiveDocumentsResults
-        key={resultsKey}
+        queryKey={resultsKey}
+        sort={appliedFilters.sort}
+        onSort={sortDocuments}
         files={files}
         pagination={pagination}
         initialLoading={initialLoading}
@@ -1482,6 +1495,9 @@ function OrganizationDocuments({
 }
 
 type ActiveDocumentsResultsProps = {
+  queryKey: string;
+  sort: OrganizationFileSort;
+  onSort: (sort: OrganizationFileSort) => void;
   files: OrganizationFile[];
   pagination: OrganizationFileListPagination;
   initialLoading: boolean;
@@ -1595,20 +1611,32 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
     hasActiveFilters,
     refreshing,
     loadingMore,
+    queryKey,
+    sort,
   } = props;
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [pageSize, setPageSize] = useState(10);
   const [pageIndex, setPageIndex] = useState(0);
   const [pendingNext, setPendingNext] = useState(false);
 
+  useLayoutEffect(() => {
+    setPageIndex(0);
+    setPendingNext(false);
+  }, [queryKey]);
+
+  // A failed cursor request must leave Previous/Next usable for a retry.
+  useEffect(() => {
+    if (error && !loadingMore) setPendingNext(false);
+  }, [error, loadingMore]);
+
   const totalPages = Math.max(1, Math.ceil(pagination.total / pageSize));
   const safePageIndex = Math.min(pageIndex, totalPages - 1);
   const start = safePageIndex * pageSize;
   const visibleFiles = files.slice(start, start + pageSize);
-  const firstShown = pagination.total === 0 ? 0 : start + 1;
-  const lastShown = Math.min(start + visibleFiles.length, pagination.total);
+  const sortFailed = Boolean(error) && pagination.sort !== sort;
+  const displayedSort = sortFailed ? pagination.sort : sort;
   const canGoPrevious = safePageIndex > 0;
-  const canGoNext = safePageIndex + 1 < totalPages;
+  const canGoNext = safePageIndex + 1 < totalPages && pagination.sort === sort;
 
   useEffect(() => {
     if (pageIndex !== safePageIndex) setPageIndex(safePageIndex);
@@ -1637,12 +1665,13 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
   }
 
   return <section className="mm-docs-panel mm-docs-results" aria-labelledby="mm-docs-results-title">
-    <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="file" /><div><h3 id="mm-docs-results-title">Documentos encontrados</h3><p>{initialLoading ? "Carregando documentos..." : error ? "A consulta precisa de atenção." : `Exibindo ${firstShown}–${lastShown} de ${pagination.total} documentos.`}</p></div></div>
+    <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="file" /><div><h3 id="mm-docs-results-title">Documentos encontrados</h3></div></div>
       <div className="mm-docs-view-mode" role="group" aria-label="Modo de visualização"><button type="button" className="mm-docs-view-mode-button" aria-label="Visualização em lista" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")}><DocumentIcon name="list" /></button><button type="button" className="mm-docs-view-mode-button" aria-label="Visualização em grade" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")}><DocumentIcon name="grid" /></button></div>
     </div>
+    {sortFailed ? <div className="mm-docs-sort-retry"><button type="button" className="mm-docs-button is-outlined" onClick={() => props.onSort(sort)}>Tentar ordenar novamente</button></div> : null}
     {initialLoading && files.length === 0 ? <TableSkeleton headers={DOCUMENT_HEADERS} rows={5} className="mm-docs-table-skeleton" /> : files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name="folder" /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : "Nenhum documento."}</p></div> : files.length === 0 ? null : <>
       {viewMode === "list" ? <div className="mm-docs-table-scroll" role="region" aria-label="Tabela de documentos" tabIndex={0} aria-busy={refreshing || loadingMore || pendingNext}>
-        <table className="mm-docs-table"><thead><tr>{DOCUMENT_HEADERS.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{visibleFiles.map(file => {
+        <table className="mm-docs-table"><thead><tr>{DOCUMENT_SORT_COLUMNS.map((column, index) => <DocumentSortHeading key={column} column={column} label={DOCUMENT_HEADERS[index]} sort={displayedSort} onSort={props.onSort} />)}<th scope="col">Ações</th></tr></thead><tbody>{visibleFiles.map(file => {
           const busy = String(props.busyFileId) === String(file.id);
           return <tr key={file.id}><td><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} /></td><td title={file.mimeType || undefined}><span className="mm-docs-type-badge">{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</span></td><td>{formatBytes(file.size)}</td><td>{formatDate(file.updatedAt || file.createdAt)}</td><td><ActiveDocumentActions {...props} file={file} busy={busy} /></td></tr>;
         })}</tbody></table>
@@ -1650,7 +1679,7 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
         const busy = String(props.busyFileId) === String(file.id);
         return <article className="mm-docs-file-card" role="listitem" key={file.id}><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} /><div className="mm-docs-file-card-meta"><span><small>Tipo</small><strong>{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</strong></span><span><small>Tamanho</small><strong>{formatBytes(file.size)}</strong></span><span><small>Atualizado em</small><strong>{formatDate(file.updatedAt || file.createdAt)}</strong></span></div><ActiveDocumentActions {...props} file={file} busy={busy} /></article>;
       })}</div>}
-      <div className="mm-docs-pagination"><span role="status">{refreshing || pendingNext ? "Atualizando documentos." : `Exibindo ${firstShown}–${lastShown} de ${pagination.total} documentos.`}</span><div className="mm-docs-page-controls"><label>Itens por página <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageIndex(0); setPendingNext(false); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><button type="button" className="mm-docs-page-arrow is-previous" aria-label="Página anterior" disabled={!canGoPrevious || refreshing || loadingMore || pendingNext} onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}><DocumentIcon name="chevron" /></button><span className="mm-docs-page-number" aria-current="page">{safePageIndex + 1}</span><button type="button" className="mm-docs-page-arrow" aria-label="Próxima página" disabled={!canGoNext || refreshing || loadingMore || pendingNext} onClick={goNext}><DocumentIcon name="chevron" /></button></div></div>
+      <div className="mm-docs-pagination"><span role="status">{refreshing || pendingNext ? "Atualizando documentos." : `Exibindo ${visibleFiles.length}/${pagination.total}.`}</span><div className="mm-docs-page-controls"><label>Itens por página <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageIndex(0); setPendingNext(false); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><button type="button" className="mm-docs-page-arrow is-previous" aria-label="Página anterior" disabled={!canGoPrevious || refreshing || loadingMore || pendingNext} onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}><DocumentIcon name="chevron" /></button><span className="mm-docs-page-number" aria-current="page">{safePageIndex + 1}</span><button type="button" className="mm-docs-page-arrow" aria-label="Próxima página" disabled={!canGoNext || refreshing || loadingMore || pendingNext} onClick={goNext}><DocumentIcon name="chevron" /></button></div></div>
     </>}
   </section>;
 }

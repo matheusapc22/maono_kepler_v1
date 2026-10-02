@@ -6,6 +6,8 @@ on:
       - 'src/pages/Projects/components/Documents*'
       - 'tests/documents-visual-contract.test.mjs'
       - 'tests/organization-file-rename.test.mjs'
+      - 'tests/organization-file-query-sorting.test.mjs'
+      - 'functions/_lib/organization-file-query.js'
       - 'functions/_lib/organization-file-rename.js'
       - 'functions/api/organizations/**/files/**'
       - 'src/lib/api.ts'
@@ -40,7 +42,7 @@ jobs:
       - name: Install existing repository dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Presentation, hierarchy and backend preservation contracts
-        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs tests/organization-file-rename.test.mjs
+        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs tests/organization-file-rename.test.mjs tests/organization-file-query-sorting.test.mjs
       - name: Build application
         run: npm run build
       - name: Install browser engines

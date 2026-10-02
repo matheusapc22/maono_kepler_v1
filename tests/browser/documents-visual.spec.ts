@@ -11,7 +11,34 @@ const files = [
   { id: 10, name: "config_kepler.json", fileType: "json", size: 34288435, updatedAt: "2026-09-24T22:18:00Z", projectName: "Projeto de demonstração", folderId: null },
   { id: 11, name: "Relatório de mercado e oportunidades.pdf", fileType: "pdf", size: 536166, updatedAt: "2026-07-17T15:59:00Z", folderId: 1 },
 ];
-async function setup(page: Page, options: { more?: boolean; empty?: boolean; role?: string; permissions?: string[]; failMove?: boolean; beforeRename?: () => Promise<void>; beforeList?: (url: URL) => Promise<void> } = {}) {
+type FixtureFile = { id: number; name: string; fileType: string; size: number; updatedAt: string; folderId: number | null; projectName?: string };
+type FixtureSort = `${"name" | "type" | "size" | "updated"}_${"asc" | "desc"}`;
+
+// Browser-only HTTP fixture: the entire dataset is filtered/sorted before the
+// server batch is sliced. Real SQL ordering/cursor correctness has separate
+// SQLite integration tests; these mocks do not claim backend coverage.
+const sortingFiles: FixtureFile[] = Array.from({ length: 73 }, (_, index) => {
+  const fileType = ["json", "spreadsheet", "pdf", "csv", "document", "image"][index % 6];
+  return {
+    id: 1000 + index,
+    name: `${index % 2 ? "documento" : "Documento"}_${String((index * 31) % 73).padStart(3, "0")}.${fileType}`,
+    fileType,
+    size: [2, 10, 512, 2048, 900, 1048576, 34288435][index % 7],
+    updatedAt: new Date(Date.UTC(2026, 8, 1 + ((index * 11) % 23))).toISOString(),
+    folderId: index < 60 ? null : 1,
+  };
+});
+const fixtureTypeLabels: Record<string, string> = { json: "JSON", spreadsheet: "Planilha", pdf: "PDF", csv: "CSV", document: "Documento", image: "Imagem" };
+function orderedFixtureFiles(source: FixtureFile[], sort: FixtureSort) {
+  const [column, direction] = sort.split("_");
+  const factor = direction === "asc" ? 1 : -1;
+  const value = (file: FixtureFile) => column === "size" ? file.size : column === "updated" ? Date.parse(file.updatedAt) : (column === "type" ? fixtureTypeLabels[file.fileType] ?? file.fileType : file.name).toLowerCase();
+  return [...source].sort((left, right) => {
+    const a = value(left); const b = value(right);
+    return ((a < b ? -1 : a > b ? 1 : 0) || left.id - right.id) * factor;
+  });
+}
+async function setup(page: Page, options: { more?: boolean; empty?: boolean; role?: string; permissions?: string[]; failMove?: boolean; dataset?: FixtureFile[]; failList?: (url: URL) => boolean; beforeRename?: () => Promise<void>; beforeList?: (url: URL) => Promise<void> } = {}) {
   const requests: { method: string; url: string; body: string | null }[] = [];
   const folderState = folders.map(folder => ({ ...folder }));
   const fileState = files.map(file => ({ ...file }));
@@ -57,6 +84,26 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
     if (url.pathname.endsWith("/document-folders")) return route.fulfill({ json: { ok: true, folders: folderState } });
     if (url.pathname === "/api/organizations/1/files") {
       await options.beforeList?.(url);
+      if (options.failList?.(url)) return route.fulfill({ status: 403, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
+      if (options.dataset) {
+        const sort = (url.searchParams.get("sort") || "updated_desc") as FixtureSort;
+        const folderId = url.searchParams.get("folderId");
+        const search = url.searchParams.get("search")?.toLowerCase() || "";
+        const type = url.searchParams.get("type") || "";
+        const queryKey = `${sort}|${folderId ?? ""}|${search}|${type}`;
+        const cursor = url.searchParams.get("cursor");
+        const prefix = `fixture:${encodeURIComponent(queryKey)}:`;
+        if (cursor && !cursor.startsWith(prefix)) return route.fulfill({ status: 400, json: { ok: false, error: { code: "ORGANIZATION_FILE_QUERY_INVALID", message: "Fixture cursor belongs to another query", retryable: false } } });
+        const offset = cursor ? Number(cursor.slice(prefix.length)) : 0;
+        const limit = Number(url.searchParams.get("limit") || 50);
+        const filtered = options.dataset.filter(file =>
+          (!folderId || (folderId === "root" ? file.folderId == null : String(file.folderId) === folderId)) &&
+          (!search || file.name.toLowerCase().includes(search)) && (!type || file.fileType === type));
+        const sorted = orderedFixtureFiles(filtered, sort);
+        const batch = sorted.slice(offset, offset + limit);
+        const hasMore = offset + batch.length < sorted.length;
+        return route.fulfill({ json: { ok: true, files: batch, facets: { types: [...new Set(options.dataset.map(file => file.fileType))], projects: [], rootCount: options.dataset.filter(file => file.folderId == null).length, folderCounts: folderState.map(folder => ({ folderId: folder.id, count: options.dataset!.filter(file => file.folderId === folder.id).length })) }, pagination: { limit, total: sorted.length, hasMore, nextCursor: hasMore ? `${prefix}${offset + batch.length}` : null, sort }, capabilities: { permanentPurgeEnabled: false } } });
+      }
       const trash = url.searchParams.get("state") === "trash";
       const cursor = url.searchParams.get("cursor");
       const folderId = url.searchParams.get("folderId");
@@ -128,6 +175,7 @@ for (const width of [320, 390, 768, 1024, 1280, 1440, 1920]) {
       expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
     }
     await expect(page.locator(".mm-docs-table-scroll")).toHaveCSS("overflow-x", "auto");
+    await expectSortHeadingGeometry(page);
     await page.locator(".mm-docs").screenshot({ path: testInfo.outputPath(`documents-${width}.png`), animations: "disabled" });
   });
 }
@@ -215,7 +263,8 @@ test("Todos os documentos é filtro da lista e mostra origem sem mudar a pasta n
   await expect(breadcrumb.getByRole("button")).toHaveText(["Raiz"]);
   await expect(page.locator(".mm-docs-folder-card strong")).toHaveText(["Mês de Setembro", "QA_VISUAL"]);
   await expect(page.locator(".mm-docs-folder select")).toHaveValue("root");
-  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Visualização em grade" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".mm-docs-file-card")).toHaveCount(1);
 });
 
 test("mover pasta usa PATCH parentId e a pasta só reaparece dentro do novo pai", async ({ page }) => {
@@ -299,8 +348,14 @@ test("menu ignora scroll atrasado da abertura e fecha quando a âncora realmente
   await expect(page.getByRole("menu")).toHaveCount(0);
 
   await trigger.click(); await page.keyboard.press("Shift+Tab");
-  await expect(page.locator(".mm-docs-table-scroll")).toBeFocused();
+  await expect(sortButton(page, "updated")).toBeFocused();
   await expect(page.getByRole("menu")).toHaveCount(0);
+  for (const column of ["size", "type", "name"] as const) {
+    await page.keyboard.press("Shift+Tab");
+    await expect(sortButton(page, column)).toBeFocused();
+  }
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.locator(".mm-docs-table-scroll")).toBeFocused();
   await trigger.click(); await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Ações de Relatório de mercado e oportunidades.pdf", exact: true })).toBeFocused();
   await expect(page.getByRole("menu")).toHaveCount(0);
@@ -570,4 +625,310 @@ test("mover para fora da pasta atual devolve foco ao breadcrumb persistente", as
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Caminho da pasta" }).getByRole("button", { name: "Raiz", exact: true })).toBeFocused();
   await expect(page.getByText("Nenhum documento.", { exact: true })).toBeVisible();
+});
+
+const sortLabels = { name: "Nome", type: "Tipo", size: "Tamanho", updated: "Atualizado em" } as const;
+const sortButton = (page: Page, column: keyof typeof sortLabels) => page.getByRole("button", { name: new RegExp(`^${sortLabels[column]}: Classificar`) });
+const fileQueries = (requests: { method: string; url: string }[]) => requests.filter(request => request.method === "GET" && new URL(request.url).pathname === "/api/organizations/1/files").map(request => new URL(request.url));
+const resultsStatus = (page: Page) => page.locator(".mm-docs-results .mm-docs-pagination [role=status]");
+
+async function expectSortHeadingGeometry(page: Page) {
+  const headingGeometry = await page.locator(".mm-docs-sort-heading").evaluateAll(headers => headers.map(header => {
+    const cell = header.getBoundingClientRect();
+    const label = header.querySelector("button > span")!.getBoundingClientRect();
+    const arrow = header.querySelector(".mm-docs-sort-arrow")!.getBoundingClientRect();
+    return { text: header.textContent, cellLeft: cell.left, cellRight: cell.right, labelLeft: label.left, labelRight: label.right, arrowLeft: arrow.left, arrowRight: arrow.right };
+  }));
+  for (const bounds of headingGeometry) {
+    expect(bounds.labelLeft, `${bounds.text} label within its cell`).toBeGreaterThanOrEqual(bounds.cellLeft);
+    expect(bounds.arrowRight, `${bounds.text} arrow within its cell`).toBeLessThanOrEqual(bounds.cellRight);
+    expect(bounds.labelRight, `${bounds.text} label and arrow do not overlap`).toBeLessThanOrEqual(bounds.arrowLeft);
+  }
+}
+
+function nextSortLabel(column: keyof typeof sortLabels, ascending: boolean) {
+  return column === "updated"
+    ? ascending ? "Classificar de mais antigas primeiro" : "Classificar de mais recentes primeiro"
+    : column === "size"
+      ? ascending ? "Classificar de menores para maiores" : "Classificar de maiores para menores"
+      : ascending ? "Classificar de A a Z" : "Classificar de Z a A";
+}
+
+test("ordenação: cabeçalhos semânticos, destaque único, Nome centralizado e rodapé exato", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await setup(page); await openDocuments(page);
+  await expect(page.locator(".mm-docs-results .mm-docs-panel-title")).toHaveText("Documentos encontrados");
+  await expect(page.locator(".mm-docs-results .mm-docs-panel-title p")).toHaveCount(0);
+  await expect(resultsStatus(page)).toHaveText("Exibindo 1/1.");
+  const headers = page.locator(".mm-docs-table thead th");
+  await expect(headers).toHaveCount(5);
+  await expect(headers.nth(0)).toHaveCSS("text-align", "center");
+  await expect(headers.nth(0)).toHaveCSS("text-transform", "uppercase");
+  await expect(page.locator(".mm-docs-table tbody td").first()).toHaveCSS("text-align", "left");
+  await expect(headers.nth(4)).toHaveText("Ações");
+  await expect(headers.nth(4).getByRole("button")).toHaveCount(0);
+  await expect(headers.nth(4)).not.toHaveAttribute("aria-sort");
+  await expect(page.locator(".mm-docs-sort-button")).toHaveCount(4);
+  await expect(page.locator(".mm-docs-sort-button.is-active")).toHaveCount(1);
+  await expect(headers.nth(3)).toHaveAttribute("aria-sort", "descending");
+  const activeColor = await sortButton(page, "updated").evaluate(element => getComputedStyle(element).color);
+  for (const index of [0, 1, 2]) {
+    await expect(headers.nth(index)).toHaveAttribute("aria-sort", "none");
+    expect(await headers.nth(index).getByRole("button").evaluate(element => getComputedStyle(element).color)).not.toBe(activeColor);
+  }
+  await expect(page.locator(".mm-docs-sort-heading[title], .mm-docs-sort-heading [title]")).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("documents-sorting-desktop.png"), fullPage: true, animations: "disabled" });
+});
+
+test("ordenação: oito sentidos globais atravessam lote HTTP de 50 sem ordenar apenas o cache", async ({ page }) => {
+  test.setTimeout(90_000);
+  const requests = await setup(page, { dataset: sortingFiles }); await openDocuments(page, true);
+  await page.getByLabel("Itens por página").selectOption("50");
+  const allSorts: FixtureSort[] = ["name_asc", "name_desc", "type_asc", "type_desc", "size_asc", "size_desc", "updated_desc", "updated_asc"];
+  for (const sort of allSorts) {
+    const [column, direction] = sort.split("_") as [keyof typeof sortLabels, "asc" | "desc"];
+    const before = fileQueries(requests).length;
+    await sortButton(page, column).click();
+    await expect.poll(() => fileQueries(requests).length).toBe(before + 1);
+    const initial = fileQueries(requests).at(-1)!;
+    expect(initial.searchParams.get("sort")).toBe(sort);
+    await expect(page.locator(".mm-docs-sort select")).toHaveValue(sort);
+    expect(initial.searchParams.has("cursor")).toBe(false);
+    expect(initial.searchParams.get("limit")).toBe("50");
+    expect(initial.searchParams.has("folderId")).toBe(false);
+    await expect(page.locator(".mm-docs-page-number")).toHaveText("1");
+    await expect(page.getByLabel("Itens por página")).toHaveValue("50");
+    const expected = orderedFixtureFiles(sortingFiles, sort);
+    await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(0, 50).map(file => file.name));
+    await expect(resultsStatus(page)).toHaveText("Exibindo 50/73.");
+    const heading = page.locator(".mm-docs-sort-heading").nth(Object.keys(sortLabels).indexOf(column));
+    await expect(heading).toHaveAttribute("aria-sort", direction === "asc" ? "ascending" : "descending");
+    await expect(page.locator(".mm-docs-sort-button.is-active")).toHaveCount(1);
+    await expect(sortButton(page, column)).toHaveClass(/is-active/);
+    await expect(heading.locator("svg path")).toHaveAttribute("d", direction === "asc" ? "M12 20V4m-7 7 7-7 7 7" : "M12 4v16m-7-7 7 7 7-7");
+    await page.getByRole("button", { name: "Próxima página" }).click();
+    await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(50).map(file => file.name));
+    await expect(resultsStatus(page)).toHaveText("Exibindo 23/73.");
+    const next = fileQueries(requests).at(-1)!;
+    expect(next.searchParams.get("sort")).toBe(sort);
+    expect(next.searchParams.get("cursor")).toBe(`fixture:${encodeURIComponent(`${sort}|||`)}:50`);
+    await expect(page.getByRole("button", { name: "Próxima página" })).toBeDisabled();
+    // Numeric byte sizes intentionally mix 2, 10, 900, KB and MB values.
+    if (column === "size") {
+      expect(expected[0].size).toBe(direction === "asc" ? 2 : 34288435);
+      expect(expected.at(-1)!.size).toBe(direction === "asc" ? 34288435 : 2);
+    }
+  }
+});
+
+for (const width of [320, 390, 1920]) {
+  test(`ordenação: tooltip exato, viewport e Enter/Space preservam foco em ${width}px`, async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width, height: 1000 });
+    await setup(page, { dataset: sortingFiles }); await openDocuments(page);
+    await expectSortHeadingGeometry(page);
+    const tooltip = page.getByRole("tooltip");
+    await sortButton(page, "updated").hover();
+    await expect(tooltip).toHaveText("Classificar de mais antigas primeiro");
+    await tooltip.hover();
+    await page.waitForTimeout(160);
+    await expect(tooltip).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(tooltip).toHaveCount(0);
+    await page.locator("#mm-docs-results-title").hover();
+    await expect(tooltip).toHaveCount(0);
+    for (const column of Object.keys(sortLabels) as (keyof typeof sortLabels)[]) {
+      const button = sortButton(page, column);
+      await button.scrollIntoViewIfNeeded();
+      await button.focus();
+      const firstAscending = column !== "updated";
+      await expect(tooltip).toHaveText(nextSortLabel(column, firstAscending));
+      expect(await button.getAttribute("aria-describedby")).toBe(await tooltip.getAttribute("id"));
+      for (const [key, ascending] of [["Enter", firstAscending], ["Space", !firstAscending]] as const) {
+        await page.keyboard.press(key);
+        await expect(button).toBeFocused();
+        await expect(page.locator(".mm-docs-sort-heading").nth(Object.keys(sortLabels).indexOf(column))).toHaveAttribute("aria-sort", ascending ? "ascending" : "descending");
+        await expect(tooltip).toHaveText(nextSortLabel(column, !ascending));
+        await expect(page.locator(".mm-docs-table-scroll")).toHaveAttribute("aria-busy", "false");
+        await expect(button).toBeFocused();
+        const box = (await tooltip.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        expect(box.y + box.height).toBeLessThanOrEqual(1000);
+        if (column === "updated" && key === "Enter") await page.screenshot({ path: testInfo.outputPath(`documents-sort-tooltip-${width}.png`), animations: "disabled" });
+      }
+      await page.keyboard.press("Escape");
+      await expect(tooltip).toHaveCount(0);
+      await expect(button).toBeFocused();
+      await expect(button).not.toHaveAttribute("title");
+    }
+  });
+}
+
+test("ordenação: filtros, Raiz e Todos resetam página/cursor e preservam grade e tamanho", async ({ page }) => {
+  const requests = await setup(page, { dataset: sortingFiles }); await openDocuments(page);
+  await expect(resultsStatus(page)).toHaveText("Exibindo 10/60.");
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 10/60.");
+  await expect(page.locator(".mm-docs-page-number")).toHaveText("2");
+  await page.getByLabel("Itens por página").selectOption("25");
+  await expect(resultsStatus(page)).toHaveText("Exibindo 25/60.");
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 25/60.");
+  await expect(page.locator(".mm-docs-page-number")).toHaveText("2");
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 10/60.");
+  await expect(page.locator(".mm-docs-page-number")).toHaveText("3");
+  expect(fileQueries(requests).at(-1)!.searchParams.has("cursor")).toBe(true);
+  await sortButton(page, "name").click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 25/60.");
+  const sortedRoot = fileQueries(requests).at(-1)!;
+  expect(sortedRoot.searchParams.get("folderId")).toBe("root");
+  expect(sortedRoot.searchParams.get("sort")).toBe("name_asc");
+  expect(sortedRoot.searchParams.has("cursor")).toBe(false);
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 25/60.");
+  await page.getByRole("button", { name: "Visualização em grade" }).click();
+  await page.locator(".mm-docs-type select").selectOption("pdf");
+  await page.getByRole("button", { name: "Aplicar", exact: true }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 10/10.");
+  await expect(page.locator(".mm-docs-file-card")).toHaveCount(10);
+  await expect(page.getByLabel("Itens por página")).toHaveValue("25");
+  await expect(page.getByRole("button", { name: "Visualização em grade" })).toHaveAttribute("aria-pressed", "true");
+  const filtered = fileQueries(requests).at(-1)!;
+  expect(filtered.searchParams.get("type")).toBe("pdf");
+  expect(filtered.searchParams.get("sort")).toBe("name_asc");
+  expect(filtered.searchParams.has("cursor")).toBe(false);
+  await showAllDocuments(page);
+  await expect(resultsStatus(page)).toHaveText("Exibindo 12/12.");
+  expect(fileQueries(requests).at(-1)!.searchParams.has("folderId")).toBe(false);
+  await expect(page.locator(".mm-docs-file-card .documents-file-origin")).toHaveCount(12);
+  await page.getByRole("button", { name: "Limpar filtros" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 25/60.");
+  await expect(page.getByRole("button", { name: "Visualização em grade" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Itens por página")).toHaveValue("25");
+  expect(fileQueries(requests).at(-1)!.searchParams.get("folderId")).toBe("root");
+  await page.getByRole("button", { name: "Visualização em lista" }).click();
+  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(25);
+});
+
+test("ordenação: falha de cursor mantém página e permite repetir Próxima página", async ({ page }) => {
+  let failCursor = true;
+  const requests = await setup(page, { dataset: sortingFiles, failList: url => {
+    if (url.searchParams.has("cursor") && failCursor) { failCursor = false; return true; }
+    return false;
+  } });
+  await openDocuments(page, true);
+  await page.getByLabel("Itens por página").selectOption("50");
+  const expected = orderedFixtureFiles(sortingFiles, "updated_desc");
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(page.locator(".mm-docs-error")).toBeVisible();
+  await expect(page.locator(".mm-docs-page-number")).toHaveText("1");
+  await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(0, 50).map(file => file.name));
+  await expect(page.getByRole("button", { name: "Próxima página" })).toBeEnabled();
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 23/73.");
+  await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(50).map(file => file.name));
+  await expect(page.locator(".mm-docs-error")).toHaveCount(0);
+  const cursorQueries = fileQueries(requests).filter(url => url.searchParams.has("cursor"));
+  expect(cursorQueries).toHaveLength(2);
+  expect(cursorQueries[0].search).toBe(cursorQueries[1].search);
+});
+
+test("ordenação: clique rápido ignora resposta antiga e mantém foco no último sentido", async ({ page }) => {
+  let release!: () => void;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  const requests = await setup(page, { dataset: sortingFiles, beforeList: async url => {
+    if (url.searchParams.get("sort") === "name_asc") await delayed;
+  } });
+  await openDocuments(page);
+  const button = sortButton(page, "name");
+  await button.focus(); await page.keyboard.press("Enter");
+  await expect.poll(() => fileQueries(requests).at(-1)!.searchParams.get("sort")).toBe("name_asc");
+  await page.keyboard.press("Space");
+  const expected = orderedFixtureFiles(sortingFiles.filter(file => file.folderId == null), "name_desc").slice(0, 10).map(file => file.name);
+  await expect(page.locator(".documents-file-name")).toHaveText(expected);
+  await expect(page.locator(".mm-docs-sort-heading").first()).toHaveAttribute("aria-sort", "descending");
+  await expect(button).toBeFocused();
+  const lateResponse = page.waitForResponse(response => response.url().includes("/api/organizations/1/files?") && new URL(response.url()).searchParams.get("sort") === "name_asc");
+  release(); await lateResponse;
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(page.locator(".documents-file-name")).toHaveText(expected);
+  await expect(button).toBeFocused();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 10/60.");
+});
+
+test("ordenação: cursor atrasado do sentido anterior não contamina a nova consulta", async ({ page }) => {
+  let release!: () => void;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  const requests = await setup(page, { dataset: sortingFiles, beforeList: async url => {
+    if (url.searchParams.has("cursor")) await delayed;
+  } });
+  await openDocuments(page, true);
+  await page.getByLabel("Itens por página").selectOption("50");
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect.poll(() => fileQueries(requests).at(-1)!.searchParams.has("cursor")).toBe(true);
+  await sortButton(page, "size").click();
+  const expected = orderedFixtureFiles(sortingFiles, "size_asc").slice(0, 50).map(file => file.name);
+  await expect(page.locator(".documents-file-name")).toHaveText(expected);
+  await expect(resultsStatus(page)).toHaveText("Exibindo 50/73.");
+  expect(fileQueries(requests).at(-1)!.searchParams.has("cursor")).toBe(false);
+  const lateResponse = page.waitForResponse(response => response.url().includes("/api/organizations/1/files?") && new URL(response.url()).searchParams.has("cursor"));
+  release(); await lateResponse;
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(page.locator(".documents-file-name")).toHaveText(expected);
+  await expect(resultsStatus(page)).toHaveText("Exibindo 50/73.");
+  // A stale append could leave page one intact while corrupting its cached next
+  // page, so verify the next page and its newly bound cursor as well.
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(page.locator(".documents-file-name")).toHaveText(orderedFixtureFiles(sortingFiles, "size_asc").slice(50).map(file => file.name));
+  await expect(resultsStatus(page)).toHaveText("Exibindo 23/73.");
+  expect(fileQueries(requests).at(-1)!.searchParams.get("cursor")).toBe(`fixture:${encodeURIComponent("size_asc|||")}:50`);
+});
+
+test("ordenação: rodapé usa quantidade visível sobre total autorizado em todas as páginas", async ({ page }) => {
+  await setup(page, { dataset: sortingFiles.slice(0, 35) }); await openDocuments(page);
+  for (const pageNumber of [1, 2, 3, 4]) {
+    await expect(page.locator(".mm-docs-page-number")).toHaveText(String(pageNumber));
+    await expect(resultsStatus(page)).toHaveText(`Exibindo ${pageNumber === 4 ? 5 : 10}/35.`);
+    if (pageNumber < 4) await page.getByRole("button", { name: "Próxima página" }).click();
+  }
+  await expect(page.getByRole("button", { name: "Próxima página" })).toBeDisabled();
+  await page.getByRole("button", { name: "Visualização em grade" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 5/35.");
+  await page.getByLabel("Itens por página").selectOption("25");
+  await expect(resultsStatus(page)).toHaveText("Exibindo 25/35.");
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(resultsStatus(page)).toHaveText("Exibindo 10/35.");
+});
+
+test("ordenação: falha na troca mantém metadados anteriores e repetir não reutiliza cursor antigo", async ({ page }) => {
+  let failSort = true;
+  const requests = await setup(page, { dataset: sortingFiles, failList: url => {
+    if (url.searchParams.get("sort") === "name_asc" && failSort) { failSort = false; return true; }
+    return false;
+  } });
+  await openDocuments(page, true);
+  await page.getByLabel("Itens por página").selectOption("50");
+  const previous = orderedFixtureFiles(sortingFiles, "updated_desc").slice(0, 50).map(file => file.name);
+  await sortButton(page, "name").click();
+  await expect(page.locator(".mm-docs-error")).toBeVisible();
+  await expect(page.locator(".documents-file-name")).toHaveText(previous);
+  await expect(page.locator(".mm-docs-sort-heading").first()).toHaveAttribute("aria-sort", "none");
+  await expect(page.locator(".mm-docs-sort-heading").nth(3)).toHaveAttribute("aria-sort", "descending");
+  await expect(page.getByRole("button", { name: "Próxima página" })).toBeDisabled();
+  expect(fileQueries(requests).filter(url => url.searchParams.has("cursor"))).toHaveLength(0);
+  await page.getByRole("button", { name: "Tentar ordenar novamente", exact: true }).click();
+  const expected = orderedFixtureFiles(sortingFiles, "name_asc");
+  await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(0, 50).map(file => file.name));
+  await expect(page.locator(".mm-docs-sort-heading").first()).toHaveAttribute("aria-sort", "ascending");
+  await expect(page.getByRole("button", { name: "Tentar ordenar novamente", exact: true })).toHaveCount(0);
+  await expect(page.locator(".mm-docs-error")).toHaveCount(0);
+  const retries = fileQueries(requests).filter(url => url.searchParams.get("sort") === "name_asc");
+  expect(retries).toHaveLength(2);
+  expect(retries.every(url => !url.searchParams.has("cursor"))).toBe(true);
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(50).map(file => file.name));
+  await expect(resultsStatus(page)).toHaveText("Exibindo 23/73.");
 });

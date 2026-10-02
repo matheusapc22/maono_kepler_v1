@@ -234,3 +234,25 @@
 
 .mm-docs .documents-file-origin { display: inline-flex; align-items: flex-start; gap: 5px; color: var(--mm-text-soft); font-size: 11px; overflow-wrap: anywhere; }
 .mm-docs .documents-file-origin .mm-docs-icon { width: 13px; height: 13px; flex: 0 0 13px; margin-top: 1px; }
+
+/* Sort affordances stay on the header; document names keep their left alignment. */
+.mm-docs .mm-docs-table th.mm-docs-sort-heading { padding-block: 7px; }
+.mm-docs .mm-docs-table th.mm-docs-sort-heading.is-name { text-align: center; }
+.mm-docs .mm-docs-sort-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; max-width: 100%; padding: 0; border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; cursor: pointer; }
+.mm-docs .mm-docs-sort-button.is-active { color: var(--maono-accent-bright); }
+.mm-docs .mm-docs-sort-arrow { display: inline-grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; border: 1px solid transparent; border-radius: 50%; }
+.mm-docs .mm-docs-sort-arrow svg { width: 20px; height: 20px; }
+.mm-docs .mm-docs-sort-button.is-active .mm-docs-sort-arrow { border-color: var(--maono-accent-border-strong); background: var(--maono-accent-surface); }
+.mm-docs-sort-tooltip { box-sizing: border-box; position: fixed; z-index: 130; width: max-content; max-width: calc(100vw - 16px); padding: 8px 12px; border: 1px solid var(--maono-accent-bright); border-radius: 7px; background: #11151a; color: var(--maono-accent-bright); box-shadow: 0 8px 24px #0009; font: 13px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; overflow-wrap: anywhere; }
+@media (forced-colors: active) {
+  .mm-docs .mm-docs-sort-button.is-active, .mm-docs-sort-tooltip { color: Highlight; }
+  .mm-docs .mm-docs-sort-button.is-active .mm-docs-sort-arrow, .mm-docs-sort-tooltip { border-color: Highlight; }
+}
+
+.mm-docs .mm-docs-sort-retry { padding: 0 20px 16px; }
+/* Reserve room for the complete heading + arrow at the 900px scroll width. */
+.mm-docs .mm-docs-table:not(.is-trash) th:first-child { width: 44%; }
+.mm-docs .mm-docs-table:not(.is-trash) th:nth-child(2) { width: 11%; }
+.mm-docs .mm-docs-table:not(.is-trash) th:nth-child(3) { width: 13%; }
+.mm-docs .mm-docs-table:not(.is-trash) th:nth-child(4) { width: 20%; }
+.mm-docs .mm-docs-table:not(.is-trash) th:last-child { width: 12%; }

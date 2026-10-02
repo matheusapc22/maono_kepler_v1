@@ -70,6 +70,8 @@ export type OrganizationFileSort =
   | "updated_asc"
   | "name_asc"
   | "name_desc"
+  | "type_asc"
+  | "type_desc"
   | "size_asc"
   | "size_desc";
 

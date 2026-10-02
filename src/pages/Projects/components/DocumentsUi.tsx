@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { OrganizationFileSort } from "../../../lib/api";
 
 type IconName = "folder" | "file" | "search" | "upload" | "download" | "trash" | "plus" | "more" | "close" | "arrow" | "restore" | "filter" | "list" | "grid" | "chevron";
 const paths: Record<IconName, string> = {
@@ -210,4 +211,104 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
       document.body,
     )}
   </>;
+}
+
+
+type DocumentSortColumn = "name" | "type" | "size" | "updated";
+
+/** One semantic button for the heading and its arrow; all ordering is server-side. */
+export function DocumentSortHeading({ column, label, sort, onSort }: {
+  column: DocumentSortColumn;
+  label: string;
+  sort: OrganizationFileSort;
+  onSort: (sort: OrganizationFileSort) => void;
+}) {
+  const active = sort.startsWith(`${column}_`);
+  const ascending = active && sort.endsWith("_asc");
+  const nextAscending = active ? !ascending : column !== "updated";
+  const nextSort: OrganizationFileSort = `${column}_${nextAscending ? "asc" : "desc"}`;
+  const nextLabel = column === "updated"
+    ? nextAscending ? "Classificar de mais antigas primeiro" : "Classificar de mais recentes primeiro"
+    : column === "size"
+      ? nextAscending ? "Classificar de menores para maiores" : "Classificar de maiores para menores"
+      : nextAscending ? "Classificar de A a Z" : "Classificar de Z a A";
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const trigger = useRef<HTMLButtonElement>(null);
+  const tooltip = useRef<HTMLDivElement>(null);
+  const hoverTimer = useRef<number | null>(null);
+  const id = useId();
+  const open = (hovered || focused) && !dismissed;
+  const enterTooltip = () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+    setHovered(true);
+    setDismissed(false);
+  };
+  const leaveTooltip = () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+    // Allow the pointer to cross the small gap into the portalled tooltip.
+    hoverTimer.current = window.setTimeout(() => setHovered(false), 120);
+  };
+  useEffect(() => () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const reposition = () => {
+      const rect = trigger.current?.getBoundingClientRect();
+      const panel = tooltip.current;
+      if (!rect || !panel) return;
+      const viewport = window.visualViewport;
+      const leftEdge = (viewport?.offsetLeft ?? 0) + 8;
+      const topEdge = (viewport?.offsetTop ?? 0) + 8;
+      const rightEdge = leftEdge + (viewport?.width ?? window.innerWidth) - 16;
+      const bottomEdge = topEdge + (viewport?.height ?? window.innerHeight) - 16;
+      const { width, height } = panel.getBoundingClientRect();
+      setPosition({
+        left: Math.max(leftEdge, Math.min(rect.right - width, rightEdge - width)),
+        top: Math.max(topEdge, Math.min(
+          rect.bottom + height + 8 > bottomEdge ? rect.top - height - 6 : rect.bottom + 6,
+          bottomEdge - height,
+        )),
+      });
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDismissed(true);
+    };
+    reposition();
+    document.addEventListener("keydown", dismissOnEscape);
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    window.visualViewport?.addEventListener("resize", reposition);
+    window.visualViewport?.addEventListener("scroll", reposition);
+    return () => {
+      document.removeEventListener("keydown", dismissOnEscape);
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      window.visualViewport?.removeEventListener("resize", reposition);
+      window.visualViewport?.removeEventListener("scroll", reposition);
+    };
+  }, [open, nextLabel]);
+
+  return <th scope="col" className={`mm-docs-sort-heading${column === "name" ? " is-name" : ""}`} aria-sort={active ? ascending ? "ascending" : "descending" : "none"}>
+    <button ref={trigger} type="button" className={`mm-docs-sort-button${active ? " is-active" : ""}`}
+      aria-label={`${label}: ${nextLabel}`} aria-describedby={open ? id : undefined}
+      onClick={() => onSort(nextSort)}
+      onPointerEnter={enterTooltip}
+      onPointerLeave={leaveTooltip}
+      onFocus={() => { setFocused(true); setDismissed(false); }}
+      onBlur={() => { setFocused(false); setDismissed(false); }}
+      onKeyDown={event => { if (event.key === "Escape") setDismissed(true); }}>
+      <span>{label}</span>
+      <span className="mm-docs-sort-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+          <path d={active ? ascending ? "M12 20V4m-7 7 7-7 7 7" : "M12 4v16m-7-7 7 7 7-7" : "M8 20V4m-4 4 4-4 4 4M16 4v16m-4-4 4 4 4-4"} />
+        </svg>
+      </span>
+    </button>
+    {open && createPortal(<div ref={tooltip} id={id} role="tooltip" className="mm-docs-sort-tooltip" style={position} onPointerEnter={enterTooltip} onPointerLeave={leaveTooltip}>{nextLabel}</div>, document.body)}
+  </th>;
 }

@@ -104,3 +104,38 @@ test('file move restores focus after native modal teardown without stealing a ne
   assert.ok(!dialog.includes('<select autoFocus'));
   assert.ok(dialog.indexOf('dialog?.showModal()') < dialog.indexOf('dialog?.querySelector<HTMLSelectElement>("select")?.focus'));
 });
+
+test('sortable headings are native buttons with single accessible next-action tooltips', () => {
+  const heading = menu.slice(menu.indexOf('export function DocumentSortHeading('));
+  for (const token of ['<th scope="col"', 'aria-sort=', '<button ref={trigger} type="button"', 'aria-label={`${label}: ${nextLabel}`}', 'aria-describedby=', 'role="tooltip"', 'createPortal', 'aria-hidden="true"', 'onClick={() => onSort(nextSort)}']) assert.ok(heading.includes(token), token);
+  for (const text of ['Classificar de A a Z', 'Classificar de Z a A', 'Classificar de menores para maiores', 'Classificar de maiores para menores', 'Classificar de mais antigas primeiro', 'Classificar de mais recentes primeiro']) assert.ok(heading.includes(text), text);
+  assert.ok(!/\btitle=/.test(heading));
+  assert.ok(heading.includes('column !== "updated"'));
+  assert.ok(heading.includes('window.visualViewport'));
+  assert.ok(heading.includes('Math.max(leftEdge, Math.min('));
+  assert.ok(heading.includes('event.key === "Escape"'));
+  assert.ok(css.includes('.mm-docs-sort-button.is-active { color: var(--maono-accent-bright); }'));
+  assert.ok(css.includes('th.mm-docs-sort-heading.is-name { text-align: center; }'));
+  assert.ok(css.includes('max-width: calc(100vw - 16px)'));
+});
+
+test('sort changes use the full server query and reset pages without remounting the view', () => {
+  const handler = component.slice(component.indexOf('function sortDocuments('), component.indexOf('function loadMoreDocuments('));
+  assert.ok(handler.includes('setFilterDraft(current => ({ ...current, sort }))'));
+  assert.ok(handler.includes('setAppliedFilters(current => ({ ...current, sort }))'));
+  assert.ok(!handler.includes('.sort('));
+  assert.ok(!handler.includes('setFiles([])'));
+  assert.match(component, /<ActiveDocumentsResults\s+queryKey=\{resultsKey\}/);
+  const results = component.slice(component.indexOf('function ActiveDocumentsResults('), component.indexOf('function documentFolderDescendantIds('));
+  assert.match(results, /useLayoutEffect\(\(\) => \{\s*setPageIndex\(0\);\s*setPendingNext\(false\);\s*\}, \[queryKey\]\)/);
+  assert.ok(results.includes('Documentos encontrados</h3>'));
+  assert.ok(!results.includes('${pagination.total} documento'));
+  assert.ok(results.includes('`Exibindo ${visibleFiles.length}/${pagination.total}.`'));
+  assert.ok(results.includes('files.slice(start, start + pageSize)'));
+  assert.ok(results.includes('DOCUMENT_SORT_COLUMNS.map('));
+  assert.ok(results.includes('<th scope="col">Ações</th>'));
+  assert.ok(results.includes('if (error && !loadingMore) setPendingNext(false)'));
+  assert.ok(results.includes('const displayedSort = sortFailed ? pagination.sort : sort'));
+  assert.ok(results.includes('pagination.sort === sort'));
+  assert.ok(results.includes('Tentar ordenar novamente'));
+});
