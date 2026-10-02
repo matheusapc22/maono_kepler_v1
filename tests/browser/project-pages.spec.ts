@@ -366,3 +366,149 @@ test("old favorite failure after A→B→A cannot roll back or unlock a new same
   await expect(page.getByRole("alert")).toHaveCount(0);
   second.resolve(); await expect(pending).toBeEnabled();
 });
+
+// Footer placement is a document-flow contract, not a fixed/sticky toolbar.
+// Exercise every tab with both spare space and content taller than the viewport.
+for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
+  for (const viewport of [{ width: 1440, height: 1600 }, { width: 390, height: 1600 }]) {
+    for (const count of [0, 1, 30]) {
+      test(`${name}: footer fills remaining page at ${viewport.width}px with ${count} projects`, async ({ page }, testInfo) => {
+        await page.setViewportSize(viewport);
+        const dataset = projects.slice(0, count).map(project => ({ ...project, favorite: true }));
+        await setup(page, { dataset, recentIds: dataset.map(project => project.id) });
+        await openSection(page, name);
+        await expectCount(page, Math.min(count, 10), count);
+        if (count > 10) {
+          await pagination(page).getByRole("combobox", { name: "Itens por página", exact: true }).selectOption("50");
+          await expectCount(page, count, count);
+        }
+        await page.evaluate(() => document.fonts.ready);
+        const originalCardHeights = await cards(page).evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
+        const evidence = [];
+        for (const tallSidebar of [false, true]) {
+          // A tall sidebar reproduces the otherwise-empty main column in the reference.
+          // On mobile the same sidebar remains above the naturally flowing main area.
+          await page.locator(".mm-projects-sidebar").evaluate((element, tall) => {
+            (element as HTMLElement).style.minHeight = tall ? "2200px" : "";
+          }, tallSidebar);
+          await page.evaluate(() => window.scrollTo(0, 0));
+          const top = await footerGeometry(page);
+          const label = `${name}, ${viewport.width}px, ${count} projects, tall sidebar: ${tallSidebar}`;
+          expect(["fixed", "absolute", "sticky"], label).not.toContain(top.footerPosition);
+          expect(top.footerBottom, label).toBeCloseTo(top.contentBottom - top.paddingBottom, 0);
+          expect(top.contentBottom, label).toBeCloseTo(top.mainBottom, 0);
+          expect(top.mainBottom, label).toBeCloseTo(top.layoutBottom, 0);
+          expect(top.paddingBottom, label).toBeGreaterThan(0);
+          expect(top.paddingBottom, label).toBeLessThanOrEqual(24);
+          expect(top.mainHeight, label).toBeGreaterThanOrEqual(viewport.height - 1);
+          expect(top.footerTop - top.resultsBottom, label).toBeGreaterThanOrEqual(27.5);
+          expect(top.documentBottom - top.footerBottom, label).toBeCloseTo(top.paddingBottom, 0);
+          expect(top.horizontalOverflow, label).toBeLessThanOrEqual(1);
+          if (tallSidebar && viewport.width > 760) {
+            expect(top.mainBottom, label).toBeGreaterThanOrEqual(top.sidebarBottom - 1);
+          }
+          if (count > 10) {
+            expect(top.resultsHeight, label).toBeGreaterThan(viewport.height);
+            expect(top.footerTop, label).toBeGreaterThan(viewport.height);
+          }
+          const cardHeights = await cards(page).evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
+          expect(cardHeights, `${label}: spare space must not stretch the cards`).toEqual(originalCardHeights);
+          // Scrolling moves the footer by precisely the document scroll distance.
+          // At the real scroll end it is fully visible, separated from every result.
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          await expect.poll(async () => (await footerGeometry(page)).scrollY).toBeCloseTo(Math.max(0, top.documentBottom - viewport.height), 0);
+          const bottom = await footerGeometry(page);
+          expect(bottom.footerTop, label).toBeCloseTo(top.footerTop, 0);
+          expect(bottom.footerViewportTop, label).toBeCloseTo(top.footerViewportTop - (bottom.scrollY - top.scrollY), 0);
+          expect(bottom.footerViewportBottom, label).toBeLessThanOrEqual(viewport.height - top.paddingBottom + 1);
+          expect(bottom.footerViewportTop, label).toBeGreaterThanOrEqual(0);
+          await expect(pagination(page)).toBeInViewport();
+          evidence.push({ tallSidebar, top, bottom });
+        }
+        await testInfo.attach("footer-geometry", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+        if (count === 1) {
+          await page.screenshot({ path: testInfo.outputPath("footer-at-page-bottom.png"), animations: "disabled" });
+        }
+      });
+    }
+  }
+}
+
+async function footerGeometry(page: Page) {
+  return page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const footer = document.querySelector(".mm-project-pages__footer")!;
+    const content = document.querySelector(".mm-project-pages > .mm-projects-content")!;
+    const footerBox = footer.getBoundingClientRect();
+    const mainBox = box(".mm-project-pages");
+    const resultsBox = box(".mm-project-pages__grid, .mm-project-pages__empty");
+    const offset = window.scrollY;
+    return {
+      scrollY: offset,
+      footerPosition: getComputedStyle(footer).position,
+      footerTop: footerBox.top + offset,
+      footerBottom: footerBox.bottom + offset,
+      footerViewportTop: footerBox.top,
+      footerViewportBottom: footerBox.bottom,
+      contentBottom: content.getBoundingClientRect().bottom + offset,
+      paddingBottom: Number.parseFloat(getComputedStyle(content).paddingBottom),
+      mainBottom: mainBox.bottom + offset,
+      mainHeight: mainBox.height,
+      layoutBottom: box(".mm-projects-layout").bottom + offset,
+      sidebarBottom: box(".mm-projects-sidebar").bottom + offset,
+      resultsBottom: resultsBox.bottom + offset,
+      resultsHeight: resultsBox.height,
+      documentBottom: document.documentElement.scrollHeight,
+      horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+}
+
+for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
+  for (const width of [1440, 390]) {
+    test(`${name}: new-map CTA keeps its dimensions with the approved inset at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await setup(page, { dataset: [projects[0]], recentIds: [projects[0].id] });
+      await openSection(page, name); await expectCount(page, 1, 1);
+      await page.evaluate(() => document.fonts.ready);
+      const cta = page.getByRole("link", { name: "Novo mapa", exact: true });
+      await expect(cta).toHaveAttribute("href", "/maps/new/create");
+      const geometry = await cta.evaluate(element => {
+        const button = element.getBoundingClientRect();
+        const header = element.closest("header")!;
+        const box = header.getBoundingClientRect();
+        const styles = getComputedStyle(header);
+        return {
+          width: button.width, height: button.height, x: button.x, y: button.y,
+          rightInset: box.right - button.right,
+          contentWidth: box.width - Number.parseFloat(styles.paddingLeft) - Number.parseFloat(styles.paddingRight),
+          paddingRight: Number.parseFloat(styles.paddingRight),
+          marginEnd: Number.parseFloat(getComputedStyle(element).marginInlineEnd),
+        };
+      });
+      expect(geometry.height).toBe(48);
+      if (width > 760) {
+        expect(geometry.width).toBe(164);
+        expect(geometry.marginEnd).toBe(32);
+        expect(geometry.rightInset).toBe(geometry.paddingRight + 32);
+        // Compare to the former right-aligned position, keeping the same DOM and viewport.
+        await cta.evaluate(element => { (element as HTMLElement).style.marginInlineEnd = "0"; });
+        const former = await cta.boundingBox();
+        expect(former!.x - geometry.x).toBe(32);
+        expect(former!.width).toBe(geometry.width);
+        expect(former!.height).toBe(geometry.height);
+        expect(former!.y).toBe(geometry.y);
+        await cta.evaluate(element => { (element as HTMLElement).style.removeProperty("margin-inline-end"); });
+      } else {
+        expect(geometry.marginEnd).toBe(0);
+        expect(geometry.width).toBe(geometry.contentWidth);
+        expect(geometry.rightInset).toBe(geometry.paddingRight);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+      const footer = await footerGeometry(page);
+      expect(footer.footerBottom).toBeCloseTo(footer.mainBottom - footer.paddingBottom, 0);
+      await testInfo.attach("new-map-geometry", { body: JSON.stringify({ geometry, footer }, null, 2), contentType: "application/json" });
+      await page.locator(".mm-project-pages").screenshot({ path: testInfo.outputPath("new-map-and-footer.png"), animations: "disabled" });
+    });
+  }
+}

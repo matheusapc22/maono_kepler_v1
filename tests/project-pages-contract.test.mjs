@@ -150,3 +150,46 @@ test('native accessible controls, footer live count and new-map permission wirin
   const shell = read('src/pages/Projects.tsx');
   for (const token of ['PERMISSION.PROJECT_CREATE', 'setProjectFavorite(', 'requestOrganizationKey !== activeOrganizationKeyRef.current']) assert.ok(shell.includes(token), token);
 });
+
+test('project footer consumes remaining main-column height without stretching cards or overlaying results', () => {
+  const css = postcss.parse(read('src/pages/Projects/components/ProjectPages.css'));
+  const declarations = selector => {
+    const values = new Map();
+    css.walkRules(rule => {
+      if (rule.parent === css && rule.selectors.includes(selector)) {
+        rule.walkDecls(declaration => values.set(declaration.prop, declaration.value));
+      }
+    });
+    return values;
+  };
+  const main = declarations('.mm-project-pages');
+  const content = declarations('.mm-project-pages > .mm-projects-content');
+  const workspace = declarations('.mm-project-pages .mm-project-pages__workspace');
+  for (const [name, styles] of [['main', main], ['content', content], ['workspace', workspace]]) {
+    assert.equal(styles.get('display'), 'flex', `${name} provides the continuous flex column`);
+    assert.equal(styles.get('flex-direction'), 'column', `${name} preserves natural vertical flow`);
+  }
+  assert.match(main.get('min-height'), /^100(?:d|s)?vh$/, 'main fills at least the viewport');
+  assert.match(content.get('flex'), /^1\s+0\s+auto$/, 'content grows without shrinking its children');
+  assert.match(workspace.get('flex'), /^1\s+0\s+auto$/, 'workspace receives the remaining column height');
+  assert.equal(declarations('.mm-project-pages .mm-project-pages__workspace > *').get('flex-shrink'), '0');
+  assert.equal(declarations('.mm-project-pages .mm-project-pages__grid').get('flex'), '0 0 auto', 'grid remains intrinsic-height');
+  assert.equal(declarations('.mm-project-pages .mm-project-pages__footer').get('margin-top'), 'auto');
+  css.walkRules(rule => {
+    if (!rule.selectors.some(selector => selector.includes('.mm-project-pages__footer'))) return;
+    rule.walkDecls('position', declaration => assert.ok(!['fixed', 'absolute', 'sticky'].includes(declaration.value), 'footer cannot cover cards or float over the page'));
+  });
+});
+
+test('new-map CTA has the approved modest desktop inset and resets it on mobile', () => {
+  const css = postcss.parse(read('src/pages/Projects/components/ProjectPages.css'));
+  const matches = [];
+  css.walkRules(rule => {
+    if (rule.selector !== '.mm-project-pages .mm-project-pages__new') return;
+    rule.walkDecls('margin-inline-end', declaration => matches.push({ value: declaration.value, media: rule.parent.type === 'atrule' ? rule.parent.params : null }));
+  });
+  assert.deepEqual(matches, [
+    { value: '32px', media: null },
+    { value: '0', media: '(max-width: 760px)' },
+  ]);
+});
