@@ -2,13 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
 import postcss from 'postcss';
 
 const root = new URL('../', import.meta.url);
 const read = path => readFileSync(new URL(path, root), 'utf8');
 const original = 'ba304ea3875dee6ed33bae1993b1bb247c9e0860';
+const hasOriginal = spawnSync('git', ['cat-file', '-e', `${original}^{commit}`], { cwd: root, stdio: 'ignore' }).status === 0;
+const requireOriginal = process.env.PROJECT_PAGES_REQUIRE_BASELINE === '1';
+if (!hasOriginal) console.info('Original project-pages Git commit is unavailable in this checkout; every current-source SHA-256 is still enforced. The dedicated full-fetch workflow requires the original too.');
+test('original Git baseline is available when the strict preservation gate requires it', () => {
+  assert.ok(!requireOriginal || hasOriginal, `Missing required original commit ${original}; fetch full history before the strict gate.`);
+});
 // These hashes were recorded from the approved original before the redesign.
 // Verify against both the pinned Git source and the working tree, not a new snapshot.
 const preserved = {
@@ -32,9 +38,11 @@ const preserved = {
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 for (const [path, expected] of Object.entries(preserved)) {
   test(`preserves original source: ${path}`, () => {
-    const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
-    assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');
     assert.equal(sha256(read(path)), expected, 'no card, action, sidebar or endpoint edits');
+    if (hasOriginal) {
+      const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
+      assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');
+    }
   });
 }
 

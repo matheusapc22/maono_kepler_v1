@@ -31,6 +31,8 @@ jobs:
       - name: Install existing repository dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Original source, pure filtering/paging and existing behavior contracts
+        env:
+          PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
           node --test tests/project-pages-contract.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
