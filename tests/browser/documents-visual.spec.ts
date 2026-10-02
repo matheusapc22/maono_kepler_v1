@@ -1258,7 +1258,7 @@ test("renomear: nome inalterado fecha sem PATCH; caracteres inválidos mantêm d
 test("mover pasta aninhada para Raiz envia parentId null e mantém pasta navegada", async ({ page }) => {
   const requests = await setup(page); await openDocuments(page);
   await page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" }).locator(".mm-docs-folder-select").click();
-  await page.getByRole("button", { name: "Ações da pasta Relatórios", exact: true }).click();
+  await page.getByRole("button", { name: "Ações da pasta Mês de Setembro / Relatórios", exact: true }).click();
   await page.getByRole("menuitem", { name: "Mover pasta", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Mover pasta", exact: true });
   await chooseDestination(dialog, []);
