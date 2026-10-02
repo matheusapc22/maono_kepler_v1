@@ -35,7 +35,8 @@ test('cursor, permission and purge contracts remain in the real component', () =
 test('virtual folders do not receive action menus and lineage stays explicit', () => {
   const first = component.slice(component.indexOf('<nav className="mm-docs-folder-grid"'), component.indexOf('{foldersLoading ?'));
   assert.ok(!first.includes('DocumentActionMenu'));
-  assert.match(component, /const folderPath = .*documentFolderBreadcrumb\(folders, (?:folderId|id)\)/);
+  assert.match(component, /const folderPath = \(id: string\) =>/);
+  assert.match(component, /documentFolderBreadcrumb\(folders,\s*id\)/);
   assert.ok(component.includes('aria-pressed='));
 });
 test('menu supports portal, keyboard, focus return and outside dismissal', () => {

@@ -178,7 +178,7 @@ test("paginação da referência usa itens por página, página atual e cursor e
   await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
   await page.getByRole("button", { name: "Página anterior" }).click();
   await expect(page.locator(".mm-docs-page-number")).toHaveText("1");
-  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(2);
+  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(10);
 });
 
 test("sidebar recolhida/aberta e navegação SPA mantêm tema próprio", async ({ page }) => {

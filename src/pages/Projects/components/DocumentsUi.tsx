@@ -78,7 +78,7 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
     {open && createPortal(<div ref={panel} id={id} className="mm-docs-action-menu" role="menu" aria-label={label} style={position} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
     }} onKeyDown={event => {
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(true); return; }
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); trigger.current?.focus({ preventScroll: true }); setOpen(false); return; }
       const items = Array.from(panel.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
       const index = items.indexOf(document.activeElement as HTMLButtonElement);
       if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) && items.length) {
