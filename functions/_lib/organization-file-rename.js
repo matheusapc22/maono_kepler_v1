@@ -15,8 +15,14 @@ function fileNotFound() {
   return renameError("Arquivo não encontrado.", 404, "ORGANIZATION_FILE_NOT_FOUND");
 }
 
-function extension(name) {
-  return String(name || "").match(/\.([a-z0-9]+)$/i)?.[1] || "";
+// Treat only the last, non-leading dot as the extension separator. Preserve
+// the exact suffix (including case); storage filenames are not display names.
+export function splitOrganizationFileName(name) {
+  const value = String(name || "");
+  const dot = value.lastIndexOf(".");
+  return dot > 0 && dot < value.length - 1
+    ? { baseName: value.slice(0, dot), extension: value.slice(dot) }
+    : { baseName: value, extension: "" };
 }
 
 export function normalizeOrganizationFileName(value, currentFile) {
@@ -28,19 +34,9 @@ export function normalizeOrganizationFileName(value, currentFile) {
     throw renameError("O nome do arquivo contém caracteres inválidos.", 400, "DOCUMENT_FILE_NAME_INVALID");
   }
 
-  let name = value.trim().replace(/\s+/g, " ");
+  const name = value.trim().replace(/\s+/g, " ");
   if (!name) {
     throw renameError("Informe um nome para o arquivo.", 400, "DOCUMENT_FILE_NAME_REQUIRED");
-  }
-
-  const currentExtension = extension(
-    currentFile.original_name || currentFile.name || currentFile.file_name,
-  ) || extension(currentFile.file_name);
-  const nextExtension = extension(name);
-  if (currentExtension && !nextExtension) {
-    name += `.${currentExtension}`;
-  } else if (nextExtension.toLowerCase() !== currentExtension.toLowerCase()) {
-    throw renameError("Mantenha a extensão original do arquivo.", 400, "DOCUMENT_FILE_EXTENSION_IMMUTABLE");
   }
 
   if (name.length > ORGANIZATION_FILE_MAX_NAME) {
@@ -50,6 +46,14 @@ export function normalizeOrganizationFileName(value, currentFile) {
   // otherwise be silently changed or truncated when the user downloads them.
   if (sanitizeFileName(name) !== name || name.endsWith(".")) {
     throw renameError("O nome do arquivo contém caracteres inválidos.", 400, "DOCUMENT_FILE_NAME_INVALID");
+  }
+
+  const currentExtension = splitOrganizationFileName(
+    currentFile.original_name || currentFile.name || currentFile.file_name,
+  ).extension;
+  const nextExtension = splitOrganizationFileName(name).extension;
+  if (nextExtension !== currentExtension) {
+    throw renameError("Mantenha a extensão original do arquivo.", 400, "DOCUMENT_FILE_EXTENSION_IMMUTABLE");
   }
 
   return name;
@@ -70,17 +74,27 @@ export async function renameOrganizationFile(env, organizationId, fileId, name) 
   // These fields are display metadata. Stored filename, content, provider
   // identity, folder/project links and trash state must remain unchanged.
   // Repeat the active-state predicates at write time to avoid renaming a file
-  // that was moved to trash after the lookup.
+  // that was moved to trash after the lookup. Compare display metadata too,
+  // preventing a concurrent rename from being overwritten with a stale suffix.
   const renamed = await getDb(env)
     .prepare(`
       UPDATE organization_files
       SET name = ?, original_name = ?, updated_at = ?
       WHERE ${activeFile}
+        AND name IS ? AND original_name IS ? AND file_name IS ?
       RETURNING *
     `)
-    .bind(normalizedName, normalizedName, new Date().toISOString(), fileId, organizationId)
+    .bind(normalizedName, normalizedName, new Date().toISOString(), fileId, organizationId,
+      file.name ?? null, file.original_name ?? null, file.file_name ?? null)
     .first();
-  if (!renamed) throw fileNotFound();
+  if (!renamed) {
+    const current = await getDb(env)
+      .prepare(`SELECT id FROM organization_files WHERE ${activeFile} LIMIT 1`)
+      .bind(fileId, organizationId)
+      .first();
+    if (!current) throw fileNotFound();
+    throw renameError("O arquivo foi alterado. Atualize e tente novamente.", 409, "DOCUMENT_FILE_RENAME_CONFLICT");
+  }
 
   return renamed;
 }

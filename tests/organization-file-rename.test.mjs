@@ -6,6 +6,7 @@ import { build } from "esbuild";
 import {
   normalizeOrganizationFileName,
   renameOrganizationFile,
+  splitOrganizationFileName,
 } from "../functions/_lib/organization-file-rename.js";
 import { createDocumentFolder } from "../functions/_lib/organization-file-folders.js";
 import {
@@ -53,9 +54,8 @@ function patch(env, cookie, payload, { organizationId = 1, fileId = 10 } = {}) {
 test("rename normaliza nome, conserva extensão e rejeita nomes inseguros/incompatíveis", () => {
   const file = { original_name: "relatorio.pdf", file_name: "stored.pdf" };
   assert.equal(normalizeOrganizationFileName("  Relatório   final.pdf  ", file), "Relatório final.pdf");
-  assert.equal(normalizeOrganizationFileName("Relatório final", file), "Relatório final.pdf");
-  assert.equal(normalizeOrganizationFileName("Relatório.PDF", file), "Relatório.PDF");
-  assert.equal(normalizeOrganizationFileName("x".repeat(156), file).length, 160);
+  assert.equal(normalizeOrganizationFileName("Relatório.PDF", { original_name: "original.PDF" }), "Relatório.PDF");
+  assert.equal(normalizeOrganizationFileName("x".repeat(156) + ".pdf", file).length, 160);
   for (const [name, code] of [
     ["", "DOCUMENT_FILE_NAME_REQUIRED"],
     ["   ", "DOCUMENT_FILE_NAME_REQUIRED"],
@@ -68,7 +68,9 @@ test("rename normaliza nome, conserva extensão e rejeita nomes inseguros/incomp
     ["nome\u0000.pdf", "DOCUMENT_FILE_NAME_INVALID"],
     [".pdf", "DOCUMENT_FILE_NAME_INVALID"],
     ["outro.exe", "DOCUMENT_FILE_EXTENSION_IMMUTABLE"],
-    ["x".repeat(157), "DOCUMENT_FILE_NAME_TOO_LONG"],
+    ["Relatório final", "DOCUMENT_FILE_EXTENSION_IMMUTABLE"],
+    ["Relatório.PDF", "DOCUMENT_FILE_EXTENSION_IMMUTABLE"],
+    ["x".repeat(157) + ".pdf", "DOCUMENT_FILE_NAME_TOO_LONG"],
   ]) {
     assert.throws(() => normalizeOrganizationFileName(name, file), { status: 400, code });
   }
@@ -78,11 +80,32 @@ test("rename normaliza nome, conserva extensão e rejeita nomes inseguros/incomp
   );
 });
 
+test("extensão original é exata, com múltiplos pontos e sem inferir extensão do binário", () => {
+  for (const [name, baseName, extension] of [
+    ["relatorio.v2.PDF", "relatorio.v2", ".PDF"],
+    ["arquivo.tar.gz", "arquivo.tar", ".gz"],
+    ["README", "README", ""],
+    [".env", ".env", ""],
+    ["nome.", "nome.", ""],
+    ["dados.part-1", "dados", ".part-1"],
+  ]) {
+    assert.deepEqual(splitOrganizationFileName(name), { baseName, extension });
+  }
+  assert.equal(normalizeOrganizationFileName("novo.v3.PDF", { original_name: "antigo.v2.PDF" }), "novo.v3.PDF");
+  assert.equal(normalizeOrganizationFileName("LEIAME", { original_name: "README", file_name: "stored.pdf" }), "LEIAME");
+  for (const candidate of ["LEIAME.txt", "LEIAME.pdf"]) {
+    assert.throws(() => normalizeOrganizationFileName(candidate, { original_name: "README", file_name: "stored.pdf" }),
+      { code: "DOCUMENT_FILE_EXTENSION_IMMUTABLE" });
+  }
+  assert.throws(() => normalizeOrganizationFileName("novo.v2.pdf", { original_name: "antigo.v1.PDF" }),
+    { code: "DOCUMENT_FILE_EXTENSION_IMMUTABLE" });
+});
+
 test("rename altera só metadados de exibição e atualiza busca sem chamada ao provider", async (t) => {
   const { env, db, calls } = persistenceFixture(t);
   insertFile(db);
   const before = db.prepare("SELECT * FROM organization_files WHERE id = 10").get();
-  const renamed = await renameOrganizationFile(env, 1, 10, "Relatório final");
+  const renamed = await renameOrganizationFile(env, 1, 10, "Relatório final.pdf");
   assert.equal(renamed.name, "Relatório final.pdf");
   assert.equal(renamed.original_name, renamed.name);
   assert.notEqual(renamed.updated_at, before.updated_at);

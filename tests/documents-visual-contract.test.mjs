@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 const component = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.css', import.meta.url), 'utf8');
 const menu = readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8');
+const dialogs = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.tsx', import.meta.url), 'utf8');
+const dialogCss = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.css', import.meta.url), 'utf8');
 const transfer = readFileSync(new URL('../src/pages/Projects/components/DocumentsTransferPanel.css', import.meta.url), 'utf8');
 
 test('controller preserves existing document lifecycles and declares folder move explicitly', () => {
@@ -34,7 +36,7 @@ test('controller preserves existing document lifecycles and declares folder move
   assert.ok(component.includes('parentId: targetParentId === "root" ? null : targetParentId'));
 });
 test('workspace includes real structural blocks, not generated-content headings', () => {
-  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-breadcrumb','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-page-controls','mm-docs-file-grid','mm-docs-dialog']) assert.ok(component.includes(name));
+  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-breadcrumb','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-page-controls','mm-docs-file-grid']) assert.ok(component.includes(name));
   assert.ok(component.includes('Buscar e filtrar'));
   assert.ok(component.includes('Documentos encontrados'));
   assert.ok(!component.includes('role="tree"'));
@@ -82,27 +84,47 @@ test('root is default, all documents is a list filter, and file actions live onl
   assert.ok(component.includes('folderOrigin={props.folderOrigin?.(file)}'));
   assert.ok(component.includes('if (next.folderId) setBrowsedFolderId(next.folderId)'));
   assert.ok(component.includes('folderId: state === "active" ? filters.folderId || undefined : undefined'));
-  const actions = component.slice(component.indexOf('function ActiveDocumentActions('), component.indexOf('function DocumentFileMoveDialog('));
+  const actions = component.slice(component.indexOf('function ActiveDocumentActions('), component.indexOf('function ActiveDocumentsResults('));
   assert.equal((actions.match(/<DocumentActionMenu/g) || []).length, 1);
   for (const label of ['Renomear', 'Baixar', 'Mover', 'Excluir']) assert.ok(actions.includes(`label: "${label}"`));
   assert.ok(!actions.includes('<select'));
   assert.ok(!actions.includes('<button'));
-  assert.ok(component.includes('renameOrganizationFile(organizationId, file.id, name.trim())'));
-  assert.ok(component.includes('dialog?.showModal()'));
+  assert.ok(component.includes('renameOrganizationFile(organizationId, file.id,'));
+  assert.ok(component.includes('<DocumentNameDialog'));
+  assert.ok(component.includes('<DocumentMoveDialog'));
+  assert.ok(!component.includes('function DocumentFileMoveDialog('));
 });
 
 
-test('file move restores focus after native modal teardown without stealing a newer focus', () => {
-  const dialog = component.slice(component.indexOf('function DocumentFileMoveDialog('), component.indexOf('function ActiveDocumentsResults('));
-  assert.ok(dialog.includes('useLayoutEffect(() => {'));
-  assert.ok(!dialog.includes('useEffect(() => {'));
-  assert.ok(dialog.includes('dialog?.close()'));
-  assert.ok(dialog.includes('window.setTimeout(() => {'));
-  assert.ok(dialog.includes('active !== document.body && active.isConnected'));
-  assert.ok(dialog.includes('previousFocus?.isConnected'));
-  assert.ok(dialog.includes('focusTarget?.focus({ preventScroll: true })'));
-  assert.ok(!dialog.includes('<select autoFocus'));
-  assert.ok(dialog.indexOf('dialog?.showModal()') < dialog.indexOf('dialog?.querySelector<HTMLSelectElement>("select")?.focus'));
+test('all document action modals share a native top-layer lifecycle and safe focus restoration', () => {
+  for (const token of ['<dialog ref={dialogRef}', 'dialog?.showModal()', 'useLayoutEffect(() => {', 'dialog?.close()', 'window.setTimeout(() => {', 'active !== document.body && active.isConnected', 'previousFocus?.isConnected', 'focusTarget?.focus({ preventScroll: true })', 'onCancel=', 'event.key !== "Tab"', 'event.shiftKey']) assert.ok(dialogs.includes(token), token);
+  assert.ok(!dialogs.includes('autoFocus='));
+  assert.ok(dialogs.indexOf('dialog?.showModal()') < dialogs.indexOf('input?.focus({ preventScroll: true })'));
+  assert.ok(!component.includes('role="dialog"'));
+  assert.ok(!component.includes('Novo nome do documento (mantenha a extensão)'));
+  assert.ok(!component.includes('Nome da nova pasta:'));
+});
+
+test('rename isolates the immutable extension and dialog mutation state prevents double-submit', () => {
+  for (const token of ['name.lastIndexOf(".")', 'dot > 0 && dot < name.length - 1', 'trimmed + original.extension', 'Nome do documento', 'Nome da pasta', 'mm-docs-name-extension', 'Extensão fixa:', 'Sem extensão', 'input.select()', 'inFlight.current', 'role="alert"', 'disabled={busy}', 'pendingLabel', 'await onSubmit(']) assert.ok(dialogs.includes(token), token);
+  assert.ok(dialogs.includes('document.activeElement'));
+  assert.ok(dialogs.includes('error ?'));
+  assert.ok(dialogs.includes('aria-invalid={Boolean(error)}'));
+});
+
+test('move browser uses real organization-owned folders, ancestry and session-scoped recents', () => {
+  for (const token of ['String(folder.organizationId) === organizationId', 'seen.has(id)', 'if (!current) return []', 'node.path.some(', 'selectedId !== currentParentId', 'eligibleIds.has(selectedId)', 'node.parentId === browsedId', 'Sugestões', 'Recentes', 'Todas as pastas', 'Buscar pastas', 'Caminho do destino', 'Destino:', 'role="tablist"', 'role="tabpanel"', 'sessionStorage.getItem', 'sessionStorage.setItem', 'encodeURIComponent(String(userId))', 'encodeURIComponent(String(organizationId))']) assert.ok(dialogs.includes(token), token);
+  assert.ok(!dialogs.includes('<select'));
+  assert.ok(!dialogs.includes('Todos os documentos'));
+  assert.ok(dialogs.includes('Nenhuma pasta encontrada.'));
+});
+
+test('modal geometry is viewport centered, responsive and independent of the content panel', () => {
+  for (const token of ['position: fixed', 'inset: 0', 'margin: auto', 'calc(100vw - 32px)', 'calc(100dvh - 32px)', '::backdrop', 'prefers-reduced-motion', 'forced-colors']) assert.ok(dialogCss.includes(token), token);
+  assert.ok(!dialogCss.includes('!important'));
+  assert.ok(!/\bzoom\s*:/.test(dialogCss));
+  assert.ok(!/^\s*(?:body|html|:root|input|select|button)\b/m.test(dialogCss));
+  assert.ok(!dialogCss.includes('translate('));
 });
 
 test('sortable headings are native buttons with single accessible next-action tooltips', () => {

@@ -198,6 +198,91 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
     message: "Confira o nome ou a pasta de destino antes de tentar novamente.",
     severity: "warning",
   },
+  DOCUMENT_FOLDER_NAME_REQUIRED: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Digite um nome para a pasta antes de salvar.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_NAME_INVALID: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Use um nome sem barras ou caracteres de controle.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_NAME_TOO_LONG: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Use até 120 caracteres no nome da pasta.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_NAME_CONFLICT: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Já existe uma pasta com esse nome neste local. Escolha outro nome.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_INVALID: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Escolha uma pasta de destino válida.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_PARENT_INVALID: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Escolha uma pasta de destino válida.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_NOT_FOUND: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Esta pasta não está mais disponível. Atualize a lista e tente novamente.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_PARENT_NOT_FOUND: {
+    title: "Não foi possível atualizar a pasta",
+    message: "A pasta de destino não está mais disponível. Atualize a lista e tente novamente.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_PARENT_SCOPE_MISMATCH: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Escolha uma pasta desta organização.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_CYCLE: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Uma pasta não pode ser movida para dentro de si mesma ou de suas subpastas.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_SELF_PARENT: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Uma pasta não pode ser movida para dentro de si mesma.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_DEPTH_EXCEEDED: {
+    title: "Não foi possível atualizar a pasta",
+    message: "O destino ultrapassa o limite de 5 níveis de pastas.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_SAME_PARENT: {
+    title: "Não foi possível atualizar a pasta",
+    message: "O item já está nesta pasta. Escolha outro destino.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_MOVE_CONFLICT: {
+    title: "Não foi possível atualizar a pasta",
+    message: "A pasta ou o destino mudou. Atualize a lista e tente novamente.",
+    severity: "warning",
+  },
+  DOCUMENT_FILE_RENAME_CONFLICT: {
+    title: "O documento foi atualizado",
+    message: "O nome do documento mudou. Atualize a lista e tente novamente.",
+    severity: "warning",
+  },
+  DOCUMENT_FILE_MOVE_CONFLICT: {
+    title: "Não foi possível atualizar a pasta",
+    message: "O documento ou o destino mudou. Atualize a lista e tente novamente.",
+    severity: "warning",
+  },
+  DOCUMENT_FOLDER_PATCH_INVALID: {
+    title: "Não foi possível atualizar a pasta",
+    message: "Confira os dados da pasta antes de tentar novamente.",
+    severity: "warning",
+  },
   PERFORMANCE_PAYLOAD_TOO_LARGE: {
     title: "Limite excedido",
     message: "Os dados enviados excedem o limite permitido para esta operação.",

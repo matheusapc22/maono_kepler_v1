@@ -4,6 +4,11 @@ on:
     branches: [mano_kepler_v1]
     paths:
       - 'src/pages/Projects/components/Documents*'
+      - 'src/pages/Projects/components/DocumentActionDialogs*'
+      - 'src/lib/user-error-catalog.ts'
+      - 'functions/_lib/organization-file-folders.js'
+      - 'functions/api/organizations/**/document-folders*'
+      - 'tests/document-action-backend-integration.test.mjs'
       - 'tests/documents-visual-contract.test.mjs'
       - 'tests/organization-file-rename.test.mjs'
       - 'tests/organization-file-query-sorting.test.mjs'
@@ -42,7 +47,7 @@ jobs:
       - name: Install existing repository dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Presentation, hierarchy and backend preservation contracts
-        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs tests/organization-file-rename.test.mjs tests/organization-file-query-sorting.test.mjs
+        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs tests/organization-file-rename.test.mjs tests/organization-file-query-sorting.test.mjs tests/document-action-backend-integration.test.mjs
       - name: Build application
         run: npm run build
       - name: Install browser engines
@@ -63,6 +68,8 @@ jobs:
             src/pages/Projects/components/DocumentsSection.tsx
             src/pages/Projects/components/DocumentsSection.css
             src/pages/Projects/components/DocumentsUi.tsx
+            src/pages/Projects/components/DocumentActionDialogs.tsx
+            src/pages/Projects/components/DocumentActionDialogs.css
             src/pages/Projects/components/DocumentsTransferPanel.css
             tests/documents-visual-contract.test.mjs
             tests/browser/documents-visual.spec.ts

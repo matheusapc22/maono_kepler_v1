@@ -1,11 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 
 const organization = { id: 1, name: "Organização de demonstração", slug: "demo", active: true };
 const folders = [
-  { id: 1, name: "Mês de Setembro", parentId: null },
-  { id: 2, name: "QA_VISUAL", parentId: null },
-  { id: 3, name: "Relatórios", parentId: 1 },
-  { id: 4, name: "2026", parentId: 3 },
+  { id: 1, name: "Mês de Setembro", parentId: null, organizationId: 1 },
+  { id: 2, name: "QA_VISUAL", parentId: null, organizationId: 1 },
+  { id: 3, name: "Relatórios", parentId: 1, organizationId: 1 },
+  { id: 4, name: "2026", parentId: 3, organizationId: 1 },
 ];
 const files = [
   { id: 10, name: "config_kepler.json", fileType: "json", size: 34288435, updatedAt: "2026-09-24T22:18:00Z", projectName: "Projeto de demonstração", folderId: null },
@@ -38,10 +38,26 @@ function orderedFixtureFiles(source: FixtureFile[], sort: FixtureSort) {
     return ((a < b ? -1 : a > b ? 1 : 0) || left.id - right.id) * factor;
   });
 }
-async function setup(page: Page, options: { more?: boolean; empty?: boolean; role?: string; permissions?: string[]; failMove?: boolean; dataset?: FixtureFile[]; failList?: (url: URL) => boolean; beforeRename?: () => Promise<void>; beforeList?: (url: URL) => Promise<void> } = {}) {
+type FixtureMutation = "rename" | "create" | "moveFile" | "moveFolder";
+type FixtureOptions = {
+  more?: boolean; empty?: boolean; role?: string; permissions?: string[]; failMove?: boolean;
+  dataset?: FixtureFile[]; initialFiles?: FixtureFile[];
+  failList?: (url: URL) => boolean;
+  failMutation?: (kind: FixtureMutation, attempt: number) => boolean;
+  beforeMutation?: (kind: FixtureMutation) => Promise<void>;
+  beforeRename?: () => Promise<void>; beforeList?: (url: URL) => Promise<void>;
+};
+async function setup(page: Page, options: FixtureOptions = {}) {
   const requests: { method: string; url: string; body: string | null }[] = [];
   const folderState = folders.map(folder => ({ ...folder }));
-  const fileState = files.map(file => ({ ...file }));
+  const fileState = (options.initialFiles ?? files).map(file => ({ ...file }));
+  const attempts: Record<FixtureMutation, number> = { rename: 0, create: 0, moveFile: 0, moveFolder: 0 };
+  const mutationFails = async (kind: FixtureMutation) => {
+    attempts[kind] += 1;
+    await options.beforeMutation?.(kind);
+    return options.failMutation?.(kind, attempts[kind]) ?? false;
+  };
+  const conflict = (kind: FixtureMutation) => ({ ok: false, error: { code: { create: "DOCUMENT_FOLDER_NAME_CONFLICT", rename: "DOCUMENT_FILE_RENAME_CONFLICT", moveFile: "DOCUMENT_FILE_MOVE_CONFLICT", moveFolder: "DOCUMENT_FOLDER_MOVE_CONFLICT" }[kind], message: "O item ou o destino mudou. Confira os dados e tente novamente.", category: "CONFLICT", retryable: false } });
   const deletedIds = new Set<number>();
   await page.route("**/api/**", async route => {
     const request = route.request();
@@ -50,12 +66,24 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
     if (url.pathname === "/api/session") {
       return route.fulfill({ json: { authenticated: true, user: { id: 1, name: "Operador de demonstração", email: "qa@example.test", role: options.role ?? "super_admin", permissions: options.permissions ?? [], activeOrganizationId: 1 }, projects: [], organizations: [organization], activeOrganization: organization } });
     }
+    if (request.method() === "POST" && url.pathname === "/api/organizations/1/document-folders") {
+      const body = JSON.parse(request.postData() || "{}");
+      if (await mutationFails("create")) return route.fulfill({ status: 409, json: conflict("create") });
+      const parentId = body.parentId == null ? null : Number(body.parentId);
+      if (folderState.some(folder => folder.parentId === parentId && folder.name.toLocaleLowerCase() === String(body.name).trim().toLocaleLowerCase())) return route.fulfill({ status: 409, json: conflict("create") });
+      const folder = { id: Math.max(...folderState.map(item => item.id)) + 1, name: String(body.name).trim(), parentId, organizationId: 1 };
+      folderState.push(folder);
+      return route.fulfill({ status: 201, json: { ok: true, folder } });
+    }
     if (request.method() === "PATCH" && /^\/api\/organizations\/1\/document-folders\/\d+$/.test(url.pathname)) {
       const folderId = Number(url.pathname.split("/").at(-1));
       const patch = JSON.parse(request.postData() || "{}");
       const folder = folderState.find(item => item.id === folderId);
       if (!folder) return route.fulfill({ status: 404, json: { ok: false } });
-      if (Object.prototype.hasOwnProperty.call(patch, "parentId")) folder.parentId = patch.parentId == null ? null : Number(patch.parentId);
+      if (Object.prototype.hasOwnProperty.call(patch, "parentId")) {
+        if (await mutationFails("moveFolder")) return route.fulfill({ status: 409, json: conflict("moveFolder") });
+        folder.parentId = patch.parentId == null ? null : Number(patch.parentId);
+      }
       if (Object.prototype.hasOwnProperty.call(patch, "name")) folder.name = String(patch.name);
       return route.fulfill({ json: { ok: true, folder } });
     }
@@ -64,11 +92,13 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
       const patch = JSON.parse(request.postData() || "{}");
       if (!file) return route.fulfill({ status: 404, json: { ok: false } });
       if (Object.prototype.hasOwnProperty.call(patch, "folderId")) {
+        if (await mutationFails("moveFile")) return route.fulfill({ status: 409, json: conflict("moveFile") });
         if (options.failMove) return route.fulfill({ status: 403, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
         file.folderId = patch.folderId == null ? null : Number(patch.folderId);
       }
       if (Object.prototype.hasOwnProperty.call(patch, "name")) {
         await options.beforeRename?.();
+        if (await mutationFails("rename")) return route.fulfill({ status: 409, json: conflict("rename") });
         file.name = patch.name;
       }
       return route.fulfill({ json: { ok: true, file } });
@@ -83,6 +113,8 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
     if (request.method() !== "GET") return route.fulfill({ status: 403, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
     if (url.pathname.endsWith("/document-folders")) return route.fulfill({ json: { ok: true, folders: folderState } });
     if (url.pathname === "/api/organizations/1/files") {
+      // Capture before the gate: delayed responses must really contain old data.
+      const requestFileSnapshot = fileState.map(file => ({ ...file }));
       await options.beforeList?.(url);
       if (options.failList?.(url)) return route.fulfill({ status: 403, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
       if (options.dataset) {
@@ -109,7 +141,7 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
       const folderId = url.searchParams.get("folderId");
       const firstBatch = options.more
         ? Array.from({ length: 10 }, (_, index) => ({ ...files[index % files.length], id: 100 + index, name: index % 2 === 0 ? `config_${index + 1}.json` : `relatorio_${index + 1}.pdf` }))
-        : fileState.filter(file => !deletedIds.has(file.id));
+        : requestFileSnapshot.filter(file => !deletedIds.has(file.id));
       let resultFiles = options.empty ? [] : firstBatch;
       if (!options.empty && folderId) resultFiles = resultFiles.filter(file => folderId === "root" ? file.folderId == null : String(file.folderId) === folderId);
       if (!options.empty && trash) resultFiles = [{ ...files[0], deletedAt: "2026-09-29T12:00:00Z", purgeAfter: "2999-01-01T00:00:00Z", deletedBy: { id: 1, name: "Operador de demonstração" }, trashedFromFolderId: 1, trashedFromFolderName: "Mês de Setembro" }];
@@ -138,6 +170,46 @@ async function showAllDocuments(page: Page) {
 async function openRoot(page: Page) {
   await page.getByRole("navigation", { name: "Caminho da pasta" }).getByRole("button", { name: "Raiz", exact: true }).click();
   await expect(page.locator(".mm-docs-folder-card")).toHaveCount(2);
+}
+
+async function chooseDestination(dialog: Locator, path: string[]) {
+  await dialog.getByRole("tab", { name: "Todas as pastas", exact: true }).click();
+  await dialog.getByRole("navigation", { name: "Caminho do destino" }).getByRole("button", { name: "Raiz", exact: true }).click();
+  for (const name of path) await dialog.getByRole("button", { name, exact: true }).click();
+}
+
+async function openFileAction(page: Page, action: "Renomear" | "Mover", fileName = "config_kepler.json") {
+  const trigger = page.getByRole("button", { name: `Ações de ${fileName}`, exact: true });
+  await trigger.click();
+  await page.getByRole("menuitem", { name: action, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: action === "Renomear" ? "Renomear documento" : "Mover documento", exact: true });
+  await expect(dialog).toBeVisible();
+  return { dialog, trigger };
+}
+
+async function expectViewportCentered(page: Page, dialog: Locator) {
+  const box = (await dialog.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(Math.abs(box.x + box.width / 2 - viewport.width / 2), "horizontal viewport center (not the content panel)").toBeLessThanOrEqual(1);
+  expect(Math.abs(box.y + box.height / 2 - viewport.height / 2), "vertical viewport center").toBeLessThanOrEqual(1);
+  expect(box.x).toBeGreaterThanOrEqual(8);
+  expect(box.y).toBeGreaterThanOrEqual(8);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width - 8);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height - 8);
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await expect(dialog).toHaveAttribute("open", "");
+  expect(await dialog.evaluate(element => element.matches(":modal"))).toBe(true);
+}
+
+async function expectFocusContained(page: Page, dialog: Locator) {
+  for (let index = 0; index < 14; index += 1) {
+    await page.keyboard.press("Tab");
+    expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  }
+  for (let index = 0; index < 14; index += 1) {
+    await page.keyboard.press("Shift+Tab");
+    expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  }
 }
 
 test("workspace real: referência estrutural, ações contextuais e ícones por tipo", async ({ page }, testInfo) => {
@@ -275,8 +347,8 @@ test("mover pasta usa PATCH parentId e a pasta só reaparece dentro do novo pai"
 
   const dialog = page.getByRole("dialog", { name: "Mover pasta" });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("combobox", { name: "Nova pasta pai" }).selectOption("2");
-  await dialog.getByRole("button", { name: "Mover pasta", exact: true }).click();
+  await dialog.getByRole("button", { name: "QA_VISUAL", exact: true }).click();
+  await dialog.getByRole("button", { name: "Mover", exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
   await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" })).toHaveCount(0);
@@ -467,12 +539,14 @@ test("menu único oferece renomear, baixar, mover e excluir na ordem solicitada"
 test("renomear usa PATCH name e atualiza a lista; cancelar não envia mutação", async ({ page }) => {
   const requests = await setup(page); await openDocuments(page, true);
   const trigger = page.getByRole("button", { name: "Ações de config_kepler.json", exact: true });
-  page.once("dialog", dialog => dialog.dismiss());
   await trigger.click(); await page.getByRole("menuitem", { name: "Renomear", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Renomear documento", exact: true });
+  await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
   expect(requests.filter(request => request.method === "PATCH")).toEqual([]);
   await expect(trigger).toBeFocused();
-  page.once("dialog", dialog => dialog.accept("Configuração revisada.json"));
   await trigger.click(); await page.getByRole("menuitem", { name: "Renomear", exact: true }).click();
+  await dialog.getByRole("textbox", { name: "Nome do documento", exact: true }).fill("Configuração revisada");
+  await dialog.getByRole("button", { name: "Renomear", exact: true }).click();
   await expect(page.locator(".documents-file-name").filter({ hasText: "Configuração revisada.json" })).toBeVisible();
   expect(requests.filter(request => request.method === "PATCH").map(request => JSON.parse(request.body!))).toEqual([{ name: "Configuração revisada.json" }]);
 });
@@ -496,20 +570,20 @@ test("mover arquivo abre diálogo, conserva foco, cancela e usa PATCH folderId",
   await trigger.click(); await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
   await expect(dialog).toBeVisible();
   expect(await page.evaluate(() => (window as Window & { documentDialogOpener?: string | null }).documentDialogOpener)).toBe("Ações de config_kepler.json");
-  await expect(dialog.getByRole("combobox", { name: "Pasta de destino" })).toBeFocused();
-  await expect(dialog.getByRole("button", { name: "Mover documento", exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("searchbox", { name: "Buscar pastas", exact: true })).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   expect(await page.evaluate(() => (window as Window & { documentDialogClosedWhileConnected?: boolean }).documentDialogClosedWhileConnected)).toBe(true);
   await expect(trigger).toBeFocused();
   await trigger.click(); await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
-  await dialog.getByRole("combobox").selectOption("3");
+  await chooseDestination(dialog, ["Mês de Setembro", "Relatórios"]);
   await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(trigger).toBeFocused();
   expect(requests.filter(request => request.method === "PATCH")).toEqual([]);
   await trigger.click(); await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
-  await dialog.getByRole("combobox").selectOption("3");
-  await dialog.getByRole("button", { name: "Mover documento", exact: true }).click();
+  await chooseDestination(dialog, ["Mês de Setembro", "Relatórios"]);
+  await dialog.getByRole("button", { name: "Mover", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(requests.filter(request => request.method === "PATCH").map(request => JSON.parse(request.body!))).toEqual([{ folderId: "3" }]);
   await page.locator(".mm-docs-folder select").selectOption("3");
@@ -525,8 +599,8 @@ test("mover negado permanece no diálogo com erro e permite cancelar", async ({ 
   await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
   await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Mover documento" });
-  await dialog.getByRole("combobox").selectOption("1");
-  await dialog.getByRole("button", { name: "Mover documento", exact: true }).click();
+  await chooseDestination(dialog, ["Mês de Setembro"]);
+  await dialog.getByRole("button", { name: "Mover", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible();
   await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -557,71 +631,13 @@ test("menu respeita grants: somente download sem gestão ou exclusão", async ({
 });
 
 
-for (const destination of ["root", "trash"] as const) {
-  test(`rename atrasado respeita navegação posterior para ${destination}`, async ({ page }) => {
-    let finishRename!: () => void;
-    const renameGate = new Promise<void>(resolve => { finishRename = resolve; });
-    const requests = await setup(page, { beforeRename: () => renameGate }); await openDocuments(page, true);
-    page.once("dialog", dialog => dialog.accept("Atualizado.json"));
-    await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
-    await page.getByRole("menuitem", { name: "Renomear", exact: true }).click();
-    await expect.poll(() => requests.some(request => request.method === "PATCH")).toBe(true);
-    if (destination === "root") {
-      await openRoot(page);
-    } else {
-      await page.getByRole("button", { name: "Lixeira", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Documentos na Lixeira" })).toBeVisible();
-    }
-    const fileQueries = () => requests.filter(request => new URL(request.url).pathname === "/api/organizations/1/files");
-    const beforeFinish = fileQueries().length;
-    finishRename();
-    await expect.poll(() => fileQueries().length).toBeGreaterThan(beforeFinish);
-    const latest = new URL(fileQueries().at(-1)!.url);
-    expect(latest.searchParams.get("state")).toBe(destination === "trash" ? "trash" : "active");
-    expect(latest.searchParams.get("folderId")).toBe(destination === "root" ? "root" : null);
-    await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
-    if (destination === "root") {
-      await expect(page.locator(".documents-file-name")).toHaveText("Atualizado.json");
-      await expect(page.getByRole("navigation", { name: "Caminho da pasta" }).getByRole("button")).toHaveText(["Raiz"]);
-    } else {
-      await expect(page.getByRole("button", { name: "Restaurar", exact: true })).toBeVisible();
-    }
-  });
-}
-
-
-test("refresh de rename vence consulta anterior sem deixar pasta vazia carregando", async ({ page }) => {
-  let finishRename!: () => void;
-  let finishInitialFolder!: () => void;
-  const renameGate = new Promise<void>(resolve => { finishRename = resolve; });
-  const folderGate = new Promise<void>(resolve => { finishInitialFolder = resolve; });
-  let folderReads = 0;
-  const requests = await setup(page, {
-    beforeRename: () => renameGate,
-    beforeList: async url => { if (url.searchParams.get("folderId") === "3" && ++folderReads === 1) await folderGate; },
-  });
-  await openDocuments(page, true);
-  page.once("dialog", dialog => dialog.accept("Atualizado.json"));
-  await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
-  await page.getByRole("menuitem", { name: "Renomear", exact: true }).click();
-  await expect.poll(() => requests.some(request => request.method === "PATCH")).toBe(true);
-  await page.locator(".mm-docs-folder select").selectOption("3");
-  await page.getByRole("button", { name: "Aplicar", exact: true }).click();
-  await expect.poll(() => folderReads).toBe(1);
-  finishRename();
-  await expect.poll(() => folderReads).toBe(2);
-  await expect(page.getByText("Nenhum documento encontrado com os filtros atuais.", { exact: true })).toBeVisible();
-  finishInitialFolder();
-  await expect(page.locator(".mm-docs-table-skeleton")).toHaveCount(0);
-});
-
 test("mover para fora da pasta atual devolve foco ao breadcrumb persistente", async ({ page }) => {
   await setup(page); await openDocuments(page, true); await openRoot(page);
   await page.getByRole("button", { name: "Ações de config_kepler.json" }).click();
   await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Mover documento" });
-  await dialog.getByRole("combobox").selectOption("1");
-  await dialog.getByRole("button", { name: "Mover documento", exact: true }).click();
+  await chooseDestination(dialog, ["Mês de Setembro"]);
+  await dialog.getByRole("button", { name: "Mover", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Caminho da pasta" }).getByRole("button", { name: "Raiz", exact: true })).toBeFocused();
   await expect(page.getByText("Nenhum documento.", { exact: true })).toBeVisible();
@@ -931,4 +947,366 @@ test("ordenação: falha na troca mantém metadados anteriores e repetir não re
   await page.getByRole("button", { name: "Próxima página" }).click();
   await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(50).map(file => file.name));
   await expect(resultsStatus(page)).toHaveText("Exibindo 23/73.");
+});
+
+// Document-action dialogs use mocked HTTP state here. These tests exercise the
+// real built UI and native modal lifecycle in Chromium, Firefox and WebKit;
+// server authorization, duplicate validation and SQL are tested separately.
+for (const viewport of [{ width: 320, height: 720 }, { width: 390, height: 844 }, { width: 768, height: 1000 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+  test(`modais: centro exato do viewport em ${viewport.width}x${viewport.height}, sidebar e scroll`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await setup(page); await openDocuments(page);
+    const layouts = viewport.width >= 1440 ? ["expanded", "collapsed"] : ["expanded"];
+    for (const layout of layouts) {
+      if (layout === "collapsed") await page.locator(".mm-sidebar-toggle").click();
+      for (const action of ["Renomear", "Nova pasta", "Mover"] as const) {
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        let dialog: Locator;
+        if (action === "Nova pasta") {
+          await page.getByRole("button", { name: "Nova pasta", exact: true }).click();
+          dialog = page.getByRole("dialog", { name: "Nova pasta", exact: true });
+        } else ({ dialog } = await openFileAction(page, action));
+        await expectViewportCentered(page, dialog);
+        if (action === "Renomear") expect(await dialog.locator(".mm-docs-name-extension").evaluate(element => {
+          const range = document.createRange(); range.selectNodeContents(element); return range.getClientRects().length;
+        }), "fixed extension stays on one legible line").toBe(1);
+        for (const control of await dialog.locator("input, button").all()) {
+          if (!(await control.isVisible())) continue;
+          const box = (await control.boundingBox())!;
+          expect(box.x).toBeGreaterThanOrEqual(0);
+          expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+        }
+        await page.screenshot({ path: testInfo.outputPath(`modal-${action}-${layout}-${viewport.width}.png`), animations: "disabled" });
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+      }
+    }
+  });
+}
+
+for (const action of ["Renomear", "Nova pasta", "Mover"] as const) {
+  test(`modais: ${action} abre por Enter, prende Tab, fecha por Escape/Cancelar e restaura foco`, async ({ page }) => {
+    const requests = await setup(page); await openDocuments(page);
+    const trigger = action === "Nova pasta"
+      ? page.getByRole("button", { name: "Nova pasta", exact: true })
+      : page.getByRole("button", { name: "Ações de config_kepler.json", exact: true });
+    const name = action === "Renomear" ? "Renomear documento" : action === "Mover" ? "Mover documento" : action;
+    const dialog = page.getByRole("dialog", { name, exact: true });
+    const field = dialog.getByLabel(action === "Renomear" ? "Nome do documento" : action === "Mover" ? "Buscar pastas" : "Nome da pasta", { exact: true });
+    for (const close of ["Escape", "Cancelar"] as const) {
+      await trigger.focus(); await page.keyboard.press("Enter");
+      if (action !== "Nova pasta") {
+        await page.getByRole("menuitem", { name: action, exact: true }).focus();
+        await page.keyboard.press("Enter");
+      }
+      await expect(dialog).toBeVisible();
+      await expect(field).toBeFocused();
+      await expectFocusContained(page, dialog);
+      // Native top-layer inertness must reject attempts to focus the page.
+      await page.locator(".mm-docs-search input").evaluate(element => (element as HTMLInputElement).focus());
+      expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+      if (close === "Escape") await page.keyboard.press("Escape");
+      else await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+      await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
+    }
+    expect(requests.filter(request => request.method !== "GET")).toEqual([]);
+  });
+}
+
+for (const [fileName, basename, suffix] of [
+  ["config_kepler.json", "config_kepler", ".json"],
+  ["dados.final.GEOJSON", "dados.final", ".GEOJSON"],
+  ["LEIA-ME", "LEIA-ME", ""],
+  [".config", ".config", ""],
+  ["arquivo.", "arquivo.", ""],
+]) {
+  test(`renomear: basename selecionado e extensão imutável para ${fileName}`, async ({ page }) => {
+    const requests = await setup(page, { initialFiles: [{ ...files[0], name: fileName }] });
+    await openDocuments(page);
+    const { dialog } = await openFileAction(page, "Renomear", fileName);
+    const input = dialog.getByRole("textbox", { name: "Nome do documento", exact: true });
+    await expect(input).toHaveValue(basename); await expect(input).toBeFocused();
+    expect(await input.evaluate(element => ({ start: (element as HTMLInputElement).selectionStart, end: (element as HTMLInputElement).selectionEnd }))).toEqual({ start: 0, end: basename.length });
+    await expect(dialog.getByRole("textbox")).toHaveCount(1);
+    await expect(dialog.locator(".mm-docs-name-extension input, .mm-docs-name-extension [contenteditable]" )).toHaveCount(0);
+    if (suffix) {
+      await expect(dialog.getByText(suffix, { exact: true })).toBeVisible();
+      expect(await dialog.locator(".mm-docs-name-extension").evaluate(element => {
+        const range = document.createRange(); range.selectNodeContents(element); return range.getClientRects().length;
+      })).toBe(1);
+    } else await expect(dialog.getByText("Sem extensão", { exact: true })).toBeVisible();
+    await input.fill("   "); await input.press("Enter");
+    await expect(dialog.getByRole("alert")).toContainText("Informe um nome");
+    expect(requests.filter(request => request.method === "PATCH")).toHaveLength(0);
+    await input.fill("  Documento revisado  "); await input.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator(".documents-file-name")).toHaveText(`Documento revisado${suffix}`);
+    expect(requests.filter(request => request.method === "PATCH").map(request => JSON.parse(request.body!))).toEqual([{ name: `Documento revisado${suffix}` }]);
+    const patchIndex = requests.findIndex(request => request.method === "PATCH");
+    expect(requests.slice(patchIndex + 1).some(request => request.method === "GET" && new URL(request.url).pathname === "/api/organizations/1/files")).toBe(true);
+    await expect(page.getByRole("button", { name: `Ações de Documento revisado${suffix}`, exact: true })).toBeFocused();
+  });
+}
+
+for (const parent of ["root", "nested", "nested-all-files"] as const) {
+  test(`nova pasta: Enter cria no destino navegado ${parent}, atualiza cards e preserva contexto`, async ({ page }) => {
+    const requests = await setup(page); await openDocuments(page);
+    if (parent !== "root") await page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" }).locator(".mm-docs-folder-select").click();
+    if (parent === "nested-all-files") await showAllDocuments(page);
+    const breadcrumb = page.getByRole("navigation", { name: "Caminho da pasta" });
+    const originalBreadcrumb = await breadcrumb.getByRole("button").allTextContents();
+    const trigger = page.getByRole("button", { name: "Nova pasta", exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Nova pasta", exact: true });
+    const input = dialog.getByRole("textbox", { name: "Nome da pasta", exact: true });
+    await expect(input).toBeFocused(); await expect(input).toHaveValue("");
+    await input.press("Enter");
+    await expect(dialog.getByRole("alert")).toContainText("Informe um nome");
+    expect(requests.filter(request => request.method === "POST")).toHaveLength(0);
+    await input.fill("  Nova entrega  "); await input.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    expect(requests.filter(request => request.method === "POST").map(request => JSON.parse(request.body!))).toEqual([{ name: "Nova entrega", parentId: parent === "root" ? null : "1" }]);
+    await expect(page.locator(".mm-docs-folder-card strong").filter({ hasText: "Nova entrega" })).toBeVisible();
+    await expect(breadcrumb.getByRole("button")).toHaveText(originalBreadcrumb);
+    await expect(trigger).toBeFocused();
+    if (parent === "nested-all-files") {
+      await expect(page.getByRole("button", { name: "Remover filtro Pasta: Todos os documentos", exact: true })).toBeVisible();
+      await expect(page.locator(".documents-file-name")).toHaveCount(2);
+    }
+    const postIndex = requests.findIndex(request => request.method === "POST");
+    expect(requests.slice(postIndex + 1).some(request => request.method === "GET" && new URL(request.url).pathname.endsWith("/document-folders"))).toBe(true);
+  });
+}
+
+for (const kind of ["rename", "create", "moveFile", "moveFolder"] as const) {
+  test(`modais: ${kind} bloqueia envios duplicados, mantém erro e permite retry`, async ({ page }) => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let first = true;
+    const requests = await setup(page, {
+      beforeMutation: async current => { if (current === kind && first) { first = false; await gate; } },
+      failMutation: (current, attempt) => current === kind && attempt === 1,
+    });
+    await openDocuments(page, true);
+    let dialog: Locator;
+    let submitName: string;
+    if (kind === "create") {
+      await page.getByRole("button", { name: "Nova pasta", exact: true }).click();
+      dialog = page.getByRole("dialog", { name: "Nova pasta", exact: true });
+      await dialog.getByRole("textbox", { name: "Nome da pasta", exact: true }).fill("Entrega nova");
+      submitName = "Criar pasta";
+    } else if (kind === "moveFolder") {
+      await page.getByRole("button", { name: "Ações da pasta Mês de Setembro", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Mover pasta", exact: true }).click();
+      dialog = page.getByRole("dialog", { name: "Mover pasta", exact: true });
+      await chooseDestination(dialog, ["QA_VISUAL"]);
+      submitName = "Mover";
+    } else {
+      ({ dialog } = await openFileAction(page, kind === "rename" ? "Renomear" : "Mover"));
+      if (kind === "rename") await dialog.getByRole("textbox", { name: "Nome do documento", exact: true }).fill("Revisado");
+      else await chooseDestination(dialog, ["Mês de Setembro"]);
+      submitName = kind === "rename" ? "Renomear" : "Mover";
+    }
+    const mutations = () => requests.filter(request => ["POST", "PATCH"].includes(request.method));
+    await dialog.getByRole("button", { name: submitName, exact: true }).click();
+    await expect.poll(() => mutations().length).toBe(1);
+    await expect(dialog.locator('button[type="submit"]')).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Cancelar", exact: true })).toBeDisabled();
+    await page.keyboard.press("Enter"); await page.keyboard.press("Enter"); await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible(); expect(mutations()).toHaveLength(1);
+    release();
+    await expect(dialog.getByRole("alert")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: submitName, exact: true })).toBeEnabled();
+    if (kind === "rename") await expect(dialog.getByRole("textbox", { name: "Nome do documento", exact: true })).toHaveValue("Revisado");
+    if (kind === "create") await expect(dialog.getByRole("textbox", { name: "Nome da pasta", exact: true })).toHaveValue("Entrega nova");
+    await dialog.getByRole("button", { name: submitName, exact: true }).click();
+    await expect(dialog).toHaveCount(0); expect(mutations()).toHaveLength(2);
+    expect(mutations()[0].body).toBe(mutations()[1].body);
+    if (kind === "rename") await expect(page.locator(".documents-file-name").filter({ hasText: "Revisado.json" })).toBeVisible();
+    if (kind === "create") await expect(page.locator(".mm-docs-folder-card strong").filter({ hasText: "Entrega nova" })).toBeVisible();
+    if (kind === "moveFile") await expect(page.locator(".mm-docs-table tbody tr").filter({ hasText: "config_kepler.json" }).locator(".documents-file-origin")).toHaveText("Pasta: Raiz / Mês de Setembro");
+    if (kind === "moveFolder") await expect(page.locator(".mm-docs-folder-card strong")).toHaveText(["QA_VISUAL"]);
+  });
+}
+
+// A list request is deliberately in flight before opening the native dialog.
+// This keeps the existing stale-refresh regression without bypassing inertness.
+test("renomear: refresh após PATCH vence leitura anterior sem duplicar ou reverter nome", async ({ page }) => {
+  let releaseList!: () => void;
+  const gate = new Promise<void>(resolve => { releaseList = resolve; });
+  let holdNext = false;
+  const requests = await setup(page, { beforeList: async () => { if (holdNext) { holdNext = false; await gate; } } });
+  await openDocuments(page, true);
+  holdNext = true;
+  await sortButton(page, "name").click();
+  await expect.poll(() => fileQueries(requests).at(-1)!.searchParams.get("sort")).toBe("name_asc");
+  const { dialog } = await openFileAction(page, "Renomear");
+  await dialog.getByRole("textbox", { name: "Nome do documento", exact: true }).fill("Atualizado");
+  await dialog.getByRole("button", { name: "Renomear", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".documents-file-name").filter({ hasText: "Atualizado.json" })).toBeVisible();
+  const staleResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/organizations/1/files" && new URL(response.url()).searchParams.get("sort") === "name_asc");
+  releaseList(); await staleResponse;
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(page.locator(".documents-file-name").filter({ hasText: "Atualizado.json" })).toBeVisible();
+  await expect(page.locator(".mm-docs-table-skeleton")).toHaveCount(0);
+  expect(requests.filter(request => request.method === "PATCH")).toHaveLength(1);
+});
+
+test("mover: tabs mostram somente pastas reais, busca profunda, breadcrumb e destino corrente", async ({ page }) => {
+  await setup(page); await openDocuments(page);
+  const { dialog } = await openFileAction(page, "Mover");
+  await expect(dialog.getByRole("tab")).toHaveText(["Sugestões", "Recentes", "Todas as pastas"]);
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeDisabled();
+  for (const name of ["Sugestões", "Recentes", "Todas as pastas"]) {
+    await dialog.getByRole("tab", { name, exact: true }).click();
+    await expect(dialog.getByRole("tab", { name, exact: true })).toHaveAttribute("aria-selected", "true");
+    const rows = await dialog.locator(".mm-docs-destination-row").allTextContents();
+    for (const row of rows) expect(folders.some(folder => row.includes(folder.name)), `real fixture folder: ${row}`).toBe(true);
+    await expect(dialog.locator(".mm-docs-destination-row").filter({ hasText: "Todos os documentos" })).toHaveCount(0);
+  }
+  const nav = dialog.getByRole("navigation", { name: "Caminho do destino" });
+  await expect(nav.getByRole("button")).toHaveText(["Raiz"]);
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "Mês de Setembro", exact: true }).click();
+  await expect(nav.getByRole("button")).toHaveText(["Raiz", "Mês de Setembro"]);
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Relatórios", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "QA_VISUAL", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeEnabled();
+  await nav.getByRole("button", { name: "Raiz", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeDisabled();
+  const search = dialog.getByRole("searchbox", { name: "Buscar pastas", exact: true });
+  await search.fill("2026");
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveCount(1);
+  await dialog.getByRole("button", { name: "2026", exact: true }).click();
+  await expect(nav.getByRole("button")).toHaveText(["Raiz", "Mês de Setembro", "Relatórios", "2026"]);
+  await expect(dialog).toContainText("Destino:");
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeEnabled();
+  await search.fill("pasta que não existe");
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+});
+
+test("mover pasta: não oferece a própria pasta ou descendentes, navega pelo pai sem permitir no-op", async ({ page }) => {
+  const requests = await setup(page); await openDocuments(page);
+  await page.getByRole("button", { name: "Ações da pasta Mês de Setembro", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Mover pasta", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Mover pasta", exact: true });
+  await expectViewportCentered(page, dialog);
+  await expect(dialog.getByRole("searchbox", { name: "Buscar pastas", exact: true })).toBeFocused();
+  await expectFocusContained(page, dialog);
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeDisabled();
+  for (const tab of ["Sugestões", "Recentes", "Todas as pastas"]) {
+    await dialog.getByRole("tab", { name: tab, exact: true }).click();
+    for (const invalid of ["Mês de Setembro", "Relatórios", "2026"]) await expect(dialog.locator(".mm-docs-destination-row").filter({ hasText: invalid })).toHaveCount(0);
+  }
+  const search = dialog.getByRole("searchbox", { name: "Buscar pastas", exact: true });
+  await search.fill("Relatórios");
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveCount(0);
+  await search.fill("");
+  await chooseDestination(dialog, ["QA_VISUAL"]);
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Ações da pasta Mês de Setembro", exact: true })).toBeFocused();
+  expect(requests.filter(request => request.method !== "GET")).toEqual([]);
+});
+
+test("mover documento de pasta aninhada para Raiz envia null e atualiza origem", async ({ page }) => {
+  const requests = await setup(page); await openDocuments(page, true);
+  const { dialog } = await openFileAction(page, "Mover", "Relatório de mercado e oportunidades.pdf");
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeDisabled();
+  await chooseDestination(dialog, []);
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Mover", exact: true }).focus(); await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  expect(requests.filter(request => request.method === "PATCH").map(request => JSON.parse(request.body!))).toEqual([{ folderId: null }]);
+  await expect(page.locator(".mm-docs-table tbody tr").filter({ hasText: "Relatório de mercado e oportunidades.pdf" }).locator(".documents-file-origin")).toHaveText("Pasta: Raiz");
+});
+
+test("nova pasta: conflito mantém texto e correção permite criar sem duplicar cards", async ({ page }) => {
+  await setup(page); await openDocuments(page);
+  await page.getByRole("button", { name: "Nova pasta", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Nova pasta", exact: true });
+  const input = dialog.getByRole("textbox", { name: "Nome da pasta", exact: true });
+  await input.fill("QA_VISUAL"); await input.press("Enter");
+  await expect(dialog.getByRole("alert")).toContainText("Já existe uma pasta com esse nome");
+  await expect(input).toHaveValue("QA_VISUAL");
+  await input.fill("QA_NOVA"); await input.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".mm-docs-folder-card strong")).toHaveCount(3);
+  await expect(page.locator(".mm-docs-folder-card strong").filter({ hasText: "QA_VISUAL" })).toHaveCount(1);
+  await expect(page.locator(".mm-docs-folder-card strong").filter({ hasText: "QA_NOVA" })).toHaveCount(1);
+});
+
+test("renomear: nome inalterado fecha sem PATCH; caracteres inválidos mantêm diálogo e valor", async ({ page }) => {
+  const requests = await setup(page); await openDocuments(page);
+  const opened = await openFileAction(page, "Renomear");
+  let dialog = opened.dialog;
+  const trigger = opened.trigger;
+  await dialog.getByRole("textbox", { name: "Nome do documento", exact: true }).press("Enter");
+  await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
+  ({ dialog } = await openFileAction(page, "Renomear"));
+  const input = dialog.getByRole("textbox", { name: "Nome do documento", exact: true });
+  await input.fill("diretório/nome"); await input.press("Enter");
+  await expect(dialog.getByRole("alert")).toBeVisible(); await expect(input).toHaveValue("diretório/nome");
+  await expect(dialog.getByText(".json", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  expect(requests.filter(request => request.method !== "GET")).toEqual([]);
+});
+
+test("mover pasta aninhada para Raiz envia parentId null e mantém pasta navegada", async ({ page }) => {
+  const requests = await setup(page); await openDocuments(page);
+  await page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" }).locator(".mm-docs-folder-select").click();
+  await page.getByRole("button", { name: "Ações da pasta Relatórios", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Mover pasta", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Mover pasta", exact: true });
+  await chooseDestination(dialog, []);
+  await dialog.getByRole("button", { name: "Mover", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(requests.filter(request => request.method === "PATCH").map(request => JSON.parse(request.body!))).toEqual([{ parentId: null }]);
+  const breadcrumb = page.getByRole("navigation", { name: "Caminho da pasta" });
+  await expect(breadcrumb.getByRole("button")).toHaveText(["Raiz", "Mês de Setembro"]);
+  await expect(breadcrumb.getByRole("button", { name: "Mês de Setembro", exact: true })).toBeFocused();
+  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(0);
+  await breadcrumb.getByRole("button", { name: "Raiz", exact: true }).click();
+  await expect(page.locator(".mm-docs-folder-card strong").filter({ hasText: "Relatórios" })).toBeVisible();
+});
+
+test("mover: Recentes é derivado de um destino usado, nunca inclui IDs desconhecidos", async ({ page }) => {
+  await setup(page); await openDocuments(page, true);
+  let { dialog } = await openFileAction(page, "Mover");
+  await dialog.getByRole("tab", { name: "Recentes", exact: true }).click();
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveCount(0);
+  await chooseDestination(dialog, ["QA_VISUAL"]);
+  await dialog.getByRole("button", { name: "Mover", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.evaluate(() => {
+    const key = "maono:document-destinations:1:1";
+    const used = JSON.parse(sessionStorage.getItem(key) || "[]");
+    sessionStorage.setItem(key, JSON.stringify(["999999", ...used]));
+  });
+  ({ dialog } = await openFileAction(page, "Mover", "Relatório de mercado e oportunidades.pdf"));
+  await dialog.getByRole("tab", { name: "Recentes", exact: true }).click();
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveText(["QA_VISUAL"]);
+  await dialog.getByRole("button", { name: "QA_VISUAL", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeEnabled();
+  await page.keyboard.press("Escape");
+});
+
+test("mover: tabs por setas/Home/End e busca sem acentos preservam navegação acessível", async ({ page }) => {
+  await setup(page); await openDocuments(page);
+  const { dialog } = await openFileAction(page, "Mover");
+  await dialog.getByRole("tab", { name: "Sugestões", exact: true }).focus();
+  for (const [key, selected] of [["ArrowRight", "Recentes"], ["End", "Todas as pastas"], ["Home", "Sugestões"], ["ArrowLeft", "Todas as pastas"]]) {
+    await page.keyboard.press(key);
+    await expect(dialog.getByRole("tab", { name: selected, exact: true })).toBeFocused();
+    await expect(dialog.getByRole("tab", { name: selected, exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.locator('[role="tab"][tabindex="0"]')).toHaveCount(1);
+  }
+  await dialog.getByRole("searchbox", { name: "Buscar pastas", exact: true }).fill("relatorios");
+  await expect(dialog.locator(".mm-docs-destination-row")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Relatórios", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Mover", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
 });
