@@ -551,6 +551,20 @@ export function moveOrganizationFileToFolder(
   );
 }
 
+export function renameOrganizationFile(
+  organizationId: number | string,
+  fileId: number | string,
+  name: string,
+) {
+  return requestJson<{ ok: boolean; file: OrganizationFile }>(
+    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    },
+  );
+}
+
 export function uploadOrganizationFile(
   organizationId: number | string,
   formData: FormData,

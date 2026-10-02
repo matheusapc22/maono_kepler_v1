@@ -199,6 +199,7 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
             onClick={() => {
               clearScheduledFocus();
               setOpen(false);
+              trigger.current?.focus({ preventScroll: true });
               action.onSelect();
             }}
           >

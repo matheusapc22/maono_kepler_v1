@@ -87,11 +87,11 @@
 .mm-docs .mm-docs-table { width: 100%; min-width: 900px; table-layout: fixed; border-collapse: collapse; text-align: left; }
 .mm-docs .mm-docs-table th { text-transform: uppercase; font-size: 10px; letter-spacing: .04em; font-weight: 650; color: #b8c1cc; background: #0b1016; padding: 11px 16px; border-bottom: 1px solid var(--mm-border); }
 .mm-docs .mm-docs-table td { padding: 14px 16px; border-bottom: 1px solid var(--mm-border); font-size: 12px; color: var(--mm-text); overflow-wrap: anywhere; }
-.mm-docs .mm-docs-table th:first-child { width: 40%; }
+.mm-docs .mm-docs-table th:first-child { width: 50%; }
 .mm-docs .mm-docs-table th:nth-child(2) { width: 9%; }
 .mm-docs .mm-docs-table th:nth-child(3) { width: 10%; }
 .mm-docs .mm-docs-table th:nth-child(4) { width: 16%; }
-.mm-docs .mm-docs-table th:last-child { width: 25%; }
+.mm-docs .mm-docs-table th:last-child { width: 15%; }
 .mm-docs .mm-docs-table tr:last-child td { border-bottom: 0; }
 .mm-docs .mm-docs-table tbody tr:hover { background: rgba(255,255,255,.025); }
 .mm-docs .mm-docs-file-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -226,3 +226,8 @@
   .mm-docs-dialog .mm-docs-dialog-actions { flex-direction: column-reverse; }
   .mm-docs-dialog .mm-docs-dialog-actions .mm-docs-button { width: 100%; }
 }
+
+.mm-docs-file-move-dialog { margin: auto; max-height: calc(100dvh - 40px); overflow-y: auto; }
+.mm-docs-file-move-dialog:not([open]) { display: none; }
+.mm-docs-file-move-dialog::backdrop { background: rgba(0,0,0,.68); backdrop-filter: blur(2px); }
+.mm-docs-file-move-dialog form { display: grid; gap: 18px; margin: 0; }

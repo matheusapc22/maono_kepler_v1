@@ -168,6 +168,36 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
     message: "O download do documento foi cancelado.",
     severity: "info",
   },
+  DOCUMENT_FILE_NAME_REQUIRED: {
+    title: "Informe o nome do arquivo",
+    message: "Digite um nome para o arquivo antes de salvar.",
+    severity: "warning",
+  },
+  DOCUMENT_FILE_NAME_INVALID: {
+    title: "Nome de arquivo inválido",
+    message: "Use um nome sem barras, caracteres de controle ou símbolos reservados.",
+    severity: "warning",
+  },
+  DOCUMENT_FILE_NAME_TOO_LONG: {
+    title: "Nome de arquivo muito longo",
+    message: "Use até 160 caracteres, incluindo a extensão do arquivo.",
+    severity: "warning",
+  },
+  DOCUMENT_FILE_EXTENSION_IMMUTABLE: {
+    title: "Mantenha a extensão do arquivo",
+    message: "Altere apenas o nome e mantenha a extensão original, como .pdf ou .xlsx.",
+    severity: "warning",
+  },
+  DOCUMENT_FILE_PATCH_AMBIGUOUS: {
+    title: "Não foi possível atualizar o arquivo",
+    message: "Renomeie ou mova o arquivo em operações separadas.",
+    severity: "warning",
+  },
+  DOCUMENT_FILE_PATCH_INVALID: {
+    title: "Não foi possível atualizar o arquivo",
+    message: "Confira o nome ou a pasta de destino antes de tentar novamente.",
+    severity: "warning",
+  },
   PERFORMANCE_PAYLOAD_TOO_LARGE: {
     title: "Limite excedido",
     message: "Os dados enviados excedem o limite permitido para esta operação.",

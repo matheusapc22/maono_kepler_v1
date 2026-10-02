@@ -52,13 +52,13 @@ test('cursor, permission and purge contracts remain in the real component', () =
   assert.ok(!component.includes('type="checkbox"'));
 });
 test('virtual folders do not receive action menus and lineage stays explicit', () => {
-  const first = component.slice(component.indexOf('<nav className="mm-docs-folder-grid"'), component.indexOf('{foldersLoading ?'));
+  const first = component.slice(component.indexOf('<nav className="mm-docs-folder-grid documents-folder-tree"'), component.indexOf('{foldersLoading ?'));
   assert.ok(!first.includes('DocumentActionMenu'));
   assert.match(component, /const folderPath = \(id: string\) =>/);
   assert.match(component, /documentFolderBreadcrumb\(folders,\s*id\)/);
   assert.ok(component.includes('aria-pressed='));
   assert.ok(component.includes('{ label: "Mover pasta"'));
-  assert.ok(component.includes('aria-current={appliedFilters.folderId === "" ? "page" : undefined}'));
+  assert.ok(component.includes('appliedFilters.folderId === "" ? <button type="button" aria-current="page"'));
 });
 test('menu supports portal, keyboard, focus return and outside dismissal', () => {
   for (const token of ['createPortal','aria-haspopup="menu"','role="menuitem"','ArrowDown','ArrowUp','Escape','Tab','Home','End','pointerdown']) assert.ok(menu.includes(token), token);
@@ -70,4 +70,16 @@ test('transfer file owns only transfer/feedback presentation', () => {
   assert.ok(!transfer.includes('.documents-filter'));
   assert.ok(!transfer.includes('.documents-table'));
   for (const token of ['mm-transfer-panel','mm-document-feedback','mm-transfer-progress','prefers-reduced-motion']) assert.ok(transfer.includes(token));
+});
+
+
+test('all documents is independent from root and file actions live only in the menu', () => {
+  assert.ok(component.includes('const directFolders = (appliedFilters.folderId ? folders : [])'));
+  const actions = component.slice(component.indexOf('function ActiveDocumentActions('), component.indexOf('function DocumentFileMoveDialog('));
+  assert.equal((actions.match(/<DocumentActionMenu/g) || []).length, 1);
+  for (const label of ['Renomear', 'Baixar', 'Mover', 'Excluir']) assert.ok(actions.includes(`label: "${label}"`));
+  assert.ok(!actions.includes('<select'));
+  assert.ok(!actions.includes('<button'));
+  assert.ok(component.includes('renameOrganizationFile(organizationId, file.id, name.trim())'));
+  assert.ok(component.includes('dialog?.showModal()'));
 });

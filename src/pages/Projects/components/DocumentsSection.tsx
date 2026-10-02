@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
@@ -11,6 +11,7 @@ import {
   listOrganizationFiles,
   moveOrganizationFileToFolder,
   purgeOrganizationFilePermanently,
+  renameOrganizationFile,
   restoreOrganizationFile,
   updateOrganizationDocumentFolder,
   type OrganizationDocumentFolder,
@@ -408,12 +409,22 @@ function OrganizationDocuments({
     folder: OrganizationDocumentFolder;
     targetParentId: string;
   } | null>(null);
+  const [fileMoveDraft, setFileMoveDraft] = useState<{
+    file: OrganizationFile;
+    targetFolderId: string;
+  } | null>(null);
   const [filterDraft, setFilterDraft] = useState<DocumentFilterState>({
     ...DEFAULT_DOCUMENT_FILTERS,
   });
   const [appliedFilters, setAppliedFilters] = useState<DocumentFilterState>({
     ...DEFAULT_DOCUMENT_FILTERS,
   });
+  const documentQueryRef = useRef({ filters: appliedFilters, state: documentState });
+  useLayoutEffect(() => {
+    // Mutations can finish after navigation. Their refresh must use the current
+    // view rather than the query captured when the action was started.
+    documentQueryRef.current = { filters: appliedFilters, state: documentState };
+  }, [appliedFilters, documentState]);
   const [facets, setFacets] = useState<OrganizationFileListFacets>(
     EMPTY_DOCUMENT_FACETS,
   );
@@ -738,7 +749,7 @@ function OrganizationDocuments({
     background = false,
     append = false,
     cursor = null,
-    filters = appliedFilters,
+    filters = documentQueryRef.current.filters,
   }: {
     background?: boolean;
     append?: boolean;
@@ -768,7 +779,7 @@ function OrganizationDocuments({
     try {
       const response = await listOrganizationFiles(
         organizationId,
-        toFileListQuery(filters, cursor, documentState),
+        toFileListQuery(filters, cursor, documentQueryRef.current.state),
       );
       if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
 
@@ -789,12 +800,10 @@ function OrganizationDocuments({
         ),
       );
     } finally {
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
-      if (append) {
+      if (mountedRef.current && sequence === loadSequenceRef.current) {
+        // The winning request also settles any loading mode it superseded.
         setLoadingMore(false);
-      } else if (showAsRefresh) {
         setRefreshing(false);
-      } else {
         setInitialLoading(false);
       }
     }
@@ -1212,11 +1221,39 @@ function OrganizationDocuments({
     }
   }
 
+  async function handleRenameFile(file: OrganizationFile) {
+    if (!organizationId || !canManage || transferBusy) return;
+    const name = window.prompt("Novo nome do documento (mantenha a extensão):", file.name);
+    if (!name?.trim() || name.trim() === file.name) return;
+
+    setBusyFileId(file.id);
+    setError(null);
+    showFeedback("loading", "Renomeando documento...");
+    try {
+      await renameOrganizationFile(organizationId, file.id, name.trim());
+      if (!mountedRef.current) return;
+      await loadFiles({ background: true });
+      if (!mountedRef.current) return;
+      showFeedback("success", "Documento renomeado.", 3000);
+    } catch (requestError) {
+      setFeedback(null);
+      setError(formatRequestError(requestError, "Não foi possível renomear o documento."));
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
+  function beginMoveFile(file: OrganizationFile) {
+    if (!canManage || transferBusy) return;
+    setError(null);
+    setFileMoveDraft({ file, targetFolderId: file.folderId == null ? "root" : String(file.folderId) });
+  }
+
   async function handleMoveFile(
     file: OrganizationFile,
     targetFolderId: string,
   ) {
-    if (!organizationId || !canManage || !targetFolderId) return;
+    if (!organizationId || !canManage || transferBusy || !targetFolderId) return;
     const folderId = targetFolderId === "root" ? null : targetFolderId;
 
     setBusyFileId(file.id);
@@ -1230,6 +1267,7 @@ function OrganizationDocuments({
         loadFolders(),
       ]);
       if (!mountedRef.current) return;
+      setFileMoveDraft(null);
       showFeedback("success", "Documento movido.", 3000);
     } catch (requestError) {
       setFeedback(null);
@@ -1286,7 +1324,7 @@ function OrganizationDocuments({
     appliedFilters.folderId && appliedFilters.folderId !== "root"
       ? String(appliedFilters.folderId)
       : null;
-  const directFolders = folders
+  const directFolders = (appliedFilters.folderId ? folders : [])
     .filter((folder) =>
       currentFolderId
         ? String(folder.parentId ?? "") === currentFolderId
@@ -1334,7 +1372,12 @@ function OrganizationDocuments({
 
       {documentState === "active" ? <section className="mm-docs-panel" aria-labelledby="mm-docs-folders-title">
         <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="folder" /><div><h3 id="mm-docs-folders-title">Pastas</h3><p>Organize seus documentos em pastas para facilitar o acesso e a gestão.</p></div></div>{canManage ? <button type="button" className="mm-docs-button is-outlined" disabled={busyFolderId !== null} onClick={() => void handleCreateFolder()}><DocumentIcon name="plus" />Nova pasta</button> : null}</div>
-        <nav className="mm-docs-breadcrumb documents-folder-breadcrumb" aria-label="Caminho da pasta"><button type="button" aria-current={appliedFilters.folderId === "" ? "page" : undefined} onClick={() => selectFolder("")}>Todos</button><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>{breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}</nav>
+        <nav className="mm-docs-breadcrumb documents-folder-breadcrumb" aria-label="Caminho da pasta">
+          {appliedFilters.folderId === "" ? <button type="button" aria-current="page" onClick={() => selectFolder("")}>Todos</button> : <>
+            <button type="button" aria-current={appliedFilters.folderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>
+            {breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}
+          </>}
+        </nav>
         <nav className="mm-docs-folder-grid documents-folder-tree" aria-label={insideFolder ? "Subpastas da pasta atual" : "Pastas de documentos"}>
           {!insideFolder ? <>
             <article className={`mm-docs-folder-card ${appliedFilters.folderId === "" ? "is-active" : ""}`}><button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === ""} onClick={() => selectFolder("")}><DocumentIcon name="folder" /><span><strong>Todos os documentos</strong><span>Todas as pastas</span></span></button></article>
@@ -1351,9 +1394,21 @@ function OrganizationDocuments({
               ]} /> : null}
             </article>;
           })}
-          {!foldersLoading && insideFolder && directFolders.length === 0 ? <p className="mm-docs-folder-empty">Esta pasta não possui subpastas.</p> : null}
+          {!foldersLoading && appliedFilters.folderId !== "" && directFolders.length === 0 ? <p className="mm-docs-folder-empty">Esta pasta não possui subpastas.</p> : null}
         </nav>
       </section> : null}
+
+      {fileMoveDraft ? <DocumentFileMoveDialog
+        file={fileMoveDraft.file}
+        targetFolderId={fileMoveDraft.targetFolderId}
+        folderTree={folderTree}
+        folderPath={folderPath}
+        busy={busyFileId !== null}
+        error={error}
+        onChange={targetFolderId => setFileMoveDraft(current => current ? { ...current, targetFolderId } : current)}
+        onClose={() => setFileMoveDraft(null)}
+        onSubmit={() => void handleMoveFile(fileMoveDraft.file, fileMoveDraft.targetFolderId)}
+      /> : null}
 
       {folderMoveDraft ? <div className="mm-docs-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && busyFolderId === null) setFolderMoveDraft(null); }}>
         <section className="mm-docs-dialog" role="dialog" aria-modal="true" aria-labelledby="mm-docs-move-folder-title" onKeyDown={event => { if (event.key === "Escape" && busyFolderId === null) setFolderMoveDraft(null); }}>
@@ -1395,9 +1450,8 @@ function OrganizationDocuments({
         canManage={canManage}
         canDownload={canDownload}
         canDelete={canDelete}
-        folderTree={folderTree}
-        folderPath={folderPath}
-        onMove={handleMoveFile}
+        onRename={handleRenameFile}
+        onMove={beginMoveFile}
         onDownload={handleDownload}
         onDelete={handleDelete}
         onLoadMore={loadMoreDocuments}
@@ -1435,9 +1489,8 @@ type ActiveDocumentsResultsProps = {
   canManage: boolean;
   canDownload: boolean;
   canDelete: boolean;
-  folderTree: DocumentFolderTreeEntry[];
-  folderPath: (id: string) => string;
-  onMove: (file: OrganizationFile, targetFolderId: string) => Promise<void>;
+  onRename: (file: OrganizationFile) => Promise<void>;
+  onMove: (file: OrganizationFile) => void;
   onDownload: (file: OrganizationFile) => Promise<void>;
   onDelete: (file: OrganizationFile) => Promise<void>;
   onLoadMore: () => void;
@@ -1459,36 +1512,63 @@ function DocumentFileIdentity({ file }: { file: OrganizationFile }) {
 }
 
 function ActiveDocumentActions({
-  file,
-  busy,
-  transferBusy,
-  canManage,
-  canDownload,
-  canDelete,
-  folderTree,
-  folderPath,
-  onMove,
-  onDownload,
-  onDelete,
-}: {
+  file, busy, transferBusy, canManage, canDownload, canDelete, onRename, onMove, onDownload, onDelete,
+}: Pick<ActiveDocumentsResultsProps, "transferBusy" | "canManage" | "canDownload" | "canDelete" | "onRename" | "onMove" | "onDownload" | "onDelete"> & {
   file: OrganizationFile;
   busy: boolean;
-  transferBusy: boolean;
-  canManage: boolean;
-  canDownload: boolean;
-  canDelete: boolean;
-  folderTree: DocumentFolderTreeEntry[];
-  folderPath: (id: string) => string;
-  onMove: (file: OrganizationFile, targetFolderId: string) => Promise<void>;
-  onDownload: (file: OrganizationFile) => Promise<void>;
-  onDelete: (file: OrganizationFile) => Promise<void>;
 }) {
   return <div className="mm-docs-row-actions">
-    {canManage ? <span className="mm-docs-move-control"><DocumentIcon name="folder" /><select className="mm-docs-move" value="" disabled={busy || transferBusy} aria-label={`Mover ${file.name} para pasta`} onChange={event => { const target = event.target.value; if (target) void onMove(file, target); }}><option value="">Mover para...</option><option value="root">Raiz</option>{folderTree.map(({ folder }) => <option key={String(folder.id)} value={String(folder.id)} disabled={String(file.folderId) === String(folder.id)}>{folderPath(String(folder.id))}</option>)}</select><DocumentIcon name="chevron" /></span> : null}
-    {canDownload ? <button type="button" className="mm-docs-button" disabled={busy || transferBusy} onClick={() => void onDownload(file)}><DocumentIcon name="download" />{busy ? "Processando..." : "Baixar"}</button> : null}
-    {canDelete ? <DocumentActionMenu label={`Ações de ${file.name}`} disabled={busy || transferBusy} actions={[{ label: "Excluir", danger: true, onSelect: () => void onDelete(file) }]} /> : null}
+    <DocumentActionMenu label={`Ações de ${file.name}`} disabled={busy || transferBusy} actions={[
+      ...(canManage ? [{ label: "Renomear", onSelect: () => void onRename(file) }] : []),
+      ...(canDownload ? [{ label: "Baixar", onSelect: () => void onDownload(file) }] : []),
+      ...(canManage ? [{ label: "Mover", onSelect: () => onMove(file) }] : []),
+      ...(canDelete ? [{ label: "Excluir", danger: true, onSelect: () => void onDelete(file) }] : []),
+    ]} />
     {!canDownload && !canDelete && !canManage ? "—" : null}
   </div>;
+}
+
+function DocumentFileMoveDialog({
+  file, targetFolderId, folderTree, folderPath, busy, error, onChange, onClose, onSubmit,
+}: {
+  file: OrganizationFile;
+  targetFolderId: string;
+  folderTree: DocumentFolderTreeEntry[];
+  folderPath: (id: string) => string;
+  busy: boolean;
+  error: string | null;
+  onChange: (targetFolderId: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    dialog?.showModal();
+    dialog?.querySelector<HTMLSelectElement>("select")?.focus({ preventScroll: true });
+    return () => {
+      dialog?.close();
+      const focusTarget = previousFocus?.isConnected
+        ? previousFocus
+        : document.querySelector<HTMLButtonElement>('.mm-docs-breadcrumb button[aria-current="page"]');
+      focusTarget?.focus({ preventScroll: true });
+    };
+  }, []);
+
+  return <dialog ref={dialogRef} className="mm-docs-dialog mm-docs-file-move-dialog" aria-labelledby="mm-docs-move-file-title"
+    onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}
+    onClick={event => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (!busy && event.target === event.currentTarget && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) onClose();
+    }}>
+    <form onSubmit={event => { event.preventDefault(); if (!busy) onSubmit(); }}>
+      <div className="mm-docs-dialog-header"><div><h3 id="mm-docs-move-file-title">Mover documento</h3><p>Escolha a pasta de destino para “{file.name}”.</p></div><button type="button" className="mm-docs-dialog-close" aria-label="Fechar" disabled={busy} onClick={onClose}>×</button></div>
+      <label className="mm-docs-field"><span>Pasta de destino</span><select autoFocus disabled={busy} value={targetFolderId} onChange={event => onChange(event.target.value)}><option value="root">Raiz</option>{folderTree.map(({ folder }) => <option key={String(folder.id)} value={String(folder.id)}>{folderPath(String(folder.id))}</option>)}</select></label>
+      {error ? <p className="mm-docs-error" role="alert">{error}</p> : null}
+      <div className="mm-docs-dialog-actions"><button type="button" className="mm-docs-button" disabled={busy} onClick={onClose}>Cancelar</button><button type="submit" className="mm-docs-button is-primary" disabled={busy || targetFolderId === (file.folderId == null ? "root" : String(file.folderId))}>{busy ? "Movendo..." : "Mover documento"}</button></div>
+    </form>
+  </dialog>;
 }
 
 function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {

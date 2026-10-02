@@ -5,6 +5,10 @@ on:
     paths:
       - 'src/pages/Projects/components/Documents*'
       - 'tests/documents-visual-contract.test.mjs'
+      - 'tests/organization-file-rename.test.mjs'
+      - 'functions/_lib/organization-file-rename.js'
+      - 'functions/api/organizations/**/files/**'
+      - 'src/lib/api.ts'
       - 'tests/browser/documents-visual.spec.ts'
       - 'playwright.documents.config.ts'
       - '.github/workflows/documents-visual.yml'
@@ -36,7 +40,7 @@ jobs:
       - name: Install existing repository dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Presentation, hierarchy and backend preservation contracts
-        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs
+        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs tests/organization-file-rename.test.mjs
       - name: Build application
         run: npm run build
       - name: Install browser engines

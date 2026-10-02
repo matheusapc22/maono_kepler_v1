@@ -18,6 +18,7 @@ import {
   moveOrganizationFileToFolder,
 } from "../../../../_lib/organization-file-folders.js";
 import { trashOrganizationFile } from "../../../../_lib/organization-file-trash.js";
+import { renameOrganizationFile } from "../../../../_lib/organization-file-rename.js";
 import { requireProjectGeoJsonAccess } from "../../../../_lib/geojson-access.js";
 
 export async function onRequest(context) {
@@ -53,6 +54,16 @@ export async function onRequestPatch({ env, request, params }) {
 
   try {
     const { organizationId, fileId } = idsFrom(params);
+    const payload = await readJsonBody(request);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      const error = new Error("Informe um objeto com name ou folderId.");
+      error.status = 400;
+      error.code = "DOCUMENT_FILE_PATCH_INVALID";
+      throw error;
+    }
+    const isRename = Object.prototype.hasOwnProperty.call(payload, "name");
+    const isMove = Object.prototype.hasOwnProperty.call(payload, "folderId");
+    const action = isRename ? "document.rename" : "document.folder.move";
     const { user } = await requireOrganizationPermission(
       env,
       request,
@@ -64,7 +75,7 @@ export async function onRequestPatch({ env, request, params }) {
         resourceId: fileId,
       },
       {
-        auditAction: "document.folder.move",
+        auditAction: action,
         resourceType: "document",
         resourceId: fileId,
         auditOnSuccess: false,
@@ -86,12 +97,18 @@ export async function onRequestPatch({ env, request, params }) {
       user,
       organizationId,
       file,
-      { surface: "document.folder.move", auditAllowed: true },
+      { surface: action, auditAllowed: true },
     );
 
-    const payload = await readJsonBody(request);
-    if (!Object.prototype.hasOwnProperty.call(payload, "folderId")) {
-      const error = new Error("Informe folderId; use null para mover à raiz.");
+    if (isRename && isMove) {
+      const error = new Error("Renomeie ou mova o arquivo em operações separadas.");
+      error.status = 400;
+      error.code = "DOCUMENT_FILE_PATCH_AMBIGUOUS";
+      error.stage = "document.update";
+      throw error;
+    }
+    if (!isRename && !isMove) {
+      const error = new Error("Informe name para renomear ou folderId para mover; use null para mover à raiz.");
       error.status = 400;
       error.code = "DOCUMENT_FOLDER_ID_REQUIRED";
       error.stage = "document.folder.move";
@@ -99,12 +116,9 @@ export async function onRequestPatch({ env, request, params }) {
       throw error;
     }
 
-    const moved = await moveOrganizationFileToFolder(
-      env,
-      organizationId,
-      fileId,
-      payload.folderId,
-    );
+    const updated = isRename
+      ? await renameOrganizationFile(env, organizationId, fileId, payload.name)
+      : await moveOrganizationFileToFolder(env, organizationId, fileId, payload.folderId);
 
     await recordOrganizationFileAudit(env, {
       request,
@@ -112,9 +126,9 @@ export async function onRequestPatch({ env, request, params }) {
       userId: user.id,
       organizationId,
       projectId: file.project_id || null,
-      action: "document.folder.move",
+      action,
       fileId,
-      fileName: file.original_name || file.name || file.file_name,
+      fileName: updated.original_name || updated.name || updated.file_name,
       size: file.size_bytes || file.size || null,
     });
 
@@ -122,7 +136,7 @@ export async function onRequestPatch({ env, request, params }) {
       {
         ok: true,
         requestId,
-        file: publicOrganizationFile(moved),
+        file: publicOrganizationFile(updated),
       },
       { headers: { "X-Request-Id": requestId } },
     );
