@@ -83,7 +83,8 @@ test("ProjectsSection controla um menu e integra o drawer fora do map", () => {
   assert.match(sectionSource, /onProjectUpdated\(updatedProject\)/);
 
   const panelIndex = sectionSource.indexOf("<ProjectMetadataPanel");
-  const mapIndex = sectionSource.indexOf("filteredProjects.map");
+  const mapIndex = sectionSource.indexOf("visibleProjects.map");
+  assert.ok(mapIndex >= 0);
   assert.ok(panelIndex > mapIndex);
 });
 
@@ -92,7 +93,7 @@ test("seção fecha menu e painel ao trocar seção ou ocultar projeto", () => {
     sectionSource,
     /setActionsOpenSlug\(null\);\s*setEditingProject\(null\);\s*\}, \[section\]\)/,
   );
-  assert.match(sectionSource, /!filteredProjects\.some\(/);
+  assert.match(sectionSource, /!visibleProjects\.some\(/);
   assert.match(sectionSource, /setEditingProject\(null\)/);
 });
 

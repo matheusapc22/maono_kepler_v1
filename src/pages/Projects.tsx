@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 
 import {
   can,
@@ -34,6 +34,7 @@ import OrganizationSection from "./Projects/components/OrganizationSection";
 import TicketsSection from "./Projects/components/TicketsSection";
 import UsersAccessSection from "./Projects/components/UsersAccessSection";
 import ProjectsSection from "./Projects/components/ProjectsSection";
+import { ProjectPagesHeader } from "./Projects/components/ProjectPagesUi";
 import {
   fetchProjects,
   setProjectFavorite,
@@ -42,6 +43,7 @@ import {
 } from "./Projects/projects-api";
 import "./Projects/projects.css";
 import "./Projects/components/project-cards.css";
+import "./Projects/components/ProjectPages.css";
 
 const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = {
   files: PERMISSION.DOCUMENT_VIEW,
@@ -321,6 +323,15 @@ const ProjectsPage: React.FC = () => {
     useState<ProjectSidebarSection>("all");
   const [allProjects, setAllProjects] = useState<ProjectListItem[]>([]);
   const [projectItems, setProjectItems] = useState<ProjectListItem[]>([]);
+  const [loadedProjectSection, setLoadedProjectSection] = useState<ProjectSectionKey | null>(null);
+  const [projectActionError, setProjectActionError] = useState<string | null>(null);
+  const currentSidebarSectionRef = useRef(sidebarSection);
+  currentSidebarSectionRef.current = sidebarSection;
+  const loadedProjectSectionRef = useRef(loadedProjectSection);
+  loadedProjectSectionRef.current = loadedProjectSection;
+  // Overlays reconcile list responses started while a favorite write is pending.
+  // A fresh read after completion becomes authoritative again.
+  const favoriteOverridesRef = useRef(new Map<string, { organizationKey: string; favorite: boolean; pending: boolean; project?: ProjectListItem }>());
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [organizationTransitionPending, setOrganizationTransitionPending] =
     useState(false);
@@ -382,6 +393,16 @@ const ProjectsPage: React.FC = () => {
   const activeOrganizationKey = String(activeOrganizationId ?? "");
   const activeOrganizationKeyRef = useRef(activeOrganizationKey);
   activeOrganizationKeyRef.current = activeOrganizationKey;
+  const favoriteContextEpochRef = useRef({ organizationKey: activeOrganizationKey, value: 0 });
+  if (favoriteContextEpochRef.current.organizationKey !== activeOrganizationKey) {
+    favoriteContextEpochRef.current = { organizationKey: activeOrganizationKey, value: favoriteContextEpochRef.current.value + 1 };
+  }
+  useEffect(() => {
+    // Covers sidebar switches and organization restoration through history links.
+    favoriteOverridesRef.current.clear();
+    setFavoriteBusySlugs({});
+    setProjectActionError(null);
+  }, [activeOrganizationKey]);
 
   const loadProjectSection = useCallback(
     async (section: ProjectSectionKey) => {
@@ -400,6 +421,10 @@ const ProjectsPage: React.FC = () => {
       const controller = new AbortController();
       projectsRequestControllerRef.current = controller;
 
+      for (const [slug, override] of favoriteOverridesRef.current) {
+        if (!override.pending) favoriteOverridesRef.current.delete(slug);
+      }
+      const requestFavoriteOverrides = new Map(favoriteOverridesRef.current);
       setProjectsContextKey(requestOrganizationKey);
       setProjectsLoading(true);
       setProjectsError(null);
@@ -416,11 +441,24 @@ const ProjectsPage: React.FC = () => {
           return;
         }
 
-        if (section === "all") {
-          setAllProjects(projects);
+        const overrides = new Map([...requestFavoriteOverrides, ...favoriteOverridesRef.current]);
+        const reconciled = projects.map(project => {
+          const override = overrides.get(project.slug);
+          return override?.organizationKey === requestOrganizationKey ? { ...project, favorite: override.favorite, favorited: override.favorite } : project;
+        }).filter(project => section !== "favorites" || Boolean(project.favorite || project.favorited));
+        if (section === "favorites") {
+          for (const override of overrides.values()) {
+            if (override.organizationKey === requestOrganizationKey && override.favorite && override.project &&
+                !reconciled.some(item => sameProject(item, override.project!))) {
+              reconciled.push(override.project);
+            }
+          }
         }
-
-        setProjectItems(projects);
+        if (section === "all") {
+          setAllProjects(reconciled);
+        }
+        setProjectItems(reconciled);
+        setLoadedProjectSection(section);
       } catch (requestFailure) {
         if (
           requestFailure instanceof DOMException &&
@@ -436,6 +474,8 @@ const ProjectsPage: React.FC = () => {
           return;
         }
 
+        setProjectItems([]);
+        setLoadedProjectSection(section);
         setProjectsError(normalizeUserError(requestFailure).message);
       } finally {
         if (
@@ -507,7 +547,7 @@ const ProjectsPage: React.FC = () => {
 
   const organizationTransitionActive =
     switchingOrganization || organizationTransitionPending || ticketLinkRestoring;
-  const visibleProjectItems = projectContextIsCurrent ? projectItems : [];
+  const visibleProjectItems = projectContextIsCurrent && loadedProjectSection === sidebarSection ? projectItems : [];
 
   const activeProjects = useMemo(() => {
     const source =
@@ -573,6 +613,9 @@ const ProjectsPage: React.FC = () => {
     setProjectsError(null);
     setProjectsLoading(false);
     setFavoriteBusySlugs({});
+    favoriteOverridesRef.current.clear();
+    setLoadedProjectSection(null);
+    setProjectActionError(null);
   }
 
   const handleProjectUpdated = useCallback(
@@ -588,51 +631,63 @@ const ProjectsPage: React.FC = () => {
   );
 
   async function handleFavoriteToggle(project: ProjectListItem) {
-    const nextFavorite = !Boolean(project.favorite || project.favorited);
+    if (favoriteOverridesRef.current.get(project.slug)?.pending && favoriteOverridesRef.current.get(project.slug)?.organizationKey === activeOrganizationKey) return;
+    const previousFavorite = Boolean(project.favorite || project.favorited);
+    const nextFavorite = !previousFavorite;
     const requestOrganizationKey = activeOrganizationKey;
+    const requestContextEpoch = favoriteContextEpochRef.current.value;
+    const contextIsCurrent = () => requestOrganizationKey === activeOrganizationKeyRef.current &&
+      requestContextEpoch === favoriteContextEpochRef.current.value;
+    favoriteOverridesRef.current.set(project.slug, { organizationKey: requestOrganizationKey, favorite: nextFavorite, pending: true });
+    setProjectActionError(null);
+    setFavoriteBusySlugs(current => ({ ...current, [project.slug]: true }));
 
-    setFavoriteBusySlugs((current) => ({
-      ...current,
-      [project.slug]: true,
-    }));
+    const patchFavorite = (items: ProjectListItem[], favorite: boolean) => items.map(item =>
+      sameProject(item, project) ? { ...item, favorite, favorited: favorite } : item,
+    );
+    setAllProjects(current => patchFavorite(current, nextFavorite));
+    setProjectItems(current => {
+      const updated = patchFavorite(current, nextFavorite);
+      return currentSidebarSectionRef.current === "favorites" && !nextFavorite
+        ? updated.filter(item => !sameProject(item, project)) : updated;
+    });
 
     try {
-      const updatedProject = await setProjectFavorite(
-        project.slug,
-        nextFavorite,
-      );
-
-      if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
-        return;
-      }
-
-      setAllProjects((current) => mergeProjectSnapshot(current, updatedProject));
-
-      setProjectItems((current) => {
-        const updated = mergeProjectSnapshot(current, updatedProject);
-
-        if (sidebarSection === "favorites" && !updatedProject.favorite) {
-          return updated.filter((item) => item.slug !== updatedProject.slug);
+      const updatedProject = await setProjectFavorite(project.slug, nextFavorite);
+      if (!contextIsCurrent()) return;
+      const favorite = updatedProject.favorite ?? updatedProject.favorited ?? nextFavorite;
+      const snapshot = mergeProjectSnapshot([project], { ...updatedProject, favorite, favorited: favorite })[0];
+      favoriteOverridesRef.current.set(project.slug, { organizationKey: requestOrganizationKey, favorite, pending: false, project: snapshot });
+      setAllProjects(current => mergeProjectSnapshot(current, snapshot));
+      setProjectItems(current => {
+        const updated = mergeProjectSnapshot(current, snapshot);
+        if (currentSidebarSectionRef.current === "favorites" && loadedProjectSectionRef.current === "favorites") {
+          if (!favorite) return updated.filter(item => !sameProject(item, project));
+          if (!updated.some(item => sameProject(item, project))) return [...updated, snapshot];
         }
-
         return updated;
       });
     } catch (requestFailure) {
-      if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
-        return;
-      }
-
-      setProjectsError(normalizeUserError(requestFailure).message);
-    } finally {
-      if (requestOrganizationKey !== activeOrganizationKeyRef.current) {
-        return;
-      }
-
-      setFavoriteBusySlugs((current) => {
-        const next = { ...current };
-        delete next[project.slug];
-        return next;
+      if (!contextIsCurrent()) return;
+      favoriteOverridesRef.current.set(project.slug, { organizationKey: requestOrganizationKey, favorite: previousFavorite, pending: false });
+      setAllProjects(current => patchFavorite(current, previousFavorite));
+      setProjectItems(current => {
+        const updated = patchFavorite(current, previousFavorite);
+        // Restore an optimistically removed favorite, even if it was the final
+        // item on the final page. Pagination clamps safely in ProjectsSection.
+        if (previousFavorite && currentSidebarSectionRef.current === "favorites" &&
+            loadedProjectSectionRef.current === "favorites" && !updated.some(item => sameProject(item, project))) {
+          return [...updated, { ...project, favorite: true, favorited: true }];
+        }
+        return updated;
       });
+      setProjectActionError(normalizeUserError(requestFailure).message);
+    } finally {
+      if (contextIsCurrent()) {
+        setFavoriteBusySlugs(current => {
+          const next = { ...current }; delete next[project.slug]; return next;
+        });
+      }
     }
   }
 
@@ -649,7 +704,7 @@ const ProjectsPage: React.FC = () => {
     PERMISSION.PROJECT_CREATE,
     organizationContext,
   );
-  const showProjectsTopbar = isProjectSection(sidebarSection);
+
 
   return (
     <main className="mm-projects-page">
@@ -666,6 +721,7 @@ const ProjectsPage: React.FC = () => {
           onSearchQueryChange={setSearchQuery}
           onSidebarSectionChange={next => {
             setSidebarSection(next);
+            setProjectActionError(null);
             if (next !== 'requests') {
               const url = new URL(window.location.href);
               for (const key of [...url.searchParams.keys()]) if (key.startsWith('cc_')) url.searchParams.delete(key);
@@ -678,11 +734,7 @@ const ProjectsPage: React.FC = () => {
         />
 
         <section
-          className={
-            organizationTransitionActive
-              ? "mm-projects-main is-context-switching"
-              : "mm-projects-main"
-          }
+          className={`mm-projects-main${organizationTransitionActive ? " is-context-switching" : ""}${isProjectSection(sidebarSection) ? " mm-project-pages" : ""}`}
           aria-busy={organizationTransitionActive}
         >
           <LoadingOverlay
@@ -692,25 +744,12 @@ const ProjectsPage: React.FC = () => {
             accessibleLabel="Trocando organização"
           />
 
-          {showProjectsTopbar && (
-            <header className="mm-projects-topbar">
-              <div>
-                <h1>{sectionTitle(sidebarSection)}</h1>
-              </div>
-
-              <div className="mm-topbar-actions">
-                {canCreateMap && (
-                  <Link
-                    to="/maps/new/create"
-                    className="mm-btn primary mm-new-map-btn"
-                    onClick={handleNewMapNavigation}
-                  >
-                    Novo mapa
-                  </Link>
-                )}
-              </div>
-            </header>
-          )}
+          {isProjectSection(sidebarSection) ? <ProjectPagesHeader
+            section={sidebarSection}
+            canCreateMap={canCreateMap}
+            onNewMap={handleNewMapNavigation}
+            onHome={() => { setSidebarSection("all"); setSearchQuery(""); setProjectActionError(null); }}
+          /> : null}
 
           <div className="mm-projects-content">
             {ticketLinkError ? <p role="alert">{ticketLinkError}</p> : null}
@@ -729,7 +768,10 @@ const ProjectsPage: React.FC = () => {
                 section={sidebarSection}
                 projects={visibleProjectItems}
                 searchQuery={searchQuery}
-                loading={projectsLoading}
+                onSearchQueryChange={setSearchQuery}
+                actionError={projectActionError}
+                onDismissActionError={() => setProjectActionError(null)}
+                loading={projectsLoading || (loadedProjectSection !== sidebarSection && !projectsError)}
                 error={projectsError}
                 favoriteBusySlugs={favoriteBusySlugs}
                 canProjectSave={(project) =>
