@@ -28,13 +28,27 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const focusTimer = useRef<number | null>(null);
   const id = useId();
+
+  const clearScheduledFocus = () => {
+    if (focusTimer.current !== null) {
+      window.clearTimeout(focusTimer.current);
+      focusTimer.current = null;
+    }
+  };
+
+  const scheduleFocus = (target: HTMLElement | null) => {
+    clearScheduledFocus();
+    focusTimer.current = window.setTimeout(() => {
+      focusTimer.current = null;
+      if (target?.isConnected) target.focus({ preventScroll: true });
+    }, 0);
+  };
 
   const closeToTrigger = () => {
     setOpen(false);
-    window.setTimeout(() => {
-      trigger.current?.focus({ preventScroll: true });
-    }, 0);
+    scheduleFocus(trigger.current);
   };
 
   useLayoutEffect(() => {
@@ -81,8 +95,13 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
   }, [open]);
 
   useEffect(() => {
-    if (disabled) setOpen(false);
+    if (disabled) {
+      clearScheduledFocus();
+      setOpen(false);
+    }
   }, [disabled]);
+
+  useEffect(() => () => clearScheduledFocus(), []);
 
   if (actions.length === 0) return null;
 
@@ -96,10 +115,14 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
       aria-expanded={open}
       aria-controls={open ? id : undefined}
       disabled={disabled}
-      onClick={() => setOpen(value => !value)}
+      onClick={() => {
+        clearScheduledFocus();
+        setOpen(value => !value);
+      }}
       onKeyDown={event => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
+          clearScheduledFocus();
           setOpen(true);
         }
         if (event.key === "Escape" && open) {
@@ -150,7 +173,7 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
             const triggerIndex = stops.indexOf(trigger.current!);
             const target = stops[triggerIndex + (event.shiftKey ? -1 : 1)] ?? trigger.current;
             setOpen(false);
-            window.requestAnimationFrame(() => target?.focus({ preventScroll: true }));
+            scheduleFocus(target);
           }
         }}
       >
@@ -162,8 +185,8 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
             className={action.danger ? "is-danger" : ""}
             disabled={action.disabled}
             onClick={() => {
+              clearScheduledFocus();
               setOpen(false);
-              trigger.current?.focus({ preventScroll: true });
               action.onSelect();
             }}
           >
