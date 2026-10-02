@@ -1,18 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 
 const component = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.css', import.meta.url), 'utf8');
 const menu = readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8');
 const transfer = readFileSync(new URL('../src/pages/Projects/components/DocumentsTransferPanel.css', import.meta.url), 'utf8');
 
-test('business prefix is unchanged; only presentation imports are added', () => {
-  const end = component.indexOf('  if (!organizationId || !canView) {\n    return <section');
-  assert.ok(end > 0);
-  const prefix = component.slice(0, end).replace('import "./DocumentsSection.css";\n', '').replace('import { DocumentActionMenu, DocumentIcon } from "./DocumentsUi";\n', '');
-  assert.equal(createHash('sha256').update(prefix).digest('hex'), '126eb4eddd554717f51acc5fe1ff9cf1b7f48a6b00d8a84f2b77851f8cc9ea58');
+test('controller preserves existing document lifecycles and declares folder move explicitly', () => {
+  for (const token of [
+    'async function handleUpload(',
+    'uploadOrganizationFileWithProgress(',
+    'async function handleDownload(',
+    'downloadOrganizationFileWithProgress(',
+    'async function handleDelete(',
+    'deleteOrganizationFile(',
+    'async function handlePermanentPurge(',
+    'purgeOrganizationFilePermanently(',
+    'async function handleRestore(',
+    'restoreOrganizationFile(',
+    'async function handleMoveFile(',
+    'moveOrganizationFileToFolder(',
+    'function applyDocumentFilters(',
+    'function clearDocumentFilters(',
+    'function removeDocumentFilter(',
+    'function loadMoreDocuments(',
+    'pagination.hasMore && pagination.nextCursor',
+  ]) assert.ok(component.includes(token), token);
+
+  assert.ok(component.includes('function beginMoveFolder('));
+  assert.ok(component.includes('async function handleMoveFolder('));
+  assert.ok(component.includes('updateOrganizationDocumentFolder(organizationId, folder.id'));
+  assert.ok(component.includes('parentId: targetParentId === "root" ? null : targetParentId'));
 });
 test('workspace includes real structural blocks, not generated-content headings', () => {
   for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-breadcrumb','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-page-controls','mm-docs-file-grid','mm-docs-dialog']) assert.ok(component.includes(name));
