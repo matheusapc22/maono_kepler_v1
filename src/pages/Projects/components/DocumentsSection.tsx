@@ -1552,6 +1552,8 @@ function DocumentFileMoveDialog({
     const dialog = dialogRef.current;
     const previousFocus = document.activeElement as HTMLElement | null;
     dialog?.showModal();
+    // Focus only after showModal: React autoFocus on a closed dialog's child
+    // clears the opener to BODY in WebKit before this effect can capture it.
     dialog?.querySelector<HTMLSelectElement>("select")?.focus({ preventScroll: true });
     return () => {
       dialog?.close();
@@ -1577,7 +1579,7 @@ function DocumentFileMoveDialog({
     }}>
     <form onSubmit={event => { event.preventDefault(); if (!busy) onSubmit(); }}>
       <div className="mm-docs-dialog-header"><div><h3 id="mm-docs-move-file-title">Mover documento</h3><p>Escolha a pasta de destino para “{file.name}”.</p></div><button type="button" className="mm-docs-dialog-close" aria-label="Fechar" disabled={busy} onClick={onClose}>×</button></div>
-      <label className="mm-docs-field"><span>Pasta de destino</span><select autoFocus disabled={busy} value={targetFolderId} onChange={event => onChange(event.target.value)}><option value="root">Raiz</option>{folderTree.map(({ folder }) => <option key={String(folder.id)} value={String(folder.id)}>{folderPath(String(folder.id))}</option>)}</select></label>
+      <label className="mm-docs-field"><span>Pasta de destino</span><select disabled={busy} value={targetFolderId} onChange={event => onChange(event.target.value)}><option value="root">Raiz</option>{folderTree.map(({ folder }) => <option key={String(folder.id)} value={String(folder.id)}>{folderPath(String(folder.id))}</option>)}</select></label>
       {error ? <p className="mm-docs-error" role="alert">{error}</p> : null}
       <div className="mm-docs-dialog-actions"><button type="button" className="mm-docs-button" disabled={busy} onClick={onClose}>Cancelar</button><button type="submit" className="mm-docs-button is-primary" disabled={busy || targetFolderId === (file.folderId == null ? "root" : String(file.folderId))}>{busy ? "Movendo..." : "Mover documento"}</button></div>
     </form>

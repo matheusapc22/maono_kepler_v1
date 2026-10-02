@@ -101,4 +101,6 @@ test('file move restores focus after native modal teardown without stealing a ne
   assert.ok(dialog.includes('active !== document.body && active.isConnected'));
   assert.ok(dialog.includes('previousFocus?.isConnected'));
   assert.ok(dialog.includes('focusTarget?.focus({ preventScroll: true })'));
+  assert.ok(!dialog.includes('<select autoFocus'));
+  assert.ok(dialog.indexOf('dialog?.showModal()') < dialog.indexOf('dialog?.querySelector<HTMLSelectElement>("select")?.focus'));
 });

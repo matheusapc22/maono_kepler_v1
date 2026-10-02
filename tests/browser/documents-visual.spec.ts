@@ -425,6 +425,11 @@ test("renomear usa PATCH name e atualiza a lista; cancelar não envia mutação"
 test("mover arquivo abre diálogo, conserva foco, cancela e usa PATCH folderId", async ({ page }) => {
   const requests = await setup(page); await openDocuments(page, true);
   await page.evaluate(() => {
+    const nativeShowModal = HTMLDialogElement.prototype.showModal;
+    HTMLDialogElement.prototype.showModal = function () {
+      (window as Window & { documentDialogOpener?: string | null }).documentDialogOpener = document.activeElement?.getAttribute("aria-label");
+      return nativeShowModal.call(this);
+    };
     const nativeClose = HTMLDialogElement.prototype.close;
     HTMLDialogElement.prototype.close = function (...args) {
       (window as Window & { documentDialogClosedWhileConnected?: boolean }).documentDialogClosedWhileConnected = this.isConnected;
@@ -435,6 +440,7 @@ test("mover arquivo abre diálogo, conserva foco, cancela e usa PATCH folderId",
   const dialog = page.getByRole("dialog", { name: "Mover documento" });
   await trigger.click(); await page.getByRole("menuitem", { name: "Mover", exact: true }).click();
   await expect(dialog).toBeVisible();
+  expect(await page.evaluate(() => (window as Window & { documentDialogOpener?: string | null }).documentDialogOpener)).toBe("Ações de config_kepler.json");
   await expect(dialog.getByRole("combobox", { name: "Pasta de destino" })).toBeFocused();
   await expect(dialog.getByRole("button", { name: "Mover documento", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");

@@ -22,6 +22,7 @@ Migration `0024_document_folders_trash.sql` is unchanged. It is the existing sch
 - Active file rows/cards expose only one ellipsis, ordered **Renomear, Baixar, Mover, Excluir**, filtered by manage/download/delete grants.
 - Move opens a native modal destination picker with keyboard focus containment, Escape/Cancel, server-error visibility and no-op prevention.
 - The modal closes in layout cleanup while still attached to the document, then restores focus to its trigger or current breadcrumb. This avoids WebKit retaining modal inertness after node removal.
+- Initial picker focus runs only after `showModal()`. React `autoFocus` on the still-closed dialog cleared the opener to BODY in WebKit; keeping the opener intact restores Escape/Cancel and move-out focus correctly.
 - Rename preserves the original file extension. Delete keeps the existing reversible ten-day trash confirmation; permanent purge is not part of that menu action.
 - Existing folder move/rename/delete, list/grid mode, typed icons, keyset pagination, search/date/type/project filters, transfer UI, restore, permission checks and menu keyboard/scroll fixes remain intact.
 - Mutation refreshes use the latest file query after navigation. The winning query clears superseded loading modes, preventing old responses from replacing the current view or leaving empty folders loading.
