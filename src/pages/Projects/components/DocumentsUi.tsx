@@ -31,8 +31,10 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
   const id = useId();
 
   const closeToTrigger = () => {
-    trigger.current?.focus({ preventScroll: true });
     setOpen(false);
+    window.requestAnimationFrame(() => {
+      trigger.current?.focus({ preventScroll: true });
+    });
   };
 
   useLayoutEffect(() => {
