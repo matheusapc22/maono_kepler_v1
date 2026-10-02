@@ -1231,10 +1231,6 @@ function OrganizationDocuments({
     return <section className="documents-section mm-docs"><header className="mm-docs-header"><div className="mm-docs-heading"><DocumentIcon name="folder" /><div><h2>Arquivos e Documentos</h2><p>{!organizationId ? "Selecione uma organização." : "Acesso não permitido."}</p></div></div></header></section>;
   }
 
-  const folderPath = (id: string) => documentFolderBreadcrumb(folders, id).map(folder => folder.name).join(" / ");
-  const countLabel = (count: number) => `${count} documento${count === 1 ? "" : "s"}`;
-  const fileIdentity = (file: OrganizationFile) => <div className="mm-docs-file-identity"><span className="mm-docs-file-icon"><DocumentIcon name="file" /></span><span className="mm-docs-file-copy"><span className="documents-file-name" title={file.name}>{file.name}</span>{file.projectName ? <span className="documents-file-project">{file.projectName}</span> : null}</span></div>;
-
   const currentFolderId =
     appliedFilters.folderId && appliedFilters.folderId !== "root"
       ? String(appliedFilters.folderId)
