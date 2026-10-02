@@ -738,7 +738,7 @@ test("ordenação: oito sentidos globais atravessam lote HTTP de 50 sem ordenar 
 });
 
 for (const width of [320, 390, 1920]) {
-  test(`ordenação: tooltip exato, viewport e Enter/Space preservam foco em ${width}px`, async ({ page }, testInfo) => {
+  test(`ordenação: tooltip apenas no mouse, viewport e Enter/Space preservam foco em ${width}px`, async ({ page }, testInfo) => {
     test.setTimeout(60_000);
     await page.setViewportSize({ width, height: 1000 });
     await setup(page, { dataset: sortingFiles }); await openDocuments(page);
@@ -746,8 +746,10 @@ for (const width of [320, 390, 1920]) {
     const tooltip = page.getByRole("tooltip");
     await sortButton(page, "updated").hover();
     await expect(tooltip).toHaveText("Classificar de mais antigas primeiro");
-    await tooltip.hover();
-    await page.waitForTimeout(160);
+    const tooltipBox = (await tooltip.boundingBox())!;
+    await page.mouse.move(tooltipBox.x + tooltipBox.width / 2, tooltipBox.y + tooltipBox.height / 2);
+    await expect(tooltip).toHaveCount(0);
+    await sortButton(page, "updated").hover();
     await expect(tooltip).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(tooltip).toHaveCount(0);
@@ -757,13 +759,17 @@ for (const width of [320, 390, 1920]) {
       const button = sortButton(page, column);
       await button.scrollIntoViewIfNeeded();
       await button.focus();
+      await expect(tooltip).toHaveCount(0);
       const firstAscending = column !== "updated";
+      await button.hover();
       await expect(tooltip).toHaveText(nextSortLabel(column, firstAscending));
       expect(await button.getAttribute("aria-describedby")).toBe(await tooltip.getAttribute("id"));
       for (const [key, ascending] of [["Enter", firstAscending], ["Space", !firstAscending]] as const) {
         await page.keyboard.press(key);
         await expect(button).toBeFocused();
         await expect(page.locator(".mm-docs-sort-heading").nth(Object.keys(sortLabels).indexOf(column))).toHaveAttribute("aria-sort", ascending ? "ascending" : "descending");
+        // Keyboard-triggered focus scrolling can move the heading away from the pointer.
+        await button.hover();
         await expect(tooltip).toHaveText(nextSortLabel(column, !ascending));
         await expect(page.locator(".mm-docs-table-scroll")).toHaveAttribute("aria-busy", "false");
         await expect(button).toBeFocused();
@@ -774,13 +780,64 @@ for (const width of [320, 390, 1920]) {
         expect(box.y + box.height).toBeLessThanOrEqual(1000);
         if (column === "updated" && key === "Enter") await page.screenshot({ path: testInfo.outputPath(`documents-sort-tooltip-${width}.png`), animations: "disabled" });
       }
-      await page.keyboard.press("Escape");
+      await page.locator("#mm-docs-results-title").hover();
       await expect(tooltip).toHaveCount(0);
       await expect(button).toBeFocused();
       await expect(button).not.toHaveAttribute("title");
+      await expect(button).not.toHaveAttribute("aria-describedby");
+      for (const [key, ascending] of [["Enter", firstAscending], ["Space", !firstAscending]] as const) {
+        await page.keyboard.press(key);
+        await expect(button).toBeFocused();
+        await expect(button).toHaveAttribute("aria-label", `${sortLabels[column]}: ${nextSortLabel(column, !ascending)}`);
+        await expect(page.locator(".mm-docs-sort-heading").nth(Object.keys(sortLabels).indexOf(column))).toHaveAttribute("aria-sort", ascending ? "ascending" : "descending");
+        await expect(tooltip).toHaveCount(0);
+      }
     }
   });
 }
+
+test("ordenação: tooltip fecha ao sair após clique com foco retido e reabre no título ou seta", async ({ page }) => {
+  await setup(page, { dataset: sortingFiles }); await openDocuments(page);
+  const tooltip = page.getByRole("tooltip");
+  for (const column of Object.keys(sortLabels) as (keyof typeof sortLabels)[]) {
+    const button = sortButton(page, column);
+    const firstAscending = column !== "updated";
+    await button.focus();
+    await button.locator("span").first().hover();
+    await expect(tooltip).toHaveText(nextSortLabel(column, firstAscending));
+    await button.click();
+    await expect(button).toBeFocused();
+    await expect(tooltip).toHaveText(nextSortLabel(column, !firstAscending));
+    await page.locator("#mm-docs-results-title").hover();
+    await expect(tooltip).toHaveCount(0);
+    await expect(button).toBeFocused();
+    await button.locator(".mm-docs-sort-arrow").hover();
+    await expect(tooltip).toHaveText(nextSortLabel(column, !firstAscending));
+    await button.locator(".mm-docs-sort-arrow").click();
+    await expect(tooltip).toHaveText(nextSortLabel(column, firstAscending));
+    await page.locator("#mm-docs-results-title").hover();
+    await expect(tooltip).toHaveCount(0);
+    await expect(button).toBeFocused();
+  }
+});
+
+test.describe("ordenação por toque", () => {
+  test.use({ hasTouch: true });
+  test("toque ordena sem abrir ou manter tooltip", async ({ page }) => {
+    await setup(page, { dataset: sortingFiles }); await openDocuments(page);
+    for (const column of Object.keys(sortLabels) as (keyof typeof sortLabels)[]) {
+      const button = sortButton(page, column);
+      const firstAscending = column !== "updated";
+      await button.tap();
+      await expect(button).toHaveAttribute("aria-label", `${sortLabels[column]}: ${nextSortLabel(column, !firstAscending)}`);
+      await expect(page.locator(".mm-docs-sort-heading").nth(Object.keys(sortLabels).indexOf(column))).toHaveAttribute("aria-sort", firstAscending ? "ascending" : "descending");
+      await expect(page.getByRole("tooltip")).toHaveCount(0);
+      await button.tap();
+      await expect(button).toHaveAttribute("aria-label", `${sortLabels[column]}: ${nextSortLabel(column, firstAscending)}`);
+      await expect(page.getByRole("tooltip")).toHaveCount(0);
+    }
+  });
+});
 
 test("ordenação: filtros, Raiz e Todos resetam página/cursor e preservam grade e tamanho", async ({ page }) => {
   const requests = await setup(page, { dataset: sortingFiles }); await openDocuments(page);

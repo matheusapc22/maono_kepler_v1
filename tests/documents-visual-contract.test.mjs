@@ -130,7 +130,7 @@ test('modal geometry is viewport centered, responsive and independent of the con
   assert.ok(!dialogCss.includes('translate('));
 });
 
-test('sortable headings are native buttons with single accessible next-action tooltips', () => {
+test('sortable headings keep accessible next actions and show visual tooltips only on mouse hover', () => {
   const heading = menu.slice(menu.indexOf('export function DocumentSortHeading('));
   for (const token of ['<th scope="col"', 'aria-sort=', '<button ref={trigger} type="button"', 'aria-label={`${label}: ${nextLabel}`}', 'aria-describedby=', 'role="tooltip"', 'createPortal', 'aria-hidden="true"', 'onClick={() => onSort(nextSort)}']) assert.ok(heading.includes(token), token);
   for (const text of ['Classificar de A a Z', 'Classificar de Z a A', 'Classificar de menores para maiores', 'Classificar de maiores para menores', 'Classificar de mais antigas primeiro', 'Classificar de mais recentes primeiro']) assert.ok(heading.includes(text), text);
@@ -139,6 +139,12 @@ test('sortable headings are native buttons with single accessible next-action to
   assert.ok(heading.includes('window.visualViewport'));
   assert.ok(heading.includes('Math.max(leftEdge, Math.min('));
   assert.ok(heading.includes('event.key === "Escape"'));
+  assert.ok(heading.includes('const open = hovered && !dismissed'));
+  assert.ok(heading.includes('setHovered(event.pointerType === "mouse")'));
+  assert.ok(heading.includes('onPointerLeave={() => setHovered(false)}'));
+  assert.ok(heading.includes('onPointerCancel={() => setHovered(false)}'));
+  assert.ok(!heading.includes('onFocus='));
+  assert.ok(!heading.includes('hoverTimer'));
   assert.ok(css.includes('.mm-docs-sort-button.is-active { color: var(--maono-accent-bright); }'));
   assert.ok(css.includes('th.mm-docs-sort-heading.is-name { text-align: center; }'));
   assert.ok(css.includes('max-width: calc(100vw - 16px)'));

@@ -233,27 +233,13 @@ export function DocumentSortHeading({ column, label, sort, onSort }: {
       ? nextAscending ? "Classificar de menores para maiores" : "Classificar de maiores para menores"
       : nextAscending ? "Classificar de A a Z" : "Classificar de Z a A";
   const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const trigger = useRef<HTMLButtonElement>(null);
   const tooltip = useRef<HTMLDivElement>(null);
-  const hoverTimer = useRef<number | null>(null);
   const id = useId();
-  const open = (hovered || focused) && !dismissed;
-  const enterTooltip = () => {
-    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
-    setHovered(true);
-    setDismissed(false);
-  };
-  const leaveTooltip = () => {
-    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
-    // Allow the pointer to cross the small gap into the portalled tooltip.
-    hoverTimer.current = window.setTimeout(() => setHovered(false), 120);
-  };
-  useEffect(() => () => {
-    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
-  }, []);
+  // Click/keyboard focus must not keep a visual hint open after mouse hover ends.
+  const open = hovered && !dismissed;
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -297,10 +283,9 @@ export function DocumentSortHeading({ column, label, sort, onSort }: {
     <button ref={trigger} type="button" className={`mm-docs-sort-button${active ? " is-active" : ""}`}
       aria-label={`${label}: ${nextLabel}`} aria-describedby={open ? id : undefined}
       onClick={() => onSort(nextSort)}
-      onPointerEnter={enterTooltip}
-      onPointerLeave={leaveTooltip}
-      onFocus={() => { setFocused(true); setDismissed(false); }}
-      onBlur={() => { setFocused(false); setDismissed(false); }}
+      onPointerEnter={event => { setHovered(event.pointerType === "mouse"); setDismissed(false); }}
+      onPointerLeave={() => setHovered(false)}
+      onPointerCancel={() => setHovered(false)}
       onKeyDown={event => { if (event.key === "Escape") setDismissed(true); }}>
       <span>{label}</span>
       <span className="mm-docs-sort-arrow" aria-hidden="true">
@@ -309,6 +294,6 @@ export function DocumentSortHeading({ column, label, sort, onSort }: {
         </svg>
       </span>
     </button>
-    {open && createPortal(<div ref={tooltip} id={id} role="tooltip" className="mm-docs-sort-tooltip" style={position} onPointerEnter={enterTooltip} onPointerLeave={leaveTooltip}>{nextLabel}</div>, document.body)}
+    {open && createPortal(<div ref={tooltip} id={id} role="tooltip" className="mm-docs-sort-tooltip" style={position}>{nextLabel}</div>, document.body)}
   </th>;
 }
