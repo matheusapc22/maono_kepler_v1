@@ -35,8 +35,8 @@ jobs:
           JS
       - name: Install existing repository dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
-      - name: Presentation and preservation contracts
-        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs
+      - name: Presentation, hierarchy and backend preservation contracts
+        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs
       - name: Build application
         run: npm run build
       - name: Install browser engines

@@ -1,57 +1,51 @@
 # AD-VIS-02 — Document workspace candidate
 
 Execution folder: https://drive.google.com/drive/folders/1Hs_pbAph0wRlHopO9NvShsNGPDk_JEOU
-Base: AD-VIS-01 `40f615e602d5f02c141ad8cd645fc591a72a80b5` (PR #220, still draft).
 
-## Intermediate audit and plan adjustment
+## Current baseline and dependency
 
-The user supplied a Preview image: the original white-field conflict is no longer visible in that frame,
-but the document layout does not meet the reference. The first PR's CI/build and Preview passed;
-that is not evidence of all real routes or backend acceptance. The correct next product increment
-remains a structural document redesign, not another global recoloring.
+AD-VIS-01 / PR #220 is merged into `mano_kepler_v1` at `0d4871d4856ae0241d8d5870ffaefcdd2ace03aa`.
+This AD-VIS-02 candidate is synchronized with that base in the same consolidated commit that carries the final visual/hierarchy correction.
 
-Plan pivot: prepare AD-VIS-02 as a **dependent draft candidate**, without merging #220 or asserting
-G04 is fully closed. This permits real built-UI regression evidence to be gathered for the combined
-candidate while legacy/authenticated checks remain explicit blockers. Merge order remains #220 then
-AD-VIS-02 (after reevaluation). No green CI status authorizes production operations.
+Migration `0024_document_folders_trash.sql` is not changed here. Historical PR evidence from 08-S3/08-S4 records it as confirmed in Preview and Production. Do not reapply it by inference.
 
-## Implementation and boundaries
+## Product correction in this candidate
 
-- Preserve the original 1,227-line controller prefix (only two presentation imports added).
-- Introduce semantic header, folder cards with real facet counts, explicit nested paths/breadcrumbs,
-  two-row desktop filters, document results panel, compact table and accessible secondary menus.
-- Virtual All/Root cards cannot be renamed or deleted. All means all folders, not a fabricated total.
-- Preserve the files/folders APIs, grants/denies, transfer/retry/progress, draft/applied filters,
-  cursor pagination, Trash metadata, restore expiry and permanent-purge confirmation/flag gates.
-- Use actual organization scope; no fictional author, bulk selection, grid mode or numbered pages.
-- Local CSS container queries respond to available content width. Sidebar, Admin and Kepler are
-  not redesigned. Portal-menu rules are namespaced independently.
-- `DocumentsTransferPanel.css` owns transfer/feedback only; workspace rules live in `DocumentsSection.css`.
+- real folder browsing: the top level shows only root children; entering a folder shows only its direct subfolders;
+- breadcrumb remains the navigation path back to root/all;
+- selecting a folder continues to send `folderId` to the existing server-side query for that folder's files;
+- current-view buttons are contextual: Documents is hidden while in Documents and Trash is hidden while in Trash;
+- list/grid switch is functional;
+- file icons now distinguish JSON/GeoJSON, PDF, spreadsheets, images, ZIP and generic documents;
+- Move to folder is rendered as the reference control while retaining the original PATCH handler;
+- the footer now exposes Items per page, current page, previous and next while preserving the existing cursor backend;
+- the first 50 authorized results stay server-paginated by the existing keyset contract; client pages are slices of loaded cursor batches and fetch the next batch only when needed;
+- no bulk selection or destructive behavior was invented.
 
-## Validation layers
+## Backend and integration conclusion
 
-The Node contract freezes business-prefix bytes. The dedicated workflow independently compares that
-hash to the pinned original Git object, builds the application and runs the actual React /projects
-route in Chromium, Firefox and WebKit with intercepted APIs. The normal reliability workflow is kept.
-Screenshots and test JSON identify the tested candidate; they do not prove real authentication,
-D1, Dropbox, Production, operational cleanup or untested routes.
+The backend required by the requested behavior predates this PR and was re-audited:
+- folder GET/POST/PATCH/DELETE routes exist;
+- `parentId` is validated server-side with maximum depth 5, sibling uniqueness, cross-organization guards and cycle protection;
+- moving a document changes D1 folder metadata without moving the Dropbox binary;
+- upload uses the centralized Dropbox integration and requires organization storage readiness;
+- folder listing/creation requires the 0024 schema.
 
-Local environment: Git clone/npm network access was unavailable. Syntax/CSS parsing and a JSX-derived
-static layout fixture are local evidence only. Full compiler/browser claims require actual CI logs.
-The historical Preview folder/upload issue H-07 remains open.
+The dedicated PR workflow now runs the folder and file-filter backend suites in addition to the visual contracts and the compiled React browser suite.
 
-## Gates and next step
+This is still not equivalent to authenticated Preview acceptance. H-07 remains an environment evidence gate until a real authenticated Preview session creates a disposable nested folder and performs a disposable upload with cleanup evidence.
 
-Do not merge while build/browser/visual evidence is failing or pending. Compare the real built screenshots
-to the reference and obtain the user's visual acceptance. Complete real legacy/subtab checks and the
-appropriate authorized environment acceptance. Update the tracker, audit and replan before release.
-The existing production-acceptance policy and credential boundary apply unchanged.
+## Validation gates
 
-## Migrations and rollback
+The PR must remain Draft until:
+1. build succeeds;
+2. Projects Fallback Scope succeeds;
+3. expanded regression succeeds;
+4. Chromium/Firefox/WebKit documents workspace succeeds;
+5. Cloudflare Preview deploy succeeds;
+6. the updated Preview is visually compared against the supplied reference;
+7. H-07 is either closed by authenticated Preview evidence or explicitly carried as a release blocker.
 
-No migration, D1/Dropbox write, permission change, flag activation or Worker deployment is included.
-The historical 0024 is not an instruction to reapply schema. If a new environment needs schema,
-record MIGRATION PENDENTE DE CONFIRMAÇÃO and block the relevant operational gate.
+## Rollback
 
-Rollback AD-VIS-02 alone preserves the fallback isolation from #220. Code rollback does not undo
-file operations. Never use purge as an automatic smoke test.
+Reverting AD-VIS-02 must leave AD-VIS-01 / PR #220 in place. No migration rollback is part of this change and no production flag or Worker activation is included.

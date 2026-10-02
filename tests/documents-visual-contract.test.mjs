@@ -15,7 +15,7 @@ test('business prefix is unchanged; only presentation imports are added', () => 
   assert.equal(createHash('sha256').update(prefix).digest('hex'), '126eb4eddd554717f51acc5fe1ff9cf1b7f48a6b00d8a84f2b77851f8cc9ea58');
 });
 test('workspace includes real structural blocks, not generated-content headings', () => {
-  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-filters','mm-docs-results','mm-docs-table-scroll']) assert.ok(component.includes(name));
+  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-page-controls','mm-docs-file-grid']) assert.ok(component.includes(name));
   assert.ok(component.includes('Buscar e filtrar'));
   assert.ok(component.includes('Documentos encontrados'));
   assert.ok(!component.includes('role="tree"'));
@@ -29,7 +29,7 @@ test('stylesheet is scoped and adds no important, universal field sizing or zoom
   assert.ok(css.includes('prefers-reduced-motion'));
 });
 test('cursor, permission and purge contracts remain in the real component', () => {
-  for (const token of ['pagination.hasMore && pagination.nextCursor','permanentPurgeEnabled && canManage && canDelete','EXCLUIR PERMANENTEMENTE','canUpload && documentState === "active"','disabled={busy || expired}','limit: 50','MAX_FILE_BYTES = 50 * 1024 * 1024']) assert.ok(component.includes(token), token);
+  for (const token of ['pagination.hasMore && pagination.nextCursor','permanentPurgeEnabled && canManage && canDelete','EXCLUIR PERMANENTEMENTE','canUpload && documentState === "active"','disabled={busy || expired}','limit: 50','MAX_FILE_BYTES = 50 * 1024 * 1024','Itens por página','Visualização em grade','directFolders']) assert.ok(component.includes(token), token);
   assert.ok(!component.includes('type="checkbox"'));
 });
 test('virtual folders do not receive action menus and lineage stays explicit', () => {

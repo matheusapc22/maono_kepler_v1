@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-type IconName = "folder" | "file" | "search" | "upload" | "download" | "trash" | "plus" | "more" | "close" | "arrow" | "restore" | "filter";
+type IconName = "folder" | "file" | "search" | "upload" | "download" | "trash" | "plus" | "more" | "close" | "arrow" | "restore" | "filter" | "list" | "grid" | "chevron";
 const paths: Record<IconName, string> = {
   folder: "M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z",
   file: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M8 13h8M8 17h6",
@@ -13,6 +13,9 @@ const paths: Record<IconName, string> = {
   close: "m6 6 12 12M6 18 18 6", arrow: "m9 5 7 7-7 7",
   restore: "M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2",
   filter: "M4 4h16l-6 7v8l-4 2V11L4 4Z",
+  list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
+  grid: "M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z",
+  chevron: "m9 5 7 7-7 7",
 };
 export function DocumentIcon({ name, className = "" }: { name: IconName; className?: string }) {
   return <svg className={`mm-docs-icon ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={name === "more" ? 3.5 : 1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={paths[name]} /></svg>;
@@ -39,7 +42,7 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
       else if (target.isConnected) target.focus();
     }
   }, [open]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const rect = trigger.current?.getBoundingClientRect();
     if (!rect) return;
@@ -49,7 +52,9 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
       left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
       top: rect.bottom + height + 8 > window.innerHeight ? Math.max(8, rect.top - height - 6) : rect.bottom + 6,
     });
-    panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+    const focusFrame = window.requestAnimationFrame(() => {
+      panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+    });
     const outside = (event: PointerEvent) => {
       if (!panel.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -58,6 +63,7 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("pointerdown", outside);
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);

@@ -1235,44 +1235,81 @@ function OrganizationDocuments({
   const countLabel = (count: number) => `${count} documento${count === 1 ? "" : "s"}`;
   const fileIdentity = (file: OrganizationFile) => <div className="mm-docs-file-identity"><span className="mm-docs-file-icon"><DocumentIcon name="file" /></span><span className="mm-docs-file-copy"><span className="documents-file-name" title={file.name}>{file.name}</span>{file.projectName ? <span className="documents-file-project">{file.projectName}</span> : null}</span></div>;
 
+  const currentFolderId =
+    appliedFilters.folderId && appliedFilters.folderId !== "root"
+      ? String(appliedFilters.folderId)
+      : null;
+  const directFolders = folders
+    .filter((folder) =>
+      currentFolderId
+        ? String(folder.parentId ?? "") === currentFolderId
+        : folder.parentId == null,
+    )
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+    );
+  const insideFolder = Boolean(currentFolderId);
+  const folderPath = (id: string) =>
+    documentFolderBreadcrumb(folders, id)
+      .map((folder) => folder.name)
+      .join(" / ");
+  const countLabel = (count: number) =>
+    `${count} documento${count === 1 ? "" : "s"}`;
+  const resultsKey = JSON.stringify({
+    state: documentState,
+    search: appliedFilters.search,
+    type: appliedFilters.type,
+    projectId: appliedFilters.projectId,
+    folderId: appliedFilters.folderId,
+    updatedFrom: appliedFilters.updatedFrom,
+    updatedTo: appliedFilters.updatedTo,
+    sort: appliedFilters.sort,
+  });
+
   return <>
     {transfer ? <TransferPanel transfer={transfer} onClose={closeTransferPanel} /> : null}
     {feedback ? <FeedbackToast feedback={feedback} /> : null}
     <section className="documents-section mm-docs" aria-labelledby="mm-docs-title">
-      <div className="mm-docs-context"><span>Organização</span><DocumentIcon name="arrow" /><span>Arquivos e Documentos</span></div>
+      <div className="mm-docs-context"><span>Início</span><DocumentIcon name="arrow" /><span>Arquivos e Documentos</span></div>
       <header className="mm-docs-header">
-        <div className="mm-docs-heading"><DocumentIcon name="folder" /><div><h2 id="mm-docs-title">Arquivos e Documentos</h2><p>Organize e consulte os documentos da organização ativa em um só lugar.</p></div></div>
+        <div className="mm-docs-heading"><DocumentIcon name="folder" /><div><h2 id="mm-docs-title">Arquivos e Documentos</h2><p>Organize, armazene e compartilhe os documentos do seu projeto em um só lugar.</p></div></div>
         <div className="mm-docs-header-actions">
-          <div className="mm-docs-view-switch" role="group" aria-label="Visão de documentos">
-            <button type="button" className={`mm-docs-button ${documentState === "active" ? "is-selected" : ""}`} aria-pressed={documentState === "active"} onClick={() => selectDocumentState("active")}><DocumentIcon name="file" />Documentos</button>
-            {canDelete ? <button type="button" className={`mm-docs-button ${documentState === "trash" ? "is-selected" : ""}`} aria-pressed={documentState === "trash"} onClick={() => selectDocumentState("trash")}><DocumentIcon name="trash" />Lixeira</button> : null}
+          <div className="mm-docs-view-switch" role="group" aria-label="Navegação de documentos">
+            {documentState === "active"
+              ? canDelete
+                ? <button type="button" className="mm-docs-button" onClick={() => selectDocumentState("trash")}><DocumentIcon name="trash" />Lixeira</button>
+                : null
+              : <button type="button" className="mm-docs-button" onClick={() => selectDocumentState("active")}><DocumentIcon name="file" />Documentos</button>}
           </div>
           {canUpload && documentState === "active" ? <><button type="button" className="mm-docs-button is-primary" disabled={uploading || transferBusy} onClick={() => fileInputRef.current?.click()}><DocumentIcon name="upload" />{uploading ? "Enviando..." : "Enviar documento"}</button><input ref={fileInputRef} type="file" accept=".geojson,.json,.csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp,.zip,.txt,.docx" disabled={uploading || transferBusy} style={{ display: "none" }} onChange={event => { const file = event.target.files?.[0]; if (file) void handleUpload(file); }} /></> : null}
         </div>
       </header>
 
       {documentState === "active" ? <section className="mm-docs-panel" aria-labelledby="mm-docs-folders-title">
-        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="folder" /><div><h3 id="mm-docs-folders-title">Pastas</h3><p>Organize seus documentos em pastas para facilitar o acesso.</p></div></div>{canManage ? <button type="button" className="mm-docs-button is-outlined" disabled={busyFolderId !== null} onClick={() => void handleCreateFolder()}><DocumentIcon name="plus" />Nova pasta</button> : null}</div>
-        <nav className="mm-docs-folder-grid" aria-label="Pastas de documentos">
-          <article className={`mm-docs-folder-card ${appliedFilters.folderId === "" ? "is-active" : ""}`}><button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === ""} onClick={() => selectFolder("")}><DocumentIcon name="folder" /><span><strong>Todos os documentos</strong><span>Todas as pastas</span></span></button></article>
-          <article className={`mm-docs-folder-card ${appliedFilters.folderId === "root" ? "is-active" : ""}`}><button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === "root"} onClick={() => selectFolder("root")}><DocumentIcon name="folder" /><span><strong>Raiz</strong><span>{countLabel(facets.rootCount)}</span></span></button></article>
-          {foldersLoading ? <p className="mm-docs-folder-status" role="status">Carregando pastas...</p> : folderTree.map(({ folder, depth }) => {
+        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="folder" /><div><h3 id="mm-docs-folders-title">Pastas</h3><p>Organize seus documentos em pastas para facilitar o acesso e a gestão.</p></div></div>{canManage ? <button type="button" className="mm-docs-button is-outlined" disabled={busyFolderId !== null} onClick={() => void handleCreateFolder()}><DocumentIcon name="plus" />Nova pasta</button> : null}</div>
+        {appliedFilters.folderId ? <nav className="mm-docs-breadcrumb documents-folder-breadcrumb" aria-label="Caminho da pasta"><button type="button" onClick={() => selectFolder("")}>Todos</button><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>{breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}</nav> : null}
+        <nav className="mm-docs-folder-grid documents-folder-tree" aria-label={insideFolder ? "Subpastas da pasta atual" : "Pastas de documentos"}>
+          {!insideFolder ? <>
+            <article className={`mm-docs-folder-card ${appliedFilters.folderId === "" ? "is-active" : ""}`}><button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === ""} onClick={() => selectFolder("")}><DocumentIcon name="folder" /><span><strong>Todos os documentos</strong><span>Todas as pastas</span></span></button></article>
+            <article className={`mm-docs-folder-card ${appliedFilters.folderId === "root" ? "is-active" : ""}`}><button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === "root"} onClick={() => selectFolder("root")}><DocumentIcon name="folder" /><span><strong>Raiz</strong><span>{countLabel(facets.rootCount)}</span></span></button></article>
+          </> : null}
+          {foldersLoading ? <p className="mm-docs-folder-status" role="status">Carregando pastas...</p> : directFolders.map(folder => {
             const path = folderPath(String(folder.id));
             return <article key={String(folder.id)} className={`mm-docs-folder-card ${appliedFilters.folderId === String(folder.id) ? "is-active" : ""}`}>
-              <button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === String(folder.id)} title={path} onClick={() => selectFolder(String(folder.id))}><DocumentIcon name="folder" /><span><strong>{folder.name}</strong><span>{countLabel(folderCountById.get(String(folder.id)) || 0)}</span>{depth > 0 ? <small>{path}</small> : null}</span></button>
+              <button type="button" className="mm-docs-folder-select" aria-pressed={appliedFilters.folderId === String(folder.id)} title={path} onClick={() => selectFolder(String(folder.id))}><DocumentIcon name="folder" /><span><strong>{folder.name}</strong><span>{countLabel(folderCountById.get(String(folder.id)) || 0)}</span></span></button>
               {canManage ? <DocumentActionMenu label={`Ações da pasta ${path}`} disabled={String(busyFolderId) === String(folder.id)} actions={[
                 { label: "Renomear pasta", onSelect: () => void handleRenameFolder(folder) },
                 { label: "Excluir pasta vazia", danger: true, onSelect: () => void handleDeleteFolder(folder) },
               ]} /> : null}
             </article>;
           })}
+          {!foldersLoading && insideFolder && directFolders.length === 0 ? <p className="mm-docs-folder-empty">Esta pasta não possui subpastas.</p> : null}
         </nav>
-        {appliedFilters.folderId ? <nav className="mm-docs-breadcrumb" aria-label="Caminho da pasta"><button type="button" onClick={() => selectFolder("")}>Todos</button><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>{breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={appliedFilters.folderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}</nav> : null}
       </section> : null}
 
       <section className="mm-docs-panel" aria-labelledby="mm-docs-filter-title">
         <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="search" /><div><h3 id="mm-docs-filter-title">Buscar e filtrar</h3><p>Encontre documentos rapidamente usando os filtros abaixo.</p></div></div></div>
-        <form className={`mm-docs-filters ${documentState === "trash" ? "is-trash" : ""}`} onSubmit={applyDocumentFilters}>
+        <form className={`mm-docs-filters documents-filter-toolbar ${documentState === "trash" ? "is-trash" : ""}`} onSubmit={applyDocumentFilters}>
           <label className="mm-docs-field mm-docs-search"><span>Buscar</span><span className="mm-docs-search-control"><DocumentIcon name="search" /><input type="search" value={filterDraft.search} placeholder="Nome do documento..." onChange={event => setFilterDraft(current => ({ ...current, search: event.target.value }))} /></span></label>
           <label className="mm-docs-field mm-docs-type"><span>Tipo</span><select value={filterDraft.type} onChange={event => setFilterDraft(current => ({ ...current, type: event.target.value }))}><option value="">Todos</option>{facets.types.map(type => <option key={type} value={type}>{fileTypeLabel(type)}</option>)}</select></label>
           <label className="mm-docs-field mm-docs-project"><span>Projeto</span><select value={filterDraft.projectId} onChange={event => setFilterDraft(current => ({ ...current, projectId: event.target.value }))}><option value="">Todos</option>{facets.projects.map(project => <option key={String(project.id)} value={String(project.id)}>{project.name}</option>)}</select></label>
@@ -1287,31 +1324,181 @@ function OrganizationDocuments({
       {error ? <p className="mm-docs-error" role="alert">{error}</p> : null}
       {documentState === "active" && pendingUpload?.retryable && canUpload && !uploading && !transferBusy ? <button type="button" className="mm-docs-button is-outlined" onClick={() => void handleUpload(pendingUpload.file, pendingUpload.idempotencyKey)}>Tentar enviar novamente</button> : null}
 
-      <section className="mm-docs-panel mm-docs-results" aria-labelledby="mm-docs-results-title">
-        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name={documentState === "trash" ? "trash" : "file"} /><div><h3 id="mm-docs-results-title">{documentState === "trash" ? "Documentos na Lixeira" : "Documentos encontrados"}</h3><p>{initialLoading ? "Carregando documentos..." : error ? "A consulta precisa de atenção." : `${pagination.total} ${documentState === "trash" ? "itens na Lixeira" : "documentos na consulta atual"}`}</p></div></div></div>
-        {initialLoading && files.length === 0 ? <TableSkeleton headers={documentState === "trash" ? TRASH_HEADERS : DOCUMENT_HEADERS} rows={5} className="mm-docs-table-skeleton" /> : files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name={documentState === "trash" ? "trash" : "folder"} /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : documentState === "trash" ? "A Lixeira está vazia." : "Nenhum documento."}</p></div> : files.length === 0 ? null : <>
-          <div className="mm-docs-table-scroll" role="region" aria-label={documentState === "trash" ? "Tabela da Lixeira" : "Tabela de documentos"} tabIndex={0} aria-busy={refreshing || loadingMore}>
-            <table className={`mm-docs-table ${documentState === "trash" ? "is-trash" : ""}`}><thead><tr>{(documentState === "trash" ? TRASH_HEADERS : DOCUMENT_HEADERS).map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{files.map(file => {
+      {documentState === "active" ? <ActiveDocumentsResults
+        key={resultsKey}
+        files={files}
+        pagination={pagination}
+        initialLoading={initialLoading}
+        error={error}
+        hasActiveFilters={hasActiveFilters}
+        refreshing={refreshing}
+        loadingMore={loadingMore}
+        busyFileId={busyFileId}
+        transferBusy={transferBusy}
+        canManage={canManage}
+        canDownload={canDownload}
+        canDelete={canDelete}
+        folderTree={folderTree}
+        folderPath={folderPath}
+        onMove={handleMoveFile}
+        onDownload={handleDownload}
+        onDelete={handleDelete}
+        onLoadMore={loadMoreDocuments}
+      /> : <section className="mm-docs-panel mm-docs-results" aria-labelledby="mm-docs-results-title">
+        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="trash" /><div><h3 id="mm-docs-results-title">Documentos na Lixeira</h3><p>{initialLoading ? "Carregando documentos..." : error ? "A consulta precisa de atenção." : `${pagination.total} itens na Lixeira`}</p></div></div></div>
+        {initialLoading && files.length === 0 ? <TableSkeleton headers={TRASH_HEADERS} rows={5} className="mm-docs-table-skeleton" /> : files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name="trash" /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : "A Lixeira está vazia."}</p></div> : files.length === 0 ? null : <>
+          <div className="mm-docs-table-scroll" role="region" aria-label="Tabela da Lixeira" tabIndex={0} aria-busy={refreshing || loadingMore}>
+            <table className="mm-docs-table is-trash"><thead><tr>{TRASH_HEADERS.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{files.map(file => {
               const busy = String(busyFileId) === String(file.id);
-              if (documentState === "trash") {
-                const expired = restoreExpired(file);
-                return <tr key={file.id}><td>{fileIdentity(file)}</td><td>{trashedFromFolderLabel(file)}</td><td>{deletedByLabel(file)}</td><td>{formatDate(file.deletedAt)}</td><td>{formatDate(file.purgeAfter)}</td><td><div className="mm-docs-row-actions">
-                  {canDelete ? <button type="button" className="mm-docs-button" disabled={busy || expired} title={expired ? "Prazo de restauração expirado." : undefined} onClick={() => void handleRestore(file)}><DocumentIcon name="restore" />{busy ? "Processando..." : expired ? "Prazo expirado" : "Restaurar"}</button> : null}
-                  {permanentPurgeEnabled && canManage && canDelete ? <DocumentActionMenu label={`Ações de ${file.name}`} disabled={busy} actions={[{ label: "Excluir permanentemente", danger: true, onSelect: () => void handlePermanentPurge(file) }]} /> : null}
-                  {!canDelete ? "—" : null}
-                </div></td></tr>;
-              }
-              return <tr key={file.id}><td>{fileIdentity(file)}</td><td title={file.mimeType || undefined}><span className="mm-docs-type-badge">{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</span></td><td>{formatBytes(file.size)}</td><td>{formatDate(file.updatedAt || file.createdAt)}</td><td><div className="mm-docs-row-actions">
-                {canManage ? <select className="mm-docs-move" value="" disabled={busy || transferBusy} aria-label={`Mover ${file.name} para pasta`} onChange={event => { const target = event.target.value; if (target) void handleMoveFile(file, target); }}><option value="">Mover para...</option><option value="root">Raiz</option>{folderTree.map(({ folder }) => <option key={String(folder.id)} value={String(folder.id)} disabled={String(file.folderId) === String(folder.id)}>{folderPath(String(folder.id))}</option>)}</select> : null}
-                {canDownload ? <button type="button" className="mm-docs-button" disabled={busy || transferBusy} onClick={() => void handleDownload(file)}><DocumentIcon name="download" />{busy ? "Processando..." : "Baixar"}</button> : null}
-                {canDelete ? <DocumentActionMenu label={`Ações de ${file.name}`} disabled={busy || transferBusy} actions={[{ label: "Excluir", danger: true, onSelect: () => void handleDelete(file) }]} /> : null}
-                {!canDownload && !canDelete && !canManage ? "—" : null}
+              const expired = restoreExpired(file);
+              return <tr key={file.id}><td><DocumentFileIdentity file={file} /></td><td>{trashedFromFolderLabel(file)}</td><td>{deletedByLabel(file)}</td><td>{formatDate(file.deletedAt)}</td><td>{formatDate(file.purgeAfter)}</td><td><div className="mm-docs-row-actions">
+                {canDelete ? <button type="button" className="mm-docs-button" disabled={busy || expired} title={expired ? "Prazo de restauração expirado." : undefined} onClick={() => void handleRestore(file)}><DocumentIcon name="restore" />{busy ? "Processando..." : expired ? "Prazo expirado" : "Restaurar"}</button> : null}
+                {permanentPurgeEnabled && canManage && canDelete ? <DocumentActionMenu label={`Ações de ${file.name}`} disabled={busy} actions={[{ label: "Excluir permanentemente", danger: true, onSelect: () => void handlePermanentPurge(file) }]} /> : null}
+                {!canDelete ? "—" : null}
               </div></td></tr>;
             })}</tbody></table>
           </div>
-          <div className="mm-docs-pagination"><span role="status">{refreshing ? "Atualizando documentos." : `Exibindo ${files.length} de ${pagination.total} ${documentState === "trash" ? "item" : "documento"}${pagination.total === 1 ? "" : "s"}${documentState === "trash" ? " na Lixeira" : ""}.`}</span>{pagination.hasMore && pagination.nextCursor ? <button type="button" className="mm-docs-button is-outlined" disabled={loadingMore || refreshing} onClick={loadMoreDocuments}>{loadingMore ? "Carregando..." : "Carregar mais"}</button> : null}</div>
+          <div className="mm-docs-pagination"><span role="status">{refreshing ? "Atualizando documentos." : `Exibindo ${files.length} de ${pagination.total} itens na Lixeira.`}</span>{pagination.hasMore && pagination.nextCursor ? <button type="button" className="mm-docs-button is-outlined" disabled={loadingMore || refreshing} onClick={loadMoreDocuments}>{loadingMore ? "Carregando..." : "Carregar mais"}</button> : null}</div>
         </>}
-      </section>
+      </section>}
     </section>
   </>;
+}
+
+type ActiveDocumentsResultsProps = {
+  files: OrganizationFile[];
+  pagination: OrganizationFileListPagination;
+  initialLoading: boolean;
+  error: string | null;
+  hasActiveFilters: boolean;
+  refreshing: boolean;
+  loadingMore: boolean;
+  busyFileId: number | string | null;
+  transferBusy: boolean;
+  canManage: boolean;
+  canDownload: boolean;
+  canDelete: boolean;
+  folderTree: DocumentFolderTreeEntry[];
+  folderPath: (id: string) => string;
+  onMove: (file: OrganizationFile, targetFolderId: string) => Promise<void>;
+  onDownload: (file: OrganizationFile) => Promise<void>;
+  onDelete: (file: OrganizationFile) => Promise<void>;
+  onLoadMore: () => void;
+};
+
+function documentVisualType(file: OrganizationFile) {
+  const type = String(file.fileType || fileExtension(file.name) || "other").toLowerCase();
+  if (type === "json" || type === "geojson") return { tone: "code", mark: "{ }" };
+  if (type === "pdf") return { tone: "pdf", mark: "PDF" };
+  if (["csv", "spreadsheet", "xlsx", "xls"].includes(type)) return { tone: "sheet", mark: "XLS" };
+  if (["image", "png", "jpg", "jpeg", "webp"].includes(type)) return { tone: "image", mark: "IMG" };
+  if (type === "zip") return { tone: "zip", mark: "ZIP" };
+  return { tone: "document", mark: "DOC" };
+}
+
+function DocumentFileIdentity({ file }: { file: OrganizationFile }) {
+  const visual = documentVisualType(file);
+  return <div className="mm-docs-file-identity"><span className={`mm-docs-file-icon is-${visual.tone}`} aria-hidden="true"><span>{visual.mark}</span></span><span className="mm-docs-file-copy"><span className="documents-file-name" title={file.name}>{file.name}</span>{file.projectName ? <span className="documents-file-project">{file.projectName}</span> : null}</span></div>;
+}
+
+function ActiveDocumentActions({
+  file,
+  busy,
+  transferBusy,
+  canManage,
+  canDownload,
+  canDelete,
+  folderTree,
+  folderPath,
+  onMove,
+  onDownload,
+  onDelete,
+}: {
+  file: OrganizationFile;
+  busy: boolean;
+  transferBusy: boolean;
+  canManage: boolean;
+  canDownload: boolean;
+  canDelete: boolean;
+  folderTree: DocumentFolderTreeEntry[];
+  folderPath: (id: string) => string;
+  onMove: (file: OrganizationFile, targetFolderId: string) => Promise<void>;
+  onDownload: (file: OrganizationFile) => Promise<void>;
+  onDelete: (file: OrganizationFile) => Promise<void>;
+}) {
+  return <div className="mm-docs-row-actions">
+    {canManage ? <span className="mm-docs-move-control"><DocumentIcon name="folder" /><select className="mm-docs-move" value="" disabled={busy || transferBusy} aria-label={`Mover ${file.name} para pasta`} onChange={event => { const target = event.target.value; if (target) void onMove(file, target); }}><option value="">Mover para...</option><option value="root">Raiz</option>{folderTree.map(({ folder }) => <option key={String(folder.id)} value={String(folder.id)} disabled={String(file.folderId) === String(folder.id)}>{folderPath(String(folder.id))}</option>)}</select><DocumentIcon name="chevron" /></span> : null}
+    {canDownload ? <button type="button" className="mm-docs-button" disabled={busy || transferBusy} onClick={() => void onDownload(file)}><DocumentIcon name="download" />{busy ? "Processando..." : "Baixar"}</button> : null}
+    {canDelete ? <DocumentActionMenu label={`Ações de ${file.name}`} disabled={busy || transferBusy} actions={[{ label: "Excluir", danger: true, onSelect: () => void onDelete(file) }]} /> : null}
+    {!canDownload && !canDelete && !canManage ? "—" : null}
+  </div>;
+}
+
+function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
+  const {
+    files,
+    pagination,
+    initialLoading,
+    error,
+    hasActiveFilters,
+    refreshing,
+    loadingMore,
+  } = props;
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [pageSize, setPageSize] = useState(10);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pendingNext, setPendingNext] = useState(false);
+
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pageSize));
+  const safePageIndex = Math.min(pageIndex, totalPages - 1);
+  const start = safePageIndex * pageSize;
+  const visibleFiles = files.slice(start, start + pageSize);
+  const firstShown = pagination.total === 0 ? 0 : start + 1;
+  const lastShown = Math.min(start + visibleFiles.length, pagination.total);
+  const canGoPrevious = safePageIndex > 0;
+  const canGoNext = safePageIndex + 1 < totalPages;
+
+  useEffect(() => {
+    if (pageIndex !== safePageIndex) setPageIndex(safePageIndex);
+  }, [pageIndex, safePageIndex]);
+
+  useEffect(() => {
+    if (!pendingNext) return;
+    const nextStart = (safePageIndex + 1) * pageSize;
+    if (files.length > nextStart || (!pagination.hasMore && files.length > start)) {
+      setPageIndex((current) => Math.min(current + 1, totalPages - 1));
+      setPendingNext(false);
+    }
+  }, [pendingNext, files.length, pagination.hasMore, safePageIndex, pageSize, start, totalPages]);
+
+  function goNext() {
+    if (!canGoNext || pendingNext) return;
+    const nextStart = (safePageIndex + 1) * pageSize;
+    if (nextStart < files.length) {
+      setPageIndex(safePageIndex + 1);
+      return;
+    }
+    if (pagination.hasMore && pagination.nextCursor) {
+      setPendingNext(true);
+      props.onLoadMore();
+    }
+  }
+
+  return <section className="mm-docs-panel mm-docs-results" aria-labelledby="mm-docs-results-title">
+    <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="file" /><div><h3 id="mm-docs-results-title">Documentos encontrados</h3><p>{initialLoading ? "Carregando documentos..." : error ? "A consulta precisa de atenção." : `Exibindo ${firstShown}–${lastShown} de ${pagination.total} documentos.`}</p></div></div>
+      <div className="mm-docs-view-mode" role="group" aria-label="Modo de visualização"><button type="button" className="mm-docs-view-mode-button" aria-label="Visualização em lista" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")}><DocumentIcon name="list" /></button><button type="button" className="mm-docs-view-mode-button" aria-label="Visualização em grade" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")}><DocumentIcon name="grid" /></button></div>
+    </div>
+    {initialLoading && files.length === 0 ? <TableSkeleton headers={DOCUMENT_HEADERS} rows={5} className="mm-docs-table-skeleton" /> : files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name="folder" /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : "Nenhum documento."}</p></div> : files.length === 0 ? null : <>
+      {viewMode === "list" ? <div className="mm-docs-table-scroll" role="region" aria-label="Tabela de documentos" tabIndex={0} aria-busy={refreshing || loadingMore || pendingNext}>
+        <table className="mm-docs-table"><thead><tr>{DOCUMENT_HEADERS.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{visibleFiles.map(file => {
+          const busy = String(props.busyFileId) === String(file.id);
+          return <tr key={file.id}><td><DocumentFileIdentity file={file} /></td><td title={file.mimeType || undefined}><span className="mm-docs-type-badge">{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</span></td><td>{formatBytes(file.size)}</td><td>{formatDate(file.updatedAt || file.createdAt)}</td><td><ActiveDocumentActions {...props} file={file} busy={busy} /></td></tr>;
+        })}</tbody></table>
+      </div> : <div className="mm-docs-file-grid" role="list" aria-label="Grade de documentos">{visibleFiles.map(file => {
+        const busy = String(props.busyFileId) === String(file.id);
+        return <article className="mm-docs-file-card" role="listitem" key={file.id}><DocumentFileIdentity file={file} /><div className="mm-docs-file-card-meta"><span><small>Tipo</small><strong>{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</strong></span><span><small>Tamanho</small><strong>{formatBytes(file.size)}</strong></span><span><small>Atualizado em</small><strong>{formatDate(file.updatedAt || file.createdAt)}</strong></span></div><ActiveDocumentActions {...props} file={file} busy={busy} /></article>;
+      })}</div>}
+      <div className="mm-docs-pagination"><span role="status">{refreshing || pendingNext ? "Atualizando documentos." : `Exibindo ${firstShown}–${lastShown} de ${pagination.total} documentos.`}</span><div className="mm-docs-page-controls"><label>Itens por página <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageIndex(0); setPendingNext(false); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><button type="button" className="mm-docs-page-arrow is-previous" aria-label="Página anterior" disabled={!canGoPrevious || refreshing || loadingMore || pendingNext} onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}><DocumentIcon name="chevron" /></button><span className="mm-docs-page-number" aria-current="page">{safePageIndex + 1}</span><button type="button" className="mm-docs-page-arrow" aria-label="Próxima página" disabled={!canGoNext || refreshing || loadingMore || pendingNext} onClick={goNext}><DocumentIcon name="chevron" /></button></div></div>
+    </>}
+  </section>;
 }

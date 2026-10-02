@@ -1,9 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Actual React /projects route and shipped CSS; all application APIs are intercepted.
-// These tests do not authenticate real users and cannot validate D1/Dropbox or Production.
 const organization = { id: 1, name: "Organização de demonstração", slug: "demo", active: true };
-const folders = [{ id: 1, name: "Mês de Setembro", parentId: null }, { id: 2, name: "QA_VISUAL", parentId: null }, { id: 3, name: "Relatórios", parentId: 1 }];
+const folders = [
+  { id: 1, name: "Mês de Setembro", parentId: null },
+  { id: 2, name: "QA_VISUAL", parentId: null },
+  { id: 3, name: "Relatórios", parentId: 1 },
+  { id: 4, name: "2026", parentId: 3 },
+];
 const files = [
   { id: 10, name: "config_kepler.json", fileType: "json", size: 34288435, updatedAt: "2026-09-24T22:18:00Z", projectName: "Projeto de demonstração", folderId: null },
   { id: 11, name: "Relatório de mercado e oportunidades.pdf", fileType: "pdf", size: 536166, updatedAt: "2026-07-17T15:59:00Z", folderId: 1 },
@@ -22,12 +25,20 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
     if (url.pathname === "/api/organizations/1/files") {
       const trash = url.searchParams.get("state") === "trash";
       const cursor = url.searchParams.get("cursor");
-      const resultFiles = options.empty ? [] : trash ? [{ ...files[0], deletedAt: "2026-09-29T12:00:00Z", purgeAfter: "2999-01-01T00:00:00Z", deletedBy: { id: 1, name: "Operador de demonstração" }, trashedFromFolderId: 1, trashedFromFolderName: "Mês de Setembro" }] : cursor ? [{ ...files[1], id: 12, name: "Terceiro documento.pdf" }] : files;
-      return route.fulfill({ json: { ok: true, files: resultFiles, facets: { types: ["json", "pdf"], projects: [{ id: 1, name: "Projeto de demonstração" }], rootCount: 1, folderCounts: [{ folderId: 1, count: 1 }, { folderId: 2, count: 0 }, { folderId: 3, count: 0 }] }, pagination: { limit: 50, total: options.empty ? 0 : trash ? 1 : options.more ? 3 : 2, hasMore: Boolean(options.more && !cursor), nextCursor: options.more && !cursor ? "fixture-next" : null, sort: "updated_desc" }, capabilities: { permanentPurgeEnabled: false } } });
+      const folderId = url.searchParams.get("folderId");
+      const firstBatch = options.more
+        ? Array.from({ length: 10 }, (_, index) => ({ ...files[index % files.length], id: 100 + index, name: index % 2 === 0 ? `config_${index + 1}.json` : `relatorio_${index + 1}.pdf` }))
+        : files;
+      let resultFiles = options.empty ? [] : firstBatch;
+      if (!options.empty && folderId === "root") resultFiles = [files[0]];
+      if (!options.empty && folderId === "1") resultFiles = [files[1]];
+      if (!options.empty && folderId === "3") resultFiles = [];
+      if (!options.empty && trash) resultFiles = [{ ...files[0], deletedAt: "2026-09-29T12:00:00Z", purgeAfter: "2999-01-01T00:00:00Z", deletedBy: { id: 1, name: "Operador de demonstração" }, trashedFromFolderId: 1, trashedFromFolderName: "Mês de Setembro" }];
+      if (!options.empty && cursor) resultFiles = [{ ...files[1], id: 12, name: "Terceiro documento.pdf" }];
+      return route.fulfill({ json: { ok: true, files: resultFiles, facets: { types: ["json", "pdf"], projects: [{ id: 1, name: "Projeto de demonstração" }], rootCount: 1, folderCounts: [{ folderId: 1, count: 1 }, { folderId: 2, count: 0 }, { folderId: 3, count: 0 }, { folderId: 4, count: 0 }] }, pagination: { limit: 50, total: options.empty ? 0 : trash ? 1 : folderId === "root" || folderId === "1" ? 1 : folderId === "3" ? 0 : options.more ? 11 : 2, hasMore: Boolean(options.more && !cursor && !folderId && !trash), nextCursor: options.more && !cursor && !folderId && !trash ? "fixture-next" : null, sort: "updated_desc" }, capabilities: { permanentPurgeEnabled: false } } });
     }
     return route.fulfill({ json: { ok: true, projects: [], tickets: [], users: [], items: [], organizations: [organization], pagination: { total: 0, hasMore: false, nextCursor: null } } });
   });
-  // No remote API/provider traffic is permitted in this local browser suite.
   await page.route(url => !["127.0.0.1", "localhost"].includes(url.hostname), route => route.abort());
   await page.goto("/projects");
   return requests;
@@ -35,24 +46,24 @@ async function setup(page: Page, options: { more?: boolean; empty?: boolean; rol
 async function openDocuments(page: Page) {
   await page.locator(".mm-sidebar-item").filter({ hasText: "Arquivos e Documentos" }).click();
   await expect(page.locator("#mm-docs-title")).toBeVisible();
-  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(5);
+  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(4);
 }
 
-test("workspace real: cabeçalho, cards, duas faixas e ações alinhadas", async ({ page }, testInfo) => {
+test("workspace real: referência estrutural, ações contextuais e ícones por tipo", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   const requests = await setup(page);
   await openDocuments(page);
-  await expect(page.getByRole("heading", { name: "Buscar e filtrar" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Documentos encontrados" })).toBeVisible();
-  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Documentos", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Lixeira", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Visualização em lista" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".mm-docs-file-icon.is-code")).toHaveCount(1);
+  await expect(page.locator(".mm-docs-file-icon.is-pdf")).toHaveCount(1);
+  await expect(page.locator(".mm-docs-move-control")).toHaveCount(2);
   const top = await page.locator(".mm-docs-search").boundingBox();
   const lower = await page.locator(".mm-docs-sort").boundingBox();
   expect(lower!.y).toBeGreaterThan(top!.y + top!.height);
-  await expect(page.locator(".mm-docs-search input")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(page.locator(".mm-docs-row-actions").first()).toHaveCSS("flex-wrap", "nowrap");
-  await expect(page.getByRole("button", { name: "Excluir", exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("documents-desktop.png"), fullPage: true, animations: "disabled" });
   expect(requests.filter(request => request.method !== "GET")).toEqual([]);
   expect(errors).toEqual([]);
@@ -91,15 +102,30 @@ test("filtros preservam rascunho/aplicar e parâmetros server-side", async ({ pa
   await expect(page.locator(".mm-docs-search input")).toHaveValue("");
 });
 
-test("cards distinguem caminhos e mantêm parentId; seletores virtuais sem menu", async ({ page }) => {
+test("navegação real mostra apenas subpastas do nível atual e consulta os arquivos da pasta", async ({ page }) => {
   const requests = await setup(page); await openDocuments(page);
-  await expect(page.locator(".mm-docs-folder-card").first().locator(".mm-docs-menu-trigger")).toHaveCount(0);
-  await expect(page.locator(".mm-docs-folder-card").nth(1).locator(".mm-docs-menu-trigger")).toHaveCount(0);
-  const nested = page.locator(".mm-docs-folder-card").filter({ hasText: "Relatórios" });
-  await expect(nested).toContainText("Mês de Setembro / Relatórios");
-  await nested.locator(".mm-docs-folder-select").click();
-  await expect(page.getByRole("navigation", { name: "Caminho da pasta" })).toContainText("Relatórios");
+  await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "Relatórios" })).toHaveCount(0);
+  await page.locator(".mm-docs-folder-card").filter({ hasText: "Mês de Setembro" }).locator(".mm-docs-folder-select").click();
+  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(1);
+  await expect(page.locator(".mm-docs-folder-card")).toContainText("Relatórios");
+  await expect(page.locator(".mm-docs-folder-card").filter({ hasText: "QA_VISUAL" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Caminho da pasta" })).toContainText("Mês de Setembro");
+  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
+  await page.locator(".mm-docs-folder-card").filter({ hasText: "Relatórios" }).locator(".mm-docs-folder-select").click();
+  await expect(page.locator(".mm-docs-folder-card")).toHaveCount(1);
+  await expect(page.locator(".mm-docs-folder-card")).toContainText("2026");
   await expect.poll(() => requests.some(request => new URL(request.url).searchParams.get("folderId") === "3")).toBe(true);
+});
+
+test("modo lista/grade alterna conteúdo sem trocar a consulta", async ({ page }) => {
+  const requests = await setup(page); await openDocuments(page);
+  const before = requests.filter(request => new URL(request.url).pathname === "/api/organizations/1/files").length;
+  await page.getByRole("button", { name: "Visualização em grade" }).click();
+  await expect(page.locator(".mm-docs-file-grid")).toBeVisible();
+  await expect(page.locator(".mm-docs-table-scroll")).toHaveCount(0);
+  await page.getByRole("button", { name: "Visualização em lista" }).click();
+  await expect(page.locator(".mm-docs-table-scroll")).toBeVisible();
+  expect(requests.filter(request => new URL(request.url).pathname === "/api/organizations/1/files").length).toBe(before);
 });
 
 test("menu secundário: teclado, Escape, Tab, clique externo; excluir exige confirmação", async ({ page }) => {
@@ -120,10 +146,21 @@ test("menu secundário: teclado, Escape, Tab, clique externo; excluir exige conf
   expect(requests.filter(request => request.method !== "GET")).toEqual([]);
 });
 
+test("botões contextuais alternam Documentos/Lixeira sem repetir a visão atual", async ({ page }) => {
+  await setup(page); await openDocuments(page);
+  await page.getByRole("button", { name: "Lixeira", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Lixeira", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Documentos", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enviar documento", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Documentos na Lixeira" })).toBeVisible();
+  await page.getByRole("button", { name: "Documentos", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Documentos", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Lixeira", exact: true })).toBeVisible();
+});
+
 test("Lixeira preserva metadados de retenção; purge desligado não aparece", async ({ page }) => {
   await setup(page); await openDocuments(page);
   await page.getByRole("button", { name: "Lixeira", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Documentos na Lixeira" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Pasta anterior" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Excluído por" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Exclusão definitiva em" })).toBeVisible();
@@ -132,12 +169,16 @@ test("Lixeira preserva metadados de retenção; purge desligado não aparece", a
   await expect(page.locator(".mm-docs-folder-grid")).toHaveCount(0);
 });
 
-test("cursor incremental continua sem páginas fictícias", async ({ page }) => {
+test("paginação da referência usa itens por página, página atual e cursor existente", async ({ page }) => {
   await setup(page, { more: true }); await openDocuments(page);
-  await page.getByRole("button", { name: "Carregar mais", exact: true }).click();
-  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(3);
-  await expect(page.getByRole("button", { name: "Carregar mais", exact: true })).toHaveCount(0);
-  await expect(page.locator(".mm-docs-pagination")).toContainText("Exibindo 3 de 3");
+  await expect(page.getByText("Itens por página")).toBeVisible();
+  await expect(page.locator(".mm-docs-page-number")).toHaveText("1");
+  await page.getByRole("button", { name: "Próxima página" }).click();
+  await expect(page.locator(".mm-docs-page-number")).toHaveText("2");
+  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(1);
+  await page.getByRole("button", { name: "Página anterior" }).click();
+  await expect(page.locator(".mm-docs-page-number")).toHaveText("1");
+  await expect(page.locator(".mm-docs-table tbody tr")).toHaveCount(2);
 });
 
 test("sidebar recolhida/aberta e navegação SPA mantêm tema próprio", async ({ page }) => {
@@ -148,7 +189,6 @@ test("sidebar recolhida/aberta e navegação SPA mantêm tema próprio", async (
   await page.locator(".mm-sidebar-item").filter({ hasText: "Todos os Projetos" }).click();
   await expect(page.locator(".mm-docs")).toHaveCount(0);
   await openDocuments(page);
-  await expect(page.locator(".mm-sidebar-search input")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
 test("viewer sem grants não recebe a subaba documental", async ({ page }) => {

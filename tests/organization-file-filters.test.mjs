@@ -173,7 +173,10 @@ test("UI implementa árvore, breadcrumb, CRUD, move e filtro por pasta", async (
   assert.match(source, /moveOrganizationFileToFolder/);
   assert.match(source, /folderId/);
   assert.match(source, /Limpar filtros/);
-  assert.match(source, /Carregar mais/);
+  assert.match(source, /Itens por página/);
+  assert.match(source, /directFolders/);
+  assert.match(source, /folder\.parentId == null/);
+  assert.match(source, /String\(folder\.parentId \?\? ""\) === currentFolderId/);
   assert.match(source, /updatedFrom/);
   assert.match(source, /projectId/);
   assert.match(source, /Lixeira/);
