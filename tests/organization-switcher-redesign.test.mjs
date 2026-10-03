@@ -91,9 +91,25 @@ for (const [path, hash] of Object.entries(preserved)) {
       line => line.replace('border: 1px solid transparent;', 'border: 1px solid var(--mm-border);')
         .replace('background: transparent;', 'background: linear-gradient(120deg, #11151a, #0d1116);'),
     );
-    if (path === 'src/platform-density.css') source = source
-      .replace('min-width: 140px; margin-inline-end: 8px;', 'min-width: 140px; margin-inline-end: 0;')
-      .replace('.mm-project-pages__new { width: 100%; margin-inline-end: 0; }', '.mm-project-pages__new { width: 100%; }');
+    if (path === 'src/platform-density.css') {
+      // Reverse only the later approved title-icon cleanup. The old hash below
+      // still rejects every unrelated density/layout change.
+      const title = 'body .mm-projects-page .mm-docs h2 { font-size: var(--maono-density-heading); }\n';
+      const mobile = '@container (max-width: 560px) {\n  body .mm-projects-page :is(.mm-docs-filters';
+      assert.equal(source.split(title).length - 1, 1);
+      assert.equal(source.split(mobile).length - 1, 1);
+      assert.ok(!source.includes('.mm-docs-heading'));
+      source = source.replace(title, title +
+        'body .mm-projects-page .mm-docs-heading { gap: 14px; }\n' +
+        'body .mm-projects-page .mm-docs-heading > .mm-docs-icon { width: 34px; height: 34px; }\n',
+      ).replace(mobile,
+        '@container (max-width: 560px) {\n' +
+        '  body .mm-projects-page .mm-docs-heading { gap: 10px; }\n' +
+        '  body .mm-projects-page .mm-docs-heading > .mm-docs-icon { width: 30px; height: 30px; }\n' +
+        '  body .mm-projects-page :is(.mm-docs-filters',
+      ).replace('min-width: 140px; margin-inline-end: 8px;', 'min-width: 140px; margin-inline-end: 0;')
+        .replace('.mm-project-pages__new { width: 100%; margin-inline-end: 0; }', '.mm-project-pages__new { width: 100%; }');
+    }
     assert.equal(createHash('sha256').update(source).digest('hex'), hash);
   });
 }

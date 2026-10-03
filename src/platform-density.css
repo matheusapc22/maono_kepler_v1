@@ -128,8 +128,6 @@ body .mm-projects-page .mm-project-pages__grid { grid-template-columns: repeat(4
  * positioning, native dialog focus/escape behavior or horizontal table scroll. */
 body .mm-projects-page .mm-docs { gap: var(--maono-density-space-3); }
 body .mm-projects-page .mm-docs h2 { font-size: var(--maono-density-heading); }
-body .mm-projects-page .mm-docs-heading { gap: 14px; }
-body .mm-projects-page .mm-docs-heading > .mm-docs-icon { width: 34px; height: 34px; }
 body .mm-projects-page .mm-docs-panel-header { padding: 14px 16px; }
 body .mm-projects-page .mm-docs-folder-grid { padding: 0 16px 14px; gap: 10px; }
 body .mm-projects-page .mm-docs-folder-select { min-height: 72px; padding: 12px; gap: 10px; }
@@ -270,8 +268,6 @@ body .mm-projects-page .mm-projects-content .mm-project-card__more {
   height: var(--maono-density-control) !important;
 }
 @container (max-width: 560px) {
-  body .mm-projects-page .mm-docs-heading { gap: 10px; }
-  body .mm-projects-page .mm-docs-heading > .mm-docs-icon { width: 30px; height: 30px; }
   body .mm-projects-page :is(.mm-docs-filters, .mm-docs-folder-grid, .mm-docs-panel-header) { padding-inline: 12px; }
 }
 @media (max-width: 820px) {

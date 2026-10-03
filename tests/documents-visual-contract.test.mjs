@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const component = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.css', import.meta.url), 'utf8');
+const densityCss = readFileSync(new URL('../src/platform-density.css', import.meta.url), 'utf8');
 const menu = readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8');
 const dialogs = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.tsx', import.meta.url), 'utf8');
 const dialogCss = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.css', import.meta.url), 'utf8');
@@ -169,4 +170,19 @@ test('sort changes use the full server query and reset pages without remounting 
   assert.ok(results.includes('const displayedSort = sortFailed ? pagination.sort : sort'));
   assert.ok(results.includes('pagination.sort === sort'));
   assert.ok(results.includes('Tentar ordenar novamente'));
+});
+
+
+test('document titles omit the duplicate folder icon in normal and unavailable-access views', () => {
+  const headings = [...component.matchAll(/<div className="mm-docs-heading">([\s\S]*?)<\/div><\/div>/g)];
+  assert.equal(headings.length, 2, 'normal and no-organization/denied-access titles');
+  for (const [, heading] of headings) {
+    assert.ok(heading.includes('Arquivos e Documentos'));
+    assert.ok(!heading.includes('DocumentIcon'), 'no decorative duplicate before the title');
+  }
+  assert.match(component, /<div className="mm-docs-panel-title"><DocumentIcon name="folder" \/><div><h3 id="mm-docs-folders-title">Pastas<\/h3>/);
+  assert.match(component, /className="mm-docs-folder-select"[^>]*onClick=\{\(\) => selectFolder\(String\(folder.id\)\)\}><DocumentIcon name="folder" \/>/);
+  assert.ok(!css.includes('.mm-docs-heading > .mm-docs-icon'), 'no obsolete desktop/mobile icon slot');
+  assert.ok(!densityCss.includes('.mm-docs-heading'), 'density overrides do not reserve space for the removed icon');
+  assert.match(css, /\.mm-docs \.mm-docs-heading \{ min-width: 0; \}/);
 });

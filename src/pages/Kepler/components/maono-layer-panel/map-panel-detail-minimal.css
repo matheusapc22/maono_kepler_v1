@@ -500,6 +500,44 @@
   scrollbar-gutter: auto;
 }
 
+/* A quiet extent guide follows the expanded body, without enclosing it. Keep
+ * the trailing section spacing outside the line and all controls to its right. */
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-section[open] > .maono-detail-section__content,
+  .maono-progressive-section[open] > .maono-progressive-section__content
+),
+.maono-layer-panel .maono-filter-detail--inline > .maono-detail-view__scroll {
+  position: relative;
+  padding-inline-start: calc(var(--maono-detail-space) + 2px);
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-section[open] > .maono-detail-section__content,
+  .maono-progressive-section[open] > .maono-progressive-section__content
+)::before,
+.maono-layer-panel .maono-filter-detail--inline > .maono-detail-view__scroll::before {
+  content: "";
+  position: absolute;
+  inset-block: 0 var(--maono-detail-space);
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--maono-layer-gold);
+  opacity: .38;
+  pointer-events: none;
+}
+
+.maono-layer-panel .maono-filter-detail--inline > .maono-detail-view__scroll::before {
+  inset-block-end: 0;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-section[open],
+  .maono-progressive-section[open]
+) > summary > span:first-child > small {
+  padding-inline-start: calc(var(--maono-detail-space) + 2px);
+}
+
 /* Focus follows the visible control, including custom checkbox/switch skins. */
 .maono-layer-panel .maono-detail-view :is(button, input, select, summary):focus-visible {
   outline: 2px solid var(--maono-focus-ring, var(--maono-layer-gold-bright));

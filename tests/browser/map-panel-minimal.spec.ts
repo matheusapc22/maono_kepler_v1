@@ -136,6 +136,75 @@ async function cardless(locator: Locator) {
   for (const edge of ['top', 'left', 'right']) await expect(locator).toHaveCSS(`border-${edge}-width`, '0px');
 }
 
+async function extentGuide(host: Locator, kind: 'layer' | 'filter', width: number) {
+  const space = width <= 560 ? 10 : 12;
+  const geometry = await host.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const guide = getComputedStyle(element, '::before');
+    return {
+      host: { left: box.left, top: box.top, bottom: box.bottom, height: box.height },
+      position: style.position, paddingLeft: parseFloat(style.paddingLeft), paddingBottom: parseFloat(style.paddingBottom),
+      guide: { content: guide.content, position: guide.position, top: parseFloat(guide.top), left: parseFloat(guide.left),
+        bottom: parseFloat(guide.bottom), width: parseFloat(guide.width), height: parseFloat(guide.height),
+        opacity: parseFloat(guide.opacity), color: guide.backgroundColor, pointerEvents: guide.pointerEvents },
+      children: Array.from(element.children).map(child => child.getBoundingClientRect())
+        .filter(child => child.width > 0 && child.height > 0)
+        .map(child => ({ left: child.left, top: child.top, bottom: child.bottom })),
+    };
+  });
+  expect(geometry.position).toBe('relative');
+  expect(geometry.paddingLeft, 'controls stay inset beyond the 2px extent guide').toBe(space + 2);
+  expect(geometry.guide).toMatchObject({ content: '""', position: 'absolute', top: 0, left: 0, width: 2,
+    bottom: kind === 'layer' ? space : 0, opacity: 0.38, color: 'rgb(242, 199, 102)', pointerEvents: 'none' });
+  expect(geometry.guide.height).toBeCloseTo(geometry.host.height - (kind === 'layer' ? space : 0), 0);
+  expect(geometry.children.length).toBeGreaterThan(0);
+  for (const child of geometry.children) {
+    expect(child.left, 'content is indented, not overlaid by the decorative guide').toBeGreaterThanOrEqual(geometry.host.left + space + 2 - 0.5);
+    expect(child.top).toBeGreaterThanOrEqual(geometry.host.top - 0.5);
+    expect(child.bottom, 'the guide reaches the last body content').toBeLessThanOrEqual(geometry.host.top + geometry.guide.height + 0.5);
+  }
+  await cardless(host);
+  return geometry;
+}
+
+async function layerExtentGuides(detail: Locator, width: number) {
+  const sections = detail.locator('.maono-detail-section, .maono-progressive-section');
+  expect(await sections.count()).toBeGreaterThanOrEqual(3);
+  for (const section of await sections.all()) {
+    const summary = section.locator(':scope > summary');
+    const content = section.locator(':scope > .maono-detail-section__content, :scope > .maono-progressive-section__content');
+    const wasOpen = await section.evaluate(element => (element as HTMLDetailsElement).open);
+    if (!wasOpen) await summary.click();
+    await expect(section).toHaveAttribute('open', '');
+    await extentGuide(content, 'layer', width);
+    await expect(summary.locator('small')).toHaveCSS('padding-left', `${(width <= 560 ? 10 : 12) + 2}px`);
+    await summary.click();
+    await expect(content).toBeHidden();
+    expect(await content.evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
+    if (wasOpen) await summary.click();
+  }
+}
+
+async function hintPortal(page: Page, trigger: Locator, text: string) {
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toHaveCount(1);
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText(text);
+  await expect(trigger).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id'))!);
+  await expect(tooltip).toHaveCSS('position', 'fixed');
+  expect(await tooltip.evaluate(element => element.parentElement === document.body)).toBe(true);
+  const viewport = page.viewportSize()!;
+  const box = (await tooltip.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  expect(await tooltip.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  return tooltip;
+}
+
 async function stableChromeAfterScroll(page: Page, scroll: Locator, toolbar: Locator) {
   const fixed = [panel(page).locator('.maono-layer-panel__header'), panel(page).locator('.maono-layer-panel__tabs'), toolbar, panel(page).locator('.maono-layer-panel__save-footer')];
   const before = await Promise.all(fixed.map(locator => locator.boundingBox()));
@@ -271,6 +340,9 @@ test('native layer interiors preserve color, opacity, radius and numeric field e
   await detail.locator('summary').filter({ hasText: 'Dimensão e agrupamento' }).click();
   await expect(detail.getByRole('slider', { name: 'Raio do ponto', exact: true })).toBeVisible();
   const radius = await nudgeRange(detail.locator('.maono-style-range').filter({ hasText: /^Raio do ponto/ }).locator('input[type=range]'), 'Home', 9);
+  await expect(detail.getByRole('button', { name: 'Sobre o agrupamento espacial', exact: true })).toBeFocused();
+  await assertPinnedLayerChrome(page, pinnedBefore);
+  await page.keyboard.press('Tab');
   await expect(detail.locator('.maono-point-spatial-grouping__switch input')).toBeFocused();
   await assertPinnedLayerChrome(page, pinnedBefore);
   await visualEvidence(page, testInfo, 'minimal-native-layer-detail');
@@ -303,6 +375,7 @@ test('inline category filter changes native CSV population, toggles, saves once 
   await importCsv(page);
   await openFilters(page);
   await addFilter(page, 'category');
+  await extentGuide(filterEditor(page).locator(':scope > .maono-detail-view__scroll'), 'filter', page.viewportSize()!.width);
   await expect(filterEditor(page).getByRole('switch', { name: 'Filtro category', exact: true })).toBeVisible();
   const originalFilterId = (await capture(page)).snapshot.filterIds[0];
   await expect(filterEditor(page).locator('.maono-filter-category__options label')).toHaveCount(3);
@@ -456,8 +529,10 @@ test('dataset groups are cardless with truthful layer colors and one rotating ac
   await firstToggle.click();
   await groups.first().locator('.maono-filter-row__open').click();
   await expect(filterEditor(page)).toBeVisible();
+  await extentGuide(filterEditor(page).locator(':scope > .maono-detail-view__scroll'), 'filter', page.viewportSize()!.width);
   await expect(panel(page).locator('.maono-filter-panel__toolbar')).toBeVisible();
   await filterEditor(page).getByRole('button', { name: 'Recolher condição', exact: true }).click();
+  await expect(filterEditor(page)).toHaveCount(0);
   await expect(groups.first().locator('.maono-filter-row')).toBeVisible();
   // Add a second real layer against Dados 1. Its filter group must switch to
   // dataset identity with a neutral marker, instead of choosing an arbitrary layer.
@@ -504,18 +579,27 @@ for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 
     await page.keyboard.press('Escape');
     await rows(page).last().locator('.maono-layer-row__open').click();
     const detail = panel(page).locator('.maono-detail-view').filter({ has: page.locator('.maono-layer-style-editor') });
+    await layerExtentGuides(detail, viewport.width);
     await detail.locator('summary').filter({ hasText: 'Dimensão e agrupamento' }).click();
     await stableChromeAfterScroll(page, detail.locator('.maono-detail-view__scroll'), detail.locator('.maono-detail-view__header'));
     const detailChrome = await Promise.all(layerChrome(page).map(locator => locator.boundingBox()));
     const radius = detail.getByRole('slider', { name: 'Raio do ponto', exact: true });
     await radius.focus();
     await radius.press('Tab');
+    await expect(detail.getByRole('button', { name: 'Sobre o agrupamento espacial', exact: true })).toBeFocused();
+    await assertPinnedLayerChrome(page, detailChrome);
+    await page.keyboard.press('Tab');
     await expect(detail.locator('.maono-point-spatial-grouping__switch input')).toBeFocused();
     await assertPinnedLayerChrome(page, detailChrome);
     await expectStableCanvas(page, canvas);
     await movePointerToMap(page);
     await page.screenshot({ path: testInfo.outputPath(`minimal-layer-detail-${viewport.width}x${viewport.height}.png`) });
     await openFilters(page);
+    await panel(page).locator('.maono-filter-group__toggle').first().click();
+    await panel(page).locator('.maono-filter-row__open').first().click();
+    const filterGuide = await extentGuide(filterEditor(page).locator(':scope > .maono-detail-view__scroll'), 'filter', viewport.width);
+    await testInfo.attach('inline-filter-guide', { body: JSON.stringify(filterGuide, null, 2), contentType: 'application/json' });
+    await filterEditor(page).getByRole('button', { name: 'Recolher condição', exact: true }).click();
     await stableChromeAfterScroll(page, panel(page).locator('.maono-filter-list-region'), panel(page).locator('.maono-filter-panel__toolbar'));
     await expectStableCanvas(page, canvas);
     const handle = page.locator('.maono-map-panel-host__handle');
@@ -557,6 +641,7 @@ test.describe('320px touch viewport', () => {
     await panel(page).getByRole('textbox', { name: 'Nome da camada', exact: true }).press('Enter');
     await openFilters(page);
     await addFilter(page, 'category');
+    await extentGuide(filterEditor(page).locator(':scope > .maono-detail-view__scroll'), 'filter', 320);
     await filterEditor(page).getByRole('checkbox', { name: 'A', exact: true }).tap();
     expect(await exportRows(page)).toHaveLength(3);
     await expect(panel(page).locator('.maono-layer-panel__save-button')).toBeInViewport();
@@ -566,6 +651,105 @@ test.describe('320px touch viewport', () => {
     expect(fixture.unexpectedWrites).toEqual([]);
   });
 });
+
+for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 }]) {
+  test.describe(`contextual panel help at ${viewport.width}×${viewport.height}`, () => {
+    test.use({ viewport, hasTouch: viewport.width === 320 });
+    test('hover, keyboard and click/touch expose unclipped hints without collapsing the panel or moving the canvas', async ({ page }, testInfo) => {
+      const fixture = await openMap(page, { layerCount: 1 });
+      const canvas = await canvasGeometry(page, true);
+      await openLayers(page);
+      await rows(page).first().locator('.maono-layer-row__open').click();
+      const detail = panel(page).locator('.maono-detail-view').filter({ has: page.locator('.maono-layer-style-editor') });
+      const dimension = detail.locator('details').filter({ has: page.locator('summary strong', { hasText: /^Dimensão e agrupamento$/ }) });
+      await dimension.locator('summary').click();
+      const trigger = detail.getByRole('button', { name: 'Sobre o agrupamento espacial', exact: true });
+      const explanation = 'Os agrupamentos são uma representação interna da mesma camada. A visibilidade, a ordem e o estilo lógico permanecem únicos no painel.';
+      await expect(trigger).toBeVisible();
+      await expect(detail.locator('.maono-point-spatial-grouping__description')).toHaveCount(0);
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
+      await trigger.scrollIntoViewIfNeeded();
+      const chrome = await Promise.all(layerChrome(page).map(locator => locator.boundingBox()));
+
+      await trigger.hover();
+      const tooltip = await hintPortal(page, trigger, explanation);
+      await tooltip.hover();
+      await expect(tooltip).toBeVisible();
+      await movePointerToMap(page);
+      await expect(tooltip).toHaveCount(0);
+
+      // Reach the help through the real keyboard order rather than dispatching
+      // synthetic component events. The focused range is immediately before it.
+      const radius = detail.getByRole('slider', { name: 'Raio do ponto', exact: true });
+      await radius.focus();
+      await radius.press('Tab');
+      await expect(trigger).toBeFocused();
+      await hintPortal(page, trigger, explanation);
+      await page.keyboard.press('Escape');
+      await expect(tooltip).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      await expect(dimension).toHaveAttribute('open', '');
+      await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'true');
+      await assertPinnedLayerChrome(page, chrome);
+
+      await trigger.press('Enter');
+      await hintPortal(page, trigger, explanation);
+      await movePointerToMap(page);
+      await expect(tooltip).toBeVisible();
+      await trigger.press('Enter');
+      await expect(tooltip).toHaveCount(0);
+      await trigger.press('Space');
+      await hintPortal(page, trigger, explanation);
+      await page.keyboard.press('Tab');
+      await expect(tooltip).toHaveCount(0);
+      await expect(detail.locator('.maono-point-spatial-grouping__switch input')).toBeFocused();
+      await assertPinnedLayerChrome(page, chrome);
+
+      const activate = async () => viewport.width === 320 ? trigger.tap() : trigger.click();
+      await activate();
+      await hintPortal(page, trigger, explanation);
+      await activate();
+      await expect(tooltip).toHaveCount(0);
+      await activate();
+      await hintPortal(page, trigger, explanation);
+      await panel(page).locator('.maono-layer-panel__header').click();
+      await expect(tooltip).toHaveCount(0);
+      await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'true');
+      await expectStableCanvas(page, canvas);
+
+      await activate();
+      await hintPortal(page, trigger, explanation);
+      await page.screenshot({ path: testInfo.outputPath(`minimal-panel-grouping-hint-${viewport.width}x${viewport.height}.png`) });
+      await page.keyboard.press('Escape');
+      const advanced = detail.locator('details').filter({ has: page.locator('summary strong', { hasText: /^Avançado$/ }) });
+      await advanced.locator('summary').click();
+      const composition = detail.getByRole('button', { name: 'Sobre os modos de composição', exact: true });
+      await expect(composition).toBeVisible();
+      await composition.focus();
+      await hintPortal(page, composition, 'Estes modos são globais e afetam a composição de todas as camadas.');
+      await composition.press('Enter');
+      if (viewport.width === 320) await tooltip.tap();
+      else await tooltip.click();
+      await expect(tooltip).toBeVisible();
+      const scroll = detail.locator('.maono-detail-view__scroll');
+      expect(await scroll.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+      await scroll.hover({ position: { x: 2, y: 2 } });
+      await page.mouse.wheel(0, -1500);
+      await expect(composition).not.toBeInViewport();
+      await expect(tooltip).toHaveCount(0);
+      await radius.focus();
+      await composition.focus();
+      await hintPortal(page, composition, 'Estes modos são globais e afetam a composição de todas as camadas.');
+      await page.keyboard.press('Escape');
+      await expect(tooltip).toHaveCount(0);
+      await expect(advanced).toHaveAttribute('open', '');
+      await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'true');
+      await expectStableCanvas(page, canvas);
+      expect(fixture.saves).toEqual([]);
+      expect(fixture.unexpectedWrites).toEqual([]);
+    });
+  });
+}
 
 test('409 preserves edited layer state and feedback while allowing a later authorized retry', async ({ page }) => {
   const fixture = await openMap(page, { layerCount: 1 });
@@ -592,6 +776,12 @@ test('viewer retains truthful counts and inspection without exposing mutation co
   await expect(panel(page).locator('.maono-layer-panel__save-footer')).toHaveCount(0);
   await expect(panel(page).getByRole('button', { name: 'Adicionar camada', exact: true })).toHaveCount(0);
   await expect(rows(page).locator('.maono-layer-row__visibility')).toHaveCount(0);
+  await rows(page).first().locator('.maono-layer-row__open').click();
+  await expect(panel(page).locator('.maono-layer-inspector__notice')).toHaveText('Modo de visualização: a aparência permanece somente leitura.');
+  await panel(page).locator('summary').filter({ hasText: 'Dimensão e agrupamento' }).click();
+  await expect(panel(page).locator('.maono-point-spatial-grouping__notice')).toHaveText('Modo de visualização: as configurações permanecem somente leitura.');
+  await expect(panel(page).locator('.maono-point-spatial-grouping__notice')).toBeVisible();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
   await openFilters(page);
   await expect(panel(page).getByRole('button', { name: 'Adicionar Filtro', exact: true })).toHaveCount(0);
   await panel(page).locator('.maono-filter-group__toggle').first().click();

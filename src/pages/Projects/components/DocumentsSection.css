@@ -11,8 +11,7 @@
 .mm-docs .mm-docs-context { display: flex; align-items: center; gap: 10px; color: var(--mm-text-soft); font-size: 12px; margin: 0 0 2px; }
 .mm-docs .mm-docs-context .mm-docs-icon { width: 12px; height: 12px; color: var(--mm-muted); }
 .mm-docs .mm-docs-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; padding: 8px 0 10px; }
-.mm-docs .mm-docs-heading { display: flex; align-items: center; gap: 18px; min-width: 0; }
-.mm-docs .mm-docs-heading > .mm-docs-icon { width: 42px; height: 42px; color: var(--maono-accent-bright); }
+.mm-docs .mm-docs-heading { min-width: 0; }
 .mm-docs h2 { margin: 0; font-size: clamp(22px, 2vw, 28px); font-weight: 750; line-height: 1.2; letter-spacing: -.02em; }
 .mm-docs .mm-docs-heading p, .mm-docs .mm-docs-panel-title p { margin: 5px 0 0; color: var(--mm-text-soft); font-size: 13px; }
 .mm-docs .mm-docs-header-actions, .mm-docs .mm-docs-view-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -129,8 +128,6 @@
   .mm-docs .mm-docs-filter-actions > button { flex: 0 1 auto; }
 }
 @container (max-width: 560px) {
-  .mm-docs .mm-docs-heading { align-items: flex-start; gap: 10px; }
-  .mm-docs .mm-docs-heading > .mm-docs-icon { width: 30px; height: 30px; }
   .mm-docs .mm-docs-folder-grid { grid-template-columns: 1fr; padding-inline: 12px; }
   .mm-docs .mm-docs-header-actions { width: 100%; }
   .mm-docs .mm-docs-panel-header { padding: 16px 12px; flex-wrap: wrap; }

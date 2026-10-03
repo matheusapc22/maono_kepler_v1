@@ -33,9 +33,35 @@ const preserved = {
   'functions/api/projects/favorites.js': '865f51ebd6921535e23176d29672bf5b63cba98520eaa8fa1ff46d4afcb69cbd',
 };
 const sha256 = text => createHash('sha256').update(text).digest('hex');
+// The later requested Documents cleanup removes only the decorative title icon.
+// Reverse those exact edits before checking the independently pinned original hash.
+function restoreApprovedDocumentTitleDelta(path, source) {
+  if (path.endsWith('/DocumentsSection.tsx')) {
+    const title = '<div className="mm-docs-heading"><div>';
+    assert.equal(source.split(title).length - 1, 2, 'both approved title variants remain icon-free');
+    return source.replaceAll(title, '<div className="mm-docs-heading"><DocumentIcon name="folder" /><div>');
+  }
+  if (path.endsWith('/DocumentsSection.css')) {
+    const heading = '.mm-docs .mm-docs-heading { min-width: 0; }\n';
+    const mobile = '@container (max-width: 560px) {\n  .mm-docs .mm-docs-folder-grid';
+    assert.equal(source.split(heading).length - 1, 1);
+    assert.equal(source.split(mobile).length - 1, 1);
+    assert.ok(!source.includes('.mm-docs-heading > .mm-docs-icon'));
+    return source.replace(heading,
+      '.mm-docs .mm-docs-heading { display: flex; align-items: center; gap: 18px; min-width: 0; }\n' +
+      '.mm-docs .mm-docs-heading > .mm-docs-icon { width: 42px; height: 42px; color: var(--maono-accent-bright); }\n',
+    ).replace(mobile,
+      '@container (max-width: 560px) {\n' +
+      '  .mm-docs .mm-docs-heading { align-items: flex-start; gap: 10px; }\n' +
+      '  .mm-docs .mm-docs-heading > .mm-docs-icon { width: 30px; height: 30px; }\n' +
+      '  .mm-docs .mm-docs-folder-grid',
+    );
+  }
+  return source;
+}
 for (const [path, expected] of Object.entries(preserved)) {
   test(`preserves original source: ${path}`, () => {
-    assert.equal(sha256(read(path)), expected, 'unrelated presentation, preview, metadata and endpoints stay unchanged');
+    assert.equal(sha256(restoreApprovedDocumentTitleDelta(path, read(path))), expected, 'only the approved Documents title cleanup may differ; unrelated presentation, preview, metadata and endpoints stay unchanged');
     if (hasOriginal) {
       const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
       assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');

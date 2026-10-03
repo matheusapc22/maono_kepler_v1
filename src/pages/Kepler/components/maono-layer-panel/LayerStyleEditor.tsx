@@ -31,6 +31,7 @@ import {
   paletteKindLabel,
   palettesForScale,
 } from "./palettes.ts";
+import PanelHint from "./PanelHint";
 
 const COLOR_SCALE_LABELS: Record<MapColorScale, string> = {
   quantile: "Quantile (distribuição)",
@@ -718,23 +719,28 @@ export default function LayerStyleEditor({
           <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
         </summary>
         <div className="maono-detail-section__content">
-          <label className="maono-style-field">
-            <span>Camadas de dados</span>
-            <select
-              value={normalizedLayerBlending}
-              onChange={(event) => {
-                if (isLayerBlendingMode(event.target.value)) {
-                  onChange({ kind: "layerBlending", value: event.target.value });
-                }
-              }}
-            >
-              {LAYER_BLENDING_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {LAYER_BLENDING_LABELS[mode]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="maono-panel-hint-field">
+            <label className="maono-style-field">
+              <span>Camadas de dados</span>
+              <select
+                value={normalizedLayerBlending}
+                onChange={(event) => {
+                  if (isLayerBlendingMode(event.target.value)) {
+                    onChange({ kind: "layerBlending", value: event.target.value });
+                  }
+                }}
+              >
+                {LAYER_BLENDING_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {LAYER_BLENDING_LABELS[mode]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <PanelHint label="Sobre os modos de composição">
+              {"Estes modos são globais e afetam a composição de todas as camadas."}
+            </PanelHint>
+          </div>
 
           <label className="maono-style-field">
             <span>Overlays sobre o mapa-base</span>
@@ -754,9 +760,6 @@ export default function LayerStyleEditor({
             </select>
           </label>
 
-          <p className="maono-style-help">
-            Estes modos são globais e afetam a composição de todas as camadas.
-          </p>
         </div>
       </details>
 

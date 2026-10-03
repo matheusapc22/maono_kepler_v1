@@ -1414,3 +1414,34 @@ for (const kind of ["file", "folder"] as const) {
     expect(JSON.parse(mutations()[0].body!)).toEqual(kind === "file" ? { folderId: "1" } : { parentId: "2" });
   });
 }
+
+
+for (const width of [320, 1440]) {
+  test(`document title has no duplicate folder icon at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await setup(page); await openDocuments(page);
+    const heading = page.locator(".mm-docs-heading");
+    const title = page.getByRole("heading", { name: "Arquivos e Documentos", exact: true });
+    await expect(heading.locator("svg")).toHaveCount(0);
+    const headerBox = (await page.locator(".mm-docs-header").boundingBox())!;
+    const titleBox = (await title.boundingBox())!;
+    expect(Math.abs(titleBox.x - headerBox.x), "title starts at the header edge without an empty icon slot").toBeLessThanOrEqual(1);
+    expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(width + 1);
+    const foldersPanel = page.getByRole("region", { name: "Pastas", exact: true });
+    await expect(foldersPanel.locator(".mm-docs-panel-title > .mm-docs-icon")).toBeVisible();
+    await expect(foldersPanel.locator(".mm-docs-panel-title > .mm-docs-icon")).toHaveAttribute("aria-hidden", "true");
+    const folder = foldersPanel.getByRole("button", { name: "Mês de Setembro 1 documento", exact: true });
+    await expect(folder.locator(".mm-docs-icon")).toBeVisible();
+    await folder.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("navigation", { name: "Caminho da pasta" })).toContainText("Mês de Setembro");
+    await expect(page.locator(".mm-docs-folder-card")).toHaveCount(1);
+    await openRoot(page);
+    await page.getByRole("button", { name: "Lixeira", exact: true }).click();
+    await expect(heading.locator("svg")).toHaveCount(0);
+    await page.getByRole("button", { name: "Documentos", exact: true }).click();
+    await expect(foldersPanel.locator(".mm-docs-panel-title > .mm-docs-icon")).toBeVisible();
+    await expect(heading.locator("svg")).toHaveCount(0);
+    await page.locator(".mm-docs-header").screenshot({ path: testInfo.outputPath(`documents-title-${width}.png`), animations: "disabled" });
+  });
+}

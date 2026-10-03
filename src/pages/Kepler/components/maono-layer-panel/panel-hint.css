@@ -1,0 +1,95 @@
+.maono-layer-panel .maono-panel-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.maono-layer-panel .maono-panel-hint__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--maono-layer-text-soft, #c8d1df);
+  background: transparent;
+  cursor: help;
+  touch-action: manipulation;
+}
+
+.maono-layer-panel .maono-panel-hint__trigger > span {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+  font: 600 11px/1 system-ui, sans-serif;
+}
+
+.maono-layer-panel .maono-panel-hint__trigger:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  color: var(--maono-layer-gold, #f2c766);
+  background: rgb(242 199 102 / 8%);
+}
+
+.maono-layer-panel .maono-panel-hint__trigger:focus-visible {
+  outline: 2px solid var(--maono-layer-gold-bright, #f3d58a);
+  outline-offset: 2px;
+}
+
+.maono-layer-panel .maono-panel-hint-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.maono-layer-panel .maono-panel-hint-field {
+  position: relative;
+  min-width: 0;
+}
+
+.maono-layer-panel .maono-panel-hint-field > .maono-panel-hint {
+  position: absolute;
+  top: -3px;
+  right: 0;
+}
+
+.maono-layer-panel .maono-panel-hint-field > label > span {
+  padding-inline-end: 28px;
+}
+
+/* A body portal avoids sidebar overflow/stacking clipping and cannot resize it. */
+.maono-panel-hint__popover {
+  position: fixed;
+  z-index: 1600;
+  box-sizing: border-box;
+  width: min(288px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px;
+  border: 1px solid rgb(242 199 102 / 28%);
+  border-radius: 8px;
+  color: #f7f2e8;
+  background: #121a27;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 28%);
+  font: 400 13px/1.5 system-ui, sans-serif;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: start;
+}
+
+/* No entrance/exit motion, including the user's reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  .maono-panel-hint__popover,
+  .maono-layer-panel .maono-panel-hint__trigger {
+    animation: none;
+    transition: none;
+  }
+}

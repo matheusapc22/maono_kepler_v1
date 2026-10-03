@@ -1279,7 +1279,7 @@ function OrganizationDocuments({
   }
 
   if (!organizationId || !canView) {
-    return <section className="documents-section mm-docs"><header className="mm-docs-header"><div className="mm-docs-heading"><DocumentIcon name="folder" /><div><h2>Arquivos e Documentos</h2><p>{!organizationId ? "Selecione uma organização." : "Acesso não permitido."}</p></div></div></header></section>;
+    return <section className="documents-section mm-docs"><header className="mm-docs-header"><div className="mm-docs-heading"><div><h2>Arquivos e Documentos</h2><p>{!organizationId ? "Selecione uma organização." : "Acesso não permitido."}</p></div></div></header></section>;
   }
 
   const currentFolderId =
@@ -1324,7 +1324,7 @@ function OrganizationDocuments({
     <section className="documents-section mm-docs" aria-labelledby="mm-docs-title">
       <div className="mm-docs-context"><span>Início</span><DocumentIcon name="arrow" /><span>Arquivos e Documentos</span></div>
       <header className="mm-docs-header">
-        <div className="mm-docs-heading"><DocumentIcon name="folder" /><div><h2 id="mm-docs-title">Arquivos e Documentos</h2><p>Organize, armazene e compartilhe os documentos do seu projeto em um só lugar.</p></div></div>
+        <div className="mm-docs-heading"><div><h2 id="mm-docs-title">Arquivos e Documentos</h2><p>Organize, armazene e compartilhe os documentos do seu projeto em um só lugar.</p></div></div>
         <div className="mm-docs-header-actions">
           <div className="mm-docs-view-switch" role="group" aria-label="Navegação de documentos">
             {documentState === "active"
