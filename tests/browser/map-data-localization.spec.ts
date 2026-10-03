@@ -35,7 +35,7 @@ type QAWindow = Window & {
   } } };
 };
 
-async function openMap(page: Page, options: { remoteStatus?: number; remoteGate?: Promise<void> } = {}) {
+async function openMap(page: Page, options: { remoteStatus?: number; remoteGate?: Promise<void>; legacyShell?: boolean } = {}) {
   const requests: string[] = [];
   const writes: string[] = [];
   await page.route('**/*', async route => {
@@ -60,7 +60,7 @@ async function openMap(page: Page, options: { remoteStatus?: number; remoteGate?
         editLayers: true, editStyle: true, manageFilters: true, createLayer: true,
         placeAnalysisMarker: true, toggleLegend: true, configureTooltips: true, addData: true, importData: true,
       },
-      features: { mapPanelModes: true, mapCreateRoute: true, maonoMapShell: true, maonoLayerManager: true, maonoMapOverlay: true },
+      features: { mapPanelModes: true, mapCreateRoute: true, maonoMapShell: !options.legacyShell, maonoLayerManager: !options.legacyShell, maonoMapOverlay: !options.legacyShell },
     } } });
     if (url.pathname === '/__qa/localization/English-Roads.csv') {
       if (options.remoteGate) await options.remoteGate;
@@ -110,6 +110,10 @@ async function openMap(page: Page, options: { remoteStatus?: number; remoteGate?
     return route.continue();
   });
   await page.goto('/maps/new/create?maonoLayoutDebug=1&maonoEngineDebug=1');
+  if (options.legacyShell) {
+    await expect(page.locator('.kepler-gl')).toBeVisible({ timeout: 30_000 });
+    return { requests, writes };
+  }
   await expect(page.locator('.maono-map-runtime')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.maono-map-runtime')).toHaveAttribute('data-map-ready', 'true');
   await expect.poll(() => page.evaluate(() => {
@@ -163,13 +167,14 @@ test('Dados Maõno and Arquivos expose Portuguese text and accessibility labels'
   await expect(sidebar(page).getByRole('button', { name: 'Selecionar arquivo', exact: true })).toBeVisible();
   await expect(sidebar(page)).toContainText('Os arquivos são processados neste navegador para adicionar dados ao mapa.');
   await expect(sidebar(page)).toContainText('formatos de arquivo aceitos');
+  await expect(sidebar(page).locator('a[href*="kepler.gl"]')).toHaveCount(0);
   for (const format of ['CSV', 'JSON', 'GeoJSON', 'Arrow', 'Parquet']) await expect(sidebar(page)).toContainText(format);
   await expect(sidebar(page)).not.toContainText(englishInterface);
   expect((await capture(page)).raw.datasetIds).toEqual([]);
   expect(writes).toEqual([]);
 });
 
-test('all Tileset forms are Portuguese and only the marked raster metadata help is removed', async ({ page }, testInfo) => {
+test('all Tileset forms are Portuguese and contain no external Kepler help', async ({ page }, testInfo) => {
   const { writes } = await openMap(page);
   await tab(page, 'Tileset').click();
   await expect(sidebar(page)).toContainText('Tipo de conjunto');
@@ -188,14 +193,12 @@ test('all Tileset forms are Portuguese and only the marked raster metadata help 
   await expectPortugueseField(page, 'Servidores de blocos matriciais', 'URLs dos servidores, separadas por vírgulas');
   await expect(sidebar(page)).toContainText('Aceita .pmtiles matriciais. Suporte limitado a itens e coleções STAC.');
   await expect(sidebar(page)).toContainText('URLs dos servidores de blocos matriciais para conjuntos Cloud Optimized GeoTIFF e elevação.');
-  // Scope to the label row: server documentation is intentionally retained.
-  const metadataRow = sidebar(page).locator('label[for="tile-metadata"]').locator('..');
-  await expect(metadataRow.locator('a, svg, button')).toHaveCount(0);
-  const serverHelp = sidebar(page).getByRole('link', { name: 'Abrir documentação de servidores de blocos matriciais', exact: true });
-  await expect(serverHelp).toHaveAttribute('title', 'Ajuda sobre servidores de blocos matriciais');
-  await expect(serverHelp).toHaveAttribute('href', 'https://docs.kepler.gl/docs/user-guides/c-types-of-layers/n-raster-tile-layer');
-  await expect(sidebar(page).getByRole('link')).toHaveCount(1);
-  await expect(sidebar(page).getByRole('link', { name: /Open Raster|documentation/i })).toHaveCount(0);
+  for (const label of ['tile-metadata', 'tileset-raster-servers']) {
+    const row = sidebar(page).locator(`label[for="${label}"]`).locator('..');
+    await expect(row.locator('a, svg, button')).toHaveCount(0);
+  }
+  await expect(sidebar(page).getByRole('link')).toHaveCount(0);
+  await expect(sidebar(page).locator('[title*="Ajuda"], [aria-label*="documentação"]')).toHaveCount(0);
   await expect(sidebar(page)).not.toContainText(englishInterface);
   await page.screenshot({ path: testInfo.outputPath('localized-raster-form.png') });
 
@@ -358,5 +361,53 @@ test('Matricial metadata fetch failure translates the message while preserving t
   await expect(sidebar(page).getByRole('textbox', { name: 'URL dos metadados', exact: true })).toHaveValue(source);
   await expect(addTileset(page)).toBeDisabled();
   expect((await capture(page)).raw.datasetIds).toEqual([]);
+  expect(writes).toEqual([]);
+});
+
+
+test('legacy map header, uploads and exports omit Kepler help while controls still work', async ({ page }, testInfo) => {
+  const { writes } = await openMap(page, { legacyShell: true });
+  await expect(page.getByRole('img', { name: 'Logo Maõno', exact: true })).toBeVisible();
+  await expect(page.locator('.side-panel__panel-header__action#share-url-only-action')).toBeVisible();
+  await expect(page.locator('#docs-action, #bug-action')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Adicionar Dados', exact: true }).click();
+  await expect(page.locator('.load-data-modal')).toBeVisible();
+  await expect(page.locator('.load-data-modal a[href*="kepler.gl"]')).toHaveCount(0);
+  await page.locator('.load-data-modal__tab__item').filter({ hasText: 'Tileset' }).click();
+  await page.locator('.tileset-type').getByText('Matricial', { exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Servidores de blocos matriciais', exact: true })).toBeVisible();
+  await expect(page.locator('.load-data-modal a[href*="kepler.gl"]')).toHaveCount(0);
+  await page.locator('.modal--close').click();
+  await page.locator('.side-panel__panel-header__action#share-url-only-action').click();
+  await page.getByText('Exportar Mapa', {exact:true}).click();
+  const exportModal = page.locator('.export-map-modal');
+  await expect(exportModal).toBeVisible();
+  await expect(exportModal.locator('a')).toHaveCount(0);
+  await expect(exportModal).toContainText('Se você não fornecer a sua própria chave de acesso');
+  const token = exportModal.getByPlaceholder('Cole a sua chave de acesso Mapbox', { exact: true });
+  await token.fill('synthetic-qa-token-not-a-real-credential');
+  await expect(token).toHaveValue('synthetic-qa-token-not-a-real-credential');
+  const editMode = exportModal.getByText('Permitir usuários a editar o mapa', { exact: true }).locator('..');
+  await editMode.click();
+  await expect(editMode.locator('.checkbox-inner')).toHaveCount(1);
+  await exportModal.getByText('json', { exact: true }).click();
+  await expect(exportModal.locator('#json-pretty')).toContainText('visState');
+  await expect(exportModal.locator('a')).toHaveCount(0);
+  await expect(exportModal).toContainText('addDataToMap');
+  await exportModal.getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(exportModal.getByRole('button', { name: 'Copied!', exact: true })).toBeVisible();
+  await exportModal.getByText('html', { exact: true }).click();
+  await expect(token).toHaveValue('synthetic-qa-token-not-a-real-credential');
+  await expect(editMode.locator('.checkbox-inner')).toHaveCount(1);
+  await expect(exportModal.locator('a')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('legacy-export-without-kepler-help.png') });
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(exportModal).toHaveCount(0);
+  await page.locator('.side-panel__panel-header__action#share-url-only-action').click();
+  await page.getByText('Exportar Mapa', { exact: true }).click();
+  await expect(exportModal).toBeVisible();
+  await expect(exportModal.locator('a')).toHaveCount(0);
+  await page.locator('.modal--close').click();
+  await expect(exportModal).toHaveCount(0);
   expect(writes).toEqual([]);
 });

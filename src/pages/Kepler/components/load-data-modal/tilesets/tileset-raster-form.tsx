@@ -18,7 +18,6 @@ import {getDatasetAttributesFromRasterTile} from '@kepler.gl/components/dist/mod
 import {default as useFetchJson} from '@kepler.gl/components/dist/hooks/use-fetch-raster-tile-metadata';
 import type {MetaResponse} from './common';
 import {InputLight} from '@kepler.gl/components';
-import {Help} from '@kepler.gl/components/dist/common/icons';
 
 const TilesetInputContainer = styled.div`
   display: grid;
@@ -41,28 +40,6 @@ const LabelRow = styled.div`
 type RasterTileFormProps = {
   setResponse: (response: MetaResponse) => void;
 };
-
-const InfoIconLink = styled.a`
-  margin-left: 4px;
-  color: ${props => props.theme.labelColor};
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  line-height: 0;
-  vertical-align: middle;
-  opacity: 0.7;
-
-  &:hover {
-    opacity: 1;
-  }
-
-  svg {
-    display: block;
-  }
-`;
-
-const RASTER_TILE_DOCUMENTATION_URL =
-  'https://docs.kepler.gl/docs/user-guides/c-types-of-layers/n-raster-tile-layer';
 
 const parseMetadataAllowCollections = (
   metadata: JsonObjectOrArray | PMTilesMetadata,
@@ -228,15 +205,6 @@ const RasterTileForm: React.FC<RasterTileFormProps> = ({setResponse}) => {
         <div>
           <LabelRow>
             <label htmlFor="tileset-raster-servers">Servidores de blocos matriciais</label>
-            <InfoIconLink
-              href={RASTER_TILE_DOCUMENTATION_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Abrir documentação de servidores de blocos matriciais"
-              title="Ajuda sobre servidores de blocos matriciais"
-            >
-              <Help height="16px" />
-            </InfoIconLink>
           </LabelRow>
           <InputLight
             id="tileset-raster-servers"

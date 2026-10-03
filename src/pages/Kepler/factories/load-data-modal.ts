@@ -52,10 +52,9 @@ function AccessibleFileSource({ FileUpload, ...props }) {
 const CustomLoadDataModalFactory = (...deps) => {
   const LoadDataModal = LoadDataModalFactory(...deps);
   const FileUpload = LoadDataModal.defaultLoadingMethods.find((method) => method.id === "upload").elementType;
-  const LoadTileset = LoadDataModal.defaultLoadingMethods.find((method) => method.id === "tileset").elementType;
   const loadingMethods = [
     { id: "upload", label: "modal.loadData.upload", elementType: FileUpload },
-    { id: "tileset", label: "modal.loadData.tileset", elementType: LoadTileset },
+    { id: "tileset", label: "modal.loadData.tileset", elementType: LocalizedLoadTilesetTab },
     { id: "remote", label: "modal.loadData.remote", elementType: LoadRemoteMap },
   ];
 

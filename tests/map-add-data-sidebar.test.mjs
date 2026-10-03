@@ -31,10 +31,10 @@ test('native ModalContainer handlers are retained and only the Add Data dialog s
   assert.doesNotMatch(dialog, /loadFiles|updateVisData|fetch\(/);
   assert.match(read(`${base}index.tsx`), /replaceAddDataDialog\(\)/);
 });
-test('Arquivos and Tileset reuse native factory source components, URL keeps existing thunk', () => {
+test('Arquivos reuses its native factory, Tileset shares localized native forms, URL keeps existing thunk', () => {
   assert.match(sources, /LoadDataModalFactory\(\.\.\.deps\)/);
   assert.match(sources, /method\.id === "upload"\)\.elementType/);
-  assert.match(sources, /method\.id === "tileset"\)\.elementType/);
+  assert.match(sources, /id: "tileset", label: "modal.loadData.tileset", elementType: LocalizedLoadTilesetTab/);
   assert.match(sources, /React\.createElement\(FileUpload, \{ \.\.\.props, fileLoadingProgress: localizeImportProgress/);
   assert.match(sources, /React\.createElement\(LocalizedLoadTilesetTab, sourceProps\)/);
   assert.match(sources, /React\.createElement\(LoadRemoteMap, sourceProps\)/);
