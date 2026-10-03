@@ -1061,7 +1061,7 @@ test('compact density: login remains scrollable, readable and keyboard operable'
   for (const viewport of [{ width: 1440, height: 900 }, { width: 800, height: 480 }, { width: 390, height: 568 }, { width: 320, height: 568 }]) {
     await page.setViewportSize(viewport);
     await page.goto('/login');
-    const email = page.getByLabel('e-mail', { exact: true });
+    const email = page.getByLabel('E-mail', { exact: true });
     await expect(email).toBeVisible();
     await email.fill('qa@example.test');
     await page.keyboard.press('Tab');
