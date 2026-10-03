@@ -24,6 +24,11 @@ on:
       - 'tests/data-import-localization.test.mjs'
       - 'tests/tileset-localization-contract.test.mjs'
       - 'tests/browser/map-sidebar-scrollbars.spec.ts'
+      - 'tests/browser/map-panel-minimal.spec.ts'
+      - 'tests/browser/fixtures/map-panel-minimal.ts'
+      - 'tests/map-panel-minimal.test.mjs'
+      - 'tests/map-filter-enabled-native.test.mjs'
+      - 'tests/map-save-conflict-preservation.test.mjs'
       - 'tests/browser/map-data-localization.spec.ts'
       - 'tests/project-pages-contract.test.mjs'
       - 'tests/projects-scrollbars.test.mjs'
@@ -51,7 +56,7 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --experimental-strip-types --test tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
+          node --experimental-strip-types --test tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs
@@ -83,6 +88,11 @@ jobs:
             src/pages/Projects/projects-scrollbars.css
             tests/browser/project-pages.spec.ts
             tests/browser/platform-density-map.spec.ts
+            tests/browser/map-panel-minimal.spec.ts
+            tests/browser/fixtures/map-panel-minimal.ts
+            tests/map-panel-minimal.test.mjs
+            tests/map-filter-enabled-native.test.mjs
+            tests/map-save-conflict-preservation.test.mjs
             tests/platform-density.test.mjs
             src/platform-density.css
             playwright.project-pages.config.ts

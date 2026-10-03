@@ -23,6 +23,8 @@ import LayerPanelIcon from "./LayerPanelIcon";
 import PanelSaveAction from "./PanelSaveAction";
 import type { LayerStyleChange } from "./LayerStyleEditor";
 import "./maono-layer-panel.css";
+import "./map-panel-minimal.css";
+import "./map-panel-detail-minimal.css";
 
 type PanelNotice = {
   kind: "error" | "success";
@@ -32,14 +34,6 @@ type PanelNotice = {
 type PanelView =
   | { kind: "list" }
   | { kind: "layer"; layerId: string };
-
-function modeLabel(mode: "viewer" | "editor" | "create" | undefined) {
-  return mode === "viewer"
-    ? "Somente leitura"
-    : mode === "create"
-      ? "Novo mapa"
-      : "Edição";
-}
 
 export default function MaonoLayerPanel() {
   const { context } = useMapPanel();
@@ -69,7 +63,6 @@ export default function MaonoLayerPanel() {
     view.kind === "layer"
       ? layers.find((layer) => layer.id === view.layerId) ?? null
       : null;
-  const showSearch = layers.length >= 8 || Boolean(search);
 
   useEffect(() => {
     if (tab === "layers" && !canViewLayers && canViewFilters) {
@@ -380,7 +373,7 @@ export default function MaonoLayerPanel() {
       : projectName ||
         organizationName ||
         (tab === "layers" ? "Camadas" : "Filtros");
-  const count = tab === "layers" ? layers.length : filters.length;
+  const count = layers.length;
 
   return (
     <aside
@@ -405,12 +398,8 @@ export default function MaonoLayerPanel() {
           >
             {title}
           </strong>
-          <span>{count} {count === 1 ? "item" : "itens"}</span>
+          <span>{count} {count === 1 ? "camada" : "camadas"}</span>
         </div>
-        <span className="maono-layer-panel__mode">
-          {context?.mode === "viewer" ? <LayerPanelIcon name="lock" /> : null}
-          {modeLabel(context?.mode)}
-        </span>
       </header>
 
       {tabCount ? (
@@ -520,23 +509,21 @@ export default function MaonoLayerPanel() {
           ) : (
             <>
               <div className="maono-layer-panel__toolbar">
-                {showSearch ? (
-                  <label className="maono-layer-panel__search">
-                    <LayerPanelIcon name="search" />
-                    <input
-                      type="search"
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Buscar camada"
-                      aria-label="Buscar camada"
-                    />
-                    {search ? (
-                      <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca">
-                        <LayerPanelIcon name="x" />
-                      </button>
-                    ) : null}
-                  </label>
-                ) : <span />}
+                <label className="maono-layer-panel__search">
+                  <LayerPanelIcon name="search" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Buscar camada..."
+                    aria-label="Buscar camada"
+                  />
+                  {search ? (
+                    <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca">
+                      <LayerPanelIcon name="x" />
+                    </button>
+                  ) : null}
+                </label>
                 {capabilities?.createLayer ? (
                   <AddLayerMenu
                     datasets={datasets}

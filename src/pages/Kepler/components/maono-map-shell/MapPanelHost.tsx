@@ -75,7 +75,7 @@ export default function MapPanelHost({
         aria-label={actionLabel}
         title={actionLabel}
       >
-        <MapShellIcon name={open ? "chevron-left" : "chevron-right"} />
+        <MapShellIcon name={activePanel === "layers" ? "chevron-left" : open ? "chevron-left" : "chevron-right"} />
         <span className="maono-map-panel-host__label">{activeLabel}</span>
       </button>
     </div>

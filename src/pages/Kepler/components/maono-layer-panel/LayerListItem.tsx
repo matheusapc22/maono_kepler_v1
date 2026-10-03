@@ -192,6 +192,7 @@ export default function LayerListItem({
     <li
       className={[
         "maono-layer-row",
+        "maono-map-panel-row",
         selected ? "is-selected" : "",
         layer.isVisible ? "is-visible" : "is-hidden",
         dragging ? "is-dragging" : "",
@@ -220,6 +221,33 @@ export default function LayerListItem({
           <LayerPanelIcon name="grip" />
         </span>
       ) : null}
+
+      {canToggle ? (
+        <button
+          type="button"
+          className="maono-layer-row__visibility"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle(layer, !layer.isVisible);
+          }}
+          aria-label={
+            layer.isVisible
+              ? `Ocultar ${layer.label}`
+              : `Mostrar ${layer.label}`
+          }
+          aria-pressed={layer.isVisible}
+          title={layer.isVisible ? "Ocultar camada" : "Mostrar camada"}
+        >
+          <LayerPanelIcon name={layer.isVisible ? "eye" : "eye-off"} />
+        </button>
+      ) : (
+        <span
+          className="maono-layer-row__visibility-state"
+          title={layer.isVisible ? "Camada visível" : "Camada oculta"}
+        >
+          <LayerPanelIcon name={layer.isVisible ? "eye" : "eye-off"} />
+        </span>
+      )}
 
       <span
         className="maono-layer-row__swatch"
@@ -289,33 +317,6 @@ export default function LayerListItem({
       </div>
 
       <div className="maono-layer-row__controls">
-        {canToggle ? (
-          <button
-            type="button"
-            className="maono-layer-row__visibility"
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggle(layer, !layer.isVisible);
-            }}
-            aria-label={
-              layer.isVisible
-                ? `Ocultar ${layer.label}`
-                : `Mostrar ${layer.label}`
-            }
-            aria-pressed={layer.isVisible}
-            title={layer.isVisible ? "Ocultar camada" : "Mostrar camada"}
-          >
-            <LayerPanelIcon name={layer.isVisible ? "eye" : "eye-off"} />
-          </button>
-        ) : (
-          <span
-            className="maono-layer-row__visibility-state"
-            title={layer.isVisible ? "Camada visível" : "Camada oculta"}
-          >
-            <LayerPanelIcon name={layer.isVisible ? "eye" : "eye-off"} />
-          </span>
-        )}
-
         {menuItems.length ? (
           <PanelActionMenu
             label={`Ações de ${layer.label}`}

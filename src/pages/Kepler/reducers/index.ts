@@ -42,6 +42,7 @@ import {
   MaonoAdaptivePointLayer,
 } from "../clustering/point-cluster-adaptive-layer.ts";
 import { generateHashId } from "../utils/strings";
+import { reconcileFilterEnabledState } from "./filter-enabled-compatibility.ts";
 
 // initialize kepler demo-app with DuckDB plugin
 /*
@@ -156,7 +157,7 @@ const demoReducer = combineReducers({
       loaders: [], // Add additional loaders.gl loaders here
       loadOptions: {}, // Add additional loaders.gl loader options here
     },
-  }),
+  }).plugin(reconcileFilterEnabledState),
   app: appReducer,
   aiAssistant: aiAssistantReducer,
 });
@@ -284,7 +285,7 @@ const loadRemoteDatasetProcessedSuccess = (state, action) => {
     },
     keplerGl: {
       ...state.keplerGl, // in case you keep multiple instances
-      map: keplerGlInstance,
+      map: reconcileFilterEnabledState(keplerGlInstance),
     },
   };
 };

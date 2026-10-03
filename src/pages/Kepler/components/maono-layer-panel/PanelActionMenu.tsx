@@ -93,6 +93,8 @@ export default function PanelActionMenu({ label, items, className }: Props) {
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
         setOpen(false);
         triggerRef.current?.focus();
       }

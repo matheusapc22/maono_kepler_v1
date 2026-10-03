@@ -188,17 +188,18 @@ test('layer, filter and nested category scroll owners share the same native scro
   await expectProjectsAppearance(page.locator('.maono-detail-view__scroll'), expected);
   await expectNativeWheel(page, page.locator('.maono-detail-view__scroll'));
   await page.getByRole('tab', { name: /^Filtros/ }).click();
-  await expectProjectsAppearance(page.locator('.maono-filter-panel'), expected);
-  await page.locator('.maono-filter-panel').getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await expectProjectsAppearance(page.locator('.maono-filter-list-region'), expected);
+  await page.locator('.maono-filter-panel').getByRole('button', { name: 'Adicionar Filtro', exact: true }).click();
   // The native select is wrapped in a label that also contains option text.
   // Its combobox accessible name excludes that text; an exact label-text
   // query does not. Target the real control's stable accessible contract.
   await page.getByRole('combobox', { name: '2. Propriedade', exact: true }).selectOption('name');
   await page.getByRole('button', { name: 'Criar filtro', exact: true }).click();
   const categories = page.locator('.maono-filter-category__options');
-  await expectProjectsAppearance(page.locator('.maono-detail-view__scroll'), expected);
+  await expectProjectsAppearance(page.locator('.maono-filter-list-region'), expected);
   await expectProjectsAppearance(categories, expected);
-  await expectNativeWheel(page, categories);
+  // Inline conditions share the collection scroll owner; all categories remain available.
+  await expectNativeWheel(page, page.locator('.maono-filter-list-region'));
   const stateAfterFilter = await capture(page);
   await expectStableCanvas(page, before);
   await page.screenshot({ path: testInfo.outputPath('map-filter-nested-scrollbar.png') });

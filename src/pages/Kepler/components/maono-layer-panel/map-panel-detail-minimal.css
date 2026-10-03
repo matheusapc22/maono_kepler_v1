@@ -1,0 +1,579 @@
+/* Open layer/filter editors share the flat panel surface. Only actual controls
+ * keep a boundary; sections use alignment, space and a single divider. */
+.maono-layer-panel .maono-detail-view {
+  --maono-detail-space: var(--maono-density-space-3, 12px);
+  --maono-detail-divider: var(--maono-panel-divider, var(--maono-layer-border));
+  --maono-detail-control: var(--maono-density-control-small, 36px);
+  min-width: 0;
+  color: var(--maono-layer-text);
+  background: transparent;
+}
+
+.maono-layer-panel .maono-detail-view__header {
+  min-height: 56px;
+  padding: 8px var(--maono-detail-space);
+  border-color: var(--maono-detail-divider);
+  background: transparent;
+}
+
+.maono-layer-panel .maono-detail-view__identity strong {
+  color: var(--maono-layer-text);
+  font-size: var(--maono-panel-font-12, 15px);
+  font-weight: 650;
+}
+
+.maono-layer-panel .maono-detail-view__identity small {
+  color: var(--maono-layer-text-soft);
+  font-size: var(--maono-panel-font-9, 11.25px);
+  line-height: 1.4;
+}
+
+.maono-layer-panel .maono-detail-view__scroll {
+  min-width: 0;
+  padding: var(--maono-detail-space) var(--maono-detail-space) 20px;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-layer-inspector, .maono-layer-style-editor) {
+  min-width: 0;
+  gap: 0;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-layer-essential,
+  .maono-filter-essential,
+  .maono-style-essential,
+  .maono-filter-value-section,
+  .maono-detail-card,
+  .maono-detail-section,
+  .maono-progressive-section
+) {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-layer-essential, .maono-filter-essential) {
+  gap: var(--maono-detail-space);
+  padding: 0 0 var(--maono-detail-space);
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-card,
+  .maono-style-essential,
+  .maono-filter-value-section
+) {
+  gap: var(--maono-detail-space);
+  padding: var(--maono-detail-space) 0;
+  border-top: 1px solid var(--maono-detail-divider);
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-detail-section, .maono-progressive-section) {
+  overflow: visible;
+  border-top: 1px solid var(--maono-detail-divider);
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-detail-section, .maono-progressive-section) > summary {
+  min-height: 52px;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-detail-section, .maono-progressive-section) > summary:hover {
+  color: var(--maono-layer-gold-bright);
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-section__content,
+  .maono-progressive-section__content
+) {
+  min-width: 0;
+  gap: var(--maono-detail-space);
+  padding: 0 0 var(--maono-detail-space);
+  border: 0;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-style-subsection, .maono-point-spatial-grouping) {
+  min-width: 0;
+  gap: 10px;
+  padding-top: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-subsection + .maono-style-subsection {
+  padding-top: var(--maono-detail-space);
+  border-top-color: var(--maono-detail-divider);
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-card > header,
+  .maono-layer-essential > header,
+  .maono-filter-essential > header,
+  .maono-style-subsection > header,
+  .maono-point-spatial-grouping > header
+) {
+  min-width: 0;
+  gap: 10px;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-card > header strong,
+  .maono-detail-section > summary strong,
+  .maono-progressive-section > summary strong,
+  .maono-filter-value-section > header strong
+) {
+  color: var(--maono-layer-gold);
+  font-size: var(--maono-panel-font-11, 13.75px);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-layer-essential > header strong,
+  .maono-filter-essential > header strong,
+  .maono-style-subsection > header strong,
+  .maono-point-spatial-grouping > header strong
+) {
+  color: var(--maono-layer-text);
+  font-size: var(--maono-panel-font-10, 12.5px);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-detail-card > header small,
+  .maono-detail-section > summary small,
+  .maono-progressive-section > summary small,
+  .maono-style-subsection > header small,
+  .maono-point-spatial-grouping > header small,
+  .maono-filter-value-section > header small,
+  .maono-style-field small,
+  .maono-style-help,
+  .maono-point-spatial-grouping__description,
+  .maono-point-spatial-grouping__notice,
+  .maono-filter-editor__empty,
+  .maono-filter-card__readonly
+) {
+  color: var(--maono-layer-text-soft);
+  font-size: var(--maono-panel-font-9, 11.25px);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-style-field > span,
+  .maono-style-range > span,
+  .maono-style-inline-heading > span,
+  .maono-style-color-input > span,
+  .maono-filter-editor label,
+  .maono-filter-editor.is-boolean legend,
+  .maono-point-spatial-grouping__grid label
+) {
+  color: var(--maono-layer-text-soft);
+  font-size: var(--maono-panel-font-9, 11.25px);
+  font-weight: 500;
+  line-height: 1.4;
+  text-transform: none;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-layer-essential > header > div > span,
+  .maono-filter-essential > header > div > span,
+  .maono-layer-essential dt,
+  .maono-filter-facts dt
+) {
+  color: var(--maono-layer-muted);
+  font-size: var(--maono-panel-font-8, 10px);
+  font-weight: 600;
+  letter-spacing: .04em;
+  line-height: 1.5;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-layer-essential dl, .maono-filter-facts) {
+  gap: 8px var(--maono-detail-space);
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-layer-essential dl div, .maono-filter-facts div) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-layer-essential dd, .maono-filter-facts dd) {
+  color: var(--maono-layer-text);
+  font-size: var(--maono-panel-font-9, 11.25px);
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Native field/color controls retain an obvious hit area and dark UI. */
+.maono-layer-panel .maono-detail-view :is(
+  .maono-style-field,
+  .maono-style-range,
+  .maono-layer-structure,
+  .maono-filter-editor,
+  .maono-filter-binding,
+  .maono-style-channel-options,
+  .maono-point-spatial-grouping__grid
+) {
+  min-width: 0;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-style-field select,
+  .maono-style-field input,
+  .maono-layer-structure select,
+  .maono-detail-view__identity input,
+  .maono-filter-editor input[type="number"],
+  .maono-filter-editor input[type="datetime-local"],
+  .maono-filter-editor input[type="search"],
+  .maono-point-spatial-grouping__grid input[type="number"]
+) {
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--maono-detail-control);
+  padding: 7px 9px;
+  border: 1px solid var(--maono-layer-border);
+  border-radius: 5px;
+  color: var(--maono-layer-text);
+  background: var(--maono-layer-raised);
+  box-shadow: none;
+  font-size: var(--maono-panel-font-10, 12.5px);
+  line-height: 1.4;
+  color-scheme: dark;
+}
+
+.maono-layer-panel .maono-detail-view :is(input, select):disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.maono-layer-panel .maono-detail-view :is(input, select)[aria-invalid="true"] {
+  border-color: var(--maono-layer-danger);
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-range > span {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-range output {
+  color: var(--maono-layer-gold-bright);
+  font-size: var(--maono-panel-font-9, 11.25px);
+  font-variant-numeric: tabular-nums;
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-range input {
+  min-width: 0;
+  margin-inline: 0;
+  accent-color: var(--maono-layer-gold);
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-color-input input[type="color"] {
+  width: 42px;
+  height: var(--maono-detail-control);
+  border-color: var(--maono-layer-border);
+  border-radius: 5px;
+  background: var(--maono-layer-raised);
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-palettes button {
+  min-height: var(--maono-detail-control);
+  border-color: var(--maono-layer-border);
+  border-radius: 5px;
+  color: var(--maono-layer-text-soft);
+  background: transparent;
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-palettes button.is-selected {
+  border-color: var(--maono-layer-gold);
+  color: var(--maono-layer-gold-bright);
+  background: var(--maono-accent-surface, rgb(197 160 89 / 12%));
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-palettes button small {
+  font-size: var(--maono-panel-font-8, 10px);
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-style-toggle, .maono-point-spatial-grouping__switch) {
+  flex-shrink: 0;
+}
+
+.maono-layer-panel .maono-detail-view .maono-style-toggle > span {
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view .maono-point-spatial-grouping__switch em {
+  color: var(--maono-layer-text-soft);
+  font-size: var(--maono-panel-font-8, 10px);
+}
+
+.maono-layer-panel .maono-detail-view .maono-layer-visibility-switch {
+  flex-shrink: 0;
+  min-height: 32px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--maono-layer-gold);
+  background: transparent;
+  font-size: var(--maono-panel-font-9, 11.25px);
+}
+
+.maono-layer-panel .maono-detail-view .maono-layer-visibility-switch > span {
+  color: inherit;
+  font: inherit;
+  text-transform: none;
+}
+
+/* Status information remains visible without another enclosing card. */
+.maono-layer-panel .maono-detail-view :is(
+  .maono-layer-inspector__notice,
+  .maono-filter-compatibility,
+  .maono-filter-editor__warning
+) {
+  margin: 0 0 var(--maono-detail-space);
+  padding: 4px 0 4px 9px;
+  border: 0;
+  border-left: 2px solid var(--maono-layer-gold);
+  border-radius: 0;
+  color: var(--maono-layer-gold-bright);
+  background: transparent;
+  font-size: var(--maono-panel-font-9, 11.25px);
+  line-height: 1.5;
+}
+
+.maono-layer-panel .maono-detail-view .maono-point-spatial-grouping__notice.is-warning {
+  color: var(--maono-layer-gold-bright);
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-value-section > header {
+  display: grid;
+  justify-content: stretch;
+  gap: 3px;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-filter-category__summary,
+  .maono-filter-histogram__meta,
+  .maono-filter-histogram__axis
+) {
+  flex-wrap: wrap;
+  color: var(--maono-layer-text-soft);
+  font-size: var(--maono-panel-font-9, 11.25px);
+  line-height: 1.4;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-filter-histogram__meta, .maono-filter-histogram__axis) > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-histogram__meta span:first-child {
+  color: var(--maono-layer-text-soft);
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-histogram__plot {
+  margin-inline: 8px;
+  border-bottom-color: var(--maono-layer-border);
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-histogram__bars > span.is-selected {
+  background: var(--maono-filter-accent, var(--maono-layer-gold));
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-histogram__selection {
+  border-top: 0;
+  background: var(--maono-accent-surface, rgb(197 160 89 / 12%));
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-histogram__selection:active {
+  background: var(--maono-accent-surface-strong, rgb(197 160 89 / 20%));
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-histogram__handle {
+  background: var(--maono-layer-panel-bg);
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-histogram__handle:hover {
+  border-color: var(--maono-layer-gold-bright);
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-filter-histogram.is-empty, .maono-filter-histogram__fallback) {
+  border: 0;
+  border-radius: 0;
+  color: var(--maono-layer-text-soft);
+  font-size: var(--maono-panel-font-9, 11.25px);
+  line-height: 1.4;
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-category__options {
+  max-height: none;
+  overflow: visible;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-category__options label {
+  position: relative;
+  min-height: var(--maono-detail-control);
+  padding: 7px 4px;
+  border-radius: 0;
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-category__options strong {
+  color: var(--maono-layer-text);
+  font-size: var(--maono-panel-font-10, 12.5px);
+  font-weight: 500;
+}
+
+.maono-layer-panel .maono-detail-view :is(.maono-filter-editor__reset, .maono-filter-category__summary button) {
+  min-height: 32px;
+  padding: 6px 0;
+  border-radius: 0;
+  color: var(--maono-layer-gold);
+  background: transparent;
+  font-size: var(--maono-panel-font-9, 11.25px);
+}
+
+.maono-layer-panel .maono-detail-view .maono-filter-focus-results {
+  min-height: var(--maono-detail-control);
+  margin-top: 4px;
+  padding: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--maono-detail-divider);
+  border-radius: 0;
+  color: var(--maono-layer-gold);
+  background: transparent;
+  font-size: var(--maono-panel-font-9, 11.25px);
+  font-weight: 600;
+  text-align: left;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-filter-editor__reset,
+  .maono-filter-category__summary button,
+  .maono-filter-focus-results,
+  .maono-layer-visibility-switch
+):hover:not(:disabled) {
+  color: var(--maono-layer-gold-bright);
+  background: var(--maono-accent-surface, rgb(197 160 89 / 12%));
+}
+
+/* An expanded filter belongs to its dataset group, not a nested viewport. */
+.maono-layer-panel .maono-filter-detail--inline {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
+  padding: 0 var(--maono-detail-space) var(--maono-detail-space);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-filter-detail--inline > .maono-detail-view__header {
+  min-height: 48px;
+  margin-bottom: var(--maono-detail-space);
+  padding: 8px 0;
+}
+
+.maono-layer-panel .maono-filter-detail--inline > .maono-detail-view__scroll {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  overscroll-behavior: auto;
+  scrollbar-gutter: auto;
+}
+
+/* Focus follows the visible control, including custom checkbox/switch skins. */
+.maono-layer-panel .maono-detail-view :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--maono-focus-ring, var(--maono-layer-gold-bright));
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.maono-layer-panel .maono-detail-view :is(
+  .maono-filter-category__options,
+  .maono-point-spatial-grouping__switch
+) input:focus-visible + span {
+  outline: 2px solid var(--maono-focus-ring, var(--maono-layer-gold-bright));
+  outline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .maono-layer-panel .maono-detail-view {
+    --maono-detail-space: 10px;
+  }
+
+  .maono-layer-panel .maono-detail-view :is(
+    .maono-style-range-pair,
+    .maono-style-palettes,
+    .maono-filter-range__numbers,
+    .maono-filter-time__inputs
+  ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .maono-layer-panel .maono-detail-view .maono-filter-histogram__meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+@media (max-width: 360px) {
+  .maono-layer-panel .maono-detail-view :is(.maono-layer-essential dl, .maono-filter-facts) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-height: 600px) {
+  .maono-layer-panel .maono-detail-view__header {
+    min-height: 48px;
+    padding-block: 6px;
+  }
+
+  .maono-layer-panel .maono-detail-view :is(.maono-detail-section, .maono-progressive-section) > summary {
+    min-height: 46px;
+    padding-block: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maono-layer-panel .maono-detail-view *,
+  .maono-layer-panel .maono-detail-view *::before,
+  .maono-layer-panel .maono-detail-view *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Anchor the visually-hidden native checkbox to its visible switch. Otherwise
+ * keyboard focus can scroll the positioned outer sidebar instead of the editor. */
+.maono-layer-panel .maono-detail-view .maono-point-spatial-grouping__switch {
+  position: relative;
+}
+.maono-layer-panel .maono-detail-view .maono-point-spatial-grouping__switch input {
+  top: 50%;
+  left: 0;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  transform: translateY(-50%);
+}

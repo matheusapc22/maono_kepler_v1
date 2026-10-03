@@ -185,6 +185,7 @@ function RangeControl({
       </span>
       <input
         type="range"
+        aria-label={label}
         min={minimum}
         max={maximum}
         step={step}
