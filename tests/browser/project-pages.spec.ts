@@ -658,7 +658,8 @@ for (const viewport of [
     const limits = sidebar.getByRole('button', { name: 'Limites e Planos', exact: true });
     await limits.click(); await expect(limits).toHaveAttribute('aria-current', 'page');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
-    await expect(sidebar).toHaveCSS('height', `${viewport.height}px`);
+    // WebKit can round 100dvh to 843.984375px for an 844px viewport.
+    await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.height - viewport.height)).toBeLessThanOrEqual(0.05);
     await expect(sidebar).toHaveCSS('overflow-y', 'hidden');
     await expect(sidebar).toHaveCSS('overflow-x', 'hidden');
     const nav = sidebar.locator('.mm-sidebar-nav');
@@ -773,7 +774,8 @@ test('sidebar: long session name and email truncate without growing the identity
       return { right: box.right, sidebarRight: sidebar.right, height: box.height, lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight) };
     });
     expect(geometry.right).toBeLessThan(geometry.sidebarRight);
-    expect(geometry.height).toBeCloseTo(geometry.lineHeight, 0);
+    // WebKit rounds a 19.5px line box to 19px without adding another line.
+    expect(Math.abs(geometry.height - geometry.lineHeight)).toBeLessThanOrEqual(0.5);
   }
   await expect(sidebar).toHaveCSS('width', '300px');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
