@@ -191,6 +191,8 @@ for (const viewport of [
     expect(Math.abs(overlayBefore!.y - overlayAfter!.y)).toBeLessThanOrEqual(1);
     await tab(page, 'Arquivos').click();
     await expect(fileInput(page)).toHaveCount(1);
+    await expect(sidebar(page).locator('.file-type-row')).toHaveCSS('opacity', '1');
+    await expect(sidebar(page).locator('.file-type-row .text').first()).toHaveCSS('white-space', 'nowrap');
     await expectStableCanvas(page, before);
     await page.screenshot({ path: testInfo.outputPath('add-data-files.png') });
     await sidebar(page).getByRole('button', { name: 'Fechar painel', exact: true }).click();
@@ -500,6 +502,7 @@ test('Tileset retains native validation and creates a real vector-tile dataset',
   await sidebar(page).locator('#tile-url').fill(`${origin}/__qa/add-data/tiles/{z}/{x}/{y}.pbf`);
   await expect(add).toBeEnabled();
   await expect(sidebar(page).locator('#json-pretty')).toBeVisible();
+  expect(await sidebar(page).locator('#json-pretty').evaluate(element => getComputedStyle(element.parentElement!).backgroundColor)).toBe('rgb(19, 28, 42)');
   await page.screenshot({ path: testInfo.outputPath('add-data-tileset.png') });
   await add.click();
   await expectImported(page);

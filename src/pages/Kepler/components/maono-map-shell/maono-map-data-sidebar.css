@@ -77,3 +77,9 @@
 .maono-map-data-sidebar__source--tileset > div > div:first-child > div:nth-child(2):has(#json-pretty) { height: 160px; min-width: 0; }
 .maono-map-data-sidebar__source--tileset > div > div:first-child > div:nth-child(2) > div { padding: 10px; overflow-x: hidden; background: var(--maono-map-panel-raised); color: var(--maono-map-text-soft); }
 .maono-map-data-sidebar #json-pretty { white-space: pre-wrap; overflow-wrap: anywhere; }
+.maono-map-data-sidebar__source--tileset :has(> #json-pretty) { background: var(--maono-map-panel-raised); color: var(--maono-map-text-soft); overflow-x: hidden; }
+.maono-map-data-sidebar #json-pretty pre { margin: 0; background: transparent; color: inherit; white-space: pre-wrap; }
+.maono-map-data-sidebar .file-drop-target .file-type-row { opacity: 1; }
+.maono-map-data-sidebar .file-type-row > div { width: 54px; color: var(--maono-map-text-soft); }
+.maono-map-data-sidebar .file-type-row > div > div { background: var(--maono-map-panel-raised); border: 1px solid var(--maono-map-border); }
+.maono-map-data-sidebar .file-type-row .text { color: var(--maono-map-text); font-size: 10px; white-space: nowrap; overflow-wrap: normal; }
