@@ -56,7 +56,8 @@ test("minimal identity, hidden semantic labels, local title font and preserved a
   await expect(page.locator("h1")).toHaveCSS("color", "rgb(169, 173, 179)");
   await expect(page.locator(".maono-login-page__intro")).toHaveCSS("font-weight", "400");
   expect(await page.evaluate(() => Array.from(document.fonts).some(font => font.family.includes("Maono Login Oxanium") && font.status === "loaded"))).toBe(true);
-  await expect(page.locator("h1")).toHaveCSS("font-family", '"Maono Login Oxanium", sans-serif');
+  // Firefox omits optional quotes when serializing a multi-word font family.
+  await expect(page.locator("h1")).toHaveCSS("font-family", /^"?Maono Login Oxanium"?, sans-serif$/);
   expect(await page.getByLabel("E-mail", { exact: true }).evaluate(element => getComputedStyle(element).fontFamily)).not.toContain("Oxanium");
   expect(await page.locator(".maono-login-page").evaluate(element => getComputedStyle(element, "::before").backgroundImage)).toContain("Piramides_Maono.png");
   await expect(page.getByRole("button", { name: /^(ver|ocultar)$/i })).toHaveCount(0);
@@ -159,7 +160,8 @@ for (const viewport of [{ width: 1672, height: 941 }, { width: 1440, height: 900
     await page.setViewportSize(viewport); await setup(page); await open(page);
     const panel = await page.locator(".maono-login-page__card").boundingBox();
     expect(panel!.x).toBeGreaterThanOrEqual(15); expect(panel!.x + panel!.width).toBeLessThanOrEqual(viewport.width - 15);
-    if (viewport.width > 768) expect(panel!.width).toBeLessThanOrEqual(500);
+    // Layout-unit rounding can yield 500.00003px in Firefox.
+    if (viewport.width > 768) expect(panel!.width).toBeCloseTo(500, 1);
     for (const locator of [page.getByLabel("E-mail", { exact: true }), page.getByLabel("Senha", { exact: true }), page.getByRole("button", { name: "Ainda não tenho uma conta" })]) {
       await locator.scrollIntoViewIfNeeded(); await locator.click();
       await expect(locator).toBeFocused();
