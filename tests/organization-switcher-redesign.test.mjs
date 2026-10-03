@@ -100,3 +100,30 @@ test('card preview lifecycle is unchanged by the new root interaction', () => {
     assert.equal(hash(preview(old)), expected, 'independently verified against approved original');
   }
 });
+
+
+test('organization chevron is a single rotating vector; every other trigger and popover operation is unchanged', () => {
+  assert.doesNotMatch(switcher, /open \? "⌃" : "⌄"/);
+  assert.equal((switcher.match(/className="mm-organization-chevron-icon"/g) || []).length, 1);
+  const withoutVector = switcher.replace(/<svg\s+className="mm-organization-chevron-icon"[\s\S]*?<\/svg>/, '<span aria-hidden="true">{open ? "⌃" : "⌄"}</span>');
+  assert.equal(createHash('sha256').update(withoutVector).digest('hex'), '2242ef1796384ed87b00e5919af05c4f52b670a910a601dd0338dafaf73b9729');
+  const icon = css.nodes.find(node => node.type === 'rule' && node.selector === '.mm-organization-chevron-icon');
+  const declarations = Object.fromEntries(icon.nodes.map(node => [node.prop, node.value]));
+  assert.equal(declarations['transform-origin'], 'center');
+  assert.equal(declarations.transform, 'rotate(0deg)');
+  assert.ok(!declarations.background && !declarations.border);
+  const open = css.nodes.find(node => node.type === 'rule' && node.selector === '.mm-organization-trigger[aria-expanded="true"] .mm-organization-chevron-icon');
+  assert.equal(open.nodes.find(node => node.prop === 'transform').value, 'rotate(180deg)');
+  const reduced = css.nodes.find(node => node.type === 'atrule' && node.params === '(prefers-reduced-motion: reduce)' && node.nodes.some(rule => rule.selector === '.mm-organization-chevron-icon'));
+  assert.ok(reduced);
+});
+
+
+test('chevron refinement preserves every unrelated style declaration', () => {
+  const entries = [];
+  css.walkDecls(node => {
+    if (node.parent.selector?.includes('.mm-organization-chevron')) return;
+    entries.push([node.parent.selector, node.parent.parent.type === 'atrule' ? node.parent.parent.params : null, node.prop, node.value, node.important || false]);
+  });
+  assert.equal(createHash('sha256').update(JSON.stringify(entries)).digest('hex'), '8761d6bc79031f3ccf7137e60addc27a24e75c98b9aa730cce2503568e0d9b75');
+});

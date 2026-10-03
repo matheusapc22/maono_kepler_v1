@@ -1271,3 +1271,54 @@ test('compact card: smaller preview controls retain keyboard and accessible touc
   await expect(page.getByRole('menuitem', { name: 'Editar informações' })).toBeVisible();
   expect(requests.filter(request => request.path.endsWith('/map-navigation'))).toHaveLength(0);
 });
+
+for (const viewport of [{ width: 1440, height: 950 }, { width: 390, height: 844 }]) {
+  test(`organization chevron: same centered gold icon rotates without a box at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await setup(page, { dataset: [projects[0]] }); await expectCount(page, 1, 1);
+    const trigger = page.getByRole('button', { name: /Trocar organização ativa/ });
+    const icon = trigger.locator('.mm-organization-chevron-icon');
+    const before = (await trigger.boundingBox())!;
+    const label = await trigger.locator('.mm-organization-trigger-copy').innerHTML();
+    const avatar = await trigger.locator('.mm-organization-avatar').innerHTML();
+    await icon.evaluate(element => { element.setAttribute('data-qa-identity', 'same-chevron'); });
+    const geometry = async () => icon.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const trigger = element.closest('button')!.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const wrapper = getComputedStyle(element.parentElement!);
+      const matrix = new DOMMatrix(style.transform);
+      return {
+        x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, triggerY: trigger.y + trigger.height / 2,
+        border: style.borderTopWidth, background: style.backgroundColor,
+        wrapperBorder: wrapper.borderTopWidth, wrapperBackground: wrapper.backgroundColor,
+        color: style.color, rotate: Math.round(Math.abs(Math.atan2(matrix.b, matrix.a) * 180 / Math.PI)),
+      };
+    });
+    const closed = await geometry();
+    expect(closed.y).toBeCloseTo(closed.triggerY, 0);
+    expect(closed.rotate).toBe(0);
+    expect(closed.color).toBe('rgb(242, 199, 102)');
+    expect(closed.border).toBe('0px'); expect(closed.wrapperBorder).toBe('0px');
+    expect(closed.background).toBe('rgba(0, 0, 0, 0)'); expect(closed.wrapperBackground).toBe('rgba(0, 0, 0, 0)');
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await trigger.click();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByRole('dialog', { name: 'Trocar organização', exact: true })).toHaveCount(1);
+      await expect.poll(async () => (await geometry()).rotate).toBe(180);
+      const opened = await geometry();
+      expect(opened.x).toBeCloseTo(closed.x, 1); expect(opened.y).toBeCloseTo(closed.y, 1);
+      await expect(icon).toHaveAttribute('data-qa-identity', 'same-chevron');
+      expect(await trigger.locator('.mm-organization-trigger-copy').innerHTML()).toBe(label);
+      expect(await trigger.locator('.mm-organization-avatar').innerHTML()).toBe(avatar);
+      const after = (await trigger.boundingBox())!; expect(after).toEqual(before);
+      await page.keyboard.press('Escape');
+      await expect.poll(async () => (await geometry()).rotate).toBe(0);
+      await expect(icon).toHaveAttribute('data-qa-identity', 'same-chevron');
+      await expect(trigger).toBeFocused();
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(icon).toHaveCSS('transition-duration', '0s');
+    await trigger.click(); await expect.poll(async () => (await geometry()).rotate).toBe(180);
+  });
+}

@@ -2442,10 +2442,32 @@
 }
 
 .mm-organization-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   color: var(--mm-gold-bright);
   font-size: 15px;
   font-weight: 900;
   text-align: center;
+}
+
+.mm-organization-chevron-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  transform: rotate(0deg);
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+.mm-organization-trigger[aria-expanded="true"] .mm-organization-chevron-icon {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-organization-chevron-icon { transition: none; }
 }
 
 .mm-organization-inline-error {

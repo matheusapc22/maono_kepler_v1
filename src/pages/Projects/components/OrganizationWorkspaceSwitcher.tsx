@@ -407,7 +407,14 @@ const OrganizationWorkspaceSwitcher: React.FC<
               accessibleLabel="Trocando organização"
             />
           ) : (
-            <span aria-hidden="true">{open ? "⌃" : "⌄"}</span>
+            <svg
+              className="mm-organization-chevron-icon"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="m3 5.5 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           )}
         </span>
       </button>
