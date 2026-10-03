@@ -2557,22 +2557,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-y: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--mm-border-strong) transparent;
   padding: 24px 12px 12px;
-}
-
-.mm-sidebar-nav::-webkit-scrollbar {
-  width: 5px;
-}
-
-.mm-sidebar-nav::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.mm-sidebar-nav::-webkit-scrollbar-thumb {
-  background: var(--mm-border-strong);
-  border-radius: 99px;
 }
 
 .mm-projects-sidebar.is-context-switching .mm-sidebar-nav,

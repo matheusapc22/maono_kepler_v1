@@ -44,6 +44,7 @@ import {
 import "./Projects/projects.css";
 import "./Projects/components/project-cards.css";
 import "./Projects/components/ProjectPages.css";
+import "./Projects/projects-scrollbars.css";
 
 const SECTION_PERMISSIONS: Partial<Record<ProjectSidebarSection, Permission>> = {
   files: PERMISSION.DOCUMENT_VIEW,
@@ -736,6 +737,8 @@ const ProjectsPage: React.FC = () => {
         <section
           className={`mm-projects-main${organizationTransitionActive ? " is-context-switching" : ""}${isProjectSection(sidebarSection) ? " mm-project-pages" : ""}`}
           aria-busy={organizationTransitionActive}
+          aria-label="Conteúdo da seção"
+          tabIndex={0}
         >
           <LoadingOverlay
             active={organizationTransitionActive}

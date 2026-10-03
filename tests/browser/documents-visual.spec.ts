@@ -415,7 +415,11 @@ test("menu ignora scroll atrasado da abertura e fecha quando a âncora realmente
   await trigger.click();
   await expect(item).toBeFocused();
   const top = (await trigger.boundingBox())!.y;
-  await page.evaluate(() => window.scrollBy(0, window.scrollY > 0 ? -32 : 32));
+  await page.evaluate(() => {
+    const owner = window.matchMedia("(min-width: 761px)").matches
+      ? document.querySelector(".mm-projects-main")! : document.scrollingElement!;
+    owner.scrollBy(0, owner.scrollTop > 0 ? -32 : 32);
+  });
   await expect.poll(async () => (await trigger.boundingBox())!.y).not.toBe(top);
   await expect(page.getByRole("menu")).toHaveCount(0);
 
@@ -1017,7 +1021,11 @@ for (const viewport of [{ width: 320, height: 720 }, { width: 390, height: 844 }
     for (const layout of layouts) {
       if (layout === "collapsed") await page.locator(".mm-sidebar-toggle").click();
       for (const action of ["Renomear", "Nova pasta", "Mover"] as const) {
-        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await page.evaluate(() => {
+          const owner = window.matchMedia("(min-width: 761px)").matches
+            ? document.querySelector(".mm-projects-main")! : document.scrollingElement!;
+          owner.scrollTo(0, owner.scrollHeight);
+        });
         let dialog: Locator;
         if (action === "Nova pasta") {
           await page.getByRole("button", { name: "Nova pasta", exact: true }).click();

@@ -11,6 +11,7 @@ on:
       - 'functions/_lib/project-list.js'
       - 'functions/api/projects/**'
       - 'tests/project-pages-contract.test.mjs'
+      - 'tests/projects-scrollbars.test.mjs'
       - 'tests/browser/project-pages.spec.ts'
       - 'playwright.project-pages.config.ts'
       - '.github/workflows/project-pages.yml'
@@ -34,7 +35,7 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --test tests/project-pages-contract.test.mjs
+          node --test tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs
@@ -58,6 +59,8 @@ jobs:
             project-pages-results.json
             dist/
             tests/project-pages-contract.test.mjs
+            tests/projects-scrollbars.test.mjs
+            src/pages/Projects/projects-scrollbars.css
             tests/browser/project-pages.spec.ts
             playwright.project-pages.config.ts
             src/pages/Projects/components/ProjectPagesUi.tsx

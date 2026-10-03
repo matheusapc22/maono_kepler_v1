@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 
 // Synthetic HTTP responses exercise the compiled React route and user events.
 // This is deliberately NOT backend integration or production acceptance.
@@ -28,6 +28,7 @@ type FixtureOptions = {
   userName?: string; userEmail?: string; organizationRoles?: Record<number, string>;
   failFavorite?: boolean | ((attempt: number) => boolean); beforeFavorite?: (attempt: number) => Promise<void>; beforeList?: (path: string) => Promise<void>;
   failList?: () => boolean;
+  beforeOrganizationSwitch?: () => Promise<void>;
 };
 function deferred() {
   let resolve!: () => void;
@@ -61,6 +62,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
       return route.fulfill({ json: { ok: true } });
     }
     if (path === "/api/session/active-organization" && request.method() === "PUT") {
+      await options.beforeOrganizationSwitch?.();
       organizationId = Number(JSON.parse(request.postData() || "{}").organizationId);
       return route.fulfill({ json: { ok: true, ...session() } });
     }
@@ -377,7 +379,7 @@ test("old favorite failure after A→B→A cannot roll back or unlock a new same
   second.resolve(); await expect(pending).toBeEnabled();
 });
 
-// Footer placement is a document-flow contract, not a fixed/sticky toolbar.
+// Footer stays in natural content flow inside the desktop scroller (document on mobile).
 // Exercise every tab with both spare space and content taller than the viewport.
 for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
   for (const viewport of [{ width: 1440, height: 1600 }, { width: 390, height: 1600 }]) {
@@ -395,25 +397,29 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
         await page.evaluate(() => document.fonts.ready);
         const originalCardHeights = await cards(page).evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
         const evidence = [];
-        for (const tallSidebar of [false, true]) {
+        for (const tallSidebar of viewport.width > 760 ? [false] : [false, true]) {
           // A tall sidebar reproduces the otherwise-empty main column in the reference.
           // On mobile the same sidebar remains above the naturally flowing main area.
           await page.locator(".mm-projects-sidebar").evaluate((element, tall) => {
             (element as HTMLElement).style.minHeight = tall ? "2200px" : "";
           }, tallSidebar);
-          await page.evaluate(() => window.scrollTo(0, 0));
+          await scrollWorkspace(page, "start");
           const top = await footerGeometry(page);
           const label = `${name}, ${viewport.width}px, ${count} projects, tall sidebar: ${tallSidebar}`;
           expect(["fixed", "absolute", "sticky"], label).not.toContain(top.footerPosition);
           expect(top.footerBottom, label).toBeCloseTo(top.contentBottom - top.paddingBottom, 0);
           expect(top.contentBottom, label).toBeCloseTo(top.mainBottom, 0);
-          expect(top.mainBottom, label).toBeCloseTo(top.layoutBottom, 0);
+          if (viewport.width <= 760) expect(top.mainBottom, label).toBeCloseTo(top.layoutBottom, 0);
+          else {
+            expect(top.mainViewportHeight, label).toBeCloseTo(viewport.height, 0);
+            expect(top.documentBottom, label).toBeLessThanOrEqual(viewport.height + 1);
+          }
           expect(top.paddingBottom, label).toBeGreaterThan(0);
           expect(top.paddingBottom, label).toBeLessThanOrEqual(24);
           expect(top.mainHeight, label).toBeGreaterThanOrEqual(viewport.height - 1);
           expect(top.footerTop - top.resultsBottom, label).toBeGreaterThanOrEqual(27.5);
           // scrollHeight is integer-rounded; WebKit may keep a half-pixel layout edge.
-          expect(Math.abs(top.documentBottom - top.footerBottom - top.paddingBottom), label).toBeLessThanOrEqual(1);
+          expect(Math.abs(top.scrollContentBottom - top.footerBottom - top.paddingBottom), label).toBeLessThanOrEqual(1);
           expect(top.horizontalOverflow, label).toBeLessThanOrEqual(1);
           if (tallSidebar && viewport.width > 760) {
             expect(top.mainBottom, label).toBeGreaterThanOrEqual(top.sidebarBottom - 1);
@@ -424,10 +430,9 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
           }
           const cardHeights = await cards(page).evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
           expect(cardHeights, `${label}: spare space must not stretch the cards`).toEqual(originalCardHeights);
-          // Scrolling moves the footer by precisely the document scroll distance.
-          // At the real scroll end it is fully visible, separated from every result.
-          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-          await expect.poll(async () => (await footerGeometry(page)).scrollY).toBeCloseTo(Math.max(0, top.documentBottom - viewport.height), 0);
+          // Scroll the actual owner, retaining a reachable natural-flow footer.
+          await scrollWorkspace(page, "end");
+          await expect.poll(async () => (await footerGeometry(page)).scrollY).toBeCloseTo(Math.max(0, top.scrollContentBottom - viewport.height), 0);
           const bottom = await footerGeometry(page);
           expect(bottom.footerTop, label).toBeCloseTo(top.footerTop, 0);
           expect(bottom.footerViewportTop, label).toBeCloseTo(top.footerViewportTop - (bottom.scrollY - top.scrollY), 0);
@@ -445,6 +450,14 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
   }
 }
 
+async function scrollWorkspace(page: Page, edge: "start" | "end") {
+  await page.evaluate(edge => {
+    const owner = window.matchMedia("(min-width: 761px)").matches
+      ? document.querySelector(".mm-projects-main")! : document.scrollingElement!;
+    owner.scrollTo(0, edge === "end" ? owner.scrollHeight : 0);
+  }, edge);
+}
+
 async function footerGeometry(page: Page) {
   return page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
@@ -453,9 +466,14 @@ async function footerGeometry(page: Page) {
     const footerBox = footer.getBoundingClientRect();
     const mainBox = box(".mm-project-pages");
     const resultsBox = box(".mm-project-pages__grid, .mm-project-pages__empty");
-    const offset = window.scrollY;
+    const desktop = window.matchMedia("(min-width: 761px)").matches;
+    const main = document.querySelector(".mm-projects-main")!;
+    const offset = desktop ? main.scrollTop : window.scrollY;
+    const scrollContentBottom = desktop ? main.scrollHeight : document.documentElement.scrollHeight;
     return {
       scrollY: offset,
+      scrollContentBottom,
+      mainViewportHeight: mainBox.height,
       footerPosition: getComputedStyle(footer).position,
       footerTop: footerBox.top + offset,
       footerBottom: footerBox.bottom + offset,
@@ -463,8 +481,8 @@ async function footerGeometry(page: Page) {
       footerViewportBottom: footerBox.bottom,
       contentBottom: content.getBoundingClientRect().bottom + offset,
       paddingBottom: Number.parseFloat(getComputedStyle(content).paddingBottom),
-      mainBottom: mainBox.bottom + offset,
-      mainHeight: mainBox.height,
+      mainBottom: desktop ? main.scrollHeight : mainBox.bottom + offset,
+      mainHeight: desktop ? main.scrollHeight : mainBox.height,
       layoutBottom: box(".mm-projects-layout").bottom + offset,
       sidebarBottom: box(".mm-projects-sidebar").bottom + offset,
       resultsBottom: resultsBox.bottom + offset,
@@ -835,3 +853,123 @@ for (const collapsed of [false, true]) {
     expect(requests.filter(request => request.path === '/api/auth/logout')).toHaveLength(1);
   });
 }
+
+// Older WebKit uses the supported pseudo-element fallback; other engines
+// expose the standardized properties. Assert the actual rendered CSS path.
+async function scrollbarAppearance(locator: Locator) {
+  return locator.evaluate(element => ({
+    color: CSS.supports('scrollbar-color', 'red transparent')
+      ? getComputedStyle(element).getPropertyValue('scrollbar-color')
+      : getComputedStyle(element, '::-webkit-scrollbar-thumb').backgroundColor,
+    width: CSS.supports('scrollbar-width', 'thin')
+      ? getComputedStyle(element).getPropertyValue('scrollbar-width')
+      : getComputedStyle(element, '::-webkit-scrollbar').width,
+  }));
+}
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 1024, height: 480 }, { width: 390, height: 568 }]) {
+  test(`section scroll: native parity, independent content and reachable footer at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await setup(page);
+    await expectCount(page, 10, 73);
+    const main = page.getByRole('region', { name: 'Conteúdo da seção' });
+    const nav = page.locator('.mm-sidebar-nav');
+    const desktop = viewport.width > 760;
+    const style = await scrollbarAppearance(nav);
+    expect(['thin', '5px']).toContain(style.width);
+    expect(await scrollbarAppearance(main)).toEqual(style);
+    await expect(main).toHaveCSS('overflow-y', desktop ? 'auto' : 'visible');
+    const before = await sidebarGeometry(page);
+    await main.focus();
+    await page.keyboard.press('PageDown');
+    if (desktop) {
+      await expect.poll(() => main.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      const after = await sidebarGeometry(page);
+      expect(after.pinned).toEqual(before.pinned);
+      expect(after.nav).toEqual(before.nav);
+      await scrollWorkspace(page, 'end');
+      await expect(pagination(page)).toBeInViewport();
+      await main.hover(); await page.mouse.wheel(0, 900);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(1);
+      const mainOffset = await main.evaluate(element => element.scrollTop);
+      await nav.hover(); await page.mouse.wheel(0, 500);
+      await expect.poll(() => nav.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+      expect(await main.evaluate(element => element.scrollTop)).toBe(mainOffset);
+    } else {
+      await scrollWorkspace(page, 'end');
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+      await expect(pagination(page)).toBeInViewport();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath('section-scroll-footer.png'), animations: 'disabled' });
+  });
+}
+
+test('section scroll: every subtab uses shared native styling and forced colors stay native', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await setup(page, { dataset: projects.slice(0, 1) });
+  await page.route('**/tickets/exports**', route => route.fulfill({ json: { enabled: false, jobs: [], nextCursor: null } }));
+  await page.route(url => /\/api\/organizations\/[^/]+\/tickets$/.test(url.pathname), route => route.fulfill({ json: {
+    ok: true, tickets: [], assignees: [], facets: { byStatus: {}, overdue: 0 },
+    pagination: { page: 1, limit: 50, total: 0, hasMore: false },
+  } }));
+  const main = page.locator('.mm-projects-main');
+  for (const name of ['Todos os Projetos', 'Recentes', 'Favoritos', 'Arquivos e Documentos', 'Central de Chamados', 'Roadmap', 'Usuários e Acessos', 'Organização', 'Limites e Planos', 'Auditoria']) {
+    const button = page.locator('.mm-sidebar-nav').getByRole('button', { name, exact: true });
+    await button.click(); await expect(button).toHaveAttribute('aria-current', 'page');
+    await expect(main).toHaveCSS('overflow-y', 'auto');
+    const styles = await main.evaluate(element => {
+      const nav = document.querySelector('.mm-sidebar-nav')!;
+      const appearance = (node: Element) => ({
+        color: CSS.supports('scrollbar-color', 'red transparent')
+          ? getComputedStyle(node).getPropertyValue('scrollbar-color')
+          : getComputedStyle(node, '::-webkit-scrollbar-thumb').backgroundColor,
+        width: CSS.supports('scrollbar-width', 'thin')
+          ? getComputedStyle(node).getPropertyValue('scrollbar-width')
+          : getComputedStyle(node, '::-webkit-scrollbar').width,
+      });
+      return { expected: appearance(nav), actual: [element, ...element.querySelectorAll('*')]
+        .filter(node => /auto|scroll/.test(getComputedStyle(node).overflowY + getComputedStyle(node).overflowX))
+        .map(appearance) };
+    });
+    for (const actual of styles.actual) expect(actual).toEqual(styles.expected);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(1);
+  }
+  await page.emulateMedia({ forcedColors: 'active' });
+  for (const element of [main, page.locator('.mm-sidebar-nav')]) {
+    const appearance = await scrollbarAppearance(element);
+    expect(['thin', '5px']).not.toContain(appearance.width);
+    expect(appearance.color).not.toContain('51, 58, 70');
+  }
+  await page.emulateMedia({ forcedColors: 'none' });
+  await page.getByRole('button', { name: 'Sair da conta', exact: true }).click();
+  await expect(page.locator('.mm-projects-page')).toHaveCount(0);
+  expect(['thin', '5px']).not.toContain((await scrollbarAppearance(page.locator('html'))).width);
+});
+
+
+test('section scroll: organization-switch overlay covers a scrolled desktop panel', async ({ page }) => {
+  const pending = deferred();
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await setup(page, { beforeOrganizationSwitch: () => pending.promise });
+  await expectCount(page, 10, 73);
+  await scrollWorkspace(page, 'end');
+  const main = page.locator('.mm-projects-main');
+  expect(await main.evaluate(element => element.scrollTop)).toBeGreaterThan(700);
+  await page.getByRole('button', { name: /Trocar organização ativa/ }).click();
+  await page.getByRole('option', { name: /Outra organização/ }).click();
+  try {
+    const overlay = main.locator('.mm-loading-overlay--container');
+    await expect(overlay).toBeVisible();
+    const mainBox = (await main.boundingBox())!;
+    const overlayBox = (await overlay.boundingBox())!;
+    expect(overlayBox.y).toBeCloseTo(mainBox.y, 0);
+    expect(overlayBox.height).toBeCloseTo(mainBox.height, 0);
+    await expect(overlay.getByRole('status')).toBeInViewport();
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  } finally { pending.resolve(); }
+  await expect(main).toHaveAttribute('aria-busy', 'false');
+  await expectCount(page, 0, 0);
+});
