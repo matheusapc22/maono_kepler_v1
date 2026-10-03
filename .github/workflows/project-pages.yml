@@ -68,6 +68,15 @@ jobs:
           VITE_MAONO_LAYER_MANAGER_V1: "true"
           VITE_MAONO_MAP_OVERLAY_V1: "true"
         run: npm run build
+      - name: Compiled map build for independent QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-pages-build-${{ github.sha }}
+          # Keep the exact build separate from potentially large failure traces.
+          # All browser cases still run below with the existing assertions.
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
       - name: Install browser engines
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Actual compiled React route with fixture APIs (not production acceptance)

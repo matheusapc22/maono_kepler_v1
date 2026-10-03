@@ -187,7 +187,7 @@ async function layerExtentGuides(detail: Locator, width: number) {
 }
 
 async function hintPortal(page: Page, trigger: Locator, text: string) {
-  const tooltip = page.getByRole('tooltip');
+  const tooltip = page.locator('.maono-panel-hint__popover[role="tooltip"]');
   await expect(tooltip).toHaveCount(1);
   await expect(tooltip).toBeVisible();
   await expect(tooltip).toHaveText(text);
@@ -667,7 +667,7 @@ for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 
       const explanation = 'Os agrupamentos são uma representação interna da mesma camada. A visibilidade, a ordem e o estilo lógico permanecem únicos no painel.';
       await expect(trigger).toBeVisible();
       await expect(detail.locator('.maono-point-spatial-grouping__description')).toHaveCount(0);
-      await expect(page.getByRole('tooltip')).toHaveCount(0);
+      await expect(page.locator('.maono-panel-hint__popover[role="tooltip"]')).toHaveCount(0);
       await trigger.scrollIntoViewIfNeeded();
       const chrome = await Promise.all(layerChrome(page).map(locator => locator.boundingBox()));
 
@@ -781,7 +781,7 @@ test('viewer retains truthful counts and inspection without exposing mutation co
   await panel(page).locator('summary').filter({ hasText: 'Dimensão e agrupamento' }).click();
   await expect(panel(page).locator('.maono-point-spatial-grouping__notice')).toHaveText('Modo de visualização: as configurações permanecem somente leitura.');
   await expect(panel(page).locator('.maono-point-spatial-grouping__notice')).toBeVisible();
-  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(page.locator('.maono-panel-hint__popover[role="tooltip"]')).toHaveCount(0);
   await openFilters(page);
   await expect(panel(page).getByRole('button', { name: 'Adicionar Filtro', exact: true })).toHaveCount(0);
   await panel(page).locator('.maono-filter-group__toggle').first().click();

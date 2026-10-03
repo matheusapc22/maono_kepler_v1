@@ -11,12 +11,14 @@ const OPEN_EVENT = "maono-panel-hint-open";
 export default function PanelHint({ label, children }: Props) {
   const id = useId();
   const [open, setOpen] = useState(false);
+  const [positioned, setPositioned] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0, maxWidth: 288, maxHeight: 240 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(false);
   const focusedRef = useRef(false);
   const hoveredRef = useRef(false);
+  const settlingPositionRef = useRef(false);
   const closeTimer = useRef<number | undefined>(undefined);
 
   const clearCloseTimer = useCallback(() => {
@@ -27,6 +29,7 @@ export default function PanelHint({ label, children }: Props) {
   const dismiss = useCallback(() => {
     clearCloseTimer();
     pinnedRef.current = false;
+    setPositioned(false);
     setOpen(false);
   }, [clearCloseTimer]);
 
@@ -45,6 +48,7 @@ export default function PanelHint({ label, children }: Props) {
   }
 
   const positionPopover = useCallback(() => {
+    if (settlingPositionRef.current) return;
     const trigger = triggerRef.current;
     const popover = popoverRef.current;
     if (!trigger || !popover) return;
@@ -77,14 +81,31 @@ export default function PanelHint({ label, children }: Props) {
       current.maxWidth === next.maxWidth && current.maxHeight === next.maxHeight
         ? current : next,
     );
+    setPositioned(true);
   }, [dismiss]);
 
   useLayoutEffect(() => {
     if (!open) return;
-    positionPopover();
+    // Native focus can scroll a clipped trigger after focus/layout handlers
+    // (notably in WebKit). Keep the portal hidden until that first paint settles;
+    // never force-scroll the sidebar or dismiss from the stale focus rectangle.
+    settlingPositionRef.current = true;
+    setPositioned(false);
+    let settledFrame: number | undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      settledFrame = window.requestAnimationFrame(() => {
+        settlingPositionRef.current = false;
+        positionPopover();
+      });
+    });
     const observer = new ResizeObserver(positionPopover);
     if (popoverRef.current) observer.observe(popoverRef.current);
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      if (settledFrame !== undefined) window.cancelAnimationFrame(settledFrame);
+      settlingPositionRef.current = false;
+      observer.disconnect();
+    };
   }, [open, positionPopover]);
 
   useEffect(() => clearCloseTimer, [clearCloseTimer]);
@@ -174,7 +195,7 @@ export default function PanelHint({ label, children }: Props) {
           id={id}
           className="maono-panel-hint__popover"
           role="tooltip"
-          style={position}
+          style={{ ...position, visibility: positioned ? "visible" : "hidden" }}
           onPointerEnter={() => { hoveredRef.current = true; clearCloseTimer(); }}
           onPointerLeave={() => { hoveredRef.current = false; leave(); }}
         >

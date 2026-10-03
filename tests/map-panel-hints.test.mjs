@@ -98,3 +98,13 @@ test("hint accessibility, isolation and viewport handling are explicit", () => {
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.doesNotMatch(hint, /href=|https?:/);
 });
+
+test("initial placement waits for native focus scrolling without moving the sidebar", () => {
+  assert.match(hint, /if \(settlingPositionRef\.current\) return/);
+  assert.match(hint, /const focusFrame = window\.requestAnimationFrame\(\(\) => \{\s*settledFrame = window\.requestAnimationFrame/);
+  assert.match(hint, /visibility: positioned \? "visible" : "hidden"/);
+  assert.match(hint, /window\.cancelAnimationFrame\(focusFrame\)/);
+  assert.match(hint, /window\.cancelAnimationFrame\(settledFrame\)/);
+  assert.match(hint, /anchor\.bottom <= visibleTop \|\| anchor\.top >= visibleBottom/);
+  assert.doesNotMatch(hint, /scrollIntoView|scrollTo\(|scrollTop\s*=/);
+});
