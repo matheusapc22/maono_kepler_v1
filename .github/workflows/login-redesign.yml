@@ -1,0 +1,52 @@
+name: Login Redesign
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/pages/Login.tsx'
+      - 'src/pages/LoginIcon.tsx'
+      - 'src/pages/login.css'
+      - 'src/pages/maono-login-accent.css'
+      - 'public/fonts/oxanium/**'
+      - 'src/auth/**'
+      - 'tests/login-*.test.mjs'
+      - 'tests/browser/login-redesign.spec.ts'
+      - 'playwright.login.config.ts'
+      - '.github/workflows/login-redesign.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  login-redesign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Login, autofill and authentication contracts
+        run: npm run test:login && node --test tests/login-redesign.test.mjs tests/maono-residual-accent.test.mjs
+      - name: Scoped lint
+        run: npx eslint src/pages/Login.tsx src/pages/LoginIcon.tsx tests/browser/login-redesign.spec.ts playwright.login.config.ts
+      - name: Build exact candidate
+        run: npm run build
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Compiled login in three engines with fixture HTTP
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: login-results.json
+        run: xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24" npx playwright test --config=playwright.login.config.ts --reporter=list,json
+      - name: Login evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: login-redesign-${{ github.sha }}
+          path: |
+            test-results/
+            login-results.json
+          retention-days: 14

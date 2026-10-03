@@ -12,6 +12,7 @@ import {
 } from "../components/loading";
 import { usePreparedNavigate } from "../hooks/usePreparedNavigate";
 import { normalizeUserError } from "../lib/user-error-catalog";
+import LoginIcon from "./LoginIcon";
 import "./login.css";
 
 const LOGIN_BACKGROUND_URL =
@@ -183,64 +184,80 @@ const LoginPage: React.FC = () => {
   } as CSSProperties;
 
   return (
-    <main className="maono-login-page" style={pageStyle}>
-      <section className="maono-login-page__card">
+    <main className="maono-login-page maono-login-page--redesigned" style={pageStyle}>
+      <section className="maono-login-page__card" aria-labelledby="maono-login-title">
         <div className="maono-login-page__content maono-login-page__content--floating">
           <div className="maono-login-page__brand">
             <img src={Logo} alt="Maõno" className="maono-login-page__logo" />
-            <h1>Faça seu login</h1>
-            <p className="maono-login-page__intro">
-              Entre para acessar seus projetos, mapas e permissões da plataforma.
-            </p>
+            <h1 id="maono-login-title">ACESSE SUA CONTA</h1>
+            <p className="maono-login-page__intro">Entre para continuar na Maõno Maps.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="maono-login-page__form" autoComplete="on">
-            <label className="maono-login-page__field" htmlFor="maono-login-email">
-              <span className="maono-login-page__field-label">e-mail</span>
-              <input
-                id="maono-login-email"
-                name="email"
-                className="maono-login-page__input"
-                type="email"
-                autoComplete="username"
-                inputMode="email"
-                autoCapitalize="none"
-                spellCheck={false}
-                required
-              />
-            </label>
+            <div className="maono-login-page__fields">
+              <div className="maono-login-page__field">
+                <label className="maono-login-page__field-label" htmlFor="maono-login-email">E-mail</label>
+                <span className="maono-login-page__input-icon"><LoginIcon name="mail" /></span>
+                <input
+                  id="maono-login-email"
+                  name="email"
+                  className="maono-login-page__input"
+                  type="email"
+                  placeholder="seu e-mail"
+                  autoComplete="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  aria-describedby={error ? "maono-login-error" : undefined}
+                  required
+                />
+              </div>
 
-            <label className="maono-login-page__field" htmlFor="maono-login-password">
-              <span className="maono-login-page__field-label">senha</span>
-              <span className="maono-login-page__password-control">
+              <div className="maono-login-page__field">
+                <label className="maono-login-page__field-label" htmlFor="maono-login-password">Senha</label>
+                <span className="maono-login-page__input-icon"><LoginIcon name="lock" /></span>
                 <input
                   id="maono-login-password"
                   name="password"
                   className="maono-login-page__input"
                   type={showPassword ? "text" : "password"}
+                  placeholder="sua senha"
                   autoComplete="current-password"
+                  aria-describedby={error ? "maono-login-error" : undefined}
                   required
                 />
                 <button
                   type="button"
                   className="maono-login-page__password-toggle"
+                  data-visible={showPassword}
                   aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                   aria-pressed={showPassword}
-                  onClick={() => setShowPassword((current) => !current)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    const input = event.currentTarget.parentElement?.querySelector("input");
+                    const start = input?.selectionStart ?? 0;
+                    const end = input?.selectionEnd ?? start;
+                    const direction = input?.selectionDirection ?? "none";
+                    setShowPassword((current) => !current);
+                    // Switching the native input type can reset its selection.
+                    requestAnimationFrame(() => {
+                      if (input?.isConnected) input.setSelectionRange(start, end, direction);
+                    });
+                  }}
                 >
-                  {showPassword ? "ocultar" : "ver"}
+                  <LoginIcon name={showPassword ? "eye" : "eye-off"} />
                 </button>
-              </span>
-            </label>
+              </div>
+            </div>
 
             <div className="maono-login-page__link-row">
               <button type="button" className="maono-login-page__link-button">
-                esqueci minha senha
+                Esqueci minha senha
               </button>
             </div>
 
             {error ? (
-              <div className="maono-login-page__error" role="alert">{error}</div>
+              <div id="maono-login-error" className="maono-login-page__error" role="alert">{error}</div>
             ) : null}
 
             <button
@@ -248,12 +265,15 @@ const LoginPage: React.FC = () => {
               type="submit"
               disabled={submitting || redirecting}
             >
-              Entrar
+              <span>Entrar</span>
+              <LoginIcon name="arrow-right" />
             </button>
+
+            <div className="maono-login-page__separator">ou</div>
 
             <div className="maono-login-page__link-center">
               <button type="button" className="maono-login-page__link-button">
-                ainda não tenho uma conta
+                Ainda não tenho uma conta
               </button>
             </div>
           </form>

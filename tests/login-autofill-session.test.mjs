@@ -19,7 +19,7 @@ test("formulário lê os valores reais preenchidos pelo gerenciador de senhas", 
   assert.match(loginPage, /new FormData\(form\)/);
   assert.match(loginPage, /name="email"/);
   assert.match(loginPage, /name="password"/);
-  assert.match(loginPage, /autoComplete="username"/);
+  assert.match(loginPage, /autoComplete="email"/);
   assert.match(loginPage, /autoComplete="current-password"/);
   assert.doesNotMatch(loginPage, /value=\{email\}/);
   assert.doesNotMatch(loginPage, /value=\{password\}/);
@@ -35,8 +35,8 @@ test("redirecionamento pós-login permanece interno à plataforma", () => {
 
 test("tema escuro prevalece nos estados de preenchimento automático do Chrome", () => {
   assert.match(loginCss, /:-webkit-autofill/);
-  assert.match(loginCss, /0 0 0 1000px #28282b inset/i);
-  assert.match(loginCss, /-webkit-text-fill-color:\s*#fff\s*!important/i);
+  assert.match(loginCss, /0 0 0 1000px #15181d inset/i);
+  assert.match(loginCss, /-webkit-text-fill-color:\s*#e9eaec\s*!important/i);
   assert.match(loginCss, /color-scheme:\s*dark/i);
 });
 
