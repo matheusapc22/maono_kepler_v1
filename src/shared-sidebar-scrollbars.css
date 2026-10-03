@@ -1,9 +1,17 @@
-/* Share the sidebar's native thin scrollbar with every existing content
- * scroll owner (tables, ticket lists, roadmap and access panels). Styling does
- * not make descendants scrollable or change their overflow/layout rules.
- * The root selector only covers the stacked mobile document while Projects
- * is mounted; other routes keep their own native scrollbar behavior. */
+/* Share Projects' native scrollbar with the map's left rail and panel host.
+ * Every existing nested scroll owner (layers, filters, basemaps, data sources)
+ * is covered without changing overflow or creating another scroll container.
+ * Right-side map tools, popovers, the canvas and the map document are excluded.
+ * The document selector only covers the stacked mobile Projects page. */
+.maono-map-sidebar,
+.maono-map-panel-host__panel {
+  --mm-border-strong: var(--maono-sidebar-scroll-thumb);
+}
 @media (forced-colors: none) {
+  .maono-map-sidebar,
+  .maono-map-sidebar *,
+  .maono-map-panel-host__panel,
+  .maono-map-panel-host__panel *,
   .maono-sidebar-scroll,
   .maono-sidebar-scroll *,
   html:has(.mm-projects-page),
@@ -14,6 +22,10 @@
     scrollbar-color: var(--mm-border-strong) transparent;
   }
 
+  .maono-map-sidebar::-webkit-scrollbar,
+  .maono-map-sidebar *::-webkit-scrollbar,
+  .maono-map-panel-host__panel::-webkit-scrollbar,
+  .maono-map-panel-host__panel *::-webkit-scrollbar,
   .maono-sidebar-scroll::-webkit-scrollbar,
   .maono-sidebar-scroll *::-webkit-scrollbar,
   html:has(.mm-projects-page)::-webkit-scrollbar,
@@ -24,6 +36,10 @@
     height: 5px;
   }
 
+  .maono-map-sidebar::-webkit-scrollbar-track,
+  .maono-map-sidebar *::-webkit-scrollbar-track,
+  .maono-map-panel-host__panel::-webkit-scrollbar-track,
+  .maono-map-panel-host__panel *::-webkit-scrollbar-track,
   .maono-sidebar-scroll::-webkit-scrollbar-track,
   .maono-sidebar-scroll *::-webkit-scrollbar-track,
   html:has(.mm-projects-page)::-webkit-scrollbar-track,
@@ -33,6 +49,10 @@
     background: transparent;
   }
 
+  .maono-map-sidebar::-webkit-scrollbar-thumb,
+  .maono-map-sidebar *::-webkit-scrollbar-thumb,
+  .maono-map-panel-host__panel::-webkit-scrollbar-thumb,
+  .maono-map-panel-host__panel *::-webkit-scrollbar-thumb,
   .maono-sidebar-scroll::-webkit-scrollbar-thumb,
   .maono-sidebar-scroll *::-webkit-scrollbar-thumb,
   html:has(.mm-projects-page)::-webkit-scrollbar-thumb,
@@ -46,6 +66,10 @@
 
 /* Preserve system colors and larger native affordances in high contrast. */
 @media (forced-colors: active) {
+  .maono-map-sidebar,
+  .maono-map-sidebar *,
+  .maono-map-panel-host__panel,
+  .maono-map-panel-host__panel *,
   .maono-sidebar-scroll,
   .maono-sidebar-scroll *,
   html:has(.mm-projects-page),

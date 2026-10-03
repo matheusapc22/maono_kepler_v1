@@ -20,6 +20,11 @@ on:
       - 'tests/browser/platform-density-map.spec.ts'
       - 'tests/browser/map-add-data-sidebar.spec.ts'
       - 'tests/map-add-data-sidebar.test.mjs'
+      - 'tests/map-sidebar-scrollbars.test.mjs'
+      - 'tests/data-import-localization.test.mjs'
+      - 'tests/tileset-localization-contract.test.mjs'
+      - 'tests/browser/map-sidebar-scrollbars.spec.ts'
+      - 'tests/browser/map-data-localization.spec.ts'
       - 'tests/project-pages-contract.test.mjs'
       - 'tests/projects-scrollbars.test.mjs'
       - 'tests/browser/project-pages.spec.ts'
@@ -31,7 +36,8 @@ permissions:
 jobs:
   project-pages:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Includes native map import, localization and nested-scroll checks in three engines.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,7 +51,7 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --test tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
+          node --experimental-strip-types --test tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs

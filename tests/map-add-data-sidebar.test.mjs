@@ -35,8 +35,8 @@ test('Arquivos and Tileset reuse native factory source components, URL keeps exi
   assert.match(sources, /LoadDataModalFactory\(\.\.\.deps\)/);
   assert.match(sources, /method\.id === "upload"\)\.elementType/);
   assert.match(sources, /method\.id === "tileset"\)\.elementType/);
-  assert.match(sources, /React\.createElement\(FileUpload, props\)/);
-  assert.match(sources, /React\.createElement\(LoadTileset, sourceProps\)/);
+  assert.match(sources, /React\.createElement\(FileUpload, \{ \.\.\.props, fileLoadingProgress: localizeImportProgress/);
+  assert.match(sources, /React\.createElement\(LocalizedLoadTilesetTab, sourceProps\)/);
   assert.match(sources, /React\.createElement\(LoadRemoteMap, sourceProps\)/);
   assert.match(sources, /onLoadRemoteMap: loadRemoteMap/);
   assert.doesNotMatch(sources, /id: "storage"|SampleMapGallery|processGeojson|processCsv|new File/);

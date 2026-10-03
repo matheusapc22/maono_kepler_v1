@@ -36,6 +36,7 @@ import MaonoSaveButton from "./components/maono-save-button";
 import BackToProjectsButton from "./components/back-to-projects-button";
 import PointClusterSettingsPanel from "./components/point-cluster-settings-panel";
 import { usePointClustering } from "./hooks/use-point-clustering";
+import { replaceDataImportNotifications } from "./factories/data-import-notifications";
 import { replaceAddDataDialog } from "./factories/add-data-dialog";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
@@ -124,6 +125,7 @@ const KeplerGl = injectComponents([
   replaceDatasetSection(),
   replaceLayerConfigurator(),
   replaceSidePanel(),
+  replaceDataImportNotifications(),
 ]);
 
 function shouldForwardProp(propName, target) {

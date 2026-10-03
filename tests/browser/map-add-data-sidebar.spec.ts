@@ -426,7 +426,7 @@ test('URL validation rejects invalid text without fetching or mutating data', as
   await openData(page);
   await tab(page, 'URL').click();
   const baseline = requests.length;
-  await sidebar(page).getByPlaceholder('Url', { exact: true }).fill('not-a-url');
+  await sidebar(page).getByRole('textbox', { name: 'URL da fonte de dados', exact: true }).fill('not-a-url');
   await urlSubmit(page).click();
   await expect(sidebar(page)).toContainText(/URL válida|URL inválida/i);
   expect((await capture(page)).raw.datasetIds).toEqual([]);
@@ -441,7 +441,7 @@ test('URL keeps the authorized sidebar during fetch and uses the native CSV pipe
   await openData(page);
   await tab(page, 'URL').click();
   const remoteUrl = new URL('/__qa/add-data/remote.csv', page.url()).href;
-  await sidebar(page).getByPlaceholder('Url', { exact: true }).fill(remoteUrl);
+  await sidebar(page).getByRole('textbox', { name: 'URL da fonte de dados', exact: true }).fill(remoteUrl);
   try {
     await urlSubmit(page).click();
     await expect.poll(() => requests.filter(url => url === remoteUrl).length).toBe(1);
@@ -458,7 +458,7 @@ test('URL failure leaves a usable panel with visible error and no dataset', asyn
   await openMap(page, { remoteStatus: 503 });
   await openData(page);
   await tab(page, 'URL').click();
-  await sidebar(page).getByPlaceholder('Url', { exact: true }).fill(new URL('/__qa/add-data/remote.csv', page.url()).href);
+  await sidebar(page).getByRole('textbox', { name: 'URL da fonte de dados', exact: true }).fill(new URL('/__qa/add-data/remote.csv', page.url()).href);
   await urlSubmit(page).click();
   await expect(sidebar(page)).toBeVisible();
   await expect(page.locator('.notification-item, #map-add-data-sidebar [role=alert]').first()).toBeVisible();
@@ -474,7 +474,7 @@ test('dismissing a pending URL request never resurrects the data sidebar', async
   await openData(page);
   await tab(page, 'URL').click();
   const remoteUrl = new URL('/__qa/add-data/remote.csv', page.url()).href;
-  await sidebar(page).getByPlaceholder('Url', { exact: true }).fill(remoteUrl);
+  await sidebar(page).getByRole('textbox', { name: 'URL da fonte de dados', exact: true }).fill(remoteUrl);
   try {
     await urlSubmit(page).click();
     await expect.poll(() => requests.filter(url => url === remoteUrl).length).toBe(1);
@@ -493,7 +493,7 @@ test('Tileset retains native validation and creates a real vector-tile dataset',
   const { writes } = await openMap(page);
   await openData(page);
   await tab(page, 'Tileset').click();
-  const add = sidebar(page).getByRole('button', { name: /adicionar.*tileset|add.*tileset/i });
+  const add = sidebar(page).getByRole('button', { name: 'Adicionar conjunto', exact: true });
   await expect(add).toBeDisabled();
   const origin = new URL(page.url()).origin;
   await sidebar(page).locator('#tileset-name').fill('Tileset sintético QA');

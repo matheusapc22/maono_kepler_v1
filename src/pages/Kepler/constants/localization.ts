@@ -25,6 +25,23 @@ export const messages = {
   en,
   pt: {
     "maono.legend.title": "Maõno",
+    "modal.loadData.remote": "URL",
+    "loadRemoteMap.description": "Carregue uma fonte de dados ou um mapa por URL.",
+    "loadRemoteMap.message": "Formatos aceitos: CSV, JSON e configuração de mapa Maõno em JSON. A URL deve incluir a extensão do arquivo.",
+    "loadRemoteMap.examples": "Exemplos:",
+    "loadRemoteMap.cors": "O domínio da fonte deve permitir o acesso pela política CORS. Para saber mais, ",
+    "loadRemoteMap.clickHere": "consulte a documentação",
+    "loadRemoteMap.fetch": "Carregar",
+    "tilesetSetup.header": "Configurar dados vetoriais",
+    "tilesetSetup.rasterTileHeader": "Configurar dados matriciais",
+    "tilesetSetup.addTilesetText": "Adicionar tileset",
+    "fileUploader.message": "Arraste e solte seus arquivos aqui",
+    "fileUploader.browseFiles": "selecione um arquivo",
+    "fileUploader.uploading": "Carregando",
+    "fileUploader.fileNotSupported": "O arquivo {errorFiles} não é compatível.",
+    "fileUploader.configUploadMessage": "Carregue {fileFormatNames} ou mapas salvos em **JSON**. Consulte os [**formatos de arquivo aceitos**]",
+    "fileUploader.chromeMessage": "No Chrome, prefira arquivos de até 250 MB. Para arquivos maiores, experimente o Safari.",
+    "fileUploader.disclaimer": "Os arquivos são processados neste navegador para adicionar dados ao mapa.",
 
     // O catálogo pt do Kepler 3.2.0 não possui o bloco mapLegend. Sem estes
     // overrides, o react-intl cai no defaultMessage inglês (Fill color,

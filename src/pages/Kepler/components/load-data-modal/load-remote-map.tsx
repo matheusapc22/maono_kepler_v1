@@ -125,8 +125,8 @@ class LoadRemoteMap extends Component {
           <StyledInputLabel>
             <FormattedMessage id={"loadRemoteMap.examples"} />
             <ul>
-              <li>https://your.map.url/map.json</li>
-              <li>http://your.map.url/data.csv</li>
+              <li>https://exemplo.com/mapa.json</li>
+              <li>https://exemplo.com/dados.csv</li>
             </ul>
           </StyledInputLabel>
           <StyledInputLabel>
@@ -143,7 +143,7 @@ class LoadRemoteMap extends Component {
             <StyledInput
               onChange={this.onMapUrlChange}
               type="text"
-              placeholder="Url"
+              placeholder="Cole a URL do arquivo ou mapa"
               aria-label="URL da fonte de dados"
               value={this.state.dataUrl}
               error={displayedError}

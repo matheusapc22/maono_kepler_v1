@@ -7,7 +7,9 @@ import { LoadDataModalFactory, withState } from "@kepler.gl/components";
 import { useIntl } from "react-intl";
 import { ThemeProvider } from "styled-components";
 import LoadRemoteMap from "../components/load-data-modal/load-remote-map";
+import LocalizedLoadTilesetTab from "../components/load-data-modal/tilesets/load-tileset";
 import { loadRemoteMap } from "../actions";
+import { localizeImportProgress } from "../components/load-data-modal/data-import-messages";
 import AddDataSidebar from "../components/maono-map-shell/AddDataSidebar";
 import { AddDataDockContext } from "../components/maono-map-shell/AddDataDockContext";
 
@@ -35,7 +37,7 @@ const dataSourceTheme = (theme) => ({
 function AccessibleFileSource({ FileUpload, ...props }) {
   const source = useRef(null);
   return React.createElement("div", { ref: source },
-    React.createElement(FileUpload, props),
+    React.createElement(FileUpload, { ...props, fileLoadingProgress: localizeImportProgress(props.fileLoadingProgress) }),
     React.createElement("button", {
       type: "button",
       className: "maono-map-data-sidebar__file-picker",
@@ -69,7 +71,7 @@ const CustomLoadDataModalFactory = (...deps) => {
           renderSource: (source) => {
             const sourceProps = { ...props, intl };
             if (source === "files") return React.createElement(AccessibleFileSource, { ...sourceProps, FileUpload });
-            if (source === "tileset") return React.createElement(LoadTileset, sourceProps);
+            if (source === "tileset") return React.createElement(LocalizedLoadTilesetTab, sourceProps);
             return React.createElement(LoadRemoteMap, sourceProps);
           },
         }),

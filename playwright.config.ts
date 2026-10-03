@@ -5,7 +5,7 @@ export default defineConfig({
   // This new route suite owns a compiled-preview, three-engine gate. Running it
   // against Vite dev can reload /projects while Kepler dependencies reoptimize.
   // All preexisting loading/reliability suites remain in this development gate.
-  testIgnore: ["**/project-pages.spec.ts", "**/platform-density-map.spec.ts", "**/map-add-data-sidebar.spec.ts"],
+  testIgnore: ["**/project-pages.spec.ts", "**/platform-density-map.spec.ts", "**/map-add-data-sidebar.spec.ts", "**/map-data-localization.spec.ts", "**/map-sidebar-scrollbars.spec.ts"],
   timeout: 30_000,
   expect: {
     timeout: 7_500,
