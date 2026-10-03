@@ -25,6 +25,7 @@ const projects: Project[] = Array.from({ length: 73 }, (_, index) => ({
 type RequestRecord = { method: string; path: string; query: string; body: string | null; organizationId: number };
 type FixtureOptions = {
   dataset?: Project[]; recentIds?: number[]; role?: string; deniedPermissions?: string[];
+  userName?: string; userEmail?: string; organizationRoles?: Record<number, string>;
   failFavorite?: boolean | ((attempt: number) => boolean); beforeFavorite?: (attempt: number) => Promise<void>; beforeList?: (path: string) => Promise<void>;
   failList?: () => boolean;
 };
@@ -39,17 +40,26 @@ async function setup(page: Page, options: FixtureOptions = {}) {
   const requests: RequestRecord[] = [];
   let organizationId = 1;
   let favoriteAttempt = 0;
-  const session = () => ({
+  let authenticated = true;
+  const fixtureOrganizations = organizations.map(organization => ({
+    ...organization, role: options.organizationRoles?.[organization.id],
+  }));
+  const session = () => authenticated ? ({
     authenticated: true,
-    user: { id: 1, name: "Operador de demonstração", email: "qa@example.test", role: options.role ?? "super_admin", activeOrganizationId: organizationId, deniedPermissions: options.deniedPermissions ?? [] },
-    projects: state.filter(item => item.organizationId === organizationId), organizations,
-    activeOrganization: organizations.find(item => item.id === organizationId),
-  });
+    user: { id: 1, name: options.userName ?? "Operador de demonstração", email: options.userEmail ?? "qa@example.test", role: options.role ?? "super_admin", activeOrganizationId: organizationId, deniedPermissions: options.deniedPermissions ?? [] },
+    projects: state.filter(item => item.organizationId === organizationId), organizations: fixtureOrganizations,
+    activeOrganization: fixtureOrganizations.find(item => item.id === organizationId),
+  }) : ({ authenticated: false, user: null, projects: [], organizations: [], activeOrganization: null });
   await page.clock.setFixedTime(new Date("2026-10-02T12:00:00Z"));
   await page.route("**/api/**", async route => {
     const request = route.request(); const url = new URL(request.url()); const path = url.pathname;
     requests.push({ method: request.method(), path, query: url.search, body: request.postData(), organizationId });
     if (path === "/api/session") return route.fulfill({ json: session() });
+    if (path === "/api/auth/logout" && request.method() === "POST") {
+      // Fully local logout: exercise the existing callback without a real account.
+      authenticated = false;
+      return route.fulfill({ json: { ok: true } });
+    }
     if (path === "/api/session/active-organization" && request.method() === "PUT") {
       organizationId = Number(JSON.parse(request.postData() || "{}").organizationId);
       return route.fulfill({ json: { ok: true, ...session() } });
@@ -530,12 +540,12 @@ test('sidebar: flat navigation, existing icons and every section remain function
   const sidebar = page.getByRole('complementary', { name: 'Navegação da área de projetos' });
   await expect(sidebar.locator('.mm-sidebar-title')).toHaveText(['Projetos', 'Organização', 'Gestão', 'Administração Maõno']);
   await expect(sidebar.locator('.mm-sidebar-count')).toHaveText('1');
-  await expect(sidebar.locator('.mm-sidebar-user')).toContainText('Operador de demonstração');
+  await expect(sidebar.locator('.mm-sidebar-user-copy strong')).toHaveText('Operador de demonstração - Super Admin');
   await expect(sidebar.locator('.mm-sidebar-user')).toContainText('qa@example.test');
   const routes = [
     ['Todos os Projetos', '▦'], ['Recentes', '◷'], ['Favoritos', '☆'],
     ['Arquivos e Documentos', '▤'], ['Central de Chamados', 'svg'], ['Roadmap', '◫'],
-    ['Usuários e Acessos', '☷'], ['Organização', '▥'], ['Limites e Planos', '▧'],
+    ['Usuários e Acessos', '☷'], ['Organização', '▥'], ['Limites e Planos', '▧'], ['Auditoria', '◌'],
   ];
   for (const [name, icon] of routes) {
     const item = sidebar.getByRole('button', { name, exact: true });
@@ -595,6 +605,11 @@ test('sidebar: hover, keyboard focus, truncation and collapsed tooltips', async 
   await expect(sidebar.locator('.mm-sidebar-count')).toBeHidden();
   await expect(sidebar.locator('.mm-sidebar-title')).toHaveCount(0);
   await expect(sidebar.locator('.mm-sidebar-user')).toHaveCount(0);
+  for (const item of await sidebar.locator('.mm-sidebar-nav .mm-sidebar-item').all()) {
+    await expect(item).toHaveAttribute('title', (await item.getAttribute('aria-label'))!);
+    await expect(item.locator('.mm-sidebar-label')).toBeHidden();
+    await expect(item.locator('.mm-sidebar-icon')).toBeVisible();
+  }
   await expect(recent).toHaveAttribute('title', 'Recentes');
   await recent.click(); await expect(recent).toHaveAttribute('aria-current', 'page');
   await expect(recent.locator('.mm-sidebar-icon')).toBeVisible();
@@ -619,27 +634,202 @@ test('sidebar: search, organization switching and permission-filtered navigation
   await expect(trigger).toContainText('Outra organização');
   await expectCount(page, 0, 0);
   await expect(sidebar.locator('.mm-sidebar-count')).toHaveText('0');
+  await expect(sidebar.getByRole('button', { name: 'Todos os Projetos', exact: true })).toHaveAttribute('aria-current', 'page');
   await trigger.click(); await page.keyboard.press('Escape');
   await expect(page.getByRole('listbox')).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });
 
-for (const viewport of [{ width: 1024, height: 600 }, { width: 390, height: 844 }]) {
-  test(`sidebar: responsive navigation and scroll at ${viewport.width}px`, async ({ page }, testInfo) => {
+for (const viewport of [
+  { width: 1366, height: 768 }, { width: 1024, height: 600 },
+  { width: 1366, height: 480 }, { width: 390, height: 844 }, { width: 390, height: 568 },
+]) {
+  test(`sidebar: responsive navigation and scroll at ${viewport.width}x${viewport.height}px`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
-    await setup(page, { dataset: projects.slice(0, 1) });
+    await setup(page, { dataset: projects.slice(0, 1), userName: 'Matheus Andrade' });
+    await expectCount(page, 1, 1);
     const sidebar = page.locator('.mm-projects-sidebar');
+    await expect(sidebar.getByRole('button', { name: 'Todos os Projetos', exact: true })).toHaveAttribute('aria-current', 'page');
+    await page.evaluate(() => document.fonts.ready);
+    if (viewport.width === 1366 && viewport.height === 768) {
+      await page.screenshot({ path: testInfo.outputPath('sidebar-all-projects-desktop.png'), animations: 'disabled' });
+      await sidebar.screenshot({ path: testInfo.outputPath('sidebar-all-projects-crop.png'), animations: 'disabled' });
+    }
     const limits = sidebar.getByRole('button', { name: 'Limites e Planos', exact: true });
     await limits.click(); await expect(limits).toHaveAttribute('aria-current', 'page');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
-    if (viewport.width > 760) {
-      await expect(sidebar).toHaveCSS('height', `${viewport.height}px`);
-      expect(await sidebar.locator('.mm-sidebar-nav').evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    await expect(sidebar).toHaveCSS('height', `${viewport.height}px`);
+    await expect(sidebar).toHaveCSS('overflow-y', 'hidden');
+    await expect(sidebar).toHaveCSS('overflow-x', 'hidden');
+    const nav = sidebar.locator('.mm-sidebar-nav');
+    await expect(nav).toHaveCSS('min-height', '0px');
+    await expect(nav).toHaveCSS('overflow-y', 'auto');
+    await expect(nav).toHaveCSS('overscroll-behavior-y', 'contain');
+    // Every tested viewport needs real overflow with the full permitted registry.
+    expect(await nav.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await nav.evaluate(element => { element.scrollTop = 0; });
+    const before = await sidebarGeometry(page);
+    for (const [name, box] of Object.entries(before.pinned)) {
+      expect(box.top, `${name} is inside the viewport`).toBeGreaterThanOrEqual(-1);
+      expect(box.bottom, `${name} is inside the viewport`).toBeLessThanOrEqual(viewport.height + 1);
     }
+    expect(before.nav.top).toBeGreaterThanOrEqual(before.pinned.header.bottom - 1);
+    expect(before.nav.bottom).toBeLessThanOrEqual(before.pinned.footer.top + 1);
+    await nav.hover();
+    await page.mouse.wheel(0, 700);
+    await expect.poll(() => nav.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    const after = await sidebarGeometry(page);
+    expect(after.sidebarScrollTop).toBe(0);
+    expect(after.documentScrollTop).toBe(before.documentScrollTop);
+    for (const [name, box] of Object.entries(before.pinned)) {
+      expect(after.pinned[name].top, `${name} stays pinned while nav scrolls`).toBeCloseTo(box.top, 0);
+      expect(after.pinned[name].bottom, `${name} stays pinned while nav scrolls`).toBeCloseTo(box.bottom, 0);
+    }
+    expect(after.firstItemTop).toBeLessThan(before.firstItemTop);
+    // Reaching the navigation's end must not chain the gesture to the page.
+    await nav.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await page.mouse.wheel(0, 700);
+    await expect(sidebar.getByRole('button', { name: 'Auditoria', exact: true })).toBeInViewport();
+    expect((await sidebarGeometry(page)).documentScrollTop).toBe(before.documentScrollTop);
+    if (viewport.height === 480) await sidebar.screenshot({ path: testInfo.outputPath('sidebar-short-height-scrolled.png'), animations: 'disabled' });
+    await testInfo.attach('sidebar-scroll-geometry', { body: JSON.stringify({ viewport, before, after }, null, 2), contentType: 'application/json' });
     await sidebar.getByRole('button', { name: 'Recolher sidebar' }).click();
     await sidebar.getByRole('button', { name: 'Favoritos', exact: true }).click();
     await expect(sidebar.getByRole('button', { name: 'Favoritos', exact: true })).toHaveAttribute('aria-current', 'page');
+    if (viewport.height === 480) await sidebar.screenshot({ path: testInfo.outputPath('sidebar-short-height-collapsed.png'), animations: 'disabled' });
     await sidebar.getByRole('button', { name: 'Expandir sidebar' }).click();
     await sidebar.screenshot({ path: testInfo.outputPath('sidebar-responsive.png'), animations: 'disabled' });
+  });
+}
+
+async function sidebarGeometry(page: Page) {
+  return page.locator('.mm-projects-sidebar').evaluate(element => {
+    const bounds = (selector: string) => {
+      const box = element.querySelector(selector)!.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom, height: box.height };
+    };
+    const selectors = {
+      header: '.mm-sidebar-head', brand: '.mm-sidebar-brand-row', user: '.mm-sidebar-user',
+      search: '.mm-sidebar-search', organization: '.mm-organization-switcher', footer: '.mm-sidebar-footer',
+    };
+    return {
+      pinned: Object.fromEntries(Object.entries(selectors).map(([name, selector]) => [name, bounds(selector)])),
+      nav: bounds('.mm-sidebar-nav'), firstItemTop: bounds('.mm-sidebar-nav .mm-sidebar-item').top,
+      sidebarScrollTop: element.scrollTop, documentScrollTop: window.scrollY,
+    };
+  });
+}
+
+// Values come from the existing API/session role schema; client is normalized
+// to owner by the real session provider before it reaches ProjectsSidebar.
+for (const [role, label] of [
+  ['super_admin', 'Super Admin'], ['admin', 'Admin'], ['owner', 'Owner'],
+  ['client', 'Owner'], ['editor', 'Editor'], ['viewer', 'Viewer'],
+]) {
+  test(`sidebar: session identity renders ${role} independently of organization membership`, async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await setup(page, {
+      dataset: [], role, userName: 'Ana Oliveira', userEmail: 'ana.oliveira@example.test',
+      organizationRoles: { 1: 'editor', 2: 'viewer' },
+    });
+    const sidebar = page.locator('.mm-projects-sidebar');
+    const identity = sidebar.locator('.mm-sidebar-user-copy');
+    await expect(identity.locator('strong')).toHaveText(`Ana Oliveira - ${label}`);
+    await expect(identity.locator('span')).toHaveText('ana.oliveira@example.test');
+    const [nameBox, emailBox] = await Promise.all([identity.locator('strong').boundingBox(), identity.locator('span').boundingBox()]);
+    expect(emailBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height);
+    await expect(sidebar.locator('.mm-sidebar-footer')).toHaveText(/^\s*Maõno Maps\s*Sair\s*$/);
+    const membership = sidebar.locator('.mm-organization-trigger-copy > span');
+    await expect(membership).toHaveText('Editor');
+    await sidebar.getByRole('button', { name: /Trocar organização ativa/ }).click();
+    await page.getByRole('option', { name: /Outra organização/ }).click();
+    await expect(membership).toHaveText('Visualizador');
+    await expect(identity.locator('strong')).toHaveText(`Ana Oliveira - ${label}`);
+    await expect(sidebar.locator('.mm-sidebar-count')).toHaveText('0');
+  });
+}
+
+test('sidebar: long session name and email truncate without growing the identity block', async ({ page }) => {
+  const name = 'Ana Maria de Albuquerque dos Santos Oliveira de Souza';
+  const email = 'ana.maria.albuquerque.santos.oliveira@example.test';
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await setup(page, { dataset: [], role: 'super_admin', userName: name, userEmail: email });
+  const sidebar = page.locator('.mm-projects-sidebar');
+  const identity = sidebar.locator('.mm-sidebar-user-copy strong');
+  const emailLine = sidebar.locator('.mm-sidebar-user-copy > span');
+  await expect(identity).toHaveText(`${name} - Super Admin`);
+  await expect(emailLine).toHaveText(email);
+  await expect(identity).toHaveAttribute('title', `${name} - Super Admin`);
+  await expect(emailLine).toHaveAttribute('title', email);
+  for (const line of [identity, emailLine]) {
+    await expect(line).toHaveCSS('white-space', 'nowrap');
+    await expect(line).toHaveCSS('overflow', 'hidden');
+    await expect(line).toHaveCSS('text-overflow', 'ellipsis');
+    expect(await line.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    const geometry = await line.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      const sidebar = element.closest('.mm-projects-sidebar')!.getBoundingClientRect();
+      return { right: box.right, sidebarRight: sidebar.right, height: box.height, lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight) };
+    });
+    expect(geometry.right).toBeLessThan(geometry.sidebarRight);
+    expect(geometry.height).toBeCloseTo(geometry.lineHeight, 0);
+  }
+  await expect(sidebar).toHaveCSS('width', '300px');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+});
+
+for (const collapsed of [false, true]) {
+  test(`sidebar: ${collapsed ? 'collapsed' : 'expanded'} minimalist footer and existing logout callback`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    const { requests } = await setup(page, { dataset: [] });
+    const sidebar = page.locator('.mm-projects-sidebar');
+    if (collapsed) await sidebar.getByRole('button', { name: 'Recolher sidebar' }).click();
+    const footer = sidebar.locator('.mm-sidebar-footer');
+    const logout = footer.getByRole('button', { name: 'Sair da conta', exact: true });
+    await expect(logout).toHaveAttribute('type', 'button');
+    await expect(logout).toHaveAttribute('title', 'Sair');
+    await expect(logout).toBeInViewport();
+    await expect(logout.locator('svg')).toBeVisible();
+    await expect(logout.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(await logout.locator('svg path, svg line, svg polyline').count()).toBeGreaterThan(0);
+    await expect(footer.locator('img')).toHaveCount(0);
+    if (collapsed) {
+      await expect(sidebar).toHaveCSS('width', '92px');
+      await expect(footer.getByText('Maõno Maps', { exact: true })).toBeHidden();
+      await expect(logout.getByText('Sair', { exact: true })).toBeHidden();
+    } else {
+      await expect(footer).toHaveText(/^\s*Maõno Maps\s*Sair\s*$/);
+      await expect(logout.getByText('Sair', { exact: true })).toBeVisible();
+    }
+    for (const element of [footer, logout]) {
+      for (const edge of ['top', 'right', 'bottom', 'left']) {
+        // The footer keeps its single requested divider; logout has no border.
+        await expect(element).toHaveCSS(`border-${edge}-width`, element === footer && edge === 'top' ? '1px' : '0px');
+      }
+      await expect(element).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      await expect(element).toHaveCSS('background-image', 'none');
+      await expect(element).toHaveCSS('box-shadow', 'none');
+    }
+    await logout.hover();
+    await expect(logout).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(logout).toHaveCSS('border-top-width', '0px');
+    await logout.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    await expect(logout).toBeFocused();
+    expect(await logout.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+    await expect(logout).toHaveCSS('outline-style', 'solid');
+    expect(await logout.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
+    await footer.screenshot({ path: testInfo.outputPath(`sidebar-footer-${collapsed ? 'collapsed' : 'expanded'}.png`), animations: 'disabled' });
+    expect(requests.filter(request => request.path === '/api/auth/logout')).toHaveLength(0);
+    if (collapsed) await logout.click();
+    else await page.keyboard.press('Enter');
+    await expect.poll(() => requests.filter(request => request.path === '/api/auth/logout').length).toBe(1);
+    expect(requests.find(request => request.path === '/api/auth/logout')?.method).toBe('POST');
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+    await expect(sidebar).toHaveCount(0);
+    await page.reload();
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+    await expect(sidebar).toHaveCount(0);
+    expect(requests.filter(request => request.path === '/api/auth/logout')).toHaveLength(1);
   });
 }

@@ -451,6 +451,9 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
   onLogout,
 }) => {
   const [expanded, setExpanded] = useState(true);
+  const roleLabel = user?.role?.trim() ? normalizeRoleLabel(user.role) : "";
+  const userName = user?.name || "Usuário Maõno";
+  const userIdentity = roleLabel ? `${userName} - ${roleLabel}` : userName;
 
   const permissionContext = useMemo(
     () => buildPermissionContext(user),
@@ -509,8 +512,8 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
             </div>
 
             <div className="mm-sidebar-user-copy">
-              <strong>{user?.name || "Usuário Maõno"}</strong>
-              <span>{user?.email}</span>
+              <strong title={userIdentity}>{userIdentity}</strong>
+              <span title={user?.email}>{user?.email}</span>
             </div>
           </div>
         ) : null}
@@ -566,35 +569,38 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
         ))}
       </nav>
 
-      <div className="mm-sidebar-footer">
+      <footer className="mm-sidebar-footer">
         {expanded ? (
-          <>
-            <strong>Maõno Maps</strong>
-            <span>{normalizeRoleLabel(user?.role)} · central geográfica</span>
-          </>
+          <strong className="mm-sidebar-footer-brand">Maõno Maps</strong>
         ) : null}
 
         <button
           type="button"
-          className={expanded ? undefined : "mm-sidebar-item"}
+          className="mm-sidebar-logout"
           title="Sair"
-          aria-label="Sair"
+          aria-label="Sair da conta"
           onClick={() => {
             void onLogout();
           }}
         >
-          {expanded ? (
-            "Sair"
-          ) : (
-            <>
-              <span className="mm-sidebar-icon" aria-hidden="true">
-                ⎋
-              </span>
-              <span className="mm-sidebar-label">Sair</span>
-            </>
-          )}
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            focusable="false"
+            aria-hidden="true"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <path d="m16 17 5-5-5-5M21 12H9" />
+          </svg>
+          <span className="mm-sidebar-label">Sair</span>
         </button>
-      </div>
+      </footer>
     </aside>
   );
 };

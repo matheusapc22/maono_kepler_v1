@@ -208,6 +208,75 @@ test('sidebar redesign preserves the original navigation and permission contract
   assert.match(sidebar, /title=\{expanded \? undefined : item.label\}/);
 });
 
+test('sidebar identity uses the real session role and keeps logout on its existing callback', () => {
+  const sidebar = read('src/pages/ProjectsSidebar.tsx');
+  assert.match(sidebar, /const roleLabel = user\?\.role\?\.trim\(\) \? normalizeRoleLabel\(user\.role\) : ""/);
+  assert.match(sidebar, /const userIdentity = roleLabel \? `\$\{userName\} - \$\{roleLabel\}` : userName/);
+  assert.match(sidebar, /<strong title=\{userIdentity\}>\{userIdentity\}<\/strong>/);
+  assert.match(sidebar, /<span title=\{user\?\.email\}>\{user\?\.email\}<\/span>/);
+  const footer = sidebar.match(/<footer className="mm-sidebar-footer">([\s\S]*?)<\/footer>/)?.[1];
+  assert.ok(footer, 'footer is semantic and stays outside the scrolling navigation');
+  assert.match(footer, /className="mm-sidebar-footer-brand">Maõno Maps<\/strong>/);
+  assert.match(footer, /className="mm-sidebar-logout"/);
+  assert.match(footer, /aria-label="Sair da conta"/);
+  assert.match(footer, /title="Sair"/);
+  assert.match(footer, /void onLogout\(\)/);
+  assert.match(footer, /<svg[\s\S]*?aria-hidden="true"[\s\S]*?<path/);
+  assert.match(footer, /<span className="mm-sidebar-label">Sair<\/span>/);
+  assert.doesNotMatch(footer, /normalizeRoleLabel|user\?\.role|central geográfica|⎋|<img/);
+  assert.equal(sidebar.match(/void onLogout\(\)/g)?.length, 1, 'one existing logout callback path');
+  assert.ok(sidebar.indexOf('</nav>') < sidebar.indexOf('<footer className="mm-sidebar-footer">'));
+});
+
+test('sidebar height, single scroll container, identity ellipsis and borderless logout are explicit', () => {
+  const css = postcss.parse(read('src/pages/Projects/projects.css'));
+  const declarations = selector => {
+    const values = new Map();
+    css.walkRules(rule => {
+      if (rule.parent === css && rule.selectors.includes(selector)) {
+        rule.walkDecls(declaration => values.set(declaration.prop, declaration.value));
+      }
+    });
+    return values;
+  };
+  const aside = declarations('.mm-projects-sidebar');
+  assert.match(aside.get('height'), /^100(?:d|s)?vh$/);
+  assert.equal(aside.get('overflow'), 'hidden');
+  assert.equal(aside.get('display'), 'flex');
+  assert.equal(aside.get('flex-direction'), 'column');
+  const nav = declarations('.mm-sidebar-nav');
+  assert.equal(nav.get('flex'), '1');
+  assert.equal(nav.get('min-height'), '0');
+  assert.equal(nav.get('overflow-y'), 'auto');
+  assert.equal(nav.get('overflow-x'), 'hidden');
+  assert.equal(nav.get('overscroll-behavior-y'), 'contain', 'menu gestures never chain to the page');
+  for (const selector of ['.mm-sidebar-head', '.mm-sidebar-footer']) {
+    assert.equal(declarations(selector).get('flex-shrink'), '0', `${selector} remains pinned`);
+  }
+  for (const selector of ['.mm-sidebar-user-copy strong', '.mm-sidebar-user-copy span']) {
+    const text = declarations(selector);
+    assert.equal(text.get('white-space'), 'nowrap');
+    assert.equal(text.get('overflow'), 'hidden');
+    assert.equal(text.get('text-overflow'), 'ellipsis');
+  }
+  const footer = declarations('.mm-sidebar-footer');
+  assert.equal(footer.get('border'), '0');
+  assert.equal(footer.get('border-top'), '1px solid var(--mm-border)', 'retain only the requested separator');
+  assert.equal(footer.get('background'), 'transparent');
+  const logout = declarations('.mm-sidebar-logout');
+  assert.equal(logout.get('border'), '0');
+  assert.equal(logout.get('background'), 'transparent');
+  assert.equal(logout.get('box-shadow'), 'none');
+  assert.match(declarations('.mm-sidebar-logout:focus-visible').get('outline'), /^2px solid /);
+  css.walkRules(rule => {
+    if (rule.parent.type !== 'atrule' || !rule.selectors.includes('.mm-projects-sidebar')) return;
+    rule.walkDecls('height', declaration => assert.match(declaration.value, /^100(?:d|s)?vh$/, 'responsive layouts retain viewport height'));
+    rule.walkDecls('overflow-y', declaration => assert.equal(declaration.value, 'hidden', 'the outer sidebar never becomes a second scroll area'));
+  });
+  assert.equal(declarations(':root').get('--mm-sidebar-open'), '300px');
+  assert.equal(declarations(':root').get('--mm-sidebar-collapsed'), '92px');
+});
+
 test('sidebar styling does not modify page, card, table, modal or layout styles', { skip: !hasOriginal }, () => {
   const path = 'src/pages/Projects/projects.css';
   const withoutSidebar = source => {
