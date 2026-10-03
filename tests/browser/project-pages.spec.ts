@@ -139,7 +139,7 @@ for (const entry of [
     await expect(filters(page).getByLabel("Buscar", { exact: true })).toHaveAttribute("placeholder", "Nome do projeto...");
     await expect(filters(page).getByRole("combobox", { name: "Status", exact: true }).locator("option:checked")).toHaveText("Todos os status");
     await expect(filters(page).getByRole("combobox", { name: "Ordenar por", exact: true }).locator("option")).toHaveText(["Mais recentes", "Mais antigos"]);
-    await expect(page.getByRole("link", { name: "Novo mapa", exact: true })).toHaveAttribute("href", "/maps/new/create");
+    await expect(page.getByRole("link", { name: "Novo Projeto", exact: true })).toHaveAttribute("href", "/maps/new/create");
     await expectCount(page, 10, entry.total);
     expect(requests.some(item => item.path === entry.endpoint)).toBe(true);
     await page.locator(".mm-project-pages").screenshot({ path: testInfo.outputPath(`${entry.endpoint.split("/").at(-1)}-desktop.png`), animations: "disabled" });
@@ -274,7 +274,11 @@ test("viewer permission boundary preserves readonly cards and hides creation/edi
   const readonly = { ...projects[0], accessLevel: "viewer", permissions: ["project.view"], deniedPermissions: ["project.save", "project.edit", "project.create", "project.favorite"] };
   await setup(page, { dataset: [readonly], role: "viewer", deniedPermissions: ["project.create", "project.edit", "project.save", "project.favorite"] });
   await expectCount(page, 1, 1);
-  await expect(page.getByRole("link", { name: "Novo mapa", exact: true })).toHaveCount(0);
+  for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
+    await openSection(page, name);
+    await expect(page.getByRole("link", { name: "Novo Projeto", exact: true })).toHaveCount(0);
+  }
+  await openSection(page, "Todos os Projetos");
   await expect(cards(page).getByText("Somente leitura", { exact: true })).toHaveCount(0);
   await expect(cards(page).getByRole("button", { name: /Mais ações|favoritos/ })).toHaveCount(0);
   await expect(cards(page)).toHaveAttribute("role", "link");
@@ -339,9 +343,12 @@ test("existing open-project action uses prepared navigation; new-map uses its es
   await cards(page).click();
   await expect.poll(() => requests.some(item => item.path === "/api/projects/projeto-01/map-navigation" && item.query === "?mode=manage")).toBe(true);
   await expect(page).toHaveURL(/\/projects\/projeto-01\/(?:view|manage)$/);
-  await page.goto("/projects"); await expectCount(page, 1, 1);
-  await page.getByRole("link", { name: "Novo mapa", exact: true }).click();
-  await expect(page).toHaveURL(/\/maps\/new\/create$/);
+  for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
+    await page.goto("/projects"); await expectCount(page, 1, 1);
+    await openSection(page, name);
+    await page.getByRole("link", { name: "Novo Projeto", exact: true }).click();
+    await expect(page).toHaveURL(/\/maps\/new\/create$/);
+  }
 });
 
 for (const delayedList of [false, true]) {
@@ -413,6 +420,9 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
           const top = await footerGeometry(page);
           const label = `${name}, ${viewport.width}px, ${count} projects, tall sidebar: ${tallSidebar}`;
           expect(["fixed", "absolute", "sticky"], label).not.toContain(top.footerPosition);
+          expect(top.footerBackground, label).toBe("rgba(0, 0, 0, 0)");
+          expect(top.footerBackgroundImage, label).toBe("none");
+          expect(top.footerBorderColors, label).toEqual(Array(4).fill("rgba(0, 0, 0, 0)"));
           expect(top.footerBottom, label).toBeCloseTo(top.contentBottom - top.paddingBottom, 0);
           // scrollHeight is integer-rounded; the content edge can retain .5px in WebKit.
           expect(Math.abs(top.contentBottom - top.mainBottom), label).toBeLessThanOrEqual(1);
@@ -483,6 +493,9 @@ async function footerGeometry(page: Page) {
       scrollContentBottom,
       mainViewportHeight: mainBox.height,
       footerPosition: getComputedStyle(footer).position,
+      footerBackground: getComputedStyle(footer).backgroundColor,
+      footerBackgroundImage: getComputedStyle(footer).backgroundImage,
+      footerBorderColors: ["Top", "Right", "Bottom", "Left"].map(side => getComputedStyle(footer).getPropertyValue(`border-${side.toLowerCase()}-color`)),
       footerTop: footerBox.top + offset,
       footerBottom: footerBox.bottom + offset,
       footerViewportTop: footerBox.top,
@@ -508,7 +521,7 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
       await setup(page, { dataset: [projects[0]], recentIds: [projects[0].id] });
       await openSection(page, name); await expectCount(page, 1, 1);
       await page.evaluate(() => document.fonts.ready);
-      const cta = page.getByRole("link", { name: "Novo mapa", exact: true });
+      const cta = page.getByRole("link", { name: "Novo Projeto", exact: true });
       await expect(cta).toHaveAttribute("href", "/maps/new/create");
       const geometry = await cta.evaluate(element => {
         const button = element.getBoundingClientRect();
@@ -531,9 +544,9 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
         expect(geometry.width).toBeGreaterThanOrEqual(140);
         expect(geometry.width).toBeLessThan(164);
         await expect(cta).toHaveCSS("min-width", "140px");
-        expect(geometry.marginEnd).toBe(0);
+        expect(geometry.marginEnd).toBe(8);
         // clamp/vw gutters resolve to fractions; layout rounds at 1/64px.
-        expect(Math.abs(geometry.rightInset - geometry.paddingRight)).toBeLessThanOrEqual(0.02);
+        expect(Math.abs(geometry.rightInset - geometry.paddingRight - 8)).toBeLessThanOrEqual(0.02);
       } else {
         expect(geometry.marginEnd).toBe(0);
         expect(geometry.width).toBeCloseTo(geometry.contentWidth, 3);

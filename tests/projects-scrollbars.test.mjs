@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import postcss from 'postcss';
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const styles = read('src/pages/Projects/projects-scrollbars.css');
+const styles = read('src/pages/Projects/projects-scrollbars.css') + read('src/shared-sidebar-scrollbars.css');
 const css = postcss.parse(styles);
 
 test('desktop owns the section scroll without introducing artificial scaling', () => {

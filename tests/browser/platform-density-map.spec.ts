@@ -104,14 +104,7 @@ for (const viewport of [
     await page.screenshot({ path: testInfo.outputPath('compact-map-basemap.png') });
     await page.keyboard.press('Escape');
     await expectInvariant(page, before);
-    const account = page.locator('.maono-map-topbar__account-trigger');
-    await account.click();
-    await expect(page.locator('.maono-map-topbar__account-menu')).toBeVisible();
-    const menu = await page.locator('.maono-map-topbar__account-menu').boundingBox();
-    expect(menu!.x).toBeGreaterThanOrEqual(0);
-    expect(menu!.x + menu!.width).toBeLessThanOrEqual(viewport.width + 1);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.maono-map-topbar__account-menu')).toHaveCount(0);
+    await expect(page.locator('.maono-map-topbar')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('compact-map-collapsed.png') });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     await testInfo.attach('canvas-geometry', { body: JSON.stringify({ viewport, before, after: await geometry(page) }), contentType: 'application/json' });

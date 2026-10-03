@@ -54,3 +54,17 @@ test('map compactness preserves coordinate, histogram and native positioning own
   assert.match(read('src/pages/Kepler/index.tsx'), /ResizeObserver/);
   assert.match(read('src/pages/Kepler/components/maono-map-shell/maono-map-panel-readability.css'), /--maono-panel-font-14:\s*17\.5px/);
 });
+
+
+test('project creation CTA has an 8px desktop inset and keeps full-width mobile fit', () => {
+  const ctaRules = rules('.mm-project-pages__new');
+  const styles = ctaRules.map(rule => ({
+    selector: rule.selector,
+    media: rule.parent.type === 'atrule' ? rule.parent.params : null,
+    declarations: Object.fromEntries(rule.nodes.map(decl => [decl.prop, decl.value])),
+  }));
+  assert.deepEqual(styles, [
+    { selector: 'body .mm-projects-page .mm-project-pages__new', media: null, declarations: { 'min-width': '140px', 'margin-inline-end': '8px' } },
+    { selector: 'body .mm-projects-page .mm-project-pages__new', media: '(max-width: 760px)', declarations: { width: '100%', 'margin-inline-end': '0' } },
+  ]);
+});

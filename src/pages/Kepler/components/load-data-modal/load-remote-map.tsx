@@ -111,7 +111,7 @@ class LoadRemoteMap extends Component {
 
   render() {
     const displayedError =
-      this.props.error || this.state.submitted ? this.state.error : null;
+      this.props.error || (this.state.submitted ? this.state.error : null);
 
     return (
       <div>
@@ -144,6 +144,7 @@ class LoadRemoteMap extends Component {
               onChange={this.onMapUrlChange}
               type="text"
               placeholder="Url"
+              aria-label="URL da fonte de dados"
               value={this.state.dataUrl}
               error={displayedError}
             />
@@ -152,6 +153,7 @@ class LoadRemoteMap extends Component {
               cta
               size="small"
               onClick={this.onLoadRemoteMap}
+              disabled={this.props.isMapLoading}
             >
               <FormattedMessage id={"loadRemoteMap.fetch"} />
             </Button>

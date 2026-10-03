@@ -36,7 +36,7 @@ export function ProjectPagesHeader({ section, canCreateMap, onNewMap, onHome }: 
         <ProjectPageIcon name={copy.icon} />
         <div><h1>{copy.title}</h1><p>{copy.description}</p></div>
       </div>
-      {canCreateMap ? <Link to="/maps/new/create" className="mm-project-pages__button is-primary mm-project-pages__new" onClick={onNewMap}><ProjectPageIcon name="plus" />Novo mapa</Link> : null}
+      {canCreateMap ? <Link to="/maps/new/create" className="mm-project-pages__button is-primary mm-project-pages__new" onClick={onNewMap}><ProjectPageIcon name="plus" />Novo Projeto</Link> : null}
     </header>
   </div>;
 }

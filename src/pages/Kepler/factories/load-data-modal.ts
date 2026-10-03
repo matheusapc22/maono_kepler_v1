@@ -2,50 +2,83 @@
 // Copyright contributors to the kepler.gl project
 // @ts-nocheck
 
-import React from "react";
+import React, { useContext, useRef } from "react";
 import { LoadDataModalFactory, withState } from "@kepler.gl/components";
-import { LOADING_METHODS } from "../constants/default-settings";
-
-import SampleMapGallery from "../components/load-data-modal/sample-data-viewer";
+import { useIntl } from "react-intl";
+import { ThemeProvider } from "styled-components";
 import LoadRemoteMap from "../components/load-data-modal/load-remote-map";
-import SampleMapsTab from "../components/load-data-modal/sample-maps-tab";
-import {
-  loadRemoteMap,
-  loadSample,
-  loadSampleConfigurations,
-} from "../actions";
+import { loadRemoteMap } from "../actions";
+import AddDataSidebar from "../components/maono-map-shell/AddDataSidebar";
+import { AddDataDockContext } from "../components/maono-map-shell/AddDataDockContext";
+
+// Only the imported sources use the dark variant. No global Kepler theme or
+// ingestion contract changes, including other dialogs and map/layer tools.
+const dataSourceTheme = (theme) => ({
+  ...theme,
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+  modalTitleColor: "var(--maono-map-text)",
+  WHITE: "var(--maono-map-panel)",
+  AZURE: "var(--maono-map-text)",
+  AZURE200: "var(--maono-map-text-soft)",
+  panelBackgroundLT: "var(--maono-map-panel)",
+  titleColorLT: "var(--maono-map-text)",
+  textColorLT: "var(--maono-map-text-soft)",
+  labelColorLT: "var(--maono-map-text-soft)",
+  subtextColorLT: "var(--maono-map-muted)",
+  inputColorLT: "var(--maono-map-text)",
+  inputBgdLT: "var(--maono-map-panel-raised)",
+  inputBorderColorLT: "var(--maono-map-border)",
+  selectBorderColorLT: "var(--maono-map-border)",
+  borderColorLT: "var(--maono-map-border)",
+});
+
+function AccessibleFileSource({ FileUpload, ...props }) {
+  const source = useRef(null);
+  return React.createElement("div", { ref: source },
+    React.createElement(FileUpload, props),
+    React.createElement("button", {
+      type: "button",
+      className: "maono-map-data-sidebar__file-picker",
+      onClick: () => {
+        const input = source.current?.querySelector('input[type="file"]');
+        if (input) { input.value = ""; input.click(); }
+      },
+    }, "Selecionar arquivo"),
+  );
+}
 
 const CustomLoadDataModalFactory = (...deps) => {
   const LoadDataModal = LoadDataModalFactory(...deps);
-  const defaultLoadingMethods = LoadDataModal.defaultLoadingMethods;
-  const additionalMethods = {
-    remote: {
-      id: LOADING_METHODS.remote,
-      label: "modal.loadData.remote",
-      elementType: LoadRemoteMap,
-    },
-    sample: {
-      id: LOADING_METHODS.sample,
-      label: "modal.loadData.sample",
-      elementType: SampleMapGallery,
-      tabElementType: SampleMapsTab,
-    },
-  };
-
-  // add more loading methods
+  const FileUpload = LoadDataModal.defaultLoadingMethods.find((method) => method.id === "upload").elementType;
+  const LoadTileset = LoadDataModal.defaultLoadingMethods.find((method) => method.id === "tileset").elementType;
   const loadingMethods = [
-    defaultLoadingMethods.find((lm) => lm.id === "upload"),
-    defaultLoadingMethods.find((lm) => lm.id === "tileset"),
-    additionalMethods.remote,
-    defaultLoadingMethods.find((lm) => lm.id === "storage"),
-    // additionalMethods.sample,
+    { id: "upload", label: "modal.loadData.upload", elementType: FileUpload },
+    { id: "tileset", label: "modal.loadData.tileset", elementType: LoadTileset },
+    { id: "remote", label: "modal.loadData.remote", elementType: LoadRemoteMap },
   ];
 
   const HydrationSafeLoadDataModal = (props) => {
+    const dock = useContext(AddDataDockContext);
+    const intl = useIntl();
+    if (dock) {
+      if (!dock.enabled) return null;
+      return React.createElement(ThemeProvider, { theme: dataSourceTheme },
+        React.createElement(AddDataSidebar, {
+          onClose: dock.close,
+          busy: Boolean(props.isMapLoading || props.fileLoading),
+          renderSource: (source) => {
+            const sourceProps = { ...props, intl };
+            if (source === "files") return React.createElement(AccessibleFileSource, { ...sourceProps, FileUpload });
+            if (source === "tileset") return React.createElement(LoadTileset, sourceProps);
+            return React.createElement(LoadRemoteMap, sourceProps);
+          },
+        }),
+      );
+    }
+    // Preserve the legacy shell's initial hydration safeguard.
     if (props.isMapLoading) {
       return null;
     }
-
     return React.createElement(LoadDataModal, props);
   };
 
@@ -56,11 +89,7 @@ const CustomLoadDataModalFactory = (...deps) => {
       ...state.demo.keplerGl.map.uiState,
       loadingMethods,
     }),
-    {
-      onLoadSample: loadSample,
-      onLoadRemoteMap: loadRemoteMap,
-      loadSampleConfigurations,
-    }
+    { onLoadRemoteMap: loadRemoteMap },
   )(HydrationSafeLoadDataModal);
 };
 

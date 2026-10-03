@@ -48,7 +48,7 @@ export default function MapPanelHost({
       data-panel-open={open ? "true" : "false"}
       data-maono-no-preview="true"
     >
-      {open ? (
+      {open && activePanel !== "data" ? (
         <button
           type="button"
           className="maono-map-panel-host__backdrop"

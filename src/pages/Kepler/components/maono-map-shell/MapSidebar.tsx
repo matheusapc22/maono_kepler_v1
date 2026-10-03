@@ -111,6 +111,9 @@ export default function MapSidebar({
         {canImportData ? (
           <button
             type="button"
+            className={panelOpen && activePanel === "data" ? "is-active" : ""}
+            aria-expanded={panelOpen && activePanel === "data"}
+            aria-controls="map-add-data-sidebar"
             onClick={onOpenData}
             disabled={mapLoading}
             aria-label="Adicionar dados"

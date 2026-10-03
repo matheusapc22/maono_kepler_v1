@@ -4,8 +4,11 @@ on:
     branches: [mano_kepler_v1]
     paths:
       - 'src/main.tsx'
+      - 'vite.config.ts'
       - 'src/platform-density.css'
-      - 'src/pages/Kepler/maono-kepler-theme.ts'
+      - 'src/pages/Kepler/**'
+      - 'src/shared-sidebar-scrollbars.css'
+      - 'src/maono-design-tokens.css'
       - 'src/pages/Projects.tsx'
       - 'src/pages/ProjectsSidebar.tsx'
       - 'src/pages/Projects/**'
@@ -15,6 +18,8 @@ on:
       - 'functions/api/projects/**'
       - 'tests/platform-density.test.mjs'
       - 'tests/browser/platform-density-map.spec.ts'
+      - 'tests/browser/map-add-data-sidebar.spec.ts'
+      - 'tests/map-add-data-sidebar.test.mjs'
       - 'tests/project-pages-contract.test.mjs'
       - 'tests/projects-scrollbars.test.mjs'
       - 'tests/browser/project-pages.spec.ts'
@@ -40,7 +45,7 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --test tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
+          node --test tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs

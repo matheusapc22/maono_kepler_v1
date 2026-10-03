@@ -140,7 +140,7 @@ test('new styles are scoped to project pages and only the grid container affects
 
 test('native accessible controls, footer live count and new-map permission wiring remain explicit', () => {
   const ui = read('src/pages/Projects/components/ProjectPagesUi.tsx');
-  for (const token of ['aria-label="Caminho da página"', 'aria-label="Filtros de projetos"', 'Nome do projeto...', 'Todos os status', 'Mais recentes', 'Mais antigos', 'Limpar filtros', 'aria-label="Paginação dos projetos"', 'Itens por página', 'Exibindo {visibleCount}/{total}.', 'aria-current="page"', 'aria-live="polite"', 'canCreateMap ?']) assert.ok(ui.includes(token), token);
+  for (const token of ['aria-label="Caminho da página"', 'aria-label="Filtros de projetos"', 'Nome do projeto...', 'Todos os status', 'Mais recentes', 'Mais antigos', 'Limpar filtros', 'aria-label="Paginação dos projetos"', 'Itens por página', 'Exibindo {visibleCount}/{total}.', 'aria-current="page"', 'aria-live="polite"', 'canCreateMap ?', 'onClick={onNewMap}', 'to="/maps/new/create"', 'Novo Projeto']) assert.ok(ui.includes(token), token);
   const section = read('src/pages/Projects/components/ProjectsSection.tsx');
   assert.ok(section.includes('filterAndSortProjects(')); assert.ok(section.includes('projectPage('));
   for (const token of ['prepareProjectMapDestination(', 'fetchProjectThumbnailStatus(', '<ProjectMetadataPanel', 'onFavoriteToggle={onFavoriteToggle}', 'visibleProjects.map(']) assert.ok(section.includes(token), token);
@@ -178,7 +178,20 @@ test('project footer consumes remaining main-column height without stretching ca
   });
 });
 
-test('new-map CTA has the approved modest desktop inset and resets it on mobile', () => {
+test('project footer removes only the decorative strip and preserves its layout footprint', () => {
+  const css = postcss.parse(read('src/pages/Projects/components/ProjectPages.css'));
+  const footer = css.nodes.find(node => node.type === 'rule' && node.selector === '.mm-project-pages .mm-project-pages__footer');
+  assert.ok(footer);
+  const declarations = Object.fromEntries(footer.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
+  assert.equal(declarations.background, 'transparent', 'no dark panel fill behind the controls');
+  assert.equal(declarations.border, '1px solid transparent', 'hide the outline without moving or resizing the controls');
+  assert.equal(declarations.padding, '18px 20px');
+  assert.equal(declarations.gap, '20px');
+  assert.equal(declarations['margin-top'], 'auto');
+  assert.equal(declarations['flex-wrap'], 'wrap');
+});
+
+test('base CTA keeps fallback desktop inset and mobile reset beneath density policy', () => {
   const css = postcss.parse(read('src/pages/Projects/components/ProjectPages.css'));
   const matches = [];
   css.walkRules(rule => {

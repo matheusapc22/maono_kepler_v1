@@ -88,7 +88,7 @@ body .mm-projects-page .mm-project-pages__heading > .mm-project-pages__icon { wi
 body .mm-projects-page .mm-project-pages__heading h1 { font-size: var(--maono-density-heading); }
 body .mm-projects-page .mm-project-pages__heading p { margin-top: 6px; }
 body .mm-projects-page .mm-project-pages__button { min-height: var(--maono-density-control); padding: 8px 14px; gap: 8px; }
-body .mm-projects-page .mm-project-pages__new { min-width: 140px; margin-inline-end: 0; }
+body .mm-projects-page .mm-project-pages__new { min-width: 140px; margin-inline-end: 8px; }
 body .mm-projects-page .mm-project-pages__workspace { gap: var(--maono-density-space-5); }
 body .mm-projects-page .mm-project-pages__filters { gap: var(--maono-density-space-3); padding-bottom: var(--maono-density-space-4); }
 body .mm-projects-page .mm-project-pages__field { gap: 6px; }
@@ -210,7 +210,7 @@ body .maono-review-panel .maono-review-panel__body { padding: 14px; gap: 12px; }
 
 @media (max-width: 760px) {
   body .mm-projects-page .mm-project-pages__header { flex-wrap: wrap; }
-  body .mm-projects-page .mm-project-pages__new { width: 100%; }
+  body .mm-projects-page .mm-project-pages__new { width: 100%; margin-inline-end: 0; }
   body .mm-projects-page .mm-project-pages__pagination { flex-wrap: wrap; }
   body .mm-projects-page .mm-project-pages__pagination .mm-project-pages__button,
   body .mm-projects-page .mm-project-pages__current { width: 44px; }

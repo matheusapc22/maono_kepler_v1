@@ -32,7 +32,7 @@
 .mm-project-pages .mm-project-pages__search-control .mm-project-pages__icon { position: absolute; left: 14px; top: 14px; color: #a7adb7; pointer-events: none; }
 .mm-project-pages .mm-project-pages__search-control input { padding-left: 44px; }
 .mm-project-pages .mm-project-pages__grid { flex: 0 0 auto; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.mm-project-pages .mm-project-pages__footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 18px 20px; border: 1px solid var(--mm-border); border-radius: 10px; background: linear-gradient(120deg, #11151a, #0d1116); }
+.mm-project-pages .mm-project-pages__footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 18px 20px; border: 1px solid transparent; border-radius: 10px; background: transparent; }
 .mm-project-pages .mm-project-pages__footer > p { margin: 0; color: var(--mm-text); font-size: 14px; }
 .mm-project-pages .mm-project-pages__pagination, .mm-project-pages .mm-project-pages__pagination > label { display: flex; align-items: center; gap: 12px; color: var(--mm-text); font-size: 13px; }
 .mm-project-pages .mm-project-pages__pagination select { width: 84px; }

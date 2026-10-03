@@ -1,3 +1,5 @@
+@import "../../shared-sidebar-scrollbars.css";
+
 /* Projects owns one content scroller on desktop. Keep the existing stacked
  * mobile flow and each section's natural content/footer height. */
 @media (min-width: 761px) {
@@ -29,53 +31,4 @@
 .mm-projects-main:focus-visible {
   outline: 2px solid var(--maono-focus-ring, var(--mm-gold-bright));
   outline-offset: -2px;
-}
-
-/* Share the sidebar's native thin scrollbar with every existing content
- * scroll owner (tables, ticket lists, roadmap and access panels). Styling does
- * not make descendants scrollable or change their overflow/layout rules.
- * The root selector only covers the stacked mobile document while Projects
- * is mounted; other routes keep their own native scrollbar behavior. */
-@media (forced-colors: none) {
-  html:has(.mm-projects-page),
-  .mm-projects-page .mm-sidebar-nav,
-  .mm-projects-page .mm-projects-main,
-  .mm-projects-page .mm-projects-main * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--mm-border-strong) transparent;
-  }
-
-  html:has(.mm-projects-page)::-webkit-scrollbar,
-  .mm-projects-page .mm-sidebar-nav::-webkit-scrollbar,
-  .mm-projects-page .mm-projects-main::-webkit-scrollbar,
-  .mm-projects-page .mm-projects-main *::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
-  }
-
-  html:has(.mm-projects-page)::-webkit-scrollbar-track,
-  .mm-projects-page .mm-sidebar-nav::-webkit-scrollbar-track,
-  .mm-projects-page .mm-projects-main::-webkit-scrollbar-track,
-  .mm-projects-page .mm-projects-main *::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  html:has(.mm-projects-page)::-webkit-scrollbar-thumb,
-  .mm-projects-page .mm-sidebar-nav::-webkit-scrollbar-thumb,
-  .mm-projects-page .mm-projects-main::-webkit-scrollbar-thumb,
-  .mm-projects-page .mm-projects-main *::-webkit-scrollbar-thumb {
-    background: var(--mm-border-strong);
-    border-radius: 99px;
-  }
-}
-
-/* Preserve system colors and larger native affordances in high contrast. */
-@media (forced-colors: active) {
-  html:has(.mm-projects-page),
-  .mm-projects-page .mm-sidebar-nav,
-  .mm-projects-page .mm-projects-main,
-  .mm-projects-page .mm-projects-main * {
-    scrollbar-color: auto;
-    scrollbar-width: auto;
-  }
 }

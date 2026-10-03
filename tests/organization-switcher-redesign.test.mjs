@@ -81,7 +81,20 @@ const preserved = {
 };
 for (const [path, hash] of Object.entries(preserved)) {
   test(`card/switcher revision preserves ${path}`, () => {
-    assert.equal(createHash('sha256').update(read(path)).digest('hex'), hash);
+    let source = read(path);
+    // Later explicitly approved tweaks: creation-label/inset and removal of
+    // the footer strip. Normalize only those exact changes; retain the older
+    // card/switcher scope guard for every other byte.
+    if (path.endsWith('/ProjectPagesUi.tsx')) source = source.replace('>Novo Projeto</Link>', '>Novo mapa</Link>');
+    if (path.endsWith('/ProjectPages.css')) source = source.replace(
+      /(^\.mm-project-pages \.mm-project-pages__footer \{[^\n]+)$/m,
+      line => line.replace('border: 1px solid transparent;', 'border: 1px solid var(--mm-border);')
+        .replace('background: transparent;', 'background: linear-gradient(120deg, #11151a, #0d1116);'),
+    );
+    if (path === 'src/platform-density.css') source = source
+      .replace('min-width: 140px; margin-inline-end: 8px;', 'min-width: 140px; margin-inline-end: 0;')
+      .replace('.mm-project-pages__new { width: 100%; margin-inline-end: 0; }', '.mm-project-pages__new { width: 100%; }');
+    assert.equal(createHash('sha256').update(source).digest('hex'), hash);
   });
 }
 

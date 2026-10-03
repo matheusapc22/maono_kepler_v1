@@ -134,6 +134,8 @@ const demoReducer = combineReducers({
     // we are going to set the mapbox access token to be used
     // in the exported file
     uiState: {
+      // Import opens explicitly through the map rail or layer menu.
+      currentModal: null,
       locale: LOCALE_CODES.pt,
       exportMap: {
         ...DEFAULT_EXPORT_MAP,
