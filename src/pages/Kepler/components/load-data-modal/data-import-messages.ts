@@ -2,6 +2,8 @@
 // filenames, source URLs and dataset values remain unchanged in Redux.
 export function importErrorText(error: unknown): string {
   if (typeof error === "string") return error;
+  // Reviewed diagnostic input: callers classify or compare this text; only
+  // dataImportErrorMessage's fixed Portuguese copy may reach the import UI.
   if (error && typeof error === "object" && "message" in error) return String(error.message ?? "");
   return "";
 }
@@ -13,8 +15,7 @@ export function isNativeImportError(message: string): boolean {
 export function dataImportErrorMessage(error: unknown): string {
   const message = importErrorText(error);
   if (/arrow type not supported:/i.test(message)) {
-    const type = message.split(/arrow type not supported:/i)[1]?.trim();
-    return type ? `O tipo de campo ${type} não é compatível com este formato.` : "Um tipo de campo não é compatível com este formato.";
+    return "Um tipo de campo não é compatível com este formato.";
   }
   if (/unknown file format|not supported|unsupported|no valid loader/i.test(message)) {
     return "Formato de arquivo não reconhecido. Use CSV, JSON, GeoJSON, Arrow ou Parquet.";

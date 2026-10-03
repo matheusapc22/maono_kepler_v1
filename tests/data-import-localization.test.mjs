@@ -14,12 +14,32 @@ test('import presentation translates native errors and retains technical format 
   assert.equal(dataImportErrorMessage(new SyntaxError('Unexpected end of JSON input')),
     'Não foi possível ler o JSON. Verifique a sintaxe e tente novamente.');
   assert.equal(dataImportErrorMessage('arrow type not supported: List<Float64>'),
-    'O tipo de campo List<Float64> não é compatível com este formato.');
+    'Um tipo de campo não é compatível com este formato.');
   assert.equal(dataImportErrorMessage('Error loading https://example.test/data.csv: 503'),
     'Não foi possível obter os dados. Verifique a URL, a conexão e a política CORS do servidor.');
   assert.equal(dataImportErrorMessage('no rows'), 'O arquivo não contém registros compatíveis.');
   assert.equal(dataImportErrorMessage(new Error('An unfamiliar server response')),
     'Não foi possível importar os dados. Verifique o arquivo ou a fonte e tente novamente.');
+});
+
+test('the reviewed import diagnostic boundary never exposes arbitrary native error text', () => {
+  const privateDetail = 'private-server-detail https://example.test/?token=synthetic-secret <script>private-content</script>';
+  for (const diagnostic of [
+    privateDetail,
+    `arrow type not supported: ${privateDetail}`,
+    `Unknown file format: ${privateDetail}`,
+    `Unexpected end of JSON input: ${privateDetail}`,
+    `Error loading https://example.test/${privateDetail}`,
+    `no rows: ${privateDetail}`,
+  ]) {
+    const nativeError = Object.freeze(new Error(diagnostic));
+    const localized = dataImportErrorMessage(nativeError);
+    assert.equal(localized.includes(privateDetail), false, diagnostic);
+    assert.equal(localized.includes(diagnostic), false, diagnostic);
+    assert.equal(nativeError.message, diagnostic);
+    const progress = localizeImportProgress({ file: { error: nativeError } });
+    assert.equal(progress.file.error.message, localized);
+  }
 });
 
 test('native import recognition does not classify ordinary save and account notifications', () => {
