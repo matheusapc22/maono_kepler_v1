@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
 import postcss from 'postcss';
 
@@ -86,9 +86,17 @@ for (const [path, hash] of Object.entries(preserved)) {
 }
 
 test('card preview lifecycle is unchanged by the new root interaction', () => {
-  const old = execFileSync('git', ['show', 'f22863de68f4f86e75bebea8f399f8b3d28d9e2e:src/pages/Projects/components/ProjectCard.tsx'], { cwd: root, encoding: 'utf8' });
   const card = read('src/pages/Projects/components/ProjectCard.tsx');
   const preview = source => source.slice(source.indexOf('  const thumbnailStatus ='), source.includes('  const openProject =') ? source.indexOf('  const openProject =') : source.indexOf('  const cardClassName ='))
     .replace(/  const accessLevel = normalizeProjectAccessLevel\(project\.accessLevel\);\n  const isOwner = accessLevel === "owner";\n/, '');
-  assert.equal(preview(card), preview(old));
+  const expected = '5ff89d56f48d3354446a2caaee1e554b3afd23dd34588754f71dd38674c0b8b0';
+  const hash = value => createHash('sha256').update(value).digest('hex');
+  assert.equal(hash(preview(card)), expected, 'preview lifecycle stays byte-identical');
+  const original = 'f22863de68f4f86e75bebea8f399f8b3d28d9e2e';
+  const hasOriginal = spawnSync('git', ['cat-file', '-e', original], { cwd: root, stdio: 'ignore' }).status === 0;
+  assert.ok(hasOriginal || process.env.PROJECT_PAGES_REQUIRE_BASELINE !== '1', 'strict project gate must fetch the original');
+  if (hasOriginal) {
+    const old = execFileSync('git', ['show', original + ':src/pages/Projects/components/ProjectCard.tsx'], { cwd: root, encoding: 'utf8' });
+    assert.equal(hash(preview(old)), expected, 'independently verified against approved original');
+  }
 });
