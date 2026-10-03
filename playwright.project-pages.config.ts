@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 // Actual built React application; fixture-only HTTP, no production URL or credentials.
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: "project-pages.spec.ts",
+  testMatch: ["project-pages.spec.ts", "platform-density-map.spec.ts"],
   timeout: 45_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -18,7 +18,9 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    // Playwright headless Firefox injects an agent stylesheet that hides every
+    // native scrollbar. A virtual display lets this gate verify the real CSS.
+    { name: "firefox", use: { ...devices["Desktop Firefox"], headless: false } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
 });

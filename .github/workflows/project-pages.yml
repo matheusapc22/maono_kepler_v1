@@ -3,6 +3,9 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'src/main.tsx'
+      - 'src/platform-density.css'
+      - 'src/pages/Kepler/maono-kepler-theme.ts'
       - 'src/pages/Projects.tsx'
       - 'src/pages/ProjectsSidebar.tsx'
       - 'src/pages/Projects/**'
@@ -10,6 +13,8 @@ on:
       - 'src/auth/session.tsx'
       - 'functions/_lib/project-list.js'
       - 'functions/api/projects/**'
+      - 'tests/platform-density.test.mjs'
+      - 'tests/browser/platform-density-map.spec.ts'
       - 'tests/project-pages-contract.test.mjs'
       - 'tests/projects-scrollbars.test.mjs'
       - 'tests/browser/project-pages.spec.ts'
@@ -35,20 +40,24 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --test tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs
+          node --test tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs
           tests/project-route-semantics.test.mjs tests/projects-fallback-scope.test.mjs
           tests/documents-visual-contract.test.mjs
       - name: Build application
+        env:
+          VITE_MAONO_MAP_SHELL_V1: "true"
+          VITE_MAONO_LAYER_MANAGER_V1: "true"
+          VITE_MAONO_MAP_OVERLAY_V1: "true"
         run: npm run build
       - name: Install browser engines
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Actual compiled React route with fixture APIs (not production acceptance)
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: project-pages-results.json
-        run: npx playwright test --config=playwright.project-pages.config.ts --reporter=list,json
+        run: xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24" npx playwright test --config=playwright.project-pages.config.ts --reporter=list,json
       - name: Evidence and inspectable local build (no credentials)
         if: always()
         uses: actions/upload-artifact@v4
@@ -62,6 +71,9 @@ jobs:
             tests/projects-scrollbars.test.mjs
             src/pages/Projects/projects-scrollbars.css
             tests/browser/project-pages.spec.ts
+            tests/browser/platform-density-map.spec.ts
+            tests/platform-density.test.mjs
+            src/platform-density.css
             playwright.project-pages.config.ts
             src/pages/Projects/components/ProjectPagesUi.tsx
             src/pages/Projects/components/ProjectPages.css

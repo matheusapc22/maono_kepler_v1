@@ -408,7 +408,8 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
           const label = `${name}, ${viewport.width}px, ${count} projects, tall sidebar: ${tallSidebar}`;
           expect(["fixed", "absolute", "sticky"], label).not.toContain(top.footerPosition);
           expect(top.footerBottom, label).toBeCloseTo(top.contentBottom - top.paddingBottom, 0);
-          expect(top.contentBottom, label).toBeCloseTo(top.mainBottom, 0);
+          // scrollHeight is integer-rounded; the content edge can retain .5px in WebKit.
+          expect(Math.abs(top.contentBottom - top.mainBottom), label).toBeLessThanOrEqual(1);
           if (viewport.width <= 760) expect(top.mainBottom, label).toBeCloseTo(top.layoutBottom, 0);
           else {
             expect(top.mainViewportHeight, label).toBeCloseTo(viewport.height, 0);
@@ -417,7 +418,8 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
           expect(top.paddingBottom, label).toBeGreaterThan(0);
           expect(top.paddingBottom, label).toBeLessThanOrEqual(24);
           expect(top.mainHeight, label).toBeGreaterThanOrEqual(viewport.height - 1);
-          expect(top.footerTop - top.resultsBottom, label).toBeGreaterThanOrEqual(27.5);
+          // Shared compact workspace gap is now 20px, with the same half-pixel tolerance.
+          expect(top.footerTop - top.resultsBottom, label).toBeGreaterThanOrEqual(19.5);
           // scrollHeight is integer-rounded; WebKit may keep a half-pixel layout edge.
           expect(Math.abs(top.scrollContentBottom - top.footerBottom - top.paddingBottom), label).toBeLessThanOrEqual(1);
           expect(top.horizontalOverflow, label).toBeLessThanOrEqual(1);
@@ -495,7 +497,7 @@ async function footerGeometry(page: Page) {
 
 for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
   for (const width of [1440, 390]) {
-    test(`${name}: new-map CTA keeps its dimensions with the approved inset at ${width}px`, async ({ page }, testInfo) => {
+    test(`${name}: new-map CTA uses shared compact geometry and responsive gutters at ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 1000 });
       await setup(page, { dataset: [projects[0]], recentIds: [projects[0].id] });
       await openSection(page, name); await expectCount(page, 1, 1);
@@ -517,19 +519,15 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
       });
       // DOMRect floats can differ by ~0.000008px after Firefox relayout.
       // Keep the geometry contract within 0.0005px instead of comparing bits.
-      expect(geometry.height).toBeCloseTo(48, 3);
+      expect(geometry.height).toBeCloseTo(width > 760 ? 40 : 44, 3);
       if (width > 760) {
-        expect(geometry.width).toBeCloseTo(164, 3);
-        expect(geometry.marginEnd).toBe(32);
-        expect(geometry.rightInset).toBeCloseTo(geometry.paddingRight + 32, 3);
-        // Compare to the former right-aligned position, keeping the same DOM and viewport.
-        await cta.evaluate(element => { (element as HTMLElement).style.marginInlineEnd = "0"; });
-        const former = await cta.boundingBox();
-        expect(former!.x - geometry.x).toBeCloseTo(32, 3);
-        expect(former!.width).toBeCloseTo(geometry.width, 3);
-        expect(former!.height).toBeCloseTo(geometry.height, 3);
-        expect(former!.y).toBeCloseTo(geometry.y, 3);
-        await cta.evaluate(element => { (element as HTMLElement).style.removeProperty("margin-inline-end"); });
+        // A minimum width lets translated/readable text grow naturally.
+        expect(geometry.width).toBeGreaterThanOrEqual(140);
+        expect(geometry.width).toBeLessThan(164);
+        await expect(cta).toHaveCSS("min-width", "140px");
+        expect(geometry.marginEnd).toBe(0);
+        // clamp/vw gutters resolve to fractions; layout rounds at 1/64px.
+        expect(Math.abs(geometry.rightInset - geometry.paddingRight)).toBeLessThanOrEqual(0.02);
       } else {
         expect(geometry.marginEnd).toBe(0);
         expect(geometry.width).toBeCloseTo(geometry.contentWidth, 3);
@@ -616,9 +614,9 @@ test('sidebar: hover, keyboard focus, truncation and collapsed tooltips', async 
   // Stress a long label without changing application copy or sidebar width.
   await label.evaluate(element => { element.textContent += ' com um título muito longo de teste'; });
   expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  await expect(sidebar).toHaveCSS('width', '300px');
+  await expect(sidebar).toHaveCSS('width', '240px');
   await sidebar.getByRole('button', { name: 'Recolher sidebar' }).click();
-  await expect(sidebar).toHaveCSS('width', '92px');
+  await expect(sidebar).toHaveCSS('width', '72px');
   await expect(sidebar.locator('.mm-sidebar-label').first()).toBeHidden();
   await expect(sidebar.locator('.mm-sidebar-count')).toBeHidden();
   await expect(sidebar.locator('.mm-sidebar-title')).toHaveCount(0);
@@ -633,7 +631,7 @@ test('sidebar: hover, keyboard focus, truncation and collapsed tooltips', async 
   await expect(recent.locator('.mm-sidebar-icon')).toBeVisible();
   await sidebar.screenshot({ path: testInfo.outputPath('sidebar-collapsed.png'), animations: 'disabled' });
   await sidebar.getByRole('button', { name: 'Expandir sidebar' }).click();
-  await expect(sidebar).toHaveCSS('width', '300px');
+  await expect(sidebar).toHaveCSS('width', '240px');
   await expect(recent).toHaveAttribute('aria-current', 'page');
 });
 
@@ -795,7 +793,7 @@ test('sidebar: long session name and email truncate without growing the identity
     // WebKit rounds a 19.5px line box to 19px without adding another line.
     expect(Math.abs(geometry.height - geometry.lineHeight)).toBeLessThanOrEqual(0.5);
   }
-  await expect(sidebar).toHaveCSS('width', '300px');
+  await expect(sidebar).toHaveCSS('width', '240px');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
 
@@ -815,7 +813,7 @@ for (const collapsed of [false, true]) {
     expect(await logout.locator('svg path, svg line, svg polyline').count()).toBeGreaterThan(0);
     await expect(footer.locator('img')).toHaveCount(0);
     if (collapsed) {
-      await expect(sidebar).toHaveCSS('width', '92px');
+      await expect(sidebar).toHaveCSS('width', '72px');
       await expect(footer.getByText('Maõno Maps', { exact: true })).toBeHidden();
       await expect(logout.getByText('Sair', { exact: true })).toBeHidden();
     } else {
@@ -972,4 +970,87 @@ test('section scroll: organization-switch overlay covers a scrolled desktop pane
   } finally { pending.resolve(); }
   await expect(main).toHaveAttribute('aria-busy', 'false');
   await expectCount(page, 0, 0);
+});
+
+
+// Global density contracts use actual React routes and synthetic HTTP only.
+for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768 }, { width: 390, height: 844 }]) {
+  test(`compact density: route sections and shared geometry at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await setup(page, { dataset: [projects[0]] });
+    await expectCount(page, 1, 1);
+    const desktop = viewport.width > 760;
+    await expect(page.locator('html')).toHaveCSS('font-size', '16px');
+    if (desktop) await expect(page.locator('.mm-projects-sidebar')).toHaveCSS('width', '240px');
+    for (const action of ['.mm-project-card__favorite', '.mm-project-card__more']) {
+      await expect(page.locator(action)).toHaveCSS('width', desktop ? '40px' : '44px');
+      await expect(page.locator(action)).toHaveCSS('height', desktop ? '40px' : '44px');
+    }
+    await page.screenshot({ path: testInfo.outputPath('compact-projects-100-percent.png'), fullPage: true });
+    // Optional ticket modules are explicitly disabled in this fixture, as
+    // opposed to returning malformed generic document responses for their APIs.
+    await page.route('**/api/organizations/1/tickets/**', route => route.fulfill({ json: { ok: true, enabled: false, jobs: [], items: [], nextCursor: null } }));
+    await page.route('**/api/organizations/1/ticket-notifications**', route => route.fulfill({ json: { ok: true, enabled: false, items: [], unread: 0, nextCursor: null } }));
+    await page.route(/\/api\/organizations\/1\/tickets(?:\?|$)/, route => route.fulfill({ json: {
+      ok: true, tickets: [], assignees: [],
+      facets: { byStatus: { new: 0, open: 0, in_progress: 0, in_review: 0, closed: 0 }, overdue: 0 },
+      pagination: { page: 1, limit: 50, total: 0, totalPages: 1, hasMore: false },
+    } }));
+    for (const [name, selector] of [
+      ['Arquivos e Documentos', '.mm-docs'], ['Central de Chamados', '.ticket-center-shell'],
+      ['Roadmap', '.roadmap-shell'], ['Usuários e Acessos', '.people-access-section'],
+      ['Organização', '.mm-section-card'], ['Limites e Planos', '.mm-section-card'],
+      ['Auditoria', '.mm-section-card'],
+    ]) {
+      await page.locator('.mm-sidebar-nav').getByRole('button', { name, exact: true }).click();
+      await expect(page.locator(selector).first()).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), name).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: testInfo.outputPath(`compact-${name.replaceAll(' ', '-')}.png`), fullPage: true });
+    }
+    await page.goto('/admin');
+    await expect(page.getByRole('heading', { name: 'Painel Admin', exact: true })).toBeVisible();
+    if (desktop) await expect(page.locator('.admin-rail')).toHaveCSS('width', '240px');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath('compact-admin.png'), fullPage: true });
+  });
+}
+
+test('compact density: desktop touch targets and readable 200-percent text', async ({ browser }, testInfo) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, hasTouch: true });
+  const page = await context.newPage();
+  await setup(page, { dataset: [projects[0]] });
+  await expectCount(page, 1, 1);
+  for (const selector of ['.mm-sidebar-toggle', '.mm-project-card__favorite', '.mm-project-card__more', '.mm-project-pages__new']) {
+    const box = await page.locator(selector).boundingBox();
+    expect(box!.height, selector).toBeGreaterThanOrEqual(44);
+    expect(box!.width, selector).toBeGreaterThanOrEqual(44);
+  }
+  // Text zoom is independent of the compact policy. A doubled user root size
+  // must grow controls, reflow cards and leave navigation/footer reachable.
+  await page.addStyleTag({ content: 'html { font-size: 32px !important; }' });
+  await expect(page.locator('html')).toHaveCSS('font-size', '32px');
+  await expect(page.locator('.mm-project-pages__new')).toHaveCSS('min-height', '88px');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await pagination(page).scrollIntoViewIfNeeded();
+  await expect(pagination(page)).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('compact-touch-large-text.png'), fullPage: true });
+  await context.close();
+});
+
+test('compact density: login remains scrollable, readable and keyboard operable', async ({ page }, testInfo) => {
+  await page.route('**/api/**', route => route.fulfill({ json: { authenticated: false, user: null, projects: [], organizations: [] } }));
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 800, height: 480 }, { width: 390, height: 568 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/login');
+    const email = page.getByLabel('e-mail', { exact: true });
+    await expect(email).toBeVisible();
+    await email.fill('qa@example.test');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#maono-login-password')).toBeFocused();
+    await page.locator('#maono-login-password').fill('fixture-only');
+    await page.getByRole('button', { name: 'Mostrar senha' }).click();
+    await expect(page.locator('#maono-login-password')).toHaveAttribute('type', 'text');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`compact-login-${viewport.width}.png`), fullPage: true });
+  }
 });
