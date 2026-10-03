@@ -19,6 +19,26 @@ const compile = source => ts.transpileModule(source, {
 
 test('help adapters are explicitly reviewed against Kepler 3.2.0', () => assert.equal(version, '3.2.0'));
 
+test('every package directly imported by the help adapters is declared and resolvable', async () => {
+  const manifest = JSON.parse(await read('package.json'));
+  const files = ['components/export-map-modal/export-html-map.tsx', 'components/export-map-modal/export-json-map.tsx',
+    'factories/export-map-help.ts', 'factories/file-upload.tsx'];
+  for (const file of files) {
+    const source = await read(`src/pages/Kepler/${file}`);
+    for (const [, specifier] of source.matchAll(/from ['"]([^'"]+)['"]/g)) {
+      if (specifier.startsWith('.')) continue;
+      const packageName = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+      assert.ok(manifest.dependencies[packageName], `${file} directly imports undeclared ${packageName}`);
+      assert.ok(require.resolve(specifier), `${specifier} must resolve in npm and clean Yarn installs`);
+    }
+  }
+  assert.equal(manifest.dependencies['react-copy-to-clipboard'], '^5.0.2');
+  assert.equal(manifest.dependencies['@kepler.gl/localization'], '3.2.0');
+  const lock = await read('yarn.lock');
+  assert.match(lock, /react-copy-to-clipboard@(?:npm:)?\^5\.0\.2"?:\n  version:? "?5\.1\.0"?/);
+  assert.equal(JSON.parse(await readFile(require.resolve('react-copy-to-clipboard/package.json'), 'utf8')).version, '5.1.0');
+});
+
 for (const name of ['export-html-map', 'export-json-map']) {
   test(`${name} preserves the full native render and behavior except docs anchors`, async () => {
     let native = (await nativeSource(`modals/export-map-modal/${name}`))
