@@ -86,6 +86,18 @@ test("Kepler version changes require an explicit review of the 3.2.0 presentatio
   assert.equal(packageJson.version, "3.2.0", REVIEW_REQUIREMENT);
 });
 
+test("the metadata preview declares its runtime dependency instead of relying on npm hoisting", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(manifest.dependencies["react-json-pretty"], "^2.2.0");
+  const lock = await readFile(new URL("../yarn.lock", import.meta.url), "utf8");
+  // Yarn 4 migrates the tracked v1 lock locally during Cloudflare installs.
+  assert.match(lock, /react-json-pretty@(?:npm:)?\^2\.2\.0"?:\n  version:? "?2\.2\.0"?/);
+  const dependency = JSON.parse(await readFile(require.resolve("react-json-pretty/package.json"), "utf8"));
+  assert.equal(dependency.version, "2.2.0");
+  assert.equal(dependency.typings, "types/JSONPretty.d.ts");
+  assert.match(await readFile(require.resolve("react-json-pretty/types/JSONPretty.d.ts"), "utf8"), /export = JSONPretty;/);
+});
+
 for (const [name, componentName] of forms) {
   test(`${name} preserves the exact native core body before returned JSX`, () => {
     const {native, local} = sources.get(name);
