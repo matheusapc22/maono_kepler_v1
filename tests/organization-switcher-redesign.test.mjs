@@ -1,0 +1,94 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { build } from 'esbuild';
+import postcss from 'postcss';
+
+const root = new URL('../', import.meta.url);
+const read = path => readFileSync(new URL(path, root), 'utf8');
+const switcher = read('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx');
+const css = postcss.parse(read('src/pages/Projects/projects.css'));
+const bundle = await build({ entryPoints: [new URL('src/pages/Projects/components/organization-switcher-position.ts', root).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const { organizationMenuPosition } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
+
+for (const expanded of [true, false]) {
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 568 }, { width: 240, height: 220 }]) {
+    test(`organization popover clamps independently of sidebar at ${viewport.width}px, expanded=${expanded}`, () => {
+      for (const rect of [
+        { left: 12, right: 228, top: 170, bottom: 214 },
+        { left: viewport.width - 56, right: viewport.width - 12, top: viewport.height - 70, bottom: viewport.height - 20 },
+      ]) {
+        const result = organizationMenuPosition(rect, viewport, expanded, 526);
+        assert.equal(result.width, Math.min(340, viewport.width - 16));
+        assert.ok(result.left >= 8 && result.left + result.width <= viewport.width - 8);
+        assert.ok(result.top >= 8);
+        assert.ok(result.top + Math.min(result.maxHeight, 526) <= viewport.height - 8);
+      }
+    });
+  }
+}
+
+test('expanded organization panel flips upward when there is more room above', () => {
+  const result = organizationMenuPosition({ left: 12, right: 228, top: 680, bottom: 724 }, { width: 1440, height: 800 }, true, 500);
+  assert.equal(result.top, 172);
+  assert.equal(result.width, 340);
+});
+
+test('search filters only the existing accessible list and uses unchanged switch operation', () => {
+  assert.match(switcher, /organizations\.filter\(\(organization\) => organization\.active !== false\)/);
+  assert.match(switcher, /search\.trim\(\)\.toLocaleLowerCase\(\)/);
+  assert.match(switcher, /\.toLocaleLowerCase\(\)\.includes\(query\)/);
+  assert.match(switcher, /await onSwitch\(organization\.id\)/);
+  assert.equal((switcher.match(/await onSwitch\(/g) || []).length, 1);
+  assert.doesNotMatch(switcher, /\bfetch\(|window\.alert|localStorage/);
+  assert.match(switcher, /selectionPendingRef\.current = true/);
+  assert.match(switcher, /epoch === menuEpochRef\.current/);
+  assert.match(switcher, /onDismissError\?\.\(\)/);
+});
+
+test('popover has one search outside its scrollable list, active semantics and portal', () => {
+  assert.match(switcher, /createPortal\(/);
+  assert.match(switcher, /document\.body/);
+  assert.match(switcher, /role="dialog"/);
+  assert.match(switcher, /role="listbox"/);
+  assert.match(switcher, /aria-selected=\{selected\}/);
+  assert.match(switcher, /Selecione um contexto de trabalho/);
+  assert.match(switcher, /placeholder="Buscar organização\.\.\."/);
+  assert.match(switcher, /Nenhuma organização encontrada/);
+  const declarations = selector => {
+    const rule = css.nodes.find(node => node.type === 'rule' && node.selector === selector);
+    return Object.fromEntries(rule.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
+  };
+  assert.equal(declarations('.mm-organization-menu').overflow, 'hidden');
+  assert.equal(declarations('.mm-organization-options')['overflow-y'], 'auto');
+  assert.equal(declarations('.mm-organization-options')['max-height'], '380px');
+  assert.equal(declarations('.mm-organization-option')['min-height'], '56px');
+  assert.equal(declarations('.mm-organization-option').border, '1px solid transparent');
+});
+
+// The revision only changes two presentation components. Freeze their callers,
+// organization/session/permission implementation and existing page chrome independently.
+const preserved = {
+  'src/pages/Projects.tsx': 'e7158f587b6e5ad64f1998e34c076a3c490cf9db490430bd87861d039ad3f479',
+  'src/pages/ProjectsSidebar.tsx': '7693f4946859773bb32d7b049e8daf733bf2e2e5e91cc2c4ebd9d14e21626fdc',
+  'src/pages/Projects/components/ProjectsSection.tsx': '050c9def25565a1a734f66bbe5f3d7782c9862c72fb038db1f42b9af02ac3c67',
+  'src/pages/Projects/components/ProjectPagesUi.tsx': '59ed8bb3a1be8890f526626dc0aa70017da27d9d8a9db2249f2d13157d8b6769',
+  'src/pages/Projects/components/ProjectPages.css': 'e3209cd406d33a84e8cf960c3bc3abda0179931c1cf34b0db33a952dfd18b9a3',
+  'src/auth/session.tsx': '57e2f47d3831c6564e85c8ede8c3cf1eb3724ae6501e5dddbea9b2dbc03a2d09',
+  'src/platform-density.css': '18ca17d6a9a4b0394ba9cff2352ac8d8b9617c11e32d6488937cc49e29360152',
+};
+for (const [path, hash] of Object.entries(preserved)) {
+  test(`card/switcher revision preserves ${path}`, () => {
+    assert.equal(createHash('sha256').update(read(path)).digest('hex'), hash);
+  });
+}
+
+test('card preview lifecycle is unchanged by the new root interaction', () => {
+  const old = execFileSync('git', ['show', 'f22863de68f4f86e75bebea8f399f8b3d28d9e2e:src/pages/Projects/components/ProjectCard.tsx'], { cwd: root, encoding: 'utf8' });
+  const card = read('src/pages/Projects/components/ProjectCard.tsx');
+  const preview = source => source.slice(source.indexOf('  const thumbnailStatus ='), source.includes('  const openProject =') ? source.indexOf('  const openProject =') : source.indexOf('  const cardClassName ='))
+    .replace(/  const accessLevel = normalizeProjectAccessLevel\(project\.accessLevel\);\n  const isOwner = accessLevel === "owner";\n/, '');
+  assert.equal(preview(card), preview(old));
+});

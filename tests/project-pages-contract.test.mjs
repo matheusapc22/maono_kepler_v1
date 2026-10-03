@@ -23,10 +23,8 @@ const preserved = {
   'src/pages/Projects/components/project-preview-presentation.mjs': '7bf63da2c68166c6471d7c609c2439d3a79c50e0f943800d8ef238834c3689a4',
   'src/pages/Projects/components/DocumentsSection.css': '63e76b77979cc356f9512e8e94e8a8ab4708320fea13b17d874168c14e6a2a1d',
   'src/pages/Projects/components/DocumentsSection.tsx': '3ba808d43d1883ec83a9c63a76e7b3c1d608dd8d62ca9d12f3ffa31adf9fc37a',
-  'src/pages/Projects/components/ProjectCard.tsx': 'e170bbe69b288dc2c21068a62dc15340703c198516e3610c4c86efdffea14426',
   'src/pages/Projects/components/project-cards.css': '46b441eb5242b3b78e8de8f2a077dead9a9c3a671dfeb0fb6e2e49a7602bf44c',
   'src/pages/Projects/components/project-card-utils.ts': 'cb69b125c61dc8204f5876c63aa8f3698289a100e7cf2db235b1f849083479c7',
-  'src/pages/Projects/components/ProjectActionsMenu.tsx': 'f9832c27f0e46004eb7ba92ad9655fef61d7617ab7118f0c6aa54b879bba21f2',
   'src/pages/Projects/components/ProjectMetadataPanel.tsx': '2f49b53dd47e8e9540b027febab2fb6394b0905c8008905edb4a7632c630dbb8',
   'src/pages/Projects/maono-card-list-accent.css': 'aa117f523564c51956d5d683c00a38389ab1672ed8d3aadd11a82d49336dbd69',
   'src/pages/Projects/projects-api.ts': '658b7edb0a98434bbaade6eed1c8a582d5fe73c0397b079967e9bf48e7d5b0a9',
@@ -37,7 +35,7 @@ const preserved = {
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 for (const [path, expected] of Object.entries(preserved)) {
   test(`preserves original source: ${path}`, () => {
-    assert.equal(sha256(read(path)), expected, 'no card, action or endpoint edits');
+    assert.equal(sha256(read(path)), expected, 'unrelated presentation, preview, metadata and endpoints stay unchanged');
     if (hasOriginal) {
       const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
       assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');
@@ -277,13 +275,13 @@ test('sidebar height, single scroll container, identity ellipsis and borderless 
   assert.equal(declarations(':root').get('--mm-sidebar-collapsed'), '92px');
 });
 
-test('sidebar styling does not modify page, card, table, modal or layout styles', { skip: !hasOriginal }, () => {
+test('sidebar and organization styling do not modify page, card, table, modal or layout styles', { skip: !hasOriginal }, () => {
   const path = 'src/pages/Projects/projects.css';
   const withoutSidebar = source => {
     const css = postcss.parse(source);
     css.walkComments(comment => comment.remove());
     css.walkRules(rule => {
-      if (rule.selector.includes('.mm-sidebar-') || rule.selector.includes('.mm-projects-sidebar') || rule.selector.includes('.mm-organization-trigger')) rule.remove();
+      if (rule.selector.includes('.mm-sidebar-') || rule.selector.includes('.mm-projects-sidebar') || rule.selector.includes('.mm-organization-')) rule.remove();
       else if (rule.selector === ':root') rule.walkDecls(declaration => {
         if (declaration.prop.startsWith('--mm-sidebar-')) declaration.remove();
       });

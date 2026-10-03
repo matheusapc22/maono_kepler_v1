@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import type {
   MaonoOrganization,
 } from "../../../auth/session";
 import { UniversalLoader } from "../../../components/loading";
+import { organizationMenuPosition } from "./organization-switcher-position";
 
 type OrganizationWorkspaceSwitcherProps = {
   activeOrganization: MaonoOrganization | null;
@@ -61,6 +63,66 @@ function accessLabel(organization: MaonoOrganization) {
   return "Membro";
 }
 
+function OrganizationSearch({ inputRef, value, listboxId, onChange, onKeyDown }: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  value: string;
+  listboxId: string;
+  onChange: (value: string) => void;
+  onKeyDown: React.KeyboardEventHandler<HTMLInputElement>;
+}) {
+  return (
+    <label className="mm-organization-search">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="10.5" cy="10.5" r="7" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        <path d="m16 16 5 5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+      <input
+        ref={inputRef}
+        type="search"
+        value={value}
+        aria-label="Buscar organização"
+        aria-controls={listboxId}
+        placeholder="Buscar organização..."
+        autoComplete="off"
+        onChange={event => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+      />
+    </label>
+  );
+}
+
+function OrganizationItem({ organization, selected, highlighted, busy, buttonRef, onFocus, onSelect }: {
+  organization: MaonoOrganization;
+  selected: boolean;
+  highlighted: boolean;
+  busy: boolean;
+  buttonRef: (element: HTMLButtonElement | null) => void;
+  onFocus: () => void;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      role="option"
+      aria-selected={selected}
+      className={selected ? "mm-organization-option selected" : "mm-organization-option"}
+      tabIndex={highlighted ? 0 : -1}
+      disabled={busy}
+      onFocus={onFocus}
+      onClick={onSelect}
+      title={organization.name || "Organização"}
+    >
+      <span className="mm-organization-avatar" aria-hidden="true">{getInitials(organization.name)}</span>
+      <span className="mm-organization-option-copy">
+        <strong>{organization.name || "Organização"}</strong>
+        <span>{accessLabel(organization)}</span>
+      </span>
+      <span className="mm-organization-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+    </button>
+  );
+}
+
 const OrganizationWorkspaceSwitcher: React.FC<
   OrganizationWorkspaceSwitcherProps
 > = ({
@@ -72,256 +134,228 @@ const OrganizationWorkspaceSwitcher: React.FC<
   onSwitch,
   onDismissError,
 }) => {
+  const panelId = useId();
   const listboxId = useId();
+  const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectionPendingRef = useRef(false);
+  const menuEpochRef = useRef(0);
+  const mountedRef = useRef(true);
+  const initialOptionRef = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectionPending, setSelectionPending] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
+  const busy = switching || selectionPending;
 
   const availableOrganizations = useMemo(
     () => organizations.filter((organization) => organization.active !== false),
     [organizations],
   );
+  const filteredOrganizations = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return availableOrganizations.filter(organization =>
+      String(organization.name || "Organização").toLocaleLowerCase().includes(query),
+    );
+  }, [availableOrganizations, search]);
+  const activeIndex = Math.max(0, availableOrganizations.findIndex(organization =>
+    sameId(activeOrganization?.id, organization.id),
+  ));
 
-  const activeIndex = useMemo(
-    () =>
-      Math.max(
-        0,
-        availableOrganizations.findIndex((organization) =>
-          sameId(activeOrganization?.id, organization.id),
-        ),
-      ),
-    [activeOrganization?.id, availableOrganizations],
-  );
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; menuEpochRef.current += 1; };
+  }, []);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
-
-    if (!trigger || typeof window === "undefined") {
-      return;
-    }
-
-    const rect = trigger.getBoundingClientRect();
-    const viewportPadding = 8;
-    const width = expanded ? Math.max(rect.width, 250) : 286;
-    const preferredLeft = expanded ? rect.left : rect.right + 8;
-    const left = Math.max(
-      viewportPadding,
-      Math.min(preferredLeft, window.innerWidth - width - viewportPadding),
+    if (!trigger) return;
+    const next = organizationMenuPosition(
+      trigger.getBoundingClientRect(),
+      { width: window.innerWidth, height: window.innerHeight },
+      expanded,
+      146 + Math.min(380, Math.max(56, filteredOrganizations.length * 60)) + (busy ? 42 : 0) + (error ? 64 : 0),
     );
-    const preferredTop = expanded ? rect.bottom + 8 : rect.top;
-    const top = Math.max(
-      viewportPadding,
-      Math.min(preferredTop, window.innerHeight - 180),
-    );
+    setMenuPosition(current => current && Object.keys(next).every(key =>
+      current[key as keyof MenuPosition] === next[key as keyof MenuPosition],
+    ) ? current : next);
+  }, [expanded, filteredOrganizations.length, busy, error]);
 
-    setMenuPosition({
-      left,
-      top,
-      width,
-      maxHeight: Math.max(160, window.innerHeight - top - viewportPadding),
-    });
-  }, [expanded]);
-
-  const closeMenu = useCallback(() => {
+  const closeMenu = useCallback((restoreFocus = false) => {
+    menuEpochRef.current += 1;
     setOpen(false);
     setMenuPosition(null);
+    if (restoreFocus) triggerRef.current?.focus();
   }, []);
 
-  const openMenu = useCallback(
-    (index = activeIndex) => {
-      if (availableOrganizations.length === 0 || switching) {
-        return;
-      }
+  const openMenu = useCallback((optionIndex: number | null = null) => {
+    if (availableOrganizations.length === 0 || busy || selectionPendingRef.current) return;
+    menuEpochRef.current += 1;
+    initialOptionRef.current = optionIndex;
+    setSearch("");
+    setHighlightedIndex(optionIndex ?? activeIndex);
+    setOpen(true);
+  }, [activeIndex, availableOrganizations.length, busy]);
 
-      setHighlightedIndex(index);
-      setOpen(true);
-    },
-    [activeIndex, availableOrganizations.length, switching],
-  );
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
+  useLayoutEffect(() => {
+    if (!open) return;
     updatePosition();
-
-    const handleViewportChange = () => updatePosition();
-    window.addEventListener("resize", handleViewportChange);
-    window.addEventListener("scroll", handleViewportChange, true);
-
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    const observer = new ResizeObserver(updatePosition);
+    if (triggerRef.current) observer.observe(triggerRef.current);
     return () => {
-      window.removeEventListener("resize", handleViewportChange);
-      window.removeEventListener("scroll", handleViewportChange, true);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      observer.disconnect();
     };
   }, [open, updatePosition]);
 
+  const positioned = menuPosition !== null;
+  useLayoutEffect(() => {
+    if (!open || !positioned) return;
+    const index = initialOptionRef.current;
+    if (index === null) searchRef.current?.focus();
+    else optionRefs.current[index]?.focus();
+    // Focus only once when opening; typing, scrolling and resizing must not steal it.
+  }, [open, positioned]);
+
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    optionRefs.current[highlightedIndex]?.focus();
-  }, [highlightedIndex, menuPosition, open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
+    if (!open) return;
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
-
-      if (
-        !triggerRef.current?.contains(target) &&
-        !menuRef.current?.contains(target)
-      ) {
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         closeMenu();
       }
     };
-
+    const handleFocus = (event: FocusEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) closeMenu();
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); closeMenu(true); }
+    };
     document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("focusin", handleFocus);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("focusin", handleFocus);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, [closeMenu, open]);
 
-  useEffect(() => {
-    if (open && !switching) {
-      setHighlightedIndex(activeIndex);
+  const focusOption = (index: number) => {
+    if (!filteredOrganizations.length || busy) return;
+    const next = (index + filteredOrganizations.length) % filteredOrganizations.length;
+    setHighlightedIndex(next);
+    optionRefs.current[next]?.focus();
+  };
+
+  const handleSelection = useCallback(async (organization: MaonoOrganization) => {
+    if (busy || selectionPendingRef.current) return;
+    if (sameId(activeOrganization?.id, organization.id)) { closeMenu(true); return; }
+    selectionPendingRef.current = true;
+    setSelectionPending(true);
+    const epoch = menuEpochRef.current;
+    try {
+      onDismissError?.();
+      await onSwitch(organization.id);
+      if (mountedRef.current && epoch === menuEpochRef.current) closeMenu(true);
+    } catch {
+      // Keep the previous context and the existing normalized session error visible.
+      // Some browsers blur a disabled option while the request is pending.
+      if (mountedRef.current && epoch === menuEpochRef.current && document.activeElement === document.body) {
+        searchRef.current?.focus();
+      }
+    } finally {
+      selectionPendingRef.current = false;
+      if (mountedRef.current) setSelectionPending(false);
     }
-  }, [activeIndex, open, switching]);
+  }, [activeOrganization?.id, busy, closeMenu, onDismissError, onSwitch]);
 
-  const moveHighlight = useCallback(
-    (direction: 1 | -1) => {
-      setHighlightedIndex((current) => {
-        const count = availableOrganizations.length;
-        return count === 0 ? 0 : (current + direction + count) % count;
-      });
-    },
-    [availableOrganizations.length],
-  );
-
-  const handleSelection = useCallback(
-    async (organization: MaonoOrganization) => {
-      if (sameId(activeOrganization?.id, organization.id) || switching) {
-        return;
-      }
-
-      try {
-        onDismissError?.();
-        await onSwitch(organization.id);
-        closeMenu();
-        window.requestAnimationFrame(() => triggerRef.current?.focus());
-      } catch {
-        // A mensagem normalizada da sessão permanece visível no seletor.
-      }
-    },
-    [
-      activeOrganization?.id,
-      closeMenu,
-      onDismissError,
-      onSwitch,
-      switching,
-    ],
-  );
-
-  const menu =
-    open && menuPosition && typeof document !== "undefined"
-      ? createPortal(
-          <div
-            ref={menuRef}
-            id={listboxId}
-            className="mm-organization-menu"
-            role="listbox"
-            aria-label="Trocar organização ativa"
-            aria-busy={switching}
-            style={{
-              left: menuPosition.left,
-              top: menuPosition.top,
-              width: menuPosition.width,
-              maxHeight: menuPosition.maxHeight,
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                moveHighlight(1);
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                moveHighlight(-1);
-              } else if (event.key === "Home") {
-                event.preventDefault();
-                setHighlightedIndex(0);
-              } else if (event.key === "End") {
-                event.preventDefault();
-                setHighlightedIndex(availableOrganizations.length - 1);
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                closeMenu();
-                triggerRef.current?.focus();
-              } else if (event.key === "Tab") {
-                closeMenu();
-              }
-            }}
-          >
-            <div className="mm-organization-menu-header">
-              <strong>Trocar organização</strong>
-              <span>Selecione o contexto de trabalho</span>
-            </div>
-
-            <div className="mm-organization-options">
-              {availableOrganizations.map((organization, index) => {
-                const selected = sameId(activeOrganization?.id, organization.id);
-
-                return (
-                  <button
-                    ref={(element) => {
-                      optionRefs.current[index] = element;
-                    }}
-                    key={String(organization.id)}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    className={selected ? "mm-organization-option selected" : "mm-organization-option"}
-                    tabIndex={index === highlightedIndex ? 0 : -1}
-                    disabled={switching}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                    onClick={() => void handleSelection(organization)}
-                  >
-                    <span className="mm-organization-avatar" aria-hidden="true">
-                      {getInitials(organization.name)}
-                    </span>
-                    <span className="mm-organization-option-copy">
-                      <strong>{organization.name || "Organização"}</strong>
-                      <span>{accessLabel(organization)}</span>
-                    </span>
-                    <span className="mm-organization-check" aria-hidden="true">
-                      {selected ? "✓" : ""}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {switching ? (
-              <div className="mm-organization-menu-status">
-                <UniversalLoader
-                  size="inline"
-                  accessibleLabel="Trocando organização"
-                />
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className="mm-organization-menu-error" role="alert">
-                {error}
-              </div>
-            ) : null}
-          </div>,
-          document.body,
-        )
-      : null;
+  const menu = open && menuPosition && typeof document !== "undefined"
+    ? createPortal(
+      <div
+        ref={menuRef}
+        id={panelId}
+        className="mm-organization-menu"
+        role="dialog"
+        aria-labelledby={titleId}
+        aria-busy={busy}
+        style={menuPosition}
+        onKeyDown={event => {
+          if (event.key === "Tab") {
+            const option = optionRefs.current[highlightedIndex];
+            if (event.target === searchRef.current && !event.shiftKey && option && !busy) {
+              event.preventDefault(); option.focus();
+            } else if (event.target !== searchRef.current && event.shiftKey) {
+              event.preventDefault(); searchRef.current?.focus();
+            } else {
+              // The portal is at the end of body. Continue from its trigger in page order.
+              triggerRef.current?.focus(); closeMenu();
+            }
+          }
+        }}
+      >
+        <div className="mm-organization-menu-header">
+          <strong id={titleId}>Trocar organização</strong>
+          <span>Selecione um contexto de trabalho</span>
+        </div>
+        <OrganizationSearch
+          inputRef={searchRef}
+          value={search}
+          listboxId={listboxId}
+          onChange={value => { setSearch(value); setHighlightedIndex(0); }}
+          onKeyDown={event => {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              focusOption(event.key === "ArrowUp" ? filteredOrganizations.length - 1 : highlightedIndex);
+            }
+          }}
+        />
+        <div
+          id={listboxId}
+          className="mm-organization-options"
+          role="listbox"
+          aria-label="Organizações disponíveis"
+          aria-busy={busy}
+          onKeyDown={event => {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault(); focusOption(highlightedIndex + (event.key === "ArrowDown" ? 1 : -1));
+            } else if (event.key === "Home" || event.key === "End") {
+              event.preventDefault(); focusOption(event.key === "Home" ? 0 : filteredOrganizations.length - 1);
+            }
+          }}
+        >
+          {filteredOrganizations.map((organization, index) => (
+            <OrganizationItem
+              key={String(organization.id)}
+              organization={organization}
+              selected={sameId(activeOrganization?.id, organization.id)}
+              highlighted={index === highlightedIndex}
+              busy={busy}
+              buttonRef={element => { optionRefs.current[index] = element; }}
+              onFocus={() => setHighlightedIndex(index)}
+              onSelect={() => void handleSelection(organization)}
+            />
+          ))}
+        </div>
+        {filteredOrganizations.length === 0 ? (
+          <p className="mm-organization-empty" role="status">Nenhuma organização encontrada.</p>
+        ) : null}
+        {busy ? (
+          <div className="mm-organization-menu-status">
+            <UniversalLoader size="inline" accessibleLabel="Trocando organização" />
+          </div>
+        ) : null}
+        {error ? <div className="mm-organization-menu-error" role="alert">{error}</div> : null}
+      </div>, document.body,
+    ) : null;
 
   const triggerLabel = activeOrganization?.name
     ? `${activeOrganization.name} Workspace`
@@ -333,12 +367,13 @@ const OrganizationWorkspaceSwitcher: React.FC<
         ref={triggerRef}
         type="button"
         className="mm-organization-trigger"
-        aria-haspopup="listbox"
-        aria-controls={open ? listboxId : undefined}
+        aria-haspopup="dialog"
+        aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         aria-label={`${triggerLabel}. Trocar organização ativa`}
         title={expanded ? "Trocar organização ativa" : triggerLabel}
-        disabled={availableOrganizations.length === 0 || switching}
+        disabled={availableOrganizations.length === 0}
+        aria-disabled={busy}
         onClick={() => (open ? closeMenu() : openMenu())}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -366,7 +401,7 @@ const OrganizationWorkspaceSwitcher: React.FC<
           </span>
         </span>
         <span className="mm-organization-chevron">
-          {switching ? (
+          {busy ? (
             <UniversalLoader
               size="inline"
               accessibleLabel="Trocando organização"

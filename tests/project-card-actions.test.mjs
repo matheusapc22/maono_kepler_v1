@@ -42,26 +42,18 @@ test("menu usa portal, teclado e retorno de foco", () => {
   assert.doesNotMatch(menuSource, /\bfetch\s*\(/);
 });
 
-test("card separa menu, favorito e CTA", () => {
-  const actionsIndex = cardSource.indexOf("mm-project-card__actions");
-  const favoriteIndex = cardSource.indexOf(
-    "mm-project-card__favorite",
-    actionsIndex,
-  );
-  const linkIndex = cardSource.indexOf("<Link");
-
+test("card isolates only actual controls and portal, not their empty wrapper", () => {
+  const actionsIndex = cardSource.indexOf("className=\"mm-project-card__actions\"");
+  const actionsWrapper = cardSource.slice(actionsIndex, cardSource.indexOf("{canEditMetadata ?", actionsIndex));
   assert.ok(actionsIndex >= 0);
-  assert.ok(favoriteIndex > actionsIndex);
-  assert.ok(linkIndex > favoriteIndex);
-
-  const linkBlock = cardSource.slice(
-    linkIndex,
-    cardSource.indexOf("</Link>", linkIndex),
-  );
-
-  assert.doesNotMatch(linkBlock, /ProjectActionsMenu/);
-  assert.doesNotMatch(linkBlock, /mm-project-card__favorite/);
-  assert.doesNotMatch(linkBlock, /<button/);
+  assert.doesNotMatch(actionsWrapper, /onClick|onPointerDown|stopPropagation/);
+  assert.match(cardSource, /event\.target\.closest\("button, \[role='menu'\]"\)/);
+  assert.match(cardSource, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
+  assert.match(cardSource, /event\.stopPropagation\(\);\s*void onFavoriteToggle\?\.\(project\)/);
+  assert.match(cardSource, /event\.target !== event\.currentTarget/);
+  assert.equal(menuSource.match(/onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/g)?.length, 3);
+  assert.match(menuSource, /event\.stopPropagation\(\);\s*onOpenChange\(false\);\s*onEdit\(\)/);
+  assert.doesNotMatch(cardSource, /<Link|mm-project-card__open/);
 });
 
 test("menu depende de canEditMetadata e autor vem do projeto", () => {

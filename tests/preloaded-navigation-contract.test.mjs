@@ -76,9 +76,10 @@ test("ProjectCard preserva modified-click e remove copy de espera", () => {
   assert.match(projectCard, /event\.metaKey/);
   assert.match(projectCard, /event\.ctrlKey/);
   assert.match(projectCard, /event\.preventDefault\(\)/);
-  assert.match(projectCard, /void onOpen\(project\)/);
+  assert.match(projectCard, /await onOpen\(project\)/);
   assert.doesNotMatch(projectCard, /Abrindo\.\.\./);
-  assert.match(projectCard, />Abrir projeto<\/span>/);
+  assert.match(projectCard, /aria-label=\{`Abrir projeto \$\{project.name\}`\}/);
+  assert.doesNotMatch(projectCard, /className="mm-project-card__open"/);
 });
 
 test("callback de autenticação usa feedback universal sem texto visual", () => {

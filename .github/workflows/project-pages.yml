@@ -40,7 +40,7 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --test tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs
+          node --test tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs

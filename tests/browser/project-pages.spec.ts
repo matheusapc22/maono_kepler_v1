@@ -29,6 +29,9 @@ type FixtureOptions = {
   failFavorite?: boolean | ((attempt: number) => boolean); beforeFavorite?: (attempt: number) => Promise<void>; beforeList?: (path: string) => Promise<void>;
   failList?: () => boolean;
   beforeOrganizationSwitch?: () => Promise<void>;
+  failOrganizationSwitch?: () => boolean;
+  organizations?: typeof organizations;
+  beforeMapNavigation?: () => Promise<void>;
 };
 function deferred() {
   let resolve!: () => void;
@@ -42,7 +45,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
   let organizationId = 1;
   let favoriteAttempt = 0;
   let authenticated = true;
-  const fixtureOrganizations = organizations.map(organization => ({
+  const fixtureOrganizations = (options.organizations ?? organizations).map(organization => ({
     ...organization, role: options.organizationRoles?.[organization.id],
   }));
   const session = () => authenticated ? ({
@@ -63,6 +66,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
     }
     if (path === "/api/session/active-organization" && request.method() === "PUT") {
       await options.beforeOrganizationSwitch?.();
+      if (options.failOrganizationSwitch?.()) return route.fulfill({ status: 403, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
       organizationId = Number(JSON.parse(request.postData() || "{}").organizationId);
       return route.fulfill({ json: { ok: true, ...session() } });
     }
@@ -90,6 +94,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
     if (path.endsWith("/thumbnail/status")) return route.fulfill({ json: { ok: true, thumbnailStatus: "READY", configRevision: 1, thumbnailRevision: 1, thumbnailAttempts: 1 } });
     if (path.endsWith("/thumbnail") || path === "/api/fixture-preview") return route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#183124"/><path d="M0 280L640 80M120 0L440 360" stroke="#d8ad50" stroke-width="8"/></svg>' });
     if (path.endsWith("/map-navigation")) {
+      await options.beforeMapNavigation?.();
       const project = state.find(item => item.slug === path.split("/")[3]);
       const requestedMode = url.searchParams.get("mode");
       return route.fulfill({ json: { ok: true, context: {
@@ -270,9 +275,10 @@ test("viewer permission boundary preserves readonly cards and hides creation/edi
   await setup(page, { dataset: [readonly], role: "viewer", deniedPermissions: ["project.create", "project.edit", "project.save", "project.favorite"] });
   await expectCount(page, 1, 1);
   await expect(page.getByRole("link", { name: "Novo mapa", exact: true })).toHaveCount(0);
-  await expect(cards(page).getByText("Somente leitura", { exact: true })).toBeVisible();
+  await expect(cards(page).getByText("Somente leitura", { exact: true })).toHaveCount(0);
   await expect(cards(page).getByRole("button", { name: /Mais ações|favoritos/ })).toHaveCount(0);
-  await expect(cards(page).getByRole("link", { name: "Abrir projeto" })).toHaveAttribute("href", "/projects/projeto-01/manage");
+  await expect(cards(page)).toHaveAttribute("role", "link");
+  await expect(cards(page)).toHaveAttribute("aria-label", "Abrir projeto Projeto 01");
 });
 
 test("existing thumbnail, menu keyboard dismissal and metadata editing flow remain intact", async ({ page }) => {
@@ -330,7 +336,7 @@ test("leaving project sections removes scoped styling and returning preserves ex
 
 test("existing open-project action uses prepared navigation; new-map uses its established route", async ({ page }) => {
   const { requests } = await setup(page, { dataset: [projects[0]] }); await expectCount(page, 1, 1);
-  await cards(page).getByRole("link", { name: "Abrir projeto" }).click();
+  await cards(page).click();
   await expect.poll(() => requests.some(item => item.path === "/api/projects/projeto-01/map-navigation" && item.query === "?mode=manage")).toBe(true);
   await expect(page).toHaveURL(/\/projects\/projeto-01\/(?:view|manage)$/);
   await page.goto("/projects"); await expectCount(page, 1, 1);
@@ -983,8 +989,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768
     await expect(page.locator('html')).toHaveCSS('font-size', '16px');
     if (desktop) await expect(page.locator('.mm-projects-sidebar')).toHaveCSS('width', '240px');
     for (const action of ['.mm-project-card__favorite', '.mm-project-card__more']) {
-      await expect(page.locator(action)).toHaveCSS('width', desktop ? '40px' : '44px');
-      await expect(page.locator(action)).toHaveCSS('height', desktop ? '40px' : '44px');
+      await expect(page.locator(action)).toHaveCSS('width', desktop ? '32px' : '44px');
+      await expect(page.locator(action)).toHaveCSS('height', desktop ? '32px' : '44px');
     }
     await page.screenshot({ path: testInfo.outputPath('compact-projects-100-percent.png'), fullPage: true });
     // Optional ticket modules are explicitly disabled in this fixture, as
@@ -1053,4 +1059,215 @@ test('compact density: login remains scrollable, readable and keyboard operable'
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath(`compact-login-${viewport.width}.png`), fullPage: true });
   }
+});
+
+// Approved card/switcher revision: same controllers, new access surface only.
+for (const selector of [
+  '.mm-project-card__preview', 'h2', '.mm-project-card__creator', '.mm-project-card__description',
+  '.mm-project-card__metadata-item:first-child', '.mm-project-card__slug', 'card-padding', 'actions-gap', 'keyboard',
+]) {
+  test(`compact card: ${selector} reuses the exact prepared project navigation`, async ({ page }) => {
+    const { requests } = await setup(page, { dataset: [projects[0]] }); await expectCount(page, 1, 1);
+    const card = cards(page);
+    await expect(card).toHaveAttribute('role', 'link');
+    await expect(card).toHaveAttribute('tabindex', '0');
+    await expect(card).toHaveAttribute('aria-label', `Abrir projeto ${projects[0].name}`);
+    await expect(card.locator('.mm-project-card__status, .mm-project-card__chip, .mm-project-card__open')).toHaveCount(0);
+    if (selector === 'keyboard') { await card.focus(); await page.keyboard.press('Enter'); }
+    else if (selector === 'card-padding') await card.click({ position: { x: 5, y: 5 } });
+    else if (selector === 'actions-gap') {
+      const more = await card.locator('.mm-project-card__more').boundingBox();
+      const favorite = await card.locator('.mm-project-card__favorite').boundingBox();
+      await page.mouse.click((more!.x + more!.width + favorite!.x) / 2, more!.y + more!.height / 2);
+    } else await card.locator(selector).click();
+    await expect.poll(() => requests.filter(request => request.path.endsWith('/map-navigation')).length).toBe(1);
+    expect(requests.filter(request => request.path.endsWith('/map-navigation')).at(-1)?.query).toBe('?mode=manage');
+    await expect(page).toHaveURL(/\/projects\/projeto-01\/(?:view|manage)$/);
+  });
+}
+
+test('compact card: favorite, keyboard menu and portaled edit never activate navigation', async ({ page }) => {
+  const { requests } = await setup(page, { dataset: [projects[0]] }); await expectCount(page, 1, 1);
+  const card = cards(page);
+  const favorite = card.locator('.mm-project-card__favorite');
+  await favorite.click(); await expect(favorite).toHaveAttribute('aria-pressed', 'false');
+  await favorite.focus(); await page.keyboard.press('Enter'); await expect(favorite).toHaveAttribute('aria-pressed', 'true');
+  const more = card.locator('.mm-project-card__more');
+  await more.focus(); await page.keyboard.press('Enter');
+  const edit = page.getByRole('menuitem', { name: 'Editar informações' });
+  await expect(edit).toBeFocused();
+  expect(await edit.evaluate(element => !element.closest('.mm-project-card'))).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Editar projeto' })).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar edição do projeto' }).click();
+  await more.click(); await edit.click();
+  await expect(page.getByRole('dialog', { name: 'Editar projeto' })).toBeVisible();
+  expect(requests.filter(request => request.path.endsWith('/map-navigation'))).toHaveLength(0);
+  await expect(page).toHaveURL(/\/projects$/);
+});
+
+test('compact card: duplicate activation is blocked while the existing open flow is pending', async ({ page }) => {
+  const pending = deferred();
+  const { requests } = await setup(page, { dataset: [projects[0]], beforeMapNavigation: () => pending.promise });
+  await expectCount(page, 1, 1);
+  await cards(page).evaluate(element => { (element as HTMLElement).click(); (element as HTMLElement).click(); });
+  await expect.poll(() => requests.filter(request => request.path.endsWith('/map-navigation')).length).toBe(1);
+  await expect(cards(page)).toHaveAttribute('aria-disabled', 'true');
+  pending.resolve(); await expect(page).toHaveURL(/\/projects\/projeto-01\/(?:view|manage)$/);
+});
+
+test('compact card: no-image, favorite, long content and equal row height retain the reference anatomy', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const dataset = projects.slice(0, 3).map((project, index) => ({
+    ...project, active: true, favorite: index > 0,
+    name: ['Novo Projeto MRA', 'Projeto MRA', 'Projeto Demonstração Maono'][index],
+    description: index === 2 ? 'Descrição longa para confirmar o limite visual. '.repeat(30) : project.description,
+  }));
+  await setup(page, { dataset }); await expectCount(page, 3, 3);
+  await expect(cards(page).getByText('Sem prévia', { exact: true })).toHaveCount(3);
+  await expect(cards(page).getByText('Este projeto ainda não possui uma imagem.', { exact: true })).toHaveCount(3);
+  const heights = await cards(page).evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
+  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+  expect(heights[0]).toBeLessThan(490);
+  await cards(page).first().focus();
+  const styles = await cards(page).first().evaluate(element => ({ outline: getComputedStyle(element).outlineStyle, cursor: getComputedStyle(element).cursor }));
+  expect(styles.cursor).toBe('pointer'); expect(styles.outline).not.toBe('none');
+  await page.locator('.mm-project-pages__grid').screenshot({ path: testInfo.outputPath('approved-compact-project-cards.png'), animations: 'disabled' });
+});
+
+const switcherOrganizations = [
+  { id: 1, name: 'Demo Maono', slug: 'demo', active: true },
+  { id: 2, name: 'Cliente Alfa - Testes', slug: 'alfa', active: true },
+  { id: 3, name: 'Cliente Beta - Testes', slug: 'beta', active: true },
+  { id: 4, name: 'MRA', slug: 'mra', active: true },
+  { id: 5, name: 'Maõno Interno - Testes', slug: 'interno', active: true },
+  { id: 6, name: 'Maõno Preview QA', slug: 'qa', active: true },
+];
+
+test('organization popover: reference header, real-time search, initials, roles, active check and empty state', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await setup(page, { organizations: switcherOrganizations, organizationRoles: { 1: 'owner', 2: 'editor', 3: 'viewer', 4: 'owner', 5: 'admin', 6: 'owner' } });
+  await expectCount(page, 10, 73);
+  const trigger = page.getByRole('button', { name: /Trocar organização ativa/ }); await trigger.click();
+  const panel = page.getByRole('dialog', { name: 'Trocar organização', exact: true });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText('Selecione um contexto de trabalho')).toBeVisible();
+  const search = panel.getByRole('searchbox', { name: 'Buscar organização' });
+  await expect(search).toBeFocused(); await expect(search).toHaveAttribute('placeholder', 'Buscar organização...');
+  const options = panel.getByRole('option'); await expect(options).toHaveCount(6);
+  await expect(options.locator('.mm-organization-avatar')).toHaveText(['DM', 'CA', 'CB', 'M', 'MI', 'MP']);
+  await expect(options.locator('.mm-organization-option-copy > span')).toHaveText(['Proprietário', 'Editor', 'Visualizador', 'Proprietário', 'Administrador', 'Proprietário']);
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(options.first().locator('.mm-organization-check')).toHaveText('✓');
+  const panelBox = (await panel.boundingBox())!; const triggerBox = (await trigger.boundingBox())!;
+  expect(panelBox.width).toBe(340); expect(panelBox.width).toBeGreaterThan(triggerBox.width);
+  expect(panelBox.x + panelBox.width).toBeGreaterThan(240);
+  expect(await panel.evaluate(element => element.parentElement === document.body)).toBe(true);
+  await panel.screenshot({ path: testInfo.outputPath('approved-organization-popover.png'), animations: 'disabled' });
+  await search.fill('  cLiEnTe  '); await expect(options).toHaveCount(2);
+  await options.first().hover(); await expect(search).toBeFocused();
+  await search.fill('nenhuma-correspondência'); await expect(options).toHaveCount(0);
+  await expect(panel.getByRole('status')).toHaveText('Nenhuma organização encontrada.');
+  await search.clear(); await expect(options).toHaveCount(6);
+  await page.keyboard.press('Escape'); await expect(panel).toHaveCount(0); await expect(trigger).toBeFocused();
+  await trigger.click(); await page.getByRole('heading', { name: 'Todos os Projetos', exact: true }).click(); await expect(panel).toHaveCount(0);
+  await trigger.click(); await options.first().click(); await expect(panel).toHaveCount(0); await expect(trigger).toBeFocused();
+});
+
+test('organization popover: every accessible context uses the existing switch and updates cards/count/active role', async ({ page }) => {
+  const dataset = switcherOrganizations.map(org => ({ ...projects[0], id: org.id, organizationId: org.id, active: true, name: `Mapa ${org.name}`, slug: `mapa-${org.slug}` }));
+  const { requests } = await setup(page, { dataset, organizations: switcherOrganizations, organizationRoles: { 1: 'owner', 2: 'editor', 3: 'viewer', 4: 'owner', 5: 'admin', 6: 'owner' } });
+  for (const org of [...switcherOrganizations.slice(1), switcherOrganizations[0]]) {
+    const trigger = page.getByRole('button', { name: /Trocar organização ativa/ }); await trigger.click();
+    await page.getByRole('option').filter({ hasText: org.name }).click();
+    await expect(page.getByRole('dialog', { name: 'Trocar organização', exact: true })).toHaveCount(0);
+    await expect(trigger).toContainText(`${org.name} Workspace`); await expect(trigger).toBeFocused();
+    await expectCount(page, 1, 1); expect(await titles(page)).toEqual([`Mapa ${org.name}`]);
+    await expect(page.locator('.mm-sidebar-count').first()).toHaveText('1');
+    await trigger.click(); await expect(page.getByRole('option').filter({ hasText: org.name })).toHaveAttribute('aria-selected', 'true'); await page.keyboard.press('Escape');
+  }
+  expect(requests.filter(request => request.path === '/api/session/active-organization')).toHaveLength(6);
+});
+
+for (const viewport of [{ width: 1440, height: 700 }, { width: 1024, height: 480 }, { width: 320, height: 568 }]) {
+  test(`organization popover: only list scrolls, long names fit, anchor survives resize at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const many = Array.from({ length: 32 }, (_, index) => ({ id: index + 1, name: `Organização ${index + 1} com nome muito longo para validação de truncamento`, slug: `org-${index + 1}`, active: true }));
+    await setup(page, { organizations: many, dataset: [] });
+    const trigger = page.getByRole('button', { name: /Trocar organização ativa/ }); await trigger.click();
+    const panel = page.getByRole('dialog', { name: 'Trocar organização', exact: true });
+    const search = panel.getByRole('searchbox'); const list = panel.getByRole('listbox');
+    await expect(panel.getByRole('option')).toHaveCount(32);
+    const headerBefore = await panel.locator('.mm-organization-menu-header').boundingBox();
+    await list.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect(panel.getByRole('option').last()).toBeInViewport(); await expect(search).toBeFocused();
+    const headerAfter = await panel.locator('.mm-organization-menu-header').boundingBox();
+    expect(headerAfter!.y).toBeCloseTo(headerBefore!.y, 0);
+    const metrics = await panel.evaluate(element => ({ panelScroll: element.scrollTop, x: element.getBoundingClientRect().x, right: element.getBoundingClientRect().right, bottom: element.getBoundingClientRect().bottom }));
+    expect(metrics.panelScroll).toBe(0); expect(metrics.x).toBeGreaterThanOrEqual(8); expect(metrics.right).toBeLessThanOrEqual(viewport.width - 8); expect(metrics.bottom).toBeLessThanOrEqual(viewport.height - 8);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height + 60 }); await expect(search).toBeFocused();
+    await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
+    if (viewport.width > 760) {
+      await page.getByRole('button', { name: 'Recolher sidebar' }).click();
+      await trigger.click(); const box = (await panel.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(64); expect(box.x + box.width).toBeLessThanOrEqual(viewport.width - 8);
+    }
+  });
+}
+
+test('organization popover: failure keeps prior context/menu; busy lock stops duplicates and retry succeeds', async ({ page }) => {
+  const pending = deferred(); let fail = true;
+  const other = { ...projects[0], id: 201, organizationId: 2, slug: 'outro', name: 'Mapa outra organização' };
+  const { requests } = await setup(page, { dataset: [projects[0], other], beforeOrganizationSwitch: () => pending.promise, failOrganizationSwitch: () => fail });
+  await expectCount(page, 1, 1);
+  const trigger = page.getByRole('button', { name: /Trocar organização ativa/ }); await trigger.click();
+  const panel = page.getByRole('dialog', { name: 'Trocar organização', exact: true });
+  await panel.getByRole('option', { name: /Outra organização/ }).evaluate(element => { (element as HTMLElement).click(); (element as HTMLElement).click(); });
+  await expect(panel).toHaveAttribute('aria-busy', 'true');
+  await expect(panel.getByRole('option').first()).toBeDisabled();
+  await expect(panel.getByRole('status')).toBeVisible();
+  expect(requests.filter(request => request.path === '/api/session/active-organization')).toHaveLength(1);
+  pending.resolve();
+  await expect(panel.getByRole('alert')).toBeVisible(); await expect(panel).toHaveAttribute('aria-busy', 'false');
+  expect(await panel.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  await expect(trigger).toContainText('Organização de demonstração'); expect(await titles(page)).toEqual([projects[0].name]);
+  fail = false; await panel.getByRole('option', { name: /Outra organização/ }).click();
+  await expect(panel).toHaveCount(0); await expect(trigger).toContainText('Outra organização');
+  await expectCount(page, 1, 1); expect(await titles(page)).toEqual([other.name]);
+  expect(requests.filter(request => request.path === '/api/session/active-organization')).toHaveLength(2);
+});
+
+test('organization popover: keyboard search/list focus and dismissal remain independent from pending selection', async ({ page }) => {
+  const pending = deferred();
+  await setup(page, { dataset: [], beforeOrganizationSwitch: () => pending.promise });
+  const trigger = page.getByRole('button', { name: /Trocar organização ativa/ });
+  await trigger.focus(); await page.keyboard.press('Enter');
+  const panel = page.getByRole('dialog', { name: 'Trocar organização', exact: true }); const search = panel.getByRole('searchbox');
+  await expect(search).toBeFocused(); await page.keyboard.press('Tab'); await expect(panel.getByRole('option').first()).toBeFocused();
+  await page.keyboard.press('Shift+Tab'); await expect(search).toBeFocused();
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('End'); await expect(panel.getByRole('option').last()).toBeFocused();
+  await page.keyboard.press('Enter'); await expect(panel).toHaveAttribute('aria-busy', 'true');
+  await page.keyboard.press('Escape'); await expect(panel).toHaveCount(0); await expect(trigger).toBeFocused();
+  await page.getByRole('button', { name: 'Recentes', exact: true }).focus();
+  pending.resolve();
+  await expect(trigger).toContainText('Outra organização');
+  await expect(trigger).not.toBeFocused(); await expect(panel).toHaveCount(0);
+  await trigger.click(); await expect(search).toHaveValue('');
+  await page.keyboard.press('Shift+Tab'); await expect(panel).toHaveCount(0);
+});
+
+test('compact card: smaller preview controls retain keyboard and accessible touch targets', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { requests } = await setup(page, { dataset: [projects[0]] }); await expectCount(page, 1, 1);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const button of await cards(page).locator('.mm-project-card__actions button').all()) {
+      const box = (await button.boundingBox())!; expect(box.width).toBe(width > 760 ? 32 : 44); expect(box.height).toBe(box.width);
+      const icon = (await button.locator('svg').boundingBox())!; expect(icon.width).toBe(18); expect(icon.height).toBe(18);
+    }
+  }
+  await cards(page).locator('.mm-project-card__favorite').click();
+  await cards(page).locator('.mm-project-card__more').focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Editar informações' })).toBeVisible();
+  expect(requests.filter(request => request.path.endsWith('/map-navigation'))).toHaveLength(0);
 });
