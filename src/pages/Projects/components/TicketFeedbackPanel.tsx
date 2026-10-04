@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
 import { toTicketApiError } from "./tickets-api";
@@ -59,7 +60,7 @@ function Answer({
           <legend>Sua avaliação</legend>
           <label>
             {item.definition.resultQuestion}
-            <select
+            <MaonoSelect
               value={outcome}
               onChange={(e) => setOutcome(e.target.value)}
             >
@@ -67,18 +68,18 @@ function Answer({
               {item.definition.outcomes.map((o) => (
                 <option key={o}>{o}</option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             {item.definition.effortQuestion}
-            <select value={effort} onChange={(e) => setEffort(e.target.value)}>
+            <MaonoSelect value={effort} onChange={(e) => setEffort(e.target.value)}>
               <option value="">Selecione</option>
               {item.definition.effortLabels.map((o, i) => (
                 <option key={i} value={i}>
                   {o}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Comentário opcional — somente você, sem envio à conversa
@@ -358,7 +359,7 @@ export default function TicketFeedbackPanel({
               </label>
               <label>
                 Direção da escala
-                <select
+                <MaonoSelect
                   value={direction}
                   onChange={(e) => setDirection(e.target.value)}
                 >
@@ -369,7 +370,7 @@ export default function TicketFeedbackPanel({
                   <option value="descending">
                     Do maior para o menor esforço
                   </option>
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Prazo aprovado em horas

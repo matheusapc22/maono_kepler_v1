@@ -1495,3 +1495,28 @@ for (const width of [390, 1440]) {
     expect(requests.filter(request => request.method !== 'GET')).toEqual([]);
   });
 }
+
+test('Maono selectors: documents filters and pagination retain draft, route and popup geometry', async ({ page }, testInfo) => {
+  const requests = await setup(page, { more: true }); await openDocuments(page, true);
+  const field = page.locator('.mm-docs-type select');
+  await field.click();
+  const menu = page.locator('.maono-select-menu');
+  await expect(menu).toHaveCSS('background-color', 'rgb(16, 23, 32)');
+  await page.screenshot({ path: testInfo.outputPath('maono-documents-select-desktop.png') });
+  await menu.getByRole('option', { name: 'PDF', exact: true }).click();
+  await expect(field).toHaveValue('pdf');
+  await page.getByRole('button', { name: 'Aplicar', exact: true }).click();
+  await expect.poll(() => [...requests].reverse().find(request => new URL(request.url).pathname === '/api/organizations/1/files')?.url || '').toContain('type=pdf');
+  await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click();
+  const size = page.locator('.mm-docs-page-controls select');
+  await size.click();
+  await page.locator('.maono-select-menu').getByRole('option', { name: '25', exact: true }).click();
+  await expect(size).toHaveValue('25');
+  await expect(page.locator('.mm-docs-page-number')).toHaveText('1');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('.mm-docs-project select').click();
+  const box = (await page.locator('.maono-select-menu').boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath('maono-documents-select-mobile.png') });
+  await page.keyboard.press('Escape');
+});

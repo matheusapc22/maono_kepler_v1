@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
 import { toTicketApiError } from "./tickets-api";
@@ -352,18 +353,18 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
                 </label>
                 <label>
                   Audiência da versão
-                  <select
+                  <MaonoSelect
                     value={audience}
                     onChange={(e) => setAudience(e.target.value)}
                     disabled={!detail || !detail.canRevise}
                   >
                     <option value="private">Autor e revisor</option>
                     <option value="organization">Organização</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <label>
                   Revisor independente
-                  <select
+                  <MaonoSelect
                     value={reviewer}
                     onChange={(e) => setReviewer(e.target.value)}
                   >
@@ -377,19 +378,19 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
                         {p.name || p.email || `Usuário ${p.id}`}
                       </option>
                     ))}
-                  </select>
+                  </MaonoSelect>
                 </label>
                 {!detail && (
                   <>
                     <label>
                       Tipo de origem opcional
-                      <select
+                      <MaonoSelect
                         value={sourceType}
                         onChange={(e) => setSourceType(e.target.value)}
                       >
                         <option value="ticket">Chamado</option>
                         <option value="case">Incidente ou problema</option>
-                      </select>
+                      </MaonoSelect>
                     </label>
                     <label>
                       ID da origem
@@ -502,7 +503,7 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
             {!!detail?.history?.length && (
               <details>
                 <summary>Comparar versões e decisões</summary>
-                <select
+                <MaonoSelect
                   aria-label="Versão para comparar"
                   value={comparison?.id || ""}
                   onChange={(e) =>
@@ -518,7 +519,7 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
                       v{r.number} — {r.title}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
                 {comparison && (
                   <div className="ticket-knowledge-comparison">
                     <div>
@@ -714,7 +715,7 @@ export function TicketKnowledgeReuse({
         </label>
         <label>
           Enviar como
-          <select
+          <MaonoSelect
             value={kind}
             onChange={(e) => {
               setKind(e.target.value);
@@ -725,7 +726,7 @@ export function TicketKnowledgeReuse({
           >
             <option value="response">Resposta</option>
             {canUseInternal && <option value="internal">Nota interna</option>}
-          </select>
+          </MaonoSelect>
         </label>
         <ul>
           {list?.items.map((a) => (

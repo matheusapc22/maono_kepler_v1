@@ -5,5 +5,5 @@ import projectPages from "./playwright.project-pages.config";
 // so Central cases do not lengthen the existing map/project acceptance job.
 export default defineConfig({
   ...projectPages,
-  testMatch: ["ticket-center-visual.spec.ts"],
+  testMatch: ["ticket-center-visual.spec.ts", "ticket-view-selector.spec.ts"],
 });

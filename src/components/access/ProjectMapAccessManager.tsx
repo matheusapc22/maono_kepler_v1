@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../selection/MaonoSelect";
 import { useEffect, useMemo, useState } from "react";
 
 import { normalizeUserError } from "../../lib/user-error-catalog";
@@ -172,7 +173,7 @@ export default function ProjectMapAccessManager({
                           <strong>{project.projectName}</strong>
                           <small>/{project.projectSlug}</small>
                         </span>
-                        <select
+                        <MaonoSelect
                           aria-label={`Rota do projeto ${project.projectName}`}
                           value={effectiveMode}
                           disabled={
@@ -188,7 +189,7 @@ export default function ProjectMapAccessManager({
                         >
                           <option value="viewer">Viewer</option>
                           {!viewerRole && <option value="editor">Editor</option>}
-                        </select>
+                        </MaonoSelect>
                       </label>
                     );
                   })}

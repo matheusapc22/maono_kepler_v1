@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useTicketDialog } from "./useTicketDialog";
 import {TicketSlaPanel} from './TicketSlaPanel';
 import {TicketChanges} from './TicketChanges';
@@ -332,7 +333,7 @@ export default function TicketDetailDrawer({
                 <div>
                   {!lifecycleEnabled ? <label>
                     <span>Situação</span>
-                    <select
+                    <MaonoSelect
                       value={status}
                       disabled={saving || loading || lifecycleDraftDirty}
                       onChange={(event) => {
@@ -345,12 +346,12 @@ export default function TicketDetailDrawer({
                           {label}
                         </option>
                       ))}
-                    </select>
+                    </MaonoSelect>
                   </label> : null}
 
                   <label>
                     <span>Prioridade</span>
-                    <select
+                    <MaonoSelect
                       value={priority}
                       disabled={saving || loading || lifecycleDraftDirty}
                       onChange={(event) => {
@@ -366,12 +367,12 @@ export default function TicketDetailDrawer({
                           {label}
                         </option>
                       ))}
-                    </select>
+                    </MaonoSelect>
                   </label>
 
                   <label>
                     <span>{triageEnabled ? "Domínio afetado" : "Categoria"}</span>
-                    <select
+                    <MaonoSelect
                       value={category}
                       disabled={saving || loading || lifecycleDraftDirty}
                       onChange={(event) => {
@@ -387,7 +388,7 @@ export default function TicketDetailDrawer({
                           {label}
                         </option>
                       ))}
-                    </select>
+                    </MaonoSelect>
                   </label>
 
                   <label>
@@ -402,7 +403,7 @@ export default function TicketDetailDrawer({
 
                   <label>
                     <span>Atendente</span>
-                    <select
+                    <MaonoSelect
                       value={assignedTo}
                       disabled={saving || loading || lifecycleDraftDirty}
                       onChange={(event) => { markDirty(); setAssignedTo(event.target.value); }}
@@ -413,7 +414,7 @@ export default function TicketDetailDrawer({
                           {ticketPersonName(assignee)}
                         </option>
                       ))}
-                    </select>
+                    </MaonoSelect>
                   </label>
                 </div>
 

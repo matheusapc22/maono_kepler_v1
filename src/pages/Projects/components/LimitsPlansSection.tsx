@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { MaonoUser } from "../../../auth/session";
@@ -323,8 +324,8 @@ export default function LimitsPlansSection({ user, projectsCount }: LimitsPlansS
           {permissions.increaseRequest ? (
             <form onSubmit={handleCreateRequest}>
               <div className="mm-form-grid">
-                <label>Tipo<select value={form.requestType} onChange={(event) => updateForm("requestType", event.target.value)}><option value="plan_upgrade">Upgrade de plano</option><option value="users_increase">Aumento de usuários</option><option value="projects_increase">Aumento de projetos</option><option value="storage_increase">Aumento de armazenamento</option><option value="exports_increase">Aumento de exportações</option></select></label>
-                <label>Plano solicitado<select value={form.requestedPlan} onChange={(event) => updateForm("requestedPlan", event.target.value)}>{PLAN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                <label>Tipo<MaonoSelect value={form.requestType} onChange={(event) => updateForm("requestType", event.target.value)}><option value="plan_upgrade">Upgrade de plano</option><option value="users_increase">Aumento de usuários</option><option value="projects_increase">Aumento de projetos</option><option value="storage_increase">Aumento de armazenamento</option><option value="exports_increase">Aumento de exportações</option></MaonoSelect></label>
+                <label>Plano solicitado<MaonoSelect value={form.requestedPlan} onChange={(event) => updateForm("requestedPlan", event.target.value)}>{PLAN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</MaonoSelect></label>
                 <label>Motivo<textarea value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} placeholder="Explique a necessidade de aumento ou upgrade." rows={3} /></label>
               </div>
               <div className="mm-actions-row"><button type="submit" className="mm-btn primary" disabled={busyKey === "create-request"}>{busyKey === "create-request" ? "Enviando..." : "Enviar solicitação"}</button></div>

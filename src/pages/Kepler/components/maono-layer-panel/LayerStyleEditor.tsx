@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../../components/selection/MaonoSelect";
 import {
   useEffect,
   useMemo,
@@ -274,7 +275,7 @@ function FieldSelect({
   return (
     <label className="maono-style-field">
       <span>{label}</span>
-      <select
+      <MaonoSelect
         value={field ?? ""}
         onChange={(event) => onChange(event.target.value || null)}
       >
@@ -284,7 +285,7 @@ function FieldSelect({
             {candidate.name}
           </option>
         ))}
-      </select>
+      </MaonoSelect>
     </label>
   );
 }
@@ -320,7 +321,7 @@ function ColorScaleControl({
       {!paletteOnly && field ? (
         <label className="maono-style-field">
           <span>Escala da cor</span>
-          <select
+          <MaonoSelect
             value={effectiveScale}
             onChange={(event) => {
               if (isColorScale(event.target.value)) {
@@ -333,7 +334,7 @@ function ColorScaleControl({
                 {COLOR_SCALE_LABELS[candidate]}
               </option>
             ))}
-          </select>
+          </MaonoSelect>
           {selectedField ? (
             <small>
               Campo {fieldKind(selectedField) === "numeric" ? "numérico" : "categórico"}
@@ -401,7 +402,7 @@ export default function LayerStyleEditor({
         {pointFamily ? (
           <label className="maono-style-field">
             <span>Formato de visualização</span>
-            <select
+            <MaonoSelect
               value={layer.type}
               onChange={(event) => {
                 if (isPointLayerType(event.target.value)) {
@@ -414,7 +415,7 @@ export default function LayerStyleEditor({
                   {option.label}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
         ) : null}
 
@@ -607,7 +608,7 @@ export default function LayerStyleEditor({
                 <header><strong>Tamanho dos pontos</strong></header>
                 <label className="maono-style-field">
                   <span>Raio orientado por campo</span>
-                  <select
+                  <MaonoSelect
                     value={style.radiusField ?? ""}
                     onChange={(event) =>
                       onChange({
@@ -622,7 +623,7 @@ export default function LayerStyleEditor({
                         {field.name}
                       </option>
                     ))}
-                  </select>
+                  </MaonoSelect>
                 </label>
 
                 {style.radiusField && compatibility.radiusRange ? (
@@ -723,7 +724,7 @@ export default function LayerStyleEditor({
           <div className="maono-panel-hint-field">
             <label className="maono-style-field">
               <span>Camadas de dados</span>
-              <select
+              <MaonoSelect
                 value={normalizedLayerBlending}
                 onChange={(event) => {
                   if (isLayerBlendingMode(event.target.value)) {
@@ -736,7 +737,7 @@ export default function LayerStyleEditor({
                     {LAYER_BLENDING_LABELS[mode]}
                   </option>
                 ))}
-              </select>
+              </MaonoSelect>
             </label>
             <PanelHint label="Sobre os modos de composição">
               {"Estes modos são globais e afetam a composição de todas as camadas."}
@@ -745,7 +746,7 @@ export default function LayerStyleEditor({
 
           <label className="maono-style-field">
             <span>Overlays sobre o mapa-base</span>
-            <select
+            <MaonoSelect
               value={normalizedOverlayBlending}
               onChange={(event) => {
                 if (isOverlayBlendingMode(event.target.value)) {
@@ -758,7 +759,7 @@ export default function LayerStyleEditor({
                   {OVERLAY_BLENDING_LABELS[mode]}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
 
         </div>

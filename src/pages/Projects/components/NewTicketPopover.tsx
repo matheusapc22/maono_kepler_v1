@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useTicketDialog } from "./useTicketDialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -565,7 +566,7 @@ export default function NewTicketPopover({
 
             <label className="ticket-field">
               <span>Prioridade *</span>
-              <select
+              <MaonoSelect
                 value={form.priority}
                 onChange={(event) => {
                   setForm((current) => ({ ...current, priority: event.target.value as TicketPriority }));
@@ -578,12 +579,12 @@ export default function NewTicketPopover({
                     {label}
                   </option>
                 ))}
-              </select>
+              </MaonoSelect>
             </label>
 
             <label className="ticket-field">
               <span>{triageEnabled ? "Domínio afetado" : "Categoria"}</span>
-              <select
+              <MaonoSelect
                 value={form.category}
                 onChange={(event) =>
                   setForm((current) => ({
@@ -597,7 +598,7 @@ export default function NewTicketPopover({
                     {label}
                   </option>
                 ))}
-              </select>
+              </MaonoSelect>
             </label>
 
             <label className="ticket-field">
@@ -617,7 +618,7 @@ export default function NewTicketPopover({
             {canManage ? (
               <label className="ticket-field">
                 <span>Atendente</span>
-                <select
+                <MaonoSelect
                   value={form.assignedTo}
                   onChange={(event) =>
                     setForm((current) => ({
@@ -632,7 +633,7 @@ export default function NewTicketPopover({
                       {assigneeLabel(assignee)}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
             ) : null}
 

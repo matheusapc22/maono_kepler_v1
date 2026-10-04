@@ -165,6 +165,8 @@ test("CT-12 client clears stale drawer data when object access is revoked", () =
   const sourceText = source("../src/pages/Projects/components/TicketsSection.tsx");
   assert.match(sourceText, /detailFailure\.status === 404 \|\| detailFailure\.status === 403/);
   assert.match(sourceText, /setDetail\(null\);[\s\S]*setSelectedTicketId\(null\);[\s\S]*setToast\("O chamado não está mais disponível para seu acesso\."\)/);
-  assert.match(sourceText, /current\.filter\(\(ticket\) => String\(ticket\.id\) !== String\(ticketId\)\)/);
+  assert.match(sourceText, /if \(removed\) \{\s*recordTicketChange\(removed, null\)/);
+  assert.match(sourceText, /current\.filter\(item => String\(item\.id\) !== id\)/);
+  assert.match(sourceText, /queryAccessRevoked && viewMode === "kanban" \? null/);
   assert.match(sourceText, /mutationFailure\.status === 404 \|\| mutationFailure\.status === 403/);
 });

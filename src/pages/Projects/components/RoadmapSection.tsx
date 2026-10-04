@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
+import { DocumentIcon } from "./DocumentsUi";
+import "./roadmap-workspace.css";
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { createRoadmap, createRoadmapTask, createTaskComment, deleteRoadmapTask, getRoadmap, listRoadmaps, listTaskComments, updateRoadmapTask } from "./roadmap-api";
 import { DEFAULT_ROADMAP_FILTERS, ROADMAP_PRIORITY_LABELS, ROADMAP_STATUS_LABELS, type RoadmapBundle, type RoadmapComment, type RoadmapFilters, type RoadmapScale, type RoadmapSummary, type RoadmapTask, type RoadmapTaskStatus, type RoadmapView } from "./roadmap-types";
 
-type Props = { user?: AccessControlUser | null; organizationId?: number | string | null; organizationName?: string | null };
+type Props = { user?: AccessControlUser | null; organizationId?: number | string | null; organizationName?: string | null; onHome?: () => void };
 const DAY = 86400000;
 const today = () => new Date().toISOString().slice(0, 10);
 const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
@@ -36,7 +40,7 @@ function GanttView({ bundle, onOpen, scale }: { bundle: RoadmapBundle; onOpen: (
   });
   const todayLeft = position(today(), start, total);
   return <div className="roadmap-gantt" role="table" aria-label="Cronograma Gantt">
-    <div className="roadmap-gantt-head" role="row"><strong role="columnheader">Tarefa / responsável</strong><div role="columnheader">{markers.map((item) => <span key={item.date} style={{ left: `${item.left}%` }}>{scale === "month" ? new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }) : formatDate(item.date).replace(/ de \d{4}/, "")}</span>)}</div></div>
+    <div className="roadmap-gantt-head" role="row"><strong role="columnheader">Tarefa / responsável</strong><div role="columnheader">{markers.map((item) => <span key={item.date} title={formatDate(item.date)} style={{ left: `${item.left}%` }}>{scale === "month" ? new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }) : new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>)}</div></div>
     <div className="roadmap-gantt-body">
       <i className="roadmap-today-line" style={{ left: `calc(320px + (100% - 320px) * ${todayLeft / 100})` }}><span>Hoje</span></i>
       {bundle.tasks.map((task) => {
@@ -67,12 +71,12 @@ function TaskDrawer({ open, task, bundle, canManage, canComment, organizationId,
   return <div className="roadmap-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><aside className="roadmap-drawer" role="dialog" aria-modal="true" aria-label={task ? `Detalhes de ${task.title}` : "Nova tarefa"}><header><div><small>{task ? "Tarefa do roadmap" : "Planejamento operacional"}</small><h3>{task ? task.title : "Nova tarefa"}</h3></div><button type="button" onClick={onClose} aria-label="Fechar">×</button></header><form onSubmit={save}>
     <label className="wide">Título<input value={form.title} disabled={!canManage} required maxLength={180} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
     <label className="wide">Descrição<textarea value={form.description} disabled={!canManage} maxLength={5000} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
-    <label>Fase<select value={form.phaseId} disabled={!canManage} onChange={(e) => setForm({ ...form, phaseId: e.target.value })}>{bundle.phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}</select></label>
-    <label>Responsável<select value={form.assigneeId} disabled={!canManage} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}><option value="">Não atribuído</option>{bundle.assignees.map((item) => <option key={item.id} value={item.id}>{item.name || item.email}</option>)}</select></label>
+    <label>Fase<MaonoSelect value={form.phaseId} disabled={!canManage} onChange={(e) => setForm({ ...form, phaseId: e.target.value })}>{bundle.phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}</MaonoSelect></label>
+    <label>Responsável<MaonoSelect value={form.assigneeId} disabled={!canManage} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}><option value="">Não atribuído</option>{bundle.assignees.map((item) => <option key={item.id} value={item.id}>{item.name || item.email}</option>)}</MaonoSelect></label>
     <label>Início<input type="date" value={form.startDate} disabled={!canManage} required onChange={(e) => setForm({ ...form, startDate: e.target.value, ...(form.isMilestone ? { endDate: e.target.value } : {}) })} /></label>
     <label>Fim<input type="date" value={form.endDate} disabled={!canManage || form.isMilestone} required onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></label>
-    <label>Status<select value={form.status} disabled={!canManage} onChange={(e) => setForm({ ...form, status: e.target.value as RoadmapTaskStatus })}>{Object.entries(ROADMAP_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-    <label>Prioridade<select value={form.priority} disabled={!canManage} onChange={(e) => setForm({ ...form, priority: e.target.value as TaskForm["priority"] })}>{Object.entries(ROADMAP_PRIORITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    <label>Status<MaonoSelect value={form.status} disabled={!canManage} onChange={(e) => setForm({ ...form, status: e.target.value as RoadmapTaskStatus })}>{Object.entries(ROADMAP_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</MaonoSelect></label>
+    <label>Prioridade<MaonoSelect value={form.priority} disabled={!canManage} onChange={(e) => setForm({ ...form, priority: e.target.value as TaskForm["priority"] })}>{Object.entries(ROADMAP_PRIORITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</MaonoSelect></label>
     <label className="wide">Progresso: {form.progress}%<input type="range" min="0" max="100" step="5" value={form.progress} disabled={!canManage} onChange={(e) => setForm({ ...form, progress: Number(e.target.value) })} /></label>
     <label className="roadmap-check wide"><input type="checkbox" checked={form.isMilestone} disabled={!canManage || Boolean(task)} onChange={(e) => setForm({ ...form, isMilestone: e.target.checked, endDate: e.target.checked ? form.startDate : form.endDate, progress: e.target.checked && form.progress !== 100 ? 0 : form.progress })} /> Esta entrega é um marco</label>
     {error ? <p className="mm-error-text wide">{error}</p> : null}
@@ -80,7 +84,7 @@ function TaskDrawer({ open, task, bundle, canManage, canComment, organizationId,
   </form>{task ? <section className="roadmap-comments"><h4>Comentários</h4>{comments.length ? comments.map((item) => <article key={item.id}><strong>{item.authorName || "Usuário"}</strong><time>{new Date(item.createdAt).toLocaleString("pt-BR")}</time><p>{item.content}</p></article>) : <p>Nenhum comentário.</p>}{canComment ? <form onSubmit={sendComment}><textarea value={comment} maxLength={2000} placeholder="Adicione um comentário..." onChange={(e) => setComment(e.target.value)} /><button className="mm-button" disabled={busy || !comment.trim()}>Comentar</button></form> : null}</section> : null}</aside></div>;
 }
 
-export default function RoadmapSection({ user, organizationId, organizationName }: Props) {
+export default function RoadmapSection({ user, organizationId, organizationName, onHome }: Props) {
   const context = useMemo(() => ({ organizationId: organizationId || undefined, organization: organizationId ? { id: organizationId } : undefined }), [organizationId]);
   const canView = can(user, PERMISSION.ROADMAP_VIEW, context); const canManage = can(user, PERMISSION.ROADMAP_MANAGE, context) || can(user, PERMISSION.ROADMAP_TASK_MANAGE, context); const canComment = can(user, PERMISSION.ROADMAP_COMMENT_CREATE, context);
   const [roadmaps, setRoadmaps] = useState<RoadmapSummary[]>([]); const [roadmapId, setRoadmapId] = useState<number | null>(null); const [bundle, setBundle] = useState<RoadmapBundle | null>(null); const [filters, setFilters] = useState<RoadmapFilters>(DEFAULT_ROADMAP_FILTERS); const [view, setView] = useState<RoadmapView>(() => (window.innerWidth < 760 ? "list" : "gantt")); const [scale, setScale] = useState<RoadmapScale>("week"); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null); const [drawerOpen, setDrawerOpen] = useState(false); const [selected, setSelected] = useState<RoadmapTask | null>(null); const requestRef = useRef(0);
@@ -90,15 +94,72 @@ export default function RoadmapSection({ user, organizationId, organizationName 
   useEffect(() => { const adapt = () => { if (window.innerWidth < 760) setView("list"); }; adapt(); window.addEventListener("resize", adapt); return () => window.removeEventListener("resize", adapt); }, []);
   useEffect(() => { const timer = window.setTimeout(() => void loadBundle(), filters.search ? 250 : 0); return () => window.clearTimeout(timer); }, [roadmapId, filters]);
   async function quickCreateRoadmap() { if (!organizationId) return; const name = window.prompt("Nome do roadmap", `Roadmap ${organizationName || "da organização"}`); if (!name) return; const startDate = today(); const endDate = new Date(Date.now() + 120 * DAY).toISOString().slice(0, 10); try { const item = await createRoadmap(organizationId, { name, startDate, endDate, description: "Plano de prestação de serviços" }); setRoadmaps((current) => [item, ...current]); setRoadmapId(item.id); } catch (value) { setError(errorText(value)); } }
-  if (!organizationId) return <section className="mm-card mm-section-card"><h2>Roadmap</h2><p>Selecione uma organização.</p></section>;
-  if (!canView) return <section className="mm-card mm-section-card"><h2>Roadmap</h2><p>Você não possui permissão para visualizar este roadmap.</p></section>;
-  return <section className="roadmap-shell"><header className="roadmap-header"><div><small>PLANEJAMENTO OPERACIONAL</small><h2>Roadmap da prestação de serviços</h2><p>{organizationName || "Organização ativa"} · entregas, marcos e progresso em um único cronograma.</p></div><div>{roadmaps.length ? <select value={roadmapId || ""} onChange={(e) => setRoadmapId(Number(e.target.value))}>{roadmaps.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select> : null}{canManage ? <button className="mm-button" type="button" onClick={() => bundle ? (setSelected(null), setDrawerOpen(true)) : void quickCreateRoadmap()}>{bundle ? "+ Nova tarefa" : "+ Criar roadmap"}</button> : null}</div></header>
-    {error ? <div className="roadmap-error" role="alert"><span>{error}</span><button onClick={() => void (roadmapId ? loadBundle() : loadIndex())}>Tentar novamente</button></div> : null}
-    {loading && !bundle ? <div className="roadmap-skeleton" aria-label="Carregando roadmap">{Array.from({ length: 8 }).map((_, index) => <span key={index} />)}</div> : bundle ? <>
-      <RoadmapMetrics bundle={bundle} />
-      <section className="roadmap-tools"><div className="roadmap-filters"><input type="search" placeholder="Buscar tarefa" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} /><select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value as RoadmapFilters["status"] })}><option value="">Todos os status</option>{Object.entries(ROADMAP_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><select value={filters.phaseId} onChange={(e) => setFilters({ ...filters, phaseId: e.target.value })}><option value="">Todas as fases</option>{bundle.phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}</select><select value={filters.assigneeId} onChange={(e) => setFilters({ ...filters, assigneeId: e.target.value })}><option value="">Todos os responsáveis</option>{bundle.assignees.map((item) => <option key={item.id} value={item.id}>{item.name || item.email}</option>)}</select><button type="button" onClick={() => setFilters(DEFAULT_ROADMAP_FILTERS)}>Limpar</button></div><div className="roadmap-view-tools"><select value={scale} onChange={(e) => setScale(e.target.value as RoadmapScale)} disabled={view === "list"}><option value="day">Dia</option><option value="week">Semana</option><option value="month">Mês</option></select><button className={view === "gantt" ? "active" : ""} onClick={() => setView("gantt")}>Gantt</button><button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>Lista</button></div></section>
-      <section className="roadmap-content">{bundle.tasks.length ? view === "gantt" ? <GanttView bundle={bundle} scale={scale} onOpen={(task) => { setSelected(task); setDrawerOpen(true); }} /> : <ListView tasks={bundle.tasks} onOpen={(task) => { setSelected(task); setDrawerOpen(true); }} /> : <div className="roadmap-empty"><strong>Nenhuma tarefa no período</strong><p>Ajuste os filtros ou registre a primeira entrega.</p>{canManage ? <button className="mm-button" onClick={() => { setSelected(null); setDrawerOpen(true); }}>Nova tarefa</button> : null}</div>}</section>
-      <TaskDrawer open={drawerOpen} task={selected} bundle={bundle} canManage={canManage} canComment={canComment} organizationId={organizationId} onClose={() => setDrawerOpen(false)} onSaved={() => void loadBundle(true)} />
-    </> : <div className="roadmap-empty"><strong>Nenhum roadmap ativo</strong><p>Crie um plano para organizar fases, tarefas e marcos.</p>{canManage ? <button className="mm-button" onClick={() => void quickCreateRoadmap()}>Criar roadmap</button> : null}</div>}
+  const hasFilters = Object.values(filters).some(Boolean);
+  const openTask = (task: RoadmapTask | null) => { setSelected(task); setDrawerOpen(true); };
+  return <section className="roadmap-shell roadmap-workspace">
+    <nav className="roadmap-breadcrumb" aria-label="Caminho da página">
+      <Link to="/projects" onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome?.(); }}>Início</Link>
+      <DocumentIcon name="chevron" /><span aria-current="page">Roadmap</span>
+    </nav>
+    <header className="roadmap-header">
+      <div className="roadmap-heading">
+        <h1>Roadmap</h1>
+        <span className="mm-sr-only">Organização ativa: {organizationName || organizationId || "Nenhuma"}</span>
+      </div>
+      {organizationId && canView ? <div className="roadmap-header-actions">
+        {roadmaps.length ? <MaonoSelect aria-label="Roadmap ativo" value={roadmapId || ""} onChange={event => setRoadmapId(Number(event.target.value))}>
+          {roadmaps.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </MaonoSelect> : null}
+        {canManage ? <button className="mm-button roadmap-primary-action" type="button" onClick={() => bundle ? openTask(null) : void quickCreateRoadmap()}>
+          <DocumentIcon name="plus" />{bundle ? "Nova tarefa" : "Criar roadmap"}
+        </button> : null}
+      </div> : null}
+    </header>
+    {!organizationId ? <div className="roadmap-empty"><p>Selecione uma organização.</p></div> : !canView ? <div className="roadmap-empty"><p>Você não possui permissão para visualizar este roadmap.</p></div> : <>
+      {error ? <div className="roadmap-error" role="alert"><span>{error}</span><button type="button" onClick={() => void (roadmapId ? loadBundle() : loadIndex())}>Tentar novamente</button></div> : null}
+      {loading && !bundle ? <div className="roadmap-skeleton" role="status" aria-label="Carregando roadmap">{Array.from({ length: 8 }).map((_, index) => <span key={index} />)}</div> : bundle ? <>
+        <section className="roadmap-tools" aria-label="Filtros do roadmap">
+          <header className="roadmap-filter-header">
+            <strong><DocumentIcon name="filter" />Filtros</strong>
+            <button type="button" className="roadmap-clear" disabled={!hasFilters} onClick={() => setFilters(DEFAULT_ROADMAP_FILTERS)}><DocumentIcon name="restore" />Limpar filtros</button>
+          </header>
+          <div className="roadmap-filters">
+            <label><span>Buscar tarefa</span><span className="roadmap-search"><DocumentIcon name="search" /><input type="search" placeholder="Título da tarefa" value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} /></span></label>
+            <label><span>Status</span><MaonoSelect value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value as RoadmapFilters["status"] })}>
+              <option value="">Todos os status</option>{Object.entries(ROADMAP_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+            </MaonoSelect></label>
+            <label><span>Fase</span><MaonoSelect value={filters.phaseId} onChange={event => setFilters({ ...filters, phaseId: event.target.value })}>
+              <option value="">Todas as fases</option>{bundle.phases.map(phase => <option key={phase.id} value={phase.id}>{phase.name}</option>)}
+            </MaonoSelect></label>
+            <label><span>Responsável</span><MaonoSelect value={filters.assigneeId} onChange={event => setFilters({ ...filters, assigneeId: event.target.value })}>
+              <option value="">Todos os responsáveis</option>{bundle.assignees.map(item => <option key={item.id} value={item.id}>{item.name || item.email}</option>)}
+            </MaonoSelect></label>
+          </div>
+        </section>
+        <RoadmapMetrics bundle={bundle} />
+        <section className="roadmap-content" aria-label="Tarefas do roadmap" aria-busy={loading}>
+          <header className="roadmap-content-header">
+            <h2>{view === "gantt" ? "Cronograma" : "Tarefas"}</h2>
+            <div className="roadmap-view-tools">
+              <MaonoSelect aria-label="Escala do cronograma" value={scale} onChange={event => setScale(event.target.value as RoadmapScale)} disabled={view === "list"}>
+                <option value="day">Dia</option><option value="week">Semana</option><option value="month">Mês</option>
+              </MaonoSelect>
+              <div className="roadmap-view-switch" role="group" aria-label="Visualização do roadmap">
+                <button type="button" aria-pressed={view === "gantt"} className={view === "gantt" ? "active" : ""} onClick={() => setView("gantt")}>Gantt</button>
+                <button type="button" aria-pressed={view === "list"} className={view === "list" ? "active" : ""} onClick={() => setView("list")}><DocumentIcon name="list" />Lista</button>
+              </div>
+            </div>
+          </header>
+          <div key={view} className="roadmap-scroll" tabIndex={0} role="region" aria-label={view === "gantt" ? "Rolagem do cronograma" : "Rolagem das tarefas"}>
+            {bundle.tasks.length ? view === "gantt" ? <GanttView bundle={bundle} scale={scale} onOpen={openTask} /> : <ListView tasks={bundle.tasks} onOpen={openTask} /> : <div className="roadmap-empty"><strong>Nenhuma tarefa no período</strong><p>Ajuste os filtros ou registre a primeira entrega.</p>{canManage ? <button className="mm-button" type="button" onClick={() => openTask(null)}>Nova tarefa</button> : null}</div>}
+          </div>
+          <footer className="roadmap-footer" aria-label="Período do roadmap">
+            <span><time dateTime={bundle.roadmap.startDate}>{formatDate(bundle.roadmap.startDate)}</time> a <time dateTime={bundle.roadmap.endDate}>{formatDate(bundle.roadmap.endDate)}</time></span>
+            <span>{bundle.roadmap.calendarPolicy === "business_days" ? "Dias úteis" : "Dias corridos"}{bundle.roadmap.timezone ? ` · ${bundle.roadmap.timezone}` : ""}</span>
+          </footer>
+        </section>
+        <TaskDrawer open={drawerOpen} task={selected} bundle={bundle} canManage={canManage} canComment={canComment} organizationId={organizationId} onClose={() => setDrawerOpen(false)} onSaved={() => void loadBundle(true)} />
+      </> : !error ? <div className="roadmap-empty"><strong>Nenhum roadmap ativo</strong><p>Crie um plano para organizar fases, tarefas e marcos.</p>{canManage ? <button className="mm-button" type="button" onClick={() => void quickCreateRoadmap()}>Criar roadmap</button> : null}</div> : null}
+    </>}
   </section>;
 }

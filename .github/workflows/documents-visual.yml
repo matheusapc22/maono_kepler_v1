@@ -3,6 +3,7 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'src/components/selection/**'
       - 'src/pages/Projects/components/Documents*'
       - 'src/pages/Projects/components/DocumentActionDialogs*'
       - 'src/lib/user-error-catalog.ts'

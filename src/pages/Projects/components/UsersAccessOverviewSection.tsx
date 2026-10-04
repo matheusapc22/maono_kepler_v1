@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import {
   useCallback,
   useEffect,
@@ -238,8 +239,8 @@ export default function UsersAccessOverviewSection({
 
       <div className="people-toolbar">
         <label><span>Buscar</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, e-mail ou acesso" /></label>
-        <label><span>Situação</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todas</option><option value="active">Ativo</option><option value="suspended">Suspenso</option></select></label>
-        <label><span>Perfil</span><select value={profileFilter} onChange={(event) => setProfileFilter(event.target.value)}><option value="all">Todos os perfis</option>{Array.from(new Set(people.map(profileLabel))).map((label) => <option key={label}>{label}</option>)}</select></label>
+        <label><span>Situação</span><MaonoSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todas</option><option value="active">Ativo</option><option value="suspended">Suspenso</option></MaonoSelect></label>
+        <label><span>Perfil</span><MaonoSelect value={profileFilter} onChange={(event) => setProfileFilter(event.target.value)}><option value="all">Todos os perfis</option>{Array.from(new Set(people.map(profileLabel))).map((label) => <option key={label}>{label}</option>)}</MaonoSelect></label>
       </div>
 
       <div className="people-table-wrap">

@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../../components/selection/MaonoSelect";
 import type { CSSProperties } from "react";
 
 import type {
@@ -131,7 +132,7 @@ export default function FilterDetailView({
             <div className="maono-filter-binding">
               <label className="maono-style-field">
                 <span>Base de dados</span>
-                <select
+                <MaonoSelect
                   value={datasetId}
                   onChange={(event) => changeDataset(event.target.value)}
                 >
@@ -140,11 +141,11 @@ export default function FilterDetailView({
                       {candidate.label}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
               <label className="maono-style-field">
                 <span>Propriedade</span>
-                <select
+                <MaonoSelect
                   value={fieldName}
                   onChange={(event) =>
                     onBindField(filter.index, datasetId, event.target.value)
@@ -155,7 +156,7 @@ export default function FilterDetailView({
                       {field.name}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
             </div>
           ) : (

@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import type { MouseEvent } from "react";
 import { Link } from "react-router";
 import type { ProjectSectionKey } from "../projects-api";
@@ -55,14 +56,14 @@ export function ProjectPageFiltersForm({ value, disabled, onChange, onApply, onC
       </span>
     </label>
     <label className="mm-project-pages__field"><span>Status</span>
-      <select value={value.status} onChange={event => onChange({ ...value, status: event.target.value as ProjectPageFilters["status"] })} disabled={disabled}>
+      <MaonoSelect value={value.status} onChange={event => onChange({ ...value, status: event.target.value as ProjectPageFilters["status"] })} disabled={disabled}>
         <option value="all">Todos os status</option><option value="active">Ativos</option><option value="inactive">Inativos</option>
-      </select>
+      </MaonoSelect>
     </label>
     <label className="mm-project-pages__field"><span>Ordenar por</span>
-      <select value={value.order} onChange={event => onChange({ ...value, order: event.target.value as ProjectPageFilters["order"] })} disabled={disabled}>
+      <MaonoSelect value={value.order} onChange={event => onChange({ ...value, order: event.target.value as ProjectPageFilters["order"] })} disabled={disabled}>
         <option value="recent">Mais recentes</option><option value="oldest">Mais antigos</option>
-      </select>
+      </MaonoSelect>
     </label>
     <button type="submit" className="mm-project-pages__button is-primary" disabled={disabled}><ProjectPageIcon name="search" />Aplicar</button>
     <button type="button" className="mm-project-pages__button" onClick={onClear} disabled={disabled}><ProjectPageIcon name="filter" />Limpar filtros</button>
@@ -76,9 +77,9 @@ export function ProjectPagePagination({ visibleCount, total, page, pageCount, pa
   return <footer className="mm-project-pages__footer">
     <p role="status" aria-live="polite" aria-atomic="true">Exibindo {visibleCount}/{total}.</p>
     <nav className="mm-project-pages__pagination" aria-label="Paginação dos projetos">
-      <label>Itens por página<select value={pageSize} onChange={event => onPageSize(Number(event.target.value))} disabled={disabled}>
+      <label>Itens por página<MaonoSelect value={pageSize} onChange={event => onPageSize(Number(event.target.value))} disabled={disabled}>
         <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
-      </select></label>
+      </MaonoSelect></label>
       <button type="button" className="mm-project-pages__button" aria-label="Página anterior" disabled={disabled || page <= 1} onClick={() => onPage(page - 1)}><ProjectPageIcon name="previous" /></button>
       <span className="mm-project-pages__current" aria-current="page" aria-label={`Página ${page} de ${pageCount}`}>{page}</span>
       <button type="button" className="mm-project-pages__button" aria-label="Próxima página" disabled={disabled || page >= pageCount} onClick={() => onPage(page + 1)}><ProjectPageIcon name="next" /></button>

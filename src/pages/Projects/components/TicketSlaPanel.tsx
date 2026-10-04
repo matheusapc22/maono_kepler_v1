@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { requestJson } from '../../../lib/api-transport';
 import TicketErrorNotice from './TicketErrorNotice';
@@ -147,7 +148,7 @@ export function TicketSlaPanel({ organizationId, ticketId, canManage, revision }
  {c.clocks ? (['response', 'resolution'] as const).map(k => <p key={k}><strong>{k === 'response' ? 'Primeira resposta (acumulada)' : 'Resolução do ciclo'}: {labels[c.clocks![k].status]}</strong> · {duration(c.clocks![k].elapsedMs)} · Pausas: {duration(c.clocks![k].pausedMs)}{c.clocks![k].consumed !== null ? ` · ${Math.round(c.clocks![k].consumed! * 100)}% da meta` : ''}</p>) : null}
  <details><summary>Políticas e períodos</summary>{c.segments.map((s, i) => <p key={i}>{s.name} · versão {s.version} · {s.timeZone}<br />{date(s.from)} até {date(s.to)} · Resposta: {s.responseMinutes ?? 'sem meta'} min · Resolução: {s.resolutionMinutes ?? 'sem meta'} min</p>)}</details></article>)}
  {canManage && !pending.current && data.status !== 'unknown' ? <details><summary>Gerenciar política de SLA</summary><p>A atribuição vale a partir de agora. Ao trocar a política, o consumo já acumulado é preservado; o novo prazo vale para o próximo período. Reaberturas precisam de atribuição própria.</p>
- <label>Política<select value={selected} onChange={e => setSelected(e.target.value)}><option value="">Selecione</option>{policies.map(p => <option key={p.version} value={p.version}>{p.name} · v{p.version} · {p.calendar.timeZone}</option>)}</select></label>
+ <label>Política<MaonoSelect value={selected} onChange={e => setSelected(e.target.value)}><option value="">Selecione</option>{policies.map(p => <option key={p.version} value={p.version}>{p.name} · v{p.version} · {p.calendar.timeZone}</option>)}</MaonoSelect></label>
  <label>Justificativa da atribuição<textarea minLength={10} maxLength={1000} value={reason} onChange={e => setReason(e.target.value)}/></label>
  <button type="button" disabled={busy || !selected || reason.trim().length < 10 || !current || !!current.closedAt} onClick={() => void command(url, { expectedVersion: data.assignmentVersion, cycle: data.currentCycle, policyVersion: Number(selected), reason })}>Atribuir política ao ciclo atual</button>
  <details><summary>Publicar nova política</summary><p>Preencha somente condições aprovadas pela operação. Não há metas ou calendário predefinidos. Esta tela cadastra um expediente por dia; feriados ficam sem expediente.</p>

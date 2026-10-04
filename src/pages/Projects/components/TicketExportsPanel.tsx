@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
 import { toTicketApiError } from "./tickets-api";
@@ -210,18 +211,18 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
           </label>
           <label>
             Relatório
-            <select value={report} onChange={(e) => setReport(e.target.value)}>
+            <MaonoSelect value={report} onChange={(e) => setReport(e.target.value)}>
               <option value="all">Visão completa</option>
               <option value="incidents">Chamados com incidentes</option>
               <option value="causes">Incidentes e causas por chamado</option>
               <option value="backlog">Backlog no instante de referência</option>
               <option value="cycles">Ciclos encerrados no período</option>
               <option value="sla">SLA e cobertura</option>
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Domínio
-            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
+            <MaonoSelect value={domain} onChange={(e) => setDomain(e.target.value)}>
               <option value="">Todos</option>
               {[
                 ["map", "Mapa"],
@@ -235,11 +236,11 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
                   {n}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Natureza
-            <select value={nature} onChange={(e) => setNature(e.target.value)}>
+            <MaonoSelect value={nature} onChange={(e) => setNature(e.target.value)}>
               <option value="">Todas</option>
               {[
                 ["question_request", "Dúvida/solicitação"],
@@ -253,7 +254,7 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
                   {n}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <button type="submit" disabled={busy || !!pending}>
             Solicitar exportação

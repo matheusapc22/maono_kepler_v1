@@ -1,3 +1,4 @@
+import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -82,7 +83,14 @@ const preserved = {
 };
 for (const [path, hash] of Object.entries(preserved)) {
   test(`card/switcher revision preserves ${path}`, () => {
-    let source = restoreTicketVisualExtraction(path, read(path));
+    let source = restoreTicketVisualExtraction(path, restoreMaonoSelect(read(path)));
+    // The later Roadmap workspace redesign adds only the existing home callback.
+    // Reverse exactly that prop in this scope guard; all controller bytes stay frozen.
+    if (path === 'src/pages/Projects.tsx') {
+      const roadmapWithHome = '<RoadmapSection\n          user={accessControlUser}\n          organizationId={organizationId}\n          organizationName={organizationName}\n          onHome={onHome}\n';
+      assert.equal(source.split(roadmapWithHome).length - 1, 1);
+      source = source.replace(roadmapWithHome, roadmapWithHome.replace('          onHome={onHome}\n', ''));
+    }
     // Later explicitly approved tweaks: creation-label/inset and removal of
     // the footer strip. Normalize only those exact changes; retain the older
     // card/switcher scope guard for every other byte.

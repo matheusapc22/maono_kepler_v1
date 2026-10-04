@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import OrganizationPermissionManager from "../../../components/access/OrganizationPermissionManager";
@@ -599,7 +600,7 @@ export default function AdminUserManager({
         </label>
         <label>
           Organização
-          <select
+          <MaonoSelect
             value={organizationFilter}
             onChange={(event) => setOrganizationFilter(event.target.value)}
           >
@@ -609,11 +610,11 @@ export default function AdminUserManager({
                 {organization.name}
               </option>
             ))}
-          </select>
+          </MaonoSelect>
         </label>
         <label>
           Perfil
-          <select
+          <MaonoSelect
             value={profileFilter}
             onChange={(event) => setProfileFilter(event.target.value)}
           >
@@ -623,18 +624,18 @@ export default function AdminUserManager({
             <option value="owner">Owner</option>
             <option value="editor">Editor</option>
             <option value="viewer">Viewer</option>
-          </select>
+          </MaonoSelect>
         </label>
         <label>
           Status
-          <select
+          <MaonoSelect
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
             <option value="all">Todos</option>
             <option value="active">Ativos</option>
             <option value="inactive">Inativos</option>
-          </select>
+          </MaonoSelect>
         </label>
         <span className="admin-user-filter-count">
           {filteredUsers.length} de {users.length} usuário(s)
@@ -795,7 +796,7 @@ export default function AdminUserManager({
                       </label>
                       <label>
                         Perfil nativo da plataforma
-                        <select
+                        <MaonoSelect
                           value={draft.role}
                           disabled={role(selected.role) === "super_admin"}
                           onChange={(event) =>
@@ -809,11 +810,11 @@ export default function AdminUserManager({
                           <option value="editor">Editor</option>
                           <option value="client">Owner</option>
                           <option value="admin">Admin</option>
-                        </select>
+                        </MaonoSelect>
                       </label>
                       <label>
                         Situação da conta
-                        <select
+                        <MaonoSelect
                           value={draft.active ? "active" : "inactive"}
                           disabled={selected.id === currentUserId}
                           onChange={(event) =>
@@ -825,7 +826,7 @@ export default function AdminUserManager({
                         >
                           <option value="active">Ativo</option>
                           <option value="inactive">Inativo</option>
-                        </select>
+                        </MaonoSelect>
                       </label>
                       <label>
                         Projetos vinculados
@@ -919,7 +920,7 @@ export default function AdminUserManager({
                         </label>
                         <label className="admin-membership-level">
                           Perfil na organização
-                          <select
+                          <MaonoSelect
                             value={organization.accessLevel}
                             disabled={!organization.assigned || busy}
                             onChange={(event) =>
@@ -933,7 +934,7 @@ export default function AdminUserManager({
                             <option value="viewer">Viewer / Consulta</option>
                             <option value="editor">Editor / Colaborador</option>
                             <option value="owner">Owner / Responsável</option>
-                          </select>
+                          </MaonoSelect>
                         </label>
                         <span
                           className={
@@ -1311,12 +1312,12 @@ export default function AdminUserManager({
                 </label>
                 <label>
                   Perfil
-                  <select name="role">
+                  <MaonoSelect name="role">
                     <option value="viewer">Viewer</option>
                     <option value="editor">Editor</option>
                     <option value="client">Cliente/Owner</option>
                     <option value="admin">Admin</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <label>
                   Senha inicial

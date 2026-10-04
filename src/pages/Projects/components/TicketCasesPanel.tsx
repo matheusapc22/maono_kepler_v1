@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
 import { toTicketApiError } from "./tickets-api";
@@ -279,7 +280,7 @@ function Content({ organizationId, canManage }: Props) {
         </label>
         <label>
           Tipo
-          <select
+          <MaonoSelect
             disabled={busy || !!pending}
             value={kind}
             onChange={(e) => {
@@ -290,7 +291,7 @@ function Content({ organizationId, canManage }: Props) {
             <option value="">Todos</option>
             <option value="incident">Incidentes</option>
             <option value="problem">Problemas</option>
-          </select>
+          </MaonoSelect>
         </label>
         <button disabled={busy} type="button" onClick={() => void load()}>
           Atualizar
@@ -315,13 +316,13 @@ function Content({ organizationId, canManage }: Props) {
           </label>
           <label>
             Natureza
-            <select
+            <MaonoSelect
               value={newKind}
               onChange={(e) => setNewKind(e.target.value)}
             >
               <option value="incident">Incidente</option>
               <option value="problem">Problema recorrente</option>
-            </select>
+            </MaonoSelect>
           </label>
           <button disabled={busy || !!pending} type="submit">
             Criar registro
@@ -400,7 +401,7 @@ function Content({ organizationId, canManage }: Props) {
               ))}
               <label>
                 Situação da causa
-                <select
+                <MaonoSelect
                   value={fields.causeStatus || "unknown"}
                   onChange={(e) =>
                     setFields({
@@ -415,7 +416,7 @@ function Content({ organizationId, canManage }: Props) {
                   <option value="unknown">Desconhecida</option>
                   <option value="hypothesis">Hipótese</option>
                   <option value="confirmed">Confirmada com evidência</option>
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Coordenador (ID de usuário)
@@ -429,7 +430,7 @@ function Content({ organizationId, canManage }: Props) {
               </label>
               <label>
                 Próximo estado
-                <select
+                <MaonoSelect
                   value={nextState}
                   onChange={(e) => setNextState(e.target.value)}
                 >
@@ -441,7 +442,7 @@ function Content({ organizationId, canManage }: Props) {
                       {labels[s]}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Motivo da revisão/transição
@@ -475,13 +476,13 @@ function Content({ organizationId, canManage }: Props) {
                 </p>
                 <label>
                   Visibilidade
-                  <select
+                  <MaonoSelect
                     value={visibility}
                     onChange={(e) => setVisibility(e.target.value)}
                   >
                     <option value="private">Privado</option>
                     <option value="organization">Organização</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <label>
                   Substituir membros adicionais (IDs separados por vírgula)
@@ -509,14 +510,14 @@ function Content({ organizationId, canManage }: Props) {
                 <h4>Adicionar relação</h4>
                 <label>
                   Alvo
-                  <select
+                  <MaonoSelect
                     value={targetType}
                     onChange={(e) => setTargetType(e.target.value)}
                   >
                     <option value="ticket">Chamado</option>
                     <option value="case">Incidente/problema</option>
                     <option value="change">Registro de mudança (CR)</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <label>
                   ID do alvo
@@ -528,7 +529,7 @@ function Content({ organizationId, canManage }: Props) {
                 </label>
                 <label>
                   Relação
-                  <select
+                  <MaonoSelect
                     value={relation}
                     onChange={(e) => setRelation(e.target.value)}
                   >
@@ -537,7 +538,7 @@ function Content({ organizationId, canManage }: Props) {
                       Possível duplicidade
                     </option>
                     <option value="implements">Implementa</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <button disabled={busy || !!pending}>Vincular</button>
               </form>
@@ -619,7 +620,7 @@ function Content({ organizationId, canManage }: Props) {
               </p>
               <label>
                 Chamado
-                <select
+                <MaonoSelect
                   required
                   value={messageTicket}
                   onChange={(e) => setMessageTicket(e.target.value)}
@@ -632,17 +633,17 @@ function Content({ organizationId, canManage }: Props) {
                         {l.target.id}
                       </option>
                     ))}
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Audiência da mensagem
-                <select
+                <MaonoSelect
                   value={messageKind}
                   onChange={(e) => setMessageKind(e.target.value)}
                 >
                   <option value="response">Resposta ao chamado</option>
                   <option value="internal">Nota interna</option>
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Mensagem revisada

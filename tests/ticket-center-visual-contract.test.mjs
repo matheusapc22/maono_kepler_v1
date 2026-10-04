@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import postcss from 'postcss';
+import { restoreMaonoSelect } from './helpers/maono-select-preservation.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const toolbar = read('src/pages/Projects/components/TicketsToolbar.tsx');
@@ -13,6 +14,8 @@ const pagination = read('src/pages/Projects/components/DocumentsPagination.tsx')
 test('flat page heading has a working neutral breadcrumb and no decorative hero content', () => {
   for (const removed of ['HeadsetIcon', 'ticket-center-headset', 'ticket-center-eyebrow', 'Atendimento operacional', 'Consulte, priorize', 'ticket-filter-help']) assert.ok(!toolbar.includes(removed), removed);
   for (const text of ['<h1>Central de Chamados</h1>', 'aria-label="Caminho da página"', 'onHome()', 'to="/projects"', 'Novo chamado', '<option value="list">Lista</option>', '<option value="kanban">Kanban</option>', '<option value="calendar">Calendário</option>']) assert.ok(toolbar.includes(text), text);
+  assert.equal((toolbar.match(/<MaonoSelect/g) || []).length, 5, 'view and all four filters use the same branded selector');
+  assert.ok(!toolbar.includes('<select'));
   assert.match(css, /ticket-center-breadcrumb a \{ color: inherit/);
 });
 test('filters retain canonical field values, one period legend and semantic controls', () => {
@@ -66,7 +69,13 @@ function Previous(props) {
 export function compare(props) {
   return [renderToStaticMarkup(<Previous {...props} />), renderToStaticMarkup(<DocumentsPagination status={props.refreshing || props.pendingNext ? 'Atualizando documentos.' : 'Exibindo ' + props.visibleFiles.length + '/' + props.pagination.total + '.'} page={props.safePageIndex + 1} pageSize={props.pageSize} canGoPrevious={props.canGoPrevious} canGoNext={props.canGoNext} disabled={props.refreshing || props.loadingMore || props.pendingNext} onPageSize={() => {}} onPrevious={() => {}} onNext={() => {}} />)];
 }`;
-  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: new URL('../', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', write: false, loader: { '.css': 'empty' }, external: ['react', 'react-dom', 'react-dom/server', 'react/jsx-runtime'] });
+  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: new URL('../', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', write: false, loader: { '.css': 'empty' }, external: ['react', 'react-dom', 'react-dom/server', 'react/jsx-runtime'],
+    // Ignore only the separately browser-tested, authorized branded select
+    // wrapper. All footer values, handlers and other markup stay byte-exact.
+    plugins: [{ name: 'preserve-footer-except-branded-select', setup(builder) {
+      builder.onLoad({ filter: /\/DocumentsPagination\.tsx$/ }, ({ path }) => ({ contents: restoreMaonoSelect(readFileSync(path, 'utf8')), loader: 'tsx' }));
+    } }],
+  });
   // A local temporary module resolves the same installed React version as the app.
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');

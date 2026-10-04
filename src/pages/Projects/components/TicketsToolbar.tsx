@@ -5,6 +5,7 @@ import type {
 } from "./ticket-types";
 import { Link } from "react-router";
 import { DocumentIcon } from "./DocumentsUi";
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 
 type TicketsToolbarProps = {
   organizationId: number | string;
@@ -77,7 +78,7 @@ export default function TicketsToolbar({
 
           <label className="ticket-view-control">
             <span className="mm-sr-only">Visualização ativa</span>
-            <select
+            <MaonoSelect
               value={viewMode}
               aria-label="Visualização dos chamados"
               onChange={(event) =>
@@ -87,7 +88,7 @@ export default function TicketsToolbar({
               <option value="list">Lista</option>
               <option value="kanban">Kanban</option>
               <option value="calendar">Calendário</option>
-            </select>
+            </MaonoSelect>
           </label>
         </div>
       </header>
@@ -136,7 +137,7 @@ export default function TicketsToolbar({
 
           <label>
             <span className="ticket-filter-label">Situação</span>
-            <select
+            <MaonoSelect
               value={filters.status}
               onChange={(event) =>
                 updateFilter(
@@ -151,12 +152,12 @@ export default function TicketsToolbar({
               <option value="in_progress">Em andamento</option>
               <option value="in_review">Em revisão</option>
               <option value="closed">Concluído</option>
-            </select>
+            </MaonoSelect>
           </label>
 
           <label>
             <span className="ticket-filter-label">Prioridade</span>
-            <select
+            <MaonoSelect
               value={filters.priority}
               onChange={(event) =>
                 updateFilter(
@@ -169,12 +170,12 @@ export default function TicketsToolbar({
               <option value="high">Alta</option>
               <option value="normal">Normal</option>
               <option value="low">Baixa</option>
-            </select>
+            </MaonoSelect>
           </label>
 
           <label>
             <span className="ticket-filter-label">Atendente</span>
-            <select
+            <MaonoSelect
               value={filters.assigneeId}
               onChange={(event) =>
                 updateFilter("assigneeId", event.target.value)
@@ -187,7 +188,7 @@ export default function TicketsToolbar({
                   {assigneeLabel(assignee)}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
 
         </div>
@@ -217,7 +218,7 @@ export default function TicketsToolbar({
 
           <label>
             <span className="ticket-filter-label">Ordenar por</span>
-            <select
+            <MaonoSelect
               value={filters.sort}
               onChange={(event) =>
                 updateFilter(
@@ -230,7 +231,7 @@ export default function TicketsToolbar({
               <option value="updated_asc">Atualizados há mais tempo</option>
               <option value="due_asc">Prazo mais próximo</option>
               <option value="priority_desc">Maior prioridade</option>
-            </select>
+            </MaonoSelect>
           </label>
         </div>
       </section>

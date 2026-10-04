@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { ticketQueueAge } from "./ticket-navigation";
 import {
   formatTicketDate,
@@ -15,7 +16,6 @@ type TicketKanbanViewProps = {
   tickets: Ticket[];
   columnPages?: Record<string, { tickets: Ticket[]; total: number; hasMore: boolean; loading: boolean }>;
   totals: Record<TicketStatus, number>;
-  policies: import('./ticket-types').TicketQueuePolicy[];
   hasMore: boolean;
   loading: boolean;
   onLoadMore: (column: string) => void;
@@ -58,7 +58,7 @@ const COLUMNS: Array<{
 ];
 
 export default function TicketKanbanView({
-  tickets, columnPages, totals, policies, hasMore, loading, onLoadMore,
+  tickets, columnPages, totals, hasMore, loading, onLoadMore,
   canManage,
   busyTicketIds,
   onOpen,
@@ -77,7 +77,6 @@ export default function TicketKanbanView({
         );
 
         const total = columnPages?.[column.id]?.total ?? column.statuses.reduce((sum, status) => sum + (totals[status] || 0), 0);
-        const policy = policies.find(item => item.queue === column.id);
         return (
           <section
             key={column.id}
@@ -92,7 +91,7 @@ export default function TicketKanbanView({
               if (!canManage) return;
               event.preventDefault();
               const ticket = ticketFromDrag(event);
-              if (ticket && !column.statuses.includes(ticket.status)) {
+              if (ticket && !busyTicketIds.has(String(ticket.id)) && !column.statuses.includes(ticket.status)) {
                 onStatusChange(ticket, column.target);
               }
             }}
@@ -104,8 +103,7 @@ export default function TicketKanbanView({
               </span>
             </header>
 
-            <p>WIP: {policy?.wipLimit ?? 'sem limite'} · {columnTickets.length < total ? 'Parcial' : 'Carregados'}</p>
-            {(columnPages?.[column.id]?.hasMore ?? hasMore) ? <button type="button" disabled={columnPages?.[column.id]?.loading ?? loading} onClick={() => onLoadMore(column.id)}>Carregar mais nesta fila</button> : null}
+            {(columnPages?.[column.id]?.hasMore ?? hasMore) ? <button type="button" disabled={loading || (columnPages?.[column.id]?.loading ?? false)} onClick={() => onLoadMore(column.id)}>Carregar mais nesta fila</button> : null}
             <div className="ticket-kanban-stack">
               {columnTickets.length === 0 ? (
                 <p className="ticket-kanban-empty">{total > 0 ? "Chamados ainda não carregados" : "Nenhum chamado acessível"}</p>
@@ -118,6 +116,7 @@ export default function TicketKanbanView({
                     <article
                       key={ticket.id}
                       className={`ticket-kanban-card priority-${ticket.priority}${overdue ? " is-overdue" : ""}`}
+                      aria-busy={busy}
                       draggable={canManage && !busy}
                       onDragStart={(event) => {
                         event.dataTransfer.setData(
@@ -182,7 +181,7 @@ export default function TicketKanbanView({
                             <span className="mm-sr-only">
                               Mover {ticket.code} para
                             </span>
-                            <select
+                            <MaonoSelect
                               value={ticket.status}
                               disabled={busy}
                               onChange={(event) =>
@@ -199,7 +198,7 @@ export default function TicketKanbanView({
                                   </option>
                                 ),
                               )}
-                            </select>
+                            </MaonoSelect>
                           </label>
                         ) : (
                           <button

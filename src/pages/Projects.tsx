@@ -875,6 +875,7 @@ function ProjectsSectionRouter({
           user={accessControlUser}
           organizationId={organizationId}
           organizationName={organizationName}
+          onHome={onHome}
         />
       );
 

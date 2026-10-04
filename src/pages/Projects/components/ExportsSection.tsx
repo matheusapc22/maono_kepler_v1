@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useMemo, useState } from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
@@ -140,24 +141,24 @@ export default function ExportsSection({
         <form className="projects-inline-form" onSubmit={handleSubmit}>
           <label>
             Tipo
-            <select
+            <MaonoSelect
               value={form.type}
               onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
             >
               <option value="projects_summary">Resumo de projetos</option>
               <option value="documents_index">Índice de documentos</option>
               <option value="tickets_summary">Resumo de chamados</option>
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Formato
-            <select
+            <MaonoSelect
               value={form.format}
               onChange={(event) => setForm((current) => ({ ...current, format: event.target.value }))}
             >
               <option value="csv">CSV</option>
               <option value="json">JSON</option>
-            </select>
+            </MaonoSelect>
           </label>
           <button type="submit" className="mm-button" disabled={creating}>
             {creating ? "Solicitando..." : "Solicitar exportação"}

@@ -1,0 +1,91 @@
+/* Roadmap composition follows Documents/Central. The timeline stays unpaginated. */
+body .roadmap-shell.roadmap-workspace {
+  width: 100%; min-width: 0; max-width: none; display: grid; gap: 16px;
+  container-type: inline-size; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px; line-height: 1.5;
+}
+body .roadmap-workspace *, body .roadmap-workspace *::before, body .roadmap-workspace *::after { box-sizing: border-box; }
+body .roadmap-workspace .mm-docs-icon { width: 18px; height: 18px; flex: 0 0 auto; }
+body .roadmap-workspace .roadmap-breadcrumb { display: flex; align-items: center; gap: 10px; color: var(--mm-text); font-size: 13px; margin: 0 0 8px; }
+body .roadmap-workspace .roadmap-breadcrumb a { color: inherit; text-decoration: none; }
+body .roadmap-workspace .roadmap-breadcrumb a:hover { text-decoration: underline; }
+body .roadmap-workspace .roadmap-breadcrumb .mm-docs-icon { width: 13px; height: 13px; color: var(--mm-muted); }
+body .roadmap-shell.roadmap-workspace .roadmap-header { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 18px; padding: 0 0 12px; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body .roadmap-workspace .roadmap-heading h1 { margin: 0; color: var(--mm-text); font-size: clamp(26px, 2vw, 32px); font-weight: 550; letter-spacing: -.025em; line-height: 1.2; }
+body .roadmap-workspace .roadmap-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; max-width: 100%; }
+body .roadmap-workspace .roadmap-header-actions > :first-child { max-width: min(360px, 100%); }
+body .roadmap-workspace .roadmap-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--maono-density-control, 40px); border-radius: 7px; box-shadow: none; white-space: nowrap; }
+body .roadmap-workspace :is(.roadmap-header, .roadmap-tools, .roadmap-content-header) select { width: 100%; min-width: 0; min-height: var(--maono-density-control, 40px); border: 1px solid var(--mm-border-strong); border-radius: 7px; padding: 8px 12px; background: var(--mm-bg-soft); color: var(--mm-text); font: inherit; color-scheme: dark; }
+body .roadmap-workspace .roadmap-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 12px 16px 16px; border: 1px solid var(--mm-border); border-radius: 10px; background: var(--mm-bg-soft); box-shadow: none; }
+body .roadmap-workspace .roadmap-filter-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding-bottom: 12px; border-bottom: 1px solid var(--mm-border); }
+body .roadmap-workspace .roadmap-filter-header strong { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 650; }
+body .roadmap-workspace .roadmap-clear { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 7px 10px; border-radius: 7px; background: transparent; font-size: 12px; font-weight: 550; }
+body .roadmap-workspace .roadmap-filters { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)); align-items: end; gap: 14px; }
+body .roadmap-workspace .roadmap-filters label { display: grid; min-width: 0; gap: 7px; color: var(--mm-text-soft); font-size: 12px; font-weight: 600; }
+body .roadmap-workspace .roadmap-filters label > :last-child { font-size: 14px; font-weight: 400; }
+body .roadmap-workspace .roadmap-search { display: flex; align-items: center; min-width: 0; min-height: var(--maono-density-control, 40px); padding-left: 12px; border: 1px solid var(--mm-border-strong); border-radius: 7px; background: var(--mm-bg-soft); }
+body .roadmap-workspace .roadmap-search input { width: 100%; min-width: 0; flex: 1; padding: 8px 11px; border: 0; box-shadow: none; background: transparent; font: inherit; }
+body .roadmap-workspace .roadmap-search .mm-docs-icon { color: var(--mm-muted); }
+body .roadmap-workspace .roadmap-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+body .roadmap-shell.roadmap-workspace .roadmap-metrics article { min-height: 76px; padding: 12px 14px; gap: 12px; border-radius: 10px; box-shadow: none; }
+body .roadmap-workspace .roadmap-metrics small { font-size: 12px; font-weight: 500; color: var(--mm-text-soft); }
+body .roadmap-workspace .roadmap-metrics strong { font-size: 25px; font-weight: 550; line-height: 1.15; }
+body .roadmap-workspace .roadmap-metrics article:last-child strong { font-size: 16px; white-space: normal; }
+body .roadmap-workspace .roadmap-content { display: block; min-width: 0; border-radius: 10px; background: var(--mm-bg-soft); box-shadow: none; }
+body .roadmap-workspace .roadmap-content-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; min-height: 64px; padding: 12px 16px; border-bottom: 1px solid var(--mm-border); }
+body .roadmap-workspace .roadmap-content-header h2 { margin: 0; font-size: 15px; font-weight: 600; }
+body .roadmap-workspace .roadmap-view-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+body .roadmap-workspace .roadmap-view-tools > :first-child { width: 112px; }
+body .roadmap-workspace .roadmap-view-switch { display: inline-flex; padding: 3px; gap: 3px; border: 1px solid var(--mm-border-strong); border-radius: 7px; }
+body .roadmap-workspace .roadmap-view-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 5px 10px; border: 1px solid transparent; border-radius: 5px; color: var(--mm-text-soft); background: transparent; font: inherit; font-size: 13px; font-weight: 550; cursor: pointer; }
+body .roadmap-workspace .roadmap-view-switch button.active { color: var(--maono-accent-text); border-color: var(--maono-accent-border); background: var(--maono-accent-surface); }
+/* A single two-axis scroller keeps the real Gantt/list and footer independent. */
+body .roadmap-workspace .roadmap-scroll { min-height: 280px; max-height: min(58vh, 640px); max-width: 100%; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+body .roadmap-workspace :is(.roadmap-gantt, .roadmap-list) { overflow: visible; }
+body .roadmap-workspace .roadmap-gantt-head { background: var(--mm-bg-soft); }
+body .roadmap-workspace .roadmap-gantt-head > strong { font-size: 12px; font-weight: 550; }
+body .roadmap-workspace .roadmap-gantt-head > div { overflow: hidden; }
+body .roadmap-workspace .roadmap-gantt-head > div span:first-child { transform: none; }
+body .roadmap-workspace .roadmap-gantt-head > div span:last-child { transform: translateX(-100%); }
+body .roadmap-workspace .roadmap-gantt-row { font-size: 13px; }
+body .roadmap-workspace .roadmap-gantt-row b { font-weight: 550; }
+body .roadmap-workspace .roadmap-gantt-row small { font-size: 12px; }
+body .roadmap-workspace .roadmap-list table { border-collapse: separate; border-spacing: 0; }
+body .roadmap-workspace .roadmap-list th { position: sticky; top: 0; z-index: 4; background: var(--mm-bg-soft); font-size: 12px; font-weight: 550; }
+body .roadmap-workspace .roadmap-list td { font-size: 13px; }
+body .roadmap-workspace .roadmap-list td strong { font-weight: 550; }
+body .roadmap-workspace .roadmap-status { font-weight: 550; }
+body .roadmap-workspace .roadmap-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; min-height: 60px; padding: 16px 20px; border-top: 1px solid var(--mm-border); color: var(--mm-text-soft); font-size: 12px; }
+body .roadmap-workspace .roadmap-footer span { min-width: 0; overflow-wrap: anywhere; }
+body .roadmap-workspace .roadmap-empty { min-height: 280px; }
+body .roadmap-workspace .roadmap-error { align-items: center; flex-wrap: wrap; }
+body .roadmap-workspace .roadmap-error button { min-height: var(--maono-density-control, 40px); border: 1px solid var(--mm-border-strong); border-radius: 7px; padding: 7px 12px; background: var(--mm-bg-soft); color: var(--mm-text); font: inherit; cursor: pointer; }
+body .roadmap-workspace :is(button, select, input):disabled { opacity: .5; cursor: not-allowed; }
+body .roadmap-workspace :is(a, button, select, input, textarea, [tabindex]):focus-visible { outline: 2px solid var(--maono-focus-ring); outline-offset: 3px; }
+body .roadmap-workspace .roadmap-scroll:focus-visible { outline-offset: -3px; }
+body .roadmap-workspace :is(.roadmap-gantt-row, .roadmap-list tr):focus-visible { outline-offset: -2px; }
+@container (max-width: 1000px) {
+  body .roadmap-workspace .roadmap-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body .roadmap-workspace .roadmap-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (max-width: 560px) {
+  body .roadmap-workspace .roadmap-breadcrumb { margin-bottom: 0; }
+  body .roadmap-workspace .roadmap-header-actions { width: 100%; display: flex; }
+  body .roadmap-workspace .roadmap-header-actions > :first-child { max-width: 100%; flex: 1 1 180px; }
+  body .roadmap-workspace .roadmap-filters { grid-template-columns: minmax(0, 1fr); }
+  body .roadmap-workspace .roadmap-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body .roadmap-shell.roadmap-workspace .roadmap-metrics article { padding: 10px; gap: 8px; }
+  body .roadmap-workspace .roadmap-metrics article > span { width: 32px; height: 32px; }
+  body .roadmap-workspace .roadmap-metrics strong { font-size: 22px; }
+  body .roadmap-workspace .roadmap-content-header { padding: 12px; }
+  body .roadmap-workspace .roadmap-view-tools { width: 100%; justify-content: space-between; }
+  body .roadmap-workspace .roadmap-footer { padding-inline: 12px; }
+  body .roadmap-workspace .roadmap-skeleton { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (pointer: coarse), (max-width: 760px) {
+  body .roadmap-workspace :is(.roadmap-clear, .roadmap-view-switch button) { min-height: 44px; }
+}
+
+/* Keep native date pickers and progress controls aligned with the dark/gold workspace. */
+body .roadmap-workspace .roadmap-drawer { color-scheme: dark; }
+body .roadmap-workspace .roadmap-drawer :is(input[type="range"], input[type="checkbox"]) { accent-color: var(--maono-accent-bright); }

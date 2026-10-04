@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../../components/selection/MaonoSelect";
 import {
   useEffect,
   useMemo,
@@ -229,7 +230,7 @@ export default function IsochroneDialog({
 
           <label>
             <span>Modalidade</span>
-            <select
+            <MaonoSelect
               value={mode}
               disabled={busy}
               onChange={(event) =>
@@ -242,7 +243,7 @@ export default function IsochroneDialog({
               <option value="drive">Carro</option>
               <option value="bicycle">Bicicleta</option>
               <option value="walk">Caminhada</option>
-            </select>
+            </MaonoSelect>
           </label>
 
           <fieldset disabled={busy}>

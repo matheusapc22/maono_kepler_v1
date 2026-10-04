@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../../components/selection/MaonoSelect";
 import {
   useEffect,
   useMemo,
@@ -244,7 +245,7 @@ export default function BufferDialog({
 
           <label>
             <span>Unidade</span>
-            <select
+            <MaonoSelect
               value={unit}
               disabled={busy}
               onChange={(event) =>
@@ -254,7 +255,7 @@ export default function BufferDialog({
             >
               <option value="m">Metros (m)</option>
               <option value="km">Quilômetros (km)</option>
-            </select>
+            </MaonoSelect>
           </label>
 
           <fieldset disabled={busy}>

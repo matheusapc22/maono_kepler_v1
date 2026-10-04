@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../../components/selection/MaonoSelect";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useKeplerState } from "../../hooks/useKeplerState";
@@ -153,7 +154,7 @@ export default function FilterPanel({
           <div id={`${groupIdPrefix}-add-filter`} className="maono-filter-add-flow">
             <label className="maono-style-field">
               <span>1. Base de dados</span>
-              <select
+              <MaonoSelect
                 value={addDatasetId}
                 onChange={(event) => {
                   const nextId = event.target.value;
@@ -169,11 +170,11 @@ export default function FilterPanel({
                     {dataset.label}
                   </option>
                 ))}
-              </select>
+              </MaonoSelect>
             </label>
             <label className="maono-style-field">
               <span>2. Propriedade</span>
-              <select
+              <MaonoSelect
                 value={addFieldName}
                 onChange={(event) => setAddFieldName(event.target.value)}
               >
@@ -182,7 +183,7 @@ export default function FilterPanel({
                     {field.name}
                   </option>
                 ))}
-              </select>
+              </MaonoSelect>
             </label>
             <button
               type="button"

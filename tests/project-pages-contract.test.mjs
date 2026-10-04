@@ -1,3 +1,4 @@
+import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { restoreApprovedDocumentHelperRemoval } from "./helpers/document-helper-preservation.mjs";
 import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
 import test from 'node:test';
@@ -63,7 +64,7 @@ function restoreApprovedDocumentTitleDelta(path, source) {
 }
 for (const [path, expected] of Object.entries(preserved)) {
   test(`preserves original source: ${path}`, () => {
-    assert.equal(sha256(restoreApprovedDocumentTitleDelta(path, restoreTicketVisualExtraction(path, restoreApprovedDocumentHelperRemoval(path, read(path))))), expected, 'only the approved Documents title/helper cleanup and shared footer extraction may differ; unrelated presentation, preview, metadata and endpoints stay unchanged');
+    assert.equal(sha256(restoreApprovedDocumentTitleDelta(path, restoreTicketVisualExtraction(path, restoreApprovedDocumentHelperRemoval(path, restoreMaonoSelect(read(path)))))), expected, 'only the approved Documents title/helper cleanup and shared footer extraction may differ; unrelated presentation, preview, metadata and endpoints stay unchanged');
     if (hasOriginal) {
       const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
       assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');

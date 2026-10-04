@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import {
   useCallback,
   useEffect,
@@ -751,7 +752,7 @@ export default function PointFromPinWorkflow() {
               </label>
               <label>
                 <span>Camada *</span>
-                <select
+                <MaonoSelect
                   value={targetKey}
                   onChange={(event) => setTargetKey(event.target.value)}
                 >
@@ -763,7 +764,7 @@ export default function PointFromPinWorkflow() {
                       {target.createNew ? "+ Nova camada de pontos" : target.label}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 <span>Descrição</span>

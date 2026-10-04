@@ -25,6 +25,7 @@ import NewTicketPopover from "./NewTicketPopover";
 import TicketCalendarView from "./TicketCalendarView";
 import TicketDetailDrawer from "./TicketDetailDrawer";
 import TicketKanbanBoard from "./TicketKanbanBoard";
+import { changeTicketFacets, matchesTicketFilters, ticketQueryKey, type TicketChange } from "./ticket-live-state";
 import TicketListView from "./TicketListView";
 import TicketsToolbar from "./TicketsToolbar";
 import TicketNotifications from "./TicketNotifications";
@@ -114,6 +115,7 @@ function TicketsSectionContent({
 }: TicketsSectionProps) {
   const navigation = useRef(readTicketNavigation(window.location.href, String(organizationId ?? ''))).current;
   const snapshotRef = useRef<string | null>(null);
+  const snapshotQueryKeyRef = useRef<string | null>(null);
   const [pageSize, setPageSize] = useState(10);
   const [exportOpenSignal, setExportOpenSignal] = useState(0);
   const [exportAvailable, setExportAvailable] = useState(false);
@@ -145,6 +147,7 @@ function TicketsSectionContent({
   const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<TicketApiError | null>(null);
+  const [queryAccessRevoked, setQueryAccessRevoked] = useState(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<
     number | string | null
@@ -156,6 +159,16 @@ function TicketsSectionContent({
   const [busyTicketIds, setBusyTicketIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [ticketChanges, setTicketChanges] = useState<TicketChange[]>([]);
+  const [boardRefresh, setBoardRefresh] = useState(0);
+  const mutationLocks = useRef(new Set<string>());
+  const mutationRevision = useRef(0);
+  const mounted = useRef(true);
+  const liveFiltersRef = useRef(debouncedFilters); liveFiltersRef.current = debouncedFilters;
+  const knownTicketsRef = useRef(new Map<string, Ticket>());
+  const queryKeyRef = useRef(ticketQueryKey(debouncedFilters));
+  queryKeyRef.current = ticketQueryKey(debouncedFilters);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [toast, setToast] = useState<string | null>(null);
 
   const listRequestSequenceRef = useRef(0);
@@ -192,7 +205,7 @@ function TicketsSectionContent({
 
   useEffect(() => {
     setViewMode(new URL(window.location.href).searchParams.get("cc_org") === String(organizationId) ? navigation.view : storedViewMode(organizationId));
-  }, [organizationId]);
+  }, [organizationId, navigation.view]);
 
   useEffect(() => {
     if (!organizationId || typeof window === "undefined") return;
@@ -213,8 +226,9 @@ function TicketsSectionContent({
   const loadTicketsPage = useCallback(
     async (
       targetPage = 1,
-      options: { append?: boolean; background?: boolean; reuseSnapshot?: boolean } = {},
+      options: { append?: boolean; background?: boolean; reuseSnapshot?: boolean; preserveError?: boolean } = {},
     ) => {
+      if (mutationLocks.current.size) return;
       if (!organizationId || !canView) {
         setTickets([]);
         return;
@@ -222,6 +236,7 @@ function TicketsSectionContent({
 
       listRequestSequenceRef.current += 1;
       const requestSequence = listRequestSequenceRef.current;
+      const requestRevision = mutationRevision.current;
       const requestOrganizationKey = String(organizationId);
       listControllerRef.current?.abort();
       const controller = new AbortController();
@@ -232,7 +247,7 @@ function TicketsSectionContent({
       } else {
         setInitialLoading(true);
       }
-      setError(null);
+      if (!options.preserveError) setError(null);
 
       try {
         const response = await listTickets(
@@ -248,7 +263,7 @@ function TicketsSectionContent({
         );
 
         if (
-          requestSequence !== listRequestSequenceRef.current ||
+          requestSequence !== listRequestSequenceRef.current || requestRevision !== mutationRevision.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -259,16 +274,19 @@ function TicketsSectionContent({
           const clamped = await listTickets(organizationId, debouncedFilters, lastPage, controller.signal, {
             limit: viewModeRef.current === "list" ? pageSize : 50, includeUndated: true,
           });
-          if (requestSequence !== listRequestSequenceRef.current || requestOrganizationKey !== organizationKeyRef.current) return;
+          if (requestSequence !== listRequestSequenceRef.current || requestRevision !== mutationRevision.current || !mounted.current || requestOrganizationKey !== organizationKeyRef.current) return;
           Object.assign(response, clamped);
         }
 
+        setQueryAccessRevoked(false);
+        for (const ticket of response.tickets) knownTicketsRef.current.set(String(ticket.id), ticket);
         setTickets((current) =>
           options.append
             ? mergeTickets(current, response.tickets)
             : response.tickets,
         );
         snapshotRef.current = response.pagination.snapshot || null;
+        snapshotQueryKeyRef.current = ticketQueryKey(debouncedFilters);
         setFlowEnabled(response.flowEnabled === true);
         setQueuePolicies(response.queuePolicies || []);
         setTriageEnabled(response.triageEnabled === true);
@@ -287,7 +305,7 @@ function TicketsSectionContent({
           return;
         }
         if (
-          requestSequence !== listRequestSequenceRef.current ||
+          requestSequence !== listRequestSequenceRef.current || requestRevision !== mutationRevision.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -295,6 +313,9 @@ function TicketsSectionContent({
 
         const listFailure = toTicketApiError(requestError, "Não foi possível carregar os chamados.");
         if (listFailure.status === 403 || listFailure.status === 404) {
+          setQueryAccessRevoked(true);
+          setDetail(null); setSelectedTicketId(null); setSuggestedStatus(null);
+          knownTicketsRef.current.clear();
           setTickets([]); setFacets(EMPTY_FACETS); setPagination(EMPTY_PAGINATION);
           snapshotRef.current = null;
         }
@@ -333,6 +354,47 @@ function TicketsSectionContent({
     if (viewMode !== 'kanban') void loadTicketsPage(1, { background: true, reuseSnapshot: true });
   }, [viewMode, loadTicketsPage]);
 
+  const reloadListRef = useRef(loadTicketsPage);
+  reloadListRef.current = loadTicketsPage;
+
+  const recordTicketChange = useCallback((previous: Ticket | null, ticket: Ticket | null, queryKey = queryKeyRef.current, retain = true) => {
+    if (!mounted.current) return;
+    const revision = ++mutationRevision.current;
+    setTicketChanges(current => [...current, { revision, queryKey, previous, ticket, retain }]);
+    if (ticket) knownTicketsRef.current.set(String(ticket.id), ticket);
+    else if (previous) knownTicketsRef.current.delete(String(previous.id));
+    if (queryKey !== queryKeyRef.current) return;
+    const id = String((ticket || previous)!.id);
+    setTickets(current => {
+      const without = current.filter(item => String(item.id) !== id);
+      return ticket && matchesTicketFilters(ticket, liveFiltersRef.current) ? replaceTicket(without, ticket) : without;
+    });
+    setFacets(current => changeTicketFacets(current, previous, ticket, liveFiltersRef.current, Boolean(snapshotRef.current)));
+  }, []);
+
+  function lockTicket(ticketId: number | string) {
+    const id = String(ticketId);
+    if (mutationLocks.current.has(id)) return false;
+    mutationLocks.current.add(id);
+    setBusyTicketIds(new Set(mutationLocks.current));
+    listRequestSequenceRef.current += 1;
+    listControllerRef.current?.abort();
+    setRefreshing(false);
+    if (selectedTicketKeyRef.current === id) {
+      detailRequestSequenceRef.current += 1;
+      detailControllerRef.current?.abort();
+      setDetailLoading(false);
+    }
+    return true;
+  }
+
+  function unlockTicket(ticketId: number | string) {
+    mutationLocks.current.delete(String(ticketId));
+    if (!mounted.current) return;
+    setBusyTicketIds(new Set(mutationLocks.current));
+    if (!mutationLocks.current.size) void reloadListRef.current(1, { background: true, preserveError: true });
+  }
+
   const loadDetail = useCallback(
     async (ticketId: number | string) => {
       if (!organizationId) return;
@@ -355,13 +417,19 @@ function TicketsSectionContent({
         );
 
         if (
-          requestSequence !== detailRequestSequenceRef.current ||
+          requestSequence !== detailRequestSequenceRef.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
         }
 
         setDetail(response);
+        const known = knownTicketsRef.current.get(String(ticketId));
+        if (!mutationLocks.current.has(String(ticketId)) && known && JSON.stringify(known) !== JSON.stringify(response.ticket)) {
+          recordTicketChange(known, response.ticket);
+          void reloadListRef.current(1, { background: true, preserveError: true });
+        }
+        knownTicketsRef.current.set(String(ticketId), response.ticket);
         setLifecycleEnabled(response.lifecycleEnabled === true);
         setAttachmentLimits(
           response.attachmentLimits || DEFAULT_TICKET_ATTACHMENT_LIMITS,
@@ -374,7 +442,7 @@ function TicketsSectionContent({
           return;
         }
         if (
-          requestSequence !== detailRequestSequenceRef.current ||
+          requestSequence !== detailRequestSequenceRef.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -385,9 +453,11 @@ function TicketsSectionContent({
           "Não foi possível carregar o chamado.",
         );
         if (detailFailure.status === 404 || detailFailure.status === 403) {
-          setTickets((current) =>
-            current.filter((ticket) => String(ticket.id) !== String(ticketId)),
-          );
+          const removed = knownTicketsRef.current.get(String(ticketId));
+          if (removed) {
+            recordTicketChange(removed, null);
+            void reloadListRef.current(1, { background: true, preserveError: true });
+          }
           setDetail(null);
           setSelectedTicketId(null);
           setSuggestedStatus(null);
@@ -403,11 +473,12 @@ function TicketsSectionContent({
         }
       }
     },
-    [organizationId],
+    [organizationId, recordTicketChange],
   );
 
   const openTicket = useCallback(
     (ticket: Ticket) => {
+      knownTicketsRef.current.set(String(ticket.id), ticket);
       setSelectedTicketId(ticket.id);
       setSuggestedStatus(null);
       setDetail(null);
@@ -430,89 +501,64 @@ function TicketsSectionContent({
   }, []);
 
   async function changeStatus(ticket: Ticket, status: TicketStatus) {
-    if (!organizationId || !canManage || ticket.status === status) return;
+    if (!organizationId || !canManage || ticket.status === status || mutationLocks.current.has(String(ticket.id))) return;
     if (lifecycleEnabled) {
       openTicket(ticket);
       setSuggestedStatus(status);
       setToast("Complete os campos e confirme a mudança no detalhe do chamado.");
       return;
     }
-
-    const previous = ticket;
-    const ticketKey = String(ticket.id);
-    const requestOrganizationKey = String(organizationId);
-    setBusyTicketIds((current) => new Set(current).add(ticketKey));
-    setTickets((current) =>
-      current.map((item) =>
-        String(item.id) === ticketKey ? { ...item, status } : item,
-      ),
-    );
+    if (!lockTicket(ticket.id)) return;
+    const queryKey = queryKeyRef.current;
+    const optimistic = { ...ticket, status };
+    recordTicketChange(ticket, optimistic, queryKey);
     setError(null);
-
     try {
-      const updated = await updateTicket(
-        organizationId,
-        ticket.id,
-        { status },
-        undefined,
-        { etag: ticket.etag },
-      );
-      if (requestOrganizationKey !== organizationKeyRef.current) return;
-      setTickets((current) => replaceTicket(current, updated));
-      if (String(selectedTicketId) === ticketKey) {
-        void loadDetail(ticket.id);
-      }
+      const updated = await updateTicket(organizationId, ticket.id, { status }, undefined, { etag: ticket.etag });
+      if (!mounted.current) return;
+      recordTicketChange(optimistic, updated, queryKey);
+      if (String(ticket.id) === selectedTicketKeyRef.current) void loadDetail(ticket.id);
     } catch (requestError) {
-      if (requestOrganizationKey !== organizationKeyRef.current) return;
-      setTickets((current) => replaceTicket(current, previous));
+      if (!mounted.current) return;
       const statusError = toTicketApiError(requestError, "Não foi possível alterar a situação.");
-      setError(statusError);
-      if (statusError.status === 428 || statusError.status === 412) void loadTicketsPage(pagination.page, { background: true });
+      const unavailable = statusError.status === 403 || statusError.status === 404;
+      recordTicketChange(optimistic, unavailable ? null : ticket, queryKey, false);
+      if (unavailable && String(ticket.id) === selectedTicketKeyRef.current) closeDetail();
+      if (queryKey === queryKeyRef.current) setError(statusError);
     } finally {
-      if (requestOrganizationKey === organizationKeyRef.current) {
-        setBusyTicketIds((current) => {
-          const next = new Set(current);
-          next.delete(ticketKey);
-          return next;
-        });
-      }
+      unlockTicket(ticket.id);
     }
   }
 
   async function mutateSelectedTicket(write: (organization: number | string, ticketId: number | string) => Promise<Ticket>) {
-    if (!organizationId || !selectedTicketId || !canManage || detailSaving) return;
+    if (!organizationId || !selectedTicketId || !canManage || detailSaving || !lockTicket(selectedTicketId)) return;
     setDetailSaving(true);
-    const requestOrganizationKey = String(organizationId);
     const requestTicketId = selectedTicketId;
+    const previous = detail?.ticket || tickets.find(ticket => String(ticket.id) === String(requestTicketId)) || null;
+    const queryKey = queryKeyRef.current;
     try {
       const updated = await write(organizationId, requestTicketId);
-      if (requestOrganizationKey !== organizationKeyRef.current) return;
-      setTickets((current) => replaceTicket(current, updated));
+      if (!mounted.current) return;
+      recordTicketChange(previous, updated, queryKey);
       if (String(requestTicketId) === selectedTicketKeyRef.current) {
-        setDetail((current) => current && String(current.ticket.id) === String(requestTicketId) ? { ...current, ticket: updated } : current);
+        setDetail(current => current && String(current.ticket.id) === String(requestTicketId) ? { ...current, ticket: updated } : current);
         await loadDetail(requestTicketId);
       }
-      void loadTicketsPage(1, { background: true });
       setToast(`${updated.code}: ação registrada no chamado.`);
     } catch (requestError) {
-      if (requestOrganizationKey !== organizationKeyRef.current) throw requestError;
-      const mutationFailure = toTicketApiError(
-        requestError,
-        "Não foi possível atualizar o chamado.",
-      );
+      if (!mounted.current) throw requestError;
+      const mutationFailure = toTicketApiError(requestError, "Não foi possível atualizar o chamado.");
       if (mutationFailure.status === 404 || mutationFailure.status === 403) {
-        setTickets((current) =>
-          current.filter((ticket) => String(ticket.id) !== String(requestTicketId)),
-        );
-        setDetail(null);
-        setSelectedTicketId(null);
-        setSuggestedStatus(null);
-        setDetailError(null);
+        if (previous) recordTicketChange(previous, null, queryKey);
+        if (String(requestTicketId) === selectedTicketKeyRef.current) {
+          closeDetail();
+        }
         setToast("O chamado não está mais disponível para seu acesso.");
       }
       throw mutationFailure;
     } finally {
-      if (requestOrganizationKey === organizationKeyRef.current) setDetailSaving(false);
+      if (mounted.current) setDetailSaving(false);
+      unlockTicket(requestTicketId);
     }
   }
 
@@ -524,9 +570,17 @@ function TicketsSectionContent({
     await mutateSelectedTicket((organization, ticketId) => runTicketCommand(organization, ticketId, command, etag));
   }
 
+  function refreshTickets() {
+    if (mutationLocks.current.size) return;
+    snapshotRef.current = null;
+    setBoardRefresh(current => current + 1);
+    setTicketChanges([]);
+    void loadTicketsPage(1, { background: true });
+  }
+
   function handleCreated(ticket: Ticket, failedFiles: File[]) {
     if (String(ticket.organizationId) !== organizationKeyRef.current) return;
-    setTickets((current) => replaceTicket(current, ticket));
+    recordTicketChange(null, ticket);
     setToast(
       failedFiles.length > 0
         ? `${ticket.code} criado; ${failedFiles.length} anexo(s) aguardam nova tentativa.`
@@ -691,7 +745,7 @@ function TicketsSectionContent({
         </section>
       )}
 
-      <TicketNotifications key={`${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
+      <TicketNotifications key={`notifications:${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
         setSelectedTicketId(id); setSuggestedStatus(null); setDetail(null); void loadDetail(id);
       }} />
       <TicketFeedbackPanel key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />
@@ -715,8 +769,8 @@ function TicketsSectionContent({
         className="ticket-view-region"
         aria-busy={initialLoading || refreshing}
       >
-        {viewMode !== "list" ? <div className="ticket-view-actions"><DocumentActionMenu label="Mais opções dos chamados" disabled={initialLoading} actions={[{ label: "Atualizar consulta", onSelect: () => void loadTicketsPage(1, { background: true }), disabled: refreshing || filters !== debouncedFilters }]} /></div> : null}
-        {viewMode === "list" ? (
+        {viewMode !== "list" ? <div className="ticket-view-actions"><DocumentActionMenu label="Mais opções dos chamados" disabled={initialLoading} actions={[{ label: "Atualizar consulta", onSelect: refreshTickets, disabled: refreshing || filters !== debouncedFilters }]} /></div> : null}
+        {queryAccessRevoked && viewMode === "kanban" ? null : viewMode === "list" ? (
           <TicketListView
             selectionScope={`${JSON.stringify(debouncedFilters)}:${pagination.page}:${pageSize}`}
             tickets={tickets}
@@ -730,7 +784,7 @@ function TicketsSectionContent({
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
             onPageSizeChange={setPageSize}
-            onRefresh={() => void loadTicketsPage(1, { background: true })}
+            onRefresh={refreshTickets}
             canExport={can(user, PERMISSION.EXPORT_VIEW, permissionContext)}
             exportAvailable={exportAvailable}
             onExport={() => setExportOpenSignal(current => current + 1)}
@@ -745,11 +799,11 @@ function TicketsSectionContent({
           </div>
         ) : viewMode === "kanban" ? (
           <TicketKanbanBoard
-            key={`${organizationId}:${pagination.snapshot || JSON.stringify(debouncedFilters)}`}
+            key={`${organizationId}:${ticketQueryKey(debouncedFilters)}:${boardRefresh}`}
             organizationId={organizationId}
             filters={debouncedFilters}
-            snapshot={pagination.snapshot}
-            policies={queuePolicies}
+            snapshot={boardRefresh || snapshotQueryKeyRef.current !== ticketQueryKey(debouncedFilters) ? null : pagination.snapshot}
+            changes={ticketChanges}
             canManage={canManage}
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
@@ -812,13 +866,13 @@ function TicketsSectionContent({
       />
 
       <TicketDetailDrawer
-        key={`${organizationId}:${selectedTicketId ?? "closed"}`}
+        key={`detail:${organizationId}:${selectedTicketId ?? "closed"}`}
         open={selectedTicketId !== null}
         organizationId={organizationId}
         detail={detail}
         loading={detailLoading}
         error={detailError}
-        saving={detailSaving}
+        saving={detailSaving || busyTicketIds.has(String(selectedTicketId))}
         canManage={canManage}
         canUpload={canUpload}
         attachmentLimits={attachmentLimits}

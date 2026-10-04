@@ -3,6 +3,12 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'src/components/selection/**'
+      - 'src/components/access/**'
+      - 'src/pages/Admin/**'
+      - 'tests/browser/platform-selectors.spec.ts'
+      - 'tests/helpers/maono-select-preservation.mjs'
+      - 'tests/maono-select-migration.test.mjs'
       - 'src/main.tsx'
       - 'vite.config.ts'
       - 'src/platform-density.css'
@@ -63,7 +69,7 @@ jobs:
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs
           tests/project-route-semantics.test.mjs tests/projects-fallback-scope.test.mjs
-          tests/documents-visual-contract.test.mjs
+          tests/documents-visual-contract.test.mjs tests/maono-select-migration.test.mjs
       - name: Build application
         id: build
         env:

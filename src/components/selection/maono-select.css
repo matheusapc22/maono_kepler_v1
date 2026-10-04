@@ -1,0 +1,154 @@
+/* Opt-in component scope: no global select/button/navigation rewrites. */
+.maono-select.maono-select {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  isolation: isolate;
+}
+.maono-select > select[data-maono-select] {
+  grid-area: 1 / 1;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--maono-density-control-small, 36px);
+  padding: 8px 12px;
+  padding-inline-end: 36px !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-color: #0b1016 !important;
+  background-image: none !important;
+  color: var(--mm-text, #e8edf5);
+  border: 1px solid var(--mm-border-strong, #343c47);
+  border-radius: 8px;
+  color-scheme: dark;
+  font: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.maono-select > select[data-maono-select]:hover:not(:disabled) { border-color: var(--maono-accent-border-strong, #d6a84f); }
+.maono-select > select[data-maono-select]:focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 2px; border-color: var(--maono-accent, #c5a059); }
+.maono-select > select[data-maono-select]:disabled { cursor: not-allowed; opacity: .5; }
+.maono-select > select[data-maono-select][aria-invalid="true"] { border-color: var(--maono-semantic-danger, #ef4444); }
+.maono-select > .maono-select__chevron {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  justify-self: end;
+  width: 16px;
+  height: 16px;
+  margin-inline-end: 12px;
+  color: var(--mm-text-soft, #aab6c5);
+  pointer-events: none;
+  transform: rotate(0deg);
+  transform-origin: center;
+  transition: transform 160ms ease, color 160ms ease;
+}
+.maono-select[data-open] > .maono-select__chevron { transform: rotate(180deg); color: var(--maono-accent-bright, #f2c766); }
+.maono-select[data-disabled] > .maono-select__chevron { opacity: .5; }
+.maono-select--native > select[data-maono-select] { padding-inline-end: 12px !important; cursor: default; }
+.maono-select-menu {
+  position: fixed;
+  inset: auto;
+  z-index: 20000;
+  margin: 0;
+  padding: 5px;
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--maono-accent-border, rgb(197 160 89 / 45%));
+  border-radius: 9px;
+  background: #101720;
+  color: #e8edf5;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 38%);
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: start;
+  scrollbar-width: thin;
+  scrollbar-color: var(--maono-sidebar-scroll-thumb, #343c47) transparent;
+}
+.maono-select-menu::backdrop { background: transparent; pointer-events: none; }
+.maono-select-menu__option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--maono-density-control-small, 36px);
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.maono-select-menu__option > span { overflow-wrap: anywhere; }
+.maono-select-menu__option > svg { width: 16px; height: 16px; opacity: 0; }
+.maono-select-menu__option[aria-selected="true"] { color: var(--maono-accent-text, #f3d58a); background: var(--maono-accent-surface, rgb(197 160 89 / 12%)); }
+.maono-select-menu__option[aria-selected="true"] > svg { opacity: 1; }
+.maono-select-menu__option.is-active:not([aria-disabled="true"]) { border-color: var(--maono-accent-border, rgb(197 160 89 / 45%)); background: var(--maono-accent-surface-strong, rgb(197 160 89 / 20%)); }
+.maono-select-menu__option[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.maono-select-menu__group, .maono-select-menu__empty { padding: 8px 10px; color: #aab6c5; }
+.maono-select-menu__group { color: var(--maono-accent-text, #f3d58a); font-size: 11px; font-weight: 650; }
+@media (prefers-reduced-motion: reduce) { .maono-select > .maono-select__chevron { transition: none; } }
+@media (forced-colors: active) {
+  .maono-select > select[data-maono-select] { background-color: Field !important; color: FieldText; border-color: ButtonText; }
+  .maono-select-menu { background: Canvas; color: CanvasText; border-color: ButtonText; forced-color-adjust: auto; }
+  .maono-select-menu__option.is-active:not([aria-disabled="true"]), .maono-select-menu__option[aria-selected="true"] { outline: 1px solid Highlight; color: Highlight; }
+}
+/* The former Admin-only translucent select shim is unnecessary here. Keep the
+ * legacy fallback for non-migrated controls, but let this control paint itself. */
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level .maono-select > select[data-maono-select],
+.admin-user-manager-enhanced .admin-membership-level .maono-select > select[data-maono-select] {
+  position: static !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  z-index: auto !important;
+  opacity: 1 !important;
+  height: var(--maono-density-control, 40px) !important;
+  min-height: var(--maono-density-control, 40px) !important;
+  padding: 8px 36px 8px 12px !important;
+  border: 1px solid var(--mm-border-strong, #343c47) !important;
+}
+:root .maono-admin-page .admin-user-manager-enhanced .admin-membership-level .maono-select > select[data-maono-select]:disabled,
+.admin-user-manager-enhanced .admin-membership-level .maono-select > select[data-maono-select]:disabled { opacity: .5 !important; }
+.admin-user-manager-enhanced .admin-membership-level .maono-select > select[data-maono-select]:focus-visible { border-color: var(--maono-accent, #c5a059) !important; }
+@media (pointer: coarse) {
+  .maono-select > select[data-maono-select], .maono-select-menu__option { min-height: 44px; }
+}
+/* Legacy fallback-ui-styles injects white form colors with #root specificity.
+ * Override only this component in the three affected shells, never page layout. */
+#root > :is(.maono-admin-page, .maono-editor-inbox, .maono-review-page) .maono-select {
+  display: grid;
+  margin-bottom: 0;
+}
+#root > :is(.maono-admin-page, .maono-editor-inbox, .maono-review-page) .maono-select > select[data-maono-select] {
+  background: #0b1016 !important;
+  color: #e8edf5 !important;
+  -webkit-text-fill-color: currentColor !important;
+  caret-color: currentColor !important;
+}
+#root .maono-admin-page .admin-user-filters input,
+#root .maono-admin-page .delegation-policy-section input[type="datetime-local"] {
+  background: #0b1016 !important;
+  color: #e8edf5 !important;
+  -webkit-text-fill-color: currentColor !important;
+  caret-color: currentColor !important;
+  color-scheme: dark;
+}
+@media (forced-colors: active) {
+  #root > :is(.maono-admin-page, .maono-editor-inbox, .maono-review-page) .maono-select > select[data-maono-select],
+  #root .maono-admin-page .admin-user-filters input,
+  #root .maono-admin-page .delegation-policy-section input[type="datetime-local"] { background: Field !important; color: FieldText !important; }
+}
+#root > :is(.maono-admin-page, .maono-editor-inbox, .maono-review-page) .maono-select > select[data-maono-select]:focus,
+#root .maono-admin-page .admin-user-filters input:focus,
+#root .maono-admin-page .delegation-policy-section input[type="datetime-local"]:focus {
+  box-shadow: 0 0 0 3px var(--maono-accent-glow, rgb(197 160 89 / 24%)) !important;
+}
