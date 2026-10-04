@@ -1,0 +1,89 @@
+/* Explicit component colors outrank legacy shell fallbacks and Tailwind layers.
+ * Keep presentation scoped: loading, navigation and permission policy stay in callers. */
+#root .maono-map-notice-viewport.maono-map-notice-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 0 !important;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #0b0f14;
+  box-sizing: border-box;
+}
+
+#root .maono-map-notice-viewport--overlay.maono-map-notice-viewport {
+  background: rgb(3 6 10 / 72%);
+}
+
+#root .maono-map-notice {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 460px;
+  min-width: 0;
+  margin-block: auto;
+  padding: 24px;
+  border: 1px solid var(--maono-accent-border, #75603a);
+  border-radius: 12px;
+  background: #11161d;
+  color: #f1f3f5;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 32%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+#root .maono-map-notice__heading { display: flex; align-items: flex-start; gap: 12px; }
+#root .maono-map-notice__heading > div { min-width: 0; }
+#root .maono-map-notice__icon { display: grid; flex: 0 0 36px; width: 36px; height: 36px; place-items: center; border: 1px solid var(--maono-accent-border, #75603a); border-radius: 8px; background: var(--maono-accent-surface, #282318); color: var(--maono-accent-bright, #f2c766); }
+#root .maono-map-notice__icon svg { width: 20px; height: 20px; }
+#root .maono-map-notice__eyebrow { display: block; margin-bottom: 3px; color: var(--maono-accent-text, #f3d58a); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+#root .maono-map-notice h2 { margin: 0; color: #f1f3f5; font: inherit; font-size: 18px; font-weight: 600; line-height: 1.4; }
+#root .maono-map-notice .maono-map-notice__message { margin: 16px 0 0; color: #bdc5d0; font-size: 14px; line-height: 1.6; }
+#root .maono-map-notice .maono-map-notice__reference { margin: 12px 0 0; color: #a7b0bd; font-size: 12px; }
+#root .maono-map-notice__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+
+#root .maono-map-notice .maono-map-notice__actions > :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--maono-accent, #c5a059);
+  border-radius: 7px;
+  background: var(--maono-accent, #c5a059);
+  color: #17140e;
+  -webkit-text-fill-color: currentColor;
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+#root .maono-map-notice .maono-map-notice__actions > :is(button, a):hover { background: var(--maono-accent-bright, #f2c766); border-color: var(--maono-accent-bright, #f2c766); }
+#root .maono-map-notice .maono-map-notice__actions > :is(button, a):focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 4px; }
+#root .maono-map-notice .maono-map-notice__actions > :is(button, a):not(:first-child) { background: transparent; color: var(--maono-accent-text, #f3d58a); }
+#root .maono-map-notice .maono-map-notice__actions > :is(button, a):not(:first-child):hover { background: var(--maono-accent-surface, #282318); }
+
+@media (max-width: 480px) {
+  #root .maono-map-notice { padding: 20px; }
+  #root .maono-map-notice .maono-map-notice__actions > :is(button, a) { width: 100%; }
+}
+
+@media (forced-colors: active) {
+  #root .maono-map-notice { border-color: CanvasText; background: Canvas; color: CanvasText; }
+  #root .maono-map-notice .maono-map-notice__actions > :is(button, a) { border-color: ButtonText; background: ButtonFace; color: ButtonText; }
+}

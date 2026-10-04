@@ -8,6 +8,7 @@ import {
   useParams,
 } from "react-router";
 
+import MapErrorNotice from "../components/map-notice/MapErrorNotice";
 import { useSession } from "../../../auth/session";
 import { useLoadingActivity } from "../../../components/loading";
 import { usePreparedNavigate } from "../../../hooks/usePreparedNavigate";
@@ -75,12 +76,10 @@ export default function MapManagementPage() {
 
   if (error) {
     return (
-      <main className="maono-map-management">
-        <section className="maono-map-management__error" role="alert">
-          <h1>Não foi possível abrir o mapa</h1>
-          <p>{normalizeUserError(error).message}</p>
+      <main className="maono-map-management maono-map-notice-viewport">
+        <MapErrorNotice title="Não foi possível abrir o mapa" message={normalizeUserError(error).message}>
           <Link to="/projects">Voltar aos projetos</Link>
-        </section>
+        </MapErrorNotice>
       </main>
     );
   }

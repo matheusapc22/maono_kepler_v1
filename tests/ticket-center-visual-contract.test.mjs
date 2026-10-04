@@ -11,6 +11,35 @@ const section = read('src/pages/Projects/components/TicketsSection.tsx');
 const css = read('src/pages/Projects/components/ticket-center-visual.css');
 const pagination = read('src/pages/Projects/components/DocumentsPagination.tsx');
 
+test('summary icons reuse Roadmap gold and review red is confined to the Kanban queue', () => {
+  const parsed = postcss.parse(css);
+  const declarations = selector => {
+    const values = {};
+    parsed.walkRules(rule => {
+      if (rule.selectors.includes(selector)) rule.walkDecls(decl => { values[decl.prop] = decl.value; });
+    });
+    return values;
+  };
+  const scope = 'body .ticket-center-shell.ticket-center-final';
+  const icons = declarations(`${scope} .ticket-metric-icon`);
+  assert.equal(icons.color, 'var(--maono-accent-bright)');
+  assert.equal(icons.background, 'var(--maono-accent-surface)');
+  const review = `${scope} .ticket-kanban-column.column-in_review`;
+  assert.equal(declarations(review)['border-top-color'], 'var(--maono-semantic-danger)');
+  for (const target of [' > header h3', ' > header > span']) {
+    assert.equal(declarations(review + target).color, 'color-mix(in srgb, var(--maono-semantic-danger) 75%, var(--mm-text))');
+  }
+  parsed.walkRules(rule => {
+    if (rule.toString().includes('--maono-semantic-danger')) {
+      for (const selector of rule.selectors) assert.ok(selector.startsWith(review));
+    }
+  });
+  for (const icon of ['open', 'progress', 'review', 'overdue', 'closed']) {
+    assert.ok(section.includes(`className="ticket-metric-icon metric-${icon}" aria-hidden="true"`));
+  }
+  assert.ok(!css.includes('.status-in_review'), 'shared list and detail badges must keep their existing semantics');
+});
+
 test('flat page heading has a working neutral breadcrumb and no decorative hero content', () => {
   for (const removed of ['HeadsetIcon', 'ticket-center-headset', 'ticket-center-eyebrow', 'Atendimento operacional', 'Consulte, priorize', 'ticket-filter-help']) assert.ok(!toolbar.includes(removed), removed);
   for (const text of ['<h1>Central de Chamados</h1>', 'aria-label="Caminho da página"', 'onHome()', 'to="/projects"', 'Novo chamado', '<option value="list">Lista</option>', '<option value="kanban">Kanban</option>', '<option value="calendar">Calendário</option>']) assert.ok(toolbar.includes(text), text);

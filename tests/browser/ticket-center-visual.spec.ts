@@ -249,6 +249,73 @@ async function switchOrganization(page: Page, name: string) {
   await expect(page.getByRole("heading", { name: "Todos os Projetos", exact: true, level: 1 })).toBeVisible();
 }
 
+for (const width of [1440, 390]) {
+  test(`gold summary icons and red review Kanban preserve labels, counts and view semantics at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const { requests } = await setup(page); await openCentral(page); await expectCount(page, 10, 63);
+    const metrics = shell(page).getByRole("region", { name: "Resumo dos chamados" });
+    const icons = metrics.locator(".ticket-metric-icon");
+    const assertGold = async () => {
+      await expect(icons).toHaveCount(5);
+      for (const icon of await icons.all()) {
+        await expect(icon).toHaveCSS("color", "rgb(242, 199, 102)");
+        await expect(icon).toHaveCSS("background-color", "rgba(197, 160, 89, 0.12)");
+        await expect(icon).toHaveAttribute("aria-hidden", "true");
+      }
+      await expect(metrics.locator(".ticket-metric-copy > span")).toHaveText(["Abertos", "Em andamento", "Em revisão", "Vencidos", "Concluídos"]);
+    };
+    await assertGold();
+    const reviewCard = metrics.getByRole("button", { name: /^Em revisão/ });
+    await reviewCard.focus(); await expect(reviewCard).toBeFocused();
+    await page.keyboard.press("Enter"); await expectCount(page, 10, 12);
+    await expect(reviewCard).toHaveAttribute("aria-pressed", "true");
+    const listBadgeColor = await rows(page).first().locator(".status-in_review").evaluate(element => getComputedStyle(element).color);
+    await clear(page); await expectCount(page, 10, 63);
+    await chooseView(page, "Kanban");
+    const review = shell(page).locator(".ticket-kanban-column.column-in_review");
+    await expect(review.locator("header h3")).toHaveText("Em revisão");
+    await expect(review.locator("header > span")).toHaveText("12 / 12");
+    await expect(review).toHaveCSS("border-top-color", "rgb(239, 68, 68)");
+    await assertGold();
+    const reviewStyles = await review.evaluate(element => {
+      const rgba = (color: string) => {
+        // Resolve color-mix() identically across the browser engines via Canvas.
+        const canvas = document.createElement("canvas"), context = canvas.getContext("2d")!;
+        context.fillStyle = color; context.fillRect(0, 0, 1, 1);
+        return [...context.getImageData(0, 0, 1, 1).data];
+      };
+      const backgroundOf = (node: Element | null): number[] => {
+        if (!node) return [255, 255, 255];
+        const color = rgba(getComputedStyle(node).backgroundColor), alpha = color[3] / 255;
+        if (alpha === 1) return color.slice(0, 3);
+        const below = backgroundOf(node.parentElement);
+        return color.slice(0, 3).map((channel, index) => channel * alpha + below[index] * (1 - alpha));
+      };
+      const luminance = (color: number[]) => color.map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+      return [...element.querySelectorAll("header h3, header > span")].map(node => {
+        const style = getComputedStyle(node), foreground = rgba(style.color).slice(0, 3);
+        const background = backgroundOf(node);
+        const a = luminance(foreground), b = luminance(background);
+        return { foreground, contrast: (Math.max(a, b) + .05) / (Math.min(a, b) + .05) };
+      });
+    });
+    for (const style of reviewStyles) {
+      expect(style.foreground[0]).toBeGreaterThan(style.foreground[1] * 1.4);
+      expect(style.contrast).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const column of ["open", "in_progress", "closed"]) {
+      await expect(shell(page).locator(`.column-${column}`)).not.toHaveCSS("border-top-color", "rgb(239, 68, 68)");
+    }
+    await metrics.screenshot({ path: testInfo.outputPath(`ticket-gold-metrics-${width}.png`), animations: "disabled" });
+    await review.locator("header").screenshot({ path: testInfo.outputPath(`ticket-review-red-${width}.png`), animations: "disabled" });
+    await chooseView(page, "Calendário"); await assertGold();
+    await chooseView(page, "Lista"); await expectCount(page, 10, 63); await assertGold();
+    await reviewCard.click(); await expectCount(page, 10, 12);
+    await expect(rows(page).first().locator(".status-in_review")).toHaveCSS("color", listBadgeColor);
+    expect(requests.filter(request => !["GET", "HEAD"].includes(request.method))).toEqual([]);
+  });
+}
+
 test("Central uses the shared composition, real API paging, named columns and optional export gating", async ({ page }) => {
   const { requests } = await setup(page); await openCentral(page); await expectCount(page, 10, 63);
   await expect(shell(page).getByRole("navigation", { name: "Caminho da página" }).getByRole("link", { name: "Início", exact: true })).toHaveAttribute("href", "/projects");

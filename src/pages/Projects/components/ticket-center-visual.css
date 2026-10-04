@@ -37,10 +37,15 @@ body .ticket-center-shell.ticket-center-final .ticket-metrics { grid-template-co
 body .ticket-center-shell.ticket-center-final .ticket-metrics > button { min-width: 0; min-height: 76px; padding: 12px 14px; gap: 12px; border-radius: 10px; background: var(--mm-surface); box-shadow: none; }
 body .ticket-center-shell.ticket-center-final .ticket-metrics > button:hover,
 body .ticket-center-shell.ticket-center-final .ticket-metrics > button.is-active { background: var(--mm-surface-2); }
-body .ticket-center-shell.ticket-center-final .ticket-metric-icon { width: 40px; height: 40px; min-width: 40px; border-radius: 9px; font-size: 25px; }
+/* Decorative summary icons share the Roadmap's gold treatment in every view. */
+body .ticket-center-shell.ticket-center-final .ticket-metric-icon { width: 40px; height: 40px; min-width: 40px; border-radius: 9px; font-size: 25px; color: var(--maono-accent-bright); background: var(--maono-accent-surface); }
 body .ticket-center-shell.ticket-center-final .ticket-metric-copy { gap: 3px; }
 body .ticket-center-shell.ticket-center-final .ticket-metric-copy > span { font-size: 12px; color: var(--mm-text-soft); font-weight: 500; }
 body .ticket-center-shell.ticket-center-final .ticket-metric-copy > strong { color: var(--mm-text); font-size: 25px; line-height: 1.15; font-weight: 550; }
+/* Review is red only in the Kanban queue; priority/overdue and other views retain their semantics. */
+body .ticket-center-shell.ticket-center-final .ticket-kanban-column.column-in_review { border-top-color: var(--maono-semantic-danger); }
+body .ticket-center-shell.ticket-center-final .ticket-kanban-column.column-in_review > header h3,
+body .ticket-center-shell.ticket-center-final .ticket-kanban-column.column-in_review > header > span { color: color-mix(in srgb, var(--maono-semantic-danger) 75%, var(--mm-text)); }
 body .ticket-center-shell.ticket-center-final .ticket-list-region { min-width: 0; overflow: hidden; border-radius: 10px; background: var(--mm-bg-soft); box-shadow: none; }
 body .ticket-center-shell.ticket-center-final .ticket-list-header { min-height: 56px; padding: 12px 16px; gap: 14px; flex-wrap: wrap; }
 body .ticket-center-shell.ticket-center-final .ticket-list-header h3 { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
