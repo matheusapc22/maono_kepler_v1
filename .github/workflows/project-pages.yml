@@ -64,6 +64,7 @@ jobs:
           tests/project-route-semantics.test.mjs tests/projects-fallback-scope.test.mjs
           tests/documents-visual-contract.test.mjs
       - name: Build application
+        id: build
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
           VITE_MAONO_LAYER_MANAGER_V1: "true"
@@ -79,8 +80,30 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Install browser engines
+        id: browsers
         run: npx playwright install --with-deps chromium firefox webkit
+      - name: Early panel help and disclosure diagnostics (three engines)
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: panel-help-results.json
+        run: >-
+          xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24"
+          npx playwright test --config=playwright.project-pages.config.ts
+          --grep="contextual panel help|disclosure chevrons"
+          --output=test-results-panel-help --reporter=list,json
+      - name: Small panel evidence for independent inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-panel-focused-evidence-${{ github.sha }}
+          # Keep the early Firefox event timeline and traces separately retrievable.
+          path: |
+            test-results-panel-help/
+            panel-help-results.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Actual compiled React route with fixture APIs (not production acceptance)
+        # A focused failure must not suppress any of the existing full-suite cases.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: project-pages-results.json
         run: xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24" npx playwright test --config=playwright.project-pages.config.ts --reporter=list,json

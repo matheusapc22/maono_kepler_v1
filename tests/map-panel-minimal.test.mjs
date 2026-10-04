@@ -104,3 +104,24 @@ test('hidden switch focus is contained by its label rather than scrolling fixed 
   assert.match(source, /\.maono-point-spatial-grouping__switch input \{\s*top: 50%;\s*left: 0;\s*width: 32px;\s*height: 18px;/);
   assert.match(source, /\.maono-filter-category__options label \{\s*position: relative;/);
 });
+
+test('detail disclosures use a persistent centered SVG instead of an off-axis text glyph', async () => {
+  const [styleEditor, panelCss, icon] = await Promise.all([
+    read('LayerStyleEditor.tsx'), read('maono-layer-panel.css'), read('LayerPanelIcon.tsx'),
+  ]);
+  assert.equal((styleEditor.match(/<LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" \/>/g) ?? []).length, 3);
+  assert.doesNotMatch(styleEditor, /⌄/);
+  assert.match(icon, /viewBox="0 0 24 24"/);
+  assert.match(panelCss, /\.maono-detail-section__chevron \{ width: 16px; height: 16px;/);
+  assert.match(panelCss, /transform-box: view-box;\s*transform-origin: center;/);
+  assert.match(panelCss, /\.maono-add-layer__trigger\[aria-expanded="true"\] > svg:last-child/);
+  assert.match(panelCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?transition: none !important;/);
+});
+
+test('early panel diagnostics keep the complete compiled suite running after a focused failure', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/project-pages.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /name: map-panel-focused-evidence-\$\{\{ github.sha \}\}/);
+  assert.match(workflow, /Actual compiled React route[^\n]*\n[^\n]*\n\s*if: \$\{\{ !cancelled\(\) && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' \}\}/);
+  assert.match(workflow, /run: xvfb-run[^\n]*playwright test --config=playwright.project-pages.config.ts --reporter=list,json/);
+  assert.doesNotMatch(workflow, /continue-on-error/);
+});

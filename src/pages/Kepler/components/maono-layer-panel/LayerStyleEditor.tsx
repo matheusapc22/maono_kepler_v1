@@ -32,6 +32,7 @@ import {
   palettesForScale,
 } from "./palettes.ts";
 import PanelHint from "./PanelHint";
+import LayerPanelIcon from "./LayerPanelIcon";
 
 const COLOR_SCALE_LABELS: Record<MapColorScale, string> = {
   quantile: "Quantile (distribuição)",
@@ -479,7 +480,7 @@ export default function LayerStyleEditor({
             <strong>Aparência</strong>
             <small>Paletas, escalas e contorno</small>
           </span>
-          <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+          <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
         </summary>
         <div className="maono-detail-section__content">
           {style.fillEnabled &&
@@ -598,7 +599,7 @@ export default function LayerStyleEditor({
               <strong>Dimensão e agrupamento</strong>
               <small>Tamanho dos símbolos e comportamento por zoom</small>
             </span>
-            <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+            <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
           </summary>
           <div className="maono-detail-section__content">
             {compatibility.radius ? (
@@ -716,7 +717,7 @@ export default function LayerStyleEditor({
             <strong>Avançado</strong>
             <small>Composição global do mapa</small>
           </span>
-          <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+          <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
         </summary>
         <div className="maono-detail-section__content">
           <div className="maono-panel-hint-field">

@@ -13,6 +13,95 @@ import {
 test.use({ reducedMotion: 'reduce' });
 test.setTimeout(90_000);
 
+type HintProbeWindow = Window & { __PANEL_HINT_PROBE__?: {
+  data: { capabilities: Record<string, unknown>; entries: unknown[] };
+  checkpoint: (phase: string) => void;
+  stop: () => void;
+} };
+
+// Read-only, synthetic-fixture diagnostics. Keep first-hover evidence in CI even
+// when the browser cannot expose a trace artifact immediately after failure.
+test.afterEach(async ({ page }, testInfo) => {
+  const data = await page.evaluate(() => {
+    const probe = (window as HintProbeWindow).__PANEL_HINT_PROBE__;
+    if (!probe) return null;
+    probe.checkpoint('test-finished');
+    probe.stop();
+    return probe.data;
+  }).catch(() => null);
+  if (!data) return;
+  const json = JSON.stringify(data, null, 2);
+  await writeFile(testInfo.outputPath('panel-hint-pointer-diagnostic.json'), json);
+  await testInfo.attach('panel-hint-pointer-diagnostic', { body: json, contentType: 'application/json' });
+  if (testInfo.status !== testInfo.expectedStatus) {
+    const concise = JSON.stringify({ browser: testInfo.project.name, title: testInfo.title, ...data }, (key, value: unknown) => {
+      if (key === 'active' || key === 'portals') return undefined;
+      if (key === 'rect' && value && typeof value === 'object') {
+        const rect = value as Record<string, unknown>;
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      }
+      return value;
+    });
+    console.log(`PANEL_HINT_DIAGNOSTIC ${concise}`);
+  }
+});
+
+async function startHintProbe(trigger: Locator, hasTouch: boolean) {
+  await trigger.evaluate((element, requestedHasTouch) => {
+    const runtime = window as HintProbeWindow;
+    runtime.__PANEL_HINT_PROBE__?.stop();
+    const entries: unknown[] = [];
+    const frames = new Set<number>();
+    let stopped = false;
+    const describe = (target: EventTarget | null) => target instanceof Element
+      ? { tag: target.tagName, class: target.getAttribute('class'), label: target.getAttribute('aria-label') }
+      : String(target);
+    const record = (phase: string, event?: Event) => {
+      if (stopped) return;
+      const pointer = event as PointerEvent | undefined;
+      const scroll = element.closest('.maono-detail-view__scroll');
+      const portals = Array.from(document.querySelectorAll('.maono-panel-hint__popover'));
+      entries.push({ phase, time: performance.now(), event: event ? { type: event.type, target: describe(event.target),
+        pointerType: pointer?.pointerType, isPrimary: pointer?.isPrimary, x: pointer?.clientX, y: pointer?.clientY } : null,
+      trigger: { rect: element.getBoundingClientRect().toJSON(), expanded: element.getAttribute('aria-expanded'), focused: element === document.activeElement },
+      scroll: scroll ? { rect: scroll.getBoundingClientRect().toJSON(), top: scroll.scrollTop } : null,
+      active: describe(document.activeElement), portalCount: portals.length,
+      portals: portals.map(portal => ({ rect: portal.getBoundingClientRect().toJSON(), visibility: getComputedStyle(portal).visibility })) });
+      // Preserve the initial enter/scroll sequence even on a noisy failure.
+      if (entries.length > 500) entries.splice(250, 1);
+    };
+    const onEvent = (event: Event) => {
+      record('event', event);
+      const first = requestAnimationFrame(() => {
+        frames.delete(first); record('after-frame', event);
+        const second = requestAnimationFrame(() => { frames.delete(second); record('after-second-frame', event); });
+        frames.add(second);
+      });
+      frames.add(first);
+    };
+    const kinds = ['pointerover', 'pointerenter', 'pointermove', 'pointerout', 'pointerleave', 'mouseover', 'mouseenter', 'mousemove', 'mouseout', 'mouseleave', 'focusin', 'focusout', 'scroll'];
+    for (const kind of kinds) document.addEventListener(kind, onEvent, true);
+    const observer = new MutationObserver(() => record('aria-expanded-mutation'));
+    observer.observe(element, { attributes: true, attributeFilter: ['aria-expanded'] });
+    runtime.__PANEL_HINT_PROBE__ = {
+      data: { capabilities: { requestedHasTouch, maxTouchPoints: navigator.maxTouchPoints, userAgent: navigator.userAgent,
+        hover: matchMedia('(hover: hover)').matches, anyHover: matchMedia('(any-hover: hover)').matches,
+        fine: matchMedia('(pointer: fine)').matches, anyFine: matchMedia('(any-pointer: fine)').matches }, entries },
+      checkpoint: phase => record(phase),
+      stop: () => { stopped = true; observer.disconnect(); for (const kind of kinds) document.removeEventListener(kind, onEvent, true); for (const frame of frames) cancelAnimationFrame(frame); },
+    };
+    record('before-scroll-into-view');
+  }, hasTouch);
+}
+
+async function hintProbeCheckpoint(page: Page, phase: string, stop = false) {
+  await page.evaluate(({ phase, stop }) => {
+    const probe = (window as HintProbeWindow).__PANEL_HINT_PROBE__;
+    probe?.checkpoint(phase);
+    if (stop) probe?.stop();
+  }, { phase, stop });
+}
+
 async function movePointerToMap(page: Page) {
   const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
   await page.mouse.move(viewport.width - 28, Math.min(80, viewport.height / 4));
@@ -217,6 +306,64 @@ async function hintPortal(page: Page, trigger: Locator, text: string) {
   expect(await tooltip.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   return tooltip;
+}
+
+type ChevronSample = { x: number; y: number; width: number; height: number; angle: number };
+type SampledChevron = SVGSVGElement & { __samples?: { values: ChevronSample[]; frame: number; stop: boolean } };
+
+async function rotateChevron(arrow: Locator, size: number, opened: boolean, motion: boolean, action: () => Promise<void>) {
+  await expect(arrow).toHaveCount(1);
+  expect(await arrow.evaluate(element => element.tagName.toLowerCase())).toBe('svg');
+  await expect(arrow).toHaveCSS('width', `${size}px`);
+  await expect(arrow).toHaveCSS('height', `${size}px`);
+  await expect(arrow).toHaveCSS('flex-shrink', '0');
+  await expect(arrow).toHaveCSS('transform-box', 'view-box');
+  await expect(arrow).toHaveCSS('transition-duration', motion ? '0.16s' : '0s');
+  const handle = (await arrow.elementHandle())!;
+  const path = await handle.innerHTML();
+  await arrow.evaluate(element => {
+    const svg = element as SampledChevron;
+    const samples = { values: [] as ChevronSample[], frame: 0, stop: false };
+    svg.__samples = samples;
+    const sample = () => {
+      if (samples.stop) return;
+      const box = svg.getBoundingClientRect();
+      const owner = svg.closest('summary,button')!.getBoundingClientRect();
+      const matrix = new DOMMatrix(getComputedStyle(svg).transform);
+      samples.values.push({ x: box.x + box.width / 2 - owner.right, y: box.y + box.height / 2 - (owner.y + owner.height / 2),
+        width: box.width, height: box.height, angle: Math.abs(Math.atan2(matrix.b, matrix.a) * 180 / Math.PI) });
+      samples.frame = requestAnimationFrame(sample);
+    };
+    sample();
+  });
+  let samples: ChevronSample[] = [];
+  try {
+    await action();
+    await expect.poll(() => arrow.evaluate((element, opened) => {
+      const matrix = new DOMMatrix(getComputedStyle(element).transform);
+      return Math.abs(matrix.a - (opened ? -1 : 1)) < 0.000001 && Math.abs(matrix.b) < 0.000001;
+    }, opened)).toBe(true);
+  } finally {
+    samples = await arrow.evaluate(element => {
+      const state = (element as SampledChevron).__samples!;
+      state.stop = true; cancelAnimationFrame(state.frame);
+      return state.values;
+    });
+  }
+  expect(await handle.evaluate(element => element.isConnected)).toBe(true);
+  expect(await handle.innerHTML()).toBe(path);
+  expect(samples.length).toBeGreaterThan(0);
+  const first = samples[0];
+  for (const sample of samples) {
+    expect(Math.abs(sample.x - first.x), 'arrow rotation keeps its center fixed within the control').toBeLessThanOrEqual(0.6);
+    expect(Math.abs(sample.y - first.y), 'arrow does not jump around its baseline').toBeLessThanOrEqual(0.6);
+    expect(Math.abs(sample.width - sample.height), 'SVG footprint stays square throughout rotation').toBeLessThanOrEqual(0.6);
+    expect(sample.width).toBeLessThanOrEqual(size * Math.SQRT2 + 0.6);
+  }
+  const intermediate = samples.filter(sample => sample.angle > 1 && sample.angle < 179);
+  if (motion) expect(intermediate.length, 'capture the real intermediate rotation, not only endpoints').toBeGreaterThan(0);
+  else expect(intermediate).toEqual([]);
+  return samples;
 }
 
 async function stableChromeAfterScroll(page: Page, scroll: Locator, toolbar: Locator) {
@@ -666,6 +813,58 @@ test.describe('320px touch viewport', () => {
   });
 });
 
+for (const viewport of [{ width: 1280, height: 720 }, { width: 320, height: 480 }]) {
+  test(`disclosure chevrons keep square SVGs centered through keyboard rotation and reduced motion at ${viewport.width}×${viewport.height}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const fixture = await openMap(page, { layerCount: 1 });
+    const canvas = await canvasGeometry(page, true);
+    await openLayers(page);
+    const evidence: Array<{ label: string; phase: string; samples: ChevronSample[] }> = [];
+    const add = panel(page).getByRole('button', { name: 'Adicionar camada', exact: true });
+    const addArrow = add.locator(':scope > svg:last-child');
+    await add.focus();
+    evidence.push({ label: 'Adicionar camada', phase: 'open', samples: await rotateChevron(addArrow, 11, true, true, () => add.press('Enter')) });
+    await expect(add).toHaveAttribute('aria-expanded', 'true');
+    evidence.push({ label: 'Adicionar camada', phase: 'close', samples: await rotateChevron(addArrow, 11, false, true, () => page.keyboard.press('Escape')) });
+    await expect(add).toHaveAttribute('aria-expanded', 'false');
+    await expect(add).toBeFocused();
+    await rows(page).first().locator('.maono-layer-row__open').click();
+    const detail = panel(page).locator('.maono-detail-view').filter({ has: page.locator('.maono-layer-style-editor') });
+    const disclosures = ['Aparência', 'Dimensão e agrupamento', 'Avançado', 'Dados'].map(label => {
+      const section = detail.locator('details').filter({ has: page.locator('summary strong', { hasText: new RegExp(`^${label}$`) }) });
+      const summary = section.locator(':scope > summary');
+      return { label, section, summary, arrow: summary.locator(':scope > svg'), size: label === 'Dados' ? 15 : 16 };
+    });
+    for (const item of disclosures) {
+      await item.summary.scrollIntoViewIfNeeded();
+      await item.summary.focus();
+      evidence.push({ label: item.label, phase: 'open', samples: await rotateChevron(item.arrow, item.size, true, true, () => item.summary.press('Enter')) });
+      await expect(item.section).toHaveAttribute('open', '');
+      await expect(item.summary).toBeFocused();
+      evidence.push({ label: item.label, phase: 'close', samples: await rotateChevron(item.arrow, item.size, false, true, () => item.summary.press('Space')) });
+      await expect(item.section).not.toHaveAttribute('open', '');
+      await expect(item.summary).toBeFocused();
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const item of disclosures) {
+      await item.summary.scrollIntoViewIfNeeded();
+      evidence.push({ label: item.label, phase: 'reopen-reduced', samples: await rotateChevron(item.arrow, item.size, true, false, () => item.summary.press('Enter')) });
+      await expect(item.section).toHaveAttribute('open', '');
+      evidence.push({ label: item.label, phase: 'close-reduced', samples: await rotateChevron(item.arrow, item.size, false, false, () => item.summary.press('Enter')) });
+      await expect(item.section).not.toHaveAttribute('open', '');
+    }
+    await detail.getByRole('button', { name: 'Voltar para a lista de camadas', exact: true }).click();
+    evidence.push({ label: 'Adicionar camada', phase: 'reopen-reduced', samples: await rotateChevron(addArrow, 11, true, false, () => add.press('Enter')) });
+    evidence.push({ label: 'Adicionar camada', phase: 'close-reduced', samples: await rotateChevron(addArrow, 11, false, false, () => page.keyboard.press('Escape')) });
+    await expect(add).toBeFocused();
+    await expectStableCanvas(page, canvas);
+    await testInfo.attach('disclosure-chevron-geometry', { body: JSON.stringify({ viewport, evidence }, null, 2), contentType: 'application/json' });
+    expect(fixture.saves).toEqual([]);
+    expect(fixture.unexpectedWrites).toEqual([]);
+  });
+}
+
 for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 }]) {
   test.describe(`contextual panel help at ${viewport.width}×${viewport.height}`, () => {
     test.use({ viewport, hasTouch: viewport.width === 320 });
@@ -682,11 +881,15 @@ for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 
       await expect(trigger).toBeVisible();
       await expect(detail.locator('.maono-point-spatial-grouping__description')).toHaveCount(0);
       await expect(page.locator('.maono-panel-hint__popover[role="tooltip"]')).toHaveCount(0);
+      await startHintProbe(trigger, viewport.width === 320);
       await trigger.scrollIntoViewIfNeeded();
+      await hintProbeCheckpoint(page, 'after-scroll-into-view');
       const chrome = await Promise.all(layerChrome(page).map(locator => locator.boundingBox()));
 
       await trigger.hover();
+      await hintProbeCheckpoint(page, 'after-hover');
       const tooltip = await hintPortal(page, trigger, explanation);
+      await hintProbeCheckpoint(page, 'first-hover-passed', true);
       await tooltip.hover();
       await expect(tooltip).toBeVisible();
       await movePointerToMap(page);
