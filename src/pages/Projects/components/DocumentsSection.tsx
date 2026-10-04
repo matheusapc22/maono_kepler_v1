@@ -29,6 +29,7 @@ import { normalizeUserError } from "../../../lib/user-error-catalog";
 
 import "./DocumentsTransferPanel.css";
 import "./DocumentsSection.css";
+import DocumentsPagination from "./DocumentsPagination";
 import { DocumentActionMenu, DocumentIcon, DocumentSortHeading } from "./DocumentsUi";
 import { DocumentMoveDialog, DocumentNameDialog } from "./DocumentActionDialogs";
 
@@ -1324,7 +1325,7 @@ function OrganizationDocuments({
     <section className="documents-section mm-docs" aria-labelledby="mm-docs-title">
       <div className="mm-docs-context"><span>Início</span><DocumentIcon name="arrow" /><span>Arquivos e Documentos</span></div>
       <header className="mm-docs-header">
-        <div className="mm-docs-heading"><div><h2 id="mm-docs-title">Arquivos e Documentos</h2><p>Organize, armazene e compartilhe os documentos do seu projeto em um só lugar.</p></div></div>
+        <div className="mm-docs-heading"><div><h2 id="mm-docs-title">Arquivos e Documentos</h2></div></div>
         <div className="mm-docs-header-actions">
           <div className="mm-docs-view-switch" role="group" aria-label="Navegação de documentos">
             {documentState === "active"
@@ -1338,7 +1339,7 @@ function OrganizationDocuments({
       </header>
 
       {documentState === "active" ? <section className="mm-docs-panel" aria-labelledby="mm-docs-folders-title">
-        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="folder" /><div><h3 id="mm-docs-folders-title">Pastas</h3><p>Organize seus documentos em pastas para facilitar o acesso e a gestão.</p></div></div>{canManage ? <button type="button" className="mm-docs-button is-outlined" disabled={busyFolderId !== null} onClick={() => setCreateFolderDraft({ parentId: browsedFolderId === "root" ? null : browsedFolderId })}><DocumentIcon name="plus" />Nova pasta</button> : null}</div>
+        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="folder" /><div><h3 id="mm-docs-folders-title">Pastas</h3></div></div>{canManage ? <button type="button" className="mm-docs-button is-outlined" disabled={busyFolderId !== null} onClick={() => setCreateFolderDraft({ parentId: browsedFolderId === "root" ? null : browsedFolderId })}><DocumentIcon name="plus" />Nova pasta</button> : null}</div>
         <nav className="mm-docs-breadcrumb documents-folder-breadcrumb" aria-label="Caminho da pasta">
           <button type="button" aria-current={browsedFolderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>
           {breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={browsedFolderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}
@@ -1371,7 +1372,7 @@ function OrganizationDocuments({
         onClose={() => setFolderMoveDraft(null)} onSubmit={handleMoveFolder} /> : null}
 
       <section className="mm-docs-panel" aria-labelledby="mm-docs-filter-title">
-        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="search" /><div><h3 id="mm-docs-filter-title">Buscar e filtrar</h3><p>Encontre documentos rapidamente usando os filtros abaixo.</p></div></div></div>
+        <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="search" /><div><h3 id="mm-docs-filter-title">Buscar e filtrar</h3></div></div></div>
         <form className={`mm-docs-filters documents-filter-toolbar ${documentState === "trash" ? "is-trash" : ""}`} onSubmit={applyDocumentFilters}>
           <label className="mm-docs-field mm-docs-search"><span>Buscar</span><span className="mm-docs-search-control"><DocumentIcon name="search" /><input type="search" value={filterDraft.search} placeholder="Nome do documento..." onChange={event => setFilterDraft(current => ({ ...current, search: event.target.value }))} /></span></label>
           <label className="mm-docs-field mm-docs-type"><span>Tipo</span><select value={filterDraft.type} onChange={event => setFilterDraft(current => ({ ...current, type: event.target.value }))}><option value="">Todos</option>{facets.types.map(type => <option key={type} value={type}>{fileTypeLabel(type)}</option>)}</select></label>
@@ -1563,7 +1564,7 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
         const busy = String(props.busyFileId) === String(file.id);
         return <article className="mm-docs-file-card" role="listitem" key={file.id}><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} /><div className="mm-docs-file-card-meta"><span><small>Tipo</small><strong>{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</strong></span><span><small>Tamanho</small><strong>{formatBytes(file.size)}</strong></span><span><small>Atualizado em</small><strong>{formatDate(file.updatedAt || file.createdAt)}</strong></span></div><ActiveDocumentActions {...props} file={file} busy={busy} /></article>;
       })}</div>}
-      <div className="mm-docs-pagination"><span role="status">{refreshing || pendingNext ? "Atualizando documentos." : `Exibindo ${visibleFiles.length}/${pagination.total}.`}</span><div className="mm-docs-page-controls"><label>Itens por página <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageIndex(0); setPendingNext(false); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><button type="button" className="mm-docs-page-arrow is-previous" aria-label="Página anterior" disabled={!canGoPrevious || refreshing || loadingMore || pendingNext} onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}><DocumentIcon name="chevron" /></button><span className="mm-docs-page-number" aria-current="page">{safePageIndex + 1}</span><button type="button" className="mm-docs-page-arrow" aria-label="Próxima página" disabled={!canGoNext || refreshing || loadingMore || pendingNext} onClick={goNext}><DocumentIcon name="chevron" /></button></div></div>
+      <DocumentsPagination status={refreshing || pendingNext ? "Atualizando documentos." : `Exibindo ${visibleFiles.length}/${pagination.total}.`} page={safePageIndex + 1} pageSize={pageSize} canGoPrevious={canGoPrevious} canGoNext={canGoNext} disabled={refreshing || loadingMore || pendingNext} onPageSize={size => { setPageSize(size); setPageIndex(0); setPendingNext(false); }} onPrevious={() => setPageIndex(Math.max(0, safePageIndex - 1))} onNext={goNext} />
     </>}
   </section>;
 }

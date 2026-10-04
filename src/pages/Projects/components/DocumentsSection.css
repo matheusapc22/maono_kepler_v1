@@ -109,7 +109,7 @@
 .mm-docs .mm-docs-table.is-trash th:nth-child(2), .mm-docs .mm-docs-table.is-trash th:nth-child(3) { width: 13%; }
 .mm-docs .mm-docs-table.is-trash th:nth-child(4), .mm-docs .mm-docs-table.is-trash th:nth-child(5) { width: 14%; }
 .mm-docs .mm-docs-table.is-trash th:last-child { width: 19%; }
-.mm-docs .mm-docs-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--mm-border); font-size: 12px; color: var(--mm-text-soft); }
+:is(.mm-docs, .ticket-center-shell) .mm-docs-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--mm-border); font-size: 12px; color: var(--mm-text-soft); }
 .mm-docs .mm-docs-empty { display: grid; place-items: center; gap: 8px; padding: 36px 20px; color: var(--mm-text-soft); text-align: center; }
 .mm-docs .mm-docs-empty > .mm-docs-icon { width: 34px; height: 34px; color: var(--maono-accent-text); }
 .mm-docs .mm-docs-empty p { margin: 0; }
@@ -138,7 +138,7 @@
   .mm-docs .mm-docs-period > div { grid-template-columns: 1fr; }
   .mm-docs .mm-docs-period .mm-docs-field > span { position: static; width: auto; height: auto; clip-path: none; white-space: normal; }
   .mm-docs .mm-docs-date-arrow { display: none; }
-  .mm-docs .mm-docs-pagination { flex-wrap: wrap; padding-inline: 12px; }
+  :is(.mm-docs, .ticket-center-shell) .mm-docs-pagination { flex-wrap: wrap; padding-inline: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .mm-docs .mm-docs-button { transition: none; } }
 @media (forced-colors: active) {
@@ -150,13 +150,13 @@
 .mm-docs .mm-docs-folder-empty { grid-column: 1 / -1; margin: 0; padding: 22px 10px; color: var(--mm-text-soft); text-align: center; font-size: 12px; }
 .mm-docs .mm-docs-results-tools, .mm-docs .mm-docs-view-mode { display: flex; align-items: center; gap: 4px; }
 .mm-docs .mm-docs-view-mode { padding: 3px; border: 1px solid var(--mm-border-strong); border-radius: 7px; background: #0b1016; }
-.mm-docs .mm-docs-view-mode-button, .mm-docs .mm-docs-page-arrow {
+.mm-docs .mm-docs-view-mode-button, :is(.mm-docs, .ticket-center-shell) .mm-docs-page-arrow {
   display: inline-grid; place-items: center; width: 36px; height: 34px; padding: 0;
   border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mm-text-soft);
   cursor: pointer; font: inherit;
 }
 .mm-docs .mm-docs-view-mode-button[aria-pressed="true"] { border-color: var(--maono-accent-bright); color: var(--maono-accent-bright); background: var(--maono-accent-surface); box-shadow: inset 0 0 0 1px var(--maono-accent-border); }
-.mm-docs .mm-docs-view-mode-button:hover:not(:disabled), .mm-docs .mm-docs-page-arrow:hover:not(:disabled) { color: var(--maono-accent-bright); background: var(--maono-accent-surface); }
+.mm-docs .mm-docs-view-mode-button:hover:not(:disabled), :is(.mm-docs, .ticket-center-shell) .mm-docs-page-arrow:hover:not(:disabled) { color: var(--maono-accent-bright); background: var(--maono-accent-surface); }
 .mm-docs .mm-docs-file-icon { border: 1px solid currentColor; background: rgba(255,255,255,.025); font: 700 8px/1 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -.03em; }
 .mm-docs .mm-docs-file-icon.is-code { color: #62d69a; background: rgba(98,214,154,.08); }
 .mm-docs .mm-docs-file-icon.is-pdf { color: #ff5a62; background: rgba(255,90,98,.08); }
@@ -176,18 +176,18 @@
 .mm-docs .mm-docs-file-card-meta strong { color: var(--mm-text); font-size: 11px; font-weight: 550; overflow-wrap: anywhere; }
 .mm-docs .mm-docs-file-card .mm-docs-row-actions { flex-wrap: wrap; }
 .mm-docs .mm-docs-file-card .mm-docs-move-control { flex: 1 1 150px; }
-.mm-docs .mm-docs-page-controls { display: flex; align-items: center; gap: 7px; }
-.mm-docs .mm-docs-page-controls label { display: inline-flex; align-items: center; gap: 8px; color: var(--mm-text-soft); white-space: nowrap; }
-.mm-docs .mm-docs-page-controls select { min-height: 34px; padding: 5px 26px 5px 9px; border: 1px solid var(--docs-control-border); border-radius: 6px; background: #0b1016; color: var(--mm-text); color-scheme: dark; font: inherit; font-size: 11px; }
-.mm-docs .mm-docs-page-arrow { border-color: var(--mm-border-strong); }
-.mm-docs .mm-docs-page-arrow.is-previous .mm-docs-icon { transform: rotate(180deg); }
-.mm-docs .mm-docs-page-number { display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid var(--maono-accent-bright); border-radius: 6px; background: var(--maono-accent-bright); color: #171105; font-weight: 700; }
+:is(.mm-docs, .ticket-center-shell) .mm-docs-page-controls { display: flex; align-items: center; gap: 7px; }
+:is(.mm-docs, .ticket-center-shell) .mm-docs-page-controls label { display: inline-flex; align-items: center; gap: 8px; color: var(--mm-text-soft); white-space: nowrap; }
+:is(.mm-docs, .ticket-center-shell) .mm-docs-page-controls select { min-height: 34px; padding: 5px 26px 5px 9px; border: 1px solid var(--docs-control-border); border-radius: 6px; background: #0b1016; color: var(--mm-text); color-scheme: dark; font: inherit; font-size: 11px; }
+:is(.mm-docs, .ticket-center-shell) .mm-docs-page-arrow { border-color: var(--mm-border-strong); }
+:is(.mm-docs, .ticket-center-shell) .mm-docs-page-arrow.is-previous .mm-docs-icon { transform: rotate(180deg); }
+:is(.mm-docs, .ticket-center-shell) .mm-docs-page-number { display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid var(--maono-accent-bright); border-radius: 6px; background: var(--maono-accent-bright); color: #171105; font-weight: 700; }
 @container (max-width: 900px) { .mm-docs .mm-docs-file-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 560px) {
   .mm-docs .mm-docs-view-mode { margin-left: auto; }
   .mm-docs .mm-docs-file-grid { grid-template-columns: 1fr; padding-inline: 12px; }
   .mm-docs .mm-docs-file-card-meta { grid-template-columns: 1fr; }
-  .mm-docs .mm-docs-page-controls { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+  :is(.mm-docs, .ticket-center-shell) .mm-docs-page-controls { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
 }
 
 .mm-docs .mm-docs-breadcrumb { min-height: 34px; }

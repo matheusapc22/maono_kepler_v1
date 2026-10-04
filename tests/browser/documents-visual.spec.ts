@@ -1445,3 +1445,53 @@ for (const width of [320, 1440]) {
     await page.locator(".mm-docs-header").screenshot({ path: testInfo.outputPath(`documents-title-${width}.png`), animations: "disabled" });
   });
 }
+
+for (const width of [390, 1440]) {
+  test(`subtítulos indicados removidos ${width}px: títulos, espaço e controles preservados`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const requests = await setup(page, { dataset: sortingFiles });
+    await openDocuments(page);
+    for (const helper of [
+      'Organize, armazene e compartilhe os documentos do seu projeto em um só lugar.',
+      'Organize seus documentos em pastas para facilitar o acesso e a gestão.',
+      'Encontre documentos rapidamente usando os filtros abaixo.',
+    ]) await expect(page.getByText(helper, { exact: true })).toHaveCount(0);
+    for (const id of ['mm-docs-title', 'mm-docs-folders-title', 'mm-docs-filter-title']) {
+      const heading = page.locator(`#${id}`);
+      await expect(heading).toBeVisible();
+      expect(await heading.evaluate(element => ({
+        children: element.parentElement!.children.length,
+        spareHeight: element.parentElement!.getBoundingClientRect().height - element.getBoundingClientRect().height,
+      }))).toEqual({ children: 1, spareHeight: 0 });
+    }
+    await expect(page.locator('[aria-labelledby="mm-docs-folders-title"] .mm-docs-panel-title > svg')).toHaveCount(1);
+    await expect(page.locator('.mm-docs-folder-card')).toHaveCount(2);
+    await expect(page.locator('.mm-docs-page-number')).toHaveText('1');
+    const next = page.getByRole('button', { name: 'Próxima página', exact: true });
+    await next.focus(); await page.keyboard.press('Enter');
+    await expect(page.locator('.mm-docs-page-number')).toHaveText('2');
+    const previous = page.getByRole('button', { name: 'Página anterior', exact: true });
+    await previous.focus(); await page.keyboard.press('Enter');
+    await expect(page.locator('.mm-docs-page-number')).toHaveText('1');
+    await page.getByLabel('Itens por página').selectOption('25');
+    await expect(page.locator('.mm-docs-table tbody tr')).toHaveCount(25);
+    await page.locator('.mm-docs-search input').fill('Documento_0');
+    await page.locator('.mm-docs-search input').press('Enter');
+    await expect.poll(() => {
+      const last = [...requests].reverse().find(request => new URL(request.url).pathname === '/api/organizations/1/files');
+      return last ? new URL(last.url).searchParams.get('search') : null;
+    }).toBe('Documento_0');
+    await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click();
+    await expect(page.locator('.mm-docs-search input')).toHaveValue('');
+    await page.locator('.mm-docs').screenshot({ path: testInfo.outputPath(`documents-no-helpers-${width}.png`), animations: 'disabled' });
+    await page.getByRole('button', { name: 'Lixeira', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Documentos na Lixeira', exact: true })).toBeVisible();
+    await expect(page.locator('#mm-docs-title')).toBeVisible();
+    await expect(page.locator('#mm-docs-filter-title')).toBeVisible();
+    await expect(page.locator('.mm-docs-heading p, [aria-labelledby="mm-docs-filter-title"] .mm-docs-panel-title p')).toHaveCount(0);
+    await expect(page.locator('.mm-docs-results .mm-docs-panel-title p')).toContainText('itens na Lixeira');
+    await page.getByRole('button', { name: 'Documentos', exact: true }).click();
+    await expect(page.locator('#mm-docs-folders-title')).toBeVisible();
+    expect(requests.filter(request => request.method !== 'GET')).toEqual([]);
+  });
+}

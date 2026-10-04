@@ -309,7 +309,9 @@ test("UI implementa árvore, breadcrumb, CRUD, move e filtro por pasta", async (
   assert.match(source, /moveOrganizationFileToFolder/);
   assert.match(source, /folderId/);
   assert.match(source, /Limpar filtros/);
-  assert.match(source, /Itens por página/);
+  assert.match(source, /<DocumentsPagination/);
+  const pagination = await readFile(new URL("../src/pages/Projects/components/DocumentsPagination.tsx", import.meta.url), "utf8");
+  assert.match(pagination, /Itens por página/);
   assert.match(source, /directFolders/);
   assert.match(source, /folder\.parentId == null/);
   assert.match(source, /String\(folder\.parentId \?\? ""\) === currentFolderId/);

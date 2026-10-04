@@ -1,3 +1,4 @@
+import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -81,7 +82,7 @@ const preserved = {
 };
 for (const [path, hash] of Object.entries(preserved)) {
   test(`card/switcher revision preserves ${path}`, () => {
-    let source = read(path);
+    let source = restoreTicketVisualExtraction(path, read(path));
     // Later explicitly approved tweaks: creation-label/inset and removal of
     // the footer strip. Normalize only those exact changes; retain the older
     // card/switcher scope guard for every other byte.

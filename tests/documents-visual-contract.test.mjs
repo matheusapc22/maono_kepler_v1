@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const component = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8');
+const pagination = readFileSync(new URL('../src/pages/Projects/components/DocumentsPagination.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.css', import.meta.url), 'utf8');
 const densityCss = readFileSync(new URL('../src/platform-density.css', import.meta.url), 'utf8');
 const menu = readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8');
@@ -37,7 +38,7 @@ test('controller preserves existing document lifecycles and declares folder move
   assert.ok(component.includes('parentId: targetParentId === "root" ? null : targetParentId'));
 });
 test('workspace includes real structural blocks, not generated-content headings', () => {
-  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-breadcrumb','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-page-controls','mm-docs-file-grid']) assert.ok(component.includes(name));
+  for (const name of ['mm-docs-header','mm-docs-folder-grid','mm-docs-breadcrumb','mm-docs-filters','mm-docs-results','mm-docs-table-scroll','mm-docs-view-mode','mm-docs-file-grid']) assert.ok(component.includes(name));
   assert.ok(component.includes('Buscar e filtrar'));
   assert.ok(component.includes('Documentos encontrados'));
   assert.ok(!component.includes('role="tree"'));
@@ -51,7 +52,7 @@ test('stylesheet is scoped and adds no important, universal field sizing or zoom
   assert.ok(css.includes('prefers-reduced-motion'));
 });
 test('cursor, permission and purge contracts remain in the real component', () => {
-  for (const token of ['pagination.hasMore && pagination.nextCursor','permanentPurgeEnabled && canManage && canDelete','EXCLUIR PERMANENTEMENTE','canUpload && documentState === "active"','disabled={busy || expired}','limit: 50','MAX_FILE_BYTES = 50 * 1024 * 1024','Itens por página','Visualização em grade','directFolders']) assert.ok(component.includes(token), token);
+  for (const token of ['pagination.hasMore && pagination.nextCursor','permanentPurgeEnabled && canManage && canDelete','EXCLUIR PERMANENTEMENTE','canUpload && documentState === "active"','disabled={busy || expired}','limit: 50','MAX_FILE_BYTES = 50 * 1024 * 1024','Visualização em grade','directFolders']) assert.ok(component.includes(token), token);
   assert.ok(!component.includes('type="checkbox"'));
 });
 test('folder navigation omits virtual cards and lineage stays explicit', () => {
@@ -185,4 +186,26 @@ test('document titles omit the duplicate folder icon in normal and unavailable-a
   assert.ok(!css.includes('.mm-docs-heading > .mm-docs-icon'), 'no obsolete desktop/mobile icon slot');
   assert.ok(!densityCss.includes('.mm-docs-heading'), 'density overrides do not reserve space for the removed icon');
   assert.match(css, /\.mm-docs \.mm-docs-heading \{ min-width: 0; \}/);
+});
+
+
+test('Documents and Central use one unchanged pagination presentation with the real count supplied by each controller', () => {
+  assert.ok(component.includes('<DocumentsPagination status={'));
+  for (const token of ['mm-docs-page-controls', 'Itens por página', 'value={10}', 'value={25}', 'value={50}', 'Página anterior', 'Próxima página', 'aria-current="page"']) assert.ok(pagination.includes(token), token);
+  assert.ok(css.includes(':is(.mm-docs, .ticket-center-shell) .mm-docs-pagination'));
+});
+
+test('only screenshot-marked helper paragraphs disappear; headings and state guidance stay', () => {
+  for (const helper of [
+    'Organize, armazene e compartilhe os documentos do seu projeto em um só lugar.',
+    'Organize seus documentos em pastas para facilitar o acesso e a gestão.',
+    'Encontre documentos rapidamente usando os filtros abaixo.',
+  ]) assert.ok(!component.includes(helper), helper);
+  for (const heading of [
+    '<h2 id="mm-docs-title">Arquivos e Documentos</h2></div>',
+    '<h3 id="mm-docs-folders-title">Pastas</h3></div>',
+    '<h3 id="mm-docs-filter-title">Buscar e filtrar</h3></div>',
+  ]) assert.ok(component.includes(heading), 'no empty helper element or spacer after the retained heading');
+  assert.ok(component.includes('<DocumentIcon name="folder" /><div><h3 id="mm-docs-folders-title">'));
+  for (const guidance of ['Selecione uma organização.', 'Acesso não permitido.', 'Carregando documentos...', 'A consulta precisa de atenção.', 'itens na Lixeira']) assert.ok(component.includes(guidance), guidance);
 });

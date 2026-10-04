@@ -368,7 +368,14 @@ const ProjectsPage: React.FC = () => {
     async function restoreTicketLink() {
       const href = window.location.href;
       const target = new URL(href).searchParams.get('cc_org');
-      if (!target) return;
+      if (!target) {
+        ticketLinkEpoch.current += 1;
+        setTicketLinkRestoring(false); setTicketLinkError(null);
+        if (currentSidebarSectionRef.current === "requests") {
+          setSidebarSection("all"); setSearchQuery(""); setProjectActionError(null);
+        }
+        return;
+      }
       const epoch = ++ticketLinkEpoch.current;
       if (!/^[1-9]\d*$/.test(target) || !organizations.some(org => String(org.id) === target)) {
         setTicketLinkError('A organização deste link não está disponível para seu acesso.');
@@ -798,6 +805,9 @@ const ProjectsPage: React.FC = () => {
                 user={user}
                 organizationId={activeOrganizationId}
                 organizationName={activeOrganization?.name}
+                onHome={() => {
+                  setSidebarSection("all"); setSearchQuery(""); setProjectActionError(null);
+                }}
               />
             )}
           </div>
@@ -813,12 +823,14 @@ function ProjectsSectionRouter({
   user,
   organizationId,
   organizationName,
+  onHome,
 }: {
   section: ProjectSidebarSection;
   projects: MaonoProject[];
   user: MaonoUser | null;
   organizationId: number | string | null;
   organizationName?: string | null;
+  onHome: () => void;
 }) {
   const accessControlUser = userAsAccessControlUser(user);
   const requiredPermission = SECTION_PERMISSIONS[section];
@@ -853,6 +865,7 @@ function ProjectsSectionRouter({
           user={accessControlUser}
           organizationId={organizationId}
           organizationName={organizationName}
+          onHome={onHome}
         />
       );
 
