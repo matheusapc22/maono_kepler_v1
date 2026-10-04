@@ -4,7 +4,7 @@ Data: 2026-10-04. Base de código: `be531dea28ce6a0b7a36a10028ad58777714bc36` (P
 
 ## Resultado e limites do inventário
 
-A busca estática de todas as declarações JSX de `select` em `src`, cruzada com as rotas/imports, encontrou **93 controles em 31 arquivos**: **88 declarações alcançáveis no aplicativo em 29 arquivos**, **2 em `ExportsSection.tsx` sem import atual**, e **3 no antigo `AdminFiles.tsx`**, que não tem import de produção. **90 declarações foram migradas em 30 arquivos**: as 88 alcançáveis e, preventivamente, as 2 de `ExportsSection.tsx`. A verificação de alcance percorreu os imports relativos desde `src/main.tsx` (378 arquivos alcançados), além da inspeção das rotas. Os números contam declarações no código, não cada instância gerada por listas, nem os controles internos da biblioteca Kepler.
+A busca estática de todas as declarações JSX de `select` em `src`, cruzada com as rotas/imports, encontrou **93 controles em 31 arquivos**: **88 declarações alcançáveis no aplicativo em 29 arquivos**, **2 em `ExportsSection.tsx` sem import atual**, e **3 no antigo `AdminFiles.tsx`**, que não tem import de produção. **90 declarações foram migradas em 30 arquivos**: as 88 alcançáveis e, preventivamente, as 2 de `ExportsSection.tsx`. A verificação de alcance percorreu os imports relativos desde `src/main.tsx` (378 arquivos no levantamento inicial, antes da extração do helper de paginação do Roadmap), além da inspeção das rotas. Os números contam declarações no código, não cada instância gerada por listas, nem os controles internos da biblioteca Kepler.
 
 Também foram auditados dropdowns/listboxes customizados, filtros de busca/data/faixa, checklists, radios e modais relacionados. Não se afirma que todas as combinações de dados, permissões, hardware ou tecnologia assistiva foram exercitadas em navegador.
 
@@ -17,7 +17,7 @@ Também foram auditados dropdowns/listboxes customizados, filtros de busca/data/
 | Área ou componente | Declarações migradas | Arquivos e controles |
 | --- | ---: | --- |
 | Projetos: Todos, Recentes e Favoritos, em `/projects` | 3 | `ProjectPagesUi.tsx`: status, ordem e itens por página; componente compartilhado pelas três seções |
-| Arquivos e Documentos | 5 | `DocumentsSection.tsx` (4: tipo, projeto, pasta, ordem); `DocumentsPagination.tsx` (1: itens por página), também usado pela Central |
+| Arquivos e Documentos | 5 | `DocumentsSection.tsx` (4: tipo, projeto, pasta, ordem); `DocumentsPagination.tsx` (1: itens por página), também usado pela Central e pelo Roadmap |
 | Central de Chamados e subpainéis | 42 | `TicketsToolbar.tsx` (5), `TicketKanbanView.tsx` (1), `TicketCasesPanel.tsx` (9), `TicketTriageFields.tsx` (3), `NewTicketPopover.tsx` (3), `TicketDetailDrawer.tsx` (4), `TicketLifecyclePanel.tsx` (4), `TicketKnowledgePanel.tsx` (5), `TicketFeedbackPanel.tsx` (3), `TicketSlaPanel.tsx` (1), `TicketExportsPanel.tsx` (3), `TicketChanges.tsx` (1) |
 | Roadmap | 9 | `RoadmapSection.tsx`: roadmap, status, fase, responsável, escala e quatro campos do drawer; o layout desta seção é uma mudança coordenada separadamente |
 | Usuários e Acessos | 2 | `UsersAccessOverviewSection.tsx`: situação e perfil |
@@ -58,7 +58,7 @@ Os componentes de Projects estão em `src/pages/Projects/components/`; os de adm
 ## Verificações
 
 - `tests/maono-select-migration.test.mjs`: **30/30**. Inclui hashes SHA-256 de 27 consumidores após reverter exclusivamente import/tags da extração visual; protege todas as demais linhas de domínio, opções, handlers e permissões. O teste de inventário impede novos selects ativos não auditados.
-- Subconjunto anterior com os guards existentes de Projects/organização: **78/78**; o guard adicional do fallback é incluído no gate final. As normalizações antigas continuam; a única normalização nova reverte import/tag do controle.
+- Subconjunto anterior com os guards existentes de Projects/organização: **78/78**; o guard adicional do fallback é incluído no gate final. Na migração dos seletores, a normalização reverte somente import/tag do controle. O ajuste posterior de paginação do Roadmap acrescenta uma normalização separada que reverte exatamente sua inclusão nos onze seletores CSS compartilhados, mantendo todas as declarações protegidas.
 - `tests/browser/maono-select.spec.ts`: **35/35** em Chromium, Firefox e WebKit desktop, Chromium mobile e WebKit mobile. Mouse/teclado, um único change, cancelamento, disabled, required, `name`/`form`, reset não controlado, ref, alteração controlada externa, lista vazia, optgroup desabilitado, nomes longos, rolagem, viewport e popover em diálogo nativo, desabilitação herdada de fieldset durante abertura, retorno de enabled sem reabertura indevida, troca assíncrona de opções, unmount e ativação repetida.
 - Central em rota React real: **18/18 em Vite dev**, cobrindo três engines, touch, teclado, focus/Esc, mesmos SVGs, filtros e parâmetros. O gate final usa também o aplicativo compilado.
 - Typecheck passou; lint do novo componente e dos novos testes passou sem erros. Os erros de Fast Refresh já existentes em `OrganizationPermissionManager.tsx` e `Projects.tsx` são anteriores à migração.

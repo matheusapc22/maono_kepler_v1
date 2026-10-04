@@ -46,10 +46,11 @@ jobs:
       - name: Roadmap contracts and original controller preservation
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
-        run: node --test tests/roadmap*.test.mjs tests/organization-switcher-redesign.test.mjs
+        run: node --experimental-strip-types --test tests/roadmap*.test.mjs tests/organization-switcher-redesign.test.mjs
       - name: Scoped lint
         run: >-
           npx eslint src/pages/Projects/components/RoadmapSection.tsx
+          src/pages/Projects/components/roadmap-pagination.ts
           tests/browser/roadmap-workspace.spec.ts playwright.roadmap.config.ts
       - name: Typecheck and build actual application
         env:

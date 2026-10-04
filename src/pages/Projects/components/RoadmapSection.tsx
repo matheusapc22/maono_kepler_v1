@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { DocumentIcon } from "./DocumentsUi";
+import DocumentsPagination from "./DocumentsPagination";
+import { paginateRoadmapTasks, reconcileRoadmapPagination, roadmapPaginationKey, type RoadmapPaginationState } from "./roadmap-pagination";
 import "./roadmap-workspace.css";
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
@@ -30,7 +32,7 @@ function RoadmapMetrics({ bundle }: { bundle: RoadmapBundle }) {
   return <section className="roadmap-metrics" aria-label="Indicadores do roadmap">{items.map(([label, value, icon]) => <article key={label}><span aria-hidden="true">{icon}</span><div><small>{label}</small><strong>{value}</strong></div></article>)}</section>;
 }
 
-function GanttView({ bundle, onOpen, scale }: { bundle: RoadmapBundle; onOpen: (task: RoadmapTask) => void; scale: RoadmapScale }) {
+function GanttView({ bundle, tasks, onOpen, scale }: { bundle: RoadmapBundle; tasks: RoadmapTask[]; onOpen: (task: RoadmapTask) => void; scale: RoadmapScale }) {
   const start = bundle.roadmap.startDate; const end = bundle.roadmap.endDate; const total = timelineDays(start, end);
   const markerCount = scale === "day" ? 14 : scale === "week" ? 12 : 8;
   const markers = Array.from({ length: markerCount }, (_, index) => {
@@ -43,7 +45,7 @@ function GanttView({ bundle, onOpen, scale }: { bundle: RoadmapBundle; onOpen: (
     <div className="roadmap-gantt-head" role="row"><strong role="columnheader">Tarefa / responsável</strong><div role="columnheader">{markers.map((item) => <span key={item.date} title={formatDate(item.date)} style={{ left: `${item.left}%` }}>{scale === "month" ? new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }) : new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>)}</div></div>
     <div className="roadmap-gantt-body">
       <i className="roadmap-today-line" style={{ left: `calc(320px + (100% - 320px) * ${todayLeft / 100})` }}><span>Hoje</span></i>
-      {bundle.tasks.map((task) => {
+      {tasks.map((task) => {
         const left = position(task.startDate, start, total); const right = position(task.endDate, start, total); const overdue = !["completed", "cancelled"].includes(task.status) && task.endDate < today();
         return <button type="button" role="row" key={task.id} className="roadmap-gantt-row" onClick={() => onOpen(task)} onKeyDown={(event) => { if (event.key === "Enter") onOpen(task); }}>
           <span role="cell"><b>{task.title}</b><small>{task.phaseName} · {person(task)}</small></span>
@@ -88,9 +90,18 @@ export default function RoadmapSection({ user, organizationId, organizationName,
   const context = useMemo(() => ({ organizationId: organizationId || undefined, organization: organizationId ? { id: organizationId } : undefined }), [organizationId]);
   const canView = can(user, PERMISSION.ROADMAP_VIEW, context); const canManage = can(user, PERMISSION.ROADMAP_MANAGE, context) || can(user, PERMISSION.ROADMAP_TASK_MANAGE, context); const canComment = can(user, PERMISSION.ROADMAP_COMMENT_CREATE, context);
   const [roadmaps, setRoadmaps] = useState<RoadmapSummary[]>([]); const [roadmapId, setRoadmapId] = useState<number | null>(null); const [bundle, setBundle] = useState<RoadmapBundle | null>(null); const [filters, setFilters] = useState<RoadmapFilters>(DEFAULT_ROADMAP_FILTERS); const [view, setView] = useState<RoadmapView>(() => (window.innerWidth < 760 ? "list" : "gantt")); const [scale, setScale] = useState<RoadmapScale>("week"); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null); const [drawerOpen, setDrawerOpen] = useState(false); const [selected, setSelected] = useState<RoadmapTask | null>(null); const requestRef = useRef(0);
+  const queryKey = roadmapPaginationKey(organizationId, roadmapId, filters);
+  const [loadedBundleKey, setLoadedBundleKey] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<RoadmapPaginationState>({ queryKey: "", pageIndex: 0, pageSize: 10 });
+  const totalTasks = bundle?.tasks.length ?? 0;
+  const resolvedPagination = reconcileRoadmapPagination(pagination, queryKey, totalTasks);
+  const page = paginateRoadmapTasks(bundle?.tasks ?? [], resolvedPagination.pageIndex, resolvedPagination.pageSize);
+  const paginationPending = loading || loadedBundleKey !== queryKey;
+  useEffect(() => { setPagination(current => reconcileRoadmapPagination(current, queryKey, totalTasks)); }, [queryKey, totalTasks]);
+  function changePage(pageIndex: number, pageSize: number = page.pageSize) { setPagination({ queryKey, pageIndex, pageSize }); }
   async function loadIndex(signal?: AbortSignal) { if (!organizationId || !canView) return; setLoading(true); try { const items = await listRoadmaps(organizationId, signal); setRoadmaps(items); setRoadmapId((current) => items.some((item) => item.id === current) ? current : items[0]?.id || null); } catch (value) { if (!(value instanceof DOMException && value.name === "AbortError")) setError(errorText(value)); } finally { setLoading(false); } }
-  async function loadBundle(background = false) { if (!organizationId || !roadmapId) { setBundle(null); return; } const id = ++requestRef.current; if (!background) setLoading(true); try { const value = await getRoadmap(organizationId, roadmapId, filters); if (id === requestRef.current) { setBundle(value); setError(null); } } catch (value) { if (id === requestRef.current) setError(errorText(value)); } finally { if (id === requestRef.current) setLoading(false); } }
-  useEffect(() => { const controller = new AbortController(); setRoadmaps([]); setBundle(null); setFilters(DEFAULT_ROADMAP_FILTERS); void loadIndex(controller.signal); return () => controller.abort(); }, [organizationId, canView]);
+  async function loadBundle(background = false) { if (!organizationId || !roadmapId) { setBundle(null); return; } const id = ++requestRef.current; if (!background) setLoading(true); try { const value = await getRoadmap(organizationId, roadmapId, filters); if (id === requestRef.current) { setBundle(value); setLoadedBundleKey(queryKey); setError(null); } } catch (value) { if (id === requestRef.current) setError(errorText(value)); } finally { if (id === requestRef.current) setLoading(false); } }
+  useEffect(() => { const controller = new AbortController(); setRoadmaps([]); setBundle(null); setLoadedBundleKey(null); setFilters(DEFAULT_ROADMAP_FILTERS); void loadIndex(controller.signal); return () => controller.abort(); }, [organizationId, canView]);
   useEffect(() => { const adapt = () => { if (window.innerWidth < 760) setView("list"); }; adapt(); window.addEventListener("resize", adapt); return () => window.removeEventListener("resize", adapt); }, []);
   useEffect(() => { const timer = window.setTimeout(() => void loadBundle(), filters.search ? 250 : 0); return () => window.clearTimeout(timer); }, [roadmapId, filters]);
   async function quickCreateRoadmap() { if (!organizationId) return; const name = window.prompt("Nome do roadmap", `Roadmap ${organizationName || "da organização"}`); if (!name) return; const startDate = today(); const endDate = new Date(Date.now() + 120 * DAY).toISOString().slice(0, 10); try { const item = await createRoadmap(organizationId, { name, startDate, endDate, description: "Plano de prestação de serviços" }); setRoadmaps((current) => [item, ...current]); setRoadmapId(item.id); } catch (value) { setError(errorText(value)); } }
@@ -137,7 +148,7 @@ export default function RoadmapSection({ user, organizationId, organizationName,
           </div>
         </section>
         <RoadmapMetrics bundle={bundle} />
-        <section className="roadmap-content" aria-label="Tarefas do roadmap" aria-busy={loading}>
+        <section className="roadmap-content" aria-label="Tarefas do roadmap" aria-busy={paginationPending}>
           <header className="roadmap-content-header">
             <h2>{view === "gantt" ? "Cronograma" : "Tarefas"}</h2>
             <div className="roadmap-view-tools">
@@ -150,12 +161,18 @@ export default function RoadmapSection({ user, organizationId, organizationName,
               </div>
             </div>
           </header>
-          <div key={view} className="roadmap-scroll" tabIndex={0} role="region" aria-label={view === "gantt" ? "Rolagem do cronograma" : "Rolagem das tarefas"}>
-            {bundle.tasks.length ? view === "gantt" ? <GanttView bundle={bundle} scale={scale} onOpen={openTask} /> : <ListView tasks={bundle.tasks} onOpen={openTask} /> : <div className="roadmap-empty"><strong>Nenhuma tarefa no período</strong><p>Ajuste os filtros ou registre a primeira entrega.</p>{canManage ? <button className="mm-button" type="button" onClick={() => openTask(null)}>Nova tarefa</button> : null}</div>}
+          <div key={`${view}:${queryKey}:${page.pageIndex}:${page.pageSize}`} className="roadmap-scroll" tabIndex={0} role="region" aria-label={view === "gantt" ? "Rolagem do cronograma" : "Rolagem das tarefas"}>
+            {bundle.tasks.length ? view === "gantt" ? <GanttView bundle={bundle} tasks={page.tasks} scale={scale} onOpen={openTask} /> : <ListView tasks={page.tasks} onOpen={openTask} /> : <div className="roadmap-empty"><strong>Nenhuma tarefa no período</strong><p>Ajuste os filtros ou registre a primeira entrega.</p>{canManage ? <button className="mm-button" type="button" onClick={() => openTask(null)}>Nova tarefa</button> : null}</div>}
           </div>
-          <footer className="roadmap-footer" aria-label="Período do roadmap">
-            <span><time dateTime={bundle.roadmap.startDate}>{formatDate(bundle.roadmap.startDate)}</time> a <time dateTime={bundle.roadmap.endDate}>{formatDate(bundle.roadmap.endDate)}</time></span>
-            <span>{bundle.roadmap.calendarPolicy === "business_days" ? "Dias úteis" : "Dias corridos"}{bundle.roadmap.timezone ? ` · ${bundle.roadmap.timezone}` : ""}</span>
+          <footer className="roadmap-pagination" aria-label="Paginação das tarefas">
+            <DocumentsPagination
+              status={paginationPending ? error && !loading ? "Não foi possível atualizar tarefas." : "Atualizando tarefas." : `Exibindo ${page.tasks.length}/${page.total}.`}
+              page={page.pageIndex + 1} pageSize={page.pageSize}
+              canGoPrevious={page.canGoPrevious} canGoNext={page.canGoNext}
+              disabled={paginationPending} disablePageSize={paginationPending}
+              onPageSize={size => changePage(0, size)}
+              onPrevious={() => changePage(page.pageIndex - 1)} onNext={() => changePage(page.pageIndex + 1)}
+            />
           </footer>
         </section>
         <TaskDrawer open={drawerOpen} task={selected} bundle={bundle} canManage={canManage} canComment={canComment} organizationId={organizationId} onClose={() => setDrawerOpen(false)} onSaved={() => void loadBundle(true)} />

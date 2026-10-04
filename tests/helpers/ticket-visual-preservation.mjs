@@ -6,6 +6,10 @@ const extractedFooter = "      <DocumentsPagination status={refreshing || pendin
 const homeCallback = "                onHome={() => {\n                  setSidebarSection(\"all\"); setSearchQuery(\"\"); setProjectActionError(null);\n                }}\n";
 export function restoreTicketVisualExtraction(path, source) {
   if (path.endsWith('/DocumentsSection.css')) {
+    // Roadmap only joins the exact shared pagination selectors; declaration hashes remain intact.
+    const roadmapScope = ':is(.mm-docs, .ticket-center-shell, .roadmap-workspace)';
+    assert.equal(source.split(roadmapScope).length - 1, 11);
+    source = source.replaceAll(roadmapScope, ':is(.mm-docs, .ticket-center-shell)');
     return source.replaceAll(':is(.mm-docs, .ticket-center-shell) .mm-docs-page', '.mm-docs .mm-docs-page').replaceAll(':is(.mm-docs, .ticket-center-shell) .mm-docs-pagination', '.mm-docs .mm-docs-pagination');
   }
   if (path.endsWith('/DocumentsSection.tsx')) {

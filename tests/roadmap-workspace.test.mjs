@@ -21,16 +21,22 @@ test("Roadmap retains real timeline/list modes, filters, metrics and mutation ha
   assert.match(source, /aria-label="Escala do cronograma"[\s\S]*?disabled=\{view === "list"\}/);
   assert.match(source, /aria-pressed=\{view === "gantt"\}/);
   assert.match(source, /aria-pressed=\{view === "list"\}/);
-  assert.match(source, /<div key=\{view\} className="roadmap-scroll"/);
+  assert.match(source, /<div key=\{`\$\{view\}:\$\{queryKey\}:\$\{page.pageIndex\}:\$\{page.pageSize\}`\} className="roadmap-scroll"/);
   assert.match(source, /title=\{formatDate\(item.date\)\}/);
 });
 
-test("The timeline footer uses API calendar metadata without fake paging or totals", () => {
-  const footer = source.match(/<footer className="roadmap-footer"[\s\S]*?<\/footer>/)?.[0] || "";
-  for (const field of ["startDate", "endDate", "calendarPolicy", "timezone"]) assert.ok(footer.includes(`bundle.roadmap.${field}`), field);
-  assert.doesNotMatch(footer, /tasks\.length|total|pageSize|pagination|Página/);
+test("Roadmap replaces the old information strip with the exact shared pagination component", () => {
+  const footer = source.match(/<footer className="roadmap-pagination"[\s\S]*?<\/footer>/)?.[0] || "";
+  assert.match(footer, /<DocumentsPagination/);
+  assert.match(footer, /Exibindo \$\{page.tasks.length\}\/\$\{page.total\}/);
+  assert.match(footer, /page=\{page.pageIndex \+ 1\} pageSize=\{page.pageSize\}/);
+  assert.doesNotMatch(source, /className="roadmap-footer"|Dias úteis|Dias corridos|bundle.roadmap.timezone/);
+  assert.doesNotMatch(footer, /formatDate|<time|calendarPolicy/);
+  assert.match(source, /<RoadmapMetrics bundle=\{bundle\}/);
+  assert.match(source, /<GanttView bundle=\{bundle\} tasks=\{page.tasks\}/);
+  assert.match(source, /<ListView tasks=\{page.tasks\}/);
+  assert.match(source, /const start = bundle.roadmap.startDate; const end = bundle.roadmap.endDate/);
   assert.match(css, /\.roadmap-scroll \{[^}]*max-height:[^}]*overflow: auto/);
-  assert.match(css, /\.roadmap-footer \{[^}]*border-top:/);
   assert.match(css, /\.roadmap-content \{ display: block/);
   assert.match(css, /\.roadmap-view-switch button \{ display: inline-flex/);
   assert.match(css, /focus-visible/);
