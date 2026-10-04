@@ -1,0 +1,139 @@
+name: Project Pages Workspace
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/main.tsx'
+      - 'vite.config.ts'
+      - 'src/platform-density.css'
+      - 'src/pages/Kepler/**'
+      - 'src/shared-sidebar-scrollbars.css'
+      - 'src/maono-design-tokens.css'
+      - 'src/pages/Projects.tsx'
+      - 'src/pages/ProjectsSidebar.tsx'
+      - 'src/pages/Projects/**'
+      - 'src/access-control/**'
+      - 'src/auth/session.tsx'
+      - 'functions/_lib/project-list.js'
+      - 'functions/api/projects/**'
+      - 'tests/platform-density.test.mjs'
+      - 'tests/browser/platform-density-map.spec.ts'
+      - 'tests/browser/map-add-data-sidebar.spec.ts'
+      - 'tests/map-add-data-sidebar.test.mjs'
+      - 'tests/map-sidebar-scrollbars.test.mjs'
+      - 'tests/data-import-localization.test.mjs'
+      - 'tests/tileset-localization-contract.test.mjs'
+      - 'tests/browser/map-sidebar-scrollbars.spec.ts'
+      - 'tests/browser/map-panel-minimal.spec.ts'
+      - 'tests/browser/map-panel-hint-compatibility.spec.ts'
+      - 'tests/browser/fixtures/map-panel-minimal.ts'
+      - 'tests/map-panel-minimal.test.mjs'
+      - 'tests/map-panel-hints.test.mjs'
+      - 'tests/map-filter-enabled-native.test.mjs'
+      - 'tests/map-save-conflict-preservation.test.mjs'
+      - 'tests/browser/map-data-localization.spec.ts'
+      - 'tests/project-pages-contract.test.mjs'
+      - 'tests/projects-scrollbars.test.mjs'
+      - 'tests/browser/project-pages.spec.ts'
+      - 'playwright.project-pages.config.ts'
+      - '.github/workflows/project-pages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  project-pages:
+    runs-on: ubuntu-latest
+    # Includes native map import, localization and nested-scroll checks in three engines.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install existing repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Original source, pure filtering/paging and existing behavior contracts
+        env:
+          PROJECT_PAGES_REQUIRE_BASELINE: "1"
+        run: >-
+          node --experimental-strip-types --test tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/map-panel-hints.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
+          tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
+          tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
+          tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs
+          tests/project-route-semantics.test.mjs tests/projects-fallback-scope.test.mjs
+          tests/documents-visual-contract.test.mjs
+      - name: Build application
+        id: build
+        env:
+          VITE_MAONO_MAP_SHELL_V1: "true"
+          VITE_MAONO_LAYER_MANAGER_V1: "true"
+          VITE_MAONO_MAP_OVERLAY_V1: "true"
+        run: npm run build
+      - name: Compiled map build for independent QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-pages-build-${{ github.sha }}
+          # Keep the exact build separate from potentially large failure traces.
+          # All browser cases still run below with the existing assertions.
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Install browser engines
+        id: browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Early panel help and disclosure diagnostics (three engines)
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: panel-help-results.json
+        run: >-
+          xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24"
+          npx playwright test --config=playwright.project-pages.config.ts
+          --grep="contextual panel help|disclosure chevrons|mouse-only panel help"
+          --output=test-results-panel-help --reporter=list,json
+      - name: Small panel evidence for independent inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-panel-focused-evidence-${{ github.sha }}
+          # Keep the early Firefox event timeline and traces separately retrievable.
+          path: |
+            test-results-panel-help/
+            panel-help-results.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Actual compiled React route with fixture APIs (not production acceptance)
+        # A focused failure must not suppress any of the existing full-suite cases.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' }}
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: project-pages-results.json
+        run: xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24" npx playwright test --config=playwright.project-pages.config.ts --reporter=list,json
+      - name: Evidence and inspectable local build (no credentials)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-pages-${{ github.sha }}
+          path: |
+            test-results/
+            project-pages-results.json
+            dist/
+            tests/project-pages-contract.test.mjs
+            tests/projects-scrollbars.test.mjs
+            src/pages/Projects/projects-scrollbars.css
+            tests/browser/project-pages.spec.ts
+            tests/browser/platform-density-map.spec.ts
+            tests/browser/map-panel-minimal.spec.ts
+            tests/browser/map-panel-hint-compatibility.spec.ts
+            tests/browser/fixtures/map-panel-minimal.ts
+            tests/map-panel-minimal.test.mjs
+            tests/map-panel-hints.test.mjs
+            tests/map-filter-enabled-native.test.mjs
+            tests/map-save-conflict-preservation.test.mjs
+            tests/platform-density.test.mjs
+            src/platform-density.css
+            playwright.project-pages.config.ts
+            src/pages/Projects/components/ProjectPagesUi.tsx
+            src/pages/Projects/components/ProjectPages.css
+            src/pages/Projects/components/project-page-query.ts
+          if-no-files-found: warn
+          retention-days: 14

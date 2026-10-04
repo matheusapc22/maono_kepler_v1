@@ -1,5 +1,6 @@
 import type { PointClusterLayerPolicy } from "../../clustering/point-cluster-policy";
 import { usePointClusterController } from "../../clustering/point-cluster-controller-bridge";
+import PanelHint from "./PanelHint";
 import "./point-spatial-grouping.css";
 
 const REASON_MESSAGES: Record<string, string> = {
@@ -63,7 +64,12 @@ export default function PointSpatialGroupingSection({
     >
       <header>
         <div>
-          <strong>Agrupamento espacial</strong>
+          <span className="maono-panel-hint-heading">
+            <strong>Agrupamento espacial</strong>
+            <PanelHint label="Sobre o agrupamento espacial">
+              {"Os agrupamentos são uma representação interna da mesma camada. A visibilidade, a ordem e o estilo lógico permanecem únicos no painel."}
+            </PanelHint>
+          </span>
           <small>
             {formatPointCount(item.eligibility.pointCount)} pontos · alternância interna por zoom
           </small>
@@ -79,11 +85,6 @@ export default function PointSpatialGroupingSection({
           <em>{policy.enabled ? "Ativo" : "Inativo"}</em>
         </label>
       </header>
-
-      <p className="maono-point-spatial-grouping__description">
-        Os agrupamentos são uma representação interna da mesma camada. A
-        visibilidade, a ordem e o estilo lógico permanecem únicos no painel.
-      </p>
 
       {!editable ? (
         <p className="maono-point-spatial-grouping__notice">

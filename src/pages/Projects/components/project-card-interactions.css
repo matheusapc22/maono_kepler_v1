@@ -1,0 +1,56 @@
+/* Whole-card navigation, without changing project grid or density tokens. */
+:root .mm-projects-content .mm-project-card[role="link"] {
+  cursor: pointer;
+}
+
+:root .mm-projects-content .mm-project-card[role="link"]:hover {
+  transform: translateY(-1px);
+  border-color: var(--maono-accent-border);
+  background:
+    linear-gradient(180deg, rgba(17, 22, 29, 0.99), rgba(8, 16, 25, 0.99));
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.26),
+    0 0 0 1px var(--maono-accent-surface);
+}
+
+:root .mm-projects-content .mm-project-card[role="link"]:focus-visible {
+  outline: 3px solid var(--project-focus-ring);
+  outline-offset: 3px;
+  border-color: var(--maono-accent-border-strong);
+}
+
+:root .mm-projects-content .mm-project-card[role="link"][aria-disabled="true"] {
+  cursor: wait;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root .mm-projects-content .mm-project-card[role="link"]:hover {
+    transform: none;
+  }
+}
+
+/* Compact preview controls; keep larger touch targets on narrow/coarse screens. */
+:root .mm-projects-content .mm-project-card .mm-project-card__actions {
+  --project-action-target: 32px;
+}
+
+:root .mm-projects-content .mm-project-card .mm-project-card__actions
+  :is(.mm-project-card__favorite, .mm-project-card__more) {
+  width: var(--project-action-target) !important;
+  height: var(--project-action-target) !important;
+  min-width: var(--project-action-target);
+  min-height: var(--project-action-target);
+  flex-basis: var(--project-action-target);
+  border-radius: 9px !important;
+}
+
+:root .mm-projects-content .mm-project-card .mm-project-card__actions button > svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  :root .mm-projects-content .mm-project-card .mm-project-card__actions {
+    --project-action-target: 44px;
+  }
+}

@@ -1,0 +1,207 @@
+/* Camadas/Filtros share one flat surface. Scope stays inside this panel and
+ * its own edge handle; map geometry, Add Data and other tools are untouched. */
+.maono-map-runtime .maono-layer-panel {
+  --maono-layer-gold: var(--maono-accent-bright, #f2c766);
+  --maono-layer-gold-bright: var(--maono-accent-text, #f3d58a);
+  --maono-layer-panel-bg: var(--maono-map-panel, #0a0f18);
+  --maono-layer-text: var(--maono-map-text, #f7f2e8);
+  --maono-layer-text-soft: var(--maono-map-text-soft, #c8d1df);
+  --maono-layer-muted: #9da9ba;
+  --maono-panel-divider: rgb(255 255 255 / 8%);
+  --maono-panel-hover: rgb(255 255 255 / 2.5%);
+  --maono-panel-padding: 12px;
+  background: var(--maono-layer-panel-bg);
+  box-shadow: none;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__header {
+  padding-inline: var(--maono-panel-padding);
+  border-bottom-color: var(--maono-panel-divider);
+  background: transparent;
+  backdrop-filter: none;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__tabs {
+  border-bottom-color: var(--maono-panel-divider);
+  background: transparent;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__tabs button {
+  color: var(--maono-layer-text-soft);
+  background: transparent;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__tabs button.is-active {
+  color: var(--maono-layer-gold);
+  border-bottom-color: var(--maono-layer-gold);
+  background: transparent;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__tabs button > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border: 0;
+  color: var(--maono-layer-text-soft);
+  background: var(--maono-layer-raised);
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 10px var(--maono-panel-padding);
+  border: 0;
+  background: transparent;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__search {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__search input {
+  height: 38px;
+  padding-right: 10px;
+  border-color: var(--maono-layer-border);
+  border-radius: 8px;
+  background: var(--maono-layer-raised);
+  box-shadow: none;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__search:has(> button) input { padding-right: 33px; }
+.maono-map-runtime .maono-layer-panel :is(.maono-add-layer__trigger, .maono-filter-add-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #15130e;
+  background: var(--maono-layer-gold);
+  box-shadow: none;
+  font-size: var(--maono-panel-font-10, 12.5px);
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.maono-map-runtime .maono-layer-panel .maono-add-layer__menu {
+  max-height: max(100px, calc(100dvh - 220px));
+}
+.maono-map-runtime .maono-layer-panel .maono-add-layer__menu > header,
+.maono-map-runtime .maono-layer-panel .maono-add-layer__import { flex: 0 0 auto; }
+.maono-map-runtime .maono-layer-panel .maono-add-layer__datasets { min-height: 0; }
+.maono-map-runtime .maono-layer-panel .maono-add-layer__trigger span { display: inline; }
+.maono-map-runtime .maono-layer-panel .maono-filter-add-button svg { width: 16px; height: 16px; }
+.maono-map-runtime .maono-layer-panel .maono-filter-panel__toolbar { justify-content: flex-end; }
+.maono-map-runtime .maono-layer-panel .maono-filter-panel { overflow: hidden; }
+.maono-map-runtime .maono-layer-panel :is(.maono-layer-list-region, .maono-filter-list-region) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 var(--maono-panel-padding) 12px;
+}
+.maono-map-runtime .maono-layer-panel :is(.maono-layer-list, .maono-filter-groups) {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+.maono-map-runtime .maono-layer-panel .maono-map-panel-row {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--maono-panel-divider);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.maono-map-runtime .maono-layer-panel .maono-map-panel-row:hover,
+.maono-map-runtime .maono-layer-panel .maono-map-panel-row.is-expanded {
+  border-bottom-color: var(--maono-panel-divider);
+}
+.maono-map-runtime .maono-layer-panel .maono-map-panel-row:last-child { border-bottom: 0; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row {
+  grid-template-columns: 18px 31px 4px minmax(0, 1fr) auto;
+  gap: 9px;
+  min-height: 66px;
+  padding: 12px 0;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-row:hover { background: var(--maono-panel-hover); }
+.maono-map-runtime .maono-layer-panel .maono-layer-row.is-selected { background: transparent; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row.is-hidden { opacity: 1; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row.is-drag-target {
+  border-top: 2px solid var(--maono-layer-gold);
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-row.is-dragging,
+.maono-map-runtime .maono-layer-panel .maono-layer-row.is-dragging .maono-layer-row__grip { cursor: grabbing; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__grip { grid-column: 1; width: 18px; }
+.maono-map-runtime .maono-layer-panel :is(.maono-layer-row__visibility, .maono-layer-row__visibility-state) { grid-column: 2; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__swatch { grid-column: 3; width: 4px; height: 40px; box-shadow: none; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__main { grid-column: 4; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__controls { grid-column: 5; }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__open strong { color: var(--maono-layer-text); font-size: var(--maono-panel-font-11, 13.75px); }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__open small { color: var(--maono-layer-muted); font-size: var(--maono-panel-font-9, 11.25px); }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__visibility[aria-pressed="true"] { color: var(--maono-layer-gold); }
+.maono-map-runtime .maono-layer-panel .maono-layer-row__visibility[aria-pressed="false"] { color: var(--maono-layer-muted); }
+.maono-map-runtime .maono-layer-panel .maono-filter-group { overflow: visible; }
+.maono-map-runtime .maono-layer-panel .maono-filter-group__toggle {
+  grid-template-columns: 4px minmax(0, 1fr) 18px;
+  gap: 12px;
+  min-height: 66px;
+  padding: 12px 0;
+  border: 0;
+}
+.maono-map-runtime .maono-layer-panel .maono-filter-group__toggle:hover { background: var(--maono-panel-hover); }
+.maono-map-runtime .maono-layer-panel .maono-filter-group__toggle strong { color: var(--maono-layer-text); font-size: var(--maono-panel-font-11, 13.75px); }
+.maono-map-runtime .maono-layer-panel .maono-filter-group__accent { width: 4px; min-height: 30px; }
+.maono-map-runtime .maono-layer-panel .maono-filter-group__chevron { transform: rotate(0deg); transform-origin: center; transition: transform 160ms ease; }
+.maono-map-runtime .maono-layer-panel .maono-filter-group.is-expanded .maono-filter-group__chevron { transform: rotate(90deg); }
+.maono-map-runtime .maono-layer-panel .maono-filter-group__rows { gap: 0; padding: 0 0 0 16px; border-top: 1px solid var(--maono-panel-divider); }
+.maono-map-runtime .maono-layer-panel .maono-filter-row {
+  border: 0;
+  border-bottom: 1px solid var(--maono-panel-divider);
+  border-radius: 0;
+  background: transparent;
+  padding-block: 12px;
+}
+.maono-map-runtime .maono-layer-panel .maono-filter-row:last-child { border-bottom: 0; }
+.maono-map-runtime .maono-layer-panel .maono-filter-row:hover { background: var(--maono-panel-hover); }
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__save-footer {
+  padding: 12px var(--maono-panel-padding);
+  border: 0;
+  background: var(--maono-layer-panel-bg);
+  box-shadow: none;
+}
+.maono-map-runtime .maono-layer-panel .maono-layer-panel__save-button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--maono-layer-gold);
+  box-shadow: none;
+}
+.maono-map-panel-host[data-active-panel="layers"] .maono-map-panel-host__handle {
+  top: 50%;
+  width: 28px;
+  height: 52px;
+  border-color: var(--maono-accent-border);
+  border-radius: 0 10px 10px 0;
+  color: var(--maono-accent-bright);
+  box-shadow: none;
+  transform: translateY(-50%);
+}
+.maono-map-panel-host[data-active-panel="layers"] .maono-map-panel-host__handle svg { transform: rotate(0deg); transform-origin: center; transition: transform 180ms ease; }
+.maono-map-panel-host[data-active-panel="layers"][data-panel-open="false"] .maono-map-panel-host__handle svg { transform: rotate(180deg); }
+@media (max-width: 560px) {
+  .maono-map-runtime .maono-layer-panel .maono-add-layer { margin-left: auto; }
+  .maono-map-runtime .maono-layer-panel .maono-layer-row { gap: 6px; grid-template-columns: 16px 28px 4px minmax(0, 1fr) auto; }
+}
+@media (max-width: 360px) {
+  .maono-map-runtime .maono-layer-panel .maono-layer-panel__tabs button { flex-wrap: wrap; gap: 2px; padding-inline: 2px; font-size: 12px; }
+  .maono-map-runtime .maono-layer-panel .maono-layer-panel__tabs svg { flex: 0 0 14px; width: 14px; height: 14px; }
+  .maono-map-runtime .maono-layer-panel .maono-layer-panel__tabs button > span { min-width: 20px; height: 20px; padding-inline: 4px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .maono-map-panel-host[data-active-panel="layers"] .maono-map-panel-host__handle svg,
+  .maono-map-runtime .maono-layer-panel .maono-filter-group__chevron { transition: none; }
+}

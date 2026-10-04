@@ -2,11 +2,7 @@
 // Copyright contributors to the kepler.gl project
 // @ts-nocheck
 
-import { PanelHeaderFactory, Icons } from "@kepler.gl/components";
-import {
-  BUG_REPORT_LINK,
-  USER_GUIDE_DOC,
-} from "@kepler.gl/constants";
+import { PanelHeaderFactory } from "@kepler.gl/components";
 import Logo from "../../../assets/images/Logo_Maono.png";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 
@@ -29,22 +25,6 @@ export function CustomPanelHeaderFactory(...deps) {
   const WrappedPanelHeader = (props) => {
     const { context } = useMapPanel();
     const actionItems = [
-      {
-        id: "bug",
-        iconComponent: Icons.Bug,
-        href: BUG_REPORT_LINK,
-        blank: true,
-        tooltip: "Bug Report",
-        onClick: () => {},
-      },
-      {
-        id: "docs",
-        iconComponent: Icons.Docs2,
-        href: USER_GUIDE_DOC,
-        blank: true,
-        tooltip: "User Guide",
-        onClick: () => {},
-      },
       ...(context?.capabilities?.saveMap
         ? [
           defaultActionItems.find((item) => item.id === "storage"),

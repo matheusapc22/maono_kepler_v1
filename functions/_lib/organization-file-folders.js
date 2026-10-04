@@ -20,6 +20,35 @@ function timestamp() {
   return new Date().toISOString();
 }
 
+// Recheck depth inside the write, not only during validation: another move can
+// change the destination or source subtree between the lookup and this query.
+// Bounded recursion also fails closed if a legacy tree is already corrupt.
+const hierarchyDepthGuard = `(
+  WITH RECURSIVE
+  ancestors(id, parent_id, depth) AS (
+    SELECT id, parent_id, 1 FROM organization_file_folders
+    WHERE id = ? AND organization_id = ? AND deleted_at IS NULL
+    UNION ALL
+    SELECT parent.id, parent.parent_id, ancestors.depth + 1
+    FROM organization_file_folders parent
+    JOIN ancestors ON parent.id = ancestors.parent_id
+    WHERE parent.organization_id = ? AND parent.deleted_at IS NULL
+      AND ancestors.depth <= ${DOCUMENT_FOLDER_MAX_DEPTH}
+  ),
+  subtree(id, depth) AS (
+    SELECT id, 1 FROM organization_file_folders
+    WHERE id = ? AND organization_id = ? AND deleted_at IS NULL
+    UNION ALL
+    SELECT child.id, subtree.depth + 1
+    FROM organization_file_folders child
+    JOIN subtree ON child.parent_id = subtree.id
+    WHERE child.organization_id = ? AND child.deleted_at IS NULL
+      AND subtree.depth <= ${DOCUMENT_FOLDER_MAX_DEPTH}
+  )
+  SELECT COALESCE((SELECT MAX(depth) FROM ancestors), 0)
+       + COALESCE((SELECT MAX(depth) FROM subtree), 1) <= ${DOCUMENT_FOLDER_MAX_DEPTH}
+)`;
+
 export async function requireDocumentFoldersSchema(env) {
   const hasFolders = await tableExists(env, "organization_file_folders");
   if (!hasFolders) {
@@ -51,7 +80,14 @@ export async function requireDocumentFoldersSchema(env) {
 }
 
 export function normalizeDocumentFolderName(value) {
-  const name = String(value || "").trim().replace(/\s+/g, " ");
+  if (value !== undefined && value !== null && typeof value !== "string") {
+    throw folderError("Nome de pasta inválido.", 400, "DOCUMENT_FOLDER_NAME_INVALID");
+  }
+  // Do not silently accept control characters through whitespace normalization.
+  if (/[\u0000-\u001f\u007f]/.test(value || "")) {
+    throw folderError("O nome da pasta contém caracteres inválidos.", 400, "DOCUMENT_FOLDER_NAME_INVALID");
+  }
+  const name = (value || "").trim().replace(/\s+/g, " ");
 
   if (!name) {
     throw folderError(
@@ -76,6 +112,25 @@ export function normalizeDocumentFolderName(value) {
   }
 
   return name;
+}
+
+export function validateDocumentFolderPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw folderError("Informe os dados da pasta em um objeto.", 400, "DOCUMENT_FOLDER_PATCH_INVALID");
+  }
+  return payload;
+}
+
+function normalizeFolderId(value, code = "DOCUMENT_FOLDER_PARENT_INVALID") {
+  if (value === null) return null;
+  // JSON booleans, arrays and objects must not coerce to an existing folder ID.
+  const validType = typeof value === "number" ||
+    (typeof value === "string" && /^[1-9]\d*$/.test(value));
+  const id = validType ? Number(value) : NaN;
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw folderError("Pasta inválida.", 400, code);
+  }
+  return id;
 }
 
 export function publicDocumentFolder(row) {
@@ -157,6 +212,7 @@ async function folderDepth(env, organizationId, folderId) {
         INNER JOIN lineage ON parent.id = lineage.parent_id
         WHERE parent.organization_id = ?
           AND parent.deleted_at IS NULL
+          AND lineage.depth <= ${DOCUMENT_FOLDER_MAX_DEPTH}
       )
       SELECT COALESCE(MAX(depth), 0) AS depth
       FROM lineage
@@ -184,6 +240,7 @@ async function subtreeHeight(env, organizationId, folderId) {
         INNER JOIN descendants ON child.parent_id = descendants.id
         WHERE child.organization_id = ?
           AND child.deleted_at IS NULL
+          AND descendants.depth <= ${DOCUMENT_FOLDER_MAX_DEPTH}
       )
       SELECT COALESCE(MAX(depth), 1) AS height
       FROM descendants
@@ -205,7 +262,7 @@ async function parentIsDescendant(env, organizationId, folderId, parentId) {
         WHERE parent_id = ?
           AND organization_id = ?
           AND deleted_at IS NULL
-        UNION ALL
+        UNION
         SELECT child.id
         FROM organization_file_folders child
         INNER JOIN descendants ON child.parent_id = descendants.id
@@ -277,14 +334,7 @@ async function validateParent(
     return null;
   }
 
-  const numericParentId = Number(parentId);
-  if (!Number.isInteger(numericParentId) || numericParentId <= 0) {
-    throw folderError(
-      "Pasta pai inválida.",
-      400,
-      "DOCUMENT_FOLDER_PARENT_INVALID",
-    );
-  }
+  const numericParentId = normalizeFolderId(parentId);
 
   if (movingFolderId && Number(movingFolderId) === numericParentId) {
     throw folderError(
@@ -383,10 +433,7 @@ export async function createDocumentFolder(
 ) {
   await requireDocumentFoldersSchema(env);
   const normalizedName = normalizeDocumentFolderName(name);
-  const normalizedParentId =
-    parentId === null || parentId === undefined || parentId === ""
-      ? null
-      : Number(parentId);
+  const normalizedParentId = normalizeFolderId(parentId);
 
   await validateParent(env, organizationId, normalizedParentId);
   await assertSiblingNameAvailable(
@@ -407,7 +454,9 @@ export async function createDocumentFolder(
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        SELECT ?, ?, ?, ?, ?, ?
+        WHERE ${hierarchyDepthGuard}
+        RETURNING *
       `)
       .bind(
         organizationId,
@@ -416,14 +465,19 @@ export async function createDocumentFolder(
         userId || null,
         timestamp(),
         timestamp(),
+        normalizedParentId,
+        organizationId,
+        organizationId,
+        null,
+        organizationId,
+        organizationId,
       )
-      .run();
+      .first();
 
-    return getDocumentFolderOrThrow(
-      env,
-      organizationId,
-      Number(result?.meta?.last_row_id || result?.meta?.last_insert_rowid),
-    );
+    if (!result) {
+      throw folderError("A estrutura excede a profundidade máxima de 5 níveis.", 400, "DOCUMENT_FOLDER_DEPTH_EXCEEDED");
+    }
+    return result;
   } catch (error) {
     throw mapConstraintError(error);
   }
@@ -435,6 +489,7 @@ export async function updateDocumentFolder(
   folderId,
   patch = {},
 ) {
+  validateDocumentFolderPayload(patch);
   await requireDocumentFoldersSchema(env);
   const current = await getDocumentFolderOrThrow(
     env,
@@ -457,10 +512,12 @@ export async function updateDocumentFolder(
     ? normalizeDocumentFolderName(patch.name)
     : current.name;
   const parentId = hasParent
-    ? patch.parentId === null || patch.parentId === ""
-      ? null
-      : Number(patch.parentId)
+    ? normalizeFolderId(patch.parentId)
     : current.parent_id;
+
+  if (hasParent && parentId === (current.parent_id ?? null) && name === current.name) {
+    throw folderError("A pasta já está neste destino.", 409, "DOCUMENT_FOLDER_SAME_PARENT");
+  }
 
   await validateParent(env, organizationId, parentId, folderId);
   await assertSiblingNameAvailable(
@@ -472,7 +529,7 @@ export async function updateDocumentFolder(
   );
 
   try {
-    await getDb(env)
+    const updated = await getDb(env)
       .prepare(`
         UPDATE organization_file_folders
         SET name = ?,
@@ -481,11 +538,19 @@ export async function updateDocumentFolder(
         WHERE id = ?
           AND organization_id = ?
           AND deleted_at IS NULL
+          AND parent_id IS ?
+          AND name = ?
+          AND ${hierarchyDepthGuard}
+        RETURNING *
       `)
-      .bind(name, parentId, timestamp(), folderId, organizationId)
-      .run();
+      .bind(name, parentId, timestamp(), folderId, organizationId, current.parent_id ?? null, current.name,
+        parentId, organizationId, organizationId, folderId, organizationId, organizationId)
+      .first();
 
-    return getDocumentFolderOrThrow(env, organizationId, folderId);
+    if (!updated) {
+      throw folderError("A pasta ou o destino foi alterado. Atualize e tente novamente.", 409, "DOCUMENT_FOLDER_MOVE_CONFLICT");
+    }
+    return updated;
   } catch (error) {
     throw mapConstraintError(error);
   }
@@ -552,15 +617,16 @@ export async function moveOrganizationFileToFolder(
   folderId,
 ) {
   await requireDocumentFoldersSchema(env);
+  const activeFile = `id = ? AND organization_id = ?
+    AND deleted_at IS NULL AND purged_at IS NULL
+    AND (active = 1 OR active IS NULL)
+    AND (status = 'ACTIVE' OR status IS NULL)`;
 
   const file = await getDb(env)
     .prepare(`
       SELECT *
       FROM organization_files
-      WHERE id = ?
-        AND organization_id = ?
-        AND deleted_at IS NULL
-        AND (active = 1 OR active IS NULL)
+      WHERE ${activeFile}
       LIMIT 1
     `)
     .bind(fileId, organizationId)
@@ -575,19 +641,9 @@ export async function moveOrganizationFileToFolder(
     );
   }
 
-  const normalizedFolderId =
-    folderId === null || folderId === undefined || folderId === ""
-      ? null
-      : Number(folderId);
+  const normalizedFolderId = normalizeFolderId(folderId, "DOCUMENT_FOLDER_INVALID");
 
   if (normalizedFolderId !== null) {
-    if (!Number.isInteger(normalizedFolderId) || normalizedFolderId <= 0) {
-      throw folderError(
-        "Pasta inválida.",
-        400,
-        "DOCUMENT_FOLDER_INVALID",
-      );
-    }
     await getDocumentFolderOrThrow(
       env,
       organizationId,
@@ -595,29 +651,27 @@ export async function moveOrganizationFileToFolder(
     );
   }
 
+  if (normalizedFolderId === (file.folder_id ?? null)) {
+    throw folderError("O arquivo já está neste destino.", 409, "DOCUMENT_FOLDER_SAME_PARENT");
+  }
+
   try {
-    await getDb(env)
+    const moved = await getDb(env)
       .prepare(`
         UPDATE organization_files
         SET folder_id = ?,
             updated_at = ?
-        WHERE id = ?
-          AND organization_id = ?
+        WHERE ${activeFile}
+          AND folder_id IS ?
+        RETURNING *
       `)
-      .bind(normalizedFolderId, timestamp(), fileId, organizationId)
-      .run();
+      .bind(normalizedFolderId, timestamp(), fileId, organizationId, file.folder_id ?? null)
+      .first();
+    if (!moved) {
+      throw folderError("O arquivo foi alterado. Atualize e tente novamente.", 409, "DOCUMENT_FILE_MOVE_CONFLICT");
+    }
+    return moved;
   } catch (error) {
     throw mapConstraintError(error);
   }
-
-  return getDb(env)
-    .prepare(`
-      SELECT *
-      FROM organization_files
-      WHERE id = ?
-        AND organization_id = ?
-      LIMIT 1
-    `)
-    .bind(fileId, organizationId)
-    .first();
 }

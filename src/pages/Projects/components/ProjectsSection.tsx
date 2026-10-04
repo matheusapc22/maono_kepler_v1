@@ -13,6 +13,13 @@ import {
   type ProjectSectionKey,
 } from "../projects-api";
 import ProjectCard from "./ProjectCard";
+import {
+  ProjectPageFiltersForm, ProjectPageIcon, ProjectPagePagination,
+} from "./ProjectPagesUi";
+import {
+  PROJECT_PAGE_COPY, DEFAULT_PROJECT_FILTERS, filterAndSortProjects, projectPage,
+  type ProjectPageFilters,
+} from "./project-page-query";
 import ProjectMetadataPanel from "./ProjectMetadataPanel";
 import {
   activateProjectThumbnailCacheContext,
@@ -25,6 +32,9 @@ type ProjectsSectionProps = {
   section: ProjectSectionKey;
   projects: ProjectListItem[];
   searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  actionError?: string | null;
+  onDismissActionError?: () => void;
   loading?: boolean;
   error?: string | null;
   favoriteBusySlugs?: Record<string, true>;
@@ -36,72 +46,13 @@ type ProjectsSectionProps = {
   onRetry?: () => void;
 };
 
-function sectionCopy(section: ProjectSectionKey) {
-  if (section === "recent") {
-    return {
-      emptyTitle: "Nenhum projeto recente",
-      emptyDescription:
-        "Projetos criados ou atualizados recentemente aparecerão aqui.",
-    };
-  }
-
-  if (section === "favorites") {
-    return {
-      emptyTitle: "Nenhum favorito ainda",
-      emptyDescription:
-        "Marque projetos com estrela para acessá-los rapidamente.",
-    };
-  }
-
-  return {
-    emptyTitle: "Nenhum projeto liberado",
-    emptyDescription:
-      "Sua conta ainda não possui projetos vinculados ou autorizados.",
-  };
-}
-
-function matchesSearch(project: ProjectListItem, searchQuery: string) {
-  const query = searchQuery.trim().toLowerCase();
-
-  if (!query) {
-    return true;
-  }
-
-  const searchable = [
-    project.name,
-    project.slug,
-    project.description,
-    project.accessLevel,
-    project.organizationId,
-    project.organization_id,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return searchable.includes(query);
-}
-
-function EmptyState({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <section className="mm-empty-state">
-      <div>▧</div>
-      <h2>{title}</h2>
-      <p>{description}</p>
-    </section>
-  );
-}
-
 const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   section,
   projects,
   searchQuery,
+  onSearchQueryChange,
+  actionError = null,
+  onDismissActionError,
   loading = false,
   error = null,
   favoriteBusySlugs = {},
@@ -112,10 +63,25 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   onProjectUpdated,
   onRetry,
 }) => {
+  const [draftFilters, setDraftFilters] = useState<ProjectPageFilters>({ ...DEFAULT_PROJECT_FILTERS, search: searchQuery });
+  const [appliedFilters, setAppliedFilters] = useState<ProjectPageFilters>({ ...DEFAULT_PROJECT_FILTERS, search: searchQuery });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  // Sidebar search keeps its established immediate behavior; the page form has
+  // an explicit draft/apply boundary for all three controls.
+  useEffect(() => {
+    setDraftFilters(current => ({ ...current, search: searchQuery }));
+    setCurrentPage(1);
+  }, [searchQuery]);
   const filteredProjects = useMemo(
-    () => projects.filter((project) => matchesSearch(project, searchQuery)),
-    [projects, searchQuery],
+    () => filterAndSortProjects(projects, { ...appliedFilters, search: searchQuery }),
+    [projects, appliedFilters, searchQuery],
   );
+  const pagination = useMemo(() => projectPage(filteredProjects, currentPage, pageSize), [filteredProjects, currentPage, pageSize]);
+  useEffect(() => {
+    setCurrentPage(pagination.page);
+  }, [pagination.page]);
+  const visibleProjects = pagination.items;
   const thumbnailOrganizationKey = useMemo(
     () =>
       projects.length > 0
@@ -132,21 +98,21 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   useEffect(() => {
     if (
       openingSlug &&
-      !filteredProjects.some((project) => project.slug === openingSlug)
+      !visibleProjects.some((project) => project.slug === openingSlug)
     ) {
       setOpeningSlug(null);
     }
 
     if (
       actionsOpenSlug &&
-      !filteredProjects.some((project) => project.slug === actionsOpenSlug)
+      !visibleProjects.some((project) => project.slug === actionsOpenSlug)
     ) {
       setActionsOpenSlug(null);
     }
 
     if (
       editingProject &&
-      !filteredProjects.some(
+      !visibleProjects.some(
         (project) => project.slug === editingProject.slug,
       )
     ) {
@@ -155,7 +121,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   }, [
     actionsOpenSlug,
     editingProject,
-    filteredProjects,
+    visibleProjects,
     openingSlug,
   ]);
 
@@ -253,53 +219,42 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     };
   }, [onProjectUpdated, projects]);
 
-  if (loading && projects.length === 0) {
-    return <ProjectGridSkeleton />;
-  }
-
-  if (error) {
-    return (
-      <section className="mm-empty-state" role="alert">
-        <div>!</div>
-        <h2>Não foi possível carregar os projetos</h2>
-        <p>{error}</p>
-        {onRetry ? (
-          <button type="button" className="mm-btn" onClick={onRetry}>
-            Tentar novamente
-          </button>
-        ) : null}
-      </section>
-    );
-  }
-
-  if (projects.length === 0) {
-    const copy = sectionCopy(section);
-
-    return (
-      <EmptyState
-        title={copy.emptyTitle}
-        description={copy.emptyDescription}
-      />
-    );
-  }
-
-  if (filteredProjects.length === 0) {
-    return (
-      <EmptyState
-        title="Nenhum projeto encontrado"
-        description="Tente buscar pelo nome, identificador ou tipo de acesso."
-      />
-    );
-  }
-
+  const copy = PROJECT_PAGE_COPY[section];
+  const hasAppliedFilters = Boolean(searchQuery.trim()) || appliedFilters.status !== "all";
   return (
-    <>
+    <div className="mm-project-pages__workspace">
+      <ProjectPageFiltersForm
+        value={draftFilters}
+        disabled={loading && projects.length === 0}
+        onChange={setDraftFilters}
+        onApply={() => {
+          setAppliedFilters({ ...draftFilters });
+          onSearchQueryChange(draftFilters.search);
+          setCurrentPage(1);
+          setActionsOpenSlug(null);
+          setEditingProject(null);
+        }}
+        onClear={() => {
+          setDraftFilters({ ...DEFAULT_PROJECT_FILTERS });
+          setAppliedFilters({ ...DEFAULT_PROJECT_FILTERS });
+          onSearchQueryChange("");
+          setCurrentPage(1);
+        }}
+      />
+      {actionError ? <div className="mm-project-pages__error" role="alert"><p>{actionError}</p>{onDismissActionError ? <button type="button" className="mm-project-pages__button" onClick={onDismissActionError}>Fechar aviso</button> : null}</div> : null}
+      {error ? <section className="mm-project-pages__empty" role="alert">
+        <h2>Não foi possível carregar os projetos</h2><p>{error}</p>
+        {onRetry ? <button type="button" className="mm-project-pages__button" onClick={onRetry}>Tentar novamente</button> : null}
+      </section> : loading && projects.length === 0 ? <ProjectGridSkeleton /> : filteredProjects.length === 0 ? <section className="mm-project-pages__empty">
+        <ProjectPageIcon name={copy.icon} /><h2>{copy.empty}</h2>
+        {hasAppliedFilters ? <p>Tente outra busca ou limpe os filtros.</p> : null}
+      </section> : (
       <section
-        className="mm-project-grid"
+        className="mm-project-grid mm-project-pages__grid"
         aria-busy={loading}
         aria-label="Projetos disponíveis"
       >
-        {filteredProjects.map((project) => (
+        {visibleProjects.map((project) => (
           <ProjectCard
             key={projectCardKey(project)}
             project={project}
@@ -358,7 +313,17 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
           </span>
         ) : null}
       </section>
-
+      )}
+      <ProjectPagePagination
+        visibleCount={error ? 0 : visibleProjects.length}
+        total={error ? 0 : pagination.total}
+        page={pagination.page}
+        pageCount={pagination.pageCount}
+        pageSize={pageSize}
+        disabled={loading || Boolean(error)}
+        onPage={page => { setCurrentPage(page); setActionsOpenSlug(null); setEditingProject(null); }}
+        onPageSize={size => { setPageSize(size); setCurrentPage(1); setActionsOpenSlug(null); setEditingProject(null); }}
+      />
       <ProjectMetadataPanel
         project={editingProject}
         open={Boolean(editingProject)}
@@ -368,7 +333,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
           onProjectUpdated(updatedProject);
         }}
       />
-    </>
+    </div>
   );
 };
 

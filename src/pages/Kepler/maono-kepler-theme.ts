@@ -14,6 +14,14 @@ export const MAONO_KEPLER_ACCENT_BRIGHT = "#f2c766";
 export const MAONO_KEPLER_ACCENT_TEXT = "#f3d58a";
 
 export const MAONO_KEPLER_THEME_OVERRIDES = Object.freeze({
+  // Native Kepler dialogs share the compact spacing policy. Keep its existing
+  // font/input sizes; upstream code also consumes these concrete theme values.
+  sidePanelInnerPadding: 12,
+  panelHeaderHeight: 40,
+  layerPanelHeaderHeight: 40,
+  modalLateralPadding: "56px",
+  modalPortableLateralPadding: "28px",
+
   // Core active/selected identity.
   activeColor: MAONO_KEPLER_ACCENT,
   activeColorHover: MAONO_KEPLER_ACCENT_BRIGHT,

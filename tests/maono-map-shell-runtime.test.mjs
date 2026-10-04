@@ -84,7 +84,7 @@ test("runtime é a única fonte efetiva de panelOpen", () => {
     1,
   );
   assert.match(runtime, /event\.key === "Escape"/);
-  assert.match(runtime, /onClose=\{\(\) => setPanelOpen\(false\)\}/);
+  assert.match(runtime, /onClose=\{closePanel\}/);
   assert.match(panelHost, /onClick=\{onClose\}/);
   assert.match(panelHost, /onClick=\{onToggle\}/);
 });

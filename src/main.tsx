@@ -9,6 +9,7 @@ import "./pages/Admin/maono-admin-accent.css";
 import "./pages/maono-login-accent.css";
 import "./index.css";
 import "./platform-layout.css";
+import "./platform-density.css";
 import "./components/loading/Skeleton.css";
 import "./components/loading/UniversalLoader.css";
 import "./fallback-ui-styles";

@@ -1,3 +1,5 @@
+@import "../../../../shared-sidebar-scrollbars.css";
+
 .maono-map-runtime,
 .maono-map-runtime *,
 .maono-map-runtime *::before,
@@ -686,11 +688,6 @@
     gap: 6px;
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .maono-map-sidebar__nav::-webkit-scrollbar {
-    display: none;
   }
 
   .maono-map-sidebar__nav a,

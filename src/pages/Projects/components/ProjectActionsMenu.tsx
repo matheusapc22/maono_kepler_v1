@@ -198,6 +198,7 @@ const ProjectActionsMenu: React.FC<ProjectActionsMenuProps> = ({
               background: "#0a1119",
               boxShadow: "0 18px 42px rgba(0,0,0,0.45)",
             }}
+            onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -223,6 +224,7 @@ const ProjectActionsMenu: React.FC<ProjectActionsMenuProps> = ({
                 textAlign: "left",
                 cursor: "pointer",
               }}
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -265,6 +267,7 @@ const ProjectActionsMenu: React.FC<ProjectActionsMenuProps> = ({
             "0 0 0 2px rgba(0,0,0,0.35), 0 8px 20px rgba(0,0,0,0.42)",
           cursor: "pointer",
         }}
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();

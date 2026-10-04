@@ -217,7 +217,7 @@ const MapUrlLoader = connectStore(
       projectSlug?: string;
       changeRequestId?: string;
     }>();
-    const { context } = useMapPanel();
+    const { context, customMapShellEnabled } = useMapPanel();
     const location = useLocation();
     const store = useStore();
     const loadedProjectRef = useRef<string | null>(null);
@@ -225,7 +225,7 @@ const MapUrlLoader = connectStore(
     const [retryToken, setRetryToken] = useState(0);
     const [loadCycleComplete, setLoadCycleComplete] = useState(false);
 
-    useLoadingActivity(isMapLoading, {
+    useLoadingActivity(isMapLoading && (!customMapShellEnabled || (Boolean(projectSlug) && !loadCycleComplete)), {
     metadata: {
       label: "map-hydration",
       scope: "map",
@@ -239,8 +239,11 @@ const MapUrlLoader = connectStore(
 
     useEffect(() => {
       if (!isMapLoading || currentModal == null) return;
+      // Once project hydration has finished, the Add Data URL source owns
+      // this loading cycle. Keep its panel/progress mounted during that import.
+      if (customMapShellEnabled && currentModal === "addData" && (!projectSlug || loadCycleComplete)) return;
       dispatch(toggleModal(null));
-    }, [currentModal, dispatch, isMapLoading]);
+    }, [currentModal, customMapShellEnabled, dispatch, isMapLoading, loadCycleComplete, projectSlug]);
 
     useEffect(() => {
       if (!projectSlug) {

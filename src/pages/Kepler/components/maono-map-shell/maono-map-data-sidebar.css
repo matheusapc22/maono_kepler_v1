@@ -1,0 +1,86 @@
+@import "../../../../shared-sidebar-scrollbars.css";
+
+.maono-map-data-outlet,
+.maono-map-data-sidebar {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.maono-map-data-sidebar {
+  display: flex;
+  flex-direction: column;
+  color: var(--maono-map-text);
+  background: var(--maono-map-panel);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  --mm-border-strong: var(--maono-sidebar-scroll-thumb);
+}
+.maono-map-data-sidebar__fixed { flex: 0 0 auto; padding: 18px 16px 0; }
+.maono-map-data-sidebar__header { display: flex; align-items: flex-start; gap: 6px; }
+.maono-map-data-sidebar__header > div { flex: 1; min-width: 0; }
+.maono-map-data-sidebar h2 { margin: 0; font-size: 19px; line-height: 1.35; font-weight: 700; }
+.maono-map-data-sidebar__header p { margin: 8px 0 18px; color: var(--maono-map-text-soft); font-size: 13px; line-height: 1.5; }
+.maono-map-data-sidebar__close { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; margin: -4px -8px 0 0; padding: 5px; color: var(--maono-map-muted); border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.maono-map-data-sidebar__close svg { width: 22px; height: 22px; }
+.maono-map-data-sidebar__close:hover { color: var(--maono-map-text); background: var(--maono-map-panel-raised); }
+.maono-map-data-sidebar__search { display: flex; align-items: center; height: 38px; gap: 8px; padding: 0 10px; border: 1px solid var(--maono-map-border); border-radius: 6px; color: var(--maono-map-muted); }
+.maono-map-data-sidebar__search svg { flex: 0 0 16px; width: 16px; height: 16px; }
+.maono-map-data-sidebar__search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; color: var(--maono-map-text); background: transparent; font: inherit; font-size: 13px; outline: none; }
+.maono-map-data-sidebar__search:focus-within { outline: 2px solid var(--maono-focus-ring); outline-offset: 2px; }
+.maono-map-data-sidebar__tabs { display: grid; grid-template-columns: 1.25fr 1fr .9fr .65fr; margin-top: 12px; border-bottom: 1px solid var(--maono-map-border); }
+.maono-map-data-sidebar__tabs button { min-width: 0; min-height: 42px; padding: 8px 3px 11px; border: 0; border-bottom: 2px solid transparent; color: var(--maono-map-text-soft); background: transparent; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.maono-map-data-sidebar__tabs button[aria-selected="true"] { color: var(--maono-map-text); border-bottom-color: var(--maono-map-gold-bright); font-weight: 650; }
+.maono-map-data-sidebar__scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; padding: 20px 16px; }
+.maono-map-data-sidebar h3 { margin: 0 0 4px; font-size: 16px; line-height: 1.4; font-weight: 700; }
+.maono-map-data-sidebar__catalog p { margin: 0; color: var(--maono-map-text-soft); font-size: 12px; line-height: 1.5; }
+.maono-map-data-sidebar__catalog .maono-map-data-sidebar__empty { margin-top: 28px; color: var(--maono-map-muted); }
+.maono-map-data-sidebar__loading { margin: 0 0 12px; color: var(--maono-map-gold-soft); font-size: 13px; }
+.maono-map-data-sidebar :is(button, a, [tabindex]):focus-visible { outline: 2px solid var(--maono-focus-ring); outline-offset: 2px; }
+.maono-map-data-sidebar__scroll:focus-visible { outline-offset: -3px; }
+.maono-map-data-sidebar__source { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.maono-map-data-sidebar__source input:not([type="file"]) { min-width: 0; width: 100%; max-width: 100%; padding: 10px; border: 1px solid var(--maono-map-border); border-radius: 5px; color: var(--maono-map-text); background: var(--maono-map-panel-raised); }
+.maono-map-data-sidebar__source input:focus-visible { outline: 2px solid var(--maono-focus-ring); outline-offset: 1px; }
+.maono-map-data-sidebar__source a { color: var(--maono-map-gold-soft); }
+/* Native upload and tile source components remain unchanged; only their
+ * modal-sized, light presentation is adapted inside this narrow outlet. */
+.maono-map-data-sidebar .file-drop-target { min-width: 0; }
+.maono-map-data-sidebar .file-drop-target > div:last-child { height: auto; min-height: 310px; padding: 24px 10px; background: transparent; border-color: var(--maono-map-border); }
+.maono-map-data-sidebar .file-type-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; opacity: 1; }
+.maono-map-data-sidebar .file-type-row svg { width: 48px; height: 44px; }
+.maono-map-data-sidebar .file-upload-display-message + div > div { height: auto; font-size: 16px; line-height: 1.5; }
+.maono-map-data-sidebar .file-upload__upload-button-span,
+.maono-map-data-sidebar .file-upload-or { display: none; }
+.maono-map-data-sidebar__file-picker { display: block; min-height: 40px; margin: 12px auto 0; padding: 8px 14px; border: 1px solid var(--maono-map-gold); border-radius: 6px; background: transparent; color: var(--maono-map-gold-soft); font: inherit; cursor: pointer; }
+.maono-map-data-sidebar__source--tileset > div > div:first-child { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.maono-map-data-sidebar .tileset-type { display: flex; flex-wrap: wrap; gap: 8px; }
+.maono-map-data-sidebar .load-data-footer { margin: 16px 0 0; padding: 0; width: 100%; }
+.maono-map-data-sidebar .load-data-footer > div { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.maono-map-data-sidebar .load-data-footer > div > div { padding: 0; color: var(--maono-map-danger); }
+.maono-map-data-sidebar__source--url > div > div { padding: 0; }
+.maono-map-data-sidebar__source--url input + button { flex: 0 0 auto; }
+.maono-map-panel-host[data-active-panel="data"] .maono-map-panel-host__handle { display: none; }
+@media (max-width: 820px) {
+  .maono-map-panel-host[data-active-panel="data"] .maono-map-panel-host__panel { max-width: calc(100% - 48px); }
+  .maono-map-data-sidebar__fixed { padding: 12px 12px 0; }
+  .maono-map-data-sidebar__scroll { padding: 16px 12px; }
+  .maono-map-data-sidebar h2 { font-size: 17px; }
+  .maono-map-data-sidebar__close { flex-basis: 44px; width: 44px; height: 44px; }
+  .maono-map-data-sidebar__tabs button { min-height: 44px; font-size: 11px; }
+  .maono-map-data-sidebar__file-picker { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maono-map-panel-host[data-active-panel="data"] .maono-map-panel-host__panel { transition: none; }
+}
+/* Give the native AutoSizer metadata preview a real scrollport after stacking
+ * the former two-column Tileset form; keep its pre-existing JSON content. */
+.maono-map-data-sidebar__source--tileset > div > div:first-child > div:nth-child(2):has(#json-pretty) { height: 160px; min-width: 0; }
+.maono-map-data-sidebar__source--tileset > div > div:first-child > div:nth-child(2) > div { padding: 10px; overflow-x: hidden; background: var(--maono-map-panel-raised); color: var(--maono-map-text-soft); }
+.maono-map-data-sidebar #json-pretty { white-space: pre-wrap; overflow-wrap: anywhere; }
+.maono-map-data-sidebar__source--tileset :has(> #json-pretty) { background: var(--maono-map-panel-raised); color: var(--maono-map-text-soft); overflow-x: hidden; }
+.maono-map-data-sidebar #json-pretty pre { margin: 0; background: transparent; color: inherit; white-space: pre-wrap; }
+.maono-map-data-sidebar .file-drop-target .file-type-row { opacity: 1; }
+.maono-map-data-sidebar .file-type-row > div { width: 54px; color: var(--maono-map-text-soft); }
+.maono-map-data-sidebar .file-type-row > div > div { background: var(--maono-map-panel-raised); border: 1px solid var(--maono-map-border); }
+.maono-map-data-sidebar .file-type-row .text { color: var(--maono-map-text); font-size: 10px; white-space: nowrap; overflow-wrap: normal; }
+.maono-map-data-sidebar .file-upload__progress__wrapper { width: 100%; min-width: 0; }
