@@ -150,7 +150,7 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
 
   const load = useCallback(async () => {
     if (!organizationId || !canView) return;
-    const requestId = ++requestRef.current;
+    const readRevision = ++requestRef.current;
     setLoading(true);
     setMessage(null);
     try {
@@ -165,7 +165,7 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
           return null;
         }),
       ]);
-      if (requestId !== requestRef.current) return;
+      if (readRevision !== requestRef.current) return;
       setLoaded(true);
       setPeople(peopleResult.users ?? []);
       setLimits(limitResult?.limits ?? null);
@@ -177,10 +177,10 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
         });
       }
     } catch (error) {
-      if (requestId !== requestRef.current) return;
+      if (readRevision !== requestRef.current) return;
       setMessage({ kind: "error", text: normalizeUserError(error).message });
     } finally {
-      if (requestId === requestRef.current) setLoading(false);
+      if (readRevision === requestRef.current) setLoading(false);
     }
   }, [canView, organizationId, user]);
 

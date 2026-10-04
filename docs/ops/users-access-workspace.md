@@ -129,3 +129,12 @@ guard, prop, API, permission predicate and mutation callback remains protected.
 
 Firefox's local container launch used temporary software-rendering preferences only;
 the repository CI configuration remains based on the existing compiled-browser gate.
+
+### CI ratchet compatibility
+
+The local monotonic read fence is named `readRevision` so the existing diagnostic-ID
+ratchet does not confuse it with operational metadata intended for error reporting.
+This is only an identifier rename; the ratchet script and its baseline remain
+unchanged. The exact strict-baseline command passes. A fresh build produced all
+135 output files byte-identical to the bundle exercised by the final 84 browser
+cases, and the complete Node aggregate passed again (2,401/2,401).

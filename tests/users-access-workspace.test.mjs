@@ -43,8 +43,8 @@ test('Users reuses branded menu and existing per-person handlers without unsuppo
 test('Users rejects stale organization responses, resets context and shows honest loading/error states', () => {
   assert.match(source, /contextKey = JSON.stringify\(\[organizationId, user\?\.id, roleOf\(user\), userPermissions\(user\)\]\)/);
   assert.match(source, /<UsersAccessWorkspace key=\{contextKey\}/);
-  assert.match(source, /const requestId = \+\+requestRef.current/);
-  assert.match(source, /if \(requestId !== requestRef.current\) return;\s*setLoaded\(true\);\s*setPeople/);
+  assert.match(source, /const readRevision = \+\+requestRef.current/);
+  assert.match(source, /if \(readRevision !== requestRef.current\) return;\s*setLoaded\(true\);\s*setPeople/);
   assert.match(source, /return \(\) => \{ requestRef.current \+= 1; \}/);
   assert.match(source, /loading \? "Atualizando usuários\." : loaded \?/);
   assert.match(source, /disabled=\{loading \|\| !loaded\} disablePageSize=\{loading \|\| !loaded\}/);
