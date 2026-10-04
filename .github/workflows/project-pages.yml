@@ -25,6 +25,7 @@ on:
       - 'tests/tileset-localization-contract.test.mjs'
       - 'tests/browser/map-sidebar-scrollbars.spec.ts'
       - 'tests/browser/map-panel-minimal.spec.ts'
+      - 'tests/browser/map-panel-hint-compatibility.spec.ts'
       - 'tests/browser/fixtures/map-panel-minimal.ts'
       - 'tests/map-panel-minimal.test.mjs'
       - 'tests/map-panel-hints.test.mjs'
@@ -88,7 +89,7 @@ jobs:
         run: >-
           xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24"
           npx playwright test --config=playwright.project-pages.config.ts
-          --grep="contextual panel help|disclosure chevrons"
+          --grep="contextual panel help|disclosure chevrons|mouse-only panel help"
           --output=test-results-panel-help --reporter=list,json
       - name: Small panel evidence for independent inspection
         if: always()
@@ -122,6 +123,7 @@ jobs:
             tests/browser/project-pages.spec.ts
             tests/browser/platform-density-map.spec.ts
             tests/browser/map-panel-minimal.spec.ts
+            tests/browser/map-panel-hint-compatibility.spec.ts
             tests/browser/fixtures/map-panel-minimal.ts
             tests/map-panel-minimal.test.mjs
             tests/map-panel-hints.test.mjs

@@ -10,8 +10,12 @@ import {
 // are synthetic test-local fixtures. This suite does not claim production or
 // backend persistence acceptance and does not install a production test hook.
 // The parent runner provides map-shell/layer-manager/overlay build-time flags.
-test.use({ reducedMotion: 'reduce' });
+test.use({ contextOptions: { reducedMotion: 'reduce' } });
 test.setTimeout(90_000);
+
+test.beforeEach(async ({ page }) => {
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+});
 
 type HintProbeWindow = Window & { __PANEL_HINT_PROBE__?: {
   data: { capabilities: Record<string, unknown>; entries: unknown[] };
@@ -308,8 +312,11 @@ async function hintPortal(page: Page, trigger: Locator, text: string) {
   return tooltip;
 }
 
-type ChevronSample = { x: number; y: number; width: number; height: number; angle: number };
-type SampledChevron = SVGSVGElement & { __samples?: { values: ChevronSample[]; frame: number; stop: boolean } };
+type ChevronSample = { x: number; y: number; width: number; height: number; angle: number; phase: string };
+type NativeChevronTransition = { property: string; duration: number | string; sampledAt: number };
+type SampledChevron = SVGSVGElement & { __samples?: {
+  values: ChevronSample[]; transitions: NativeChevronTransition[]; frame: number; stop: boolean; cleanup: () => void;
+} };
 
 async function rotateChevron(arrow: Locator, size: number, opened: boolean, motion: boolean, action: () => Promise<void>) {
   await expect(arrow).toHaveCount(1);
@@ -321,22 +328,47 @@ async function rotateChevron(arrow: Locator, size: number, opened: boolean, moti
   await expect(arrow).toHaveCSS('transition-duration', motion ? '0.16s' : '0s');
   const handle = (await arrow.elementHandle())!;
   const path = await handle.innerHTML();
-  await arrow.evaluate(element => {
+  await arrow.evaluate((element, motion) => {
     const svg = element as SampledChevron;
-    const samples = { values: [] as ChevronSample[], frame: 0, stop: false };
+    const samples = { values: [] as ChevronSample[], transitions: [] as NativeChevronTransition[], frame: 0, stop: false, cleanup: () => {} };
     svg.__samples = samples;
-    const sample = () => {
-      if (samples.stop) return;
+    const record = (phase: string) => {
       const box = svg.getBoundingClientRect();
       const owner = svg.closest('summary,button')!.getBoundingClientRect();
       const matrix = new DOMMatrix(getComputedStyle(svg).transform);
       samples.values.push({ x: box.x + box.width / 2 - owner.right, y: box.y + box.height / 2 - (owner.y + owner.height / 2),
-        width: box.width, height: box.height, angle: Math.abs(Math.atan2(matrix.b, matrix.a) * 180 / Math.PI) });
+        width: box.width, height: box.height, angle: Math.abs(Math.atan2(matrix.b, matrix.a) * 180 / Math.PI), phase });
+    };
+    const sampleNativeTransition = () => {
+      if (!motion || samples.transitions.length || samples.stop) return;
+      const transition = svg.getAnimations().find(animation =>
+        'transitionProperty' in animation && animation.transitionProperty === 'transform');
+      if (!transition?.effect) return;
+      const duration = transition.effect.getComputedTiming().duration;
+      samples.transitions.push({ property: 'transform', duration: typeof duration === 'number' ? duration : String(duration), sampledAt: performance.now() });
+      if (typeof duration !== 'number') return;
+      // Sample the real browser-created CSS transition, not substitute CSS or
+      // keyframes. Desktop WebKit can stall a frame longer than its 160ms run.
+      transition.pause();
+      for (const fraction of [0.25, 0.5, 0.75]) {
+        transition.currentTime = duration * fraction;
+        record(`native-transition-${fraction}`);
+      }
+      transition.finish();
+      record('native-transition-finished');
+    };
+    svg.addEventListener('transitionrun', sampleNativeTransition);
+    samples.cleanup = () => svg.removeEventListener('transitionrun', sampleNativeTransition);
+    const sample = () => {
+      if (samples.stop) return;
+      record('frame');
+      sampleNativeTransition();
       samples.frame = requestAnimationFrame(sample);
     };
     sample();
-  });
+  }, motion);
   let samples: ChevronSample[] = [];
+  let transitions: NativeChevronTransition[] = [];
   try {
     await action();
     await expect.poll(() => arrow.evaluate((element, opened) => {
@@ -344,11 +376,13 @@ async function rotateChevron(arrow: Locator, size: number, opened: boolean, moti
       return Math.abs(matrix.a - (opened ? -1 : 1)) < 0.000001 && Math.abs(matrix.b) < 0.000001;
     }, opened)).toBe(true);
   } finally {
-    samples = await arrow.evaluate(element => {
+    const captured = await arrow.evaluate(element => {
       const state = (element as SampledChevron).__samples!;
-      state.stop = true; cancelAnimationFrame(state.frame);
-      return state.values;
+      state.stop = true; cancelAnimationFrame(state.frame); state.cleanup();
+      return { values: state.values, transitions: state.transitions };
     });
+    samples = captured.values;
+    transitions = captured.transitions;
   }
   expect(await handle.evaluate(element => element.isConnected)).toBe(true);
   expect(await handle.innerHTML()).toBe(path);
@@ -361,8 +395,15 @@ async function rotateChevron(arrow: Locator, size: number, opened: boolean, moti
     expect(sample.width).toBeLessThanOrEqual(size * Math.SQRT2 + 0.6);
   }
   const intermediate = samples.filter(sample => sample.angle > 1 && sample.angle < 179);
-  if (motion) expect(intermediate.length, 'capture the real intermediate rotation, not only endpoints').toBeGreaterThan(0);
-  else expect(intermediate).toEqual([]);
+  if (motion) {
+    expect(transitions).toEqual([expect.objectContaining({ property: 'transform', duration: 160 })]);
+    for (const fraction of [0.25, 0.5, 0.75]) {
+      expect(intermediate.some(sample => sample.phase === `native-transition-${fraction}`), 'verify the actual native transition at each intermediate progress').toBe(true);
+    }
+  } else {
+    expect(transitions).toEqual([]);
+    expect(intermediate).toEqual([]);
+  }
   return samples;
 }
 
@@ -817,6 +858,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 320, height: 480 
   test(`disclosure chevrons keep square SVGs centered through keyboard rotation and reduced motion at ${viewport.width}×${viewport.height}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(false);
     const fixture = await openMap(page, { layerCount: 1 });
     const canvas = await canvasGeometry(page, true);
     await openLayers(page);
@@ -847,6 +889,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 320, height: 480 
       await expect(item.summary).toBeFocused();
     }
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
     for (const item of disclosures) {
       await item.summary.scrollIntoViewIfNeeded();
       evidence.push({ label: item.label, phase: 'reopen-reduced', samples: await rotateChevron(item.arrow, item.size, true, false, () => item.summary.press('Enter')) });

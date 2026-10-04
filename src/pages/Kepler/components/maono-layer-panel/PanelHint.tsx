@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { panelHintPosition } from "./panel-hint-position";
@@ -45,6 +45,28 @@ export default function PanelHint({ label, children }: Props) {
     if (pinnedRef.current || focusedRef.current) return;
     // Bridge the small gap to the portal so the text stays hoverable/selectable.
     closeTimer.current = window.setTimeout(dismiss, 160);
+  }
+
+  function enterHover() {
+    // Some browsers deliver both streams; one physical entry opens only once.
+    if (hoveredRef.current) return;
+    hoveredRef.current = true;
+    show();
+  }
+
+  function leaveHover() {
+    if (!hoveredRef.current) return;
+    hoveredRef.current = false;
+    leave();
+  }
+
+  function enterMouse(event: ReactMouseEvent<HTMLElement>) {
+    const source = event.nativeEvent as MouseEvent & {
+      sourceCapabilities?: { firesTouchEvents: boolean };
+    };
+    if (source.sourceCapabilities?.firesTouchEvents) return;
+    // Firefox touch emulation can emit real mouseenter without pointerenter.
+    enterHover();
   }
 
   const positionPopover = useCallback(() => {
@@ -138,6 +160,8 @@ export default function PanelHint({ label, children }: Props) {
     }
 
     document.addEventListener("pointerdown", dismissOutside, true);
+    document.addEventListener("mousedown", dismissOutside, true);
+    document.addEventListener("touchstart", dismissOutside, { capture: true, passive: true });
     document.addEventListener("focusin", dismissOutside, true);
     document.addEventListener("keydown", handleKeyDown, true);
     document.addEventListener("toggle", handleToggle, true);
@@ -149,6 +173,8 @@ export default function PanelHint({ label, children }: Props) {
 
     return () => {
       document.removeEventListener("pointerdown", dismissOutside, true);
+      document.removeEventListener("mousedown", dismissOutside, true);
+      document.removeEventListener("touchstart", dismissOutside, true);
       document.removeEventListener("focusin", dismissOutside, true);
       document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("toggle", handleToggle, true);
@@ -171,9 +197,11 @@ export default function PanelHint({ label, children }: Props) {
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onPointerEnter={(event) => {
-          if (event.pointerType !== "touch") { hoveredRef.current = true; show(); }
+          if (event.pointerType !== "touch") enterHover();
         }}
-        onPointerLeave={() => { hoveredRef.current = false; leave(); }}
+        onPointerLeave={leaveHover}
+        onMouseEnter={enterMouse}
+        onMouseLeave={leaveHover}
         onFocus={() => { focusedRef.current = true; show(); }}
         onBlur={() => {
           focusedRef.current = false;
@@ -196,8 +224,10 @@ export default function PanelHint({ label, children }: Props) {
           className="maono-panel-hint__popover"
           role="tooltip"
           style={{ ...position, visibility: positioned ? "visible" : "hidden" }}
-          onPointerEnter={() => { hoveredRef.current = true; clearCloseTimer(); }}
-          onPointerLeave={() => { hoveredRef.current = false; leave(); }}
+          onPointerEnter={(event) => { if (event.pointerType !== "touch") enterHover(); }}
+          onPointerLeave={leaveHover}
+          onMouseEnter={enterMouse}
+          onMouseLeave={leaveHover}
         >
           {children}
         </div>,
