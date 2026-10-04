@@ -108,3 +108,17 @@ test("initial placement waits for native focus scrolling without moving the side
   assert.match(hint, /anchor\.bottom <= visibleTop \|\| anchor\.top >= visibleBottom/);
   assert.doesNotMatch(hint, /scrollIntoView|scrollTo\(|scrollTop\s*=/);
 });
+
+test("hint text stays above map-control touch targets and below modal backdrops", async () => {
+  const [overlayCss, mapPopoverCss] = await Promise.all([
+    read("../map-overlay/map-overlay-controls.css"),
+    read("../../factories/maono-map-popover.css"),
+  ]);
+  const hintLayer = Number(css.match(/\.maono-panel-hint__popover\s*\{[\s\S]*?z-index:\s*(\d+)/)?.[1]);
+  const controlsLayer = Number(overlayCss.match(/\.maono-map-overlay\s*\{[\s\S]*?z-index:\s*(\d+)/)?.[1]);
+  const mapPopoverLayer = Number(mapPopoverCss.match(/z-index:\s*(\d+)/)?.[1]);
+  const modalLayer = Number(overlayCss.match(/\.maono-isochrone-dialog__backdrop\s*\{[\s\S]*?z-index:\s*(\d+)/)?.[1]);
+  assert.ok(hintLayer > controlsLayer, "map tool buttons must not occlude or steal touches from help text");
+  assert.ok(hintLayer > mapPopoverLayer, "map popovers must not cover panel help");
+  assert.ok(hintLayer < modalLayer, "modal dialogs must retain priority above help");
+});

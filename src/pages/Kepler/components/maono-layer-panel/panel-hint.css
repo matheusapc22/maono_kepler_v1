@@ -67,7 +67,9 @@
 /* A body portal avoids sidebar overflow/stacking clipping and cannot resize it. */
 .maono-panel-hint__popover {
   position: fixed;
-  z-index: 1600;
+  /* Above body-portaled map controls/popovers (100050/100070), but below
+   * modal backdrops (100080). Visible text must also own touch hit testing. */
+  z-index: 100075;
   box-sizing: border-box;
   width: min(288px, calc(100vw - 16px));
   max-height: calc(100dvh - 16px);

@@ -200,6 +200,20 @@ async function hintPortal(page: Page, trigger: Locator, text: string) {
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  const occluded = await tooltip.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const failures: Array<{ x: number; y: number; hit: string | null }> = [];
+    // A touch target may be only a few pixels from the exact center. Sample
+    // the full interior densely, staying clear of the rounded 8px corners.
+    for (let y = box.top + 8; y < box.bottom - 8; y += 12) {
+      for (let x = box.left + 8; x < box.right - 8; x += 12) {
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || !element.contains(hit)) failures.push({ x, y, hit: hit?.outerHTML.slice(0, 300) ?? null });
+      }
+    }
+    return failures;
+  });
+  expect(occluded, 'all hint text stays above map tools and receives pointer/touch input').toEqual([]);
   expect(await tooltip.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   return tooltip;
@@ -731,6 +745,7 @@ for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 
       if (viewport.width === 320) await tooltip.tap();
       else await tooltip.click();
       await expect(tooltip).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Configuração de tooltips', exact: true })).toHaveCount(0);
       const scroll = detail.locator('.maono-detail-view__scroll');
       expect(await scroll.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
       await scroll.hover({ position: { x: 2, y: 2 } });
