@@ -44,9 +44,11 @@ test('Users rejects stale organization responses, resets context and shows hones
   assert.match(source, /contextKey = JSON.stringify\(\[organizationId, user\?\.id, roleOf\(user\), userPermissions\(user\)\]\)/);
   assert.match(source, /<UsersAccessWorkspace key=\{contextKey\}/);
   assert.match(source, /const readRevision = \+\+requestRef.current/);
-  assert.match(source, /if \(readRevision !== requestRef.current\) return;\s*setLoaded\(true\);\s*setPeople/);
+  assert.match(source, /const current = \(\) => readRevision === requestRef.current/);
+  assert.match(source, /if \(!current\(\)\) return;\s*setPeople\(peopleResult.users \?\? \[\]\);\s*setLoaded\(true\)/);
   assert.match(source, /return \(\) => \{ requestRef.current \+= 1; \}/);
-  assert.match(source, /loading \? loaded \? "Atualizando usuários\." : "Carregando pessoas com acesso\.\.\." : loaded \?/);
+  assert.match(source, /loading \|\| limitsLoading \|\| governanceLoading \? <LoadingStatus/);
+  assert.match(source, /refreshingLabel=\{loading \? "Atualizando usuários\."/);
   assert.match(source, /disabled=\{loading \|\| !loaded\} disablePageSize=\{loading \|\| !loaded\}/);
   assert.match(source, /loaded \? active : "—"/);
   assert.match(source, /onClick=\{\(\) => void load\(\)\}>Tentar novamente/);

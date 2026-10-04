@@ -510,8 +510,11 @@ test("an authorization failure clears cached rows and facets before a successful
   await rows(page).first().getByRole("checkbox").check();
   revoked = true; await refresh(page);
   await expect(shell(page).getByRole("alert")).toBeVisible();
-  await expectCount(page, 0, 0);
-  await expect(shell(page).locator(".ticket-metric-copy strong")).toHaveText(["0", "0", "0", "0", "0"]);
+  await expect(rows(page)).toHaveCount(0);
+  await expect(pagination(page).getByRole("status")).toHaveText("A consulta precisa de atenção.");
+  await expect(shell(page).locator(".ticket-metric-copy strong")).toHaveText(["—", "—", "—", "—", "—"]);
+  await expect(shell(page).locator('.ticket-list-region [aria-busy="true"], .ticket-metrics[aria-busy="true"]')).toHaveCount(0);
+  await expect(shell(page).locator(".mm-skeleton")).toHaveCount(0);
   await expect(shell(page).getByText(tickets[62].subject, { exact: true })).toHaveCount(0);
   revoked = false; await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
   await expectCount(page, 10, 63); await expect(rows(page).locator('input:checked')).toHaveCount(0);
@@ -789,12 +792,13 @@ test("refresh keeps keyboard focus while a delayed request disables only the pen
     await trigger.focus(); await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Atualizar consulta", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(shell(page).locator(".ticket-view-region")).toHaveAttribute("aria-busy", "true");
+    await expect(shell(page).locator(".ticket-list-scroll")).toHaveAttribute("aria-busy", "true");
     await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Atualizar consulta", exact: true })).toBeDisabled();
     await page.keyboard.press("Escape"); await expect(trigger).toBeFocused();
     pending = false; gate.resolve(); await expectCount(page, 10, 63);
+    await expect(shell(page).locator(".ticket-list-scroll")).toHaveAttribute("aria-busy", "false");
     await expect(trigger).toBeFocused();
   } finally { gate.resolve(); }
 });
@@ -1083,7 +1087,9 @@ test("Kanban discards a delayed old broad-list response after a newer status mut
     await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
     await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
     oldList.resolve();
-    await expect(shell(page).locator(".ticket-view-region")).toHaveAttribute("aria-busy", "false");
+    for (const queue of ["open", "in_progress", "in_review", "closed"]) {
+      await expect(kanbanColumn(page, queue).locator(".ticket-kanban-stack")).toHaveAttribute("aria-busy", "false");
+    }
     await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
     await expect(shell(page).getByRole("region", { name: "Resumo dos chamados" }).getByRole("button", { name: /^Em andamento/ }).locator("strong")).toHaveText("2");
     await expect(kanbanCard(page, "CH-0001")).toHaveCount(1);
@@ -1150,7 +1156,9 @@ test("Kanban aggregate authorization failure removes board content and cached mo
   await expect(shell(page).getByRole("alert")).toContainText("Você não possui permissão para esta ação.");
   await expect(shell(page).getByRole("region", { name: "Kanban de chamados", exact: true })).toHaveCount(0);
   await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
-  await expect(shell(page).locator(".ticket-metric-copy strong")).toHaveText(["0", "0", "0", "0", "0"]);
+  await expect(shell(page).locator(".ticket-metric-copy strong")).toHaveText(["—", "—", "—", "—", "—"]);
+  await expect(shell(page).locator('.ticket-metrics[aria-busy="true"], .ticket-kanban-stack[aria-busy="true"]')).toHaveCount(0);
+  await expect(shell(page).locator(".mm-skeleton")).toHaveCount(0);
   revoked = false; await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
   await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
   await expect(shell(page).getByRole("alert")).toHaveCount(0);

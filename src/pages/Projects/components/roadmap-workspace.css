@@ -63,18 +63,17 @@ body .roadmap-workspace :is(button, select, input):disabled { opacity: .5; curso
 body .roadmap-workspace :is(a, button, select, input, textarea, [tabindex]):focus-visible { outline: 2px solid var(--maono-focus-ring); outline-offset: 3px; }
 body .roadmap-workspace .roadmap-scroll:focus-visible { outline-offset: -3px; }
 body .roadmap-workspace :is(.roadmap-gantt-row, .roadmap-list tr):focus-visible { outline-offset: -2px; }
-/* Initial loading mirrors this workspace and inherits the shared mm-shimmer/motion policy. */
-body .roadmap-workspace :is(.roadmap-loading, .roadmap-loading-layout) { display: grid; min-width: 0; gap: 16px; }
+/* Only unknown values/rows shimmer; the real controls and column headers stay mounted. */
 body .roadmap-workspace .roadmap-loading-field { display: grid; min-width: 0; gap: 7px; }
-body .roadmap-workspace .roadmap-loading-metric { flex: 1; min-width: 0; }
-body .roadmap-workspace .roadmap-loading-icon { background: var(--mm-skeleton-base); }
-body .roadmap-workspace .roadmap-loading-scroll { min-width: 0; min-height: 280px; max-height: min(58vh, 640px); overflow: hidden; }
-body .roadmap-workspace :is(.roadmap-loading-columns, .roadmap-loading-row) { display: grid; align-items: center; gap: 24px; min-height: 58px; padding: 12px 18px; border-bottom: 1px solid var(--mm-border); }
-body .roadmap-workspace .roadmap-loading-columns { min-height: 54px; }
-body .roadmap-workspace .roadmap-loading-gantt > div { min-width: 980px; grid-template-columns: 278px minmax(642px, 1fr); }
-body .roadmap-workspace .roadmap-loading-list > div { min-width: 900px; grid-template-columns: 2fr repeat(5, minmax(0, 1fr)); }
-body .roadmap-workspace .roadmap-loading-timeline { min-width: 0; }
-body .roadmap-workspace .roadmap-loading-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; min-height: 64px; padding: 12px 16px; border-top: 1px solid var(--mm-border); }
+body .roadmap-workspace .roadmap-loading-timeline { min-width: 0; padding: 0 18px; }
+body .roadmap-workspace .roadmap-gantt .roadmap-loading-row { display: grid; grid-template-columns: 320px minmax(660px, 1fr); align-items: center; min-height: 58px; border-bottom: 1px solid var(--mm-border); }
+body .roadmap-workspace .roadmap-gantt .roadmap-loading-field { align-content: center; min-height: 58px; padding: 10px 18px; border-right: 1px solid var(--mm-border); }
+body .roadmap-workspace .roadmap-loading-dates { display: flex; align-items: center; justify-content: space-between; gap: 36px; height: 54px; padding: 0 18px; }
+body .roadmap-workspace .roadmap-gantt-head .roadmap-loading-dates .mm-skeleton { position: relative; top: auto; transform: none; }
+body .roadmap-workspace .roadmap-list .roadmap-loading-row { height: 58px; cursor: default; }
+body .roadmap-workspace .roadmap-list .roadmap-loading-row:hover { background: transparent; }
+body .roadmap-workspace .roadmap-list .roadmap-loading-row td:first-child { min-width: 220px; }
+body .roadmap-workspace .roadmap-list .roadmap-loading-row td:not(:first-child) { min-width: 125px; }
 @container (max-width: 1000px) {
   body .roadmap-workspace .roadmap-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body .roadmap-workspace .roadmap-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }

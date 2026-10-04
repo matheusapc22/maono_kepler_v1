@@ -1,3 +1,5 @@
+import { LoadingStatus } from "../../../components/loading/Skeleton";
+import { TicketDetailSkeleton } from "./TicketLoadingSkeletons";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useTicketDialog } from "./useTicketDialog";
 import {TicketSlaPanel} from './TicketSlaPanel';
@@ -257,23 +259,15 @@ export default function TicketDetailDrawer({
         </header>
 
         {closeNotice ? <p role="status">{closeNotice}</p> : null}
+        <LoadingStatus loading={loading} refreshing={Boolean(ticket)} label="Carregando detalhes do chamado." refreshingLabel="Atualizando versão do chamado. Seus rascunhos serão preservados." />
         {loading && !ticket ? (
-          <div className="ticket-detail-loading" aria-busy="true">
-            <span />
-            <span />
-            <span />
-            <span />
-            <p className="mm-sr-only" role="status">
-              Carregando detalhes do chamado.
-            </p>
-          </div>
+          <TicketDetailSkeleton triageEnabled={triageEnabled} />
         ) : error && !ticket ? (
           <div className="ticket-detail-error">
             <TicketErrorNotice error={error} onRetry={onRetry} />
           </div>
         ) : ticket && detail ? (
           <div className="ticket-detail-content" aria-busy={loading || saving}>
-            {loading ? <p role="status">Atualizando versão do chamado. Seus rascunhos serão preservados.</p> : null}
             {error ? <TicketErrorNotice error={error} onRetry={onRetry} /> : null}
             <section className="ticket-detail-summary">
               <div>

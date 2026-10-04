@@ -1,6 +1,7 @@
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { OrganizationSectionSkeleton } from "./ProjectSectionSkeletons";
+import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
 
 import type { MaonoUser } from "../../../auth/session";
 import {
@@ -163,11 +164,11 @@ function buildMetricItems(metrics: OrganizationMetrics | undefined, projectsCoun
 }
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return <tr><th>{label}</th><td>{children}</td></tr>;
+  return <tr><th scope="row">{label}</th><td>{children}</td></tr>;
 }
 
-function MetricCard({ label, value }: { label: string; value: number }) {
-  return <div className="mm-card metric"><span>{label}</span><strong>{formatNumber(value)}</strong></div>;
+function MetricCard({ label, value, pending }: { label: string; value: number | undefined; pending: boolean }) {
+  return <div className="mm-card metric"><span>{label}</span><strong>{pending ? <Skeleton width={54} height={30} /> : value === undefined ? "—" : formatNumber(value)}</strong></div>;
 }
 
 export default function OrganizationSection(props: OrganizationSectionProps) {
@@ -200,7 +201,10 @@ function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps
       if (revision !== requestRef.current) return;
       setOrganization(response.organization);
     } catch (error) {
-      if (revision === requestRef.current) setErrorMessage(normalizeUserError(error).message);
+      if (revision === requestRef.current) {
+        if (isRegionAccessDenied(error)) setOrganization(null);
+        setErrorMessage(normalizeUserError(error).message);
+      }
     } finally {
       if (revision === requestRef.current) setLoading(false);
     }
@@ -237,22 +241,18 @@ function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps
         </div>
       )}
 
-      <span className="mm-sr-only" role="status">{loading ? organization ? "Atualizando dados da organização." : "Carregando dados da organização." : ""}</span>
+      <LoadingStatus loading={loading} refreshing={Boolean(organization)} label="Carregando dados da organização." refreshingLabel="Atualizando dados da organização." />
       <div className="mm-section-load-region" role="region" aria-label="Dados da organização" aria-busy={loading}>
-      {loading && !organization ? <OrganizationSectionSkeleton metrics={permissions.metricsView} /> : null}
-
-      {organization && (
-        <>
           <div className="mm-card">
             <h3>Dados principais</h3>
             <div className="mm-table-wrap">
               <table><tbody>
                 <InfoRow label="Nome">{organization?.name || fallbackOrganizationName}</InfoRow>
-                <InfoRow label="Slug">{organization?.slug || "—"}</InfoRow>
-                <InfoRow label="Plano"><span className={planClassName(organization?.plan)}>{planLabel(organization?.plan)}</span></InfoRow>
-                <InfoRow label="Status"><span className={statusClassName(organization?.active)}>{statusLabel(organization?.active)}</span></InfoRow>
-                <InfoRow label="Criada em">{formatDate(organization?.createdAt)}</InfoRow>
-                <InfoRow label="Atualizada em">{formatDate(organization?.updatedAt)}</InfoRow>
+                <InfoRow label="Slug">{loading && !organization ? <Skeleton width="58%" height={16} /> : organization?.slug || "—"}</InfoRow>
+                <InfoRow label="Plano">{loading && !organization ? <Skeleton width={65} height={25} radius={999} /> : organization?.plan ? <span className={planClassName(organization.plan)}>{planLabel(organization.plan)}</span> : "—"}</InfoRow>
+                <InfoRow label="Status">{loading && !organization ? <Skeleton width={65} height={25} radius={999} /> : organization ? <span className={statusClassName(organization.active)}>{statusLabel(organization.active)}</span> : "—"}</InfoRow>
+                <InfoRow label="Criada em">{loading && !organization ? <Skeleton width="54%" height={16} /> : formatDate(organization?.createdAt)}</InfoRow>
+                <InfoRow label="Atualizada em">{loading && !organization ? <Skeleton width="48%" height={16} /> : formatDate(organization?.updatedAt)}</InfoRow>
                 <InfoRow label="Perfil atual">{user?.role || "—"}</InfoRow>
               </tbody></table>
             </div>
@@ -262,7 +262,7 @@ function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps
             <div className="mm-card">
               <h3>Métricas</h3>
               <div className="mm-metrics-grid compact">
-                {metricItems.map((metric) => <MetricCard key={metric.key} label={metric.label} value={metric.value} />)}
+                {metricItems.map((metric) => <MetricCard key={metric.key} label={metric.label} value={organization?.metrics?.[metric.key]} pending={loading && !organization} />)}
               </div>
             </div>
           ) : (
@@ -271,14 +271,11 @@ function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps
               <p>Você possui acesso aos dados básicos, mas não possui permissão para consultar métricas gerenciais.</p>
             </div>
           )}
-
-          <div className="mm-card">
-            <h3>Edição</h3>
-            <p>A edição da organização ainda não está disponível nesta tela.</p>
-            <button type="button" className="mm-btn" disabled>Editar organização</button>
-          </div>
-        </>
-      )}
+      </div>
+      <div className="mm-card">
+        <h3>Edição</h3>
+        <p>A edição da organização ainda não está disponível nesta tela.</p>
+        <button type="button" className="mm-btn" disabled>Editar organização</button>
       </div>
     </section>
   );

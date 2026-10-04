@@ -35,7 +35,7 @@ type ProjectsSidebarProps = {
   organizations: MaonoOrganization[];
   switchingOrganization: boolean;
   organizationSwitchError: string | null;
-  activeProjectsCount: number;
+  activeProjectsCount: number | null;
   searchQuery: string;
   sidebarSection: ProjectSidebarSection;
   onSearchQueryChange: (value: string) => void;
@@ -55,7 +55,7 @@ type SidebarItem = {
   key?: ProjectSidebarSection;
   label: string;
   icon: React.ReactNode;
-  count?: number;
+  count?: number | null;
   href?: string;
   permission?: Permission;
 };
@@ -277,7 +277,7 @@ function canShowItem(
   return can(user as AccessControlUser, item.permission, context);
 }
 
-function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
+function createSidebarGroups(activeProjectsCount: number | null): SidebarGroup[] {
   return [
     {
       title: "Projetos",
@@ -403,6 +403,8 @@ function ItemButton({
 
       {typeof item.count === "number" ? (
         <span className="mm-sidebar-count">{item.count}</span>
+      ) : item.count === null ? (
+        <span className="mm-sidebar-count" aria-label="Contagem de projetos indisponível">—</span>
       ) : null}
     </>
   );

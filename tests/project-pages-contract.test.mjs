@@ -1,3 +1,5 @@
+import { restoreAdminProjectsProgressiveLoading } from "./helpers/admin-projects-progressive-preservation.mjs";
+import { restoreTicketDocumentsProgressiveLoading } from "./helpers/ticket-docs-progressive-preservation.mjs";
 import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { restoreApprovedDocumentHelperRemoval } from "./helpers/document-helper-preservation.mjs";
 import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
@@ -64,7 +66,7 @@ function restoreApprovedDocumentTitleDelta(path, source) {
 }
 for (const [path, expected] of Object.entries(preserved)) {
   test(`preserves original source: ${path}`, () => {
-    assert.equal(sha256(restoreApprovedDocumentTitleDelta(path, restoreTicketVisualExtraction(path, restoreApprovedDocumentHelperRemoval(path, restoreMaonoSelect(read(path)))))), expected, 'only the approved Documents title/helper cleanup and shared footer extraction may differ; unrelated presentation, preview, metadata and endpoints stay unchanged');
+    assert.equal(sha256(restoreApprovedDocumentTitleDelta(path, restoreTicketVisualExtraction(path, restoreApprovedDocumentHelperRemoval(path, restoreMaonoSelect(restoreTicketDocumentsProgressiveLoading(path, read(path))))))), expected, 'only the approved Documents title/helper cleanup and shared footer extraction may differ; unrelated presentation, preview, metadata and endpoints stay unchanged');
     if (hasOriginal) {
       const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
       assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');
@@ -236,7 +238,7 @@ test('base CTA keeps fallback desktop inset and mobile reset beneath density pol
 // Sidebar presentation is now explicitly in scope. Keep its item registry,
 // icons, labels, hrefs, permission rules and count wiring independently pinned.
 test('sidebar redesign preserves the original navigation and permission contract', () => {
-  const sidebar = read('src/pages/ProjectsSidebar.tsx');
+  const sidebar = restoreAdminProjectsProgressiveLoading('src/pages/ProjectsSidebar.tsx', read('src/pages/ProjectsSidebar.tsx'));
   assert.equal(sha256(sidebar.split('function SectionTitle(')[0]), 'f9499bd8d0ee1dd8665914086f911ba48eae75ce21976ba781ab8e3782453d46');
   assert.match(sidebar, /active=\{section === sidebarSection\}/);
   assert.match(sidebar, /onSidebarSectionChange\(section\)/);

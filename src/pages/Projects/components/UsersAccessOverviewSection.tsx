@@ -1,3 +1,4 @@
+import { isRegionAccessDenied, isRegionAuthenticationError } from "../../../components/loading/region-loading-policy";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import {
   useCallback,
@@ -8,7 +9,8 @@ import {
 } from "react";
 
 import { Link } from "react-router";
-import { UsersMetricsSkeleton, UsersTableSkeletonRows } from "./ProjectSectionSkeletons";
+import { UsersTableSkeletonRows } from "./ProjectSectionSkeletons";
+import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
 import DocumentsPagination from "./DocumentsPagination";
 import { DocumentActionMenu, DocumentIcon } from "./DocumentsUi";
 import { paginateUsers, reconcileUsersPagination, type UsersPaginationState } from "./users-access-pagination";
@@ -113,6 +115,8 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
   const [profileFilter, setProfileFilter] = useState("all");
   const [loading, setLoading] = useState(Boolean(organizationId && canViewTeam(user)));
   const [loaded, setLoaded] = useState(false);
+  const [limitsLoading, setLimitsLoading] = useState(Boolean(organizationId && canViewTeam(user) && hasPermission(user, "limits.view")));
+  const [governanceLoading, setGovernanceLoading] = useState(Boolean(organizationId && canViewTeam(user)));
   const requestRef = useRef(0);
   const workspaceRef = useRef<HTMLElement>(null);
   const focusReturnFrameRef = useRef<number | null>(null);
@@ -152,37 +156,53 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
   const load = useCallback(async () => {
     if (!organizationId || !canView) return;
     const readRevision = ++requestRef.current;
+    const current = () => readRevision === requestRef.current;
+    const reportReadError = (text: string) => {
+      if (!current()) return;
+      setMessage(previous => ({ kind: "error", text: previous?.kind === "error" ? `${previous.text} ${text}` : text }));
+    };
+    const clearDeniedContext = (error: unknown) => {
+      if (!current()) return;
+      reportReadError(normalizeUserError(error).message);
+      requestRef.current += 1;
+      setPeople([]); setLoaded(false); setLimits(null); setGovernance(null);
+      setLoading(false); setLimitsLoading(false); setGovernanceLoading(false);
+      setManagementTargetUserId(null); setMapAccessTargetUserId(null);
+    };
     setLoading(true);
+    setLimitsLoading(hasPermission(user, "limits.view"));
+    setGovernanceLoading(true);
     setMessage(null);
-    try {
-      let governanceUnavailable = false;
-      const [peopleResult, limitResult, governanceResult] = await Promise.all([
-        listOrganizationUsers(organizationId),
-        hasPermission(user, "limits.view")
-          ? getOrganizationLimits(organizationId).catch(() => null)
-          : Promise.resolve(null),
-        loadAccessGovernance(organizationId).catch(() => {
-          governanceUnavailable = true;
-          return null;
-        }),
-      ]);
-      if (readRevision !== requestRef.current) return;
-      setLoaded(true);
-      setPeople(peopleResult.users ?? []);
-      setLimits(limitResult?.limits ?? null);
-      setGovernance(governanceResult);
-      if (governanceUnavailable) {
-        setMessage({
-          kind: "error",
-          text: "A equipe continua disponível para consulta, mas as configurações de acesso não puderam ser carregadas. Tente novamente.",
-        });
-      }
-    } catch (error) {
-      if (readRevision !== requestRef.current) return;
-      setMessage({ kind: "error", text: normalizeUserError(error).message });
-    } finally {
-      if (readRevision === requestRef.current) setLoading(false);
-    }
+    // Requests start together; each region commits as soon as its own data is ready.
+    await Promise.all([
+      listOrganizationUsers(organizationId).then(peopleResult => {
+        if (!current()) return;
+        setPeople(peopleResult.users ?? []);
+        setLoaded(true);
+      }).catch(error => {
+        if (isRegionAccessDenied(error)) clearDeniedContext(error);
+        else reportReadError(normalizeUserError(error).message);
+      })
+        .finally(() => { if (current()) setLoading(false); }),
+      hasPermission(user, "limits.view")
+        ? getOrganizationLimits(organizationId).then(limitResult => {
+          if (current()) setLimits(limitResult?.limits ?? null);
+        }).catch(error => {
+          if (isRegionAuthenticationError(error)) { clearDeniedContext(error); return; }
+          if (current() && isRegionAccessDenied(error)) setLimits(null);
+          reportReadError("Os limites não puderam ser atualizados. A equipe continua disponível para consulta.");
+        })
+          .finally(() => { if (current()) setLimitsLoading(false); })
+        : Promise.resolve(null),
+      loadAccessGovernance(organizationId).then(governanceResult => {
+        if (current()) setGovernance(governanceResult);
+      }).catch(error => {
+        if (!current()) return;
+        if (isRegionAuthenticationError(error)) { clearDeniedContext(error); return; }
+        setGovernance(null);
+        reportReadError("A equipe continua disponível para consulta, mas as configurações de acesso não puderam ser carregadas. Tente novamente.");
+      }).finally(() => { if (current()) setGovernanceLoading(false); }),
+    ]);
   }, [canView, organizationId, user]);
 
   useEffect(() => {
@@ -275,19 +295,17 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
           </div>
         </section>
 
-        <section className="people-capacity-grid" aria-label="Indicadores da equipe" aria-busy={loading}>
-          {loading && !loaded ? <UsersMetricsSkeleton /> : <>
-          <article><span>Pessoas com acesso</span><strong>{loaded ? active : "—"}</strong></article>
-          <article><span>Limite da organização</span><strong>{loaded ? limit : "—"}</strong></article>
-          <article><span>Vagas disponíveis</span><strong>{loaded ? available : "—"}</strong></article>
-          <article><span>Acessos suspensos</span><strong>{loaded ? suspended : "—"}</strong></article>
-          </>}
+        <section className="people-capacity-grid" aria-label="Indicadores da equipe">
+          <article aria-busy={loading}><span>Pessoas com acesso</span><strong>{loading && !loaded ? <Skeleton width={54} height={29} /> : loaded ? active : "—"}</strong></article>
+          <article aria-busy={limitsLoading}><span>Limite da organização</span><strong>{limitsLoading && !limits ? <Skeleton width={54} height={29} /> : limits ? limit : "—"}</strong></article>
+          <article aria-busy={loading || limitsLoading}><span>Vagas disponíveis</span><strong>{(loading && !loaded) || (limitsLoading && !limits) ? <Skeleton width={54} height={29} /> : loaded && limits ? available : "—"}</strong></article>
+          <article aria-busy={loading}><span>Acessos suspensos</span><strong>{loading && !loaded ? <Skeleton width={54} height={29} /> : loaded ? suspended : "—"}</strong></article>
         </section>
 
         <section className="people-content" aria-label="Pessoas da organização">
           <header className="people-content-header">
             <div><h2>Equipe</h2><p>{delegatedAlternative ? "Delegação limitada ativa: use Mapa e Gerenciar nas ações de cada pessoa." : isSuperAdmin ? "Use Mapa nas ações de cada pessoa para gerenciar as rotas de projeto." : "Consulta operacional: alterações de acesso exigem delegação."}</p></div>
-            {loaded && <div className="people-capacity-progress"><span>{active} de {limit} acessos utilizados · {percent}%</span><progress aria-label="Capacidade de acessos utilizada" max="100" value={percent}>{percent}%</progress></div>}
+            {loaded && limits && <div className="people-capacity-progress"><span>{active} de {limit} acessos utilizados · {percent}%</span><progress aria-label="Capacidade de acessos utilizada" max="100" value={percent}>{percent}%</progress></div>}
           </header>
           <div key={`${queryKey}:${page.pageIndex}:${page.pageSize}`} className="people-table-wrap" tabIndex={0} role="region" aria-label="Lista de pessoas" aria-busy={loading}>
             <table aria-label="Usuários e acessos da organização">
@@ -306,7 +324,7 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
                       <td>{profileLabel(person)}</td>
                       <td>{(person.permissions ?? []).length ? String(person.permissions?.length) + " acesso" + (person.permissions?.length === 1 ? "" : "s") : "Nenhum adicional"}</td>
                       <td>{formatDate(person.updatedAt ?? person.createdAt)}</td>
-                      <td>{manageMap || manageAdditional ? (
+                      <td aria-busy={governanceLoading}>{governanceLoading && !governance && !isSuperAdmin ? <Skeleton width={28} height={28} /> : manageMap || manageAdditional ? (
                         <DocumentActionMenu label={`Ações de ${person.name || person.email || "Pessoa sem nome"}`} actions={[
                           ...(manageMap ? [{ label: "Mapa", onSelect: () => setMapAccessTargetUserId(person.id) }] : []),
                           ...(manageAdditional ? [{ label: "Gerenciar", onSelect: () => setManagementTargetUserId(person.id) }] : []),
@@ -320,7 +338,7 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
           </div>
           <footer className="people-pagination" aria-label="Paginação de usuários">
             <DocumentsPagination
-              status={loading ? loaded ? "Atualizando usuários." : "Carregando pessoas com acesso..." : loaded ? `Exibindo ${page.people.length}/${page.total}.` : "Não foi possível atualizar usuários."}
+              status={loading || limitsLoading || governanceLoading ? <LoadingStatus announce={false} visuallyHidden={false} loading refreshing={loaded} label="Carregando pessoas com acesso..." refreshingLabel={loading ? "Atualizando usuários." : limitsLoading ? "Carregando limites da organização." : "Carregando configurações de acesso."} /> : loaded ? `Exibindo ${page.people.length}/${page.total}.` : "Não foi possível atualizar usuários."}
               page={page.pageIndex + 1} pageSize={page.pageSize}
               canGoPrevious={page.canGoPrevious} canGoNext={page.canGoNext}
               disabled={loading || !loaded} disablePageSize={loading || !loaded}

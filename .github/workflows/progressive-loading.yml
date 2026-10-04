@@ -1,0 +1,68 @@
+name: Progressive Loading
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/components/loading/**'
+      - 'src/pages/Admin.tsx'
+      - 'src/pages/Admin/**'
+      - 'src/pages/Projects.tsx'
+      - 'src/pages/Projects/**'
+      - 'tests/*progressive*.test.mjs'
+      - 'tests/helpers/*progressive*.mjs'
+      - 'tests/browser/*progressive-loading.spec.ts'
+      - 'playwright.progressive-loading.config.ts'
+      - '.github/workflows/progressive-loading.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  progressive-loading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Regional loading and preservation contracts
+        run: >-
+          node --experimental-strip-types --test tests/*progressive*.test.mjs
+          tests/projects-section-loading.test.mjs tests/users-access*.test.mjs
+          tests/roadmap-loading.test.mjs tests/maono-select-migration.test.mjs
+          tests/project-pages-contract.test.mjs
+      - name: Scoped lint
+        run: >-
+          npx eslint src/components/loading/Skeleton.tsx src/components/loading/region-loading-policy.ts
+          src/components/loading/useSkeletonCount.ts src/pages/Admin.tsx
+          src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
+          src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
+          src/pages/Projects/components/TicketLoadingSkeletons.tsx
+          tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
+      - name: Compile actual application
+        env:
+          VITE_MAONO_MAP_SHELL_V1: "true"
+          VITE_MAONO_LAYER_MANAGER_V1: "true"
+          VITE_MAONO_MAP_OVERLAY_V1: "true"
+        run: npm run build
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Three-engine compiled fixture coverage
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: progressive-loading-results.json
+        run: npx playwright test --config=playwright.progressive-loading.config.ts --reporter=list,json
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: progressive-loading-${{ github.sha }}
+          path: |
+            test-results/progressive-loading/
+            progressive-loading-results.json
+            tests/browser/*progressive-loading.spec.ts
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,3 +1,4 @@
+import { isRegionAccessDenied, isRegionAuthenticationError } from "../../../components/loading/region-loading-policy";
 import { useEffect, useRef, useState } from 'react';
 import TicketKanbanView from './TicketKanbanView';
 import TicketErrorNotice from './TicketErrorNotice';
@@ -6,14 +7,14 @@ import { matchesTicketFilters, projectTicketColumn, ticketQueryKey, type TicketC
 import type { Ticket, TicketFilters, TicketPagination, TicketStatus } from './ticket-types';
 
 const queues = ['open', 'in_progress', 'in_review', 'closed'];
-type Column = { tickets: Ticket[]; total: number; hasMore: boolean; loading: boolean; revision: number; pagination?: TicketPagination; error?: TicketApiError };
+type Column = { tickets: Ticket[]; total: number; hasMore: boolean; loading: boolean; loadingMore?: boolean; revision: number; pagination?: TicketPagination; error?: TicketApiError };
 const emptyColumn = (): Column => ({ tickets: [], total: 0, hasMore: false, loading: false, revision: 0 });
 
-export default function TicketKanbanBoard({ organizationId, snapshot, filters, changes, canManage, busyTicketIds, onOpen, onStatusChange }: {
-  organizationId: number | string; snapshot?: string | null; filters: TicketFilters; changes: TicketChange[]; canManage: boolean;
+export default function TicketKanbanBoard({ organizationId, snapshot, refreshKey = 0, filters, changes, canManage, busyTicketIds, onOpen, onStatusChange }: {
+  organizationId: number | string; snapshot?: string | null; refreshKey?: number; filters: TicketFilters; changes: TicketChange[]; canManage: boolean;
   busyTicketIds: ReadonlySet<string>; onOpen: (ticket: Ticket) => void; onStatusChange: (ticket: Ticket, status: TicketStatus) => void;
 }) {
-  const [columns, setColumns] = useState<Record<string, Column>>({});
+  const [columns, setColumns] = useState<Record<string, Column>>(() => Object.fromEntries(queues.map(queue => [queue, { ...emptyColumn(), loading: true }])));
   const [accessRevoked, setAccessRevoked] = useState(false);
   const [verifiedPins, setVerifiedPins] = useState(new Map<string, Ticket>());
   const current = useRef(columns); current.current = columns;
@@ -22,6 +23,13 @@ export default function TicketKanbanBoard({ organizationId, snapshot, filters, c
   const revision = changes.at(-1)?.revision ?? 0;
   const latestRevision = useRef(revision); latestRevision.current = revision;
   const pending = useRef(busyTicketIds.size > 0); pending.current = busyTicketIds.size > 0;
+
+  function invalidateAccess(failure: TicketApiError, queue: string) {
+    generation.current += 1;
+    for (const active of controllers.current.values()) active.abort();
+    setAccessRevoked(true); setVerifiedPins(new Map());
+    setColumns(Object.fromEntries(queues.map(id => [id, { ...emptyColumn(), ...(id === queue ? { error: failure } : {}) }])));
+  }
 
   async function load(queue: string, more = false, sharedSnapshot: string | null | undefined = null, commit = true) {
     if (pending.current) return;
@@ -33,7 +41,7 @@ export default function TicketKanbanBoard({ organizationId, snapshot, filters, c
     // Preserve the number of loaded pages during reconciliation, with one new
     // snapshot shared by page 1 and every following page of this queue.
     const lastPage = more ? page : Math.max(1, previous.pagination?.page || 1);
-    setColumns(state => ({ ...state, [queue]: { ...(state[queue] || emptyColumn()), loading: true, error: undefined } }));
+    setColumns(state => ({ ...state, [queue]: { ...(state[queue] || emptyColumn()), loading: true, loadingMore: more, error: undefined } }));
     let querySnapshot = more ? previous.pagination?.snapshot : sharedSnapshot;
     let loaded = more ? previous.tickets : [];
     try {
@@ -43,7 +51,7 @@ export default function TicketKanbanBoard({ organizationId, snapshot, filters, c
         loaded = [...new Map([...loaded, ...data.tickets].map(ticket => [String(ticket.id), ticket])).values()];
         querySnapshot = data.pagination.snapshot;
         if (nextPage === lastPage || !data.pagination.hasMore) {
-          const column = { tickets: loaded, total: data.pagination.total, hasMore: data.pagination.hasMore, loading: false, pagination: data.pagination, revision: more ? previous.revision : requestRevision };
+          const column = { tickets: loaded, total: data.pagination.total, hasMore: data.pagination.hasMore, loading: false, loadingMore: false, pagination: data.pagination, revision: more ? previous.revision : requestRevision };
           if (commit) setColumns(state => ({ ...state, [queue]: column }));
           return { snapshot: data.pagination.snapshot || null, column };
         }
@@ -51,16 +59,28 @@ export default function TicketKanbanBoard({ organizationId, snapshot, filters, c
     } catch (error) {
       if (controller.signal.aborted || epoch !== generation.current || requestRevision !== latestRevision.current) return;
       const failure = toTicketApiError(error);
-      if (failure.status === 403 || failure.status === 404) { setAccessRevoked(true); setVerifiedPins(new Map()); }
-      setColumns(state => ({ ...state, [queue]: { ...(failure.status === 403 || failure.status === 404 ? emptyColumn() : state[queue] || emptyColumn()), loading: false, error: failure } }));
+      if (isRegionAccessDenied(failure) || failure.status === 404) {
+        invalidateAccess(failure, queue);
+        return;
+      }
+      setColumns(state => ({ ...state, [queue]: { ...(isRegionAccessDenied(failure) || failure.status === 404 ? emptyColumn() : state[queue] || emptyColumn()), loading: false, error: failure } }));
     }
   }
 
   async function reconcile(forceFresh = false) {
     const epoch = generation.current, requestRevision = latestRevision.current;
-    const first = await load(queues[0], false, requestRevision === 0 && !forceFresh ? snapshot : null, false);
-    if (!first || epoch !== generation.current || pending.current) return;
-    const rest = await Promise.all(queues.slice(1).map(queue => load(queue, false, first.snapshot, false)));
+    setColumns(state => Object.fromEntries(queues.map(queue => [queue, { ...(state[queue] || emptyColumn()), loading: true, loadingMore: false }])));
+    // Only mutation reconciliation needs the atomic snapshot/overlay swap.
+    // Initial authorized queues can reveal independently once the first token exists.
+    const hasQueryChanges = changes.some(change => change.queryKey === ticketQueryKey(filters));
+    const revealPendingQueue = (queue: string) => !hasQueryChanges && !current.current[queue]?.pagination;
+    const first = await load(queues[0], false, requestRevision === 0 && !forceFresh ? snapshot : null, revealPendingQueue(queues[0]));
+    if (epoch !== generation.current || pending.current) return;
+    if (!first) {
+      setColumns(state => Object.fromEntries(Object.entries(state).map(([queue, column]) => [queue, { ...column, loading: false }])));
+      return;
+    }
+    const rest = await Promise.all(queues.slice(1).map(queue => load(queue, false, first.snapshot, revealPendingQueue(queue))));
     if (epoch !== generation.current || requestRevision !== latestRevision.current || pending.current) return;
     if (rest.some(result => !result)) {
       setColumns(state => Object.fromEntries(Object.entries(state).map(([queue, column]) => [queue, { ...column, loading: false }])));
@@ -81,7 +101,11 @@ export default function TicketKanbanBoard({ organizationId, snapshot, filters, c
       } catch (error) {
         if (controller.signal.aborted) return;
         const failure = toTicketApiError(error);
-        if (failure.status !== 403 && failure.status !== 404) {
+        if (isRegionAuthenticationError(failure)) {
+          invalidateAccess(failure, change.ticket.status === 'new' ? 'open' : change.ticket.status);
+          return;
+        }
+        if (!isRegionAccessDenied(failure) && failure.status !== 404) {
           const queue = change.ticket.status === 'new' ? 'open' : change.ticket.status;
           next[queue] = { ...next[queue], error: failure };
         }
@@ -98,11 +122,11 @@ export default function TicketKanbanBoard({ organizationId, snapshot, filters, c
     generation.current += 1;
     for (const controller of activeControllers.values()) controller.abort();
     setColumns(state => Object.fromEntries(Object.entries(state).map(([queue, column]) => [queue, { ...column, loading: false }])));
-    if (!pending.current) void reconcile();
+    if (!pending.current) void reconcile(refreshKey > 0);
     return () => { generation.current += 1; for (const controller of activeControllers.values()) controller.abort(); };
-    // Query/organization/manual refresh remount the board; mutations reconcile in place.
+    // Query/organization remount the board; same-query refresh and mutations reconcile in place.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision, busyTicketIds.size]);
+  }, [revision, busyTicketIds.size, refreshKey]);
 
   const freshTickets = new Map(verifiedPins);
   const latestById = new Map(changes.map(change => [String((change.ticket || change.previous)!.id), change]));
@@ -117,7 +141,7 @@ export default function TicketKanbanBoard({ organizationId, snapshot, filters, c
   const visible = Object.fromEntries(queues.map(queue => {
     const column = columns[queue] || emptyColumn();
     // A revoked queue must not expose tickets retained by local overlays.
-    return [queue, accessRevoked ? emptyColumn() : column.error?.status === 403 || column.error?.status === 404 ? column : projectTicketColumn(column, queue, changes, filters, freshTickets, rawQueues)];
+    return [queue, accessRevoked ? emptyColumn() : isRegionAccessDenied(column.error) || column.error?.status === 404 ? column : projectTicketColumn(column, queue, changes, filters, freshTickets, rawQueues)];
   }));
   const tickets = Object.values(visible).flatMap(column => column.tickets);
   return <>{queues.map(queue => columns[queue]?.error ? <TicketErrorNotice key={queue} error={columns[queue].error!} onRetry={() => void reconcile(true)} /> : null)}

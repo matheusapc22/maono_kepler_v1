@@ -21,7 +21,10 @@ test("Roadmap retains real timeline/list modes, filters, metrics and mutation ha
   assert.match(source, /aria-label="Escala do cronograma"[\s\S]*?disabled=\{view === "list"\}/);
   assert.match(source, /aria-pressed=\{view === "gantt"\}/);
   assert.match(source, /aria-pressed=\{view === "list"\}/);
-  assert.match(source, /<div key=\{`\$\{view\}:\$\{queryKey\}:\$\{page.pageIndex\}:\$\{page.pageSize\}`\} className="roadmap-scroll"/);
+  assert.match(source, /<div ref=\{scrollRef\} className="roadmap-scroll"/);
+  assert.doesNotMatch(source, /key=\{`\$\{view\}/);
+  assert.match(source, /scrollRef.current.scrollTop = 0; scrollRef.current.scrollLeft = 0/);
+  assert.match(source, /\[view, queryKey, page.pageIndex, page.pageSize\]/);
   assert.match(source, /title=\{formatDate\(item.date\)\}/);
 });
 
@@ -35,7 +38,7 @@ test("Roadmap replaces the old information strip with the exact shared paginatio
   assert.match(source, /<RoadmapMetrics bundle=\{bundle\}/);
   assert.match(source, /<GanttView bundle=\{bundle\} tasks=\{page.tasks\}/);
   assert.match(source, /<ListView tasks=\{page.tasks\}/);
-  assert.match(source, /const start = bundle.roadmap.startDate; const end = bundle.roadmap.endDate/);
+  assert.match(source, /const start = bundle\?.roadmap.startDate; const end = bundle\?.roadmap.endDate/);
   assert.match(css, /\.roadmap-scroll \{[^}]*max-height:[^}]*overflow: auto/);
   assert.match(css, /\.roadmap-content \{ display: block/);
   assert.match(css, /\.roadmap-view-switch button \{ display: inline-flex/);

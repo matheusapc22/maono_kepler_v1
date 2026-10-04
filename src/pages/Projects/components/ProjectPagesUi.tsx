@@ -1,3 +1,4 @@
+import { LoadingStatus } from "../../../components/loading/Skeleton";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import type { MouseEvent } from "react";
 import { Link } from "react-router";
@@ -70,18 +71,19 @@ export function ProjectPageFiltersForm({ value, disabled, onChange, onApply, onC
   </form>;
 }
 
-export function ProjectPagePagination({ visibleCount, total, page, pageCount, pageSize, disabled, onPage, onPageSize }: {
+export function ProjectPagePagination({ visibleCount, total, page, pageCount, pageSize, disabled, loading = false, refreshing = false, unavailable = false, onPage, onPageSize }: {
   visibleCount: number; total: number; page: number; pageCount: number; pageSize: number;
+  loading?: boolean; refreshing?: boolean; unavailable?: boolean;
   disabled: boolean; onPage: (page: number) => void; onPageSize: (size: number) => void;
 }) {
   return <footer className="mm-project-pages__footer">
-    <p role="status" aria-live="polite" aria-atomic="true">Exibindo {visibleCount}/{total}.</p>
+    {loading ? <><p>{refreshing ? `Exibindo ${visibleCount}/${total}. Atualizando projetos.` : "Carregando projetos."}</p><LoadingStatus loading={loading} refreshing={refreshing} label="Carregando projetos." refreshingLabel="Atualizando projetos." /></> : unavailable ? <p role="status" aria-live="polite">Contagem de projetos indisponível.</p> : <p role="status" aria-live="polite" aria-atomic="true">Exibindo {visibleCount}/{total}.</p>}
     <nav className="mm-project-pages__pagination" aria-label="Paginação dos projetos">
       <label>Itens por página<MaonoSelect value={pageSize} onChange={event => onPageSize(Number(event.target.value))} disabled={disabled}>
         <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
       </MaonoSelect></label>
       <button type="button" className="mm-project-pages__button" aria-label="Página anterior" disabled={disabled || page <= 1} onClick={() => onPage(page - 1)}><ProjectPageIcon name="previous" /></button>
-      <span className="mm-project-pages__current" aria-current="page" aria-label={`Página ${page} de ${pageCount}`}>{page}</span>
+      <span className="mm-project-pages__current" aria-current="page" aria-label={loading && !refreshing || unavailable ? "Paginação indisponível" : `Página ${page} de ${pageCount}`}>{loading && !refreshing || unavailable ? "—" : page}</span>
       <button type="button" className="mm-project-pages__button" aria-label="Próxima página" disabled={disabled || page >= pageCount} onClick={() => onPage(page + 1)}><ProjectPageIcon name="next" /></button>
     </nav>
   </footer>;

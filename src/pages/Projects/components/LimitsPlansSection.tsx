@@ -1,7 +1,8 @@
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { LimitsPlansSectionSkeleton } from "./ProjectSectionSkeletons";
+import { LoadingStatus, Skeleton, TableSkeleton } from "../../../components/loading/Skeleton";
 
 import type { MaonoUser } from "../../../auth/session";
 import {
@@ -196,7 +197,7 @@ function sanitizeReason(reason: string): string {
   return reason.trim().slice(0, 1000);
 }
 
-function LimitUsageRow({ item }: { item: LimitItem }) {
+function LimitUsageRow({ item, pending = false, available = true }: { item: LimitItem; pending?: boolean; available?: boolean }) {
   const percent = getUsagePercent(item.counter);
   const used = `${formatNumber(item.counter.used)}${item.unit ? ` ${item.unit}` : ""}`;
   const limit = `${formatNumber(item.counter.limit)}${item.unit ? ` ${item.unit}` : ""}`;
@@ -204,8 +205,8 @@ function LimitUsageRow({ item }: { item: LimitItem }) {
   return (
     <tr>
       <td><strong>{item.label}</strong><div className="mm-muted">{item.description}</div></td>
-      <td>{used}</td><td>{limit}</td>
-      <td><span className={percent >= 90 ? "mm-tag red" : percent >= 70 ? "mm-tag gold" : "mm-tag green"}>{percent}%</span></td>
+      <td>{pending ? <Skeleton width={48} height={16} /> : available ? used : "—"}</td><td>{pending ? <Skeleton width={48} height={16} /> : available ? limit : "—"}</td>
+      <td>{pending ? <Skeleton width={52} height={24} radius={999} /> : available ? <span className={percent >= 90 ? "mm-tag red" : percent >= 70 ? "mm-tag gold" : "mm-tag green"}>{percent}%</span> : "—"}</td>
     </tr>
   );
 }
@@ -218,7 +219,7 @@ function PendingRequestsTable({ requests }: { requests: OrganizationLimitRequest
   return (
     <div className="mm-table-wrap">
       <table>
-        <thead><tr><th>ID</th><th>Tipo</th><th>Plano solicitado</th><th>Status</th><th>Motivo</th><th>Criado em</th></tr></thead>
+        <thead><tr><th scope="col">ID</th><th scope="col">Tipo</th><th scope="col">Plano solicitado</th><th scope="col">Status</th><th scope="col">Motivo</th><th scope="col">Criado em</th></tr></thead>
         <tbody>{requests.map((request) => (
           <tr key={String(request.id)}>
             <td>{request.id}</td>
@@ -268,7 +269,10 @@ function LimitsPlansWorkspace({ user, projectsCount }: LimitsPlansSectionProps) 
       setLimits(response.limits);
       setPendingRequests(response.pendingRequests || []);
     } catch (error) {
-      if (revision === requestRef.current) setErrorMessage(normalizeUserError(error).message);
+      if (revision === requestRef.current) {
+        if (isRegionAccessDenied(error)) { setLimits(null); setPendingRequests([]); }
+        setErrorMessage(normalizeUserError(error).message);
+      }
     } finally {
       if (revision === requestRef.current) setLoading(false);
     }
@@ -326,14 +330,13 @@ function LimitsPlansWorkspace({ user, projectsCount }: LimitsPlansSectionProps) 
 
       {errorMessage && <div className="mm-card" role="alert"><strong>Não foi possível concluir</strong><p>{errorMessage}</p><button type="button" className="mm-btn" disabled={loading} onClick={() => void loadLimits()}>Recarregar</button></div>}
       {successMessage && <div className="mm-card" role="status"><strong>Sucesso</strong><p>{successMessage}</p></div>}
-      <span className="mm-sr-only" role="status">{loading ? limits ? "Atualizando limites da organização." : "Carregando limites da organização." : ""}</span>
+      <LoadingStatus loading={loading} refreshing={Boolean(limits)} label="Carregando limites da organização." refreshingLabel="Atualizando limites da organização." />
       <div className="mm-section-load-region" role="region" aria-label="Limites da organização" aria-busy={loading}>
-      {loading && !limits ? <LimitsPlansSectionSkeleton requestForm={permissions.increaseRequest} /> : null}
+        <div className="mm-card"><h3>Plano atual</h3><div className="mm-tags-list">{loading && !limits ? <Skeleton width={65} height={25} radius={999} /> : limits?.plan ? <span className={planClassName(limits.plan)}>{planLabel(limits.plan)}</span> : "—"}</div><p>Alterações de plano são analisadas antes de entrarem em vigor.</p></div>
 
-      {limits && <>
-        <div className="mm-card"><h3>Plano atual</h3><div className="mm-tags-list"><span className={planClassName(limits?.plan)}>{planLabel(limits?.plan)}</span></div><p>Alterações de plano são analisadas antes de entrarem em vigor.</p></div>
+        <div className="mm-card"><h3>Uso e limites</h3><div className="mm-table-wrap"><table><thead><tr><th scope="col">Categoria</th><th scope="col">Uso atual</th><th scope="col">Limite</th><th scope="col">Uso</th></tr></thead><tbody>{limitItems.map((item) => <LimitUsageRow key={item.key} item={item} pending={loading && !limits} available={Boolean(limits?.[item.key])} />)}</tbody></table></div></div>
 
-        <div className="mm-card"><h3>Uso e limites</h3><div className="mm-table-wrap"><table><thead><tr><th>Categoria</th><th>Uso atual</th><th>Limite</th><th>Uso</th></tr></thead><tbody>{limitItems.map((item) => <LimitUsageRow key={item.key} item={item} />)}</tbody></table></div></div>
+      </div>
 
         <div className="mm-card"><h3>Solicitar upgrade ou aumento</h3>
           {permissions.increaseRequest ? (
@@ -348,9 +351,7 @@ function LimitsPlansWorkspace({ user, projectsCount }: LimitsPlansSectionProps) 
           ) : <p>Seu perfil não possui permissão para solicitar aumento de limite.</p>}
         </div>
 
-        <div className="mm-card"><h3>Solicitações pendentes</h3><PendingRequestsTable requests={pendingRequests} /></div>
-      </>}
-      </div>
+        <div className="mm-card" aria-busy={loading}><h3>Solicitações pendentes</h3>{loading && !limits ? <TableSkeleton headers={["ID", "Tipo", "Plano solicitado", "Status", "Motivo", "Criado em"]} pageSize={3} /> : limits ? <PendingRequestsTable requests={pendingRequests} /> : <p>As solicitações não puderam ser carregadas.</p>}</div>
     </section>
   );
 }

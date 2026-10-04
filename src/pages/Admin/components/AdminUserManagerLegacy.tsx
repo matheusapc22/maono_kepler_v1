@@ -1,3 +1,5 @@
+import { Skeleton } from "../../../components/loading/Skeleton";
+import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
@@ -106,6 +108,9 @@ function toDateTimeLocal(value?: string | null) {
 export default function AdminUserManager({
   users,
   organizations,
+  loading = false,
+  usersLoaded = true,
+  organizationsLoaded = true,
   initialOrganizationId,
   currentUserId,
   isSuperAdmin,
@@ -114,12 +119,16 @@ export default function AdminUserManager({
 }: {
   users: User[];
   organizations: Organization[];
+  loading?: boolean;
+  usersLoaded?: boolean;
+  organizationsLoaded?: boolean;
   initialOrganizationId?: number | string | null;
-  currentUserId?: number;
+  currentUserId?: number | string;
   isSuperAdmin: boolean;
   onRefresh: () => Promise<void>;
   onMessage: (kind: "error" | "success", text: string) => void;
 }) {
+  const skeletonRows = useSkeletonCount({ layout: "table", itemHeight: 54, reservedHeight: 320, maxCount: 10 });
   const [selected, setSelected] = useState<User | null>(null);
   const [selectedView, setSelectedView] =
     useState<UserManagementView>("profile");
@@ -602,6 +611,7 @@ export default function AdminUserManager({
           Organização
           <MaonoSelect
             value={organizationFilter}
+            disabled={!organizationsLoaded}
             onChange={(event) => setOrganizationFilter(event.target.value)}
           >
             <option value="all">Todas</option>
@@ -638,24 +648,27 @@ export default function AdminUserManager({
           </MaonoSelect>
         </label>
         <span className="admin-user-filter-count">
-          {filteredUsers.length} de {users.length} usuário(s)
+          {usersLoaded ? <>{filteredUsers.length} de {users.length} usuário(s)</> : loading ? "Carregando usuários." : "Contagem indisponível."}
         </span>
       </div>
 
-      <div className="admin-users-table">
+      <div className="admin-users-table" aria-busy={loading}>
         <table>
           <thead>
             <tr>
-              <th>Nome</th>
-              <th>E-mail</th>
-              <th>Perfil</th>
-              <th>Projetos</th>
-              <th>Status</th>
-              <th>Ações</th>
+              <th scope="col">Nome</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Perfil</th>
+              <th scope="col">Projetos</th>
+              <th scope="col">Status</th>
+              <th scope="col">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map((user) => (
+            {loading && !usersLoaded ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
+              <tr key={`pending-${rowIndex}`} aria-hidden="true">{Array.from({ length: 6 }, (_, columnIndex) => <td key={columnIndex}><Skeleton width={`${55 + ((rowIndex + columnIndex) % 4) * 10}%`} height={12} /></td>)}</tr>
+            )) : null}
+            {usersLoaded && filteredUsers.map((user) => (
               <tr key={user.id}>
                 <td>{user.name || "—"}</td>
                 <td>{user.email}</td>
@@ -682,7 +695,8 @@ export default function AdminUserManager({
                 </td>
               </tr>
             ))}
-            {filteredUsers.length === 0 && (
+            {!loading && !usersLoaded ? <tr><td colSpan={6} className="admin-users-empty">Dados de usuários indisponíveis.</td></tr> : null}
+            {usersLoaded && filteredUsers.length === 0 && (
               <tr>
                 <td colSpan={6} className="admin-users-empty">
                   Nenhum usuário corresponde aos filtros selecionados.

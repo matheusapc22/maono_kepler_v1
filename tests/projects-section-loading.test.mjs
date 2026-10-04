@@ -10,15 +10,19 @@ const [organization, limits, users, skeletons, css] = await Promise.all([
   'src/components/loading/Skeleton.css',
 ].map(read));
 
-test('organization and limits show shimmer only before the first real response', () => {
-  for (const [source, data, skeleton] of [[organization, 'organization', 'OrganizationSectionSkeleton'], [limits, 'limits', 'LimitsPlansSectionSkeleton']]) {
-    assert.match(source, new RegExp(`loading && !${data} \\? <${skeleton}`));
-    assert.match(source, new RegExp(`\\{${data} &&`));
+test('organization and limits reserve only missing values while keeping known structural labels and controls', () => {
+  for (const [source, data] of [[organization, 'organization'], [limits, 'limits']]) {
+    assert.ok(source.includes(`loading && !${data}`));
     assert.match(source, /useState\(Boolean\(organizationId && permissions.view\)\)/);
     assert.match(source, /aria-busy=\{loading\}/);
-    assert.match(source, /className="mm-sr-only" role="status"/);
+    assert.match(source, /<LoadingStatus loading=\{loading\} refreshing=\{Boolean\(/);
     assert.doesNotMatch(source, /\{!loading &&|setTimeout|setInterval/);
   }
+  for (const label of ['Dados principais', 'Métricas', 'Edição', 'Perfil atual']) assert.ok(organization.includes(label));
+  for (const label of ['Plano atual', 'Uso e limites', 'Solicitar upgrade ou aumento', 'Solicitações pendentes']) assert.ok(limits.includes(label));
+  assert.doesNotMatch(organization, /OrganizationSectionSkeleton/);
+  assert.doesNotMatch(limits, /LimitsPlansSectionSkeleton|\{limits && <>/);
+  assert.match(limits, /available=\{Boolean\(limits\?\.\[item.key\]\)\}/);
 });
 
 test('organization and limits invalidate reads on unmount and remount authorization contexts', () => {
@@ -31,20 +35,27 @@ test('organization and limits invalidate reads on unmount and remount authorizat
   }
 });
 
-test('users preserve valid rows and metrics during refresh and announce through the existing footer', () => {
-  assert.match(users, /loading && !loaded \? <UsersMetricsSkeleton/);
+test('users publish independent dependencies and keep valid rows during auxiliary waits', () => {
+  assert.match(users, /listOrganizationUsers\(organizationId\)\.then\(peopleResult/);
+  assert.match(users, /getOrganizationLimits\(organizationId\)\.then\(limitResult/);
+  assert.match(users, /loadAccessGovernance\(organizationId\)\.then\(governanceResult/);
+  assert.match(users, /const current = \(\) => readRevision === requestRef.current/);
   assert.match(users, /loading && !loaded \? <UsersTableSkeletonRows/);
   assert.match(users, /\{loaded && page.people.map/);
-  assert.doesNotMatch(users, /\{!loading && page.people.map|role="status">Carregando pessoas/);
-  assert.match(users, /status=\{loading \? loaded \? "Atualizando usuários\."/);
+  assert.doesNotMatch(users, /\{!loading && page.people.map/);
+  assert.match(users, /announce=\{false\} visuallyHidden=\{false\}/);
+  assert.match(users, /governanceLoading && !governance && !isSuperAdmin/);
+  assert.match(users, /limitsLoading && !limits \? <Skeleton/);
+  assert.match(users, /loaded && limits && <div className="people-capacity-progress"/);
 });
 
-test('section geometry uses shared non-interactive aria-hidden shimmer and reduced-motion tokens', () => {
-  assert.match(skeletons, /import \{ Skeleton, TableSkeleton \} from "\.\.\/\.\.\/\.\.\/components\/loading\/Skeleton"/);
-  assert.match(skeletons, /mm-metrics-grid compact/);
+test('section geometry uses viewport/page estimates and shared decorative motion tokens', () => {
+  assert.match(skeletons, /useSkeletonCount/);
+  assert.match(skeletons, /useSkeletonCount\(\{ layout: "table", pageSize: rows/);
   assert.match(skeletons, /people-skeleton-row/);
   assert.match(skeletons, /aria-hidden="true"/);
   assert.doesNotMatch(skeletons, /<button|<input|role="status"|setTimeout|animation:/);
+  assert.match(css, /\.mm-section-card \.mm-section-load-region \+ \.mm-card \{\s*margin-top: 14px;/);
   assert.match(css, /animation: mm-shimmer/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });

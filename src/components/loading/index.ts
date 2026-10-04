@@ -24,6 +24,7 @@ export {
 export type { LoadingStaleDiagnostic } from "./loading-diagnostics";
 export {
   AdminPageSkeleton,
+  LoadingStatus,
   MetricsSkeleton,
   ProjectCardSkeleton,
   ProjectGridSkeleton,
@@ -31,3 +32,6 @@ export {
   Skeleton,
   TableSkeleton,
 } from "./Skeleton";
+export type { SkeletonCountOptions, RegionLoadingState } from "./region-loading-policy";
+export { useSkeletonCount } from "./useSkeletonCount";
+export { estimateSkeletonCount, resolveRegionState } from "./region-loading-policy";

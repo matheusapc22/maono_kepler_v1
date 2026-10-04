@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { restoreMaonoSelect } from './maono-select-preservation.mjs';
+import { restoreUsersProgressiveRead } from './users-progressive-preservation.mjs';
 
 export const usersAccessBaseline = JSON.parse(readFileSync(new URL('../fixtures/users-access-baseline.json', import.meta.url), 'utf8'));
 export const preservedHelpers = ['roleOf', 'userPermissions', 'hasPermission', 'canViewTeam', 'fallbackOrganizationId', 'profileLabel', 'targetLevel', 'sameId', 'formatDate'];
@@ -36,6 +37,7 @@ function enclosingExpression(node) {
  * pre-redesign fixture pins business logic and management props while allowing
  * a new visual layout, client paging and cancellation of stale read requests. */
 export function assertUsersAccessPreserved(source) {
+  source = restoreUsersProgressiveRead(source);
   assert.equal(usersAccessBaseline.revision, '158e2b3c1d05dbe69589d610167754ac72787215');
   assert.equal(digest(usersAccessBaseline.source), '155f6988a2402f25fe7cf226f201dcf8031af956732638b66d3eaf8fc4d409c1');
   // This is the exact migration hash retired for this one consumer, proving

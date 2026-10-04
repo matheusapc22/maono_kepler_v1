@@ -1,3 +1,4 @@
+import { isRegionAccessDenied, isRegionAuthenticationError } from "../src/components/loading/region-loading-policy.ts";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -58,7 +59,9 @@ test('the contract catches mutations instead of accepting newly calculated hashe
     ['restorePersonActionFocus(mapAccessTargetUserId)', 'restorePersonActionFocus(managementTargetUserId)'],
     ['setManagementTargetUserId(null); restorePersonActionFocus(managementTargetUserId);', 'setManagementTargetUserId(null);'],
     ['setMapAccessTargetUserId(null); restorePersonActionFocus(mapAccessTargetUserId);', 'setMapAccessTargetUserId(null);'],
-    ['hasPermission(user, "limits.view")', 'true'],
+    ['hasPermission(user, "limits.view")\n        ? getOrganizationLimits(organizationId)', 'true\n        ? getOrganizationLimits(organizationId)'],
+    ['listOrganizationUsers(organizationId).then', 'listOrganizationUsers(2).then'],
+    ['if (current()) setGovernance(governanceResult)', 'setGovernance(governanceResult)'],
   ]) {
     assert.ok(source.includes(before), before);
     assert.throws(() => assertUsersAccessPreserved(source.replace(before, after)), undefined, before);
@@ -228,21 +231,23 @@ test('real SQL returns more than 50 organization members, suspended people, scop
   assert.doesNotMatch(query.sql, /\bLIMIT\b|\bOFFSET\b/i);
 });
 
-function loadHarness({ user = { id: 1, role: 'owner' }, organizationId = 1, canView = true, limitsError = false, governanceError = false } = {}) {
-  const calls = [], writes = [], readCalls = [];
+function loadHarness({ user = { id: 1, role: 'owner' }, organizationId = 1, canView = true, limitsError = false, governanceError = false, delayAuxiliary = false } = {}) {
+  const calls = [], writes = [], readCalls = [], auxiliary = [];
+  const states = new Map();
+  const waitAuxiliary = () => delayAuxiliary ? new Promise(resolve => auxiliary.push(resolve)) : Promise.resolve();
   const requestRef = { current: 0 };
   const dependencies = {
-    user, organizationId, canView, requestRef, useCallback: fn => fn,
+    user, organizationId, canView, requestRef, useCallback: fn => fn, isRegionAccessDenied, isRegionAuthenticationError,
     hasPermission: currentModel().hasPermission,
     normalizeUserError: error => ({ message: error.message }),
     listOrganizationUsers: id => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); calls.push({ id, resolve, reject }); return promise; },
-    getOrganizationLimits: async id => { readCalls.push(['limits', id]); if (limitsError) throw new Error('limits failed'); return { limits: { users: { limit: 20 } } }; },
-    loadAccessGovernance: async id => { readCalls.push(['governance', id]); if (governanceError) throw new Error('governance failed'); return { mode: 'organization', canManageAdditionalAccesses: true, allowedTargetLevels: ['viewer'] }; },
+    getOrganizationLimits: async id => { readCalls.push(['limits', id]); await waitAuxiliary(); if (limitsError) throw new Error('limits failed'); return { limits: { users: { limit: 20 } } }; },
+    loadAccessGovernance: async id => { readCalls.push(['governance', id]); await waitAuxiliary(); if (governanceError) throw new Error('governance failed'); return { mode: 'organization', canManageAdditionalAccesses: true, allowedTargetLevels: ['viewer'] }; },
   };
-  for (const name of ['setLoading', 'setLoaded', 'setMessage', 'setPeople', 'setLimits', 'setGovernance']) dependencies[name] = value => writes.push([name, value]);
+  for (const name of ['setLoading', 'setLoaded', 'setMessage', 'setPeople', 'setLimits', 'setGovernance', 'setLimitsLoading', 'setGovernanceLoading', 'setManagementTargetUserId', 'setMapAccessTargetUserId']) dependencies[name] = input => { const value = typeof input === 'function' ? input(states.get(name) ?? null) : input; states.set(name, value); writes.push([name, value]); };
   const loadSource = `const ${declaration(ast, 'load').getText()}; return load;`;
   const load = new Function(...Object.keys(dependencies), compile(loadSource))(...Object.values(dependencies));
-  return { calls, writes, readCalls, requestRef, load };
+  return { calls, writes, readCalls, requestRef, load, auxiliary, states };
 }
 test('newer refresh wins and stale requests cannot replace users or clear the busy state', async () => {
   const harness = loadHarness();
@@ -253,7 +258,7 @@ test('newer refresh wins and stale requests cannot replace users or clear the bu
   harness.calls[1].resolve({ users: [{ id: 'current' }] });
   await latestLoad;
   assert.deepEqual(harness.writes.filter(([name]) => name === 'setPeople'), [['setPeople', [{ id: 'current' }]]]);
-  assert.deepEqual(harness.writes.at(-1), ['setLoading', false]);
+  assert.equal(harness.states.get('setLoading'), false);
 });
 test('unmount/context replacement invalidates late success and error, and unauthorized contexts never fetch', async () => {
   assert.equal(canonical(declaration(ast, 'contextKey').initializer), 'JSON.stringify([organizationId, user?.id, roleOf(user), userPermissions(user)])');
@@ -279,9 +284,9 @@ test('load keeps optional limits permission and fallback behavior without granti
     harness.calls[0].resolve({ users: [{ id: 8 }] });
     await pending;
     assert.deepEqual(harness.writes.find(([name]) => name === 'setPeople'), ['setPeople', [{ id: 8 }]]);
-    assert.deepEqual(harness.writes.at(-1), ['setLoading', false]);
+    assert.equal(harness.states.get('setLoading'), false);
     if (input.user) assert.deepEqual(harness.readCalls, [['governance', 1]]);
-    if (input.limitsError || input.user) assert.deepEqual(harness.writes.find(([name]) => name === 'setLimits'), ['setLimits', null]);
+    if (input.limitsError || input.user) assert.equal(harness.writes.some(([name]) => name === 'setLimits'), false, 'unavailable limits never overwrite valid cached limits or fabricate a count');
     if (input.governanceError) {
       assert.deepEqual(harness.writes.find(([name]) => name === 'setGovernance'), ['setGovernance', null]);
       const warning = harness.writes.find(([name, value]) => name === 'setMessage' && value);
@@ -293,8 +298,9 @@ test('load keeps optional limits permission and fallback behavior without granti
   harness.calls[0].reject(new Error('roster failed'));
   await failed;
   assert.deepEqual(harness.writes.find(([name, value]) => name === 'setMessage' && value), ['setMessage', { kind: 'error', text: 'roster failed' }]);
-  assert.ok(harness.writes.every(([name]) => !['setPeople', 'setLoaded', 'setGovernance'].includes(name)));
-  assert.deepEqual(harness.writes.at(-1), ['setLoading', false]);
+  assert.ok(harness.writes.every(([name]) => !['setPeople', 'setLoaded'].includes(name)));
+  assert.equal(harness.states.get('setGovernance').mode, 'organization', 'independent authorized metadata can settle without fabricating roster rows');
+  assert.equal(harness.states.get('setLoading'), false);
 });
 
 test('manager close callbacks clear only their existing target then restore that person action focus', () => {
@@ -409,4 +415,62 @@ test('repeated close cancels old frames, null targets do not schedule, and unmou
   assert.ok(harness.cancelled.includes(pending));
   assert.equal(harness.focused.length, 1);
   const empty = focusHarness(); empty.restore(null); assert.equal(empty.frames.size, 0);
+});
+
+
+test('roster publishes immediately while limits and governance remain pending independently', async () => {
+  const harness = loadHarness({ delayAuxiliary: true });
+  const pending = harness.load();
+  assert.deepEqual(harness.readCalls, [['limits', 1], ['governance', 1]], 'all independent reads start immediately');
+  harness.calls[0].resolve({ users: [{ id: 8 }] });
+  for (let index = 0; index < 8; index++) await Promise.resolve();
+  assert.deepEqual(harness.states.get('setPeople'), [{ id: 8 }]);
+  assert.equal(harness.states.get('setLoaded'), true);
+  assert.equal(harness.states.get('setLoading'), false);
+  assert.equal(harness.states.get('setLimitsLoading'), true);
+  assert.equal(harness.states.get('setGovernanceLoading'), true);
+  assert.equal(harness.states.has('setGovernance'), false);
+  harness.auxiliary.forEach(resolve => resolve());
+  await pending;
+  assert.equal(harness.states.get('setLimitsLoading'), false);
+  assert.equal(harness.states.get('setGovernanceLoading'), false);
+});
+
+test('superseded auxiliary responses cannot publish data or clear newer per-region busy flags', async () => {
+  const harness = loadHarness({ delayAuxiliary: true });
+  const old = harness.load(); const latest = harness.load();
+  harness.calls[0].resolve({ users: [{ id: 'old' }] });
+  harness.auxiliary[0](); harness.auxiliary[1]();
+  await old;
+  assert.equal(harness.states.has('setPeople'), false);
+  assert.equal(harness.states.has('setLimits'), false);
+  assert.equal(harness.states.has('setGovernance'), false);
+  assert.equal(harness.states.get('setLimitsLoading'), true);
+  assert.equal(harness.states.get('setGovernanceLoading'), true);
+  harness.calls[1].resolve({ users: [{ id: 'latest' }] });
+  harness.auxiliary[2](); harness.auxiliary[3]();
+  await latest;
+  assert.deepEqual(harness.states.get('setPeople'), [{ id: 'latest' }]);
+  assert.equal(harness.states.get('setLimitsLoading'), false);
+  assert.equal(harness.states.get('setGovernanceLoading'), false);
+});
+
+
+test('denied roster clears revealed data and rejects late auxiliary results', async () => {
+  const harness = loadHarness({ delayAuxiliary: true });
+  harness.states.set('setPeople', [{ id: 99 }]); harness.states.set('setLoaded', true);
+  harness.states.set('setLimits', { users: { limit: 99 } });
+  harness.states.set('setGovernance', { mode: 'organization' });
+  const pending = harness.load();
+  harness.calls[0].reject(Object.assign(new Error('Access revoked'), { status: 403, category: 'PERMISSION' }));
+  for (let index = 0; index < 8; index++) await Promise.resolve();
+  assert.deepEqual(harness.states.get('setPeople'), []);
+  assert.equal(harness.states.get('setLoaded'), false);
+  assert.equal(harness.states.get('setLimits'), null);
+  assert.equal(harness.states.get('setGovernance'), null);
+  assert.equal(harness.states.get('setGovernanceLoading'), false);
+  assert.equal(harness.states.get('setLimitsLoading'), false);
+  harness.auxiliary.forEach(resolve => resolve()); await pending;
+  assert.equal(harness.states.get('setLimits'), null);
+  assert.equal(harness.states.get('setGovernance'), null);
 });

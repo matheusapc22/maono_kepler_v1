@@ -36,6 +36,7 @@ type ProjectsSectionProps = {
   actionError?: string | null;
   onDismissActionError?: () => void;
   loading?: boolean;
+  loaded?: boolean;
   error?: string | null;
   favoriteBusySlugs?: Record<string, true>;
   canProjectSave: (project: ProjectListItem) => boolean;
@@ -54,6 +55,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   actionError = null,
   onDismissActionError,
   loading = false,
+  loaded = projects.length > 0 || !loading,
   error = null,
   favoriteBusySlugs = {},
   canProjectSave,
@@ -225,7 +227,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
     <div className="mm-project-pages__workspace">
       <ProjectPageFiltersForm
         value={draftFilters}
-        disabled={loading && projects.length === 0}
+        disabled={false}
         onChange={setDraftFilters}
         onApply={() => {
           setAppliedFilters({ ...draftFilters });
@@ -245,7 +247,8 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
       {error ? <section className="mm-project-pages__empty" role="alert">
         <h2>Não foi possível carregar os projetos</h2><p>{error}</p>
         {onRetry ? <button type="button" className="mm-project-pages__button" onClick={onRetry}>Tentar novamente</button> : null}
-      </section> : loading && projects.length === 0 ? <ProjectGridSkeleton /> : filteredProjects.length === 0 ? <section className="mm-project-pages__empty">
+      </section> : null}
+      {loading && !loaded ? <ProjectGridSkeleton pageSize={pageSize} announce={false} className="mm-project-pages__grid" /> : !loaded && error ? null : filteredProjects.length === 0 ? <section className="mm-project-pages__empty" aria-busy={loading}>
         <ProjectPageIcon name={copy.icon} /><h2>{copy.empty}</h2>
         {hasAppliedFilters ? <p>Tente outra busca ou limpe os filtros.</p> : null}
       </section> : (
@@ -307,16 +310,14 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
           />
         ))}
 
-        {loading ? (
-          <span className="mm-sr-only" role="status" aria-live="polite">
-            Atualizando projetos.
-          </span>
-        ) : null}
       </section>
       )}
       <ProjectPagePagination
-        visibleCount={error ? 0 : visibleProjects.length}
-        total={error ? 0 : pagination.total}
+        loading={loading}
+        refreshing={loaded}
+        unavailable={!loaded && Boolean(error)}
+        visibleCount={visibleProjects.length}
+        total={pagination.total}
         page={pagination.page}
         pageCount={pagination.pageCount}
         pageSize={pageSize}

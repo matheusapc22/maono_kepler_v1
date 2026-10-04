@@ -2,6 +2,12 @@
   --mm-skeleton-base: #1a1f28;
   --mm-skeleton-highlight: rgba(255, 255, 255, 0.11);
   --mm-skeleton-duration: 1.35s;
+  --mm-skeleton-intensity: 1;
+  --mm-skeleton-direction: normal;
+  --mm-skeleton-radius: 6px;
+  --mm-skeleton-transition: 180ms;
+  --mm-skeleton-activation-delay: 160ms;
+  --mm-skeleton-group-offset: 60ms;
 }
 
 .mm-skeleton {
@@ -11,6 +17,7 @@
   overflow: hidden;
   background: var(--mm-skeleton-base);
   contain: paint;
+  pointer-events: none;
 }
 
 .mm-skeleton::after {
@@ -26,8 +33,18 @@
     transparent 100%
   );
   transform: translateX(-100%);
+  opacity: var(--mm-skeleton-intensity);
   animation: mm-shimmer var(--mm-skeleton-duration) ease-in-out infinite;
-  will-change: transform;
+  animation-direction: var(--mm-skeleton-direction);
+  /* CSS delay applies to onset only, not to each subsequent cycle. */
+  animation-delay: calc(var(--mm-skeleton-activation-delay) + var(--mm-skeleton-group, 1) * var(--mm-skeleton-group-offset));
+}
+
+/* Stable route chrome is reserved immediately; only pending content shimmers. */
+.mm-skeleton-page .mm-projects-topbar .mm-skeleton::after,
+.mm-skeleton-admin-rail .mm-skeleton::after {
+  animation: none;
+  opacity: 0;
 }
 
 .mm-skeleton-fill {
@@ -249,27 +266,13 @@
   z-index: 3;
 }
 
-.mm-project-card.is-media-pending::after {
-  content: "";
+.mm-project-card__preview .mm-skeleton-fill {
   position: absolute;
   inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.035) 38%,
-    var(--mm-skeleton-highlight) 50%,
-    rgba(255, 255, 255, 0.035) 62%,
-    transparent 100%
-  );
-  transform: translateX(-100%);
-  animation: mm-shimmer var(--mm-skeleton-duration) ease-in-out infinite;
 }
 
-.mm-project-card.is-media-pending .mm-project-card__status,
-.mm-project-card.is-media-pending .mm-project-card__favorite {
-  opacity: 0;
+.mm-project-card__preview-fallback > .mm-skeleton {
+  z-index: -1;
 }
 
 .mm-project-card__preview img.is-loading {
@@ -278,7 +281,7 @@
 
 .mm-project-card__preview img.is-loaded {
   opacity: 1;
-  transition: opacity 180ms ease;
+  transition: opacity var(--mm-skeleton-transition) ease;
 }
 
 @keyframes mm-shimmer {
@@ -287,19 +290,9 @@
   }
 }
 
-@media (max-width: 1200px) {
-  .mm-project-skeleton:nth-child(n + 5) {
-    display: none;
-  }
-}
-
 @media (max-width: 760px) {
   .mm-projects-loading-sidebar {
     min-height: auto;
-  }
-
-  .mm-project-skeleton:nth-child(n + 4) {
-    display: none;
   }
 
   .mm-skeleton-topbar-copy {
@@ -308,11 +301,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mm-skeleton::after,
-  .mm-project-card.is-media-pending::after {
+  .mm-skeleton::after {
     animation: none;
     transform: none;
-    opacity: 0.32;
+    opacity: 0;
   }
 
   .mm-project-card__preview img.is-loaded {
@@ -327,21 +319,6 @@
 
 .mm-project-skeleton .mm-project-card__content {
   min-height: 0;
-}
-
-.mm-project-card__preview-loading {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-}
-
-.mm-project-card__preview img.is-loading {
-  opacity: 0;
-}
-
-.mm-project-card__preview img.is-loaded {
-  opacity: 1;
-  transition: opacity 180ms ease;
 }
 
 /* Keep Projects section placeholders in the same responsive card geometry. */
@@ -371,4 +348,51 @@
 
 .mm-limits-usage-skeleton th:first-child {
   width: 42%;
+}
+
+/* A single region-level message; only a prolonged wait needs visible copy. */
+.mm-loading-status.is-prolonged {
+  display: block;
+  margin: 8px 0;
+  color: var(--mm-text-muted, #98a2b3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mm-skeleton-page + .mm-loading-status.is-prolonged {
+  position: fixed;
+  z-index: 5;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 12px;
+  border: 1px solid var(--mm-border, rgba(255, 255, 255, 0.1));
+  border-radius: var(--mm-skeleton-radius);
+  background: var(--mm-surface, #11161e);
+}
+
+/* A prolonged thumbnail wait occupies its already reserved media area. The
+   live message is outside preview aria-busy and never pushes revealed text. */
+.mm-project-card__media-region {
+  position: relative;
+  min-width: 0;
+}
+
+.mm-project-card__media-region > .mm-loading-status.is-prolonged {
+  position: absolute;
+  z-index: 5;
+  inset-inline: 10px;
+  bottom: 8px;
+  margin: 0;
+  padding: 5px 8px;
+  border-radius: var(--mm-skeleton-radius);
+  background: var(--mm-surface, #11161e);
+  pointer-events: none;
+}
+
+/* Regional busy boundaries keep the original 14px gap between real cards. */
+.mm-section-card .mm-section-load-region + .mm-card {
+  margin-top: 14px;
 }

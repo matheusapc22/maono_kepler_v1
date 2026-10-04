@@ -1,3 +1,6 @@
+import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
+import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
+import "./TicketLoadingSkeletons.css";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -12,6 +15,10 @@ import {
 
 type TicketCalendarViewProps = {
   tickets: Ticket[];
+  loading?: boolean;
+  initialLoading?: boolean;
+  loadingMore?: boolean;
+  error?: boolean;
   from?: string;
   onOpen: (ticket: Ticket) => void;
   onRangeChange: (from: string, to: string) => void;
@@ -65,10 +72,11 @@ function monthTitle(date: Date) {
 }
 
 export default function TicketCalendarView({
-  tickets, from,
+  tickets, from, loading = false, initialLoading = false, loadingMore = false, error = false,
   onOpen,
   onRangeChange,
 }: TicketCalendarViewProps) {
+  const skeletonCount = useSkeletonCount({ layout: "list", itemHeight: 64, reservedHeight: 400, maxCount: 6 });
   const [month, setMonthState] = useState(
     () => from ? new Date(Number(from.slice(0,4)), Number(from.slice(5,7)) - 1, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
@@ -151,7 +159,8 @@ export default function TicketCalendarView({
         </div>
       </header>
 
-      <div className="ticket-calendar-grid">
+      <LoadingStatus loading={loading} refreshing={!initialLoading} label="Carregando calendário de chamados." refreshingLabel={loadingMore ? "Carregando mais chamados." : "Atualizando calendário de chamados."} />
+      <div className="ticket-calendar-grid" aria-busy={loading}>
         {WEEKDAYS.map((weekday) => (
           <div className="ticket-calendar-weekday" key={weekday}>
             {weekday}
@@ -189,6 +198,7 @@ export default function TicketCalendarView({
             >
               <time dateTime={key}>{date.getDate()}</time>
               <div className="ticket-calendar-events">
+                {initialLoading && index % 4 === 0 ? <div className="ticket-calendar-event mm-loading-calendar-event" aria-hidden="true"><Skeleton width="48%" height={10} /><Skeleton width="84%" height={12} /></div> : null}
                 {visible.map((ticket) => (
                   <button
                     type="button"
@@ -224,8 +234,8 @@ export default function TicketCalendarView({
         })}
       </div>
 
-      <div className="ticket-calendar-agenda" aria-label="Agenda do mês">
-        {agendaTickets.length === 0 ? (
+      <div className="ticket-calendar-agenda" aria-label="Agenda do mês" aria-busy={loading}>
+        {initialLoading ? Array.from({ length: skeletonCount }, (_, index) => <div className="mm-loading-calendar-event" aria-hidden="true" key={index}><Skeleton width={72} height={14} /><Skeleton width="55%" height={16} /></div>) : agendaTickets.length === 0 && !error ? (
           <p>Nenhum chamado com prazo neste mês.</p>
         ) : (
           agendaTickets.map((ticket) => (
@@ -247,12 +257,12 @@ export default function TicketCalendarView({
         )}
       </div>
 
-      <aside className="ticket-calendar-undated">
+      <aside className="ticket-calendar-undated" aria-busy={loading}>
         <header>
           <h4>Sem data</h4>
-          <span>{withoutDate.length}</span>
+          <span>{initialLoading ? <Skeleton width={28} height={14} /> : error && !tickets.length ? "—" : withoutDate.length}</span>
         </header>
-        {withoutDate.length === 0 ? (
+        {initialLoading ? <div className="mm-skeleton-stack" aria-hidden="true"><Skeleton width="60%" height={14} /><Skeleton width="42%" height={12} /></div> : withoutDate.length === 0 && !error ? (
           <p>Todos os chamados exibidos possuem prazo.</p>
         ) : (
           <div>
@@ -269,6 +279,7 @@ export default function TicketCalendarView({
           </div>
         )}
       </aside>
+      {loadingMore ? <div className="mm-skeleton-stack ticket-loading-expansion" aria-hidden="true"><Skeleton width="72%" height={36} /><Skeleton width="58%" height={36} /></div> : null}
     </section>
   );
 }

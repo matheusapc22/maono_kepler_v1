@@ -31,7 +31,42 @@ const loadingChanges = [
   }
 ];
 
+const progressiveChanges = [
+  {
+    "after": "import { isRegionAccessDenied } from \"../../../components/loading/region-loading-policy\";\nimport { MaonoSelect } from \"../../../components/selection/MaonoSelect\";\nimport { useCallback, useEffect, useMemo, useRef, useState } from \"react\";\n\nimport { LoadingStatus, Skeleton, TableSkeleton } from \"../../../components/loading/Skeleton\";\n\nimport type { MaonoUser } from \"../../../auth/session\";\nimport {\n",
+    "before": "import { MaonoSelect } from \"../../../components/selection/MaonoSelect\";\nimport { useCallback, useEffect, useMemo, useRef, useState } from \"react\";\n\nimport { LimitsPlansSectionSkeleton } from \"./ProjectSectionSkeletons\";\n\nimport type { MaonoUser } from \"../../../auth/session\";\nimport {\n"
+  },
+  {
+    "after": "  return reason.trim().slice(0, 1000);\n}\n\nfunction LimitUsageRow({ item, pending = false, available = true }: { item: LimitItem; pending?: boolean; available?: boolean }) {\n  const percent = getUsagePercent(item.counter);\n  const used = `${formatNumber(item.counter.used)}${item.unit ? ` ${item.unit}` : \"\"}`;\n  const limit = `${formatNumber(item.counter.limit)}${item.unit ? ` ${item.unit}` : \"\"}`;\n",
+    "before": "  return reason.trim().slice(0, 1000);\n}\n\nfunction LimitUsageRow({ item }: { item: LimitItem }) {\n  const percent = getUsagePercent(item.counter);\n  const used = `${formatNumber(item.counter.used)}${item.unit ? ` ${item.unit}` : \"\"}`;\n  const limit = `${formatNumber(item.counter.limit)}${item.unit ? ` ${item.unit}` : \"\"}`;\n"
+  },
+  {
+    "after": "  return (\n    <tr>\n      <td><strong>{item.label}</strong><div className=\"mm-muted\">{item.description}</div></td>\n      <td>{pending ? <Skeleton width={48} height={16} /> : available ? used : \"—\"}</td><td>{pending ? <Skeleton width={48} height={16} /> : available ? limit : \"—\"}</td>\n      <td>{pending ? <Skeleton width={52} height={24} radius={999} /> : available ? <span className={percent >= 90 ? \"mm-tag red\" : percent >= 70 ? \"mm-tag gold\" : \"mm-tag green\"}>{percent}%</span> : \"—\"}</td>\n    </tr>\n  );\n}\n",
+    "before": "  return (\n    <tr>\n      <td><strong>{item.label}</strong><div className=\"mm-muted\">{item.description}</div></td>\n      <td>{used}</td><td>{limit}</td>\n      <td><span className={percent >= 90 ? \"mm-tag red\" : percent >= 70 ? \"mm-tag gold\" : \"mm-tag green\"}>{percent}%</span></td>\n    </tr>\n  );\n}\n"
+  },
+  {
+    "after": "  return (\n    <div className=\"mm-table-wrap\">\n      <table>\n        <thead><tr><th scope=\"col\">ID</th><th scope=\"col\">Tipo</th><th scope=\"col\">Plano solicitado</th><th scope=\"col\">Status</th><th scope=\"col\">Motivo</th><th scope=\"col\">Criado em</th></tr></thead>\n        <tbody>{requests.map((request) => (\n          <tr key={String(request.id)}>\n            <td>{request.id}</td>\n",
+    "before": "  return (\n    <div className=\"mm-table-wrap\">\n      <table>\n        <thead><tr><th>ID</th><th>Tipo</th><th>Plano solicitado</th><th>Status</th><th>Motivo</th><th>Criado em</th></tr></thead>\n        <tbody>{requests.map((request) => (\n          <tr key={String(request.id)}>\n            <td>{request.id}</td>\n"
+  },
+  {
+    "after": "      setLimits(response.limits);\n      setPendingRequests(response.pendingRequests || []);\n    } catch (error) {\n      if (revision === requestRef.current) {\n        if (isRegionAccessDenied(error)) { setLimits(null); setPendingRequests([]); }\n        setErrorMessage(normalizeUserError(error).message);\n      }\n    } finally {\n      if (revision === requestRef.current) setLoading(false);\n    }\n",
+    "before": "      setLimits(response.limits);\n      setPendingRequests(response.pendingRequests || []);\n    } catch (error) {\n      if (revision === requestRef.current) setErrorMessage(normalizeUserError(error).message);\n    } finally {\n      if (revision === requestRef.current) setLoading(false);\n    }\n"
+  },
+  {
+    "after": "\n      {errorMessage && <div className=\"mm-card\" role=\"alert\"><strong>Não foi possível concluir</strong><p>{errorMessage}</p><button type=\"button\" className=\"mm-btn\" disabled={loading} onClick={() => void loadLimits()}>Recarregar</button></div>}\n      {successMessage && <div className=\"mm-card\" role=\"status\"><strong>Sucesso</strong><p>{successMessage}</p></div>}\n      <LoadingStatus loading={loading} refreshing={Boolean(limits)} label=\"Carregando limites da organização.\" refreshingLabel=\"Atualizando limites da organização.\" />\n      <div className=\"mm-section-load-region\" role=\"region\" aria-label=\"Limites da organização\" aria-busy={loading}>\n        <div className=\"mm-card\"><h3>Plano atual</h3><div className=\"mm-tags-list\">{loading && !limits ? <Skeleton width={65} height={25} radius={999} /> : limits?.plan ? <span className={planClassName(limits.plan)}>{planLabel(limits.plan)}</span> : \"—\"}</div><p>Alterações de plano são analisadas antes de entrarem em vigor.</p></div>\n\n        <div className=\"mm-card\"><h3>Uso e limites</h3><div className=\"mm-table-wrap\"><table><thead><tr><th scope=\"col\">Categoria</th><th scope=\"col\">Uso atual</th><th scope=\"col\">Limite</th><th scope=\"col\">Uso</th></tr></thead><tbody>{limitItems.map((item) => <LimitUsageRow key={item.key} item={item} pending={loading && !limits} available={Boolean(limits?.[item.key])} />)}</tbody></table></div></div>\n\n      </div>\n\n        <div className=\"mm-card\"><h3>Solicitar upgrade ou aumento</h3>\n          {permissions.increaseRequest ? (\n",
+    "before": "\n      {errorMessage && <div className=\"mm-card\" role=\"alert\"><strong>Não foi possível concluir</strong><p>{errorMessage}</p><button type=\"button\" className=\"mm-btn\" disabled={loading} onClick={() => void loadLimits()}>Recarregar</button></div>}\n      {successMessage && <div className=\"mm-card\" role=\"status\"><strong>Sucesso</strong><p>{successMessage}</p></div>}\n      <span className=\"mm-sr-only\" role=\"status\">{loading ? limits ? \"Atualizando limites da organização.\" : \"Carregando limites da organização.\" : \"\"}</span>\n      <div className=\"mm-section-load-region\" role=\"region\" aria-label=\"Limites da organização\" aria-busy={loading}>\n      {loading && !limits ? <LimitsPlansSectionSkeleton requestForm={permissions.increaseRequest} /> : null}\n\n      {limits && <>\n        <div className=\"mm-card\"><h3>Plano atual</h3><div className=\"mm-tags-list\"><span className={planClassName(limits?.plan)}>{planLabel(limits?.plan)}</span></div><p>Alterações de plano são analisadas antes de entrarem em vigor.</p></div>\n\n        <div className=\"mm-card\"><h3>Uso e limites</h3><div className=\"mm-table-wrap\"><table><thead><tr><th>Categoria</th><th>Uso atual</th><th>Limite</th><th>Uso</th></tr></thead><tbody>{limitItems.map((item) => <LimitUsageRow key={item.key} item={item} />)}</tbody></table></div></div>\n\n        <div className=\"mm-card\"><h3>Solicitar upgrade ou aumento</h3>\n          {permissions.increaseRequest ? (\n"
+  },
+  {
+    "after": "          ) : <p>Seu perfil não possui permissão para solicitar aumento de limite.</p>}\n        </div>\n\n        <div className=\"mm-card\" aria-busy={loading}><h3>Solicitações pendentes</h3>{loading && !limits ? <TableSkeleton headers={[\"ID\", \"Tipo\", \"Plano solicitado\", \"Status\", \"Motivo\", \"Criado em\"]} pageSize={3} /> : limits ? <PendingRequestsTable requests={pendingRequests} /> : <p>As solicitações não puderam ser carregadas.</p>}</div>\n    </section>\n  );\n}",
+    "before": "          ) : <p>Seu perfil não possui permissão para solicitar aumento de limite.</p>}\n        </div>\n\n        <div className=\"mm-card\"><h3>Solicitações pendentes</h3><PendingRequestsTable requests={pendingRequests} /></div>\n      </>}\n      </div>\n    </section>\n  );\n}"
+  }
+];
+
 export function restoreLimitsPlansLoading(source) {
+  for (const { after, before } of progressiveChanges) {
+    assert.equal(source.split(after).length - 1, 1, "exact progressive Limits loading change");
+    source = source.replace(after, before);
+  }
   for (const { after, before } of loadingChanges) {
     assert.equal(source.split(after).length - 1, 1, "exact approved Limits loading change");
     source = source.replace(after, before);

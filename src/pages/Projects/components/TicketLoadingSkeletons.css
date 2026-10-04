@@ -1,0 +1,14 @@
+/* Loading composition only. Color, shimmer and motion policy belong to Skeleton.css. */
+.mm-loading-file-identity { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.mm-loading-file-identity > .mm-skeleton { flex-shrink: 0; }
+.mm-loading-file-identity > div { flex: 1; display: grid; gap: 8px; min-width: 0; }
+.mm-docs .mm-loading-folder-card { min-height: 72px; padding: 16px; gap: 12px; }
+.mm-loading-table-row.is-document { height: 69px; }
+.mm-loading-table-row.is-ticket { height: 53px; }
+.mm-loading-ticket-card { pointer-events: none; }
+.mm-loading-ticket-card dd { flex: 1; }
+.mm-loading-ticket-detail .mm-loading-detail-description { display: flex; margin: 18px 0; }
+.mm-loading-ticket-detail .ticket-detail-summary dd { min-height: 18px; }
+.ticket-calendar-event.mm-loading-calendar-event { min-height: 46px; display: grid; gap: 7px; padding: 8px; pointer-events: none; }
+.ticket-calendar-agenda .mm-loading-calendar-event { display: flex; gap: 12px; align-items: center; }
+.ticket-loading-expansion { margin-top: 12px; }

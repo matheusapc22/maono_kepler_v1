@@ -42,7 +42,7 @@ type FixtureMutation = "rename" | "create" | "moveFile" | "moveFolder";
 type FixtureOptions = {
   more?: boolean; empty?: boolean; role?: string; permissions?: string[]; failMove?: boolean;
   dataset?: FixtureFile[]; initialFiles?: FixtureFile[];
-  failList?: (url: URL) => boolean;
+  failList?: (url: URL) => boolean | number;
   failMutation?: (kind: FixtureMutation, attempt: number) => boolean;
   beforeMutation?: (kind: FixtureMutation) => Promise<void>;
   beforeRename?: () => Promise<void>; beforeList?: (url: URL) => Promise<void>;
@@ -116,7 +116,12 @@ async function setup(page: Page, options: FixtureOptions = {}) {
       // Capture before the gate: delayed responses must really contain old data.
       const requestFileSnapshot = fileState.map(file => ({ ...file }));
       await options.beforeList?.(url);
-      if (options.failList?.(url)) return route.fulfill({ status: 403, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
+      const failure = options.failList?.(url);
+      if (failure) {
+        // A transient read may retain authorized cache. An actual 403 must clear it.
+        const status = typeof failure === "number" ? failure : 403;
+        return route.fulfill({ status, json: { ok: false, error: { code: status === 503 ? "INFRASTRUCTURE_UNEXPECTED_ERROR" : "AUTH_PERMISSION_DENIED", category: status === 503 ? "INFRASTRUCTURE" : "AUTH", retryable: status === 503 } } });
+      }
       if (options.dataset) {
         const sort = (url.searchParams.get("sort") || "updated_desc") as FixtureSort;
         const folderId = url.searchParams.get("folderId");
@@ -893,13 +898,15 @@ test("ordenação: filtros, Raiz e Todos resetam página/cursor e preservam grad
 test("ordenação: falha de cursor mantém página e permite repetir Próxima página", async ({ page }) => {
   let failCursor = true;
   const requests = await setup(page, { dataset: sortingFiles, failList: url => {
-    if (url.searchParams.has("cursor") && failCursor) { failCursor = false; return true; }
+    if (url.searchParams.has("cursor") && failCursor) { failCursor = false; return 503; }
     return false;
   } });
   await openDocuments(page, true);
   await page.getByLabel("Itens por página").selectOption("50");
   const expected = orderedFixtureFiles(sortingFiles, "updated_desc");
+  const failureResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/files") && new URL(response.url()).searchParams.has("cursor"));
   await page.getByRole("button", { name: "Próxima página" }).click();
+  expect((await failureResponse).status()).toBe(503);
   await expect(page.locator(".mm-docs-error")).toBeVisible();
   await expect(page.locator(".mm-docs-page-number")).toHaveText("1");
   await expect(page.locator(".documents-file-name")).toHaveText(expected.slice(0, 50).map(file => file.name));
@@ -983,13 +990,15 @@ test("ordenação: rodapé usa quantidade visível sobre total autorizado em tod
 test("ordenação: falha na troca mantém metadados anteriores e repetir não reutiliza cursor antigo", async ({ page }) => {
   let failSort = true;
   const requests = await setup(page, { dataset: sortingFiles, failList: url => {
-    if (url.searchParams.get("sort") === "name_asc" && failSort) { failSort = false; return true; }
+    if (url.searchParams.get("sort") === "name_asc" && failSort) { failSort = false; return 503; }
     return false;
   } });
   await openDocuments(page, true);
   await page.getByLabel("Itens por página").selectOption("50");
   const previous = orderedFixtureFiles(sortingFiles, "updated_desc").slice(0, 50).map(file => file.name);
+  const failureResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/files") && new URL(response.url()).searchParams.get("sort") === "name_asc");
   await sortButton(page, "name").click();
+  expect((await failureResponse).status()).toBe(503);
   await expect(page.locator(".mm-docs-error")).toBeVisible();
   await expect(page.locator(".documents-file-name")).toHaveText(previous);
   await expect(page.locator(".mm-docs-sort-heading").first()).toHaveAttribute("aria-sort", "none");

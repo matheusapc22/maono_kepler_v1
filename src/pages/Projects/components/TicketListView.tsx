@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { TableSkeleton } from "../../../components/loading/Skeleton";
+import { LoadingStatus } from "../../../components/loading/Skeleton";
+import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
+import { LoadingTableRows } from "./TicketLoadingSkeletons";
 import DocumentsPagination from "./DocumentsPagination";
 import { DocumentActionMenu, DocumentIcon } from "./DocumentsUi";
 import {
@@ -46,6 +48,7 @@ export default function TicketListView({
   selectionScope, pageSize, loading, initialLoading, error, canCreate, onNewTicket,
   onPageSizeChange, onRefresh, canExport, exportAvailable, onExport,
 }: TicketListViewProps) {
+  const skeletonRows = useSkeletonCount({ layout: "table", pageSize, itemHeight: 53, reservedHeight: 400, maxCount: pageSize });
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const regionRef = useRef<HTMLElement>(null);
   const pendingFocusRef = useRef<HTMLElement | null>(null);
@@ -90,13 +93,13 @@ export default function TicketListView({
         </div>
       </header>
       <span className="mm-sr-only" role="status">{selectedCount} chamado(s) selecionado(s) nesta página.</span>
-      {initialLoading ? <TableSkeleton headers={TICKET_LIST_HEADERS} rows={7} /> : tickets.length === 0 && !error ? (
+      {!initialLoading && tickets.length === 0 && !error ? (
         <div className="ticket-empty-state">
           <DocumentIcon name="list" /><h3>{pagination.total > 0 ? "Nenhum chamado acessível nesta página" : "Nenhum chamado encontrado"}</h3>
           <p>{pagination.total > 0 ? "Continue pelas páginas ou atualize a consulta para reorganizar os resultados disponíveis." : "Ajuste os filtros ou registre a primeira solicitação desta organização."}</p>
           {canCreate && pagination.total === 0 ? <button type="button" className="ticket-primary-action" onClick={onNewTicket}>Novo chamado</button> : null}
         </div>
-      ) : <div className="ticket-list-scroll" role="region" aria-label="Tabela de chamados" tabIndex={0}>
+      ) : <div className="ticket-list-scroll" role="region" aria-label="Tabela de chamados" tabIndex={0} aria-busy={loading}>
         <table className="ticket-list-table">
           <thead>
             <tr>
@@ -110,6 +113,7 @@ export default function TicketListView({
             </tr>
           </thead>
           <tbody>
+            {initialLoading ? <LoadingTableRows columns={TICKET_LIST_HEADERS.length} count={skeletonRows} kind="ticket" /> : null}
             {tickets.map((ticket) => {
               const busy = busyTicketIds.has(String(ticket.id));
               const overdue = isTicketOverdue(ticket);
@@ -170,7 +174,7 @@ export default function TicketListView({
         </table>
       </div>}
 
-      <DocumentsPagination status={loading ? "Atualizando chamados." : `Exibindo ${tickets.length}/${pagination.total}.`} page={pagination.page} pageSize={pageSize} canGoPrevious={pagination.page > 1} canGoNext={pagination.hasMore} disabled={loading} disablePageSize={loading} onPageSize={size => navigate(() => onPageSizeChange(size))} onPrevious={() => navigate(() => onPageChange(pagination.page - 1))} onNext={() => navigate(() => onPageChange(pagination.page + 1))} />
+      <DocumentsPagination status={loading ? <LoadingStatus loading refreshing={!initialLoading} label="Carregando chamados." refreshingLabel="Atualizando chamados." announce={false} visuallyHidden={false} /> : error && tickets.length === 0 ? "A consulta precisa de atenção." : `Exibindo ${tickets.length}/${pagination.total}.`} page={pagination.page} pageSize={pageSize} canGoPrevious={pagination.page > 1} canGoNext={pagination.hasMore} disabled={loading} disablePageSize={loading} onPageSize={size => navigate(() => onPageSizeChange(size))} onPrevious={() => navigate(() => onPageChange(pagination.page - 1))} onNext={() => navigate(() => onPageChange(pagination.page + 1))} />
 
       <span className="mm-sr-only">
         Prioridades disponíveis: {Object.values(PRIORITY_LABELS).join(", ")}.

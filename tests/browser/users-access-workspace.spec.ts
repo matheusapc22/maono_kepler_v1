@@ -439,7 +439,7 @@ test("missing team permission prevents opening the workspace or requesting organ
 test("governance and limits failures preserve visible team but never infer delegated authority", async ({ page }) => {
   await setup(page, { failGovernance: true, failLimits: true }); await expectPage(page, 10, 36, 1);
   await expect(workspace(page).getByRole("alert")).toContainText("as configurações de acesso não puderam ser carregadas");
-  await expect(workspace(page).locator(".people-capacity-grid article strong")).toHaveText(["30", "36", "6", "6"]);
+  await expect(workspace(page).locator(".people-capacity-grid article strong")).toHaveText(["30", "—", "—", "6"]);
   await expect(rows(page).nth(1).getByRole("button", { name: `Nenhuma ação disponível para ${people[1].name}`, exact: true })).toBeDisabled();
   await expect(menu(page)).toHaveCount(0);
 });

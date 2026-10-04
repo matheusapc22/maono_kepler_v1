@@ -1,8 +1,9 @@
-// @ts-nocheck
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
-import { useSession } from "../auth/session";
-import { AdminPageSkeleton } from "../components/loading/Skeleton";
+import { useSession, type MaonoUser } from "../auth/session";
+import { AdminPageSkeleton, LoadingStatus, Skeleton } from "../components/loading/Skeleton";
+import { isRegionAccessDenied, isRegionAuthenticationError } from "../components/loading/region-loading-policy";
+import { useSkeletonCount } from "../components/loading/useSkeletonCount";
 import { parseJsonResponse } from "../lib/api-transport";
 import { normalizeUserError } from "../lib/user-error-catalog";
 import "./Projects/projects.css";
@@ -96,61 +97,116 @@ function statusLabel(active?: boolean) {
   return active === false ? "Inativo" : "Ativo";
 }
 
+type AdminRegionKey = "projects" | "organizations" | "users" | "access";
+type AdminRegionState = { pending: boolean; loaded: boolean; error: string };
+const initialRegions = (): Record<AdminRegionKey, AdminRegionState> => ({
+  projects: { pending: true, loaded: false, error: "" },
+  organizations: { pending: true, loaded: false, error: "" },
+  users: { pending: true, loaded: false, error: "" },
+  access: { pending: true, loaded: false, error: "" },
+});
+const regionLabels: Record<string, string> = { projects: "Projetos", organizations: "Organizações", users: "Usuários", access: "Acessos" };
+
 const AdminPage: React.FC = () => {
   const { authenticated, loading, user, logout } = useSession();
+  const [params] = useSearchParams();
+  if (loading) return <AdminPageSkeleton section={params.get("section") || "overview"} />;
+  if (!authenticated) return <Navigate to="/login?next=/admin" replace />;
+  if (normalizeRole(user?.role) !== "super_admin") return <Navigate to="/projects" replace />;
+  // Only access-context changes remount the workspace; ordinary refreshes keep
+  // inputs, selection and revealed content intact. No prior-context data leaks.
+  const contextKey = JSON.stringify([user?.id, user?.role, user?.activeOrganizationId, user?.organizationId, user?.organization_id, user?.permissions, user?.deniedPermissions, user?.scopes]);
+  return <AdminWorkspace key={contextKey} user={user} logout={logout} />;
+};
+
+function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () => Promise<void> }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const section = (params.get("section") || "overview") as AdminSection;
-
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [organizations, setOrganizations] = useState<AdminOrganization[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [access, setAccess] = useState<AdminAccess[]>([]);
+  const [, setAccess] = useState<AdminAccess[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
+  const [regions, setRegions] = useState(initialRegions);
+  const [usersAccessEpoch, setUsersAccessEpoch] = useState(0);
+  const handleMessage = useCallback((kind: "error" | "success", text: string) => {
+    if (kind === "error") setError(text);
+    else setSuccess(text);
+  }, []);
+  const requestRef = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
   const isSuperAdmin = normalizeRole(user?.role) === "super_admin";
+  const isRefreshing = Object.values(regions).some(region => region.pending);
 
-  async function refreshAdminData() {
-    setIsRefreshing(true);
+  const refreshAdminData = useCallback(async () => {
+    const revision = ++requestRef.current;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    const isCurrent = () => revision === requestRef.current && !controller.signal.aborted;
     setError("");
+    setRegions(current => Object.fromEntries(Object.entries(current).map(([key, state]) => [key, { ...state, pending: true, error: "" }])) as Record<AdminRegionKey, AdminRegionState>);
 
-    try {
-      const [projectsData, accessData, usersData, organizationsData] = await Promise.all([
-        fetch("/api/admin/projects", { credentials: "include", headers: { Accept: "application/json" } }).then(readJson),
-        fetch("/api/admin/access", { credentials: "include", headers: { Accept: "application/json" } }).then(readJson),
-        fetch("/api/admin/users", { credentials: "include", headers: { Accept: "application/json" } }).then(readJson),
-        fetch("/api/admin/organizations", { credentials: "include", headers: { Accept: "application/json" } }).then(readJson),
-      ]);
-
-      setProjects(projectsData.projects || []);
-      setUsers(usersData.users || accessData.users || []);
-      setAccess(accessData.access || []);
-      setOrganizations(organizationsData.organizations || []);
-    } catch (err) {
-      setError(normalizeUserError(err).message);
-    } finally {
-      setHasLoaded(true);
-      setIsRefreshing(false);
-    }
-  }
+    const read = (path: string) => fetch(path, {
+      credentials: "include", headers: { Accept: "application/json" }, signal: controller.signal,
+    }).then(readJson);
+    // Start every independently authorized request before awaiting any result.
+    const projectsRead = read("/api/admin/projects");
+    const accessRead = read("/api/admin/access");
+    const usersRead = read("/api/admin/users");
+    const organizationsRead = read("/api/admin/organizations");
+    const loadRegion = async (key: AdminRegionKey, request: Promise<any>, commit: (data: any) => void) => {
+      try {
+        const data = await request;
+        if (!isCurrent()) return;
+        commit(data);
+        setRegions(current => ({ ...current, [key]: { pending: false, loaded: true, error: "" } }));
+      } catch (err) {
+        if (!isCurrent()) return;
+        const denied = isRegionAccessDenied(err);
+        const sessionLost = isRegionAuthenticationError(err);
+        if (sessionLost) {
+          // Session loss invalidates the entire batch, including companions
+          // that may resolve successfully after this response.
+          requestRef.current += 1;
+          controller.abort();
+          controllerRef.current = null;
+          setProjects([]); setOrganizations([]); setUsers([]); setAccess([]);
+          setUsersAccessEpoch(current => current + 1);
+          setError(normalizeUserError(err).message);
+          setRegions(current => Object.fromEntries(Object.keys(current).map(region => [region, { pending: false, loaded: false, error: "" }])) as Record<AdminRegionKey, AdminRegionState>);
+          return;
+        }
+        if (denied) {
+          // A denied read is not valid cached content for this authorization.
+          if (key === "projects") setProjects([]);
+          if (key === "organizations") setOrganizations([]);
+          if (key === "users") { setUsers([]); setUsersAccessEpoch(current => current + 1); }
+          if (key === "access") setAccess([]);
+        }
+        setRegions(current => ({ ...current, [key]: { ...current[key], pending: false, loaded: denied ? false : current[key].loaded, error: normalizeUserError(err).message } }));
+      }
+    };
+    await Promise.allSettled([
+      loadRegion("projects", projectsRead, data => setProjects(data.projects || [])),
+      loadRegion("access", accessRead, data => setAccess(data.access || [])),
+      // Preserve the existing users endpoint precedence, including [] being
+      // authoritative. Access users are only a successful-response fallback.
+      loadRegion("users", usersRead.then(async usersData => usersData.users || (await accessRead).users || []), setUsers),
+      loadRegion("organizations", organizationsRead, data => setOrganizations(data.organizations || [])),
+    ]);
+    if (isCurrent()) controllerRef.current = null;
+  }, []);
 
   useEffect(() => {
-    if (!loading && !authenticated) navigate("/login?next=/admin", { replace: true });
-  }, [authenticated, loading, navigate]);
-
-  useEffect(() => {
-    if (!loading && authenticated && !isSuperAdmin) navigate("/projects", { replace: true });
-  }, [authenticated, isSuperAdmin, loading, navigate]);
-
-  useEffect(() => {
-    if (!loading && authenticated && isSuperAdmin) {
-      void refreshAdminData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authenticated, isSuperAdmin, loading]);
+    void refreshAdminData();
+    return () => {
+      requestRef.current += 1;
+      controllerRef.current?.abort();
+    };
+  }, [refreshAdminData]);
 
   async function handleLogout() {
     await logout();
@@ -161,17 +217,6 @@ const AdminPage: React.FC = () => {
   const activeOrganizations = useMemo(() => organizations.filter((item) => item.active !== false), [organizations]);
   const activeUsers = useMemo(() => users.filter((item) => item.active !== false), [users]);
   const totalFiles = useMemo(() => organizations.reduce((sum, org) => sum + Number(org.fileCount || 0), 0), [organizations]);
-
-  if (loading) {
-    return <AdminPageSkeleton section={section} />;
-  }
-
-  if (!authenticated) return null;
-  if (!isSuperAdmin) return <Navigate to="/projects" replace />;
-
-  if (!hasLoaded) {
-    return <AdminPageSkeleton section={section} />;
-  }
 
   const navItems = [
     { section: "overview", label: "Painel", icon: "◎" },
@@ -191,10 +236,10 @@ const AdminPage: React.FC = () => {
     return (
       <>
         <section className="mm-metrics-grid">
-          <article className="mm-card metric"><span>Organizações</span><strong>{activeOrganizations.length}</strong></article>
-          <article className="mm-card metric"><span>Projetos</span><strong>{activeProjects.length}</strong></article>
-          <article className="mm-card metric"><span>Usuários</span><strong>{activeUsers.length}</strong></article>
-          <article className="mm-card metric"><span>Arquivos</span><strong>{totalFiles}</strong></article>
+          <AdminMetric label="Organizações" value={activeOrganizations.length} state={regions.organizations} />
+          <AdminMetric label="Projetos" value={activeProjects.length} state={regions.projects} />
+          <AdminMetric label="Usuários" value={activeUsers.length} state={regions.users} />
+          <AdminMetric label="Arquivos" value={totalFiles} state={regions.organizations} />
         </section>
 
         <section className="admin-command-grid">
@@ -223,7 +268,7 @@ const AdminPage: React.FC = () => {
       <section className="mm-card mm-section-card">
         <h2>Gestão de Organizações</h2>
         <p>Arquivos e documentos por organização.</p>
-        <Table
+        <Table state={regions.organizations}
           headers={["Organização", "Slug", "Pasta", "Projetos", "Usuários", "Arquivos", "Status"]}
           rows={organizations.map((org) => [
             org.name,
@@ -242,15 +287,17 @@ const AdminPage: React.FC = () => {
   function renderUsers() {
     return (
       <AdminUserManager
+        key={usersAccessEpoch}
         users={users}
         organizations={organizations}
+        loading={regions.users.pending}
+        usersLoaded={regions.users.loaded}
+        organizationsLoaded={regions.organizations.loaded}
         initialOrganizationId={params.get("organization")}
         currentUserId={user?.id}
         isSuperAdmin={isSuperAdmin}
         onRefresh={refreshAdminData}
-        onMessage={(kind, text) =>
-          kind === "error" ? setError(text) : setSuccess(text)
-        }
+        onMessage={handleMessage}
       />
     );
   }
@@ -260,7 +307,7 @@ const AdminPage: React.FC = () => {
       <section className="mm-card mm-section-card">
         <h2>Projetos e Mapas</h2>
         <p>Mapas, configurações, previews e vínculos.</p>
-        <Table
+        <Table state={regions.projects}
           headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]}
           rows={projects.map((project) => [
             project.name,
@@ -359,7 +406,7 @@ const AdminPage: React.FC = () => {
         </div>
       </aside>
 
-      <section className="admin-main" aria-busy={isRefreshing}>
+      <section className="admin-main">
         <header className="mm-projects-topbar admin-topbar">
           <div>
             <p className="mm-eyebrow">Administração Maõno</p>
@@ -377,27 +424,40 @@ const AdminPage: React.FC = () => {
         <div className="admin-content">
           {error && <div className="admin-notice error">{error}</div>}
           {success && <div className="admin-notice success">{success}</div>}
+          {Object.entries(regions).filter(([, state]) => state.error).map(([key, state]) => (
+            <div className="admin-notice error" role="alert" key={key}>
+              <strong>{regionLabels[key]}: </strong>{state.error}
+            </div>
+          ))}
+          <LoadingStatus loading={isRefreshing} refreshing={Object.values(regions).some(region => region.loaded)} label="Carregando dados administrativos." refreshingLabel="Atualizando dados administrativos." />
           {renderActiveSection()}
-          {isRefreshing ? (
-            <span className="mm-sr-only" role="status">
-              Atualizando dados administrativos.
-            </span>
-          ) : null}
         </div>
       </section>
     </main>
   );
-};
+}
 
-function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
+function AdminMetric({ label, value, state }: { label: string; value: number; state: AdminRegionState }) {
+  return <article className="mm-card metric" aria-busy={state.pending}>
+    <span>{label}</span>
+    {state.loaded ? <strong>{value}</strong> : state.pending ? <Skeleton width={54} height={30} /> : <strong aria-label="Indisponível">—</strong>}
+  </article>;
+}
+
+function Table({ headers, rows, state }: { headers: string[]; rows: string[][]; state: AdminRegionState }) {
+  const skeletonRows = useSkeletonCount({ layout: "table", itemHeight: 45, reservedHeight: 260, maxCount: 10 });
   return (
-    <div className="mm-table-wrap">
+    <div className="mm-table-wrap" aria-busy={state.pending}>
       <table>
         <thead>
-          <tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr>
+          <tr>{headers.map((header) => <th key={header} scope="col">{header}</th>)}</tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {state.pending && !state.loaded ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
+            <tr key={`pending-${rowIndex}`} aria-hidden="true">{headers.map((header, columnIndex) => <td key={header}><Skeleton width={`${52 + ((rowIndex + columnIndex) % 4) * 11}%`} height={12} /></td>)}</tr>
+          )) : !state.loaded ? (
+            <tr><td colSpan={headers.length}>Dados indisponíveis.</td></tr>
+          ) : rows.length === 0 ? (
             <tr><td colSpan={headers.length}>Nenhum registro encontrado.</td></tr>
           ) : (
             rows.map((row, rowIndex) => (

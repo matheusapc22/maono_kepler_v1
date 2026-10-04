@@ -17,7 +17,7 @@ function deferred() {
 }
 async function setup(page: Page, options: {
   beforeRead?: (resource: string, organizationId: number, attempt: number) => Promise<void>;
-  failure?: boolean; role?: string; allowRequest?: boolean;
+  failure?: boolean; role?: string; allowRequest?: boolean; failureResources?: string[]; failureStatus?: number; emptyUsers?: boolean; delegated?: boolean;
 } = {}) {
   let organizationId = 1, failure = Boolean(options.failure);
   const organizations = [{ id: 1, name: "Organização de demonstração", slug: "demo", active: true }, { id: 2, name: "Organização secundária", slug: "second", active: true }];
@@ -40,11 +40,11 @@ async function setup(page: Page, options: {
       const id = Number(match[1]), resource = match[2] ?? "organization", key = `${id}:${resource}`;
       const attempt = (attempts.get(key) ?? 0) + 1; attempts.set(key, attempt);
       await options.beforeRead?.(resource, id, attempt);
-      if (failure) return route.fulfill({ status: 503, json: { ok: false, error: { code: "INFRASTRUCTURE_UNEXPECTED_ERROR", category: "INFRASTRUCTURE", retryable: true } } });
+      if (failure || options.failureResources?.includes(resource)) return route.fulfill({ status: options.failureStatus ?? 503, json: { ok: false, error: { code: "INFRASTRUCTURE_UNEXPECTED_ERROR", category: "INFRASTRUCTURE", retryable: true } } });
       if (resource === "organization") return route.fulfill({ json: { ok: true, organization: { id, name: `Organização carregada ${id}`, slug: `organização-${id}`, plan: "enterprise", active: true, metrics: { users: 8, projects: 3, files: 12, tickets: 2, exports: 5 } } } });
       if (resource === "limits") return route.fulfill({ json: { ok: true, limits: { plan: id === 1 ? "enterprise" : "pro", users: { used: 8, limit: 50 }, projects: { used: 3, limit: 100 }, storageMb: { used: 120, limit: 1000 }, exports: { used: 5, limit: 100 } }, pendingRequests: [] } });
-      if (resource === "users") return route.fulfill({ json: { ok: true, users: [{ id: 2, organizationId: id, name: `Pessoa da organização ${id}`, email: `pessoa${id}@example.test`, role: "viewer", accessLevel: "viewer", active: true, permissions: [] }] } });
-      return route.fulfill({ json: { ok: true, capabilities: { mode: "super_admin", organizationId: id, canManageAdditionalAccesses: false, allowedPermissions: [], grantPermissions: [], revokePermissions: [], allowedTargetLevels: [], reason: "synthetic" } } });
+      if (resource === "users") return route.fulfill({ json: { ok: true, users: options.emptyUsers ? [] : [{ id: 2, organizationId: id, name: `Pessoa da organização ${id}`, email: `pessoa${id}@example.test`, role: "viewer", accessLevel: "viewer", active: true, permissions: [] }] } });
+      return route.fulfill({ json: { ok: true, capabilities: { mode: options.delegated ? "organization" : "super_admin", organizationId: id, canManageAdditionalAccesses: Boolean(options.delegated), allowedPermissions: [], grantPermissions: [], revokePermissions: [], allowedTargetLevels: options.delegated ? ["viewer"] : [], reason: "synthetic" } } });
     }
     if (/^\/api\/projects/.test(path)) return route.fulfill({ json: { ok: true, projects: [] } });
     return route.fulfill({ json: { ok: true, enabled: false, notifications: [], jobs: [], unreadCount: 0 } });
@@ -78,13 +78,13 @@ for (const section of sections) for (const width of [1440, 390]) {
     expect(await placeholders.first().evaluate(element => getComputedStyle(element, "::after").animationName)).toBe("mm-shimmer");
     await expect(region.getByRole("status")).toHaveCount(1);
     expect(await region.getByRole("status").evaluate(element => element.closest('[aria-busy="true"]') === null)).toBe(true);
-    await expect(region).not.toContainText(section.loaded);
+    await expect(section.resource === "limits" ? region.locator(".mm-tags-list") : region).not.toContainText(section.loaded);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     const heading = await region.getByRole("heading", { name: section.name, exact: true }).boundingBox();
     await page.screenshot({ path: testInfo.outputPath(`${section.resource}-${width}-pending.png`), fullPage: true });
     gate.release();
     await expect(placeholders).toHaveCount(0);
-    await expect(region).toContainText(section.loaded);
+    await expect(section.resource === "limits" ? region.locator(".mm-tags-list") : region).toContainText(section.loaded);
     const after = await region.getByRole("heading", { name: section.name, exact: true }).boundingBox();
     expect(after?.y).toBe(heading?.y);
     await page.screenshot({ path: testInfo.outputPath(`${section.resource}-${width}-loaded.png`), fullPage: true });
@@ -114,7 +114,7 @@ for (const section of sections.slice(0, 2)) {
     await expect(region).not.toContainText("Free"); await expect(region).not.toContainText("Ativa");
     fixture.recover(); await region.getByRole("alert").getByRole("button").click();
     await expect(region.locator(".mm-skeleton").first()).toBeVisible(); retry.release();
-    await expect(region.locator(".mm-skeleton")).toHaveCount(0); await expect(region).toContainText(section.loaded);
+    await expect(region.locator(".mm-skeleton")).toHaveCount(0); await expect(section.resource === "limits" ? region.locator(".mm-tags-list") : region).toContainText(section.loaded);
   });
 
   test(`${section.name}: old organization response cannot replace current data`, async ({ page }) => {
@@ -140,7 +140,7 @@ for (const section of sections.slice(0, 2)) {
     const oldResponse = page.waitForResponse(response => new URL(response.url()).pathname === `/api/organizations/1${section.resource === "limits" ? "/limits" : ""}`);
     gate.release(); await oldResponse; await flushFrames(page);
     await expect(page.locator(section.selector)).toHaveCount(0);
-    await open(page, section); await expect(page.locator(section.selector)).toContainText(section.loaded);
+    await open(page, section); await expect(section.resource === "limits" ? page.locator(section.selector).locator(".mm-tags-list") : page.locator(section.selector)).toContainText(section.loaded);
   });
 }
 
@@ -166,4 +166,112 @@ test("restricted sections make no authorized-data requests or fake skeletons", a
     await expect(page.locator(section.selector)).toHaveCount(0);
   }
   expect(fixture.requests.some(request => /\/api\/organizations\//.test(request))).toBe(false);
+});
+
+
+test("organization keeps authorized labels, current role and static edit controls real while values load", async ({ page }, testInfo) => {
+  const gate = deferred();
+  await setup(page, { beforeRead: async resource => { if (resource === "organization") await gate.promise; } });
+  await open(page, sections[0]); const region = page.locator(sections[0].selector);
+  for (const title of ["Dados principais", "Métricas", "Edição"]) await expect(region.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  for (const label of ["Nome", "Slug", "Plano", "Status", "Criada em", "Atualizada em", "Perfil atual"]) await expect(region.getByRole("rowheader", { name: label, exact: true })).toBeVisible();
+  await expect(region.getByText("super_admin", { exact: true })).toBeVisible();
+  await expect(region.getByRole("button", { name: "Editar organização", exact: true })).toBeVisible();
+  await expect(region.getByRole("button", { name: "Editar organização", exact: true })).toBeDisabled();
+  await expect(region.getByText("Ativa", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("organization-real-structure-pending.png"), fullPage: true });
+  gate.release(); await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+});
+
+test("limits keeps authorized real form mounted, focused and typed through initial data reveal", async ({ page }, testInfo) => {
+  const gate = deferred();
+  await setup(page, { beforeRead: async resource => { if (resource === "limits") await gate.promise; } });
+  await open(page, sections[1]); const region = page.locator(sections[1].selector);
+  const reason = region.getByPlaceholder("Explique a necessidade de aumento ou upgrade.");
+  await reason.fill("Rascunho preservado antes dos dados.");
+  await expect(reason).toBeFocused();
+  expect(await reason.evaluate(element => element.closest('[aria-busy="true"]'))).toBeNull();
+  await expect(region.getByRole("columnheader", { name: "Categoria", exact: true })).toBeVisible();
+  await expect(region.getByRole("heading", { name: "Plano atual", exact: true })).toBeVisible();
+  await expect(region.getByText("Não há solicitações pendentes no momento.")).toHaveCount(0);
+  const marker = await reason.evaluate(element => { element.setAttribute("data-same-control", "true"); return element.getBoundingClientRect().y; });
+  await page.screenshot({ path: testInfo.outputPath("limits-partial-form-ready.png"), fullPage: true });
+  gate.release(); await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+  await expect(reason).toHaveValue("Rascunho preservado antes dos dados."); await expect(reason).toBeFocused();
+  await expect(reason).toHaveAttribute("data-same-control", "true");
+  expect(Math.abs((await reason.boundingBox())!.y - marker)).toBeLessThanOrEqual(2);
+});
+
+test("users reveal roster before limits and governance without granting pending authority", async ({ page }, testInfo) => {
+  const limits = deferred(), governance = deferred();
+  const fixture = await setup(page, { role: "owner", delegated: true, beforeRead: async resource => {
+    if (resource === "limits") await limits.promise;
+    if (resource === "access-governance") await governance.promise;
+  } });
+  await open(page, sections[2]); const region = page.locator(sections[2].selector);
+  await expect(region.getByText("Pessoa da organização 1", { exact: true })).toBeVisible();
+  await expect(region.locator(".people-table-wrap")).toHaveAttribute("aria-busy", "false");
+  await expect(region.locator(".people-capacity-grid article").first().locator("strong")).toHaveText("1");
+  await expect(region.locator(".people-capacity-grid article").nth(1).locator(".mm-skeleton")).toBeVisible();
+  await expect(region.getByRole("button", { name: "Ações de Pessoa da organização 1", exact: true })).toHaveCount(0);
+  expect(fixture.requests).toContain("GET /api/organizations/1/users");
+  expect(fixture.requests).toContain("GET /api/organizations/1/limits");
+  expect(fixture.requests).toContain("GET /api/organizations/1/access-governance");
+  await expect(region.getByRole("status")).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath("users-roster-ready-metadata-pending.png"), fullPage: true });
+  limits.release(); await expect(region.locator(".people-capacity-grid article").nth(1).locator("strong")).toHaveText("50");
+  await expect(region.getByRole("button", { name: "Ações de Pessoa da organização 1", exact: true })).toHaveCount(0);
+  governance.release(); await expect(region.getByRole("button", { name: "Ações de Pessoa da organização 1", exact: true })).toBeVisible();
+  await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+});
+
+test("users auxiliary failure leaves ready roster and honest unknown limits without skeleton", async ({ page }) => {
+  await setup(page, { role: "owner", failureResources: ["limits", "access-governance"] });
+  await open(page, sections[2]); const region = page.locator(sections[2].selector);
+  await expect(region.getByText("Pessoa da organização 1", { exact: true })).toBeVisible();
+  await expect(region.locator(".people-capacity-grid article strong")).toHaveText(["1", "—", "—", "0"]);
+  await expect(region.getByRole("alert")).toContainText("Os limites não puderam ser atualizados");
+  await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+  await expect(region.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(region.getByRole("button", { name: /Nenhuma ação disponível/ })).toBeDisabled();
+});
+
+test("empty roster settles independently while auxiliary metadata remains pending", async ({ page }) => {
+  const gate = deferred();
+  await setup(page, { emptyUsers: true, beforeRead: async resource => { if (resource === "limits") await gate.promise; } });
+  await open(page, sections[2]); const region = page.locator(sections[2].selector);
+  await expect(region.getByText("Nenhuma pessoa encontrada.", { exact: true })).toBeVisible();
+  await expect(region.locator(".people-table-wrap")).toHaveAttribute("aria-busy", "false");
+  await expect(region.locator(".people-table-wrap .mm-skeleton")).toHaveCount(0);
+  await expect(region.locator(".people-capacity-grid .mm-skeleton").first()).toBeVisible();
+  gate.release(); await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+});
+
+test("prolonged loading is understandable and cancellation removes its timer and busy regions", async ({ page }) => {
+  await page.clock.install(); const gate = deferred();
+  await setup(page, { beforeRead: async resource => { if (resource === "organization") await gate.promise; } });
+  await open(page, sections[0]); const region = page.locator(sections[0].selector);
+  await page.clock.fastForward(8_100);
+  await expect(region.getByRole("status")).toContainText("continua em andamento");
+  await expect(region.getByRole("status")).toBeVisible();
+  await page.locator(".mm-sidebar-nav").getByRole("button", { name: "Todos os Projetos", exact: true }).click();
+  gate.release(); await page.clock.fastForward(8_100);
+  await expect(page.locator(sections[0].selector)).toHaveCount(0);
+  await expect(page.getByText("O carregamento continua em andamento. Aguarde mais um pouco.", { exact: true })).toHaveCount(0);
+});
+
+
+for (const status of [401, 403]) test(`limits ${status} after refresh clears the previously revealed plan and counts`, async ({ page }) => {
+  const failureResources: string[] = [];
+  await setup(page, { allowRequest: true, failureResources, failureStatus: status });
+  await open(page, sections[1]); const region = page.locator(sections[1].selector);
+  await expect(region.locator(".mm-tags-list .mm-tag")).toHaveText("Enterprise");
+  failureResources.push("limits");
+  await region.getByPlaceholder("Explique a necessidade de aumento ou upgrade.").fill("Solicitação sintética de validação.");
+  await region.getByRole("button", { name: "Enviar solicitação", exact: true }).click();
+  await expect(region.getByRole("alert")).toBeVisible();
+  await expect(region.locator(".mm-tags-list .mm-tag")).toHaveCount(0);
+  await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+  await expect(region.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(region.locator(".mm-section-load-region").getByText("Enterprise", { exact: true })).toHaveCount(0);
 });

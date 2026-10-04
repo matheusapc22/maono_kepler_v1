@@ -1,9 +1,12 @@
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
-import { TableSkeleton } from "../../../components/loading/Skeleton";
+import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
+import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
+import { DocumentFolderSkeleton, DocumentGridSkeleton, LoadingTableRows } from "./TicketLoadingSkeletons";
 import {
   createOrganizationDocumentFolder,
   deleteOrganizationDocumentFolder,
@@ -388,7 +391,7 @@ function FeedbackToast({ feedback }: { feedback: FeedbackState }) {
 
 export default function DocumentsSection(props: DocumentsSectionProps) {
   // A new organization must not inherit a previous request's files or transfer.
-  return <OrganizationDocuments key={String(props.organizationId ?? "none")} {...props} />;
+  return <OrganizationDocuments key={JSON.stringify([props.organizationId, props.user?.id, props.user?.role, props.user?.permissions, props.user?.deniedPermissions, props.user?.scopes])} {...props} />;
 }
 
 function OrganizationDocuments({
@@ -404,13 +407,16 @@ function OrganizationDocuments({
   const displayedProgressRef = useRef(0);
   const uploadInFlightRef = useRef(false);
   const loadSequenceRef = useRef(0);
+  const folderSequenceRef = useRef(0);
+  const accessDeniedRef = useRef(false);
   const mountedRef = useRef(true);
   const [files, setFiles] = useState<OrganizationFile[]>([]);
   const [permanentPurgeEnabled, setPermanentPurgeEnabled] = useState(false);
   const [documentState, setDocumentState] = useState<"active" | "trash">("active");
   const [folders, setFolders] = useState<OrganizationDocumentFolder[]>([]);
   const [browsedFolderId, setBrowsedFolderId] = useState("root");
-  const [foldersLoading, setFoldersLoading] = useState(false);
+  const [foldersLoading, setFoldersLoading] = useState(true);
+  const [foldersError, setFoldersError] = useState(false);
   const [busyFolderId, setBusyFolderId] = useState<number | string | null>(null);
   const [folderMoveDraft, setFolderMoveDraft] = useState<{
     folder: OrganizationDocumentFolder;
@@ -430,7 +436,9 @@ function OrganizationDocuments({
   useLayoutEffect(() => {
     // Mutations can finish after navigation. Their refresh must use the current
     // view rather than the query captured when the action was started.
+    accessDeniedRef.current = false;
     documentQueryRef.current = { filters: appliedFilters, state: documentState };
+    loadSequenceRef.current += 1;
   }, [appliedFilters, documentState]);
   const [facets, setFacets] = useState<OrganizationFileListFacets>(
     EMPTY_DOCUMENT_FACETS,
@@ -439,7 +447,9 @@ function OrganizationDocuments({
     EMPTY_DOCUMENT_PAGINATION,
   );
   const [loadingMore, setLoadingMore] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [hasLoadedFiles, setHasLoadedFiles] = useState(false);
+  const trashSkeletonRows = useSkeletonCount({ layout: "table", itemHeight: 69, reservedHeight: 500, maxCount: 8 });
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busyFileId, setBusyFileId] = useState<number | string | null>(null);
@@ -722,19 +732,36 @@ function OrganizationDocuments({
     });
   }
 
+  function clearDeniedDocuments() {
+    // Invalidate companion reads and mutation-triggered refreshes from this context.
+    accessDeniedRef.current = true;
+    loadSequenceRef.current += 1;
+    folderSequenceRef.current += 1;
+    setFiles([]); setFolders([]); setHasLoadedFiles(false); setFoldersError(true);
+    setFileRenameDraft(null); setFileMoveDraft(null); setFolderMoveDraft(null); setCreateFolderDraft(null);
+    setFacets(EMPTY_DOCUMENT_FACETS); setPagination(EMPTY_DOCUMENT_PAGINATION);
+    setInitialLoading(false); setRefreshing(false); setLoadingMore(false); setFoldersLoading(false);
+    setPermanentPurgeEnabled(false);
+  }
+
   async function loadFolders() {
+    if (accessDeniedRef.current) return;
     if (!organizationId || !canView) {
       setFolders([]);
       return;
     }
 
+    const sequence = ++folderSequenceRef.current;
     setFoldersLoading(true);
+    setFoldersError(false);
     try {
       const response = await listOrganizationDocumentFolders(organizationId);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || sequence !== folderSequenceRef.current) return;
       setFolders(response.folders ?? []);
     } catch (requestError) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || sequence !== folderSequenceRef.current) return;
+      if (isRegionAccessDenied(requestError)) clearDeniedDocuments();
+      setFoldersError(true);
       setError(
         formatRequestError(
           requestError,
@@ -742,7 +769,7 @@ function OrganizationDocuments({
         ),
       );
     } finally {
-      if (mountedRef.current) setFoldersLoading(false);
+      if (mountedRef.current && sequence === folderSequenceRef.current) setFoldersLoading(false);
     }
   }
 
@@ -757,6 +784,7 @@ function OrganizationDocuments({
     cursor?: string | null;
     filters?: DocumentFilterState;
   } = {}) {
+    if (accessDeniedRef.current) return;
     if (!organizationId || !canView) {
       setFiles([]);
       setFacets(EMPTY_DOCUMENT_FACETS);
@@ -787,6 +815,7 @@ function OrganizationDocuments({
       setFiles((current) =>
         append ? [...current, ...(response.files ?? [])] : response.files ?? [],
       );
+      setHasLoadedFiles(true);
       setFacets(response.facets ?? EMPTY_DOCUMENT_FACETS);
       setPagination(response.pagination ?? EMPTY_DOCUMENT_PAGINATION);
       setPermanentPurgeEnabled(
@@ -794,6 +823,7 @@ function OrganizationDocuments({
       );
     } catch (requestError) {
       if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      if (isRegionAccessDenied(requestError)) clearDeniedDocuments();
       setError(
         formatRequestError(
           requestError,
@@ -812,6 +842,7 @@ function OrganizationDocuments({
 
   useEffect(() => {
     setFeedback(null);
+    if (foldersError && !accessDeniedRef.current) void loadFolders();
     void loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, canView, appliedFilters, documentState]);
@@ -875,11 +906,13 @@ function OrganizationDocuments({
 
       if (!mountedRef.current) return;
 
+      // Refresh the settled upload immediately; progress interpolation is visual only.
+      const refresh = loadFiles({ background: true });
       await completeTransfer("upload", file.name);
       if (!mountedRef.current) return;
       setPendingUpload(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      await loadFiles({ background: true });
+      await refresh;
       if (!mountedRef.current) return;
       showFeedback("success", "Documento enviado.", 3400);
       scheduleTransferDismiss();
@@ -1086,6 +1119,8 @@ function OrganizationDocuments({
     setFilterDraft(clean);
     setAppliedFilters(clean);
     setFiles([]);
+    setHasLoadedFiles(false);
+    setInitialLoading(true);
     setDocumentState(next);
     setBrowsedFolderId("root");
     setError(null);
@@ -1100,6 +1135,8 @@ function OrganizationDocuments({
     };
     setFilterDraft(next);
     setFiles([]);
+    setHasLoadedFiles(false);
+    setInitialLoading(true);
     setAppliedFilters(next);
   }
 
@@ -1241,6 +1278,8 @@ function OrganizationDocuments({
     if (next.folderId) setBrowsedFolderId(next.folderId);
     setFilterDraft(next);
     setFiles([]);
+    setHasLoadedFiles(false);
+    setInitialLoading(true);
     setAppliedFilters(next);
   }
 
@@ -1249,6 +1288,8 @@ function OrganizationDocuments({
     setBrowsedFolderId("root");
     setFilterDraft(next);
     setFiles([]);
+    setHasLoadedFiles(false);
+    setInitialLoading(true);
     setAppliedFilters(next);
   }
 
@@ -1260,6 +1301,8 @@ function OrganizationDocuments({
     if (key === "folderId") setBrowsedFolderId("root");
     setFilterDraft(next);
     setFiles([]);
+    setHasLoadedFiles(false);
+    setInitialLoading(true);
     setAppliedFilters(next);
   }
 
@@ -1345,11 +1388,13 @@ function OrganizationDocuments({
           <button type="button" aria-current={browsedFolderId === "root" ? "page" : undefined} onClick={() => selectFolder("root")}>Raiz</button>
           {breadcrumbFolders.map(folder => <span key={String(folder.id)}><DocumentIcon name="arrow" /><button type="button" aria-current={browsedFolderId === String(folder.id) ? "page" : undefined} onClick={() => selectFolder(String(folder.id))}>{folder.name}</button></span>)}
         </nav>
-        <nav className="mm-docs-folder-grid documents-folder-tree" aria-label={insideFolder ? "Subpastas da pasta atual" : "Pastas de documentos"}>
-          {foldersLoading ? <p className="mm-docs-folder-status" role="status">Carregando pastas...</p> : directFolders.map(folder => {
+        <LoadingStatus loading={foldersLoading} refreshing={folders.length > 0} label="Carregando pastas." refreshingLabel="Atualizando pastas." />
+        <nav className="mm-docs-folder-grid documents-folder-tree" aria-busy={foldersLoading} aria-label={insideFolder ? "Subpastas da pasta atual" : "Pastas de documentos"}>
+          {foldersLoading ? folders.length === 0 ? <DocumentFolderSkeleton /> : null : null}
+          {directFolders.map(folder => {
             const path = folderPath(String(folder.id));
             return <article key={String(folder.id)} className={`mm-docs-folder-card ${browsedFolderId === String(folder.id) ? "is-active" : ""}`}>
-              <button type="button" className="mm-docs-folder-select" aria-pressed={browsedFolderId === String(folder.id)} title={path} onClick={() => selectFolder(String(folder.id))}><DocumentIcon name="folder" /><span><strong>{folder.name}</strong><span>{countLabel(folderCountById.get(String(folder.id)) || 0)}</span></span></button>
+              <button type="button" className="mm-docs-folder-select" aria-pressed={browsedFolderId === String(folder.id)} title={path} onClick={() => selectFolder(String(folder.id))}><DocumentIcon name="folder" /><span><strong>{folder.name}</strong><span>{hasLoadedFiles ? countLabel(folderCountById.get(String(folder.id)) || 0) : initialLoading ? <Skeleton width={84} height={11} /> : "Contagem indisponível"}</span></span></button>
               {canManage ? <DocumentActionMenu label={`Ações da pasta ${path}`} disabled={String(busyFolderId) === String(folder.id)} actions={[
                 { label: "Mover pasta", onSelect: () => beginMoveFolder(folder) },
                 { label: "Renomear pasta", onSelect: () => void handleRenameFolder(folder) },
@@ -1357,7 +1402,7 @@ function OrganizationDocuments({
               ]} /> : null}
             </article>;
           })}
-          {!foldersLoading && directFolders.length === 0 ? <p className="mm-docs-folder-empty">Esta pasta não possui subpastas.</p> : null}
+          {!foldersLoading && !foldersError && directFolders.length === 0 ? <p className="mm-docs-folder-empty">Esta pasta não possui subpastas.</p> : null}
         </nav>
       </section> : null}
 
@@ -1413,8 +1458,9 @@ function OrganizationDocuments({
         onLoadMore={loadMoreDocuments}
       /> : <section className="mm-docs-panel mm-docs-results" aria-labelledby="mm-docs-results-title">
         <div className="mm-docs-panel-header"><div className="mm-docs-panel-title"><DocumentIcon name="trash" /><div><h3 id="mm-docs-results-title">Documentos na Lixeira</h3><p>{initialLoading ? "Carregando documentos..." : error ? "A consulta precisa de atenção." : `${pagination.total} itens na Lixeira`}</p></div></div></div>
-        {initialLoading && files.length === 0 ? <TableSkeleton headers={TRASH_HEADERS} rows={5} className="mm-docs-table-skeleton" /> : files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name="trash" /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : "A Lixeira está vazia."}</p></div> : files.length === 0 ? null : <>
-          <div className="mm-docs-table-scroll" role="region" aria-label="Tabela da Lixeira" tabIndex={0} aria-busy={refreshing || loadingMore}>
+        <LoadingStatus loading={initialLoading || refreshing || loadingMore} refreshing={files.length > 0} label="Carregando documentos na Lixeira." refreshingLabel={loadingMore ? "Carregando mais documentos." : "Atualizando documentos."} />
+        {!initialLoading && files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name="trash" /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : "A Lixeira está vazia."}</p></div> : !initialLoading && files.length === 0 ? null : <>
+          <div className="mm-docs-table-scroll" role="region" aria-label="Tabela da Lixeira" tabIndex={0} aria-busy={initialLoading || refreshing || loadingMore}>
             <table className="mm-docs-table is-trash"><thead><tr>{TRASH_HEADERS.map(header => <th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{files.map(file => {
               const busy = String(busyFileId) === String(file.id);
               const expired = restoreExpired(file);
@@ -1423,9 +1469,9 @@ function OrganizationDocuments({
                 {permanentPurgeEnabled && canManage && canDelete ? <DocumentActionMenu label={`Ações de ${file.name}`} disabled={busy} actions={[{ label: "Excluir permanentemente", danger: true, onSelect: () => void handlePermanentPurge(file) }]} /> : null}
                 {!canDelete ? "—" : null}
               </div></td></tr>;
-            })}</tbody></table>
+            })}{initialLoading && files.length === 0 || loadingMore ? <LoadingTableRows columns={TRASH_HEADERS.length} count={loadingMore ? Math.min(trashSkeletonRows, Math.max(0, pagination.total - files.length)) : trashSkeletonRows} /> : null}</tbody></table>
           </div>
-          <div className="mm-docs-pagination"><span role="status">{refreshing ? "Atualizando documentos." : `Exibindo ${files.length} de ${pagination.total} itens na Lixeira.`}</span>{pagination.hasMore && pagination.nextCursor ? <button type="button" className="mm-docs-button is-outlined" disabled={loadingMore || refreshing} onClick={loadMoreDocuments}>{loadingMore ? "Carregando..." : "Carregar mais"}</button> : null}</div>
+          <div className="mm-docs-pagination"><span>{initialLoading ? "Carregando documentos." : refreshing ? "Atualizando documentos." : `Exibindo ${files.length} de ${pagination.total} itens na Lixeira.`}</span>{pagination.hasMore && pagination.nextCursor ? <button type="button" className="mm-docs-button is-outlined" disabled={loadingMore || refreshing} onClick={loadMoreDocuments}>{loadingMore ? "Carregando..." : "Carregar mais"}</button> : null}</div>
         </>}
       </section>}
     </section>
@@ -1504,6 +1550,8 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
   const [pageSize, setPageSize] = useState(10);
   const [pageIndex, setPageIndex] = useState(0);
   const [pendingNext, setPendingNext] = useState(false);
+  const skeletonCount = useSkeletonCount({ layout: viewMode === "grid" ? "grid" : "table", pageSize, itemHeight: viewMode === "grid" ? 200 : 69, reservedHeight: 500, maxCount: pageSize });
+  const expansionCount = Math.min(skeletonCount, Math.max(0, pagination.total - files.length));
 
   useLayoutEffect(() => {
     setPageIndex(0);
@@ -1555,17 +1603,17 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
       <div className="mm-docs-view-mode" role="group" aria-label="Modo de visualização"><button type="button" className="mm-docs-view-mode-button" aria-label="Visualização em lista" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")}><DocumentIcon name="list" /></button><button type="button" className="mm-docs-view-mode-button" aria-label="Visualização em grade" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")}><DocumentIcon name="grid" /></button></div>
     </div>
     {sortFailed ? <div className="mm-docs-sort-retry"><button type="button" className="mm-docs-button is-outlined" onClick={() => props.onSort(sort)}>Tentar ordenar novamente</button></div> : null}
-    {initialLoading && files.length === 0 ? <TableSkeleton headers={DOCUMENT_HEADERS} rows={5} className="mm-docs-table-skeleton" /> : files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name="folder" /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : "Nenhum documento."}</p></div> : files.length === 0 ? null : <>
-      {viewMode === "list" ? <div className="mm-docs-table-scroll" role="region" aria-label="Tabela de documentos" tabIndex={0} aria-busy={refreshing || loadingMore || pendingNext}>
+    {!initialLoading && files.length === 0 && !error ? <div className="mm-docs-empty"><DocumentIcon name="folder" /><p>{hasActiveFilters ? "Nenhum documento encontrado com os filtros atuais." : "Nenhum documento."}</p></div> : !initialLoading && files.length === 0 ? null : <>
+      {viewMode === "list" ? <div className="mm-docs-table-scroll" role="region" aria-label="Tabela de documentos" tabIndex={0} aria-busy={initialLoading || refreshing || loadingMore || pendingNext}>
         <table className="mm-docs-table"><thead><tr>{DOCUMENT_SORT_COLUMNS.map((column, index) => <DocumentSortHeading key={column} column={column} label={DOCUMENT_HEADERS[index]} sort={displayedSort} onSort={props.onSort} />)}<th scope="col">Ações</th></tr></thead><tbody>{visibleFiles.map(file => {
           const busy = String(props.busyFileId) === String(file.id);
           return <tr key={file.id}><td><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} /></td><td title={file.mimeType || undefined}><span className="mm-docs-type-badge">{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</span></td><td>{formatBytes(file.size)}</td><td>{formatDate(file.updatedAt || file.createdAt)}</td><td><ActiveDocumentActions {...props} file={file} busy={busy} /></td></tr>;
-        })}</tbody></table>
-      </div> : <div className="mm-docs-file-grid" role="list" aria-label="Grade de documentos">{visibleFiles.map(file => {
+        })}{initialLoading && files.length === 0 || loadingMore ? <LoadingTableRows columns={DOCUMENT_HEADERS.length} count={loadingMore ? expansionCount : skeletonCount} /> : null}</tbody></table>
+      </div> : <div className="mm-docs-file-grid" role="list" aria-label="Grade de documentos" aria-busy={initialLoading || refreshing || loadingMore || pendingNext}>{visibleFiles.map(file => {
         const busy = String(props.busyFileId) === String(file.id);
         return <article className="mm-docs-file-card" role="listitem" key={file.id}><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} /><div className="mm-docs-file-card-meta"><span><small>Tipo</small><strong>{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</strong></span><span><small>Tamanho</small><strong>{formatBytes(file.size)}</strong></span><span><small>Atualizado em</small><strong>{formatDate(file.updatedAt || file.createdAt)}</strong></span></div><ActiveDocumentActions {...props} file={file} busy={busy} /></article>;
-      })}</div>}
-      <DocumentsPagination status={refreshing || pendingNext ? "Atualizando documentos." : `Exibindo ${visibleFiles.length}/${pagination.total}.`} page={safePageIndex + 1} pageSize={pageSize} canGoPrevious={canGoPrevious} canGoNext={canGoNext} disabled={refreshing || loadingMore || pendingNext} onPageSize={size => { setPageSize(size); setPageIndex(0); setPendingNext(false); }} onPrevious={() => setPageIndex(Math.max(0, safePageIndex - 1))} onNext={goNext} />
-    </>}
+      })}{initialLoading && files.length === 0 || loadingMore ? <DocumentGridSkeleton count={loadingMore ? expansionCount : skeletonCount} /> : null}</div>}
+      </>}
+      <DocumentsPagination status={initialLoading || refreshing || loadingMore || pendingNext ? <LoadingStatus loading refreshing={files.length > 0} label="Carregando documentos." refreshingLabel={loadingMore ? "Carregando mais documentos." : "Atualizando documentos."} announce={false} visuallyHidden={false} /> : error && files.length === 0 ? "A consulta precisa de atenção." : `Exibindo ${visibleFiles.length}/${pagination.total}.`} page={safePageIndex + 1} pageSize={pageSize} canGoPrevious={canGoPrevious} canGoNext={canGoNext} disabled={initialLoading || refreshing || loadingMore || pendingNext} onPageSize={size => { setPageSize(size); setPageIndex(0); setPendingNext(false); }} onPrevious={() => setPageIndex(Math.max(0, safePageIndex - 1))} onNext={goNext} />
   </section>;
 }

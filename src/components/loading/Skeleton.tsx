@@ -1,61 +1,129 @@
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, HTMLAttributes } from "react";
 
 import Logo from "../../assets/images/Logo_Maono.png";
+import {
+  DEFAULT_PROLONGED_LOADING_MS,
+} from "./region-loading-policy";
+
+import { useSkeletonCount } from "./useSkeletonCount";
 
 type SkeletonProps = HTMLAttributes<HTMLSpanElement> & {
   width?: CSSProperties["width"];
   height?: CSSProperties["height"];
   radius?: CSSProperties["borderRadius"];
+  /** Visual priority only. The delay runs once when this placeholder mounts. */
+  group?: number;
+  onsetMs?: number;
 };
 
 type TableSkeletonProps = {
   headers: string[];
   rows?: number;
   className?: string;
+  pageSize?: number;
+  knownCount?: number;
 };
 
 type CountProps = {
   count?: number;
 };
 
+type LoadingStatusProps = {
+  loading: boolean;
+  refreshing?: boolean;
+  label?: string;
+  refreshingLabel?: string;
+  prolongedLabel?: string;
+  prolongedAfterMs?: number;
+  className?: string;
+  /** Disable when an existing pagination/live-region owner announces this text. */
+  announce?: boolean;
+  visuallyHidden?: boolean;
+};
+
+/** Keep this live region outside the subtree marked aria-busy. */
+export function LoadingStatus({
+  loading,
+  refreshing = false,
+  label = "Carregando conteúdo.",
+  refreshingLabel = "Atualizando conteúdo.",
+  prolongedLabel = "O carregamento continua em andamento. Aguarde mais um pouco.",
+  prolongedAfterMs = DEFAULT_PROLONGED_LOADING_MS,
+  className = "",
+  announce = true,
+  visuallyHidden = true,
+}: LoadingStatusProps) {
+  const [prolonged, setProlonged] = useState(false);
+  useEffect(() => {
+    setProlonged(false);
+    if (!loading) return;
+    const delay = Number.isFinite(prolongedAfterMs) ? Math.max(0, prolongedAfterMs) : DEFAULT_PROLONGED_LOADING_MS;
+    const timer = window.setTimeout(() => setProlonged(true), delay);
+    return () => window.clearTimeout(timer);
+  }, [loading, prolongedAfterMs]);
+  const isProlonged = loading && prolonged;
+  return <span
+    role={announce ? "status" : undefined}
+    aria-live={announce ? "polite" : undefined}
+    aria-atomic={announce ? true : undefined}
+    className={`${isProlonged ? "mm-loading-status is-prolonged" : visuallyHidden ? "mm-sr-only" : "mm-loading-status"} ${className}`.trim()}
+  >{loading ? isProlonged ? prolongedLabel : refreshing ? refreshingLabel : label : ""}</span>;
+}
+
 export function Skeleton({
   width = "100%",
   height = "1rem",
-  radius = "6px",
+  radius = "var(--mm-skeleton-radius)",
+  group,
+  onsetMs,
   className = "",
   style,
   ...props
 }: SkeletonProps) {
   return (
     <span
-      aria-hidden="true"
       className={`mm-skeleton ${className}`.trim()}
-      style={{ width, height, borderRadius: radius, ...style }}
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        ...(group !== undefined ? { "--mm-skeleton-group": Math.max(0, group) } : {}),
+        ...(onsetMs !== undefined ? { "--mm-skeleton-activation-delay": `${Math.max(0, onsetMs)}ms` } : {}),
+        ...style,
+      } as CSSProperties}
       {...props}
+      aria-hidden="true"
+      tabIndex={-1}
+      contentEditable={false}
+      children={null}
     />
   );
 }
 
 export function TableSkeleton({
   headers,
-  rows = 5,
+  rows,
   className = "",
+  pageSize,
+  knownCount,
 }: TableSkeletonProps) {
+  const estimatedRows = useSkeletonCount({ layout: "table", pageSize, knownCount });
+  const rowCount = rows ?? estimatedRows;
   return (
     <div
       className={`mm-table-wrap mm-table-skeleton ${className}`.trim()}
-      aria-hidden="true"
     >
       <table>
         <thead>
           <tr>
             {headers.map((header) => (
-              <th key={header}>{header}</th>
+              <th key={header} scope="col">{header}</th>
             ))}
           </tr>
         </thead>
-        <tbody>
-          {Array.from({ length: rows }, (_, rowIndex) => (
+        <tbody aria-hidden="true">
+          {Array.from({ length: rowCount }, (_, rowIndex) => (
             <tr key={rowIndex}>
               {headers.map((header, columnIndex) => (
                 <td key={`${header}-${columnIndex}`}>
@@ -97,46 +165,50 @@ export function ProjectCardSkeleton() {
       </div>
 
       <div className="mm-project-card__content">
-        <div className="mm-project-card__status">
-          <Skeleton width={88} height={24} radius={999} />
-          <Skeleton width={82} height={24} radius={999} />
-        </div>
-
         <header className="mm-project-card__header">
-          <Skeleton width="72%" height={20} />
+          <h2><Skeleton width="72%" height="1.28em" /></h2>
+          <p className="mm-project-card__creator"><Skeleton width="48%" height="1.35em" /></p>
         </header>
 
-        <div className="mm-project-card__description mm-skeleton-stack">
-          <Skeleton width="100%" height={12} />
-          <Skeleton width="84%" height={12} />
-        </div>
+        <p className="mm-project-card__description">
+          <Skeleton width="100%" height=".8em" />
+          <Skeleton width="84%" height=".8em" style={{ marginTop: ".3em" }} />
+        </p>
 
         <footer className="mm-project-card__footer">
-          <div className="mm-project-card__metadata mm-skeleton-stack">
-            <Skeleton width="62%" height={11} />
-            <Skeleton width="45%" height={11} />
+          <div className="mm-project-card__metadata">
+            <span className="mm-project-card__metadata-item"><Skeleton width={70} height={12} /></span>
+            <span className="mm-project-card__metadata-divider" />
+            <span className="mm-project-card__metadata-item mm-project-card__metadata-slug"><Skeleton width={60} height={12} /></span>
           </div>
-          <Skeleton width="100%" height={46} radius={9} />
         </footer>
       </div>
     </article>
   );
 }
 
-export function ProjectGridSkeleton({ count = 6 }: CountProps) {
+export function ProjectGridSkeleton({ count, pageSize, knownCount, announce = true, className = "" }: CountProps & {
+  pageSize?: number;
+  knownCount?: number;
+  announce?: boolean;
+  className?: string;
+}) {
+  const regionRef = useRef<HTMLElement>(null);
+  const estimatedCount = useSkeletonCount({ layout: "grid", pageSize, knownCount }, regionRef);
   return (
+    <>
     <section
-      className="mm-project-grid"
+      ref={regionRef}
+      className={`mm-project-grid ${className}`.trim()}
       aria-busy="true"
       aria-label="Carregando projetos"
     >
-      {Array.from({ length: count }, (_, index) => (
+      {Array.from({ length: count ?? estimatedCount }, (_, index) => (
         <ProjectCardSkeleton key={index} />
       ))}
-      <span className="mm-sr-only" role="status">
-        Carregando projetos autorizados.
-      </span>
     </section>
+    {announce ? <LoadingStatus loading label="Carregando projetos autorizados." /> : null}
+    </>
   );
 }
 
@@ -180,26 +252,26 @@ function ProjectsLoadingSidebar() {
 
 export function ProjectsPageSkeleton() {
   return (
-    <main className="mm-projects-page mm-skeleton-page" aria-busy="true">
+    <>
+    <main className="mm-projects-page mm-skeleton-page">
       <div className="mm-projects-layout">
         <ProjectsLoadingSidebar />
         <section className="mm-projects-main">
           <header className="mm-projects-topbar">
             <div className="mm-skeleton-stack mm-skeleton-topbar-copy">
-              <Skeleton width={230} height={27} />
+              <h1>Projetos</h1>
               <Skeleton width={160} height={12} />
             </div>
             <Skeleton width={112} height={38} radius={9} />
           </header>
           <div className="mm-projects-content">
-            <ProjectGridSkeleton />
+            <ProjectGridSkeleton announce={false} />
           </div>
         </section>
       </div>
-      <span className="mm-sr-only" role="status">
-        Carregando a área de projetos.
-      </span>
     </main>
+    <LoadingStatus loading label="Carregando a área de projetos." />
+    </>
   );
 }
 
@@ -207,7 +279,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "organizations") {
     return (
       <section className="mm-card mm-section-card">
-        <Skeleton width={230} height={24} />
+        <h2>Organizações</h2>
         <Skeleton width={260} height={12} />
         <TableSkeleton
           headers={["Organização", "Slug", "Pasta", "Projetos", "Usuários", "Arquivos", "Status"]}
@@ -219,7 +291,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "users") {
     return (
       <section className="mm-card mm-section-card">
-        <Skeleton width={220} height={24} />
+        <h2>Usuários</h2>
         <Skeleton width={240} height={12} />
         <TableSkeleton headers={["Nome", "E-mail", "Perfil", "Projetos", "Status"]} />
       </section>
@@ -229,7 +301,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "projects") {
     return (
       <section className="mm-card mm-section-card">
-        <Skeleton width={190} height={24} />
+        <h2>Projetos</h2>
         <Skeleton width={260} height={12} />
         <TableSkeleton headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]} />
       </section>
@@ -239,7 +311,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "requests") {
     return (
       <section className="mm-card mm-section-card">
-        <Skeleton width={150} height={24} />
+        <h2>Solicitações</h2>
         <MetricsSkeleton count={3} />
       </section>
     );
@@ -248,7 +320,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "audit") {
     return (
       <section className="mm-card mm-section-card mm-skeleton-stack">
-        <Skeleton width={120} height={24} />
+        <h2>Auditoria</h2>
         {Array.from({ length: 3 }, (_, index) => (
           <Skeleton key={index} width="100%" height={48} />
         ))}
@@ -259,7 +331,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "system") {
     return (
       <section className="mm-card mm-section-card mm-skeleton-stack">
-        <Skeleton width={110} height={24} />
+        <h2>Sistema</h2>
         <Skeleton width="72%" height={12} />
         <Skeleton width="100%" height={112} />
       </section>
@@ -283,8 +355,18 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
 }
 
 export function AdminPageSkeleton({ section = "overview" }: { section?: string }) {
+  const titles: Record<string, string> = {
+    overview: "Painel Admin",
+    organizations: "Gestão de Organizações",
+    users: "Usuários e Permissões",
+    projects: "Projetos e Mapas",
+    requests: "Solicitações",
+    audit: "Auditoria",
+    system: "Sistema",
+  };
   return (
-    <main className="maono-admin-page admin-page mm-skeleton-page" aria-busy="true">
+    <>
+    <main className="maono-admin-page admin-page mm-skeleton-page">
       <aside className="admin-rail mm-skeleton-admin-rail" aria-hidden="true">
         <div className="admin-brand">
           <Skeleton width={38} height={38} radius={9} />
@@ -306,22 +388,21 @@ export function AdminPageSkeleton({ section = "overview" }: { section?: string }
       <section className="admin-main">
         <header className="mm-projects-topbar admin-topbar">
           <div className="mm-skeleton-stack mm-skeleton-topbar-copy">
-            <Skeleton width={120} height={11} />
-            <Skeleton width={240} height={28} />
-            <Skeleton width={180} height={12} />
+            <p className="mm-eyebrow">Administração Maõno</p>
+            <h1>{titles[section] ?? titles.overview}</h1>
+            <p>Acesso administrativo.</p>
           </div>
           <div className="mm-topbar-actions">
             <Skeleton width={84} height={28} radius={999} />
             <Skeleton width={96} height={38} radius={9} />
           </div>
         </header>
-        <div className="admin-content">
+        <div className="admin-content" aria-busy="true">
           <AdminSectionSkeleton section={section} />
         </div>
       </section>
-      <span className="mm-sr-only" role="status">
-        Carregando a área administrativa.
-      </span>
     </main>
+    <LoadingStatus loading label="Carregando a área administrativa." />
+    </>
   );
 }

@@ -209,7 +209,7 @@ test("few tasks and no matches retain real zero-count pagination", async ({ page
 test("initial loading and service error recover in the same minimal workspace", async ({ page }) => {
   let release!: () => void; const delay = new Promise<void>(resolve => { release = resolve; });
   const fixture = await setup(page, { delay, fail: true });
-  await expect(shell(page).getByRole("status", { name: "Carregando roadmap" })).toBeVisible();
+  await expect(pagination(page).getByRole("status")).toHaveText("Carregando roadmap.");
   release(); await expect(shell(page).getByRole("alert")).toBeVisible();
   await expect(shell(page).getByText("Nenhum roadmap ativo", { exact: true })).toHaveCount(0);
   fixture.recover(); await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
@@ -357,15 +357,26 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 1100, view: "gan
     const fixture = await setup(page, { indexDelay, delay });
     const loading = shell(page).locator(".roadmap-loading");
     try {
-      await expect(loading).toHaveAttribute("aria-busy", "true");
+      await expect(region(page)).toHaveAttribute("aria-busy", "true");
       await expect(shell(page).getByRole("status")).toHaveCount(1);
       expect(await shell(page).getByRole("status").evaluate(element => element.closest('[aria-busy="true"]') === null)).toBe(true);
-      await expect(shell(page).getByRole("status", { name: "Carregando roadmap" })).toBeVisible();
-      await expect(loading.locator(".roadmap-loading-layout")).toHaveAttribute("aria-hidden", "true");
-      await expect(loading.locator(`.roadmap-loading-${viewport.view}`)).toBeVisible();
-      await expect(loading.locator(".roadmap-metrics article")).toHaveCount(5);
-      await expect(loading.locator(".roadmap-filters > div")).toHaveCount(4);
-      await expect(loading.locator("button, input, select, a, [tabindex]")).toHaveCount(0);
+      await expect(pagination(page).getByRole("status")).toHaveText("Carregando roadmap.");
+      await expect(loading).toHaveAttribute("aria-hidden", "true");
+      await expect(shell(page).locator(`.roadmap-loading-${viewport.view}`)).toBeVisible();
+      await expect(shell(page).locator(".roadmap-metrics article")).toHaveCount(5);
+      await expect(shell(page).locator(".roadmap-metrics small").first()).toHaveText("Progresso geral");
+      await expect(shell(page).locator(".roadmap-filters > label")).toHaveCount(4);
+      await expect(shell(page).getByRole("searchbox", { name: "Buscar tarefa" })).toBeEnabled();
+      await expect(shell(page).getByRole("combobox", { name: "Status", exact: true })).toBeEnabled();
+      await expect(shell(page).getByRole("combobox", { name: "Fase", exact: true })).toBeDisabled();
+      await expect(shell(page).getByRole("combobox", { name: "Responsável", exact: true })).toBeDisabled();
+      await expect(shell(page).getByRole("button", { name: "Lista", exact: true })).toBeEnabled();
+      await expect(shell(page).getByRole("columnheader").first()).toContainText("Tarefa");
+      await expect(shell(page).locator(".roadmap-pagination")).toBeVisible();
+      await expect(loading.locator('button, input, select, a, [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
+      expect(await loading.locator(".roadmap-loading-row").count()).toBe(viewport.name === "desktop" ? 10 : 6);
+      const stable = await shell(page).locator(".roadmap-tools, .roadmap-metrics, .roadmap-content-header, .roadmap-scroll, .roadmap-pagination").elementHandles();
+      await expect(shell(page)).not.toContainText("Exibindo 0/0");
       const shimmer = loading.locator(".mm-skeleton").first();
       await expect(shimmer).toBeVisible();
       expect(await shimmer.evaluate(element => getComputedStyle(element, "::after").animationName)).toBe("mm-shimmer");
@@ -380,6 +391,9 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 1100, view: "gan
       releaseBundle();
       await expect(loading).toHaveCount(0);
       await expectPage(page, 10, 36, 1);
+      for (const element of stable) expect(await element.evaluate(node => node.isConnected)).toBe(true);
+      await expect(shell(page).getByRole("combobox", { name: "Fase", exact: true })).toBeEnabled();
+      await expect(shell(page).getByRole("combobox", { name: "Responsável", exact: true })).toBeEnabled();
       expect(await page.evaluate(() => (window as Window & { __roadmapEmptyFlashes?: string[] }).__roadmapEmptyFlashes)).toEqual([]);
       expect(await overflow(page)).toBe(false);
     } finally { releaseIndex(); releaseBundle(); }
