@@ -1,4 +1,5 @@
-import { LoadingStatus } from "../../../components/loading/Skeleton";
+import { useInitialLoadingPresentation } from "../../../components/loading/useInitialLoadingPresentation";
+import { LoadingStatus, Skeleton, StaticLoadingText } from "../../../components/loading/Skeleton";
 import { TicketDetailSkeleton } from "./TicketLoadingSkeletons";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useTicketDialog } from "./useTicketDialog";
@@ -166,6 +167,14 @@ export default function TicketDetailDrawer({
   }
 
   useTicketDialog(open, drawerRef, requestClose);
+  const { structurePending, contentPending } = useInitialLoadingPresentation({
+    pending: loading,
+    hasData: Boolean(detail?.ticket),
+    // The drawer is keyed by organization and selected ticket in its owner.
+    scopeKey: String(organizationId),
+    failed: Boolean(error),
+    cancelled: !open,
+  });
 
   if (!open) return null;
 
@@ -242,10 +251,10 @@ export default function TicketDetailDrawer({
         <header className="ticket-panel-header">
           <div>
             <span className="ticket-center-eyebrow">
-              {ticket?.code || "Detalhes do chamado"}
+              {contentPending ? <StaticLoadingText pending={structurePending}>Detalhes do chamado</StaticLoadingText> : ticket?.code || "Detalhes do chamado"}
             </span>
             <h3 id="ticket-detail-title">
-              {ticket?.subject || "Carregando chamado..."}
+              {contentPending ? <><span className="mm-sr-only">Carregando chamado...</span><Skeleton width={240} height={24} /></> : ticket?.subject || "Carregando chamado..."}
             </h3>
           </div>
           <button
@@ -259,15 +268,14 @@ export default function TicketDetailDrawer({
         </header>
 
         {closeNotice ? <p role="status">{closeNotice}</p> : null}
-        <LoadingStatus loading={loading} refreshing={Boolean(ticket)} label="Carregando detalhes do chamado." refreshingLabel="Atualizando versão do chamado. Seus rascunhos serão preservados." />
-        {loading && !ticket ? (
-          <TicketDetailSkeleton triageEnabled={triageEnabled} />
-        ) : error && !ticket ? (
+        <LoadingStatus loading={loading || contentPending} refreshing={Boolean(ticket) && !contentPending} label="Carregando detalhes do chamado." refreshingLabel="Atualizando versão do chamado. Seus rascunhos serão preservados." />
+        {contentPending ? <TicketDetailSkeleton triageEnabled={triageEnabled} structurePending={structurePending} /> : null}
+        {error && !ticket ? (
           <div className="ticket-detail-error">
             <TicketErrorNotice error={error} onRetry={onRetry} />
           </div>
         ) : ticket && detail ? (
-          <div className="ticket-detail-content" aria-busy={loading || saving}>
+          <div className="ticket-detail-content" hidden={contentPending} style={contentPending ? { display: "none" } : undefined} aria-busy={loading || saving}>
             {error ? <TicketErrorNotice error={error} onRetry={onRetry} /> : null}
             <section className="ticket-detail-summary">
               <div>

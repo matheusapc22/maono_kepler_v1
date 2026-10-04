@@ -16,7 +16,7 @@ const region = (page: Page) => shell(page).locator(".roadmap-scroll");
 const status = (page: Page) => shell(page).locator(".roadmap-pagination").getByRole("status");
 const search = (page: Page) => shell(page).getByRole("searchbox", { name: "Buscar tarefa" });
 type FixtureFailure = { status: number; category?: string; code?: string };
-async function setup(page: Page, hooks: { index?: () => Promise<void>; bundle?: (search: string, read: number) => Promise<void | FixtureFailure> } = {}) {
+async function setup(page: Page, hooks: { index?: () => Promise<void>; bundle?: (search: string, read: number) => Promise<void | FixtureFailure>; pauseInitial?: boolean } = {}) {
   const state = structuredClone(tasks), reads: string[] = [], settled: string[] = [], errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   const session = { authenticated: true, user: { id: 1, name: "Pessoa de teste", email: "qa@example.test", role: "super_admin", activeOrganizationId: 1, organizationId: 1, permissions: [] }, projects: [], organizations: [{ id: 1, name: "Organização sintética", slug: "synthetic", active: true }], activeOrganization: { id: 1, name: "Organização sintética" } };
@@ -44,7 +44,10 @@ async function setup(page: Page, hooks: { index?: () => Promise<void>; bundle?: 
     return route.fulfill({ json: { ok: true, notifications: [], unreadCount: 0, jobs: [], enabled: false } });
   });
   await page.goto("/projects");
-  await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).click();
+  if (hooks.pauseInitial) {
+    await page.clock.pauseAt(new Date("2026-10-04T12:01:00Z"));
+    await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).evaluate((node: HTMLButtonElement) => node.click());
+  } else await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).click();
   await expect(shell(page).getByRole("heading", { name: "Roadmap", exact: true })).toBeVisible();
   return { reads, settled, errors };
 }
@@ -54,7 +57,7 @@ async function stableNodes(page: Page) {
 }
 
 for (const viewport of [{ name: "desktop", width: 1440, height: 1100 }, { name: "mobile", width: 390, height: 844 }]) {
-  test(`fast data does not wait for visual onset and pending controls retain identity on ${viewport.name}`, async ({ page }) => {
+  test(`data after the initial window ignores shimmer onset and pending controls retain identity on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const index = gate(), detail = gate();
     const fixture = await setup(page, { index: () => index.promise, bundle: () => detail.promise });
@@ -67,7 +70,7 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 1100 }, { name: 
       await expect(shell(page).getByRole("combobox", { name: "Responsável", exact: true })).toBeDisabled();
       await search(page).fill("Entrega");
       expect(fixture.reads, "The bundle really depends on the roadmap index").toEqual([]);
-      // A deliberately long visual threshold must never hold ready content back.
+      // The decorative shimmer threshold cannot extend the initial 260ms deadline.
       await page.addStyleTag({ content: ":root { --mm-skeleton-activation-delay: 60000ms; }" });
       const shimmer = shell(page).locator(".mm-skeleton").first();
       expect(parseFloat(await shimmer.evaluate(node => getComputedStyle(node, "::after").animationDelay))).toBeGreaterThanOrEqual(60);
@@ -215,5 +218,36 @@ test("transient refresh failure preserves valid same-scope content and still exp
   await expect(status(page)).toHaveText("Exibindo 1/1.");
   await expect(shell(page).locator(".roadmap-gantt-row")).toContainText("Entrega 02");
   await expect(shell(page).getByRole("alert")).toHaveCount(0);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const mode of ["fast", "slow", "reduced"] as const) test(`Roadmap ${mode} initial stage respects structure first and total request window`, async ({ page }) => {
+  if (mode === "reduced") await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install({ time: new Date(NOW) });
+  const detail = gate();
+  const fixture = await setup(page, { pauseInitial: true, bundle: mode === "slow" ? () => detail.promise : undefined });
+  const heading = shell(page).getByRole("heading", { name: "Roadmap", exact: true });
+  const initialBox = await heading.boundingBox(), stable = await stableNodes(page);
+  await expect.poll(() => fixture.reads.length).toBe(1);
+  if (mode === "reduced") {
+    await expect(shell(page).locator('[data-loading-structure="pending"]')).toHaveCount(0);
+    await expect(status(page)).toHaveText("Exibindo 10/26.");
+  } else {
+    await expect(heading.locator('[data-loading-structure="pending"]')).toHaveCount(1);
+    await page.clock.runFor(79);
+    await expect(heading.locator('[data-loading-structure="pending"]')).toHaveCount(1);
+    await page.clock.runFor(1);
+    await expect(shell(page).locator('[data-loading-structure="pending"]')).toHaveCount(0);
+    await expect(shell(page).locator(".roadmap-gantt-row")).toHaveCount(0);
+    await expect(search(page)).toBeEnabled();
+    await page.clock.runFor(mode === "slow" ? 920 : 179);
+    await expect(shell(page).locator(".roadmap-gantt-row")).toHaveCount(0);
+    if (mode === "slow") detail.release(); else await page.clock.runFor(1);
+    // No clock advance after a slow response: no response-relative wait exists.
+    await expect(status(page)).toHaveText("Exibindo 10/26.");
+  }
+  await expect(shell(page).locator(".mm-skeleton")).toHaveCount(0);
+  expect(await heading.boundingBox()).toEqual(initialBox);
+  for (const node of stable) expect(await node.evaluate(element => element.isConnected)).toBe(true);
   expect(fixture.errors).toEqual([]);
 });

@@ -3,6 +3,8 @@
 .mm-loading-file-identity > .mm-skeleton { flex-shrink: 0; }
 .mm-loading-file-identity > div { flex: 1; display: grid; gap: 8px; min-width: 0; }
 .mm-docs .mm-loading-folder-card { min-height: 72px; padding: 16px; gap: 12px; }
+/* Match the 72px density control plus its enclosing card's two 1px borders. */
+body .mm-projects-page .mm-docs .mm-loading-folder-card { min-height: 74px; }
 .mm-loading-table-row.is-document { height: 69px; }
 .mm-loading-table-row.is-ticket { height: 53px; }
 .mm-loading-ticket-card { pointer-events: none; }

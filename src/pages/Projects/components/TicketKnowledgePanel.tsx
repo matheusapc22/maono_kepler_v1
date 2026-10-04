@@ -1,3 +1,7 @@
+import { useTicketOptionalPresentation } from "./useTicketOptionalPresentation";
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
+import TicketOptionalPanelState from "./TicketOptionalPanelState";
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
@@ -111,10 +115,14 @@ type Props = {
   organizationId: string | number;
   canManage: boolean;
   reviewers?: TicketPerson[];
+  structurePending?: boolean;
+  stagePending?: boolean;
 };
-function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
+function KnowledgeEditor({ organizationId, canManage, reviewers = [], structurePending = false, stagePending = false }: Props) {
   const endpoint = `/api/organizations/${organizationId}/ticket-knowledge`,
     { busy, error, run } = useKnowledgeRequest();
+  // Keep confirmed availability while same-context payloads refresh or recover.
+  const [available, setAvailable] = useState(false);
   const [list, setList] = useState<List | null>(null),
     [detail, setDetail] = useState<Detail | null>(null),
     [query, setQuery] = useState("");
@@ -138,8 +146,9 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
             `${endpoint}?q=${encodeURIComponent(query)}&after=${encodeURIComponent(after)}`,
             { signal: s },
           ),
-        setList,
-        () => {
+        value => { setList(value); setAvailable(value.enabled === true); },
+        (failure) => {
+          if (isRegionAccessDenied(failure)) { setAvailable(false); setPending(null); }
           setList(null);
           setDetail(null);
           setTitle("");
@@ -172,10 +181,11 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
       (e) => {
         setDetail(null);
         setList(null);
+        if (isRegionAccessDenied(e)) setAvailable(false);
         setTitle("");
         setBody("");
         setComparison(null);
-        if (e.status === 403 || e.status === 404) setPending(null);
+        if (isRegionAccessDenied(e) || e.status === 404) setPending(null);
       },
     );
   }
@@ -235,26 +245,34 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
       (e) => {
         setDetail(null);
         setList(null);
+        if (isRegionAccessDenied(e)) setAvailable(false);
         setTitle("");
         setBody("");
         setComparison(null);
-        if (e.status === 403 || e.status === 404) setPending(null);
+        if (isRegionAccessDenied(e) || e.status === 404) setPending(null);
       },
     );
   }
-  if (list?.enabled === false) return null;
+  const presentation = useTicketOptionalPresentation({ structurePending, stagePending, error });
+  if (!available) return <TicketOptionalPanelState
+    title="Conhecimento e respostas reutilizáveis"
+    error={list?.enabled === false ? null : error}
+    onRetry={() => void (pending && !isRegionAccessDenied(error) ? mutate(String(pending.payload.action)) : load())}
+    onRefresh={pending && !isRegionAccessDenied(error) ? () => { setPending(null); setDetail(null); void load(); } : undefined}
+  />;
   return (
     <section
       className="ticket-knowledge"
       aria-label="Conhecimento e respostas reutilizáveis"
     >
       <details>
-        <summary>Conhecimento e respostas reutilizáveis</summary>
+        <summary><StaticLoadingText pending={presentation.structurePending}>Conhecimento e respostas reutilizáveis</StaticLoadingText></summary>
+        <div className="ticket-optional-panel-body" data-ticket-optional-body="" hidden={presentation.stagePending}>
         <p>
           Artigos revisados da organização. Conteúdo de chamados e incidentes
           permanece privado até ser selecionado e revisado.
         </p>
-        {error && <TicketErrorNotice error={error} />}
+        {error && <TicketErrorNotice error={error} onRetry={pending ? undefined : () => void load()} />}
         {pending ? (
           <div role="status">
             <p>
@@ -565,6 +583,7 @@ function KnowledgeEditor({ organizationId, canManage, reviewers = [] }: Props) {
             )}
           </fieldset>
         )}
+        </div>
       </details>
     </section>
   );
@@ -593,6 +612,8 @@ export function TicketKnowledgeReuse({
 }: ReuseProps) {
   const endpoint = `/api/organizations/${organizationId}/ticket-knowledge`,
     { busy, error, run } = useKnowledgeRequest();
+  // Keep confirmed availability while same-context payloads refresh or recover.
+  const [available, setAvailable] = useState(false);
   const [list, setList] = useState<List | null>(null),
     [query, setQuery] = useState(""),
     [selection, setSelection] = useState<Selection | null>(null),
@@ -614,8 +635,9 @@ export function TicketKnowledgeReuse({
             `${endpoint}?suggestions=true&q=${encodeURIComponent(query)}&after=${encodeURIComponent(after)}`,
             { signal: s },
           ),
-        setList,
-        () => {
+        value => { setList(value); setAvailable(value.enabled === true); },
+        (failure) => {
+          if (isRegionAccessDenied(failure)) { setAvailable(false); pending.current = null; setReviewed(false); }
           setList(null);
           setSelection(null);
           setBody("");
@@ -651,7 +673,8 @@ export function TicketKnowledgeReuse({
         setReviewed(false);
         pending.current = null;
       },
-      () => {
+      (failure) => {
+        if (isRegionAccessDenied(failure)) { setAvailable(false); setList(null); pending.current = null; setReviewed(false); }
         setSelection(null);
         setBody("");
       },
@@ -689,21 +712,27 @@ export function TicketKnowledgeReuse({
         onSent();
       },
       (e) => {
-        if (e.status === 403 || e.status === 404) {
+        if (isRegionAccessDenied(e) || e.status === 404) {
           pending.current = null;
           setSelection(null);
           setList(null);
+          if (isRegionAccessDenied(e)) setAvailable(false);
           setBody("");
           setReviewed(false);
         }
       },
     );
   }
-  if (list?.enabled === false) return null;
+  if (!available) return <TicketOptionalPanelState
+    title="Usar resposta revisada"
+    error={list?.enabled === false ? null : error}
+    onRetry={() => void (pending.current && !isRegionAccessDenied(error) ? send() : load())}
+    onRefresh={pending.current && !isRegionAccessDenied(error) ? () => { pending.current = null; setSelection(null); setBody(""); setReviewed(false); void load(); onSent(); } : undefined}
+  />;
   return (
     <details className="ticket-knowledge">
       <summary>Usar resposta revisada</summary>
-      {error && <TicketErrorNotice error={error} />}
+      {error && <TicketErrorNotice error={error} onRetry={pending.current ? undefined : () => void load()} />}
       <fieldset disabled={busy || !!pending.current}>
         <label>
           Buscar solução

@@ -10,7 +10,9 @@ const queues = ['open', 'in_progress', 'in_review', 'closed'];
 type Column = { tickets: Ticket[]; total: number; hasMore: boolean; loading: boolean; loadingMore?: boolean; revision: number; pagination?: TicketPagination; error?: TicketApiError };
 const emptyColumn = (): Column => ({ tickets: [], total: 0, hasMore: false, loading: false, revision: 0 });
 
-export default function TicketKanbanBoard({ organizationId, snapshot, refreshKey = 0, filters, changes, canManage, busyTicketIds, onOpen, onStatusChange }: {
+export default function TicketKanbanBoard({ organizationId, snapshot, refreshKey = 0, structurePending = false, stagePending = false, cancelledQueuePresentations, onCancelQueuePresentations, filters, changes, canManage, busyTicketIds, onOpen, onStatusChange }: {
+  structurePending?: boolean; stagePending?: boolean;
+  cancelledQueuePresentations?: ReadonlySet<string>; onCancelQueuePresentations?: (queues: string[]) => void;
   organizationId: number | string; snapshot?: string | null; refreshKey?: number; filters: TicketFilters; changes: TicketChange[]; canManage: boolean;
   busyTicketIds: ReadonlySet<string>; onOpen: (ticket: Ticket) => void; onStatusChange: (ticket: Ticket, status: TicketStatus) => void;
 }) {
@@ -145,7 +147,7 @@ export default function TicketKanbanBoard({ organizationId, snapshot, refreshKey
   }));
   const tickets = Object.values(visible).flatMap(column => column.tickets);
   return <>{queues.map(queue => columns[queue]?.error ? <TicketErrorNotice key={queue} error={columns[queue].error!} onRetry={() => void reconcile(true)} /> : null)}
-    <TicketKanbanView tickets={tickets} columnPages={visible} totals={{ new: 0, open: 0, in_progress: 0, in_review: 0, closed: 0 }}
+    <TicketKanbanView cancelledQueuePresentations={cancelledQueuePresentations} onCancelQueuePresentations={onCancelQueuePresentations} cancelled={accessRevoked} structurePending={structurePending} stagePending={stagePending} tickets={tickets} columnPages={visible} totals={{ new: 0, open: 0, in_progress: 0, in_review: 0, closed: 0 }}
       hasMore={false} loading={pending.current} onLoadMore={queue => void load(queue, true)}
       canManage={canManage} busyTicketIds={busyTicketIds} onOpen={onOpen} onStatusChange={onStatusChange} />
   </>;

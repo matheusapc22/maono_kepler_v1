@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { restoreTicketDocumentInitialPresentation } from './helpers/ticket-docs-progressive-preservation.mjs';
 
-const component = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8');
-const pagination = readFileSync(new URL('../src/pages/Projects/components/DocumentsPagination.tsx', import.meta.url), 'utf8');
+const component = restoreTicketDocumentInitialPresentation(readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8'), 'DocumentsSection');
+const pagination = restoreTicketDocumentInitialPresentation(readFileSync(new URL('../src/pages/Projects/components/DocumentsPagination.tsx', import.meta.url), 'utf8'), 'DocumentsPagination');
 const css = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.css', import.meta.url), 'utf8');
 const densityCss = readFileSync(new URL('../src/platform-density.css', import.meta.url), 'utf8');
-const menu = readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8');
+const menu = restoreTicketDocumentInitialPresentation(readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8'), 'DocumentsUi');
 const dialogs = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.tsx', import.meta.url), 'utf8');
 const dialogCss = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.css', import.meta.url), 'utf8');
 const transfer = readFileSync(new URL('../src/pages/Projects/components/DocumentsTransferPanel.css', import.meta.url), 'utf8');

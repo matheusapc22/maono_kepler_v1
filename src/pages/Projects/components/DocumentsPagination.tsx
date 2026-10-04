@@ -1,18 +1,19 @@
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import type { ReactNode } from "react";
 import "./DocumentsSection.css";
 import { DocumentIcon } from "./DocumentsUi";
 
 /** Shared presentation; each workspace retains its own backend paging controller. */
-export default function DocumentsPagination({ status, page, pageSize, canGoPrevious, canGoNext, disabled, disablePageSize = false, onPageSize, onPrevious, onNext }: {
+export default function DocumentsPagination({ status, page, pageSize, canGoPrevious, canGoNext, disabled, disablePageSize = false, structurePending = false, onPageSize, onPrevious, onNext }: {
   status: ReactNode; page: number; pageSize: number; canGoPrevious: boolean; canGoNext: boolean;
-  disabled: boolean; disablePageSize?: boolean;
+  disabled: boolean; disablePageSize?: boolean; structurePending?: boolean;
   onPageSize: (size: number) => void; onPrevious: () => void; onNext: () => void;
 }) {
   return <div className="mm-docs-pagination">
     <span role="status">{status}</span>
     <div className="mm-docs-page-controls">
-      <label>Itens por página <MaonoSelect value={pageSize} disabled={disablePageSize} onChange={event => onPageSize(Number(event.target.value))}>
+      <label><StaticLoadingText pending={structurePending}>Itens por página</StaticLoadingText> <MaonoSelect value={pageSize} disabled={disablePageSize} onChange={event => onPageSize(Number(event.target.value))}>
         <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option>
       </MaonoSelect></label>
       <button type="button" className="mm-docs-page-arrow is-previous" aria-label="Página anterior" disabled={!canGoPrevious || disabled} onClick={onPrevious}><DocumentIcon name="chevron" /></button>

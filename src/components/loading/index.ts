@@ -30,8 +30,18 @@ export {
   ProjectGridSkeleton,
   ProjectsPageSkeleton,
   Skeleton,
+  StaticLoadingText,
   TableSkeleton,
 } from "./Skeleton";
 export type { SkeletonCountOptions, RegionLoadingState } from "./region-loading-policy";
 export { useSkeletonCount } from "./useSkeletonCount";
 export { estimateSkeletonCount, resolveRegionState } from "./region-loading-policy";
+
+export { useInitialLoadingPresentation } from "./useInitialLoadingPresentation";
+export type { InitialLoadingPresentationOptions, InitialLoadingPresentation } from "./initial-loading-presentation";
+export {
+  DEFAULT_INITIAL_STRUCTURE_DELAY_MS,
+  DEFAULT_INITIAL_CONTENT_DELAY_MS,
+  MAX_INITIAL_LOADING_DELAY_MS,
+  normalizeInitialLoadingDelays,
+} from "./initial-loading-presentation";

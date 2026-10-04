@@ -1,3 +1,4 @@
+import { StaticLoadingText } from "../../../components/loading";
 import { Skeleton } from "../../../components/loading/Skeleton";
 import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
@@ -111,6 +112,9 @@ export default function AdminUserManager({
   loading = false,
   usersLoaded = true,
   organizationsLoaded = true,
+  structurePending = false,
+  usersContentPending = false,
+  organizationsContentPending = false,
   initialOrganizationId,
   currentUserId,
   isSuperAdmin,
@@ -122,6 +126,9 @@ export default function AdminUserManager({
   loading?: boolean;
   usersLoaded?: boolean;
   organizationsLoaded?: boolean;
+  structurePending?: boolean;
+  usersContentPending?: boolean;
+  organizationsContentPending?: boolean;
   initialOrganizationId?: number | string | null;
   currentUserId?: number | string;
   isSuperAdmin: boolean;
@@ -582,10 +589,9 @@ export default function AdminUserManager({
     <section className="admin-user-manager">
       <header>
         <div>
-          <h2>Usuários e Permissões</h2>
+          <h2><StaticLoadingText pending={structurePending}>Usuários e Permissões</StaticLoadingText></h2>
           <p>
-            Gerencie contas da plataforma, vínculos organizacionais e os limites
-            da delegação de acessos.
+            <StaticLoadingText pending={structurePending}>Gerencie contas da plataforma, vínculos organizacionais e os limites da delegação de acessos.</StaticLoadingText>
           </p>
         </div>
         <button
@@ -593,13 +599,13 @@ export default function AdminUserManager({
           type="button"
           onClick={() => setCreating(true)}
         >
-          ＋ Novo usuário
+          <StaticLoadingText pending={structurePending}>＋ Novo usuário</StaticLoadingText>
         </button>
       </header>
 
       <div className="admin-user-filters" aria-label="Filtros de usuários">
         <label className="wide">
-          Buscar
+          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>
           <input
             type="search"
             value={searchQuery}
@@ -608,14 +614,14 @@ export default function AdminUserManager({
           />
         </label>
         <label>
-          Organização
+          <StaticLoadingText pending={structurePending}>Organização</StaticLoadingText>
           <MaonoSelect
             value={organizationFilter}
-            disabled={!organizationsLoaded}
+            disabled={!organizationsLoaded || organizationsContentPending}
             onChange={(event) => setOrganizationFilter(event.target.value)}
           >
             <option value="all">Todas</option>
-            {organizations.map((organization) => (
+            {(organizationsContentPending ? [] : organizations).map((organization) => (
               <option key={organization.id} value={organization.id}>
                 {organization.name}
               </option>
@@ -623,7 +629,7 @@ export default function AdminUserManager({
           </MaonoSelect>
         </label>
         <label>
-          Perfil
+          <StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText>
           <MaonoSelect
             value={profileFilter}
             onChange={(event) => setProfileFilter(event.target.value)}
@@ -637,7 +643,7 @@ export default function AdminUserManager({
           </MaonoSelect>
         </label>
         <label>
-          Status
+          <StaticLoadingText pending={structurePending}>Status</StaticLoadingText>
           <MaonoSelect
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
@@ -648,27 +654,27 @@ export default function AdminUserManager({
           </MaonoSelect>
         </label>
         <span className="admin-user-filter-count">
-          {usersLoaded ? <>{filteredUsers.length} de {users.length} usuário(s)</> : loading ? "Carregando usuários." : "Contagem indisponível."}
+          {usersContentPending ? "Carregando usuários." : usersLoaded ? <>{filteredUsers.length} de {users.length} usuário(s)</> : loading ? "Carregando usuários." : "Contagem indisponível."}
         </span>
       </div>
 
-      <div className="admin-users-table" aria-busy={loading}>
+      <div className="admin-users-table" aria-busy={loading || usersContentPending}>
         <table>
           <thead>
             <tr>
-              <th scope="col">Nome</th>
-              <th scope="col">E-mail</th>
-              <th scope="col">Perfil</th>
-              <th scope="col">Projetos</th>
-              <th scope="col">Status</th>
-              <th scope="col">Ações</th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Nome</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>E-mail</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Projetos</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Status</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Ações</StaticLoadingText></th>
             </tr>
           </thead>
           <tbody>
-            {loading && !usersLoaded ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
+            {usersContentPending || loading && !usersLoaded ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
               <tr key={`pending-${rowIndex}`} aria-hidden="true">{Array.from({ length: 6 }, (_, columnIndex) => <td key={columnIndex}><Skeleton width={`${55 + ((rowIndex + columnIndex) % 4) * 10}%`} height={12} /></td>)}</tr>
             )) : null}
-            {usersLoaded && filteredUsers.map((user) => (
+            {usersLoaded && !usersContentPending && filteredUsers.map((user) => (
               <tr key={user.id}>
                 <td>{user.name || "—"}</td>
                 <td>{user.email}</td>
@@ -695,8 +701,8 @@ export default function AdminUserManager({
                 </td>
               </tr>
             ))}
-            {!loading && !usersLoaded ? <tr><td colSpan={6} className="admin-users-empty">Dados de usuários indisponíveis.</td></tr> : null}
-            {usersLoaded && filteredUsers.length === 0 && (
+            {!loading && !usersContentPending && !usersLoaded ? <tr><td colSpan={6} className="admin-users-empty">Dados de usuários indisponíveis.</td></tr> : null}
+            {usersLoaded && !usersContentPending && filteredUsers.length === 0 && (
               <tr>
                 <td colSpan={6} className="admin-users-empty">
                   Nenhum usuário corresponde aos filtros selecionados.

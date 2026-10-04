@@ -251,7 +251,7 @@ test('sidebar redesign preserves the original navigation and permission contract
 });
 
 test('sidebar identity uses the real session role and keeps logout on its existing callback', () => {
-  const sidebar = read('src/pages/ProjectsSidebar.tsx');
+  const sidebar = restoreAdminProjectsProgressiveLoading('src/pages/ProjectsSidebar.tsx', read('src/pages/ProjectsSidebar.tsx'));
   assert.match(sidebar, /const roleLabel = user\?\.role\?\.trim\(\) \? normalizeRoleLabel\(user\.role\) : ""/);
   assert.match(sidebar, /const userIdentity = roleLabel \? `\$\{userName\} - \$\{roleLabel\}` : userName/);
   assert.match(sidebar, /<strong title=\{userIdentity\}>\{userIdentity\}<\/strong>/);

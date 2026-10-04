@@ -20,6 +20,28 @@
   pointer-events: none;
 }
 
+/* The real text remains in the DOM and accessibility tree. Inline background
+   fragments match its existing wrapping without changing width, height or
+   layout; no duplicate text, generated content or interactive placeholder. */
+/* Legacy region styles target every descendant span, including typography,
+   badge padding and display:block. This wrapper must behave exactly like the
+   parent's original text node in both stages, never like a new region badge. */
+.mm-static-loading-text {
+  all: unset !important;
+  display: inline !important;
+}
+
+.mm-static-loading-text.is-pending {
+  color: transparent !important;
+  text-shadow: none !important;
+  background: var(--mm-skeleton-base) !important;
+  border-radius: var(--mm-skeleton-radius) !important;
+  -webkit-box-decoration-break: clone !important;
+  box-decoration-break: clone !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
 .mm-skeleton::after {
   content: "";
   position: absolute;

@@ -7,21 +7,21 @@ import { build } from "esbuild";
 const source = await readFile(new URL("../src/pages/Projects/components/RoadmapSection.tsx", import.meta.url), "utf8");
 const css = await readFile(new URL("../src/pages/Projects/components/roadmap-workspace.css", import.meta.url), "utf8");
 
-test("Roadmap keeps real controls and headers while only unknown values use shared Skeleton", () => {
-  assert.match(source, /import \{ Skeleton, LoadingStatus \} from "\.\.\/\.\.\/\.\.\/components\/loading\/Skeleton"/);
+test("Roadmap stages known text and volatile data with separate presentation-only gates", () => {
+  assert.match(source, /import \{ Skeleton, LoadingStatus, StaticLoadingText \} from "\.\.\/\.\.\/\.\.\/components\/loading\/Skeleton"/);
   assert.match(source, /import \{ useSkeletonCount \} from "\.\.\/\.\.\/\.\.\/components\/loading\/useSkeletonCount"/);
   const metrics = source.slice(source.indexOf("function RoadmapMetrics"), source.indexOf("function GanttView"));
   const gantt = source.slice(source.indexOf("function GanttView"), source.indexOf("function ListView"));
   const list = source.slice(source.indexOf("function ListView"), source.indexOf("type TaskForm"));
-  assert.match(metrics, /<small>\{label\}<\/small>/);
+  assert.match(metrics, /<small><StaticLoadingText pending=\{structurePending\}>\{String\(label\)\}<\/StaticLoadingText><\/small>/);
   assert.match(metrics, /value \?\? \(loading \? <Skeleton/);
-  assert.match(gantt, /role="columnheader">Tarefa \/ responsável/);
+  assert.match(gantt, /role="columnheader"><StaticLoadingText pending=\{structurePending\}>Tarefa \/ responsável/);
   assert.match(gantt, /className="roadmap-loading" aria-hidden="true"/);
-  assert.match(list, /<th scope="col">Tarefa<\/th><th scope="col">Fase<\/th><th scope="col">Período<\/th><th scope="col">Status<\/th><th scope="col">Progresso<\/th><th scope="col">Responsável<\/th>/);
+  for (const title of ["Tarefa", "Fase", "Período", "Status", "Progresso", "Responsável"]) assert.ok(list.includes(`<StaticLoadingText pending={structurePending}>${title}</StaticLoadingText>`));
   assert.match(source, /useSkeletonCount\(\{ layout: "table", pageSize: page.pageSize, itemHeight: 58, reservedHeight: 500 \}\)/);
-  assert.match(source, /const skeletonCount = loading && !bundle \? estimatedRows : 0/);
-  assert.match(source, /value=\{filters.phaseId\} disabled=\{!bundle\}/);
-  assert.match(source, /value=\{filters.assigneeId\} disabled=\{!bundle\}/);
+  assert.match(source, /const skeletonCount = contentPending \? estimatedRows : 0/);
+  assert.match(source, /value=\{filters.phaseId\} disabled=\{!presentedBundle\}/);
+  assert.match(source, /value=\{filters.assigneeId\} disabled=\{!presentedBundle\}/);
   assert.doesNotMatch(source, /RoadmapLoadingSkeleton|roadmap-loading-footer|roadmap-loading-columns/);
   assert.doesNotMatch(css, /@keyframes|animation:/);
   assert.match(css, /roadmap-loading-row[^}]*min-height: 58px/);
@@ -34,16 +34,16 @@ test("Roadmap requests are abortable and scoped, while current data remains duri
   assert.match(source, /currentRequestRef.current.scopeKey === scopeKey/);
   assert.match(source, /currentRequestRef.current.queryKey === queryKey/);
   assert.match(source, /indexControllerRef.current\?\.abort\(\); bundleControllerRef.current\?\.abort\(\)/);
-  assert.match(source, /loading \|\| bundle \|\| roadmapId \|\| error \? <>/);
+  assert.match(source, /presentationLoading \|\| bundle \|\| roadmapId \|\| error \? <>/);
   assert.match(source, /items: current.scopeKey === scopeKey \? current.items : \[\]/);
   assert.match(source, /<div ref=\{scrollRef\} className="roadmap-scroll"/);
   assert.doesNotMatch(source, /key=\{`\$\{view\}/);
   assert.match(source, /\[view, queryKey, page.pageIndex, page.pageSize\]/);
-  assert.match(source, /<LoadingStatus loading refreshing=\{Boolean\(bundle\)\}/);
+  assert.match(source, /<LoadingStatus loading refreshing=\{Boolean\(bundle\) && !contentPending\}/);
   assert.match(source, /announce=\{false\} visuallyHidden=\{false\}/);
   assert.match(source, /loadedBundleKey !== queryKey && !error/);
-  assert.match(source, /className="roadmap-scroll" aria-busy=\{loading\}/);
-  // Preserve only the existing user-search debounce, with no artificial loading duration.
+  assert.match(source, /className="roadmap-scroll" aria-busy=\{presentationLoading\}/);
+  // The shared presentation clock never changes the existing user-search debounce or read effects.
   assert.equal((source.match(/setTimeout\(/g) || []).length, 1);
   assert.match(source, /filters.search \? window.setTimeout\(\(\) => void loadBundle\(\), 250\) : null/);
 });
@@ -91,11 +91,11 @@ export function render(props) { return renderToStaticMarkup(<StaticRouter locati
     assert.equal((loading.match(/role="status"/g) || []).length, 1);
     assert.equal((loading.match(/class="roadmap-loading-row"/g) || []).length, 10);
     assert.doesNotMatch(loading, /Nenhum roadmap ativo|Nenhuma tarefa no período|Exibindo 0|Tentar novamente/);
-    assert.match(loading, /<h1>Roadmap<\/h1>/);
-    assert.match(loading, /<small>Progresso geral<\/small>/);
+    assert.match(loading, /<h1><span class="mm-static-loading-text is-pending" data-loading-structure="pending">Roadmap<\/span><\/h1>/);
+    assert.match(loading, /<small><span class="mm-static-loading-text is-pending" data-loading-structure="pending">Progresso geral<\/span><\/small>/);
     assert.match(loading, /type="search"/);
     assert.match(loading, /Todos os status/);
-    assert.match(loading, /role="columnheader">Tarefa \/ responsável/);
+    assert.match(loading, /role="columnheader"><span class="mm-static-loading-text is-pending" data-loading-structure="pending">Tarefa \/ responsável/);
     assert.match(loading, /class="roadmap-pagination"/);
     assert.match(loading, /Carregando roadmap\./);
     assert.match(loading, /aria-label="Página anterior" disabled=""/);
@@ -103,7 +103,7 @@ export function render(props) { return renderToStaticMarkup(<StaticRouter locati
     globalThis.window = { innerWidth: 390, innerHeight: 844 };
     const mobile = render({ organizationId: 1, user });
     assert.match(mobile, /roadmap-loading-list/);
-    assert.match(mobile, /<th scope="col">Tarefa<\/th><th scope="col">Fase<\/th>/);
+    assert.match(mobile, /<th scope="col"><span class="mm-static-loading-text is-pending" data-loading-structure="pending">Tarefa<\/span><\/th>/);
     assert.equal((mobile.match(/class="roadmap-loading-row"/g) || []).length, 6);
     globalThis.window = { innerWidth: 1440, innerHeight: 680 };
     assert.equal((render({ organizationId: 1, user }).match(/class="roadmap-loading-row"/g) || []).length, 4);

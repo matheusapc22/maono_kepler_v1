@@ -1,7 +1,8 @@
+import { useInitialLoadingPresentation } from "../../../components/loading/useInitialLoadingPresentation";
 import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
+import { LoadingStatus, Skeleton, StaticLoadingText } from "../../../components/loading/Skeleton";
 
 import type { MaonoUser } from "../../../auth/session";
 import {
@@ -163,12 +164,12 @@ function buildMetricItems(metrics: OrganizationMetrics | undefined, projectsCoun
   ];
 }
 
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return <tr><th scope="row">{label}</th><td>{children}</td></tr>;
+function InfoRow({ label, children, structurePending }: { label: string; children: React.ReactNode; structurePending: boolean }) {
+  return <tr><th scope="row"><StaticLoadingText pending={structurePending}>{label}</StaticLoadingText></th><td>{children}</td></tr>;
 }
 
-function MetricCard({ label, value, pending }: { label: string; value: number | undefined; pending: boolean }) {
-  return <div className="mm-card metric"><span>{label}</span><strong>{pending ? <Skeleton width={54} height={30} /> : value === undefined ? "—" : formatNumber(value)}</strong></div>;
+function MetricCard({ label, value, pending, structurePending }: { label: string; value: number | undefined; pending: boolean; structurePending: boolean }) {
+  return <div className="mm-card metric"><span><StaticLoadingText pending={structurePending}>{label}</StaticLoadingText></span><strong>{pending ? <Skeleton width={54} height={30} /> : value === undefined ? "—" : formatNumber(value)}</strong></div>;
 }
 
 export default function OrganizationSection(props: OrganizationSectionProps) {
@@ -188,6 +189,12 @@ function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps
   const [loading, setLoading] = useState(Boolean(organizationId && permissions.view));
   const requestRef = useRef(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { structurePending, contentPending } = useInitialLoadingPresentation({
+    pending: loading, hasData: Boolean(organization), scopeKey: String(organizationId),
+    failed: Boolean(errorMessage), cancelled: !organizationId || !permissions.view,
+  });
+  const presentationLoading = loading || contentPending;
 
   const loadOrganization = useCallback(async () => {
     if (!organizationId || !permissions.view) return;
@@ -230,8 +237,8 @@ function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps
 
   return (
     <section className="mm-card mm-section-card mm-organization-section">
-      <h2>Organização</h2>
-      <p>Resumo da organização, plano atual, status e métricas operacionais.</p>
+      <h2><StaticLoadingText pending={structurePending}>Organização</StaticLoadingText></h2>
+      <p><StaticLoadingText pending={structurePending}>Resumo da organização, plano atual, status e métricas operacionais.</StaticLoadingText></p>
 
       {errorMessage && (
         <div className="mm-card" role="alert">
@@ -241,41 +248,41 @@ function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps
         </div>
       )}
 
-      <LoadingStatus loading={loading} refreshing={Boolean(organization)} label="Carregando dados da organização." refreshingLabel="Atualizando dados da organização." />
-      <div className="mm-section-load-region" role="region" aria-label="Dados da organização" aria-busy={loading}>
+      <LoadingStatus loading={presentationLoading} refreshing={Boolean(organization) && !contentPending} label="Carregando dados da organização." refreshingLabel="Atualizando dados da organização." />
+      <div className="mm-section-load-region" role="region" aria-label="Dados da organização" aria-busy={presentationLoading}>
           <div className="mm-card">
-            <h3>Dados principais</h3>
+            <h3><StaticLoadingText pending={structurePending}>Dados principais</StaticLoadingText></h3>
             <div className="mm-table-wrap">
               <table><tbody>
-                <InfoRow label="Nome">{organization?.name || fallbackOrganizationName}</InfoRow>
-                <InfoRow label="Slug">{loading && !organization ? <Skeleton width="58%" height={16} /> : organization?.slug || "—"}</InfoRow>
-                <InfoRow label="Plano">{loading && !organization ? <Skeleton width={65} height={25} radius={999} /> : organization?.plan ? <span className={planClassName(organization.plan)}>{planLabel(organization.plan)}</span> : "—"}</InfoRow>
-                <InfoRow label="Status">{loading && !organization ? <Skeleton width={65} height={25} radius={999} /> : organization ? <span className={statusClassName(organization.active)}>{statusLabel(organization.active)}</span> : "—"}</InfoRow>
-                <InfoRow label="Criada em">{loading && !organization ? <Skeleton width="54%" height={16} /> : formatDate(organization?.createdAt)}</InfoRow>
-                <InfoRow label="Atualizada em">{loading && !organization ? <Skeleton width="48%" height={16} /> : formatDate(organization?.updatedAt)}</InfoRow>
-                <InfoRow label="Perfil atual">{user?.role || "—"}</InfoRow>
+                <InfoRow structurePending={structurePending} label="Nome"><StaticLoadingText pending={structurePending}>{contentPending ? fallbackOrganizationName : organization?.name || fallbackOrganizationName}</StaticLoadingText></InfoRow>
+                <InfoRow structurePending={structurePending} label="Slug">{contentPending ? <Skeleton width="58%" height={16} /> : organization?.slug || "—"}</InfoRow>
+                <InfoRow structurePending={structurePending} label="Plano">{contentPending ? <Skeleton width={65} height={25} radius={999} /> : organization?.plan ? <span className={planClassName(organization.plan)}>{planLabel(organization.plan)}</span> : "—"}</InfoRow>
+                <InfoRow structurePending={structurePending} label="Status">{contentPending ? <Skeleton width={65} height={25} radius={999} /> : organization ? <span className={statusClassName(organization.active)}>{statusLabel(organization.active)}</span> : "—"}</InfoRow>
+                <InfoRow structurePending={structurePending} label="Criada em">{contentPending ? <Skeleton width="54%" height={16} /> : formatDate(organization?.createdAt)}</InfoRow>
+                <InfoRow structurePending={structurePending} label="Atualizada em">{contentPending ? <Skeleton width="48%" height={16} /> : formatDate(organization?.updatedAt)}</InfoRow>
+                <InfoRow structurePending={structurePending} label="Perfil atual"><StaticLoadingText pending={structurePending}>{user?.role || "—"}</StaticLoadingText></InfoRow>
               </tbody></table>
             </div>
           </div>
 
           {permissions.metricsView ? (
             <div className="mm-card">
-              <h3>Métricas</h3>
+              <h3><StaticLoadingText pending={structurePending}>Métricas</StaticLoadingText></h3>
               <div className="mm-metrics-grid compact">
-                {metricItems.map((metric) => <MetricCard key={metric.key} label={metric.label} value={organization?.metrics?.[metric.key]} pending={loading && !organization} />)}
+                {metricItems.map((metric) => <MetricCard structurePending={structurePending} key={metric.key} label={metric.label} value={organization?.metrics?.[metric.key]} pending={contentPending} />)}
               </div>
             </div>
           ) : (
             <div className="mm-card">
-              <strong>Métricas restritas</strong>
-              <p>Você possui acesso aos dados básicos, mas não possui permissão para consultar métricas gerenciais.</p>
+              <strong><StaticLoadingText pending={structurePending}>Métricas restritas</StaticLoadingText></strong>
+              <p><StaticLoadingText pending={structurePending}>Você possui acesso aos dados básicos, mas não possui permissão para consultar métricas gerenciais.</StaticLoadingText></p>
             </div>
           )}
       </div>
       <div className="mm-card">
-        <h3>Edição</h3>
-        <p>A edição da organização ainda não está disponível nesta tela.</p>
-        <button type="button" className="mm-btn" disabled>Editar organização</button>
+        <h3><StaticLoadingText pending={structurePending}>Edição</StaticLoadingText></h3>
+        <p><StaticLoadingText pending={structurePending}>A edição da organização ainda não está disponível nesta tela.</StaticLoadingText></p>
+        <button type="button" className="mm-btn" disabled><StaticLoadingText pending={structurePending}>Editar organização</StaticLoadingText></button>
       </div>
     </section>
   );

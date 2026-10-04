@@ -53,7 +53,7 @@ test("static placeholders reserve dimensions before a one-time animation-only on
   assert.match(css, /--mm-skeleton-group-offset:/);
   assert.match(css, /background:\s*var\(--mm-skeleton-base\)/);
   assert.match(css, /@keyframes mm-shimmer\s*\{\s*to\s*\{\s*transform:/);
-  assert.doesNotMatch(skeleton.slice(skeleton.indexOf("export function Skeleton("), skeleton.indexOf("export function TableSkeleton(")), /setTimeout|useEffect|loading|opacity:\s*0/);
+  assert.doesNotMatch(skeleton.slice(skeleton.indexOf("export function Skeleton("), skeleton.indexOf("export function StaticLoadingText(")), /setTimeout|useEffect|loading|opacity:\s*0/);
   assert.doesNotMatch(css, /will-change:/);
   for (const token of ["base", "highlight", "duration", "intensity", "direction", "radius", "transition"]) assert.ok(css.includes(`--mm-skeleton-${token}:`));
 });
@@ -63,22 +63,23 @@ test("decorative placeholders cannot override hidden or keyboard-inert semantics
   assert.match(css, /\.mm-skeleton\s*\{[^}]*pointer-events:\s*none/s);
 });
 
-test("table headers remain structural real text and only data rows are hidden", () => {
+test("table headers preserve real accessible text through the optional structural mask", () => {
   const table = skeleton.slice(skeleton.indexOf("export function TableSkeleton("), skeleton.indexOf("export function MetricsSkeleton("));
   assert.doesNotMatch(table.slice(0, table.indexOf("<table>")), /aria-hidden/);
-  assert.match(table, /<th key=\{header\} scope="col">\{header\}<\/th>/);
+  assert.match(table, /<th key=\{header\} scope="col"><StaticLoadingText pending=\{structurePending\}>\{header\}<\/StaticLoadingText><\/th>/);
   assert.match(table, /<tbody aria-hidden="true">/);
 });
 
-test("route fallbacks have one sibling live status and retain public known titles", () => {
+test("route fallbacks have one sibling live status and mask known titles until the real route can stage", () => {
   const projects = skeleton.slice(skeleton.indexOf("export function ProjectsPageSkeleton("), skeleton.indexOf("function AdminSectionSkeleton("));
   const admin = skeleton.slice(skeleton.indexOf("export function AdminPageSkeleton("));
-  assert.match(projects, /<h1>Projetos<\/h1>/);
+  assert.match(projects, /<h1><StaticLoadingText pending>Projetos<\/StaticLoadingText><\/h1>/);
   assert.match(projects, /<ProjectGridSkeleton announce=\{false\} \/>/);
   for (const route of [projects, admin]) {
     assert.match(route, /<\/main>\s*<LoadingStatus loading/);
     assert.equal((route.match(/<LoadingStatus/g) ?? []).length, 1);
     assert.doesNotMatch(route, /<main[^>]*aria-busy/);
+    assert.doesNotMatch(route, /useInitialLoadingPresentation|setTimeout/);
   }
 });
 
@@ -112,4 +113,18 @@ test("access denials invalidate regional data while transient failures retain ca
   assert.equal(isRegionAuthenticationError({ status: 403 }), false);
   assert.equal(isRegionAuthenticationError({ status: 403, code: "AUTH_PERMISSION_DENIED", category: "AUTH" }), false);
   assert.equal(isRegionAccessDenied({ status: 403, code: "AUTH_PERMISSION_DENIED", category: "AUTH" }), true);
+});
+
+
+test("static loading text keeps exact real text geometry and accessible control names", () => {
+  const text = skeleton.slice(skeleton.indexOf("export function StaticLoadingText("), skeleton.indexOf("export function TableSkeleton("));
+  assert.match(text, /children: string \| number/);
+  assert.match(text, />\{children\}<\/span>/);
+  assert.doesNotMatch(text, /aria-hidden|tabIndex|onClick|contentEditable|Skeleton width/);
+  assert.match(css, /\.mm-static-loading-text\s*\{\s*all:\s*unset !important;\s*display:\s*inline !important;/);
+  const mask = css.match(/\.mm-static-loading-text\.is-pending\s*\{([^}]+)\}/s)?.[1] ?? "";
+  assert.match(mask, /color:\s*transparent !important/);
+  assert.match(mask, /background:\s*var\(--mm-skeleton-base\)/);
+  assert.match(mask, /box-decoration-break:\s*clone/);
+  assert.doesNotMatch(mask, /display:|visibility:|opacity:|padding:|margin:|font-size:|line-height:|width:|height:/);
 });

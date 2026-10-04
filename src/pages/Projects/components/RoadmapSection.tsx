@@ -1,5 +1,6 @@
+import { useInitialLoadingPresentation } from "../../../components/loading/useInitialLoadingPresentation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Skeleton, LoadingStatus } from "../../../components/loading/Skeleton";
+import { Skeleton, LoadingStatus, StaticLoadingText } from "../../../components/loading/Skeleton";
 import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { Link } from "react-router";
@@ -24,7 +25,7 @@ const errorText = (error: unknown) => normalizeUserError(error).message || "Não
 function timelineDays(start: string, end: string) { return Math.max(1, Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY) + 1); }
 function position(value: string, start: string, total: number) { return Math.max(0, Math.min(100, (Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY) / total) * 100)); }
 
-function RoadmapMetrics({ bundle, loading }: { bundle: RoadmapBundle | null; loading: boolean }) {
+function RoadmapMetrics({ bundle, loading, structurePending }: { bundle: RoadmapBundle | null; loading: boolean; structurePending: boolean }) {
   const items = [
     ["Progresso geral", bundle ? `${bundle.metrics.progress}%` : null, "◔"],
     ["Em andamento", bundle?.metrics.inProgress, "▶"],
@@ -32,10 +33,10 @@ function RoadmapMetrics({ bundle, loading }: { bundle: RoadmapBundle | null; loa
     ["Bloqueadas", bundle?.metrics.blocked, "◆"],
     ["Próximo marco", bundle ? bundle.metrics.nextMilestone ? formatDate(bundle.metrics.nextMilestone.startDate) : "—" : null, "◇"],
   ];
-  return <section className="roadmap-metrics" aria-label="Indicadores do roadmap" aria-busy={loading}>{items.map(([label, value, icon], index) => <article key={label}><span aria-hidden="true">{icon}</span><div><small>{label}</small><strong>{value ?? (loading ? <Skeleton width={index === 4 ? 110 : 52} height={index === 4 ? 18 : 25} /> : "—")}</strong></div></article>)}</section>;
+  return <section className="roadmap-metrics" aria-label="Indicadores do roadmap" aria-busy={loading}>{items.map(([label, value, icon], index) => <article key={label}><span aria-hidden="true">{icon}</span><div><small><StaticLoadingText pending={structurePending}>{String(label)}</StaticLoadingText></small><strong>{value ?? (loading ? <Skeleton width={index === 4 ? 110 : 52} height={index === 4 ? 18 : 25} /> : "—")}</strong></div></article>)}</section>;
 }
 
-function GanttView({ bundle, tasks, onOpen, scale, skeletonCount = 0 }: { bundle: RoadmapBundle | null; tasks: RoadmapTask[]; onOpen: (task: RoadmapTask) => void; scale: RoadmapScale; skeletonCount?: number }) {
+function GanttView({ bundle, tasks, onOpen, scale, skeletonCount = 0, structurePending }: { bundle: RoadmapBundle | null; tasks: RoadmapTask[]; onOpen: (task: RoadmapTask) => void; scale: RoadmapScale; skeletonCount?: number; structurePending: boolean }) {
   const start = bundle?.roadmap.startDate; const end = bundle?.roadmap.endDate; const total = start && end ? timelineDays(start, end) : 1;
   const markerCount = scale === "day" ? 14 : scale === "week" ? 12 : 8;
   const markers = start ? Array.from({ length: markerCount }, (_, index) => {
@@ -45,7 +46,7 @@ function GanttView({ bundle, tasks, onOpen, scale, skeletonCount = 0 }: { bundle
   }) : [];
   const todayLeft = start ? position(today(), start, total) : 0;
   return <div className={`roadmap-gantt${skeletonCount ? " roadmap-loading-gantt" : ""}`} role="table" aria-label="Cronograma Gantt">
-    <div className="roadmap-gantt-head" role="row"><strong role="columnheader">Tarefa / responsável</strong><div role="columnheader" aria-label="Datas do cronograma">{markers.map((item) => <span key={item.date} title={formatDate(item.date)} style={{ left: `${item.left}%` }}>{scale === "month" ? new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }) : new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>)}{!bundle && skeletonCount ? <div className="roadmap-loading-dates" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} width={42} height={12} />)}</div> : null}</div></div>
+    <div className="roadmap-gantt-head" role="row"><strong role="columnheader"><StaticLoadingText pending={structurePending}>Tarefa / responsável</StaticLoadingText></strong><div role="columnheader" aria-label="Datas do cronograma">{markers.map((item) => <span key={item.date} title={formatDate(item.date)} style={{ left: `${item.left}%` }}>{scale === "month" ? new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { month: "short" }) : new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>)}{!bundle && skeletonCount ? <div className="roadmap-loading-dates" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} width={42} height={12} />)}</div> : null}</div></div>
     <div className="roadmap-gantt-body">
       {bundle ? <i className="roadmap-today-line" style={{ left: `calc(320px + (100% - 320px) * ${todayLeft / 100})` }}><span>Hoje</span></i> : null}
       {skeletonCount ? <div className="roadmap-loading" aria-hidden="true">{Array.from({ length: skeletonCount }, (_, index) => <div className="roadmap-loading-row" key={index}>
@@ -65,8 +66,8 @@ function GanttView({ bundle, tasks, onOpen, scale, skeletonCount = 0 }: { bundle
   </div>;
 }
 
-function ListView({ tasks, onOpen, skeletonCount = 0 }: { tasks: RoadmapTask[]; onOpen: (task: RoadmapTask) => void; skeletonCount?: number }) {
-  return <div className={`roadmap-list${skeletonCount ? " roadmap-loading-list" : ""}`}><table><thead><tr><th scope="col">Tarefa</th><th scope="col">Fase</th><th scope="col">Período</th><th scope="col">Status</th><th scope="col">Progresso</th><th scope="col">Responsável</th></tr></thead><tbody className={skeletonCount ? "roadmap-loading" : undefined} aria-hidden={skeletonCount ? true : undefined}>
+function ListView({ tasks, onOpen, skeletonCount = 0, structurePending }: { tasks: RoadmapTask[]; onOpen: (task: RoadmapTask) => void; skeletonCount?: number; structurePending: boolean }) {
+  return <div className={`roadmap-list${skeletonCount ? " roadmap-loading-list" : ""}`}><table><thead><tr><th scope="col"><StaticLoadingText pending={structurePending}>Tarefa</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Fase</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Período</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Status</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Progresso</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Responsável</StaticLoadingText></th></tr></thead><tbody className={skeletonCount ? "roadmap-loading" : undefined} aria-hidden={skeletonCount ? true : undefined}>
     {Array.from({ length: skeletonCount }, (_, index) => <tr className="roadmap-loading-row" key={`pending-${index}`}>
       <td><Skeleton width={`${72 - index % 3 * 8}%`} height={14} /><Skeleton width="48%" height={11} /></td>
       {Array.from({ length: 5 }, (_, column) => <td key={column}><Skeleton width={`${54 + (index + column) % 3 * 9}%`} height={column === 2 ? 24 : 13} /></td>)}
@@ -129,13 +130,20 @@ export default function RoadmapSection({ user, organizationId, organizationName,
   const indexPending = scopeKey !== null && (index.scopeKey !== scopeKey || index.status === "loading");
   // A selected but not-yet-loaded bundle includes the index-to-detail handoff and search debounce.
   const loading = indexPending || loadingQueryKey === queryKey || Boolean(roadmapId && loadedBundleKey !== queryKey && !error);
+  const { structurePending, contentPending } = useInitialLoadingPresentation({
+    pending: loading,
+    hasData: Boolean(bundle) || (index.scopeKey === scopeKey && index.status === "ready" && roadmaps.length === 0),
+    scopeKey: scopeKey ?? "unavailable", failed: Boolean(error), cancelled: !scopeKey,
+  });
+  const presentationLoading = loading || contentPending;
+  const presentedBundle = contentPending ? null : bundle;
   const [pagination, setPagination] = useState<RoadmapPaginationState>({ queryKey: "", pageIndex: 0, pageSize: 10 });
   const totalTasks = bundle?.tasks.length ?? 0;
   const resolvedPagination = reconcileRoadmapPagination(pagination, queryKey, totalTasks);
   const page = paginateRoadmapTasks(bundle?.tasks ?? [], resolvedPagination.pageIndex, resolvedPagination.pageSize);
   const paginationPending = loading || loadedBundleKey !== queryKey;
   const estimatedRows = useSkeletonCount({ layout: "table", pageSize: page.pageSize, itemHeight: 58, reservedHeight: 500 });
-  const skeletonCount = loading && !bundle ? estimatedRows : 0;
+  const skeletonCount = contentPending ? estimatedRows : 0;
   // Reset only real navigation; refreshing the same data retains the scroller and focus.
   useEffect(() => { if (scrollRef.current) { scrollRef.current.scrollTop = 0; scrollRef.current.scrollLeft = 0; } }, [view, queryKey, page.pageIndex, page.pageSize]);
   useEffect(() => { setPagination(current => reconcileRoadmapPagination(current, queryKey, totalTasks)); }, [queryKey, totalTasks]);
@@ -206,69 +214,70 @@ export default function RoadmapSection({ user, organizationId, organizationName,
   const openTask = (task: RoadmapTask | null) => { setSelected(task); setDrawerOpen(true); };
   return <section className="roadmap-shell roadmap-workspace">
     <nav className="roadmap-breadcrumb" aria-label="Caminho da página">
-      <Link to="/projects" onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome?.(); }}>Início</Link>
-      <DocumentIcon name="chevron" /><span aria-current="page">Roadmap</span>
+      <Link to="/projects" onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome?.(); }}><StaticLoadingText pending={structurePending}>Início</StaticLoadingText></Link>
+      <DocumentIcon name="chevron" /><span aria-current="page"><StaticLoadingText pending={structurePending}>Roadmap</StaticLoadingText></span>
     </nav>
     <header className="roadmap-header">
       <div className="roadmap-heading">
-        <h1>Roadmap</h1>
+        <h1><StaticLoadingText pending={structurePending}>Roadmap</StaticLoadingText></h1>
         <span className="mm-sr-only">Organização ativa: {organizationName || organizationId || "Nenhuma"}</span>
       </div>
       {organizationId && canView ? <div className="roadmap-header-actions">
-        {indexPending || roadmaps.length ? <MaonoSelect aria-label="Roadmap ativo" value={roadmapId || ""} disabled={!roadmaps.length} onChange={event => setRoadmapId(Number(event.target.value))}>
-          {!roadmaps.length ? <option value="">Carregando roadmaps…</option> : null}
-          {roadmaps.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+        {indexPending || roadmaps.length ? <MaonoSelect aria-label="Roadmap ativo" value={contentPending ? "" : roadmapId || ""} disabled={!roadmaps.length || contentPending} onChange={event => setRoadmapId(Number(event.target.value))}>
+          {!roadmaps.length || contentPending ? <option value="">Carregando roadmaps…</option> : null}
+          {!contentPending && roadmaps.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </MaonoSelect> : null}
         {canManage ? <button className="mm-button roadmap-primary-action" type="button" disabled={!bundle && (indexPending || Boolean(roadmapId) || index.status === "error")} onClick={() => bundle ? openTask(null) : void quickCreateRoadmap()}>
-          <DocumentIcon name="plus" />{indexPending || roadmapId ? "Nova tarefa" : "Criar roadmap"}
+          <DocumentIcon name="plus" /><StaticLoadingText pending={structurePending}>{indexPending || roadmapId ? "Nova tarefa" : "Criar roadmap"}</StaticLoadingText>
         </button> : null}
       </div> : null}
     </header>
     {!organizationId ? <div className="roadmap-empty"><p>Selecione uma organização.</p></div> : !canView ? <div className="roadmap-empty"><p>Você não possui permissão para visualizar este roadmap.</p></div> : <>
       {error ? <div className="roadmap-error" role="alert"><span>{error}</span><button type="button" onClick={() => void (roadmapId ? loadBundle() : loadIndex())}>Tentar novamente</button></div> : null}
-      {loading || bundle || roadmapId || error ? <>
+      {presentationLoading || bundle || roadmapId || error ? <>
         <section className="roadmap-tools" aria-label="Filtros do roadmap">
           <header className="roadmap-filter-header">
-            <strong><DocumentIcon name="filter" />Filtros</strong>
-            <button type="button" className="roadmap-clear" disabled={!hasFilters} onClick={() => setFilters(DEFAULT_ROADMAP_FILTERS)}><DocumentIcon name="restore" />Limpar filtros</button>
+            <strong><DocumentIcon name="filter" /><StaticLoadingText pending={structurePending}>Filtros</StaticLoadingText></strong>
+            <button type="button" className="roadmap-clear" disabled={!hasFilters} onClick={() => setFilters(DEFAULT_ROADMAP_FILTERS)}><DocumentIcon name="restore" /><StaticLoadingText pending={structurePending}>Limpar filtros</StaticLoadingText></button>
           </header>
           <div className="roadmap-filters">
-            <label><span>Buscar tarefa</span><span className="roadmap-search"><DocumentIcon name="search" /><input type="search" placeholder="Título da tarefa" value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} /></span></label>
-            <label><span>Status</span><MaonoSelect value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value as RoadmapFilters["status"] })}>
+            <label><span><StaticLoadingText pending={structurePending}>Buscar tarefa</StaticLoadingText></span><span className="roadmap-search"><DocumentIcon name="search" /><input type="search" placeholder="Título da tarefa" value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} /></span></label>
+            <label><span><StaticLoadingText pending={structurePending}>Status</StaticLoadingText></span><MaonoSelect value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value as RoadmapFilters["status"] })}>
               <option value="">Todos os status</option>{Object.entries(ROADMAP_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
             </MaonoSelect></label>
-            <label><span>Fase</span><MaonoSelect value={filters.phaseId} disabled={!bundle} onChange={event => setFilters({ ...filters, phaseId: event.target.value })}>
-              <option value="">Todas as fases</option>{bundle?.phases.map(phase => <option key={phase.id} value={phase.id}>{phase.name}</option>)}
+            <label><span><StaticLoadingText pending={structurePending}>Fase</StaticLoadingText></span><MaonoSelect value={filters.phaseId} disabled={!presentedBundle} onChange={event => setFilters({ ...filters, phaseId: event.target.value })}>
+              <option value="">Todas as fases</option>{presentedBundle?.phases.map(phase => <option key={phase.id} value={phase.id}>{phase.name}</option>)}
             </MaonoSelect></label>
-            <label><span>Responsável</span><MaonoSelect value={filters.assigneeId} disabled={!bundle} onChange={event => setFilters({ ...filters, assigneeId: event.target.value })}>
-              <option value="">Todos os responsáveis</option>{bundle?.assignees.map(item => <option key={item.id} value={item.id}>{item.name || item.email}</option>)}
+            <label><span><StaticLoadingText pending={structurePending}>Responsável</StaticLoadingText></span><MaonoSelect value={filters.assigneeId} disabled={!presentedBundle} onChange={event => setFilters({ ...filters, assigneeId: event.target.value })}>
+              <option value="">Todos os responsáveis</option>{presentedBundle?.assignees.map(item => <option key={item.id} value={item.id}>{item.name || item.email}</option>)}
             </MaonoSelect></label>
           </div>
         </section>
-        <RoadmapMetrics bundle={bundle} loading={loading} />
+        <RoadmapMetrics bundle={presentedBundle} loading={presentationLoading} structurePending={structurePending} />
         <section className="roadmap-content" aria-label="Tarefas do roadmap">
           <header className="roadmap-content-header">
-            <h2>{view === "gantt" ? "Cronograma" : "Tarefas"}</h2>
+            <h2><StaticLoadingText pending={structurePending}>{view === "gantt" ? "Cronograma" : "Tarefas"}</StaticLoadingText></h2>
             <div className="roadmap-view-tools">
               <MaonoSelect aria-label="Escala do cronograma" value={scale} onChange={event => setScale(event.target.value as RoadmapScale)} disabled={view === "list"}>
                 <option value="day">Dia</option><option value="week">Semana</option><option value="month">Mês</option>
               </MaonoSelect>
               <div className="roadmap-view-switch" role="group" aria-label="Visualização do roadmap">
-                <button type="button" aria-pressed={view === "gantt"} className={view === "gantt" ? "active" : ""} onClick={() => setView("gantt")}>Gantt</button>
-                <button type="button" aria-pressed={view === "list"} className={view === "list" ? "active" : ""} onClick={() => setView("list")}><DocumentIcon name="list" />Lista</button>
+                <button type="button" aria-pressed={view === "gantt"} className={view === "gantt" ? "active" : ""} onClick={() => setView("gantt")}><StaticLoadingText pending={structurePending}>Gantt</StaticLoadingText></button>
+                <button type="button" aria-pressed={view === "list"} className={view === "list" ? "active" : ""} onClick={() => setView("list")}><DocumentIcon name="list" /><StaticLoadingText pending={structurePending}>Lista</StaticLoadingText></button>
               </div>
             </div>
           </header>
-          <div ref={scrollRef} className="roadmap-scroll" aria-busy={loading} tabIndex={0} role="region" aria-label={view === "gantt" ? "Rolagem do cronograma" : "Rolagem das tarefas"}>
-            {view === "gantt" ? <GanttView bundle={bundle} tasks={page.tasks} scale={scale} onOpen={openTask} skeletonCount={skeletonCount} /> : <ListView tasks={page.tasks} onOpen={openTask} skeletonCount={skeletonCount} />}
-            {bundle && !bundle.tasks.length && !loading ? <div className="roadmap-empty"><strong>Nenhuma tarefa no período</strong><p>Ajuste os filtros ou registre a primeira entrega.</p>{canManage ? <button className="mm-button" type="button" onClick={() => openTask(null)}>Nova tarefa</button> : null}</div> : null}
+          <div ref={scrollRef} className="roadmap-scroll" aria-busy={presentationLoading} tabIndex={0} role="region" aria-label={view === "gantt" ? "Rolagem do cronograma" : "Rolagem das tarefas"}>
+            {view === "gantt" ? <GanttView bundle={presentedBundle} tasks={contentPending ? [] : page.tasks} structurePending={structurePending} scale={scale} onOpen={openTask} skeletonCount={skeletonCount} /> : <ListView tasks={contentPending ? [] : page.tasks} structurePending={structurePending} onOpen={openTask} skeletonCount={skeletonCount} />}
+            {bundle && !bundle.tasks.length && !presentationLoading ? <div className="roadmap-empty"><strong>Nenhuma tarefa no período</strong><p>Ajuste os filtros ou registre a primeira entrega.</p>{canManage ? <button className="mm-button" type="button" onClick={() => openTask(null)}>Nova tarefa</button> : null}</div> : null}
           </div>
           <footer className="roadmap-pagination" aria-label="Paginação das tarefas">
             <DocumentsPagination
-              status={loading ? <LoadingStatus loading refreshing={Boolean(bundle)} label="Carregando roadmap." refreshingLabel="Atualizando tarefas." prolongedLabel="O roadmap continua carregando. Aguarde mais um pouco." announce={false} visuallyHidden={false} className="roadmap-loading-status" /> : paginationPending ? "Não foi possível atualizar tarefas." : `Exibindo ${page.tasks.length}/${page.total}.`}
+              structurePending={structurePending}
+              status={presentationLoading ? <LoadingStatus loading refreshing={Boolean(bundle) && !contentPending} label="Carregando roadmap." refreshingLabel="Atualizando tarefas." prolongedLabel="O roadmap continua carregando. Aguarde mais um pouco." announce={false} visuallyHidden={false} className="roadmap-loading-status" /> : paginationPending ? "Não foi possível atualizar tarefas." : `Exibindo ${page.tasks.length}/${page.total}.`}
               page={page.pageIndex + 1} pageSize={page.pageSize}
               canGoPrevious={page.canGoPrevious} canGoNext={page.canGoNext}
-              disabled={paginationPending} disablePageSize={paginationPending}
+              disabled={paginationPending || contentPending} disablePageSize={paginationPending || contentPending}
               onPageSize={size => changePage(0, size)}
               onPrevious={() => changePage(page.pageIndex - 1)} onNext={() => changePage(page.pageIndex + 1)}
             />

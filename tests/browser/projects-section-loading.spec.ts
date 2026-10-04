@@ -169,7 +169,7 @@ test("restricted sections make no authorized-data requests or fake skeletons", a
 });
 
 
-test("organization keeps authorized labels, current role and static edit controls real while values load", async ({ page }, testInfo) => {
+test("organization reveals authorized labels, current role and static edit controls before values", async ({ page }, testInfo) => {
   const gate = deferred();
   await setup(page, { beforeRead: async resource => { if (resource === "organization") await gate.promise; } });
   await open(page, sections[0]); const region = page.locator(sections[0].selector);
@@ -274,4 +274,60 @@ for (const status of [401, 403]) test(`limits ${status} after refresh clears the
   await expect(region.locator(".mm-skeleton")).toHaveCount(0);
   await expect(region.locator('[aria-busy="true"]')).toHaveCount(0);
   await expect(region.locator(".mm-section-load-region").getByText("Enterprise", { exact: true })).toHaveCount(0);
+});
+
+// The user's revised initial-load contract intentionally replaces immediate
+// volatile reveal: 80ms structure, then a total 260ms window from request start.
+for (const section of sections) test(`${section.name}: static labels reveal at 80ms before fast data at 260ms`, async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-04T12:00:00Z") });
+  await setup(page);
+  await page.clock.pauseAt(new Date("2026-10-04T12:01:00Z"));
+  const response = page.waitForResponse(item => new URL(item.url()).pathname === `/api/organizations/1${section.resource === "organization" ? "" : `/${section.resource}`}`);
+  await page.locator(".mm-sidebar-nav").getByRole("button", { name: section.name, exact: true }).evaluate((node: HTMLButtonElement) => node.click());
+  const region = page.locator(section.selector);
+  const heading = region.getByRole("heading", { name: section.name, exact: true });
+  await expect(heading.locator('[data-loading-structure="pending"]')).toHaveCount(1);
+  const node = await heading.elementHandle(), initialBox = await heading.boundingBox();
+  await response;
+  await page.clock.runFor(79);
+  await expect(heading.locator('[data-loading-structure="pending"]')).toHaveCount(1);
+  await page.clock.runFor(1);
+  await expect(region.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  await expect(region.locator(".mm-skeleton").first()).toBeVisible();
+  await page.clock.runFor(179);
+  await expect(region.locator(".mm-skeleton").first()).toBeVisible();
+  await expect(section.resource === "limits" ? region.locator(".mm-tags-list") : region).not.toContainText(section.loaded);
+  await page.clock.runFor(1);
+  await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+  await expect(section.resource === "limits" ? region.locator(".mm-tags-list") : region).toContainText(section.loaded);
+  expect(await node!.evaluate(element => element.isConnected)).toBe(true);
+  expect(await heading.boundingBox()).toEqual(initialBox);
+});
+
+for (const section of sections) test(`${section.name}: a slow response after the window adds no presentation delay`, async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-04T12:00:00Z") });
+  const delayed = deferred();
+  await setup(page, { beforeRead: async resource => { if (resource === section.resource) await delayed.promise; } });
+  await page.clock.pauseAt(new Date("2026-10-04T12:01:00Z"));
+  await page.locator(".mm-sidebar-nav").getByRole("button", { name: section.name, exact: true }).evaluate((node: HTMLButtonElement) => node.click());
+  const region = page.locator(section.selector);
+  await expect(region.locator(".mm-skeleton").first()).toBeVisible();
+  await page.clock.runFor(1_000);
+  await expect(region.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  delayed.release();
+  // Clock stays frozen: a delay scheduled after fulfillment would fail here.
+  await expect(region.locator(".mm-skeleton")).toHaveCount(0);
+  await expect(section.resource === "limits" ? region.locator(".mm-tags-list") : region).toContainText(section.loaded);
+});
+
+for (const section of sections) test(`${section.name}: reduced motion has no artificial static or content wait`, async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install({ time: new Date("2026-10-04T12:00:00Z") });
+  await setup(page);
+  await page.clock.pauseAt(new Date("2026-10-04T12:01:00Z"));
+  await page.locator(".mm-sidebar-nav").getByRole("button", { name: section.name, exact: true }).evaluate((node: HTMLButtonElement) => node.click());
+  const region = page.locator(section.selector);
+  await expect(region.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  await expect(section.resource === "limits" ? region.locator(".mm-tags-list") : region).toContainText(section.loaded);
+  await expect(region.locator(".mm-skeleton")).toHaveCount(0);
 });

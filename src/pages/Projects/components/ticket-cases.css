@@ -1,9 +1,10 @@
 .ticket-cases {
   margin: 12px 0;
   padding: 14px;
-  border: 1px solid #d5ded9;
+  border: 1px solid var(--mm-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--mm-bg-soft);
+  color: var(--mm-text);
   max-width: 100%;
   overflow-wrap: anywhere;
 }
@@ -39,10 +40,10 @@
   width: 100%;
   box-sizing: border-box;
   padding: 8px;
-  border: 1px solid #a6b9ad;
+  border: 1px solid var(--mm-border-strong);
   border-radius: 5px;
-  color: #182d21;
-  background: #fff;
+  color: var(--mm-text);
+  background: var(--mm-bg-soft);
 }
 .ticket-cases textarea {
   min-height: 70px;
@@ -52,17 +53,17 @@
   padding: 8px 12px;
   cursor: pointer;
   align-self: end;
-  border: 1px solid #698a76;
+  border: 1px solid var(--mm-border-strong);
   border-radius: 5px;
-  background: #f2f7f3;
-  color: #173b26;
+  background: var(--mm-surface);
+  color: var(--mm-text);
 }
 .ticket-cases button:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .ticket-cases :focus-visible {
-  outline: 3px solid #267443;
+  outline: 3px solid var(--maono-focus-ring);
   outline-offset: 2px;
 }
 .ticket-cases pre {
@@ -75,7 +76,7 @@
 }
 .ticket-cases fieldset {
   flex-basis: 100%;
-  border: 1px solid #ddd;
+  border: 1px solid var(--mm-border);
 }
 .ticket-cases ul,
 .ticket-cases ol {

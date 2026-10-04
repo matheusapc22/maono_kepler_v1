@@ -1,3 +1,4 @@
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { OrganizationFileSort } from "../../../lib/api";
@@ -217,7 +218,8 @@ export function DocumentActionMenu({ label, actions, disabled = false }: { label
 type DocumentSortColumn = "name" | "type" | "size" | "updated";
 
 /** One semantic button for the heading and its arrow; all ordering is server-side. */
-export function DocumentSortHeading({ column, label, sort, onSort }: {
+export function DocumentSortHeading({ column, label, sort, onSort, structurePending = false }: {
+  structurePending?: boolean;
   column: DocumentSortColumn;
   label: string;
   sort: OrganizationFileSort;
@@ -287,7 +289,7 @@ export function DocumentSortHeading({ column, label, sort, onSort }: {
       onPointerLeave={() => setHovered(false)}
       onPointerCancel={() => setHovered(false)}
       onKeyDown={event => { if (event.key === "Escape") setDismissed(true); }}>
-      <span>{label}</span>
+      <span><StaticLoadingText pending={structurePending}>{label}</StaticLoadingText></span>
       <span className="mm-docs-sort-arrow" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" focusable="false">
           <path d={active ? ascending ? "M12 20V4m-7 7 7-7 7 7" : "M12 4v16m-7-7 7 7 7-7" : "M8 20V4m-4 4 4-4 4 4M16 4v16m-4-4 4 4 4-4"} />

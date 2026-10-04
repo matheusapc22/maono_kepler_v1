@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { LoadingStatus } from "../../../components/loading/Skeleton";
+import { LoadingStatus, StaticLoadingText } from "../../../components/loading/Skeleton";
 import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { LoadingTableRows } from "./TicketLoadingSkeletons";
 import DocumentsPagination from "./DocumentsPagination";
@@ -17,6 +17,7 @@ import {
 } from "./ticket-types";
 
 type TicketListViewProps = {
+  contentPending?: boolean; structurePending?: boolean;
   tickets: Ticket[];
   pagination: TicketPagination;
   busyTicketIds: ReadonlySet<string>;
@@ -47,6 +48,7 @@ export default function TicketListView({
   onPageChange,
   selectionScope, pageSize, loading, initialLoading, error, canCreate, onNewTicket,
   onPageSizeChange, onRefresh, canExport, exportAvailable, onExport,
+  contentPending = initialLoading, structurePending = false,
 }: TicketListViewProps) {
   const skeletonRows = useSkeletonCount({ layout: "table", pageSize, itemHeight: 53, reservedHeight: 400, maxCount: pageSize });
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -84,22 +86,22 @@ export default function TicketListView({
   return (
     <section ref={regionRef} className="ticket-list-region" aria-label="Lista de chamados">
       <header className="ticket-list-header">
-        <h3><DocumentIcon name="list" />Lista de chamados</h3>
+        <h3><DocumentIcon name="list" /><StaticLoadingText pending={structurePending}>Lista de chamados</StaticLoadingText></h3>
         <div>
           {canExport ? <button type="button" className="ticket-list-tool" onClick={onExport} disabled={!exportAvailable} title={exportAvailable ? "Abrir relatórios e exportações" : "Exportações indisponíveis para esta organização"}>
-            <DocumentIcon name="upload" /> Exportar
+            <DocumentIcon name="upload" /> <StaticLoadingText pending={structurePending}>Exportar</StaticLoadingText>
           </button> : null}
           <DocumentActionMenu label="Mais opções dos chamados" disabled={initialLoading} actions={[{ label: "Atualizar consulta", onSelect: onRefresh, disabled: loading }]} />
         </div>
       </header>
       <span className="mm-sr-only" role="status">{selectedCount} chamado(s) selecionado(s) nesta página.</span>
-      {!initialLoading && tickets.length === 0 && !error ? (
+      {!contentPending && tickets.length === 0 && !error ? (
         <div className="ticket-empty-state">
           <DocumentIcon name="list" /><h3>{pagination.total > 0 ? "Nenhum chamado acessível nesta página" : "Nenhum chamado encontrado"}</h3>
           <p>{pagination.total > 0 ? "Continue pelas páginas ou atualize a consulta para reorganizar os resultados disponíveis." : "Ajuste os filtros ou registre a primeira solicitação desta organização."}</p>
           {canCreate && pagination.total === 0 ? <button type="button" className="ticket-primary-action" onClick={onNewTicket}>Novo chamado</button> : null}
         </div>
-      ) : <div className="ticket-list-scroll" role="region" aria-label="Tabela de chamados" tabIndex={0} aria-busy={loading}>
+      ) : <div className="ticket-list-scroll" role="region" aria-label="Tabela de chamados" tabIndex={0} aria-busy={loading || contentPending}>
         <table className="ticket-list-table">
           <thead>
             <tr>
@@ -107,14 +109,14 @@ export default function TicketListView({
                 <th key={header} scope="col">
                   {index === 0 ? (
                     <label className="ticket-select-control"><input ref={selectAllRef} type="checkbox" aria-label="Selecionar todos os chamados desta página" checked={allSelected} disabled={loading || tickets.length === 0} onChange={event => setSelected(event.target.checked ? new Set(visibleIds) : new Set())} /></label>
-                  ) : header}
+                  ) : <StaticLoadingText pending={structurePending}>{header}</StaticLoadingText>}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {initialLoading ? <LoadingTableRows columns={TICKET_LIST_HEADERS.length} count={skeletonRows} kind="ticket" /> : null}
-            {tickets.map((ticket) => {
+            {contentPending ? <LoadingTableRows columns={TICKET_LIST_HEADERS.length} count={skeletonRows} kind="ticket" /> : null}
+            {(contentPending ? [] : tickets).map((ticket) => {
               const busy = busyTicketIds.has(String(ticket.id));
               const overdue = isTicketOverdue(ticket);
 
@@ -174,7 +176,7 @@ export default function TicketListView({
         </table>
       </div>}
 
-      <DocumentsPagination status={loading ? <LoadingStatus loading refreshing={!initialLoading} label="Carregando chamados." refreshingLabel="Atualizando chamados." announce={false} visuallyHidden={false} /> : error && tickets.length === 0 ? "A consulta precisa de atenção." : `Exibindo ${tickets.length}/${pagination.total}.`} page={pagination.page} pageSize={pageSize} canGoPrevious={pagination.page > 1} canGoNext={pagination.hasMore} disabled={loading} disablePageSize={loading} onPageSize={size => navigate(() => onPageSizeChange(size))} onPrevious={() => navigate(() => onPageChange(pagination.page - 1))} onNext={() => navigate(() => onPageChange(pagination.page + 1))} />
+      <DocumentsPagination structurePending={structurePending} status={loading || contentPending ? <LoadingStatus loading refreshing={!contentPending} label="Carregando chamados." refreshingLabel="Atualizando chamados." announce={false} visuallyHidden={false} /> : error && tickets.length === 0 ? "A consulta precisa de atenção." : `Exibindo ${tickets.length}/${pagination.total}.`} page={pagination.page} pageSize={pageSize} canGoPrevious={pagination.page > 1} canGoNext={pagination.hasMore} disabled={loading} disablePageSize={loading} onPageSize={size => navigate(() => onPageSizeChange(size))} onPrevious={() => navigate(() => onPageChange(pagination.page - 1))} onNext={() => navigate(() => onPageChange(pagination.page + 1))} />
 
       <span className="mm-sr-only">
         Prioridades disponíveis: {Object.values(PRIORITY_LABELS).join(", ")}.

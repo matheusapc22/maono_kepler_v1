@@ -50,6 +50,7 @@ for (const width of [1440, 390]) test(`Admin ${width}px reveals independent metr
   await expect(page.getByRole('heading', { name: 'Painel Admin', exact: true })).toBeVisible();
   await expect(page.locator('.admin-rail')).toBeVisible();
   await expect(metric(page, 'Projetos').locator('strong')).toHaveText('1');
+  await expect(page.locator('.admin-content').getByRole('status')).toHaveText('Carregando dados administrativos.');
   await expect(metric(page, 'Usuários').locator('.mm-skeleton')).toBeVisible();
   await expect(metric(page, 'Organizações').locator('.mm-skeleton')).toBeVisible();
   await expect(metric(page, 'Arquivos').locator('strong')).toHaveCount(0);
@@ -99,6 +100,7 @@ test('Admin refresh retains rows, typed filter, focused input and current scroll
   // Trigger the existing refresh action without deliberately moving focus away.
   await page.getByRole('button', { name: 'Atualizar', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
   await expect(page.locator('.admin-users-table')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('.admin-content').getByRole('status')).toHaveText('Atualizando dados administrativos.');
   await expect(page.locator('.admin-users-table')).toContainText('Pessoa pronta');
   await expect(page.locator('.admin-content .mm-skeleton')).toHaveCount(0);
   await expect(search).toBeFocused(); await expect(search).toHaveValue('Pessoa');
@@ -145,4 +147,90 @@ test('late independent Admin data does not reset a focused in-progress user edit
   gate.release();
   await expect(page.getByRole('button', { name: 'Atualizar', exact: true })).toBeEnabled();
   await expect(name).toBeFocused(); await expect(name).toHaveValue('Rascunho local ainda não salvo');
+});
+
+async function freezePresentationClock(page: Page) {
+  const time = new Date('2026-01-01T12:00:00Z');
+  await page.clock.install({ time });
+  await page.clock.pauseAt(new Date(time.getTime() + 60_000));
+}
+
+test('Admin fast data starts immediately, with exact80ms structure and total260ms content stages', async ({ page }, testInfo) => {
+  await freezePresentationClock(page);
+  const gate = deferred();
+  const fixture = await setup(page, { beforeRead: () => gate.promise });
+  const heading = page.locator('.admin-topbar h1 .mm-static-loading-text');
+  await expect(heading).toHaveAttribute('data-loading-structure', 'pending');
+  const pendingRequestGeometry = await page.locator('.admin-topbar h1').boundingBox();
+  expect(fixture.requests.filter(path => path.startsWith('GET /api/admin/'))).toHaveLength(4);
+  const responses = ['projects', 'access', 'users', 'organizations'].map(resource => page.waitForResponse(response => new URL(response.url()).pathname === `/api/admin/${resource}`));
+  gate.release(); await Promise.all(responses);
+  await expect(page.getByRole('button', { name: 'Atualizar', exact: true })).toBeEnabled();
+  await expect(heading).toHaveAttribute('data-loading-structure', 'pending');
+  const geometry = await page.locator('.admin-topbar h1').boundingBox();
+  expect(pendingRequestGeometry).not.toBeNull();
+  expect(geometry).not.toBeNull();
+  // The existing Atualizando... → Atualizar button copy changes header x
+  // before either presentation deadline. Its text dimensions and y stay fixed.
+  expect({ width: geometry!.width, height: geometry!.height, y: geometry!.y }).toEqual({
+    width: pendingRequestGeometry!.width, height: pendingRequestGeometry!.height, y: pendingRequestGeometry!.y,
+  });
+  await expect(page.locator('.admin-content').getByRole('status')).toHaveText('Carregando dados administrativos.');
+  await expect(metric(page, 'Projetos').locator('strong')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('admin-stage-0.png'), fullPage: true });
+  await page.clock.runFor(79);
+  await expect(heading).toHaveAttribute('data-loading-structure', 'pending');
+  await page.clock.runFor(1);
+  await expect(heading).not.toHaveAttribute('data-loading-structure', 'pending');
+  await expect(metric(page, 'Projetos').locator('.mm-skeleton')).toBeVisible();
+  expect(await page.locator('.admin-topbar h1').boundingBox()).toEqual(geometry);
+  await page.screenshot({ path: testInfo.outputPath('admin-stage-80.png'), fullPage: true });
+  await page.clock.runFor(179);
+  await expect(metric(page, 'Projetos').locator('strong')).toHaveCount(0);
+  await page.clock.runFor(1);
+  await expect(metric(page, 'Projetos').locator('strong')).toHaveText('1');
+  await expect(page.locator('.admin-content .mm-skeleton')).toHaveCount(0);
+});
+
+test('Admin slow response has no additional hold and refresh keeps focused controls mounted', async ({ page }) => {
+  await freezePresentationClock(page);
+  const initial = deferred(), refresh = deferred();
+  await setup(page, { section: 'users', beforeRead: (_resource, attempt) => attempt === 1 ? initial.promise : refresh.promise });
+  await page.clock.runFor(900);
+  await expect(page.locator('.admin-user-manager h2 .mm-static-loading-text')).not.toHaveAttribute('data-loading-structure', 'pending');
+  initial.release();
+  await expect(page.locator('.admin-users-table')).toContainText('Pessoa pronta');
+  const input = page.getByPlaceholder('Nome, e-mail, organização ou perfil');
+  await input.fill('Pessoa');
+  await page.getByRole('button', { name: 'Atualizar', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
+  await expect(page.locator('.admin-users-table')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('.admin-content').getByRole('status')).toHaveText('Atualizando dados administrativos.');
+  await expect(page.locator('.admin-users-table')).toContainText('Pessoa pronta');
+  await expect(page.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  await expect(input).toBeFocused(); refresh.release();
+  await expect(page.locator('.admin-users-table')).toHaveAttribute('aria-busy', 'false');
+});
+
+test('Admin initial authentication failure cancels every presentation stage and late companions cannot restore rows', async ({ page }) => {
+  await freezePresentationClock(page);
+  const failure = deferred(), late = deferred();
+  await setup(page, { section: 'projects', beforeRead: resource => resource === 'users' ? failure.promise : late.promise, status: resource => resource === 'users' ? 401 : 200 });
+  await expect(page.locator('.admin-topbar [data-loading-structure="pending"]')).not.toHaveCount(0);
+  failure.release();
+  await expect(page.locator('.admin-notice.error')).toBeVisible();
+  await expect(page.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  await expect(page.locator('.admin-content .mm-skeleton')).toHaveCount(0);
+  late.release(); await page.clock.runFor(600);
+  await expect(page.locator('.mm-table-wrap')).not.toContainText('Projeto pronto');
+});
+
+test('Admin reduced motion removes structure and content holds without changing real pending data', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await freezePresentationClock(page);
+  const gate = deferred(); await setup(page, { beforeRead: () => gate.promise });
+  await expect(page.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  await expect(metric(page, 'Projetos').locator('.mm-skeleton')).toBeVisible();
+  gate.release();
+  await expect(metric(page, 'Projetos').locator('strong')).toHaveText('1');
+  await expect(page.locator('.admin-content .mm-skeleton')).toHaveCount(0);
 });

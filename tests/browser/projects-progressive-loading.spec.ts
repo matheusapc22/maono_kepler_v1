@@ -35,9 +35,15 @@ async function setup(page: Page, options: {
   });
   await page.route(url => !['127.0.0.1', 'localhost'].includes(url.hostname), route => route.abort());
   await page.goto('/projects');
+  // The load event can precede session hydration and the Projects module mount.
+  // Observe the authorized region and its first read before a fixture advances
+  // virtual time; this adds no clock ticks or response/presentation delay.
+  await expect(page.locator('.mm-sidebar-nav').getByRole('button', { name: 'Todos os Projetos', exact: true })).toBeVisible();
+  await expect(page.locator('.mm-project-pages__heading h1')).toHaveText('Todos os Projetos');
+  await expect.poll(() => attempts.get('/api/projects')).toBe(1);
   return { attempts };
 }
-const cards = (page: Page) => page.locator('.mm-project-card:not(.mm-project-skeleton)');
+const cards = (page: Page) => page.locator('.mm-project-card:not(.mm-project-skeleton):visible');
 const search = (page: Page) => page.getByRole('form', { name: 'Filtros de projetos' }).getByLabel('Buscar', { exact: true });
 async function reopenAll(page: Page) {
   await page.locator('.mm-sidebar-nav').getByRole('button', { name: 'Auditoria', exact: true }).click();
@@ -163,4 +169,103 @@ test('sidebar keeps a nonempty authorized session count, then accepts an authori
   await expect(badge).toHaveText('3');
   gate.release(); await expect(page.getByText('Nenhum projeto encontrado.', { exact: true })).toBeVisible();
   await expect(badge).toHaveText('0');
+});
+
+async function freezePresentationClock(page: Page) {
+  const time = new Date('2026-01-01T12:00:00Z');
+  await page.clock.install({ time });
+  await page.clock.pauseAt(new Date(time.getTime() + 60_000));
+}
+
+test('Projects fast response preserves exact structure geometry and starts images before total260ms reveal', async ({ page }, testInfo) => {
+  await freezePresentationClock(page);
+  const gate = deferred(), image = deferred();
+  const fixture = await setup(page, { count: 1, image: true, beforeRead: path => path === '/api/projects' ? gate.promise : path.endsWith('/thumbnail') ? image.promise : Promise.resolve() });
+  const heading = page.locator('.mm-project-pages__heading h1 .mm-static-loading-text');
+  await expect(heading).toHaveAttribute('data-loading-structure', 'pending');
+  const geometry = await page.locator('.mm-project-pages__heading').boundingBox();
+  expect(fixture.attempts.get('/api/projects')).toBe(1);
+  gate.release();
+  const rawCard = page.locator('.mm-project-card:not(.mm-project-skeleton)');
+  await expect(rawCard).toHaveCount(1);
+  await expect(rawCard).not.toBeVisible();
+  await expect.poll(() => fixture.attempts.get('/api/projects/mapa-1/thumbnail')).toBe(1);
+  const mountedCard = await rawCard.elementHandle();
+  await page.screenshot({ path: testInfo.outputPath('projects-stage-0.png'), fullPage: true });
+  await page.clock.runFor(79);
+  await expect(heading).toHaveAttribute('data-loading-structure', 'pending');
+  await page.clock.runFor(1);
+  await expect(heading).not.toHaveAttribute('data-loading-structure', 'pending');
+  expect(await page.locator('.mm-project-pages__heading').boundingBox()).toEqual(geometry);
+  await expect(rawCard).not.toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('projects-stage-80.png'), fullPage: true });
+  await page.clock.runFor(179);
+  await expect(rawCard).not.toBeVisible();
+  await page.clock.runFor(1);
+  await expect(rawCard).toBeVisible();
+  expect(await mountedCard!.evaluate(element => element.isConnected)).toBe(true);
+  await expect(rawCard.locator('.mm-project-card__preview')).toHaveAttribute('aria-busy', 'true');
+  await expect(rawCard.locator('.mm-project-card__content [data-loading-structure="pending"]')).toHaveCount(0);
+  image.release(); await expect(rawCard.locator('img.is-loaded')).toBeVisible();
+});
+
+test('Projects slow data has no response-relative hold and valid cached return bypasses both stages', async ({ page }) => {
+  await freezePresentationClock(page);
+  const initial = deferred(), refresh = deferred();
+  await setup(page, { beforeRead: (path, attempt) => path === '/api/projects' ? attempt === 1 ? initial.promise : refresh.promise : Promise.resolve() });
+  await expect(page.locator('.mm-project-pages__heading h1 .mm-static-loading-text')).toHaveAttribute('data-loading-structure', 'pending');
+  await page.clock.runFor(1200);
+  await expect(page.locator('.mm-project-pages__heading [data-loading-structure="pending"]')).toHaveCount(0);
+  initial.release(); await expect(cards(page)).toHaveCount(4);
+  await reopenAll(page);
+  await expect(cards(page)).toHaveCount(4);
+  await expect(page.locator('.mm-project-skeleton')).toHaveCount(0);
+  await expect(page.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  await search(page).fill('Rascunho sem remount');
+  refresh.release();
+  await expect(search(page)).toBeFocused();
+  await expect(search(page)).toHaveValue('Rascunho sem remount');
+});
+
+test('Projects reduced motion eliminates both artificial delays', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await freezePresentationClock(page);
+  const gate = deferred(); await setup(page, { beforeRead: path => path === '/api/projects' ? gate.promise : Promise.resolve() });
+  await expect(page.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  gate.release(); await expect(cards(page)).toHaveCount(4);
+  await expect(page.locator('.mm-project-skeleton')).toHaveCount(0);
+});
+
+test('Projects a newer section invalidates old presentation timers and ignores the late prior response', async ({ page }) => {
+  await freezePresentationClock(page);
+  const old = deferred(), latest = deferred();
+  await setup(page, { count: 1, beforeRead: path => path === '/api/projects' ? old.promise : path === '/api/projects/recent' ? latest.promise : Promise.resolve() });
+  await expect(page.locator('.mm-project-pages__heading h1 .mm-static-loading-text')).toHaveAttribute('data-loading-structure', 'pending');
+  await page.clock.runFor(50);
+  await page.locator('.mm-sidebar-nav').getByRole('button', { name: 'Recentes', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
+  await expect(page.locator('.mm-project-pages__heading h1')).toHaveText('Recentes');
+  const heading = page.locator('.mm-project-pages__heading h1 .mm-static-loading-text');
+  await expect(heading).toHaveAttribute('data-loading-structure', 'pending');
+  old.release(); latest.release();
+  await page.clock.runFor(30);
+  await expect(heading).toHaveAttribute('data-loading-structure', 'pending');
+  await page.clock.runFor(50);
+  await expect(heading).not.toHaveAttribute('data-loading-structure', 'pending');
+  await page.clock.runFor(179);
+  await expect(cards(page)).toHaveCount(0);
+  await page.clock.runFor(1);
+  await expect(cards(page)).toHaveCount(1);
+  await expect(page.locator('.mm-project-pages__heading h1')).toHaveText('Recentes');
+});
+
+test('Projects initial access error immediately cancels title and content holds', async ({ page }) => {
+  await freezePresentationClock(page);
+  const gate = deferred(); await setup(page, { beforeRead: path => path === '/api/projects' ? gate.promise : Promise.resolve(), status: path => path === '/api/projects' ? 403 : 200 });
+  await expect(page.locator('.mm-project-pages__heading [data-loading-structure="pending"]')).not.toHaveCount(0);
+  gate.release();
+  await expect(page.getByRole('alert')).toContainText('Não foi possível carregar os projetos');
+  await expect(page.locator('[data-loading-structure="pending"]')).toHaveCount(0);
+  await expect(page.locator('.mm-project-skeleton')).toHaveCount(0);
+  await expect(cards(page)).toHaveCount(0);
+  await expect(page.locator('.mm-project-pages__footer')).toContainText('Contagem de projetos indisponível.');
 });

@@ -4,15 +4,31 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from 'esbuild';
 const root = new URL('../', import.meta.url);
+test('document folder reservation matches the exact enclosing-card height in project density',()=>{
+  const styles=readFileSync(new URL('src/pages/Projects/components/TicketLoadingSkeletons.css',root),'utf8');
+  const documents=readFileSync(new URL('src/pages/Projects/components/DocumentsSection.css',root),'utf8');
+  const density=readFileSync(new URL('src/platform-density.css',root),'utf8');
+  const control=density.match(/body \.mm-projects-page \.mm-docs-folder-select \{[^}]*min-height: (\d+)px/);
+  const border=documents.match(/\.mm-docs \.mm-docs-folder-card \{[^}]*border: (\d+)px/);
+  const reserved=styles.match(/body \.mm-projects-page \.mm-docs \.mm-loading-folder-card \{ min-height: (\d+)px; \}/);
+  assert.ok(control);assert.ok(border);assert.ok(reserved);
+  assert.equal(Number(reserved[1]),Number(control[1])+2*Number(border[1]));
+  assert.match(styles,/\.mm-docs \.mm-loading-folder-card \{ min-height: 72px;/,'standalone default is unchanged');
+});
 const read = name => readFileSync(new URL(`src/pages/Projects/components/${name}`, root), 'utf8');
 const directory = mkdtempSync(new URL('../.ticket-docs-loading-test-', import.meta.url).pathname);
 const bundle = await build({ stdin: { contents: `
 import {renderToStaticMarkup} from 'react-dom/server';
 import TicketListView from './TicketListView';
+import TicketsToolbar from './TicketsToolbar';
+import {MemoryRouter} from 'react-router';
+import TicketDetailDrawer from './TicketDetailDrawer';
 import TicketKanbanView from './TicketKanbanView';
 import TicketCalendarView from './TicketCalendarView';
 import {ActiveDocumentsResults} from './DocumentsSection';
 import {TicketDetailSkeleton,DocumentGridSkeleton} from './TicketLoadingSkeletons';
+export const renderToolbar=p=>renderToStaticMarkup(<MemoryRouter><TicketsToolbar {...p}/></MemoryRouter>);
+export const renderDrawer=p=>renderToStaticMarkup(<TicketDetailDrawer {...p}/>);
 export const renderList=p=>renderToStaticMarkup(<TicketListView {...p}/>);
 export const renderBoard=p=>renderToStaticMarkup(<TicketKanbanView {...p}/>);
 export const renderCalendar=p=>renderToStaticMarkup(<TicketCalendarView {...p}/>);
@@ -122,4 +138,116 @@ test('queue reveal predicate ignores unrelated mutation history but preserves cu
   assert.equal(overlay('in_progress'),false);
   assert.match(board,/requestRevision !== latestRevision.current/);
   assert.match(board,/requestRevision === 0 && !forceFresh \? snapshot : null/);
+});
+
+test('static first stage masks actual known text and retains all accessible labels',()=>{
+ const cases=[
+  [runtime.renderList({...listProps,structurePending:true}),['Lista de chamados','Código','Assunto','Itens por página']],
+  [runtime.renderDocuments({...documentProps,structurePending:true}),['Documentos encontrados','Nome','Tipo','Tamanho','Itens por página']],
+  [runtime.renderCalendar({tickets:[],from:'2026-10-01',loading:true,initialLoading:true,structurePending:true,onOpen:noop,onRangeChange:noop}),['Outubro','Hoje','Dom','Sem data']],
+ ];
+ for(const [html,labels] of cases){
+  assert.match(html,/data-loading-structure="pending"/);
+  for(const label of labels)assert.ok(html.includes(label),label);
+  assert.doesNotMatch(html,/<span[^>]*mm-static-loading-text[^>]*aria-hidden/);
+ }
+});
+
+test('fast ready response remains in volatile presentation only until parent releases its initial gate',()=>{
+ const cases=[
+  [runtime.renderList({...listProps,tickets:[ticket],pagination,loading:false,initialLoading:false,contentPending:true}),ticket.subject],
+  [runtime.renderDocuments({...documentProps,files:[file],initialLoading:false,contentPending:true,pagination:{...documentProps.pagination,total:1}}),file.name],
+  [runtime.renderCalendar({tickets:[ticket],from:'2026-10-01',loading:false,initialLoading:false,contentPending:true,onOpen:noop,onRangeChange:noop}),ticket.subject],
+ ];
+ for(const [html,value] of cases){
+  assert.match(html,/mm-skeleton/);assert.match(html,/aria-busy="true"/);
+  assert.ok(!html.includes(value),`pending presentation must not leak ${value}`);
+  assert.doesNotMatch(html,/data-loading-structure="pending"/);
+ }
+});
+
+test('detail holds presentation without delaying real dependent children or changing request state',()=>{
+ const source=read('TicketDetailDrawer.tsx');
+ assert.match(source,/\{contentPending \? <TicketDetailSkeleton[^\n]+ : null\}/);
+ assert.match(source,/\{error && !ticket \? \([\s\S]*?\) : ticket && detail \? \(\s*<div className="ticket-detail-content" hidden=\{contentPending\} style=\{contentPending \? \{ display: "none" \} : undefined\}/);
+ assert.ok(source.indexOf('<TicketConversationPanel')>source.indexOf('hidden={contentPending}'));
+ assert.ok(source.indexOf('<TicketAttachmentList')>source.indexOf('hidden={contentPending}'));
+ assert.doesNotMatch(source,/contentPending[^\n]*\?[^\n]*TicketConversationPanel|useEffect\([^]*?\[contentPending\]/);
+});
+
+test('staging identities are query/access only and first-queue failure cancels unfinished queues',()=>{
+ const section=read('TicketsSection.tsx'),docs=read('DocumentsSection.tsx'),board=read('TicketKanbanView.tsx');
+ assert.match(section,/hasData: hasLoadedQuery && snapshotQueryKeyRef\.current === ticketQueryKey\(debouncedFilters\)/);
+ assert.match(docs,/scopeKey: String\(organizationId\)/);
+ assert.match(section,/scopeKey: String\(organizationId\)/);
+ assert.match(board,/cancelled \|\| Boolean\(page\?\.error\) \|\| Boolean\(columnPages\?\.open\.error && !page\?\.loading && !page\?\.pagination\)/);
+ assert.doesNotMatch(board,/cancelled: !page\?\.loading/);
+ for(const source of [section,docs,board,read('TicketDetailDrawer.tsx')])assert.doesNotMatch(source,/scopeKey:[^\n]*(?:initialLoading|refreshing|contentPending|structurePending)/);
+});
+
+
+test('detail dialog retains an accessible loading name while its volatile title is masked',()=>{
+ const html=runtime.renderDrawer({open:true,organizationId:1,detail:null,loading:true,error:null,saving:false,canManage:false,canUpload:false,attachmentLimits:{},onClose:noop,onRetry:noop,onReload:noop,onUpdate:noop,onCommand:noop});
+ assert.match(html,/role="dialog"[^>]*aria-labelledby="ticket-detail-title"/);
+ assert.match(html,/<h3 id="ticket-detail-title"><span class="mm-sr-only">Carregando chamado\.\.\.<\/span><span class="mm-skeleton"/);
+ assert.match(html,/aria-label="Fechar detalhes"/);
+});
+
+
+test('volatile assignee names wait for content reveal while a deep-link selection retains its exact ID',()=>{
+ const props={organizationId:1,filters:{q:"",status:"",priority:"",assigneeId:"17",from:"",to:"",sort:"updated_desc"},assignees:[{id:17,name:"Atendente sintético"}],viewMode:"list",canCreate:false,onFiltersChange:noop,onViewModeChange:noop,onNewTicket:noop,onHome:noop};
+ for(const structurePending of [true,false]){
+  const html=runtime.renderToolbar({...props,structurePending,contentPending:true});
+  assert.doesNotMatch(html,/Atendente sintético/);
+  assert.match(html,/<option value="17" disabled="" selected="">Carregando atendente…<\/option>/);
+  assert.match(html,/<option value="">Todos os atendentes<\/option>/);
+ }
+ const ready=runtime.renderToolbar({...props,contentPending:false});
+ assert.match(ready,/<option value="17" selected="">Atendente sintético<\/option>/);
+ assert.doesNotMatch(ready,/Carregando atendente/);
+ for(const assigneeId of ["","unassigned"]){
+  const html=runtime.renderToolbar({...props,filters:{...props.filters,assigneeId},contentPending:true});
+  assert.doesNotMatch(html,/Carregando atendente/);
+  assert.ok(html.includes(`value="${assigneeId}" selected=""`));
+ }
+});
+
+
+test('direct ticket deep-link seeds detail pending before its first commit',()=>{
+ const source=read('TicketsSection.tsx');
+ assert.match(source,/const \[detailLoading, setDetailLoading\] = useState\(Boolean\(navigation.ticketId\)\);/);
+ assert.match(source,/\>\(navigation.ticketId\);/);
+ assert.match(source,/loading=\{detailLoading\}/);
+});
+
+
+test('Kanban owns no artificial clock and consumes only the stable owner stage while queues reveal independently',()=>{
+ const columns=Object.fromEntries(queues.map(q=>[q,{tickets:[],total:0,hasMore:false,loading:true}]));
+ columns.open={tickets:[ticket],total:1,hasMore:false,loading:false,pagination};
+ const held=runtime.renderBoard({...boardProps,tickets:[ticket],columnPages:columns,structurePending:true,stagePending:true});
+ assert.doesNotMatch(held,/Chamado preservado/);assert.match(held,/data-loading-structure="pending"/);
+ const released=runtime.renderBoard({...boardProps,tickets:[ticket],columnPages:columns,stagePending:false});
+ assert.ok(released.includes(ticket.subject));assert.match(released,/mm-loading-ticket-card/);assert.doesNotMatch(released,/data-loading-structure="pending"/);
+ const failed=runtime.renderBoard({...boardProps,columnPages:Object.fromEntries(queues.map(q=>[q,{tickets:[],total:0,hasMore:false,loading:false,...q==='open'?{error:new Error('failed')}:{}}])),stagePending:true,structurePending:true});
+ assert.doesNotMatch(failed,/mm-skeleton|data-loading-structure="pending"/);
+ assert.doesNotMatch(read('TicketKanbanView.tsx'),/useInitialLoadingPresentation|useQueuePresentation/);
+ assert.match(read('TicketsSection.tsx'),/stagePending=\{stagePending\}/);
+ assert.match(read('TicketKanbanBoard.tsx'),/stagePending=\{stagePending\}/);
+});
+
+
+test('a cancelled Kanban stage never revives on fast retry but real pending rows remain',()=>{
+ const columns=Object.fromEntries(queues.map(q=>[q,{tickets:[],total:0,hasMore:false,loading:true}]));
+ const cancelledQueuePresentations=new Set(['open']);
+ const pending=runtime.renderBoard({...boardProps,columnPages:columns,cancelledQueuePresentations,stagePending:true,structurePending:true});
+ const pendingOpen=pending.slice(pending.indexOf('column-open'),pending.indexOf('column-in_progress'));
+ assert.match(pendingOpen,/mm-loading-ticket-card/);assert.doesNotMatch(pendingOpen,/data-loading-structure="pending"/);
+ const success=runtime.renderBoard({...boardProps,tickets:[ticket],columnPages:{...columns,open:{tickets:[ticket],total:1,hasMore:false,loading:false,pagination}},cancelledQueuePresentations,stagePending:true,structurePending:true});
+ const readyOpen=success.slice(success.indexOf('column-open'),success.indexOf('column-in_progress'));
+ assert.ok(readyOpen.includes(ticket.subject));assert.doesNotMatch(readyOpen,/mm-skeleton|data-loading-structure="pending"/);
+ const section=read('TicketsSection.tsx');
+ assert.match(section,/const \[cancelledQueuePresentations, setCancelledQueuePresentations\] = useState/);
+ assert.match(section,/cancelledQueuePresentations=\{cancelledQueuePresentations\}/);
+ assert.match(section,/onCancelQueuePresentations=\{cancelQueuePresentations\}/);
+ assert.match(read('TicketKanbanView.tsx'),/if \(cancellationKey\) onCancelQueuePresentations\?\.\(cancellationKey\.split\(","\)\)/);
 });

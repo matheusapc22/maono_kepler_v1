@@ -1,3 +1,7 @@
+import { useTicketOptionalPresentation } from "./useTicketOptionalPresentation";
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
+import TicketOptionalPanelState from "./TicketOptionalPanelState";
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
@@ -22,7 +26,7 @@ type Detail = {
   canManage: boolean;
 };
 type List = { enabled: boolean; items: Case[]; nextCursor: string | null };
-type Props = { organizationId: string | number; canManage: boolean };
+type Props = { organizationId: string | number; canManage: boolean; structurePending?: boolean; stagePending?: boolean };
 const labels: Record<string, string> = {
   open: "Aberto",
   mitigating: "Em mitigação",
@@ -113,8 +117,10 @@ function HistoryData({ data }: { data: Record<string, unknown> }) {
     </dl>
   );
 }
-function Content({ organizationId, canManage }: Props) {
+function Content({ organizationId, canManage, structurePending = false, stagePending = false }: Props) {
   const endpoint = `/api/organizations/${organizationId}/ticket-cases`;
+  // Keep confirmed availability while same-context payloads refresh or recover.
+  const [available, setAvailable] = useState(false);
   const [list, setList] = useState<List | null>(null),
     [detail, setDetail] = useState<Detail | null>(null),
     [error, setError] = useState<ReturnType<typeof toTicketApiError> | null>(
@@ -165,7 +171,9 @@ function Content({ organizationId, canManage }: Props) {
         if (mounted.current && g === generation.current) apply(data);
       } catch (e) {
         if (mounted.current && g === generation.current && !c.signal.aborted) {
-          setError(toTicketApiError(e));
+          const failure = toTicketApiError(e);
+          setError(failure);
+          if (isRegionAccessDenied(failure)) { setAvailable(false); setPending(null); }
           setDetail(null);
           setList(null);
         }
@@ -180,7 +188,7 @@ function Content({ organizationId, canManage }: Props) {
       run<List>(
         `${endpoint}?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(query)}&after=${encodeURIComponent(after)}`,
         {},
-        setList,
+        value => { setList(value); setAvailable(value.enabled === true); },
       ),
     [endpoint, kind, query, run],
   );
@@ -235,11 +243,18 @@ function Content({ organizationId, canManage }: Props) {
       },
     );
   }
-  if (list?.enabled === false) return null;
+  const presentation = useTicketOptionalPresentation({ structurePending, stagePending, error });
+  if (!available) return <TicketOptionalPanelState
+    title="Incidentes e problemas"
+    error={list?.enabled === false ? null : error}
+    onRetry={() => void (pending && !isRegionAccessDenied(error) ? send(pending) : load())}
+    onRefresh={pending && !isRegionAccessDenied(error) ? () => void load() : undefined}
+  />;
   const writable = canManage && detail?.canManage;
   return (
     <details className="ticket-cases">
-      <summary>Incidentes e problemas</summary>
+      <summary><StaticLoadingText pending={presentation.structurePending}>Incidentes e problemas</StaticLoadingText></summary>
+      <div className="ticket-optional-panel-body" data-ticket-optional-body="" hidden={presentation.stagePending}>
       <p>
         Coordene a restauração e investigue causas. Cada chamado mantém sua
         própria validação.
@@ -671,6 +686,7 @@ function Content({ organizationId, canManage }: Props) {
           </details>
         </section>
       )}
+      </div>
     </details>
   );
 }

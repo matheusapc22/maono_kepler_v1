@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { useSession, type MaonoUser } from "../auth/session";
+import { StaticLoadingText, useInitialLoadingPresentation } from "../components/loading";
 import { AdminPageSkeleton, LoadingStatus, Skeleton } from "../components/loading/Skeleton";
 import { isRegionAccessDenied, isRegionAuthenticationError } from "../components/loading/region-loading-policy";
 import { useSkeletonCount } from "../components/loading/useSkeletonCount";
@@ -139,6 +140,14 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   const controllerRef = useRef<AbortController | null>(null);
   const isSuperAdmin = normalizeRole(user?.role) === "super_admin";
   const isRefreshing = Object.values(regions).some(region => region.pending);
+  const { structurePending } = useInitialLoadingPresentation({
+    pending: isRefreshing, hasData: Object.values(regions).some(region => region.loaded),
+    scopeKey: "admin-structure", failed: Boolean(error) || Object.values(regions).some(region => Boolean(region.error)),
+  });
+  const projectPresentation = useInitialLoadingPresentation({ pending: regions.projects.pending, hasData: regions.projects.loaded, scopeKey: "admin-projects", failed: Boolean(error || regions.projects.error) });
+  const organizationPresentation = useInitialLoadingPresentation({ pending: regions.organizations.pending, hasData: regions.organizations.loaded, scopeKey: "admin-organizations", failed: Boolean(error || regions.organizations.error) });
+  const userPresentation = useInitialLoadingPresentation({ pending: regions.users.pending, hasData: regions.users.loaded, scopeKey: "admin-users", failed: Boolean(error || regions.users.error) });
+  const presentationPending = projectPresentation.contentPending || organizationPresentation.contentPending || userPresentation.contentPending;
 
   const refreshAdminData = useCallback(async () => {
     const revision = ++requestRef.current;
@@ -236,27 +245,27 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
     return (
       <>
         <section className="mm-metrics-grid">
-          <AdminMetric label="Organizações" value={activeOrganizations.length} state={regions.organizations} />
-          <AdminMetric label="Projetos" value={activeProjects.length} state={regions.projects} />
-          <AdminMetric label="Usuários" value={activeUsers.length} state={regions.users} />
-          <AdminMetric label="Arquivos" value={totalFiles} state={regions.organizations} />
+          <AdminMetric label="Organizações" value={activeOrganizations.length} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />
+          <AdminMetric label="Projetos" value={activeProjects.length} state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending} />
+          <AdminMetric label="Usuários" value={activeUsers.length} state={regions.users} structurePending={structurePending} contentPending={userPresentation.contentPending} />
+          <AdminMetric label="Arquivos" value={totalFiles} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />
         </section>
 
         <section className="admin-command-grid">
           <article className="mm-card mm-section-card">
-            <h2>Gestão de Organizações</h2>
-            <p>Organizações, documentos, projetos e limites.</p>
-            <button className="mm-btn primary" type="button" onClick={() => setSection("organizations")}>Abrir organizações</button>
+            <h2><StaticLoadingText pending={structurePending}>Gestão de Organizações</StaticLoadingText></h2>
+            <p><StaticLoadingText pending={structurePending}>Organizações, documentos, projetos e limites.</StaticLoadingText></p>
+            <button className="mm-btn primary" type="button" onClick={() => setSection("organizations")}><StaticLoadingText pending={structurePending}>Abrir organizações</StaticLoadingText></button>
           </article>
           <article className="mm-card mm-section-card">
-            <h2>Projetos e Mapas</h2>
-            <p>Mapas, vínculos, previews e configurações.</p>
-            <button className="mm-btn" type="button" onClick={() => setSection("projects")}>Abrir projetos</button>
+            <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>
+            <p><StaticLoadingText pending={structurePending}>Mapas, vínculos, previews e configurações.</StaticLoadingText></p>
+            <button className="mm-btn" type="button" onClick={() => setSection("projects")}><StaticLoadingText pending={structurePending}>Abrir projetos</StaticLoadingText></button>
           </article>
           <article className="mm-card mm-section-card">
-            <h2>Auditoria</h2>
-            <p>Eventos, bloqueios e ações administrativas.</p>
-            <button className="mm-btn" type="button" onClick={() => setSection("audit")}>Abrir auditoria</button>
+            <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>
+            <p><StaticLoadingText pending={structurePending}>Eventos, bloqueios e ações administrativas.</StaticLoadingText></p>
+            <button className="mm-btn" type="button" onClick={() => setSection("audit")}><StaticLoadingText pending={structurePending}>Abrir auditoria</StaticLoadingText></button>
           </article>
         </section>
       </>
@@ -266,9 +275,9 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   function renderOrganizations() {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Gestão de Organizações</h2>
-        <p>Arquivos e documentos por organização.</p>
-        <Table state={regions.organizations}
+        <h2><StaticLoadingText pending={structurePending}>Gestão de Organizações</StaticLoadingText></h2>
+        <p><StaticLoadingText pending={structurePending}>Arquivos e documentos por organização.</StaticLoadingText></p>
+        <Table state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending}
           headers={["Organização", "Slug", "Pasta", "Projetos", "Usuários", "Arquivos", "Status"]}
           rows={organizations.map((org) => [
             org.name,
@@ -293,6 +302,9 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         loading={regions.users.pending}
         usersLoaded={regions.users.loaded}
         organizationsLoaded={regions.organizations.loaded}
+        structurePending={structurePending}
+        usersContentPending={userPresentation.contentPending}
+        organizationsContentPending={organizationPresentation.contentPending}
         initialOrganizationId={params.get("organization")}
         currentUserId={user?.id}
         isSuperAdmin={isSuperAdmin}
@@ -305,9 +317,9 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   function renderProjects() {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Projetos e Mapas</h2>
-        <p>Mapas, configurações, previews e vínculos.</p>
-        <Table state={regions.projects}
+        <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>
+        <p><StaticLoadingText pending={structurePending}>Mapas, configurações, previews e vínculos.</StaticLoadingText></p>
+        <Table state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending}
           headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]}
           rows={projects.map((project) => [
             project.name,
@@ -325,12 +337,12 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   function renderRequests() {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Solicitações</h2>
-        <p>Criação, revisão e suporte.</p>
+        <h2><StaticLoadingText pending={structurePending}>Solicitações</StaticLoadingText></h2>
+        <p><StaticLoadingText pending={structurePending}>Criação, revisão e suporte.</StaticLoadingText></p>
         <section className="mm-metrics-grid compact">
-          <article className="mm-card metric"><span>Abertas</span><strong>0</strong></article>
-          <article className="mm-card metric"><span>Em análise</span><strong>0</strong></article>
-          <article className="mm-card metric"><span>Concluídas</span><strong>0</strong></article>
+          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Abertas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
+          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Em análise</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
+          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Concluídas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
         </section>
       </section>
     );
@@ -339,12 +351,12 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   function renderAudit() {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Auditoria</h2>
-        <p>Eventos e ações administrativas.</p>
+        <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>
+        <p><StaticLoadingText pending={structurePending}>Eventos e ações administrativas.</StaticLoadingText></p>
         <div className="mm-audit-list">
-          <div><strong>admin.open</strong><span>Painel acessado por {roleLabel(user?.role)}.</span></div>
-          <div><strong>admin.files.redirect</strong><span>/admin/files redireciona para Gestão de Organizações.</span></div>
-          <div><strong>projects.thumbnail</strong><span>Preview vinculado ao projeto.</span></div>
+          <div><strong><StaticLoadingText pending={structurePending}>admin.open</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>{`Painel acessado por ${roleLabel(user?.role)}.`}</StaticLoadingText></span></div>
+          <div><strong><StaticLoadingText pending={structurePending}>admin.files.redirect</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>/admin/files redireciona para Gestão de Organizações.</StaticLoadingText></span></div>
+          <div><strong><StaticLoadingText pending={structurePending}>projects.thumbnail</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>Preview vinculado ao projeto.</StaticLoadingText></span></div>
         </div>
       </section>
     );
@@ -353,13 +365,13 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   function renderSystem() {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Sistema</h2>
-        <p>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</p>
+        <h2><StaticLoadingText pending={structurePending}>Sistema</StaticLoadingText></h2>
+        <p><StaticLoadingText pending={structurePending}>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</StaticLoadingText></p>
         <div className="mm-code-panel">
-          / = /projects<br />
-          /admin = painel administrativo<br />
-          /admin/files = /admin?section=organizations<br />
-          /api/projects/:slug/thumbnail = preview do projeto
+          <StaticLoadingText pending={structurePending}>/ = /projects</StaticLoadingText><br />
+          <StaticLoadingText pending={structurePending}>/admin = painel administrativo</StaticLoadingText><br />
+          <StaticLoadingText pending={structurePending}>/admin/files = /admin?section=organizations</StaticLoadingText><br />
+          <StaticLoadingText pending={structurePending}>/api/projects/:slug/thumbnail = preview do projeto</StaticLoadingText>
         </div>
       </section>
     );
@@ -381,8 +393,8 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         <div className="admin-brand">
           <span className="admin-brand-mark">M</span>
           <div>
-            <strong>Maõno Admin</strong>
-            <span>{roleLabel(user?.role)}</span>
+            <strong><StaticLoadingText pending={structurePending}>Maõno Admin</StaticLoadingText></strong>
+            <span><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>
           </div>
         </div>
 
@@ -395,28 +407,28 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
               onClick={() => setSection(item.section as AdminSection)}
             >
               <span>{item.icon}</span>
-              {item.label}
+              <StaticLoadingText pending={structurePending}>{item.label}</StaticLoadingText>
             </button>
           ))}
         </nav>
 
         <div className="admin-rail-footer">
-          <Link to="/projects" className="mm-btn">Voltar para Projects</Link>
-          <button type="button" className="mm-btn" onClick={handleLogout}>Sair</button>
+          <Link to="/projects" className="mm-btn"><StaticLoadingText pending={structurePending}>Voltar para Projects</StaticLoadingText></Link>
+          <button type="button" className="mm-btn" onClick={handleLogout}><StaticLoadingText pending={structurePending}>Sair</StaticLoadingText></button>
         </div>
       </aside>
 
       <section className="admin-main">
         <header className="mm-projects-topbar admin-topbar">
           <div>
-            <p className="mm-eyebrow">Administração Maõno</p>
-            <h1>{sectionTitle(section)}</h1>
-            <p>Acesso administrativo.</p>
+            <p className="mm-eyebrow"><StaticLoadingText pending={structurePending}>Administração Maõno</StaticLoadingText></p>
+            <h1><StaticLoadingText pending={structurePending}>{sectionTitle(section)}</StaticLoadingText></h1>
+            <p><StaticLoadingText pending={structurePending}>Acesso administrativo.</StaticLoadingText></p>
           </div>
           <div className="mm-topbar-actions">
-            <span className="mm-user-chip gold">{roleLabel(user?.role)}</span>
+            <span className="mm-user-chip gold"><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>
             <button type="button" className="mm-btn" onClick={refreshAdminData} disabled={isRefreshing}>
-              {isRefreshing ? "Atualizando..." : "Atualizar"}
+              <StaticLoadingText pending={structurePending}>{isRefreshing ? "Atualizando..." : "Atualizar"}</StaticLoadingText>
             </button>
           </div>
         </header>
@@ -429,7 +441,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
               <strong>{regionLabels[key]}: </strong>{state.error}
             </div>
           ))}
-          <LoadingStatus loading={isRefreshing} refreshing={Object.values(regions).some(region => region.loaded)} label="Carregando dados administrativos." refreshingLabel="Atualizando dados administrativos." />
+          <LoadingStatus loading={isRefreshing || presentationPending} refreshing={(regions.projects.pending && regions.projects.loaded && !projectPresentation.contentPending) || (regions.organizations.pending && regions.organizations.loaded && !organizationPresentation.contentPending) || (regions.users.pending && regions.users.loaded && !userPresentation.contentPending)} label="Carregando dados administrativos." refreshingLabel="Atualizando dados administrativos." />
           {renderActiveSection()}
         </div>
       </section>
@@ -437,23 +449,23 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   );
 }
 
-function AdminMetric({ label, value, state }: { label: string; value: number; state: AdminRegionState }) {
-  return <article className="mm-card metric" aria-busy={state.pending}>
-    <span>{label}</span>
-    {state.loaded ? <strong>{value}</strong> : state.pending ? <Skeleton width={54} height={30} /> : <strong aria-label="Indisponível">—</strong>}
+function AdminMetric({ label, value, state, structurePending, contentPending }: { label: string; value: number; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {
+  return <article className="mm-card metric" aria-busy={state.pending || contentPending}>
+    <span><StaticLoadingText pending={structurePending}>{label}</StaticLoadingText></span>
+    {contentPending ? <Skeleton width={54} height={30} /> : state.loaded ? <strong>{value}</strong> : <strong aria-label="Indisponível">—</strong>}
   </article>;
 }
 
-function Table({ headers, rows, state }: { headers: string[]; rows: string[][]; state: AdminRegionState }) {
+function Table({ headers, rows, state, structurePending, contentPending }: { headers: string[]; rows: string[][]; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {
   const skeletonRows = useSkeletonCount({ layout: "table", itemHeight: 45, reservedHeight: 260, maxCount: 10 });
   return (
-    <div className="mm-table-wrap" aria-busy={state.pending}>
+    <div className="mm-table-wrap" aria-busy={state.pending || contentPending}>
       <table>
         <thead>
-          <tr>{headers.map((header) => <th key={header} scope="col">{header}</th>)}</tr>
+          <tr>{headers.map((header) => <th key={header} scope="col"><StaticLoadingText pending={structurePending}>{header}</StaticLoadingText></th>)}</tr>
         </thead>
         <tbody>
-          {state.pending && !state.loaded ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
+          {contentPending ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
             <tr key={`pending-${rowIndex}`} aria-hidden="true">{headers.map((header, columnIndex) => <td key={header}><Skeleton width={`${52 + ((rowIndex + columnIndex) % 4) * 11}%`} height={12} /></td>)}</tr>
           )) : !state.loaded ? (
             <tr><td colSpan={headers.length}>Dados indisponíveis.</td></tr>

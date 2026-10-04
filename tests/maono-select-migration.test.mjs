@@ -1,3 +1,4 @@
+import { restoreTicketOptionalProgressiveLoading } from "./helpers/ticket-optional-progressive-preservation.mjs";
 import { restoreAdminProjectsProgressiveLoading } from "./helpers/admin-projects-progressive-preservation.mjs";
 import { restoreTicketDocumentsProgressiveLoading } from "./helpers/ticket-docs-progressive-preservation.mjs";
 import test from "node:test";
@@ -127,7 +128,7 @@ const consumers = {
 };
 for (const [path, contract] of Object.entries(consumers)) {
   test(`shared selector preserves all consumer logic: ${path}`, () => {
-    const source = restoreAdminProjectsProgressiveLoading(path, restoreTicketDocumentsProgressiveLoading(path, read(path)));
+    const source = restoreAdminProjectsProgressiveLoading(path, restoreTicketDocumentsProgressiveLoading(path, restoreTicketOptionalProgressiveLoading(path, read(path))));
     assert.equal((source.match(/<MaonoSelect\b/g) || []).length, contract.controls);
     if (contract.preserve) contract.preserve(source);
     else assert.equal(createHash("sha256").update(restoreMaonoSelect(contract.restore ? contract.restore(source) : source)).digest("hex"), contract.sha256);

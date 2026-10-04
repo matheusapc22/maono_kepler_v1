@@ -1,3 +1,4 @@
+import { StaticLoadingText } from "../../../components/loading";
 import { LoadingStatus } from "../../../components/loading/Skeleton";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import type { MouseEvent } from "react";
@@ -20,31 +21,33 @@ export function ProjectPageIcon({ name }: { name: IconName }) {
   return <svg className="mm-project-pages__icon" data-icon={name} viewBox={name === "idea" ? "0 0 36 36" : "0 0 24 24"} fill="none" stroke="currentColor" strokeWidth={name === "idea" ? 2 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={paths[name]} /></svg>;
 }
 
-export function ProjectPagesHeader({ section, canCreateMap, onNewMap, onHome }: {
+export function ProjectPagesHeader({ section, canCreateMap, onNewMap, onHome, structurePending = false }: {
   section: ProjectSectionKey;
   canCreateMap: boolean;
+  structurePending?: boolean;
   onNewMap: (event: MouseEvent<HTMLAnchorElement>) => void;
   onHome: () => void;
 }) {
   const copy = PROJECT_PAGE_COPY[section];
   return <div className="mm-project-pages__chrome">
     <nav className="mm-project-pages__breadcrumb" aria-label="Caminho da página">
-      <Link to="/projects" onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome(); }}>Início</Link>
+      <Link to="/projects" onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome(); }}><StaticLoadingText pending={structurePending}>Início</StaticLoadingText></Link>
       <ProjectPageIcon name="next" />
-      <span aria-current="page">{copy.title}</span>
+      <span aria-current="page"><StaticLoadingText pending={structurePending}>{copy.title}</StaticLoadingText></span>
     </nav>
     <header className="mm-project-pages__header">
       <div className="mm-project-pages__heading">
         <ProjectPageIcon name={copy.icon} />
-        <div><h1>{copy.title}</h1><p>{copy.description}</p></div>
+        <div><h1><StaticLoadingText pending={structurePending}>{copy.title}</StaticLoadingText></h1><p><StaticLoadingText pending={structurePending}>{copy.description}</StaticLoadingText></p></div>
       </div>
-      {canCreateMap ? <Link to="/maps/new/create" className="mm-project-pages__button is-primary mm-project-pages__new" onClick={onNewMap}><ProjectPageIcon name="plus" />Novo Projeto</Link> : null}
+      {canCreateMap ? <Link to="/maps/new/create" className="mm-project-pages__button is-primary mm-project-pages__new" onClick={onNewMap}><ProjectPageIcon name="plus" /><StaticLoadingText pending={structurePending}>Novo Projeto</StaticLoadingText></Link> : null}
     </header>
   </div>;
 }
 
-export function ProjectPageFiltersForm({ value, disabled, onChange, onApply, onClear }: {
+export function ProjectPageFiltersForm({ value, disabled, onChange, onApply, onClear, structurePending = false }: {
   value: ProjectPageFilters;
+  structurePending?: boolean;
   disabled: boolean;
   onChange: (filters: ProjectPageFilters) => void;
   onApply: () => void;
@@ -52,34 +55,34 @@ export function ProjectPageFiltersForm({ value, disabled, onChange, onApply, onC
 }) {
   return <form className="mm-project-pages__filters" aria-label="Filtros de projetos" onSubmit={event => { event.preventDefault(); onApply(); }}>
     <label className="mm-project-pages__field mm-project-pages__search">
-      <span>Buscar</span><span className="mm-project-pages__search-control"><ProjectPageIcon name="search" />
+      <span><StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText></span><span className="mm-project-pages__search-control"><ProjectPageIcon name="search" />
         <input type="search" placeholder="Nome do projeto..." value={value.search} onChange={event => onChange({ ...value, search: event.target.value })} disabled={disabled} />
       </span>
     </label>
-    <label className="mm-project-pages__field"><span>Status</span>
+    <label className="mm-project-pages__field"><span><StaticLoadingText pending={structurePending}>Status</StaticLoadingText></span>
       <MaonoSelect value={value.status} onChange={event => onChange({ ...value, status: event.target.value as ProjectPageFilters["status"] })} disabled={disabled}>
         <option value="all">Todos os status</option><option value="active">Ativos</option><option value="inactive">Inativos</option>
       </MaonoSelect>
     </label>
-    <label className="mm-project-pages__field"><span>Ordenar por</span>
+    <label className="mm-project-pages__field"><span><StaticLoadingText pending={structurePending}>Ordenar por</StaticLoadingText></span>
       <MaonoSelect value={value.order} onChange={event => onChange({ ...value, order: event.target.value as ProjectPageFilters["order"] })} disabled={disabled}>
         <option value="recent">Mais recentes</option><option value="oldest">Mais antigos</option>
       </MaonoSelect>
     </label>
-    <button type="submit" className="mm-project-pages__button is-primary" disabled={disabled}><ProjectPageIcon name="search" />Aplicar</button>
-    <button type="button" className="mm-project-pages__button" onClick={onClear} disabled={disabled}><ProjectPageIcon name="filter" />Limpar filtros</button>
+    <button type="submit" className="mm-project-pages__button is-primary" disabled={disabled}><ProjectPageIcon name="search" /><StaticLoadingText pending={structurePending}>Aplicar</StaticLoadingText></button>
+    <button type="button" className="mm-project-pages__button" onClick={onClear} disabled={disabled}><ProjectPageIcon name="filter" /><StaticLoadingText pending={structurePending}>Limpar filtros</StaticLoadingText></button>
   </form>;
 }
 
-export function ProjectPagePagination({ visibleCount, total, page, pageCount, pageSize, disabled, loading = false, refreshing = false, unavailable = false, onPage, onPageSize }: {
+export function ProjectPagePagination({ visibleCount, total, page, pageCount, pageSize, disabled, loading = false, refreshing = false, unavailable = false, structurePending = false, onPage, onPageSize }: {
   visibleCount: number; total: number; page: number; pageCount: number; pageSize: number;
-  loading?: boolean; refreshing?: boolean; unavailable?: boolean;
+  loading?: boolean; refreshing?: boolean; unavailable?: boolean; structurePending?: boolean;
   disabled: boolean; onPage: (page: number) => void; onPageSize: (size: number) => void;
 }) {
   return <footer className="mm-project-pages__footer">
     {loading ? <><p>{refreshing ? `Exibindo ${visibleCount}/${total}. Atualizando projetos.` : "Carregando projetos."}</p><LoadingStatus loading={loading} refreshing={refreshing} label="Carregando projetos." refreshingLabel="Atualizando projetos." /></> : unavailable ? <p role="status" aria-live="polite">Contagem de projetos indisponível.</p> : <p role="status" aria-live="polite" aria-atomic="true">Exibindo {visibleCount}/{total}.</p>}
     <nav className="mm-project-pages__pagination" aria-label="Paginação dos projetos">
-      <label>Itens por página<MaonoSelect value={pageSize} onChange={event => onPageSize(Number(event.target.value))} disabled={disabled}>
+      <label><StaticLoadingText pending={structurePending}>Itens por página</StaticLoadingText><MaonoSelect value={pageSize} onChange={event => onPageSize(Number(event.target.value))} disabled={disabled}>
         <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
       </MaonoSelect></label>
       <button type="button" className="mm-project-pages__button" aria-label="Página anterior" disabled={disabled || page <= 1} onClick={() => onPage(page - 1)}><ProjectPageIcon name="previous" /></button>

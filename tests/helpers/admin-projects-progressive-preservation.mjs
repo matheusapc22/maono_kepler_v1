@@ -161,7 +161,586 @@ const changes = {
   ]
 };
 
+// Exact inverse of the separately reviewed 80 ms structure / 260 ms content presentation.
+// Applied in reverse edit order before the original pinned-baseline inverse.
+const initialStageChanges = {
+  "src/pages/Admin.tsx": [
+    {
+      "before": "import { AdminPageSkeleton, LoadingStatus, Skeleton }",
+      "after": "import { StaticLoadingText, useInitialLoadingPresentation } from \"../components/loading\";\nimport { AdminPageSkeleton, LoadingStatus, Skeleton }"
+    },
+    {
+      "before": "  const isRefreshing = Object.values(regions).some(region => region.pending);",
+      "after": "  const isRefreshing = Object.values(regions).some(region => region.pending);\n  const { structurePending } = useInitialLoadingPresentation({\n    pending: isRefreshing, hasData: Object.values(regions).some(region => region.loaded),\n    scopeKey: \"admin-structure\", failed: Boolean(error) || Object.values(regions).some(region => Boolean(region.error)),\n  });\n  const projectPresentation = useInitialLoadingPresentation({ pending: regions.projects.pending, hasData: regions.projects.loaded, scopeKey: \"admin-projects\", failed: Boolean(error || regions.projects.error) });\n  const organizationPresentation = useInitialLoadingPresentation({ pending: regions.organizations.pending, hasData: regions.organizations.loaded, scopeKey: \"admin-organizations\", failed: Boolean(error || regions.organizations.error) });\n  const userPresentation = useInitialLoadingPresentation({ pending: regions.users.pending, hasData: regions.users.loaded, scopeKey: \"admin-users\", failed: Boolean(error || regions.users.error) });\n  const presentationPending = projectPresentation.contentPending || organizationPresentation.contentPending || userPresentation.contentPending;"
+    },
+    {
+      "before": "          <AdminMetric label=\"Organizações\" value={activeOrganizations.length} state={regions.organizations} />",
+      "after": "          <AdminMetric label=\"Organizações\" value={activeOrganizations.length} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />"
+    },
+    {
+      "before": "          <AdminMetric label=\"Projetos\" value={activeProjects.length} state={regions.projects} />",
+      "after": "          <AdminMetric label=\"Projetos\" value={activeProjects.length} state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending} />"
+    },
+    {
+      "before": "          <AdminMetric label=\"Usuários\" value={activeUsers.length} state={regions.users} />",
+      "after": "          <AdminMetric label=\"Usuários\" value={activeUsers.length} state={regions.users} structurePending={structurePending} contentPending={userPresentation.contentPending} />"
+    },
+    {
+      "before": "          <AdminMetric label=\"Arquivos\" value={totalFiles} state={regions.organizations} />",
+      "after": "          <AdminMetric label=\"Arquivos\" value={totalFiles} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />"
+    },
+    {
+      "before": "<Table state={regions.organizations}",
+      "after": "<Table state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending}"
+    },
+    {
+      "before": "<Table state={regions.projects}",
+      "after": "<Table state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending}"
+    },
+    {
+      "before": "        organizationsLoaded={regions.organizations.loaded}",
+      "after": "        organizationsLoaded={regions.organizations.loaded}\n        structurePending={structurePending}\n        usersContentPending={userPresentation.contentPending}\n        organizationsContentPending={organizationPresentation.contentPending}"
+    },
+    {
+      "before": "            <h2>Gestão de Organizações</h2>",
+      "after": "            <h2><StaticLoadingText pending={structurePending}>Gestão de Organizações</StaticLoadingText></h2>"
+    },
+    {
+      "before": "            <h2>Projetos e Mapas</h2>",
+      "after": "            <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>"
+    },
+    {
+      "before": "            <h2>Auditoria</h2>",
+      "after": "            <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>"
+    },
+    {
+      "before": "        <h2>Gestão de Organizações</h2>",
+      "after": "        <h2><StaticLoadingText pending={structurePending}>Gestão de Organizações</StaticLoadingText></h2>"
+    },
+    {
+      "before": "        <h2>Projetos e Mapas</h2>",
+      "after": "        <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>"
+    },
+    {
+      "before": "        <h2>Solicitações</h2>",
+      "after": "        <h2><StaticLoadingText pending={structurePending}>Solicitações</StaticLoadingText></h2>"
+    },
+    {
+      "before": "        <h2>Auditoria</h2>",
+      "after": "        <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>"
+    },
+    {
+      "before": "        <h2>Sistema</h2>",
+      "after": "        <h2><StaticLoadingText pending={structurePending}>Sistema</StaticLoadingText></h2>"
+    },
+    {
+      "before": "            <p>Organizações, documentos, projetos e limites.</p>",
+      "after": "            <p><StaticLoadingText pending={structurePending}>Organizações, documentos, projetos e limites.</StaticLoadingText></p>"
+    },
+    {
+      "before": "            <p>Mapas, vínculos, previews e configurações.</p>",
+      "after": "            <p><StaticLoadingText pending={structurePending}>Mapas, vínculos, previews e configurações.</StaticLoadingText></p>"
+    },
+    {
+      "before": "            <p>Eventos, bloqueios e ações administrativas.</p>",
+      "after": "            <p><StaticLoadingText pending={structurePending}>Eventos, bloqueios e ações administrativas.</StaticLoadingText></p>"
+    },
+    {
+      "before": "        <p>Arquivos e documentos por organização.</p>",
+      "after": "        <p><StaticLoadingText pending={structurePending}>Arquivos e documentos por organização.</StaticLoadingText></p>"
+    },
+    {
+      "before": "        <p>Mapas, configurações, previews e vínculos.</p>",
+      "after": "        <p><StaticLoadingText pending={structurePending}>Mapas, configurações, previews e vínculos.</StaticLoadingText></p>"
+    },
+    {
+      "before": "        <p>Criação, revisão e suporte.</p>",
+      "after": "        <p><StaticLoadingText pending={structurePending}>Criação, revisão e suporte.</StaticLoadingText></p>"
+    },
+    {
+      "before": "        <p>Eventos e ações administrativas.</p>",
+      "after": "        <p><StaticLoadingText pending={structurePending}>Eventos e ações administrativas.</StaticLoadingText></p>"
+    },
+    {
+      "before": "        <p>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</p>",
+      "after": "        <p><StaticLoadingText pending={structurePending}>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</StaticLoadingText></p>"
+    },
+    {
+      "before": "            <p>Acesso administrativo.</p>",
+      "after": "            <p><StaticLoadingText pending={structurePending}>Acesso administrativo.</StaticLoadingText></p>"
+    },
+    {
+      "before": "<strong>Maõno Admin</strong>",
+      "after": "<strong><StaticLoadingText pending={structurePending}>Maõno Admin</StaticLoadingText></strong>"
+    },
+    {
+      "before": "<span>{roleLabel(user?.role)}</span>",
+      "after": "<span><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>"
+    },
+    {
+      "before": "              {item.label}",
+      "after": "              <StaticLoadingText pending={structurePending}>{item.label}</StaticLoadingText>"
+    },
+    {
+      "before": "<p className=\"mm-eyebrow\">Administração Maõno</p>",
+      "after": "<p className=\"mm-eyebrow\"><StaticLoadingText pending={structurePending}>Administração Maõno</StaticLoadingText></p>"
+    },
+    {
+      "before": "<h1>{sectionTitle(section)}</h1>",
+      "after": "<h1><StaticLoadingText pending={structurePending}>{sectionTitle(section)}</StaticLoadingText></h1>"
+    },
+    {
+      "before": "<span className=\"mm-user-chip gold\">{roleLabel(user?.role)}</span>",
+      "after": "<span className=\"mm-user-chip gold\"><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>"
+    },
+    {
+      "before": "<LoadingStatus loading={isRefreshing}",
+      "after": "<LoadingStatus loading={isRefreshing || presentationPending}"
+    },
+    {
+      "before": "function AdminMetric({ label, value, state }: { label: string; value: number; state: AdminRegionState }) {\n  return <article className=\"mm-card metric\" aria-busy={state.pending}>\n    <span>{label}</span>\n    {state.loaded ? <strong>{value}</strong> : state.pending ? <Skeleton width={54} height={30} /> : <strong aria-label=\"Indisponível\">—</strong>}",
+      "after": "function AdminMetric({ label, value, state, structurePending, contentPending }: { label: string; value: number; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {\n  return <article className=\"mm-card metric\" aria-busy={state.pending || contentPending}>\n    <span><StaticLoadingText pending={structurePending}>{label}</StaticLoadingText></span>\n    {contentPending ? <Skeleton width={54} height={30} /> : state.loaded ? <strong>{value}</strong> : <strong aria-label=\"Indisponível\">—</strong>}"
+    },
+    {
+      "before": "function Table({ headers, rows, state }: { headers: string[]; rows: string[][]; state: AdminRegionState }) {",
+      "after": "function Table({ headers, rows, state, structurePending, contentPending }: { headers: string[]; rows: string[][]; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {"
+    },
+    {
+      "before": "<div className=\"mm-table-wrap\" aria-busy={state.pending}>",
+      "after": "<div className=\"mm-table-wrap\" aria-busy={state.pending || contentPending}>"
+    },
+    {
+      "before": "<th key={header} scope=\"col\">{header}</th>",
+      "after": "<th key={header} scope=\"col\"><StaticLoadingText pending={structurePending}>{header}</StaticLoadingText></th>"
+    },
+    {
+      "before": "{state.pending && !state.loaded ? Array.from",
+      "after": "{contentPending ? Array.from"
+    },
+    {
+      "before": ">Abrir organizações<",
+      "after": "><StaticLoadingText pending={structurePending}>Abrir organizações</StaticLoadingText><"
+    },
+    {
+      "before": ">Abrir projetos<",
+      "after": "><StaticLoadingText pending={structurePending}>Abrir projetos</StaticLoadingText><"
+    },
+    {
+      "before": ">Abrir auditoria<",
+      "after": "><StaticLoadingText pending={structurePending}>Abrir auditoria</StaticLoadingText><"
+    },
+    {
+      "before": ">Voltar para Projects<",
+      "after": "><StaticLoadingText pending={structurePending}>Voltar para Projects</StaticLoadingText><"
+    },
+    {
+      "before": ">Sair<",
+      "after": "><StaticLoadingText pending={structurePending}>Sair</StaticLoadingText><"
+    },
+    {
+      "before": "<span>Abertas</span><strong>0</strong>",
+      "after": "<span><StaticLoadingText pending={structurePending}>Abertas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong>"
+    },
+    {
+      "before": "<span>Em análise</span><strong>0</strong>",
+      "after": "<span><StaticLoadingText pending={structurePending}>Em análise</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong>"
+    },
+    {
+      "before": "<span>Concluídas</span><strong>0</strong>",
+      "after": "<span><StaticLoadingText pending={structurePending}>Concluídas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong>"
+    },
+    {
+      "before": "{isRefreshing ? \"Atualizando...\" : \"Atualizar\"}",
+      "after": "<StaticLoadingText pending={structurePending}>{isRefreshing ? \"Atualizando...\" : \"Atualizar\"}</StaticLoadingText>"
+    },
+    {
+      "before": ">admin.open<",
+      "after": "><StaticLoadingText pending={structurePending}>admin.open</StaticLoadingText><"
+    },
+    {
+      "before": ">admin.files.redirect<",
+      "after": "><StaticLoadingText pending={structurePending}>admin.files.redirect</StaticLoadingText><"
+    },
+    {
+      "before": ">projects.thumbnail<",
+      "after": "><StaticLoadingText pending={structurePending}>projects.thumbnail</StaticLoadingText><"
+    },
+    {
+      "before": ">/admin/files redireciona para Gestão de Organizações.<",
+      "after": "><StaticLoadingText pending={structurePending}>/admin/files redireciona para Gestão de Organizações.</StaticLoadingText><"
+    },
+    {
+      "before": ">Preview vinculado ao projeto.<",
+      "after": "><StaticLoadingText pending={structurePending}>Preview vinculado ao projeto.</StaticLoadingText><"
+    },
+    {
+      "before": "<span>Painel acessado por {roleLabel(user?.role)}.</span>",
+      "after": "<span><StaticLoadingText pending={structurePending}>{`Painel acessado por ${roleLabel(user?.role)}.`}</StaticLoadingText></span>"
+    },
+    {
+      "before": "/ = /projects<br />",
+      "after": "<StaticLoadingText pending={structurePending}>/ = /projects</StaticLoadingText><br />"
+    },
+    {
+      "before": "/admin = painel administrativo<br />",
+      "after": "<StaticLoadingText pending={structurePending}>/admin = painel administrativo</StaticLoadingText><br />"
+    },
+    {
+      "before": "/admin/files = /admin?section=organizations<br />",
+      "after": "<StaticLoadingText pending={structurePending}>/admin/files = /admin?section=organizations</StaticLoadingText><br />"
+    },
+    {
+      "before": "          /api/projects/:slug/thumbnail = preview do projeto",
+      "after": "          <StaticLoadingText pending={structurePending}>/api/projects/:slug/thumbnail = preview do projeto</StaticLoadingText>"
+    },
+    {
+      "before": "refreshing={Object.values(regions).some(region => region.loaded)}",
+      "after": "refreshing={(regions.projects.pending && regions.projects.loaded && !projectPresentation.contentPending) || (regions.organizations.pending && regions.organizations.loaded && !organizationPresentation.contentPending) || (regions.users.pending && regions.users.loaded && !userPresentation.contentPending)}"
+    }
+  ],
+  "src/pages/Admin/components/AdminUserManagerLegacy.tsx": [
+    {
+      "before": "import { Skeleton }",
+      "after": "import { StaticLoadingText } from \"../../../components/loading\";\nimport { Skeleton }"
+    },
+    {
+      "before": "  organizationsLoaded = true,",
+      "after": "  organizationsLoaded = true,\n  structurePending = false,\n  usersContentPending = false,\n  organizationsContentPending = false,"
+    },
+    {
+      "before": "  organizationsLoaded?: boolean;",
+      "after": "  organizationsLoaded?: boolean;\n  structurePending?: boolean;\n  usersContentPending?: boolean;\n  organizationsContentPending?: boolean;"
+    },
+    {
+      "before": ">Usuários e Permissões<",
+      "after": "><StaticLoadingText pending={structurePending}>Usuários e Permissões</StaticLoadingText><"
+    },
+    {
+      "before": "            Gerencie contas da plataforma, vínculos organizacionais e os limites\n            da delegação de acessos.",
+      "after": "            <StaticLoadingText pending={structurePending}>Gerencie contas da plataforma, vínculos organizacionais e os limites da delegação de acessos.</StaticLoadingText>"
+    },
+    {
+      "before": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          Buscar\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          Organização\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          Perfil\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          Status\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        ",
+      "after": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          Organização\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          Perfil\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          Status\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        "
+    },
+    {
+      "before": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          Organização\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          Perfil\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          Status\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        ",
+      "after": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Organização</StaticLoadingText>\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          Perfil\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          Status\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        "
+    },
+    {
+      "before": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Organização</StaticLoadingText>\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          Perfil\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          Status\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        ",
+      "after": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Organização</StaticLoadingText>\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText>\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          Status\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        "
+    },
+    {
+      "before": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Organização</StaticLoadingText>\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText>\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          Status\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        ",
+      "after": "<div className=\"admin-user-filters\" aria-label=\"Filtros de usuários\">\n        <label className=\"wide\">\n          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>\n          <input\n            type=\"search\"\n            value={searchQuery}\n            onChange={(event) => setSearchQuery(event.target.value)}\n            placeholder=\"Nome, e-mail, organização ou perfil\"\n          />\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Organização</StaticLoadingText>\n          <MaonoSelect\n            value={organizationFilter}\n            disabled={!organizationsLoaded}\n            onChange={(event) => setOrganizationFilter(event.target.value)}\n          >\n            <option value=\"all\">Todas</option>\n            {organizations.map((organization) => (\n              <option key={organization.id} value={organization.id}>\n                {organization.name}\n              </option>\n            ))}\n          </MaonoSelect>\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText>\n          <MaonoSelect\n            value={profileFilter}\n            onChange={(event) => setProfileFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"super_admin\">Super Admin</option>\n            <option value=\"admin\">Admin</option>\n            <option value=\"owner\">Owner</option>\n            <option value=\"editor\">Editor</option>\n            <option value=\"viewer\">Viewer</option>\n          </MaonoSelect>\n        </label>\n        <label>\n          <StaticLoadingText pending={structurePending}>Status</StaticLoadingText>\n          <MaonoSelect\n            value={statusFilter}\n            onChange={(event) => setStatusFilter(event.target.value)}\n          >\n            <option value=\"all\">Todos</option>\n            <option value=\"active\">Ativos</option>\n            <option value=\"inactive\">Inativos</option>\n          </MaonoSelect>\n        </label>\n        "
+    },
+    {
+      "before": "disabled={!organizationsLoaded}",
+      "after": "disabled={!organizationsLoaded || organizationsContentPending}"
+    },
+    {
+      "before": "{organizations.map((organization) => (",
+      "after": "{(organizationsContentPending ? [] : organizations).map((organization) => ("
+    },
+    {
+      "before": "{usersLoaded ? <>{filteredUsers.length} de {users.length} usuário(s)</> : loading ? \"Carregando usuários.\" : \"Contagem indisponível.\"}",
+      "after": "{usersContentPending ? \"Carregando usuários.\" : usersLoaded ? <>{filteredUsers.length} de {users.length} usuário(s)</> : loading ? \"Carregando usuários.\" : \"Contagem indisponível.\"}"
+    },
+    {
+      "before": "<div className=\"admin-users-table\" aria-busy={loading}>",
+      "after": "<div className=\"admin-users-table\" aria-busy={loading || usersContentPending}>"
+    },
+    {
+      "before": "<th scope=\"col\">Nome</th>",
+      "after": "<th scope=\"col\"><StaticLoadingText pending={structurePending}>Nome</StaticLoadingText></th>"
+    },
+    {
+      "before": "<th scope=\"col\">E-mail</th>",
+      "after": "<th scope=\"col\"><StaticLoadingText pending={structurePending}>E-mail</StaticLoadingText></th>"
+    },
+    {
+      "before": "<th scope=\"col\">Perfil</th>",
+      "after": "<th scope=\"col\"><StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText></th>"
+    },
+    {
+      "before": "<th scope=\"col\">Projetos</th>",
+      "after": "<th scope=\"col\"><StaticLoadingText pending={structurePending}>Projetos</StaticLoadingText></th>"
+    },
+    {
+      "before": "<th scope=\"col\">Status</th>",
+      "after": "<th scope=\"col\"><StaticLoadingText pending={structurePending}>Status</StaticLoadingText></th>"
+    },
+    {
+      "before": "<th scope=\"col\">Ações</th>",
+      "after": "<th scope=\"col\"><StaticLoadingText pending={structurePending}>Ações</StaticLoadingText></th>"
+    },
+    {
+      "before": "{loading && !usersLoaded ? Array.from",
+      "after": "{usersContentPending || loading && !usersLoaded ? Array.from"
+    },
+    {
+      "before": "{usersLoaded && filteredUsers.map",
+      "after": "{usersLoaded && !usersContentPending && filteredUsers.map"
+    },
+    {
+      "before": "{usersLoaded && filteredUsers.length === 0",
+      "after": "{usersLoaded && !usersContentPending && filteredUsers.length === 0"
+    },
+    {
+      "before": "{!loading && !usersLoaded ? <tr>",
+      "after": "{!loading && !usersContentPending && !usersLoaded ? <tr>"
+    },
+    {
+      "before": "          ＋ Novo usuário\n",
+      "after": "          <StaticLoadingText pending={structurePending}>＋ Novo usuário</StaticLoadingText>\n"
+    }
+  ],
+  "src/pages/Projects.tsx": [
+    {
+      "before": "  useInitialBootReadiness,",
+      "after": "  useInitialBootReadiness,\n  useInitialLoadingPresentation,"
+    },
+    {
+      "before": "  const loginProjectsReady =",
+      "after": "  const projectPresentation = useInitialLoadingPresentation({\n    pending: !loading && authenticated && Boolean(activeOrganizationId) && isProjectSection(sidebarSection) &&\n      (projectsLoading || (loadedProjectSection !== sidebarSection && !projectsError)),\n    hasData: projectContextIsCurrent && projectDataKey === JSON.stringify([activeOrganizationKey, sidebarSection]),\n    scopeKey: JSON.stringify([user?.id, activeOrganizationKey, sidebarSection]),\n    failed: Boolean(projectsError),\n    cancelled: !authenticated || !activeOrganizationId || !isProjectSection(sidebarSection),\n  });\n  const loginProjectsReady ="
+    },
+    {
+      "before": "            section={sidebarSection}\n            canCreateMap={canCreateMap}",
+      "after": "            section={sidebarSection}\n            structurePending={projectPresentation.structurePending}\n            canCreateMap={canCreateMap}"
+    },
+    {
+      "before": "                error={projectsError}",
+      "after": "                structurePending={projectPresentation.structurePending}\n                contentPending={projectPresentation.contentPending}\n                error={projectsError}"
+    },
+    {
+      "before": "    failed: Boolean(projectsError),",
+      "after": "    failed: projectContextIsCurrent && loadedProjectSection === sidebarSection && Boolean(projectsError),"
+    },
+    {
+      "before": "          activeProjectsCount={activeProjectsCount}",
+      "after": "          activeProjectsCount={activeProjectsCount}\n          projectsUnavailable={Boolean(projectsError)}"
+    }
+  ],
+  "src/pages/Projects/components/ProjectsSection.tsx": [
+    {
+      "before": "  loaded?: boolean;",
+      "after": "  loaded?: boolean;\n  structurePending?: boolean;\n  contentPending?: boolean;"
+    },
+    {
+      "before": "  loaded = projects.length > 0 || !loading,",
+      "after": "  loaded = projects.length > 0 || !loading,\n  structurePending = false,\n  contentPending = loading && !loaded,"
+    },
+    {
+      "before": "      <ProjectPageFiltersForm\n        value={draftFilters}",
+      "after": "      <ProjectPageFiltersForm\n        structurePending={structurePending}\n        value={draftFilters}"
+    },
+    {
+      "before": "{loading && !loaded ? <ProjectGridSkeleton",
+      "after": "{contentPending ? <ProjectGridSkeleton"
+    },
+    {
+      "before": "        loading={loading}\n        refreshing={loaded}",
+      "after": "        structurePending={structurePending}\n        loading={loading || contentPending}\n        refreshing={loaded && !contentPending}"
+    },
+    {
+      "before": "        disabled={loading || Boolean(error)}",
+      "after": "        disabled={loading || contentPending || Boolean(error)}"
+    },
+    {
+      "before": "{contentPending ? <ProjectGridSkeleton pageSize={pageSize} announce={false} className=\"mm-project-pages__grid\" /> : !loaded && error ? null : filteredProjects.length === 0 ? <section className=\"mm-project-pages__empty\" aria-busy={loading}>",
+      "after": "{contentPending ? <ProjectGridSkeleton pageSize={pageSize} announce={false} className=\"mm-project-pages__grid\" /> : null}\n      {/* Ready cards stay mounted so thumbnail requests never wait for presentation. */}\n      {contentPending && !loaded || !loaded && error ? null : filteredProjects.length === 0 ? <section className=\"mm-project-pages__empty\" aria-busy={loading || contentPending} style={contentPending ? { display: \"none\" } : undefined}>"
+    },
+    {
+      "before": "        className=\"mm-project-grid mm-project-pages__grid\"\n        aria-busy={loading}",
+      "after": "        className=\"mm-project-grid mm-project-pages__grid\"\n        style={contentPending ? { display: \"none\" } : undefined}\n        aria-busy={loading || contentPending}"
+    },
+    {
+      "before": "            project={project}\n            canSave={canProjectSave(project)}",
+      "after": "            project={project}\n            initialPresentationPending={contentPending}\n            canSave={canProjectSave(project)}"
+    },
+    {
+      "before": "import { ProjectGridSkeleton } from \"../../../components/loading/Skeleton\";",
+      "after": "import { ProjectGridSkeleton } from \"../../../components/loading/Skeleton\";\nimport { useSkeletonCount } from \"../../../components/loading/useSkeletonCount\";"
+    },
+    {
+      "before": "  const [pageSize, setPageSize] = useState(10);",
+      "after": "  const [pageSize, setPageSize] = useState(10);\n  const initialPreviewCount = useSkeletonCount({ layout: \"grid\", pageSize });"
+    },
+    {
+      "before": "{visibleProjects.map((project) => (",
+      "after": "{visibleProjects.map((project, index) => ("
+    },
+    {
+      "before": "initialPresentationPending={contentPending}",
+      "after": "initialPresentationPending={contentPending && index < initialPreviewCount}"
+    }
+  ],
+  "src/pages/Projects/components/ProjectPagesUi.tsx": [
+    {
+      "before": "import { LoadingStatus }",
+      "after": "import { StaticLoadingText } from \"../../../components/loading\";\nimport { LoadingStatus }"
+    },
+    {
+      "before": "export function ProjectPagesHeader({ section, canCreateMap, onNewMap, onHome }: {",
+      "after": "export function ProjectPagesHeader({ section, canCreateMap, onNewMap, onHome, structurePending = false }: {"
+    },
+    {
+      "before": "  canCreateMap: boolean;",
+      "after": "  canCreateMap: boolean;\n  structurePending?: boolean;"
+    },
+    {
+      "before": "}>Início</Link>",
+      "after": "}><StaticLoadingText pending={structurePending}>Início</StaticLoadingText></Link>"
+    },
+    {
+      "before": "<span aria-current=\"page\">{copy.title}</span>",
+      "after": "<span aria-current=\"page\"><StaticLoadingText pending={structurePending}>{copy.title}</StaticLoadingText></span>"
+    },
+    {
+      "before": "<div><h1>{copy.title}</h1><p>{copy.description}</p></div>",
+      "after": "<div><h1><StaticLoadingText pending={structurePending}>{copy.title}</StaticLoadingText></h1><p><StaticLoadingText pending={structurePending}>{copy.description}</StaticLoadingText></p></div>"
+    },
+    {
+      "before": "export function ProjectPageFiltersForm({ value, disabled, onChange, onApply, onClear }: {",
+      "after": "export function ProjectPageFiltersForm({ value, disabled, onChange, onApply, onClear, structurePending = false }: {"
+    },
+    {
+      "before": "  value: ProjectPageFilters;",
+      "after": "  value: ProjectPageFilters;\n  structurePending?: boolean;"
+    },
+    {
+      "before": ">Buscar<",
+      "after": "><StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText><"
+    },
+    {
+      "before": ">Status<",
+      "after": "><StaticLoadingText pending={structurePending}>Status</StaticLoadingText><"
+    },
+    {
+      "before": ">Ordenar por<",
+      "after": "><StaticLoadingText pending={structurePending}>Ordenar por</StaticLoadingText><"
+    },
+    {
+      "before": "export function ProjectPagePagination({ visibleCount, total, page, pageCount, pageSize, disabled, loading = false, refreshing = false, unavailable = false, onPage, onPageSize }: {",
+      "after": "export function ProjectPagePagination({ visibleCount, total, page, pageCount, pageSize, disabled, loading = false, refreshing = false, unavailable = false, structurePending = false, onPage, onPageSize }: {"
+    },
+    {
+      "before": "  loading?: boolean; refreshing?: boolean; unavailable?: boolean;",
+      "after": "  loading?: boolean; refreshing?: boolean; unavailable?: boolean; structurePending?: boolean;"
+    },
+    {
+      "before": "<label>Itens por página<MaonoSelect",
+      "after": "<label><StaticLoadingText pending={structurePending}>Itens por página</StaticLoadingText><MaonoSelect"
+    },
+    {
+      "before": " />Novo Projeto</",
+      "after": " /><StaticLoadingText pending={structurePending}>Novo Projeto</StaticLoadingText></"
+    },
+    {
+      "before": " />Aplicar</",
+      "after": " /><StaticLoadingText pending={structurePending}>Aplicar</StaticLoadingText></"
+    },
+    {
+      "before": " />Limpar filtros</",
+      "after": " /><StaticLoadingText pending={structurePending}>Limpar filtros</StaticLoadingText></"
+    }
+  ],
+  "src/pages/ProjectsSidebar.tsx": [
+    {
+      "before": "import { Link } from \"react-router\";",
+      "after": "import { Link } from \"react-router\";\nimport { StaticLoadingText, useInitialLoadingPresentation } from \"../components/loading\";"
+    },
+    {
+      "before": "function SectionTitle({\n  children,\n  expanded,",
+      "after": "function SectionTitle({\n  children,\n  expanded,\n  structurePending,"
+    },
+    {
+      "before": "  children: React.ReactNode;\n  expanded: boolean;",
+      "after": "  children: string;\n  expanded: boolean;\n  structurePending: boolean;"
+    },
+    {
+      "before": "<div className=\"mm-sidebar-title\">{children}</div>",
+      "after": "<div className=\"mm-sidebar-title\"><StaticLoadingText pending={structurePending}>{children}</StaticLoadingText></div>"
+    },
+    {
+      "before": "function ItemButton({\n  item,\n  active,\n  expanded,",
+      "after": "function ItemButton({\n  item,\n  active,\n  expanded,\n  structurePending,\n  contentPending,"
+    },
+    {
+      "before": "  active?: boolean;\n  expanded: boolean;",
+      "after": "  active?: boolean;\n  expanded: boolean;\n  structurePending: boolean;\n  contentPending: boolean;"
+    },
+    {
+      "before": "<span className=\"mm-sidebar-label\">{item.label}</span>",
+      "after": "<span className=\"mm-sidebar-label\"><StaticLoadingText pending={structurePending}>{item.label}</StaticLoadingText></span>"
+    },
+    {
+      "before": "<span className=\"mm-sidebar-count\">{item.count}</span>",
+      "after": "<span className=\"mm-sidebar-count\"><StaticLoadingText pending={contentPending}>{item.count}</StaticLoadingText></span>"
+    },
+    {
+      "before": "  const [expanded, setExpanded] = useState(true);",
+      "after": "  const [expanded, setExpanded] = useState(true);\n  const { structurePending, contentPending } = useInitialLoadingPresentation({\n    pending: activeProjectsCount === null, hasData: activeProjectsCount !== null,\n    scopeKey: JSON.stringify([user?.id, activeOrganization?.id]),\n    cancelled: !user || !activeOrganization,\n  });"
+    },
+    {
+      "before": "<strong title={userIdentity}>{userIdentity}</strong>",
+      "after": "<strong title={userIdentity}><StaticLoadingText pending={structurePending}>{userIdentity}</StaticLoadingText></strong>"
+    },
+    {
+      "before": "<span title={user?.email}>{user?.email}</span>",
+      "after": "<span title={user?.email}><StaticLoadingText pending={structurePending}>{user?.email || \"\"}</StaticLoadingText></span>"
+    },
+    {
+      "before": "<SectionTitle expanded={expanded}>",
+      "after": "<SectionTitle expanded={expanded} structurePending={structurePending}>"
+    },
+    {
+      "before": "                    item={item}\n                    expanded={expanded}",
+      "after": "                    item={item}\n                    structurePending={structurePending}\n                    contentPending={contentPending}\n                    expanded={expanded}"
+    },
+    {
+      "before": ">Maõno Maps<",
+      "after": "><StaticLoadingText pending={structurePending}>Maõno Maps</StaticLoadingText><"
+    },
+    {
+      "before": ">Sair<",
+      "after": "><StaticLoadingText pending={structurePending}>Sair</StaticLoadingText><"
+    },
+    {
+      "before": "  activeProjectsCount: number | null;",
+      "after": "  activeProjectsCount: number | null;\n  projectsUnavailable?: boolean;"
+    },
+    {
+      "before": "  activeProjectsCount,\n  searchQuery,",
+      "after": "  activeProjectsCount,\n  projectsUnavailable = false,\n  searchQuery,"
+    },
+    {
+      "before": "    cancelled: !user || !activeOrganization,",
+      "after": "    cancelled: !user || !activeOrganization, failed: projectsUnavailable,"
+    }
+  ],
+  "src/pages/Projects/components/ProjectCard.tsx": [
+    {
+      "before": "  opening?: boolean;",
+      "after": "  opening?: boolean;\n  initialPresentationPending?: boolean;"
+    },
+    {
+      "before": "  opening = false,",
+      "after": "  opening = false,\n  initialPresentationPending = false,"
+    },
+    {
+      "before": "loading={showGenerationSvg ? \"eager\" : \"lazy\"}",
+      "after": "loading={initialPresentationPending || showGenerationSvg ? \"eager\" : \"lazy\"}"
+    }
+  ]
+};
+
 export function restoreAdminProjectsProgressiveLoading(path, source) {
+  for (const { before, after } of [...(initialStageChanges[path] || [])].reverse()) {
+    assert.equal(source.split(after).length - 1, 1, `exact approved initial-presentation edit: ${path}`);
+    source = source.replace(after, before);
+  }
   for (const { before, after } of changes[path] || []) {
     assert.equal(source.split(after).length - 1, 1, `exact approved progressive-loading edit: ${path}`);
     source = source.replace(after, before);

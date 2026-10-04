@@ -23,6 +23,7 @@ type TableSkeletonProps = {
   className?: string;
   pageSize?: number;
   knownCount?: number;
+  structurePending?: boolean;
 };
 
 type CountProps = {
@@ -101,12 +102,34 @@ export function Skeleton({
   );
 }
 
+/**
+ * A permanent inline span lets the actual text reserve its exact font/wrapping
+ * geometry. Masking is visual only: existing labels and buttons keep their one
+ * accessible name, and the decorative presentation adds no focusable element.
+ * Use only around text already authorized/rendered by the owning region.
+ */
+export function StaticLoadingText({
+  pending,
+  children,
+  className = "",
+}: {
+  pending: boolean;
+  children: string | number | null | undefined;
+  className?: string;
+}) {
+  return <span
+    className={`mm-static-loading-text${pending ? " is-pending" : ""} ${className}`.trim()}
+    data-loading-structure={pending ? "pending" : undefined}
+  >{children}</span>;
+}
+
 export function TableSkeleton({
   headers,
   rows,
   className = "",
   pageSize,
   knownCount,
+  structurePending = false,
 }: TableSkeletonProps) {
   const estimatedRows = useSkeletonCount({ layout: "table", pageSize, knownCount });
   const rowCount = rows ?? estimatedRows;
@@ -118,7 +141,7 @@ export function TableSkeleton({
         <thead>
           <tr>
             {headers.map((header) => (
-              <th key={header} scope="col">{header}</th>
+              <th key={header} scope="col"><StaticLoadingText pending={structurePending}>{header}</StaticLoadingText></th>
             ))}
           </tr>
         </thead>
@@ -250,6 +273,8 @@ function ProjectsLoadingSidebar() {
   );
 }
 
+// A route fallback waits for real module/auth availability. It never starts a
+// second presentation clock or reveals a title that the mounted route remasks.
 export function ProjectsPageSkeleton() {
   return (
     <>
@@ -259,7 +284,7 @@ export function ProjectsPageSkeleton() {
         <section className="mm-projects-main">
           <header className="mm-projects-topbar">
             <div className="mm-skeleton-stack mm-skeleton-topbar-copy">
-              <h1>Projetos</h1>
+              <h1><StaticLoadingText pending>Projetos</StaticLoadingText></h1>
               <Skeleton width={160} height={12} />
             </div>
             <Skeleton width={112} height={38} radius={9} />
@@ -279,9 +304,10 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "organizations") {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Organizações</h2>
+        <h2><StaticLoadingText pending>Organizações</StaticLoadingText></h2>
         <Skeleton width={260} height={12} />
         <TableSkeleton
+          structurePending
           headers={["Organização", "Slug", "Pasta", "Projetos", "Usuários", "Arquivos", "Status"]}
         />
       </section>
@@ -291,9 +317,9 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "users") {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Usuários</h2>
+        <h2><StaticLoadingText pending>Usuários</StaticLoadingText></h2>
         <Skeleton width={240} height={12} />
-        <TableSkeleton headers={["Nome", "E-mail", "Perfil", "Projetos", "Status"]} />
+        <TableSkeleton structurePending headers={["Nome", "E-mail", "Perfil", "Projetos", "Status"]} />
       </section>
     );
   }
@@ -301,9 +327,9 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "projects") {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Projetos</h2>
+        <h2><StaticLoadingText pending>Projetos</StaticLoadingText></h2>
         <Skeleton width={260} height={12} />
-        <TableSkeleton headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]} />
+        <TableSkeleton structurePending headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]} />
       </section>
     );
   }
@@ -311,7 +337,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "requests") {
     return (
       <section className="mm-card mm-section-card">
-        <h2>Solicitações</h2>
+        <h2><StaticLoadingText pending>Solicitações</StaticLoadingText></h2>
         <MetricsSkeleton count={3} />
       </section>
     );
@@ -320,7 +346,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "audit") {
     return (
       <section className="mm-card mm-section-card mm-skeleton-stack">
-        <h2>Auditoria</h2>
+        <h2><StaticLoadingText pending>Auditoria</StaticLoadingText></h2>
         {Array.from({ length: 3 }, (_, index) => (
           <Skeleton key={index} width="100%" height={48} />
         ))}
@@ -331,7 +357,7 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   if (section === "system") {
     return (
       <section className="mm-card mm-section-card mm-skeleton-stack">
-        <h2>Sistema</h2>
+        <h2><StaticLoadingText pending>Sistema</StaticLoadingText></h2>
         <Skeleton width="72%" height={12} />
         <Skeleton width="100%" height={112} />
       </section>
@@ -388,9 +414,9 @@ export function AdminPageSkeleton({ section = "overview" }: { section?: string }
       <section className="admin-main">
         <header className="mm-projects-topbar admin-topbar">
           <div className="mm-skeleton-stack mm-skeleton-topbar-copy">
-            <p className="mm-eyebrow">Administração Maõno</p>
-            <h1>{titles[section] ?? titles.overview}</h1>
-            <p>Acesso administrativo.</p>
+            <p className="mm-eyebrow"><StaticLoadingText pending>Administração Maõno</StaticLoadingText></p>
+            <h1><StaticLoadingText pending>{titles[section] ?? titles.overview}</StaticLoadingText></h1>
+            <p><StaticLoadingText pending>Acesso administrativo.</StaticLoadingText></p>
           </div>
           <div className="mm-topbar-actions">
             <Skeleton width={84} height={28} radius={999} />

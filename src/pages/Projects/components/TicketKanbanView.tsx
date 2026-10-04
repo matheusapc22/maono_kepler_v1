@@ -1,4 +1,5 @@
-import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
+import { useEffect, useState } from "react";
+import { LoadingStatus, Skeleton, StaticLoadingText } from "../../../components/loading/Skeleton";
 import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { TicketCardSkeleton } from "./TicketLoadingSkeletons";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
@@ -17,6 +18,8 @@ import {
 } from "./ticket-types";
 
 type TicketKanbanViewProps = {
+  structurePending?: boolean; stagePending?: boolean; cancelled?: boolean;
+  cancelledQueuePresentations?: ReadonlySet<string>; onCancelQueuePresentations?: (queues: string[]) => void;
   tickets: Ticket[];
   columnPages?: Record<string, { tickets: Ticket[]; total: number; hasMore: boolean; loading: boolean; loadingMore?: boolean; pagination?: TicketPagination; error?: unknown }>;
   totals: Record<TicketStatus, number>;
@@ -62,12 +65,26 @@ const COLUMNS: Array<{
 ];
 
 export default function TicketKanbanView({
-  tickets, columnPages, totals, hasMore, loading, onLoadMore,
+  tickets, columnPages, totals, hasMore, loading, onLoadMore, structurePending = false, stagePending = false, cancelled = false,
   canManage,
+  cancelledQueuePresentations, onCancelQueuePresentations,
   busyTicketIds,
   onOpen,
   onStatusChange,
 }: TicketKanbanViewProps) {
+  const [localCancelledQueues, setLocalCancelledQueues] = useState<ReadonlySet<string>>(() => new Set(cancelledQueuePresentations));
+  const terminalQueues = COLUMNS.filter(column => {
+    const page = columnPages?.[column.id];
+    return cancelled || Boolean(page?.error) || Boolean(columnPages?.open.error && !page?.loading && !page?.pagination);
+  }).map(column => column.id);
+  if (terminalQueues.some(queue => !localCancelledQueues.has(queue))) {
+    setLocalCancelledQueues(new Set([...localCancelledQueues, ...terminalQueues]));
+  }
+  const cancelledQueues = new Set([...localCancelledQueues, ...(cancelledQueuePresentations ?? []), ...terminalQueues]);
+  const cancellationKey = [...cancelledQueues].sort().join(",");
+  useEffect(() => {
+    if (cancellationKey) onCancelQueuePresentations?.(cancellationKey.split(","));
+  }, [cancellationKey, onCancelQueuePresentations]);
   const skeletonCount = useSkeletonCount({ layout: "list", itemHeight: 280, reservedHeight: 400, pageSize: 25, maxCount: 3 });
   function ticketFromDrag(event: React.DragEvent) {
     const id = event.dataTransfer.getData("text/ticket-id");
@@ -82,8 +99,12 @@ export default function TicketKanbanView({
         );
 
         const page = columnPages?.[column.id];
-        const initialLoading = Boolean(page?.loading && !page.pagination && columnTickets.length === 0);
-        const totalKnown = !page || Boolean(page.pagination);
+        // The owner retains the artificial timeline across query-keyed remounts.
+        // A queue's real readiness is independent from the summary and other queues.
+        const queueCancelled = cancelled || Boolean(page?.error) || Boolean(columnPages?.open.error && !page?.loading && !page?.pagination);
+        const queueStructurePending = structurePending && !cancelledQueues.has(column.id);
+        const initialLoading = !queueCancelled && ((stagePending && !cancelledQueues.has(column.id)) || Boolean(page?.loading && !page.pagination && columnTickets.length === 0));
+        const totalKnown = !initialLoading && (!page || Boolean(page.pagination));
         const total = columnPages?.[column.id]?.total ?? column.statuses.reduce((sum, status) => sum + (totals[status] || 0), 0);
         return (
           <section
@@ -105,16 +126,16 @@ export default function TicketKanbanView({
             }}
           >
             <header>
-              <h3 id={`ticket-column-${column.id}`}>{column.label}</h3>
+              <h3 id={`ticket-column-${column.id}`}><StaticLoadingText pending={queueStructurePending}>{column.label}</StaticLoadingText></h3>
               <span aria-label={totalKnown ? `${columnTickets.length} carregados de ${total} acessíveis` : undefined}>
                 {totalKnown ? `${columnTickets.length} / ${total}` : initialLoading ? <Skeleton width={42} height={14} /> : "—"}
               </span>
             </header>
 
             {(columnPages?.[column.id]?.hasMore ?? hasMore) ? <button type="button" disabled={loading || (columnPages?.[column.id]?.loading ?? false)} onClick={() => onLoadMore(column.id)}>Carregar mais nesta fila</button> : null}
-            <LoadingStatus loading={Boolean(page?.loading)} refreshing={!initialLoading} label={`Carregando fila ${column.label}.`} refreshingLabel={page?.loadingMore ? `Carregando mais chamados em ${column.label}.` : `Atualizando fila ${column.label}.`} />
-            <div className="ticket-kanban-stack" aria-busy={Boolean(page?.loading)}>
-              {initialLoading ? <TicketCardSkeleton count={skeletonCount} /> : columnTickets.length === 0 && !page?.error && totalKnown ? (
+            <LoadingStatus loading={Boolean(page?.loading) || initialLoading} refreshing={!initialLoading} label={`Carregando fila ${column.label}.`} refreshingLabel={page?.loadingMore ? `Carregando mais chamados em ${column.label}.` : `Atualizando fila ${column.label}.`} />
+            <div className="ticket-kanban-stack" aria-busy={Boolean(page?.loading) || initialLoading}>
+              {initialLoading ? <TicketCardSkeleton structurePending={queueStructurePending} count={skeletonCount} /> : columnTickets.length === 0 && !page?.error && totalKnown ? (
                 <p className="ticket-kanban-empty">{total > 0 ? "Chamados ainda não carregados" : "Nenhum chamado acessível"}</p>
               ) : (
                 columnTickets.map((ticket) => {

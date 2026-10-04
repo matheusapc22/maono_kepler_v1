@@ -6,7 +6,7 @@ const css = await readFile(new URL("../src/pages/Projects/components/roadmap-wor
 const router = await readFile(new URL("../src/pages/Projects.tsx", import.meta.url), "utf8");
 
 test("Roadmap uses the shared minimal page hierarchy and a working home breadcrumb", () => {
-  assert.match(source, /<h1>Roadmap<\/h1>/);
+  assert.match(source, /<h1><StaticLoadingText pending=\{structurePending\}>Roadmap<\/StaticLoadingText><\/h1>/);
   assert.match(source, /className="roadmap-breadcrumb"/);
   assert.match(source, /<Link to="\/projects"[\s\S]*?onHome\?\.\(\)/);
   assert.match(router, /<RoadmapSection[\s\S]*?onHome=\{onHome\}/);
@@ -35,9 +35,9 @@ test("Roadmap replaces the old information strip with the exact shared paginatio
   assert.match(footer, /page=\{page.pageIndex \+ 1\} pageSize=\{page.pageSize\}/);
   assert.doesNotMatch(source, /className="roadmap-footer"|Dias úteis|Dias corridos|bundle.roadmap.timezone/);
   assert.doesNotMatch(footer, /formatDate|<time|calendarPolicy/);
-  assert.match(source, /<RoadmapMetrics bundle=\{bundle\}/);
-  assert.match(source, /<GanttView bundle=\{bundle\} tasks=\{page.tasks\}/);
-  assert.match(source, /<ListView tasks=\{page.tasks\}/);
+  assert.match(source, /<RoadmapMetrics bundle=\{presentedBundle\}/);
+  assert.match(source, /<GanttView bundle=\{presentedBundle\} tasks=\{contentPending \? \[\] : page.tasks\}/);
+  assert.match(source, /<ListView tasks=\{contentPending \? \[\] : page.tasks\}/);
   assert.match(source, /const start = bundle\?.roadmap.startDate; const end = bundle\?.roadmap.endDate/);
   assert.match(css, /\.roadmap-scroll \{[^}]*max-height:[^}]*overflow: auto/);
   assert.match(css, /\.roadmap-content \{ display: block/);

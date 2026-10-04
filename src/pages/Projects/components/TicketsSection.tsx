@@ -1,3 +1,4 @@
+import { useInitialLoadingPresentation } from "../../../components/loading/useInitialLoadingPresentation";
 import { isRegionAccessDenied, isRegionAuthenticationError } from "../../../components/loading/region-loading-policy";
 import TicketFeedbackPanel from "./TicketFeedbackPanel";
 import TicketKnowledgePanel from "./TicketKnowledgePanel";
@@ -20,7 +21,7 @@ import {
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
 import {
-  LoadingStatus, Skeleton,
+  LoadingStatus, Skeleton, StaticLoadingText,
 } from "../../../components/loading/Skeleton";
 import NewTicketPopover from "./NewTicketPopover";
 import TicketCalendarView from "./TicketCalendarView";
@@ -157,7 +158,7 @@ function TicketsSectionContent({
     number | string | null
   >(navigation.ticketId);
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(Boolean(navigation.ticketId));
   const [detailError, setDetailError] = useState<TicketApiError | null>(null);
   const [detailSaving, setDetailSaving] = useState(false);
   const [busyTicketIds, setBusyTicketIds] = useState<Set<string>>(
@@ -165,6 +166,12 @@ function TicketsSectionContent({
   );
   const [ticketChanges, setTicketChanges] = useState<TicketChange[]>([]);
   const [boardRefresh, setBoardRefresh] = useState(0);
+  // Presentation cancellation outlives the query-keyed Kanban controller.
+  const [cancelledQueuePresentations, setCancelledQueuePresentations] = useState<ReadonlySet<string>>(() => new Set());
+  const cancelQueuePresentations = useCallback((queues: string[]) => {
+    setCancelledQueuePresentations(current => queues.every(queue => current.has(queue))
+      ? current : new Set([...current, ...queues]));
+  }, []);
   const mutationLocks = useRef(new Set<string>());
   const mutationRevision = useRef(0);
   const mounted = useRef(true);
@@ -198,6 +205,13 @@ function TicketsSectionContent({
   const canCreate = can(user, PERMISSION.TICKET_CREATE, permissionContext);
   const canManage = can(user, PERMISSION.TICKET_MANAGE, permissionContext);
   const canUpload = canCreate || canManage;
+  const { structurePending, contentPending, stagePending } = useInitialLoadingPresentation({
+    pending: initialLoading,
+    hasData: hasLoadedQuery && snapshotQueryKeyRef.current === ticketQueryKey(debouncedFilters),
+    scopeKey: String(organizationId),
+    failed: Boolean(error),
+    cancelled: !organizationId || !canView || queryAccessRevoked,
+  });
 
   useEffect(() => {
     const timeout = window.setTimeout(
@@ -665,11 +679,13 @@ function TicketsSectionContent({
 
   const openCount =
     facets.byStatus.open;
-  const showInitialSkeleton = initialLoading && tickets.length === 0;
+  const showInitialSkeleton = contentPending;
 
   return (
     <section className="ticket-center-shell ticket-center-final">
       <TicketsToolbar
+        structurePending={structurePending}
+        contentPending={contentPending}
         organizationId={organizationId}
         organizationName={organizationName}
         filters={filters}
@@ -683,11 +699,11 @@ function TicketsSectionContent({
         newTicketButtonRef={newTicketButtonRef}
       />
 
-      <LoadingStatus loading={initialLoading || refreshing || filters !== debouncedFilters} refreshing={hasLoadedQuery} label="Carregando resumo dos chamados." refreshingLabel="Atualizando resumo dos chamados." />
+      <LoadingStatus loading={contentPending || initialLoading || refreshing || filters !== debouncedFilters} refreshing={hasLoadedQuery && !contentPending} label="Carregando resumo dos chamados." refreshingLabel="Atualizando resumo dos chamados." />
         <section
           className="ticket-metrics"
           aria-label="Resumo dos chamados"
-          aria-busy={initialLoading || refreshing || filters !== debouncedFilters}
+          aria-busy={contentPending || initialLoading || refreshing || filters !== debouncedFilters}
         >
           <button
             type="button"
@@ -702,7 +718,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-open" aria-hidden="true">▣</span>
-            <span className="ticket-metric-copy"><span>Abertos</span><strong>{!hasLoadedQuery ? initialLoading ? <Skeleton width={38} height={25} /> : "—" : openCount}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Abertos</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : openCount}</strong></span>
           </button>
           <button
             type="button"
@@ -717,7 +733,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-progress" aria-hidden="true">◔</span>
-            <span className="ticket-metric-copy"><span>Em andamento</span><strong>{!hasLoadedQuery ? initialLoading ? <Skeleton width={38} height={25} /> : "—" : facets.byStatus.in_progress}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Em andamento</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.byStatus.in_progress}</strong></span>
           </button>
           <button
             type="button"
@@ -732,7 +748,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-review" aria-hidden="true">◉</span>
-            <span className="ticket-metric-copy"><span>Em revisão</span><strong>{!hasLoadedQuery ? initialLoading ? <Skeleton width={38} height={25} /> : "—" : facets.byStatus.in_review}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Em revisão</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.byStatus.in_review}</strong></span>
           </button>
           <button
             type="button"
@@ -747,7 +763,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-overdue" aria-hidden="true">⚠</span>
-            <span className="ticket-metric-copy"><span>Vencidos</span><strong>{!hasLoadedQuery ? initialLoading ? <Skeleton width={38} height={25} /> : "—" : facets.overdue}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Vencidos</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.overdue}</strong></span>
           </button>
           <button
             type="button"
@@ -762,20 +778,20 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-closed" aria-hidden="true">✓</span>
-            <span className="ticket-metric-copy"><span>Concluídos</span><strong>{!hasLoadedQuery ? initialLoading ? <Skeleton width={38} height={25} /> : "—" : facets.byStatus.closed}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Concluídos</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.byStatus.closed}</strong></span>
           </button>
         </section>
 
       <TicketNotifications key={`notifications:${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
         setSelectedTicketId(id); setSuggestedStatus(null); setDetail(null); void loadDetail(id);
       }} />
-      <TicketFeedbackPanel key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />
-      <TicketMetricsPanel organizationId={organizationId} canManage={canManage} />
-      <TicketKnowledgePanel key={`knowledge:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} reviewers={assignees} />
-      <TicketCasesPanel key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />
-      {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} openSignal={exportOpenSignal} onAvailabilityChange={setExportAvailable} />}
+      <TicketFeedbackPanel structurePending={structurePending} stagePending={stagePending} key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />
+      <TicketMetricsPanel structurePending={structurePending} stagePending={stagePending} organizationId={organizationId} canManage={canManage} />
+      <TicketKnowledgePanel structurePending={structurePending} stagePending={stagePending} key={`knowledge:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} reviewers={assignees} />
+      <TicketCasesPanel structurePending={structurePending} stagePending={stagePending} key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />
+      {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel structurePending={structurePending} stagePending={stagePending} key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} openSignal={exportOpenSignal} onAvailabilityChange={setExportAvailable} />}
       {flowEnabled && canManage ? <TicketFlowSettings organizationId={organizationId} policies={queuePolicies} onSaved={() => void loadTicketsPage(1, { background: true })} /> : null}
-      {hasLoadedQuery ? <p className="mm-sr-only" role="status">
+      {hasLoadedQuery && !contentPending ? <p className="mm-sr-only" role="status">
         {viewMode === "kanban" ? "Carregamento por fila. " : ""}{pagination.total} acessíveis nesta consulta.
         {pagination.snapshotAt ? " Ordem preservada por até 15 minutos; use Atualizar consulta no menu para incluir novos chamados." : ""}
       </p> : null}
@@ -797,7 +813,9 @@ function TicketsSectionContent({
             pagination={pagination}
             pageSize={pageSize}
             loading={initialLoading || refreshing || filters !== debouncedFilters}
-            initialLoading={showInitialSkeleton}
+            initialLoading={initialLoading && tickets.length === 0}
+            contentPending={showInitialSkeleton}
+            structurePending={structurePending}
             error={Boolean(error)}
             canCreate={canCreate}
             onNewTicket={() => setNewTicketOpen(true)}
@@ -814,6 +832,10 @@ function TicketsSectionContent({
           />
         ) : viewMode === "kanban" ? (
           <TicketKanbanBoard
+            cancelledQueuePresentations={cancelledQueuePresentations}
+            onCancelQueuePresentations={cancelQueuePresentations}
+            structurePending={structurePending}
+            stagePending={stagePending}
             key={`${organizationId}:${ticketQueryKey(debouncedFilters)}`}
             refreshKey={boardRefresh}
             organizationId={organizationId}
@@ -831,7 +853,9 @@ function TicketsSectionContent({
           <TicketCalendarView
             from={filters.from}
             loading={initialLoading || refreshing || filters !== debouncedFilters}
-            initialLoading={showInitialSkeleton}
+            initialLoading={initialLoading && tickets.length === 0}
+            contentPending={showInitialSkeleton}
+            structurePending={structurePending}
             loadingMore={loadingMore}
             error={Boolean(error)}
             tickets={tickets}

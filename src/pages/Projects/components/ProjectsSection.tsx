@@ -5,6 +5,7 @@ import React, {
 } from "react";
 
 import { ProjectGridSkeleton } from "../../../components/loading/Skeleton";
+import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { usePreparedNavigate } from "../../../hooks/usePreparedNavigate";
 import { prepareProjectMapDestination } from "../../Kepler/map-panel/prepare-project-map-destination";
 import {
@@ -37,6 +38,8 @@ type ProjectsSectionProps = {
   onDismissActionError?: () => void;
   loading?: boolean;
   loaded?: boolean;
+  structurePending?: boolean;
+  contentPending?: boolean;
   error?: string | null;
   favoriteBusySlugs?: Record<string, true>;
   canProjectSave: (project: ProjectListItem) => boolean;
@@ -56,6 +59,8 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   onDismissActionError,
   loading = false,
   loaded = projects.length > 0 || !loading,
+  structurePending = false,
+  contentPending = loading && !loaded,
   error = null,
   favoriteBusySlugs = {},
   canProjectSave,
@@ -69,6 +74,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   const [appliedFilters, setAppliedFilters] = useState<ProjectPageFilters>({ ...DEFAULT_PROJECT_FILTERS, search: searchQuery });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const initialPreviewCount = useSkeletonCount({ layout: "grid", pageSize });
   // Sidebar search keeps its established immediate behavior; the page form has
   // an explicit draft/apply boundary for all three controls.
   useEffect(() => {
@@ -226,6 +232,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   return (
     <div className="mm-project-pages__workspace">
       <ProjectPageFiltersForm
+        structurePending={structurePending}
         value={draftFilters}
         disabled={false}
         onChange={setDraftFilters}
@@ -248,19 +255,23 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
         <h2>Não foi possível carregar os projetos</h2><p>{error}</p>
         {onRetry ? <button type="button" className="mm-project-pages__button" onClick={onRetry}>Tentar novamente</button> : null}
       </section> : null}
-      {loading && !loaded ? <ProjectGridSkeleton pageSize={pageSize} announce={false} className="mm-project-pages__grid" /> : !loaded && error ? null : filteredProjects.length === 0 ? <section className="mm-project-pages__empty" aria-busy={loading}>
+      {contentPending ? <ProjectGridSkeleton pageSize={pageSize} announce={false} className="mm-project-pages__grid" /> : null}
+      {/* Ready cards stay mounted so thumbnail requests never wait for presentation. */}
+      {contentPending && !loaded || !loaded && error ? null : filteredProjects.length === 0 ? <section className="mm-project-pages__empty" aria-busy={loading || contentPending} style={contentPending ? { display: "none" } : undefined}>
         <ProjectPageIcon name={copy.icon} /><h2>{copy.empty}</h2>
         {hasAppliedFilters ? <p>Tente outra busca ou limpe os filtros.</p> : null}
       </section> : (
       <section
         className="mm-project-grid mm-project-pages__grid"
-        aria-busy={loading}
+        style={contentPending ? { display: "none" } : undefined}
+        aria-busy={loading || contentPending}
         aria-label="Projetos disponíveis"
       >
-        {visibleProjects.map((project) => (
+        {visibleProjects.map((project, index) => (
           <ProjectCard
             key={projectCardKey(project)}
             project={project}
+            initialPresentationPending={contentPending && index < initialPreviewCount}
             canSave={canProjectSave(project)}
             canFavorite={canProjectFavorite(project)}
             canEditMetadata={canProjectEdit(project)}
@@ -313,15 +324,16 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
       </section>
       )}
       <ProjectPagePagination
-        loading={loading}
-        refreshing={loaded}
+        structurePending={structurePending}
+        loading={loading || contentPending}
+        refreshing={loaded && !contentPending}
         unavailable={!loaded && Boolean(error)}
         visibleCount={visibleProjects.length}
         total={pagination.total}
         page={pagination.page}
         pageCount={pagination.pageCount}
         pageSize={pageSize}
-        disabled={loading || Boolean(error)}
+        disabled={loading || contentPending || Boolean(error)}
         onPage={page => { setCurrentPage(page); setActionsOpenSlug(null); setEditingProject(null); }}
         onPageSize={size => { setPageSize(size); setCurrentPage(1); setActionsOpenSlug(null); setEditingProject(null); }}
       />

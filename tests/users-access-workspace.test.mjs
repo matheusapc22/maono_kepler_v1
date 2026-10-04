@@ -7,7 +7,7 @@ const css = read('src/pages/Projects/components/users-access-workspace.css');
 const sharedCss = read('src/pages/Projects/components/DocumentsSection.css');
 
 test('Users uses a minimal functional breadcrumb and existing Admin action', () => {
-  assert.match(source, /<h1>Usuários e Acessos<\/h1>/);
+  assert.match(source, /<h1><StaticLoadingText pending=\{structurePending\}>Usuários e Acessos<\/StaticLoadingText><\/h1>/);
   assert.match(source, /<Link to="\/projects"[\s\S]*?onHome\?\.\(\)/);
   assert.match(read('src/pages/Projects.tsx'), /<UsersAccessSectionWithProps\s+onHome=\{onHome\}/);
   assert.doesNotMatch(source, /people-eyebrow|VISÃO DA EQUIPE|people-notice governance/);
@@ -47,9 +47,9 @@ test('Users rejects stale organization responses, resets context and shows hones
   assert.match(source, /const current = \(\) => readRevision === requestRef.current/);
   assert.match(source, /if \(!current\(\)\) return;\s*setPeople\(peopleResult.users \?\? \[\]\);\s*setLoaded\(true\)/);
   assert.match(source, /return \(\) => \{ requestRef.current \+= 1; \}/);
-  assert.match(source, /loading \|\| limitsLoading \|\| governanceLoading \? <LoadingStatus/);
+  assert.match(source, /presentationLoading \? <LoadingStatus/);
   assert.match(source, /refreshingLabel=\{loading \? "Atualizando usuários\."/);
-  assert.match(source, /disabled=\{loading \|\| !loaded\} disablePageSize=\{loading \|\| !loaded\}/);
+  assert.match(source, /disabled=\{loading \|\| !visiblePeople\} disablePageSize=\{loading \|\| !visiblePeople\}/);
   assert.match(source, /loaded \? active : "—"/);
   assert.match(source, /onClick=\{\(\) => void load\(\)\}>Tentar novamente/);
 });

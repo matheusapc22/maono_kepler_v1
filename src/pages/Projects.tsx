@@ -19,6 +19,7 @@ import {
   LoadingOverlay,
   useCompleteLoadingHandoff,
   useInitialBootReadiness,
+  useInitialLoadingPresentation,
 } from "../components/loading";
 import { ProjectsPageSkeleton } from "../components/loading/Skeleton";
 import { usePreparedNavigate } from "../hooks/usePreparedNavigate";
@@ -533,6 +534,14 @@ const ProjectsPage: React.FC = () => {
 
   const projectContextIsCurrent =
     projectsContextKey === activeOrganizationKey;
+  const projectPresentation = useInitialLoadingPresentation({
+    pending: !loading && authenticated && Boolean(activeOrganizationId) && isProjectSection(sidebarSection) &&
+      (projectsLoading || (loadedProjectSection !== sidebarSection && !projectsError)),
+    hasData: projectContextIsCurrent && projectDataKey === JSON.stringify([activeOrganizationKey, sidebarSection]),
+    scopeKey: JSON.stringify([user?.id, activeOrganizationKey, sidebarSection]),
+    failed: projectContextIsCurrent && loadedProjectSection === sidebarSection && Boolean(projectsError),
+    cancelled: !authenticated || !activeOrganizationId || !isProjectSection(sidebarSection),
+  });
   const loginProjectsReady =
     !loading &&
     authenticated &&
@@ -753,6 +762,7 @@ const ProjectsPage: React.FC = () => {
           switchingOrganization={organizationTransitionActive}
           organizationSwitchError={organizationSwitchError}
           activeProjectsCount={activeProjectsCount}
+          projectsUnavailable={Boolean(projectsError)}
           searchQuery={searchQuery}
           sidebarSection={sidebarSection}
           onSearchQueryChange={setSearchQuery}
@@ -785,6 +795,7 @@ const ProjectsPage: React.FC = () => {
 
           {isProjectSection(sidebarSection) ? <ProjectPagesHeader
             section={sidebarSection}
+            structurePending={projectPresentation.structurePending}
             canCreateMap={canCreateMap}
             onNewMap={handleNewMapNavigation}
             onHome={() => { setSidebarSection("all"); setSearchQuery(""); setProjectActionError(null); }}
@@ -812,6 +823,8 @@ const ProjectsPage: React.FC = () => {
                 onDismissActionError={() => setProjectActionError(null)}
                 loading={projectsLoading || (loadedProjectSection !== sidebarSection && !projectsError)}
                 loaded={projectContextIsCurrent && projectDataKey === JSON.stringify([activeOrganizationKey, sidebarSection])}
+                structurePending={projectPresentation.structurePending}
+                contentPending={projectPresentation.contentPending}
                 error={projectsError}
                 favoriteBusySlugs={favoriteBusySlugs}
                 canProjectSave={(project) =>

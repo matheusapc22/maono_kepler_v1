@@ -10,12 +10,15 @@ const [organization, limits, users, skeletons, css] = await Promise.all([
   'src/components/loading/Skeleton.css',
 ].map(read));
 
-test('organization and limits reserve only missing values while keeping known structural labels and controls', () => {
+test('organization and limits stage static labels before volatile values without changing requests', () => {
   for (const [source, data] of [[organization, 'organization'], [limits, 'limits']]) {
-    assert.ok(source.includes(`loading && !${data}`));
+    assert.ok(source.includes(`hasData: Boolean(${data})`));
+    assert.match(source, /useInitialLoadingPresentation/);
+    assert.match(source, /<StaticLoadingText pending=\{structurePending\}/);
+    assert.match(source, /contentPending \? <Skeleton/);
     assert.match(source, /useState\(Boolean\(organizationId && permissions.view\)\)/);
-    assert.match(source, /aria-busy=\{loading\}/);
-    assert.match(source, /<LoadingStatus loading=\{loading\} refreshing=\{Boolean\(/);
+    assert.match(source, /aria-busy=\{presentationLoading\}/);
+    assert.match(source, /<LoadingStatus loading=\{presentationLoading\} refreshing=\{Boolean\(/);
     assert.doesNotMatch(source, /\{!loading &&|setTimeout|setInterval/);
   }
   for (const label of ['Dados principais', 'Métricas', 'Edição', 'Perfil atual']) assert.ok(organization.includes(label));
@@ -39,14 +42,15 @@ test('users publish independent dependencies and keep valid rows during auxiliar
   assert.match(users, /listOrganizationUsers\(organizationId\)\.then\(peopleResult/);
   assert.match(users, /getOrganizationLimits\(organizationId\)\.then\(limitResult/);
   assert.match(users, /loadAccessGovernance\(organizationId\)\.then\(governanceResult/);
+  assert.equal((users.match(/useInitialLoadingPresentation\(\{/g) || []).length, 3);
   assert.match(users, /const current = \(\) => readRevision === requestRef.current/);
-  assert.match(users, /loading && !loaded \? <UsersTableSkeletonRows/);
-  assert.match(users, /\{loaded && page.people.map/);
+  assert.match(users, /peoplePending \? <UsersTableSkeletonRows/);
+  assert.match(users, /\{visiblePeople && page.people.map/);
   assert.doesNotMatch(users, /\{!loading && page.people.map/);
   assert.match(users, /announce=\{false\} visuallyHidden=\{false\}/);
-  assert.match(users, /governanceLoading && !governance && !isSuperAdmin/);
-  assert.match(users, /limitsLoading && !limits \? <Skeleton/);
-  assert.match(users, /loaded && limits && <div className="people-capacity-progress"/);
+  assert.match(users, /governancePending && !isSuperAdmin/);
+  assert.match(users, /limitsPending \? <Skeleton/);
+  assert.match(users, /visiblePeople && visibleLimits && <div className="people-capacity-progress"/);
 });
 
 test('section geometry uses viewport/page estimates and shared decorative motion tokens', () => {

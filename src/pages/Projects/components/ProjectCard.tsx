@@ -27,6 +27,7 @@ type ProjectCardProps = {
   actionsOpen?: boolean;
   favoriteBusy?: boolean;
   opening?: boolean;
+  initialPresentationPending?: boolean;
   onOpen?: (project: ProjectListItem) => void | Promise<void>;
   onActionsOpenChange?: (open: boolean) => void;
   onEditMetadata?: (project: ProjectListItem) => void;
@@ -191,6 +192,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   actionsOpen = false,
   favoriteBusy = false,
   opening = false,
+  initialPresentationPending = false,
   onOpen,
   onActionsOpenChange,
   onEditMetadata,
@@ -680,7 +682,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 ? `Última prévia válida do projeto ${project.name}`
                 : `Prévia do projeto ${project.name}`
             }
-            loading={showGenerationSvg ? "eager" : "lazy"}
+            loading={initialPresentationPending || showGenerationSvg ? "eager" : "lazy"}
             decoding="async"
             className={
               displayImageDecoded ? "is-loaded" : "is-loading"

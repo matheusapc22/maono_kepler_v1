@@ -9,6 +9,7 @@ on:
       - 'src/pages/Projects.tsx'
       - 'src/pages/Projects/**'
       - 'tests/*progressive*.test.mjs'
+      - 'tests/initial-loading-presentation.test.mjs'
       - 'tests/helpers/*progressive*.mjs'
       - 'tests/browser/*progressive-loading.spec.ts'
       - 'playwright.progressive-loading.config.ts'
@@ -32,16 +33,25 @@ jobs:
       - name: Regional loading and preservation contracts
         run: >-
           node --experimental-strip-types --test tests/*progressive*.test.mjs
+          tests/initial-loading-presentation.test.mjs
           tests/projects-section-loading.test.mjs tests/users-access*.test.mjs
           tests/roadmap-loading.test.mjs tests/maono-select-migration.test.mjs
           tests/project-pages-contract.test.mjs
       - name: Scoped lint
         run: >-
           npx eslint src/components/loading/Skeleton.tsx src/components/loading/region-loading-policy.ts
-          src/components/loading/useSkeletonCount.ts src/pages/Admin.tsx
+          src/components/loading/useSkeletonCount.ts src/components/loading/initial-loading-presentation.ts
+          src/components/loading/useInitialLoadingPresentation.ts src/pages/Admin.tsx
           src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
           src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
           src/pages/Projects/components/TicketLoadingSkeletons.tsx
+          src/pages/Projects/components/TicketOptionalPanelState.tsx
+          src/pages/Projects/components/useTicketOptionalPresentation.ts src/pages/Projects/components/useManualRefreshFocus.ts
+          src/pages/Projects/components/TicketKnowledgePanel.tsx src/pages/Projects/components/TicketCasesPanel.tsx
+          src/pages/Projects/components/TicketFeedbackPanel.tsx src/pages/Projects/components/TicketMetricsPanel.tsx
+          src/pages/Projects/components/TicketExportsPanel.tsx
+          src/pages/Projects/components/TicketsToolbar.tsx src/pages/Projects/components/DocumentsPagination.tsx
+          src/pages/Projects/components/DocumentsUi.tsx
           tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
       - name: Compile actual application
         env:

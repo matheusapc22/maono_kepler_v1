@@ -3,9 +3,10 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import postcss from 'postcss';
 import { restoreMaonoSelect } from './helpers/maono-select-preservation.mjs';
+import { restoreTicketDocumentInitialPresentation } from './helpers/ticket-docs-progressive-preservation.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
-const toolbar = read('src/pages/Projects/components/TicketsToolbar.tsx');
+const toolbar = restoreTicketDocumentInitialPresentation(read('src/pages/Projects/components/TicketsToolbar.tsx'), 'TicketsToolbar');
 const list = read('src/pages/Projects/components/TicketListView.tsx');
 const section = read('src/pages/Projects/components/TicketsSection.tsx');
 const css = read('src/pages/Projects/components/ticket-center-visual.css');
@@ -98,11 +99,11 @@ function Previous(props) {
 export function compare(props) {
   return [renderToStaticMarkup(<Previous {...props} />), renderToStaticMarkup(<DocumentsPagination status={props.refreshing || props.pendingNext ? 'Atualizando documentos.' : 'Exibindo ' + props.visibleFiles.length + '/' + props.pagination.total + '.'} page={props.safePageIndex + 1} pageSize={props.pageSize} canGoPrevious={props.canGoPrevious} canGoNext={props.canGoNext} disabled={props.refreshing || props.loadingMore || props.pendingNext} onPageSize={() => {}} onPrevious={() => {}} onNext={() => {}} />)];
 }`;
-  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: new URL('../', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', write: false, loader: { '.css': 'empty' }, external: ['react', 'react-dom', 'react-dom/server', 'react/jsx-runtime'],
+  const result = await build({ stdin: { contents: source, loader: 'tsx', resolveDir: new URL('../', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', write: false, loader: { '.css': 'empty', '.png': 'dataurl' }, external: ['react', 'react-dom', 'react-dom/server', 'react/jsx-runtime'],
     // Ignore only the separately browser-tested, authorized branded select
     // wrapper. All footer values, handlers and other markup stay byte-exact.
     plugins: [{ name: 'preserve-footer-except-branded-select', setup(builder) {
-      builder.onLoad({ filter: /\/DocumentsPagination\.tsx$/ }, ({ path }) => ({ contents: restoreMaonoSelect(readFileSync(path, 'utf8')), loader: 'tsx' }));
+      builder.onLoad({ filter: /\/DocumentsPagination\.tsx$/ }, ({ path }) => ({ contents: restoreMaonoSelect(restoreTicketDocumentInitialPresentation(readFileSync(path, 'utf8'), 'DocumentsPagination')), loader: 'tsx' }));
     } }],
   });
   // A local temporary module resolves the same installed React version as the app.

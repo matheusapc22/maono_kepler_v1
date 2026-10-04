@@ -190,3 +190,77 @@ test('strict inverses preserve all prior Admin user controls, project selectors 
   catch (error) { assert.ok(error instanceof assert.AssertionError); rejected = true; }
   assert.equal(rejected, true, 'unrelated creation behavior must not be accepted as a loading delta');
 });
+
+const presentationCode = transformSync(read('src/components/loading/initial-loading-presentation.ts'), { loader: 'ts', format: 'esm' }).code;
+const { advanceInitialLoadingPresentation: advancePresentation, readInitialLoadingPresentation: presentationState } = await import(`data:text/javascript;base64,${Buffer.from(presentationCode).toString('base64')}`);
+
+test('Admin fast responses update real data immediately while titles precede volatile presentation at80/260ms', async () => {
+  const h = adminHarness();
+  const input = () => ({ scopeKey: 'admin-projects', pending: h.state.regions.projects.pending, hasData: h.state.regions.projects.loaded, failed: Boolean(h.state.regions.projects.error) });
+  let visual = advancePresentation(null, input(), 0);
+  const done = h.refresh(); settleBatch(h, 0); await done;
+  assert.equal(h.state.regions.projects.pending, false);
+  assert.equal(h.state.projects[0].name, 'Projeto');
+  visual = advancePresentation(visual, input(), 30);
+  assert.deepEqual(presentationState(visual), { structurePending: true, contentPending: true });
+  visual = advancePresentation(visual, input(), 80);
+  assert.deepEqual(presentationState(visual), { structurePending: false, contentPending: true });
+  visual = advancePresentation(visual, input(), 259);
+  assert.equal(presentationState(visual).contentPending, true);
+  visual = advancePresentation(visual, input(), 260);
+  assert.deepEqual(presentationState(visual), { structurePending: false, contentPending: false });
+  assert.match(admin, /pending: regions\.projects\.pending, hasData: regions\.projects\.loaded/);
+  assert.match(admin, /contentPending=\{projectPresentation\.contentPending\}/);
+  assert.match(admin, /<h1><StaticLoadingText pending=\{structurePending\}>\{sectionTitle\(section\)\}/);
+});
+
+test('Projects slow responses reveal immediately after total minimum; valid refresh snapshots never replay stages', async () => {
+  const h = projectHarness(), done = h.refresh('all');
+  const input = () => ({ scopeKey: '1:all', pending: h.state.loading, hasData: h.state.dataKey === '["1","all"]', failed: Boolean(h.state.error) });
+  let visual = advancePresentation(null, input(), 0);
+  visual = advancePresentation(visual, input(), 500);
+  assert.deepEqual(presentationState(visual), { structurePending: false, contentPending: true });
+  h.requests[0].resolve([{ id: 1, slug: 'ready' }]); await done;
+  visual = advancePresentation(visual, input(), 500);
+  assert.deepEqual(presentationState(visual), { structurePending: false, contentPending: false });
+  const refresh = h.refresh('all'); visual = advancePresentation(visual, input(), 510);
+  assert.deepEqual(presentationState(visual), { structurePending: false, contentPending: false });
+  assert.deepEqual(presentationState(advancePresentation(null, input(), 510)), { structurePending: false, contentPending: false });
+  h.requests[1].resolve([]); await refresh;
+  assert.match(grid, /style=\{contentPending \? \{ display: "none" \} : undefined\}/);
+  assert.match(grid, /contentPending && !loaded \|\| !loaded && error/);
+  assert.match(grid, /refreshing=\{loaded && !contentPending\}/);
+  assert.match(grid, /initialPresentationPending=\{contentPending && index < initialPreviewCount\}/);
+  assert.match(grid, /initialPreviewCount = useSkeletonCount\(\{ layout: "grid", pageSize \}\)/);
+  assert.match(card, /loading=\{initialPresentationPending \|\| showGenerationSvg \? "eager" : "lazy"\}/);
+  assert.doesNotMatch(projects.slice(projects.indexOf('const loadProjectSection = useCallback('), projects.indexOf('    [activeOrganizationId],')), /setTimeout|structurePending|contentPending/);
+});
+
+test('initial presentation inverses reject changed permissions, payloads, destinations and timer settings', () => {
+  for (const [path, before, after] of [
+    ['src/pages/Projects.tsx', 'PERMISSION.PROJECT_CREATE,', 'PERMISSION.PROJECT_EDIT,'],
+    ['src/pages/ProjectsSidebar.tsx', 'return isSuperAdmin(user);', 'return true;'],
+    ['src/pages/Admin/components/AdminUserManagerLegacy.tsx', 'method: "PATCH",', 'method: "POST",'],
+    ['src/pages/Projects/components/ProjectPagesUi.tsx', 'to="/maps/new/create"', 'to="/projects"'],
+    ['src/pages/Projects.tsx', 'scopeKey: JSON.stringify([user?.id, activeOrganizationKey, sidebarSection])', 'scopeKey: projectsLoading'],
+  ]) {
+    const original = read(path), mutated = original.replace(before, after);
+    assert.notEqual(original, mutated, path);
+    let rejected = false;
+    try { rejected = createHash('sha256').update(restoreAdminProjectsProgressiveLoading(path, mutated)).digest('hex') !== progressiveBaselines[path]; }
+    catch (error) { assert.ok(error instanceof assert.AssertionError); rejected = true; }
+    assert.equal(rejected, true, `${path}: ${before}`);
+  }
+});
+
+test('Admin loading announcements distinguish first partial/held results from refreshes of revealed regions', () => {
+  const expression = admin.match(/<LoadingStatus loading=\{isRefreshing \|\| presentationPending\} refreshing=\{([^}]+)\}/)?.[1];
+  assert.ok(expression);
+  const refreshing = new Function('regions', 'projectPresentation', 'organizationPresentation', 'userPresentation', `return (${expression});`);
+  const pending = { pending: true, loaded: false }, ready = { pending: false, loaded: true }, updating = { pending: true, loaded: true };
+  const held = { contentPending: true }, shown = { contentPending: false };
+  assert.equal(refreshing({ projects: ready, organizations: pending, users: pending }, shown, held, held), false, 'one revealed initial result is not a refresh of other pending regions');
+  assert.equal(refreshing({ projects: ready, organizations: ready, users: ready }, held, held, held), false, 'fast ready data still in initial presentation is not updating');
+  assert.equal(refreshing({ projects: updating, organizations: ready, users: ready }, shown, shown, shown), true, 'a real refresh of mounted data is updating');
+  assert.equal(refreshing({ projects: ready, organizations: ready, users: updating }, shown, shown, shown), true);
+});

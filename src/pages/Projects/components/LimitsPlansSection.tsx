@@ -1,8 +1,9 @@
+import { useInitialLoadingPresentation } from "../../../components/loading/useInitialLoadingPresentation";
 import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { LoadingStatus, Skeleton, TableSkeleton } from "../../../components/loading/Skeleton";
+import { LoadingStatus, Skeleton, StaticLoadingText, TableSkeleton } from "../../../components/loading/Skeleton";
 
 import type { MaonoUser } from "../../../auth/session";
 import {
@@ -197,14 +198,14 @@ function sanitizeReason(reason: string): string {
   return reason.trim().slice(0, 1000);
 }
 
-function LimitUsageRow({ item, pending = false, available = true }: { item: LimitItem; pending?: boolean; available?: boolean }) {
+function LimitUsageRow({ item, pending = false, available = true, structurePending }: { item: LimitItem; pending?: boolean; available?: boolean; structurePending: boolean }) {
   const percent = getUsagePercent(item.counter);
   const used = `${formatNumber(item.counter.used)}${item.unit ? ` ${item.unit}` : ""}`;
   const limit = `${formatNumber(item.counter.limit)}${item.unit ? ` ${item.unit}` : ""}`;
 
   return (
     <tr>
-      <td><strong>{item.label}</strong><div className="mm-muted">{item.description}</div></td>
+      <td><strong><StaticLoadingText pending={structurePending}>{item.label}</StaticLoadingText></strong><div className="mm-muted"><StaticLoadingText pending={structurePending}>{item.description}</StaticLoadingText></div></td>
       <td>{pending ? <Skeleton width={48} height={16} /> : available ? used : "—"}</td><td>{pending ? <Skeleton width={48} height={16} /> : available ? limit : "—"}</td>
       <td>{pending ? <Skeleton width={52} height={24} radius={999} /> : available ? <span className={percent >= 90 ? "mm-tag red" : percent >= 70 ? "mm-tag gold" : "mm-tag green"}>{percent}%</span> : "—"}</td>
     </tr>
@@ -257,6 +258,12 @@ function LimitsPlansWorkspace({ user, projectsCount }: LimitsPlansSectionProps) 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const limitItems = useMemo(() => buildLimitItems(limits, projectsCount), [limits, projectsCount]);
+
+  const { structurePending, contentPending } = useInitialLoadingPresentation({
+    pending: loading, hasData: Boolean(limits), scopeKey: String(organizationId),
+    failed: Boolean(errorMessage), cancelled: !organizationId || !permissions.view,
+  });
+  const presentationLoading = loading || contentPending;
 
   const loadLimits = useCallback(async () => {
     if (!organizationId || !permissions.view) return;
@@ -325,33 +332,33 @@ function LimitsPlansWorkspace({ user, projectsCount }: LimitsPlansSectionProps) 
 
   return (
     <section className="mm-card mm-section-card mm-limits-section">
-      <h2>Limites e Planos</h2>
-      <p>Acompanhe o uso atual da organização e solicite upgrade de plano ou aumento de limites.</p>
+      <h2><StaticLoadingText pending={structurePending}>Limites e Planos</StaticLoadingText></h2>
+      <p><StaticLoadingText pending={structurePending}>Acompanhe o uso atual da organização e solicite upgrade de plano ou aumento de limites.</StaticLoadingText></p>
 
       {errorMessage && <div className="mm-card" role="alert"><strong>Não foi possível concluir</strong><p>{errorMessage}</p><button type="button" className="mm-btn" disabled={loading} onClick={() => void loadLimits()}>Recarregar</button></div>}
       {successMessage && <div className="mm-card" role="status"><strong>Sucesso</strong><p>{successMessage}</p></div>}
-      <LoadingStatus loading={loading} refreshing={Boolean(limits)} label="Carregando limites da organização." refreshingLabel="Atualizando limites da organização." />
-      <div className="mm-section-load-region" role="region" aria-label="Limites da organização" aria-busy={loading}>
-        <div className="mm-card"><h3>Plano atual</h3><div className="mm-tags-list">{loading && !limits ? <Skeleton width={65} height={25} radius={999} /> : limits?.plan ? <span className={planClassName(limits.plan)}>{planLabel(limits.plan)}</span> : "—"}</div><p>Alterações de plano são analisadas antes de entrarem em vigor.</p></div>
+      <LoadingStatus loading={presentationLoading} refreshing={Boolean(limits) && !contentPending} label="Carregando limites da organização." refreshingLabel="Atualizando limites da organização." />
+      <div className="mm-section-load-region" role="region" aria-label="Limites da organização" aria-busy={presentationLoading}>
+        <div className="mm-card"><h3><StaticLoadingText pending={structurePending}>Plano atual</StaticLoadingText></h3><div className="mm-tags-list">{contentPending ? <Skeleton width={65} height={25} radius={999} /> : limits?.plan ? <span className={planClassName(limits.plan)}>{planLabel(limits.plan)}</span> : "—"}</div><p><StaticLoadingText pending={structurePending}>Alterações de plano são analisadas antes de entrarem em vigor.</StaticLoadingText></p></div>
 
-        <div className="mm-card"><h3>Uso e limites</h3><div className="mm-table-wrap"><table><thead><tr><th scope="col">Categoria</th><th scope="col">Uso atual</th><th scope="col">Limite</th><th scope="col">Uso</th></tr></thead><tbody>{limitItems.map((item) => <LimitUsageRow key={item.key} item={item} pending={loading && !limits} available={Boolean(limits?.[item.key])} />)}</tbody></table></div></div>
+        <div className="mm-card"><h3><StaticLoadingText pending={structurePending}>Uso e limites</StaticLoadingText></h3><div className="mm-table-wrap"><table><thead><tr><th scope="col"><StaticLoadingText pending={structurePending}>Categoria</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Uso atual</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Limite</StaticLoadingText></th><th scope="col"><StaticLoadingText pending={structurePending}>Uso</StaticLoadingText></th></tr></thead><tbody>{limitItems.map((item) => <LimitUsageRow structurePending={structurePending} key={item.key} item={item} pending={contentPending} available={Boolean(limits?.[item.key])} />)}</tbody></table></div></div>
 
       </div>
 
-        <div className="mm-card"><h3>Solicitar upgrade ou aumento</h3>
+        <div className="mm-card"><h3><StaticLoadingText pending={structurePending}>Solicitar upgrade ou aumento</StaticLoadingText></h3>
           {permissions.increaseRequest ? (
             <form onSubmit={handleCreateRequest}>
               <div className="mm-form-grid">
-                <label>Tipo<MaonoSelect value={form.requestType} onChange={(event) => updateForm("requestType", event.target.value)}><option value="plan_upgrade">Upgrade de plano</option><option value="users_increase">Aumento de usuários</option><option value="projects_increase">Aumento de projetos</option><option value="storage_increase">Aumento de armazenamento</option><option value="exports_increase">Aumento de exportações</option></MaonoSelect></label>
-                <label>Plano solicitado<MaonoSelect value={form.requestedPlan} onChange={(event) => updateForm("requestedPlan", event.target.value)}>{PLAN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</MaonoSelect></label>
-                <label>Motivo<textarea value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} placeholder="Explique a necessidade de aumento ou upgrade." rows={3} /></label>
+                <label><StaticLoadingText pending={structurePending}>Tipo</StaticLoadingText><MaonoSelect value={form.requestType} onChange={(event) => updateForm("requestType", event.target.value)}><option value="plan_upgrade">Upgrade de plano</option><option value="users_increase">Aumento de usuários</option><option value="projects_increase">Aumento de projetos</option><option value="storage_increase">Aumento de armazenamento</option><option value="exports_increase">Aumento de exportações</option></MaonoSelect></label>
+                <label><StaticLoadingText pending={structurePending}>Plano solicitado</StaticLoadingText><MaonoSelect value={form.requestedPlan} onChange={(event) => updateForm("requestedPlan", event.target.value)}>{PLAN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</MaonoSelect></label>
+                <label><StaticLoadingText pending={structurePending}>Motivo</StaticLoadingText><textarea value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} placeholder="Explique a necessidade de aumento ou upgrade." rows={3} /></label>
               </div>
-              <div className="mm-actions-row"><button type="submit" className="mm-btn primary" disabled={busyKey === "create-request"}>{busyKey === "create-request" ? "Enviando..." : "Enviar solicitação"}</button></div>
+              <div className="mm-actions-row"><button type="submit" className="mm-btn primary" disabled={busyKey === "create-request"}><StaticLoadingText pending={structurePending}>{busyKey === "create-request" ? "Enviando..." : "Enviar solicitação"}</StaticLoadingText></button></div>
             </form>
-          ) : <p>Seu perfil não possui permissão para solicitar aumento de limite.</p>}
+          ) : <p><StaticLoadingText pending={structurePending}>Seu perfil não possui permissão para solicitar aumento de limite.</StaticLoadingText></p>}
         </div>
 
-        <div className="mm-card" aria-busy={loading}><h3>Solicitações pendentes</h3>{loading && !limits ? <TableSkeleton headers={["ID", "Tipo", "Plano solicitado", "Status", "Motivo", "Criado em"]} pageSize={3} /> : limits ? <PendingRequestsTable requests={pendingRequests} /> : <p>As solicitações não puderam ser carregadas.</p>}</div>
+        <div className="mm-card" aria-busy={presentationLoading}><h3><StaticLoadingText pending={structurePending}>Solicitações pendentes</StaticLoadingText></h3>{contentPending ? <TableSkeleton structurePending={structurePending} headers={["ID", "Tipo", "Plano solicitado", "Status", "Motivo", "Criado em"]} pageSize={3} /> : limits ? <PendingRequestsTable requests={pendingRequests} /> : <p>As solicitações não puderam ser carregadas.</p>}</div>
     </section>
   );
 }

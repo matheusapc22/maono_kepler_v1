@@ -46,7 +46,10 @@ test("grade não fica bloqueada aguardando todos os PNGs", () => {
   assert.doesNotMatch(section, /settledThumbnailKeys/);
   assert.doesNotMatch(section, /allVisibleThumbnailsSettled/);
   assert.doesNotMatch(section, /holdThumbnailShimmer/);
-  assert.match(section, /aria-busy=\{loading\}/);
+  assert.match(section, /aria-busy=\{loading \|\| contentPending\}/);
+  assert.match(section, /contentPending = loading && !loaded/);
+  assert.match(section, /style=\{contentPending \? \{ display: "none" \} : undefined\}/);
+  assert.match(section, /initialPresentationPending=\{contentPending && index < initialPreviewCount\}/);
 });
 
 test("card limita o SVG à apresentação de geração e conclui no decode", () => {
@@ -66,8 +69,15 @@ test("card limita o SVG à apresentação de geração e conclui no decode", () 
   );
   assert.match(
     card,
-    /loading=\{showGenerationSvg \? "eager" : "lazy"\}/,
+    /loading=\{initialPresentationPending \|\| showGenerationSvg \? "eager" : "lazy"\}/,
   );
+  const policy = card.match(/loading=\{([^}]+)\}/)?.[1];
+  assert.ok(policy);
+  const imageLoading = new Function("initialPresentationPending", "showGenerationSvg", `return (${policy});`);
+  assert.equal(imageLoading(false, false), "lazy", "ordinary ready images retain lazy loading");
+  assert.equal(imageLoading(false, true), "eager", "generation keeps its existing eager behavior");
+  assert.equal(imageLoading(true, false), "eager", "initial hidden presentation never delays a visible preview request");
+  assert.equal(imageLoading(true, true), "eager");
   assert.match(card, /onError=\{handleDisplayedImageError\}/);
   assert.match(card, /VITE_PROJECT_PREVIEW_TRANSITION_V2/);
 });
