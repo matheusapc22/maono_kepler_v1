@@ -173,9 +173,7 @@ test("CT-12 client clears stale drawer data when object access is revoked", () =
 
 
 test("CT-12 client access classifier covers 401/403 and retains transient data only", async () => {
-  const { build } = await import("esbuild");
-  const bundle = await build({ entryPoints: [new URL("../src/components/loading/region-loading-policy.ts", import.meta.url).pathname], bundle: true, platform: "node", format: "esm", write: false });
-  const { isRegionAccessDenied } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+  const { isRegionAccessDenied } = await import("../src/components/loading/region-loading-policy.ts");
   for (const error of [{ status: 401 }, { status: 403 }, { category: "AUTH" }, { category: "PERMISSION" }]) assert.equal(isRegionAccessDenied(error), true);
   for (const error of [{ status: 500 }, { status: 503 }, { code: "NETWORK_ERROR" }]) assert.equal(isRegionAccessDenied(error), false);
   const sourceText = source("../src/pages/Projects/components/TicketsSection.tsx");
