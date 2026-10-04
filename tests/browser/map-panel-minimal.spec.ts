@@ -315,7 +315,7 @@ async function hintPortal(page: Page, trigger: Locator, text: string) {
 type ChevronSample = { x: number; y: number; width: number; height: number; angle: number; phase: string };
 type NativeChevronTransition = { property: string; duration: number | string; sampledAt: number };
 type SampledChevron = SVGSVGElement & { __samples?: {
-  values: ChevronSample[]; transitions: NativeChevronTransition[]; frame: number; stop: boolean; cleanup: () => void;
+  values: ChevronSample[]; transitions: NativeChevronTransition[]; frame: number; stop: boolean; cleanup: () => void; settled: Promise<void> | null;
 } };
 
 async function rotateChevron(arrow: Locator, size: number, opened: boolean, motion: boolean, action: () => Promise<void>) {
@@ -330,7 +330,7 @@ async function rotateChevron(arrow: Locator, size: number, opened: boolean, moti
   const path = await handle.innerHTML();
   await arrow.evaluate((element, motion) => {
     const svg = element as SampledChevron;
-    const samples = { values: [] as ChevronSample[], transitions: [] as NativeChevronTransition[], frame: 0, stop: false, cleanup: () => {} };
+    const samples = { values: [] as ChevronSample[], transitions: [] as NativeChevronTransition[], frame: 0, stop: false, cleanup: () => {}, settled: null as Promise<void> | null };
     svg.__samples = samples;
     const record = (phase: string) => {
       const box = svg.getBoundingClientRect();
@@ -356,6 +356,14 @@ async function rotateChevron(arrow: Locator, size: number, opened: boolean, moti
       }
       transition.finish();
       record('native-transition-finished');
+      // Commit the finished native transition before testing a new full-length
+      // reversal. An endpoint style alone can precede WebKit's paint cleanup.
+      samples.settled = transition.finished.then(() => new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          record('native-transition-settled');
+          resolve();
+        }));
+      }));
     };
     svg.addEventListener('transitionrun', sampleNativeTransition);
     samples.cleanup = () => svg.removeEventListener('transitionrun', sampleNativeTransition);
@@ -375,6 +383,9 @@ async function rotateChevron(arrow: Locator, size: number, opened: boolean, moti
       const matrix = new DOMMatrix(getComputedStyle(element).transform);
       return Math.abs(matrix.a - (opened ? -1 : 1)) < 0.000001 && Math.abs(matrix.b) < 0.000001;
     }, opened)).toBe(true);
+    await arrow.evaluate(async element => { await (element as SampledChevron).__samples!.settled; });
+    await expect.poll(() => arrow.evaluate(element => element.getAnimations().filter(animation =>
+      'transitionProperty' in animation && animation.transitionProperty === 'transform').length)).toBe(0);
   } finally {
     const captured = await arrow.evaluate(element => {
       const state = (element as SampledChevron).__samples!;
@@ -388,6 +399,16 @@ async function rotateChevron(arrow: Locator, size: number, opened: boolean, moti
   expect(await handle.innerHTML()).toBe(path);
   expect(samples.length).toBeGreaterThan(0);
   const first = samples[0];
+  const endpoint = await arrow.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const owner = element.closest('summary,button')!.getBoundingClientRect();
+    const matrix = new DOMMatrix(getComputedStyle(element).transform);
+    return { x: box.x + box.width / 2 - owner.right, y: box.y + box.height / 2 - (owner.y + owner.height / 2), a: matrix.a, b: matrix.b };
+  });
+  expect(Math.abs(endpoint.x - first.x)).toBeLessThanOrEqual(0.6);
+  expect(Math.abs(endpoint.y - first.y)).toBeLessThanOrEqual(0.6);
+  expect(endpoint.a).toBeCloseTo(opened ? -1 : 1, 6);
+  expect(endpoint.b).toBeCloseTo(0, 6);
   for (const sample of samples) {
     expect(Math.abs(sample.x - first.x), 'arrow rotation keeps its center fixed within the control').toBeLessThanOrEqual(0.6);
     expect(Math.abs(sample.y - first.y), 'arrow does not jump around its baseline').toBeLessThanOrEqual(0.6);
