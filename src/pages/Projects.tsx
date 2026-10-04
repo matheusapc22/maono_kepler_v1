@@ -71,7 +71,7 @@ type ManagementSectionProps = {
  */
 const UsersAccessSectionWithProps =
   UsersAccessSection as React.ComponentType<
-    Pick<ManagementSectionProps, "user" | "organizationId" | "projects">
+    Pick<ManagementSectionProps, "user" | "organizationId" | "projects"> & { onHome?: () => void }
   >;
 
 const OrganizationSectionWithProps =
@@ -882,6 +882,7 @@ function ProjectsSectionRouter({
     case "users":
       return (
         <UsersAccessSectionWithProps
+          onHome={onHome}
           user={user}
           organizationId={organizationId}
           projects={projects}

@@ -1,0 +1,84 @@
+name: Users Access Workspace
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/main.tsx'
+      - 'src/pages/Projects.tsx'
+      - 'src/pages/ProjectsSidebar.tsx'
+      - 'src/pages/Projects/**'
+      - 'src/components/access/**'
+      - 'src/components/selection/**'
+      - 'src/access-control/**'
+      - 'src/auth/session.tsx'
+      - 'src/lib/api.ts'
+      - 'src/platform-density.css'
+      - 'src/platform-layout.css'
+      - 'src/maono-design-tokens.css'
+      - 'functions/_lib/organizations.js'
+      - 'functions/api/organizations/**/users*'
+      - 'functions/api/organizations/**/users/**'
+      - 'tests/users-access*.test.mjs'
+      - 'tests/user-access-commercial.test.mjs'
+      - 'tests/access-delegation.test.mjs'
+      - 'tests/maono-select-migration.test.mjs'
+      - 'tests/helpers/*preservation.mjs'
+      - 'tests/fixtures/users-access-*'
+      - 'tests/browser/users-access-workspace.spec.ts'
+      - 'playwright.users-access.config.ts'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/users-access-workspace.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  users-access-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install existing repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Users workspace, original access logic and API contracts
+        run: >-
+          node --experimental-strip-types --test tests/users-access*.test.mjs
+          tests/user-access-commercial.test.mjs tests/access-delegation.test.mjs
+          tests/maono-select-migration.test.mjs tests/documents-visual-contract.test.mjs
+      - name: Scoped lint
+        run: >-
+          npx eslint src/pages/Projects/components/UsersAccessOverviewSection.tsx
+          src/pages/Projects/components/users-access-pagination.ts
+          tests/browser/users-access-workspace.spec.ts playwright.users-access.config.ts
+      - name: Typecheck and build actual application
+        env:
+          VITE_MAONO_MAP_SHELL_V1: "true"
+          VITE_MAONO_LAYER_MANAGER_V1: "true"
+          VITE_MAONO_MAP_OVERLAY_V1: "true"
+        run: npm run build
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Compiled Users route with synthetic fixture APIs
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: users-access-workspace-results.json
+        run: npx playwright test --config=playwright.users-access.config.ts --reporter=list,json
+      - name: Browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: users-access-workspace-${{ github.sha }}
+          path: |
+            test-results/users-access-workspace/
+            users-access-workspace-results.json
+            tests/browser/users-access-workspace.spec.ts
+            tests/users-access*.test.mjs
+            playwright.users-access.config.ts
+          if-no-files-found: warn
+          retention-days: 14

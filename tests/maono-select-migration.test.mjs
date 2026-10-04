@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
+import { assertUsersAccessPreserved } from "./helpers/users-access-preservation.mjs";
 const root = new URL("../", import.meta.url);
 const read = path => readFileSync(new URL(path, root), "utf8");
 // These consumers were migrated mechanically from merged PR #221, be531dea.
@@ -66,7 +67,9 @@ const consumers = {
     "controls": 2
   },
   "src/pages/Projects/components/UsersAccessOverviewSection.tsx": {
-    "sha256": "a6c92f5228ec6387512d712e1e11629e23e9ff7ff966320ff905b5881b667a8e",
+    // This redesigned consumer has an independent pre-redesign AST/byte
+    // contract. Every other consumer keeps its original full-source hash.
+    "preserve": assertUsersAccessPreserved,
     "controls": 2
   },
   "src/pages/Projects/components/TicketCasesPanel.tsx": {
@@ -122,7 +125,8 @@ for (const [path, contract] of Object.entries(consumers)) {
   test(`shared selector preserves all consumer logic: ${path}`, () => {
     const source = read(path);
     assert.equal((source.match(/<MaonoSelect\b/g) || []).length, contract.controls);
-    assert.equal(createHash("sha256").update(restoreMaonoSelect(source)).digest("hex"), contract.sha256);
+    if (contract.preserve) contract.preserve(source);
+    else assert.equal(createHash("sha256").update(restoreMaonoSelect(source)).digest("hex"), contract.sha256);
   });
 }
 function files(directory) {

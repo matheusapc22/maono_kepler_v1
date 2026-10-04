@@ -3,8 +3,15 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+
+import { Link } from "react-router";
+import DocumentsPagination from "./DocumentsPagination";
+import { DocumentActionMenu, DocumentIcon } from "./DocumentsUi";
+import { paginateUsers, reconcileUsersPagination, type UsersPaginationState } from "./users-access-pagination";
+import "./users-access-workspace.css";
 
 import {
   getOrganizationLimits,
@@ -80,14 +87,21 @@ function formatDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? "-" : new Intl.DateTimeFormat("pt-BR").format(date);
 }
 
-export default function UsersAccessOverviewSection({
-  user,
-  organizationId: organizationIdProp,
-}: {
+type Props = {
   user: MaonoUser | null;
   organizationId?: ApiId | null;
-}) {
+  onHome?: () => void;
+};
+
+export default function UsersAccessOverviewSection({ user, organizationId: organizationIdProp, onHome }: Props) {
   const organizationId = organizationIdProp ?? fallbackOrganizationId(user);
+  // A new authorization context remounts the workspace before rendering any old
+  // rows, popovers or management targets, including an in-flight prior response.
+  const contextKey = JSON.stringify([organizationId, user?.id, roleOf(user), userPermissions(user)]);
+  return <UsersAccessWorkspace key={contextKey} user={user} organizationId={organizationId} onHome={onHome} />;
+}
+
+function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
   const [people, setPeople] = useState<OrganizationUser[]>([]);
   const [limits, setLimits] = useState<OrganizationLimits | null>(null);
   const [governance, setGovernance] = useState<AccessGovernanceCapabilities | null>(null);
@@ -96,14 +110,47 @@ export default function UsersAccessOverviewSection({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [profileFilter, setProfileFilter] = useState("all");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(organizationId && canViewTeam(user)));
+  const [loaded, setLoaded] = useState(false);
+  const requestRef = useRef(0);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const focusReturnFrameRef = useRef<number | null>(null);
+  const [pagination, setPagination] = useState<UsersPaginationState>({ queryKey: "", pageIndex: 0, pageSize: 10 });
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+
+  // Resolve the current row after React removes the dialog. A saved DOM node
+  // can be detached by onSaved/load, pagination or a change of organization.
+  function restorePersonActionFocus(targetId: ApiId | null) {
+    if (focusReturnFrameRef.current !== null) window.cancelAnimationFrame(focusReturnFrameRef.current);
+    if (targetId === null) return;
+    const workspace = workspaceRef.current;
+    const focusedAtClose = document.activeElement;
+    focusReturnFrameRef.current = window.requestAnimationFrame(() => {
+      focusReturnFrameRef.current = null;
+      if (!workspace?.isConnected || workspaceRef.current !== workspace) return;
+      // Never steal focus from a newer dialog or an intervening user action.
+      if (workspace.querySelector('[role="dialog"]')) return;
+      const focusedNow = document.activeElement;
+      if (focusedNow !== document.body && focusedNow !== focusedAtClose && focusedNow?.isConnected) return;
+      const row = Array.from(workspace.querySelectorAll<HTMLElement>('tr[data-user-id]'))
+        .find(item => item.dataset.userId === String(targetId));
+      const trigger = row?.querySelector<HTMLButtonElement>('button.mm-docs-menu-trigger');
+      if (trigger?.isConnected && !trigger.disabled && trigger.getClientRects().length > 0) {
+        trigger.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  useEffect(() => () => {
+    if (focusReturnFrameRef.current !== null) window.cancelAnimationFrame(focusReturnFrameRef.current);
+  }, []);
 
   const canView = canViewTeam(user);
   const isSuperAdmin = roleOf(user) === "super_admin";
 
   const load = useCallback(async () => {
     if (!organizationId || !canView) return;
+    const requestId = ++requestRef.current;
     setLoading(true);
     setMessage(null);
     try {
@@ -118,6 +165,8 @@ export default function UsersAccessOverviewSection({
           return null;
         }),
       ]);
+      if (requestId !== requestRef.current) return;
+      setLoaded(true);
       setPeople(peopleResult.users ?? []);
       setLimits(limitResult?.limits ?? null);
       setGovernance(governanceResult);
@@ -128,13 +177,17 @@ export default function UsersAccessOverviewSection({
         });
       }
     } catch (error) {
+      if (requestId !== requestRef.current) return;
       setMessage({ kind: "error", text: normalizeUserError(error).message });
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   }, [canView, organizationId, user]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => { requestRef.current += 1; };
+  }, [load]);
 
   const delegatedAlternative = Boolean(
     governance?.mode === "organization" && governance.canManageAdditionalAccesses,
@@ -181,96 +234,98 @@ export default function UsersAccessOverviewSection({
     [people, profileFilter, query, status],
   );
 
-  if (!organizationId) {
-    return <section className="mm-card mm-section-card"><h2>Usuários e Acessos</h2><p>Não foi possível identificar a organização ativa.</p></section>;
-  }
-
-  if (!canView) {
-    return <section className="mm-card mm-section-card"><h2>Usuários e Acessos</h2><p>Você não possui acesso para consultar a equipe.</p></section>;
-  }
+  const queryKey = JSON.stringify([organizationId, query, status, profileFilter]);
+  const resolvedPagination = reconcileUsersPagination(pagination, queryKey, filtered.length);
+  const page = paginateUsers(filtered, resolvedPagination.pageIndex, resolvedPagination.pageSize);
+  const hasFilters = Boolean(query || status !== "all" || profileFilter !== "all");
+  useEffect(() => { setPagination(current => reconcileUsersPagination(current, queryKey, filtered.length)); }, [queryKey, filtered.length]);
+  function changePage(pageIndex: number, pageSize: number = page.pageSize) { setPagination({ queryKey, pageIndex, pageSize }); }
 
   return (
-    <section className="people-access-section">
+    <section ref={workspaceRef} className="people-access-section users-access-workspace">
+      <nav className="people-breadcrumb" aria-label="Caminho da página">
+        <Link to="/projects" onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome?.(); }}>Início</Link>
+        <DocumentIcon name="chevron" /><span aria-current="page">Usuários e Acessos</span>
+      </nav>
       <header className="people-access-header">
-        <div>
-          <span className="people-eyebrow">VISÃO DA EQUIPE</span>
-          <h2>Usuários e Acessos</h2>
-          <p>Consulte pessoas, perfis e acessos da organização. Cada vínculo de projeto usa uma única rota de mapa: Viewer ou Editor.</p>
-        </div>
-        <div className="people-access-actions">
-          {isSuperAdmin && (
-            <a className="mm-btn primary" href={"/admin?section=users&organization=" + encodeURIComponent(String(organizationId))}>
-              Gerenciar no Painel Admin
-            </a>
-          )}
-        </div>
+        <h1>Usuários e Acessos</h1>
+        {organizationId && canView && isSuperAdmin && (
+          <a className="mm-btn primary people-admin-action" href={"/admin?section=users&organization=" + encodeURIComponent(String(organizationId))}>
+            Gerenciar no Painel Admin
+          </a>
+        )}
       </header>
 
-      {delegatedAlternative ? (
-        <div className="people-notice governance active" role="status">
-          <strong>Delegação limitada ativa</strong>
-          <span>Use <strong>Mapa</strong> para definir Viewer ou Editor por projeto e <strong>Gerenciar</strong> para os acessos adicionais autorizados.</span>
-        </div>
-      ) : isSuperAdmin ? (
-        <div className="people-notice governance active" role="status">
-          <strong>Gestão de rotas disponível</strong>
-          <span>Use <strong>Mapa</strong> para atribuir a rota exclusiva e controlar a criação de novos projetos.</span>
-        </div>
-      ) : (
-        <div className="people-notice governance" role="status">
-          <strong>Consulta operacional</strong>
-          <span>Esta tela não altera perfis, vínculos ou acessos sem delegação.</span>
-        </div>
-      )}
+      {!organizationId ? <div className="people-empty"><p>Não foi possível identificar a organização ativa.</p></div> : !canView ? <div className="people-empty"><p>Você não possui acesso para consultar a equipe.</p></div> : <>
+        {message && <div className={"people-notice " + message.kind} role={message.kind === "error" ? "alert" : "status"}>
+          <span>{message.text}</span>
+          {message.kind === "error" && <button type="button" disabled={loading} onClick={() => void load()}>Tentar novamente</button>}
+        </div>}
 
-      <div className="people-capacity-grid">
-        <article><span>Pessoas com acesso</span><strong>{active}</strong></article>
-        <article><span>Limite da organização</span><strong>{limit}</strong></article>
-        <article><span>Vagas disponíveis</span><strong>{available}</strong></article>
-        <article><span>Acessos suspensos</span><strong>{suspended}</strong></article>
-      </div>
+        <section className="people-tools" aria-label="Filtros de usuários">
+          <header className="people-filter-header">
+            <strong><DocumentIcon name="filter" />Filtros</strong>
+            <button type="button" className="people-clear" disabled={!hasFilters} onClick={() => { setQuery(""); setStatus("all"); setProfileFilter("all"); }}><DocumentIcon name="restore" />Limpar filtros</button>
+          </header>
+          <div className="people-toolbar">
+            <label><span>Buscar</span><span className="people-search"><DocumentIcon name="search" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, e-mail ou acesso" /></span></label>
+            <label><span>Situação</span><MaonoSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todas</option><option value="active">Ativo</option><option value="suspended">Suspenso</option></MaonoSelect></label>
+            <label><span>Perfil</span><MaonoSelect value={profileFilter} onChange={(event) => setProfileFilter(event.target.value)}><option value="all">Todos os perfis</option>{Array.from(new Set(people.map(profileLabel))).map((label) => <option key={label}>{label}</option>)}</MaonoSelect></label>
+          </div>
+        </section>
 
-      <div className="people-capacity-progress">
-        <div><span>{active} de {limit} acessos utilizados</span><strong>{percent}%</strong></div>
-        <progress max="100" value={percent}>{percent}%</progress>
-      </div>
+        <section className="people-capacity-grid" aria-label="Indicadores da equipe" aria-busy={loading}>
+          <article><span>Pessoas com acesso</span><strong>{loaded ? active : "—"}</strong></article>
+          <article><span>Limite da organização</span><strong>{loaded ? limit : "—"}</strong></article>
+          <article><span>Vagas disponíveis</span><strong>{loaded ? available : "—"}</strong></article>
+          <article><span>Acessos suspensos</span><strong>{loaded ? suspended : "—"}</strong></article>
+        </section>
 
-      {message && <div className={"people-notice " + message.kind} role={message.kind === "error" ? "alert" : "status"}>{message.text}</div>}
-
-      <div className="people-toolbar">
-        <label><span>Buscar</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, e-mail ou acesso" /></label>
-        <label><span>Situação</span><MaonoSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Todas</option><option value="active">Ativo</option><option value="suspended">Suspenso</option></MaonoSelect></label>
-        <label><span>Perfil</span><MaonoSelect value={profileFilter} onChange={(event) => setProfileFilter(event.target.value)}><option value="all">Todos os perfis</option>{Array.from(new Set(people.map(profileLabel))).map((label) => <option key={label}>{label}</option>)}</MaonoSelect></label>
-      </div>
-
-      <div className="people-table-wrap">
-        <table>
-          <thead><tr><th>Pessoa</th><th>Situação</th><th>Perfil</th><th>Acessos adicionais</th><th>Atualizado em</th><th>Ações</th></tr></thead>
-          <tbody>
-            {loading && <tr><td colSpan={6}>Carregando pessoas com acesso...</td></tr>}
-            {!loading && filtered.length === 0 && <tr><td colSpan={6}>Nenhuma pessoa encontrada.</td></tr>}
-            {!loading && filtered.map((person) => {
-              const manageAdditional = canManagePerson(person);
-              const manageMap = canManageMapPerson(person);
-              return (
-                <tr key={String(person.id)}>
-                  <td><strong>{person.name || "Pessoa sem nome"}</strong><small>{person.email}</small></td>
-                  <td><span className={"people-status " + (person.active === false ? "suspended" : "active")}>{person.active === false ? "Suspenso" : "Ativo"}</span></td>
-                  <td>{profileLabel(person)}</td>
-                  <td>{(person.permissions ?? []).length ? String(person.permissions?.length) + " acesso" + (person.permissions?.length === 1 ? "" : "s") : "Nenhum adicional"}</td>
-                  <td>{formatDate(person.updatedAt ?? person.createdAt)}</td>
-                  <td>{manageMap || manageAdditional ? (
-                    <div className="people-access-actions">
-                      {manageMap && <button className="mm-btn tiny people-manage-button" type="button" onClick={() => setMapAccessTargetUserId(person.id)}>Mapa</button>}
-                      {manageAdditional && <button className="mm-btn tiny people-manage-button" type="button" onClick={() => setManagementTargetUserId(person.id)}>Gerenciar</button>}
-                    </div>
-                  ) : <span className="people-action-unavailable">—</span>}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+        <section className="people-content" aria-label="Pessoas da organização" aria-busy={loading}>
+          <header className="people-content-header">
+            <div><h2>Equipe</h2><p>{delegatedAlternative ? "Delegação limitada ativa: use Mapa e Gerenciar nas ações de cada pessoa." : isSuperAdmin ? "Use Mapa nas ações de cada pessoa para gerenciar as rotas de projeto." : "Consulta operacional: alterações de acesso exigem delegação."}</p></div>
+            {loaded && <div className="people-capacity-progress"><span>{active} de {limit} acessos utilizados · {percent}%</span><progress aria-label="Capacidade de acessos utilizada" max="100" value={percent}>{percent}%</progress></div>}
+          </header>
+          <div key={`${queryKey}:${page.pageIndex}:${page.pageSize}`} className="people-table-wrap" tabIndex={0} role="region" aria-label="Lista de pessoas">
+            <table aria-label="Usuários e acessos da organização">
+              <thead><tr><th scope="col">Pessoa</th><th scope="col">Situação</th><th scope="col">Perfil</th><th scope="col">Acessos adicionais</th><th scope="col">Atualizado em</th><th scope="col">Ações</th></tr></thead>
+              <tbody>
+                {loading && <tr><td colSpan={6} className="people-table-state"><span role="status">Carregando pessoas com acesso...</span></td></tr>}
+                {!loading && !loaded && <tr><td colSpan={6} className="people-table-state">Não foi possível carregar a equipe. Tente novamente.</td></tr>}
+                {!loading && loaded && filtered.length === 0 && <tr><td colSpan={6} className="people-table-state">Nenhuma pessoa encontrada.</td></tr>}
+                {!loading && page.people.map((person) => {
+                  const manageAdditional = canManagePerson(person);
+                  const manageMap = canManageMapPerson(person);
+                  return (
+                    <tr key={String(person.id)} data-user-id={String(person.id)}>
+                      <td><strong>{person.name || "Pessoa sem nome"}</strong><small>{person.email}</small></td>
+                      <td><span className={"people-status " + (person.active === false ? "suspended" : "active")}>{person.active === false ? "Suspenso" : "Ativo"}</span></td>
+                      <td>{profileLabel(person)}</td>
+                      <td>{(person.permissions ?? []).length ? String(person.permissions?.length) + " acesso" + (person.permissions?.length === 1 ? "" : "s") : "Nenhum adicional"}</td>
+                      <td>{formatDate(person.updatedAt ?? person.createdAt)}</td>
+                      <td>{manageMap || manageAdditional ? (
+                        <DocumentActionMenu label={`Ações de ${person.name || person.email || "Pessoa sem nome"}`} actions={[
+                          ...(manageMap ? [{ label: "Mapa", onSelect: () => setMapAccessTargetUserId(person.id) }] : []),
+                          ...(manageAdditional ? [{ label: "Gerenciar", onSelect: () => setManagementTargetUserId(person.id) }] : []),
+                        ]} />
+                      ) : <button className="mm-docs-button mm-docs-menu-trigger" type="button" disabled aria-label={`Nenhuma ação disponível para ${person.name || person.email || "Pessoa sem nome"}`} title="Nenhuma ação disponível"><DocumentIcon name="more" /></button>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <footer className="people-pagination" aria-label="Paginação de usuários">
+            <DocumentsPagination
+              status={loading ? "Atualizando usuários." : loaded ? `Exibindo ${page.people.length}/${page.total}.` : "Não foi possível atualizar usuários."}
+              page={page.pageIndex + 1} pageSize={page.pageSize}
+              canGoPrevious={page.canGoPrevious} canGoNext={page.canGoNext}
+              disabled={loading || !loaded} disablePageSize={loading || !loaded}
+              onPageSize={size => changePage(0, size)}
+              onPrevious={() => changePage(page.pageIndex - 1)} onNext={() => changePage(page.pageIndex + 1)}
+            />
+          </footer>
+        </section>
 
       {managementTargetUserId !== null && delegatedAlternative && (
         <OrganizationPermissionManager
@@ -278,7 +333,7 @@ export default function UsersAccessOverviewSection({
           actorUserId={user?.id}
           initialTargetUserId={managementTargetUserId}
           mode="delegated"
-          onClose={() => setManagementTargetUserId(null)}
+          onClose={() => { setManagementTargetUserId(null); restorePersonActionFocus(managementTargetUserId); }}
           onSaved={load}
         />
       )}
@@ -287,10 +342,11 @@ export default function UsersAccessOverviewSection({
         <ProjectMapAccessManager
           organizationId={organizationId}
           userId={mapAccessTargetUserId}
-          onClose={() => setMapAccessTargetUserId(null)}
+          onClose={() => { setMapAccessTargetUserId(null); restorePersonActionFocus(mapAccessTargetUserId); }}
           onSaved={load}
         />
       )}
+      </>}
     </section>
   );
 }
