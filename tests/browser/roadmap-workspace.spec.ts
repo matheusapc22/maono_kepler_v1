@@ -13,11 +13,11 @@ const tasks: RoadmapTask[] = Array.from({ length: 36 }, (_, index) => ({
 }));
 const errors = new WeakMap<Page, string[]>();
 const writes = new WeakMap<Page, string[]>();
-type FixtureOptions = { dataset?: RoadmapTask[]; emptyIndex?: boolean; fail?: boolean; delay?: Promise<void>; role?: string; multipleRoadmaps?: boolean; beforeBundle?: (params: URLSearchParams) => Promise<void> };
+type FixtureOptions = { dataset?: RoadmapTask[]; emptyIndex?: boolean; fail?: boolean; failIndex?: boolean; delay?: Promise<void>; indexDelay?: Promise<void>; role?: string; multipleRoadmaps?: boolean; beforeIndex?: (organizationId: number) => Promise<void>; beforeBundle?: (params: URLSearchParams, context: { organizationId: number; roadmapId: number }) => Promise<void> };
 async function setup(page: Page, options: FixtureOptions = {}) {
   const state = structuredClone(options.dataset ?? tasks);
   const requests: { path: string; method: string; params: URLSearchParams; body: Record<string, unknown> | null }[] = [];
-  let fail = options.fail, organizationId = 1;
+  let fail = options.fail, failIndex = options.failIndex, organizationId = 1;
   const organizations = [{ id: 1, name: "Organização de demonstração", slug: "demo", active: true }, { id: 2, name: "Organização secundária", slug: "second", active: true }];
   const session = () => ({ authenticated: true, user: { id: 1, name: "Operador de demonstração", email: "qa@example.test", role: options.role ?? "super_admin", activeOrganizationId: organizationId, organizationId, permissions: options.role === "viewer" ? ["roadmap.view", "roadmap.comment.create"] : [] }, projects: [], organizations, activeOrganization: organizations.find(item => item.id === organizationId) });
   errors.set(page, []); writes.set(page, []);
@@ -35,8 +35,12 @@ async function setup(page: Page, options: FixtureOptions = {}) {
     if (roadmapsMatch) {
       const requestedOrganization = Number(roadmapsMatch[1]), roadmapId = Number(roadmapsMatch[2] || 1);
       const selectedRoadmap = { ...roadmap, organizationId: requestedOrganization, id: roadmapId, name: roadmapId === 2 ? "Outro planejamento" : roadmap.name };
-      if (!roadmapsMatch[2]) return route.fulfill({ json: { roadmaps: options.emptyIndex ? [] : [selectedRoadmap, ...(options.multipleRoadmaps ? [{ ...selectedRoadmap, id: 2, name: "Outro planejamento" }] : [])] } });
-      await options.delay; await options.beforeBundle?.(url.searchParams);
+      if (!roadmapsMatch[2]) {
+        await options.indexDelay; await options.beforeIndex?.(requestedOrganization);
+        if (failIndex) return route.fulfill({ status: 503, json: { ok: false, error: "Não foi possível carregar o roadmap.", code: "SERVICE_UNAVAILABLE" } });
+        return route.fulfill({ json: { roadmaps: options.emptyIndex ? [] : [selectedRoadmap, ...(options.multipleRoadmaps ? [{ ...selectedRoadmap, id: 2, name: "Outro planejamento" }] : [])] } });
+      }
+      await options.delay; await options.beforeBundle?.(url.searchParams, { organizationId: requestedOrganization, roadmapId });
       if (fail) return route.fulfill({ status: 503, json: { ok: false, error: "Não foi possível carregar o roadmap.", code: "SERVICE_UNAVAILABLE" } });
       const params = url.searchParams;
       const source = requestedOrganization === 2 ? state.slice(0, 4) : roadmapId === 2 ? state.slice(0, 3) : state;
@@ -59,7 +63,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
   await page.goto("/projects");
   await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).click();
   await expect(page.getByRole("heading", { name: "Roadmap", exact: true, level: 1 })).toBeVisible();
-  return { requests, state, recover: () => { fail = false; } };
+  return { requests, state, recover: () => { fail = false; failIndex = false; } };
 }
 const shell = (page: Page) => page.locator(".roadmap-workspace");
 const region = (page: Page) => shell(page).locator(".roadmap-scroll");
@@ -333,4 +337,150 @@ test("an initially empty roadmap has zero-count shared pagination at every suppo
   await expect(shell(page).getByText("Nenhuma tarefa no período", { exact: true })).toBeVisible();
   await expect(shell(page).locator(".roadmap-pagination")).not.toContainText("Dias úteis");
   await expect(shell(page).locator(".roadmap-footer")).toHaveCount(0);
+});
+
+
+for (const viewport of [{ name: "desktop", width: 1440, height: 1100, view: "gantt" }, { name: "mobile", width: 390, height: 844, view: "list" }]) {
+  test(`shared shimmer covers index and bundle without empty flashes on ${viewport.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.addInitScript(() => {
+      const state = window as Window & { __roadmapEmptyFlashes?: string[] };
+      state.__roadmapEmptyFlashes = [];
+      new MutationObserver(() => {
+        const text = document.querySelector(".roadmap-workspace .roadmap-empty")?.textContent;
+        if (text?.includes("Nenhum roadmap ativo")) state.__roadmapEmptyFlashes!.push(text);
+      }).observe(document, { childList: true, subtree: true });
+    });
+    let releaseIndex!: () => void, releaseBundle!: () => void;
+    const indexDelay = new Promise<void>(resolve => { releaseIndex = resolve; });
+    const delay = new Promise<void>(resolve => { releaseBundle = resolve; });
+    const fixture = await setup(page, { indexDelay, delay });
+    const loading = shell(page).locator(".roadmap-loading");
+    try {
+      await expect(loading).toHaveAttribute("aria-busy", "true");
+      await expect(shell(page).getByRole("status")).toHaveCount(1);
+      expect(await shell(page).getByRole("status").evaluate(element => element.closest('[aria-busy="true"]') === null)).toBe(true);
+      await expect(shell(page).getByRole("status", { name: "Carregando roadmap" })).toBeVisible();
+      await expect(loading.locator(".roadmap-loading-layout")).toHaveAttribute("aria-hidden", "true");
+      await expect(loading.locator(`.roadmap-loading-${viewport.view}`)).toBeVisible();
+      await expect(loading.locator(".roadmap-metrics article")).toHaveCount(5);
+      await expect(loading.locator(".roadmap-filters > div")).toHaveCount(4);
+      await expect(loading.locator("button, input, select, a, [tabindex]")).toHaveCount(0);
+      const shimmer = loading.locator(".mm-skeleton").first();
+      await expect(shimmer).toBeVisible();
+      expect(await shimmer.evaluate(element => getComputedStyle(element, "::after").animationName)).toBe("mm-shimmer");
+      expect(await overflow(page)).toBe(false);
+      await page.screenshot({ path: testInfo.outputPath(`roadmap-shimmer-${viewport.name}.png`), fullPage: true });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      expect(await shimmer.evaluate(element => getComputedStyle(element, "::after").animationName)).toBe("none");
+      releaseIndex();
+      await expect.poll(() => fixture.requests.filter(request => request.path === "/api/organizations/1/roadmaps/1").length).toBeGreaterThan(0);
+      await expect(loading).toBeVisible();
+      await expect(shell(page).getByText("Nenhum roadmap ativo", { exact: true })).toHaveCount(0);
+      releaseBundle();
+      await expect(loading).toHaveCount(0);
+      await expectPage(page, 10, 36, 1);
+      expect(await page.evaluate(() => (window as Window & { __roadmapEmptyFlashes?: string[] }).__roadmapEmptyFlashes)).toEqual([]);
+      expect(await overflow(page)).toBe(false);
+    } finally { releaseIndex(); releaseBundle(); }
+  });
+}
+
+test("index failures show a real retry and never leave a shimmering error state", async ({ page }) => {
+  const fixture = await setup(page, { failIndex: true });
+  await expect(shell(page).getByRole("alert")).toBeVisible();
+  await expect(shell(page).locator(".roadmap-loading")).toHaveCount(0);
+  await expect(shell(page).getByText("Nenhum roadmap ativo", { exact: true })).toHaveCount(0);
+  fixture.recover();
+  await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
+  await expectPage(page, 10, 36, 1);
+  await expect(shell(page).getByRole("alert")).toHaveCount(0);
+});
+
+test("filter refresh keeps real content and ignores the superseded slow response", async ({ page }) => {
+  let release!: () => void, entered = false, completed = false;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  await setup(page, { beforeBundle: async params => { if (params.get("search") === "Entrega 01") { entered = true; await delayed; completed = true; } } });
+  await expectPage(page, 10, 36, 1);
+  const metrics = await shell(page).locator(".roadmap-metrics").innerText();
+  await shell(page).getByRole("searchbox", { name: "Buscar tarefa" }).fill("Entrega 01");
+  try {
+    await expect.poll(() => entered).toBe(true);
+    await expect(shell(page).locator(".roadmap-scroll")).toHaveAttribute("aria-busy", "true");
+    await expect(shell(page).locator(".roadmap-loading")).toHaveCount(0);
+    await expect(shell(page).locator(".roadmap-gantt-row")).toHaveCount(10);
+    expect(await shell(page).locator(".roadmap-metrics").innerText()).toBe(metrics);
+    await expect(pagination(page).getByRole("status")).toHaveText("Atualizando tarefas.");
+    await shell(page).getByRole("searchbox", { name: "Buscar tarefa" }).fill("Entrega 02");
+    await expectPage(page, 1, 1, 1);
+    await expect(shell(page).locator(".roadmap-gantt-row")).toContainText("Entrega 02");
+    release(); await expect.poll(() => completed).toBe(true);
+    await expect(shell(page).locator(".roadmap-gantt-row")).toContainText("Entrega 02");
+    await expect(shell(page).locator(".roadmap-scroll")).toHaveAttribute("aria-busy", "false");
+    await expect(shell(page).getByRole("alert")).toHaveCount(0);
+  } finally { release(); }
+});
+
+test("late organization bundle and unmounted index responses cannot replace the active roadmap", async ({ page }) => {
+  let release!: () => void, entered = false, completed = false;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  await setup(page, { beforeBundle: async (params, context) => {
+    if (context.organizationId === 1 && params.get("search") === "Entrega 01") { entered = true; await delayed; completed = true; }
+  } });
+  await expectPage(page, 10, 36, 1);
+  await shell(page).getByRole("searchbox", { name: "Buscar tarefa" }).fill("Entrega 01");
+  try {
+    await expect.poll(() => entered).toBe(true);
+    await page.getByRole("button", { name: /Trocar organização ativa/ }).click();
+    await page.getByRole("option", { name: /Organização secundária/ }).click();
+    await expect(page.getByRole("heading", { name: "Todos os Projetos", exact: true })).toBeVisible();
+    await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).click();
+    await expectPage(page, 4, 4, 1);
+    release(); await expect.poll(() => completed).toBe(true);
+    await expectPage(page, 4, 4, 1);
+    await expect(shell(page).getByRole("alert")).toHaveCount(0);
+  } finally { release(); }
+});
+
+test("leaving a delayed index and returning starts a fresh request without stale loading", async ({ page }) => {
+  let release!: () => void, entered = false, completed = false, indexReads = 0;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  await setup(page, { beforeIndex: async () => { indexReads += 1; if (indexReads === 1) { entered = true; await delayed; completed = true; } } });
+  try {
+    await expect.poll(() => entered).toBe(true);
+    await expect(shell(page).locator(".roadmap-loading")).toBeVisible();
+    await shell(page).getByRole("navigation").getByRole("link", { name: "Início" }).click();
+    await expect(page.getByRole("heading", { name: "Todos os Projetos", exact: true })).toBeVisible();
+    await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).click();
+    await expectPage(page, 10, 36, 1);
+    release(); await expect.poll(() => completed).toBe(true);
+    await expectPage(page, 10, 36, 1);
+    await expect(shell(page).locator(".roadmap-loading")).toHaveCount(0);
+    await expect(shell(page).getByRole("alert")).toHaveCount(0);
+    expect(indexReads).toBeGreaterThanOrEqual(2);
+  } finally { release(); }
+});
+
+test("same-query refresh after saving retains loaded rows until the replacement arrives", async ({ page }) => {
+  let release!: () => void, bundleReads = 0, refreshing = false;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  await setup(page, { beforeBundle: async () => { bundleReads += 1; if (bundleReads > 1) { refreshing = true; await delayed; } } });
+  await expectPage(page, 10, 36, 1);
+  await shell(page).locator(".roadmap-gantt-row").first().click();
+  const drawer = page.getByRole("dialog");
+  await drawer.getByLabel("Título", { exact: true }).fill("Entrega revisada no mesmo roadmap");
+  await drawer.getByRole("button", { name: "Salvar tarefa", exact: true }).click();
+  try {
+    await expect(drawer).toHaveCount(0);
+    await expect.poll(() => refreshing).toBe(true);
+    await expect(shell(page).locator(".roadmap-scroll")).toHaveAttribute("aria-busy", "true");
+    await expect(shell(page).locator(".roadmap-loading")).toHaveCount(0);
+    await expect(shell(page).locator(".roadmap-gantt-row")).toHaveCount(10);
+    await expect(shell(page).locator(".roadmap-gantt-row").first()).toContainText("Entrega 01");
+    await expect(pagination(page).getByRole("status")).toHaveText("Atualizando tarefas.");
+    release();
+    await expect(shell(page).locator(".roadmap-gantt-row").first()).toContainText("Entrega revisada no mesmo roadmap");
+    await expectPage(page, 10, 36, 1);
+    await expect(shell(page).locator(".roadmap-scroll")).toHaveAttribute("aria-busy", "false");
+  } finally { release(); }
 });

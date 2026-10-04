@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Skeleton } from "../../../components/loading/Skeleton";
 import { Link } from "react-router";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { DocumentIcon } from "./DocumentsUi";
@@ -20,6 +21,33 @@ const errorText = (error: unknown) => normalizeUserError(error).message || "Não
 
 function timelineDays(start: string, end: string) { return Math.max(1, Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY) + 1); }
 function position(value: string, start: string, total: number) { return Math.max(0, Math.min(100, (Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / DAY) / total) * 100)); }
+
+function RoadmapLoadingSkeleton({ view }: { view: RoadmapView }) {
+  return <><div className="roadmap-loading" aria-busy="true">
+    <div className="roadmap-loading-layout" aria-hidden="true">
+      <div className="roadmap-tools">
+        <div className="roadmap-filter-header"><Skeleton width={88} height={16} /><Skeleton width={112} height={28} /></div>
+        <div className="roadmap-filters">{Array.from({ length: 4 }, (_, index) => <div className="roadmap-loading-field" key={index}><Skeleton width={index ? "48%" : "38%"} height={12} /><Skeleton height="var(--maono-density-control, 40px)" radius={7} /></div>)}</div>
+      </div>
+      <div className="roadmap-metrics">{Array.from({ length: 5 }, (_, index) => <article key={index}><Skeleton className="roadmap-loading-icon" width={38} height={38} radius={10} /><div className="roadmap-loading-metric"><Skeleton width="80%" height={12} /><Skeleton width={index === 4 ? "92%" : "48%"} height={25} /></div></article>)}</div>
+      <div className="roadmap-content">
+        <div className="roadmap-content-header"><Skeleton width={100} height={18} /><div className="roadmap-view-tools"><Skeleton width={112} height={38} /><Skeleton width={140} height={38} /></div></div>
+        <div className="roadmap-loading-scroll">
+          <div className={`roadmap-loading-${view}`}>
+            <div className="roadmap-loading-columns">{Array.from({ length: view === "gantt" ? 2 : 6 }, (_, index) => <Skeleton key={index} width={index ? "58%" : "64%"} height={12} />)}</div>
+            {Array.from({ length: 10 }, (_, index) => <div className="roadmap-loading-row" key={index}>
+              <div className="roadmap-loading-field"><Skeleton width={`${72 - index % 3 * 8}%`} height={14} /><Skeleton width="48%" height={11} /></div>
+              {view === "gantt" ? <div className="roadmap-loading-timeline"><Skeleton width={`${28 + index % 3 * 12}%`} height={24} style={{ marginLeft: `${index % 4 * 12}%` }} /></div> : Array.from({ length: 5 }, (_, column) => <Skeleton key={column} width={column === 2 ? "72%" : "64%"} height={column === 2 ? 24 : 13} />)}
+            </div>)}
+          </div>
+        </div>
+        <div className="roadmap-loading-footer"><Skeleton width={112} height={13} /><Skeleton width={180} height={32} /></div>
+      </div>
+    </div>
+  </div>
+    <span className="mm-sr-only" role="status" aria-label="Carregando roadmap">Carregando roadmap.</span>
+  </>;
+}
 
 function RoadmapMetrics({ bundle }: { bundle: RoadmapBundle }) {
   const items = [
@@ -89,9 +117,32 @@ function TaskDrawer({ open, task, bundle, canManage, canComment, organizationId,
 export default function RoadmapSection({ user, organizationId, organizationName, onHome }: Props) {
   const context = useMemo(() => ({ organizationId: organizationId || undefined, organization: organizationId ? { id: organizationId } : undefined }), [organizationId]);
   const canView = can(user, PERMISSION.ROADMAP_VIEW, context); const canManage = can(user, PERMISSION.ROADMAP_MANAGE, context) || can(user, PERMISSION.ROADMAP_TASK_MANAGE, context); const canComment = can(user, PERMISSION.ROADMAP_COMMENT_CREATE, context);
-  const [roadmaps, setRoadmaps] = useState<RoadmapSummary[]>([]); const [roadmapId, setRoadmapId] = useState<number | null>(null); const [bundle, setBundle] = useState<RoadmapBundle | null>(null); const [filters, setFilters] = useState<RoadmapFilters>(DEFAULT_ROADMAP_FILTERS); const [view, setView] = useState<RoadmapView>(() => (window.innerWidth < 760 ? "list" : "gantt")); const [scale, setScale] = useState<RoadmapScale>("week"); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null); const [drawerOpen, setDrawerOpen] = useState(false); const [selected, setSelected] = useState<RoadmapTask | null>(null); const requestRef = useRef(0);
+  const scopeKey = organizationId && canView ? String(organizationId) : null;
+  const [index, setIndex] = useState<{ scopeKey: string | null; items: RoadmapSummary[]; status: "loading" | "ready" | "error" }>({ scopeKey: null, items: [], status: "loading" });
+  const [selection, setSelection] = useState<{ scopeKey: string | null; id: number | null }>({ scopeKey: null, id: null });
+  const roadmaps = index.scopeKey === scopeKey ? index.items : [];
+  const roadmapId = selection.scopeKey === scopeKey ? selection.id : null;
+  const setRoadmapId = (id: number | null) => setSelection({ scopeKey, id });
+  const [bundleState, setBundleState] = useState<{ scopeKey: string; queryKey: string; value: RoadmapBundle } | null>(null);
+  // Keep the current roadmap visible during refresh, but never reuse another organization's data.
+  const bundle = bundleState && bundleState.scopeKey === scopeKey && bundleState.value.roadmap.id === roadmapId ? bundleState.value : null;
+  const [filters, setFilters] = useState<RoadmapFilters>(DEFAULT_ROADMAP_FILTERS);
+  const [view, setView] = useState<RoadmapView>(() => (window.innerWidth < 760 ? "list" : "gantt"));
+  const [scale, setScale] = useState<RoadmapScale>("week");
+  const [loadingQueryKey, setLoadingQueryKey] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<{ scopeKey: string | null; queryKey: string | null; message: string } | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false); const [selected, setSelected] = useState<RoadmapTask | null>(null);
+  const requestRef = useRef(0); const indexRequestRef = useRef(0);
+  const bundleControllerRef = useRef<AbortController | null>(null); const indexControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(false);
   const queryKey = roadmapPaginationKey(organizationId, roadmapId, filters);
-  const [loadedBundleKey, setLoadedBundleKey] = useState<string | null>(null);
+  const currentRequestRef = useRef({ scopeKey, queryKey });
+  currentRequestRef.current = { scopeKey, queryKey };
+  const error = errorState && errorState.scopeKey === scopeKey && (errorState.queryKey === null || errorState.queryKey === queryKey) ? errorState.message : null;
+  const loadedBundleKey = bundle ? bundleState?.queryKey : null;
+  const indexPending = scopeKey !== null && (index.scopeKey !== scopeKey || index.status === "loading");
+  // A selected but not-yet-loaded bundle includes the index-to-detail handoff and search debounce.
+  const loading = indexPending || loadingQueryKey === queryKey || Boolean(roadmapId && loadedBundleKey !== queryKey && !error);
   const [pagination, setPagination] = useState<RoadmapPaginationState>({ queryKey: "", pageIndex: 0, pageSize: 10 });
   const totalTasks = bundle?.tasks.length ?? 0;
   const resolvedPagination = reconcileRoadmapPagination(pagination, queryKey, totalTasks);
@@ -99,12 +150,57 @@ export default function RoadmapSection({ user, organizationId, organizationName,
   const paginationPending = loading || loadedBundleKey !== queryKey;
   useEffect(() => { setPagination(current => reconcileRoadmapPagination(current, queryKey, totalTasks)); }, [queryKey, totalTasks]);
   function changePage(pageIndex: number, pageSize: number = page.pageSize) { setPagination({ queryKey, pageIndex, pageSize }); }
-  async function loadIndex(signal?: AbortSignal) { if (!organizationId || !canView) return; setLoading(true); try { const items = await listRoadmaps(organizationId, signal); setRoadmaps(items); setRoadmapId((current) => items.some((item) => item.id === current) ? current : items[0]?.id || null); } catch (value) { if (!(value instanceof DOMException && value.name === "AbortError")) setError(errorText(value)); } finally { setLoading(false); } }
-  async function loadBundle(background = false) { if (!organizationId || !roadmapId) { setBundle(null); return; } const id = ++requestRef.current; if (!background) setLoading(true); try { const value = await getRoadmap(organizationId, roadmapId, filters); if (id === requestRef.current) { setBundle(value); setLoadedBundleKey(queryKey); setError(null); } } catch (value) { if (id === requestRef.current) setError(errorText(value)); } finally { if (id === requestRef.current) setLoading(false); } }
-  useEffect(() => { const controller = new AbortController(); setRoadmaps([]); setBundle(null); setLoadedBundleKey(null); setFilters(DEFAULT_ROADMAP_FILTERS); void loadIndex(controller.signal); return () => controller.abort(); }, [organizationId, canView]);
+  const loadIndex = useCallback(async () => {
+    if (!organizationId || !scopeKey || !mountedRef.current || currentRequestRef.current.scopeKey !== scopeKey) return;
+    indexControllerRef.current?.abort();
+    const controller = new AbortController(); indexControllerRef.current = controller;
+    const id = ++indexRequestRef.current;
+    const isCurrent = () => !controller.signal.aborted && mountedRef.current && id === indexRequestRef.current && currentRequestRef.current.scopeKey === scopeKey;
+    setIndex({ scopeKey, items: [], status: "loading" }); setErrorState(null);
+    try {
+      const items = await listRoadmaps(organizationId, controller.signal);
+      if (!isCurrent()) return;
+      setIndex({ scopeKey, items, status: "ready" });
+      setSelection(current => ({ scopeKey, id: current.scopeKey === scopeKey && items.some(item => item.id === current.id) ? current.id : items[0]?.id || null }));
+    } catch (value) {
+      if (!isCurrent()) return;
+      setIndex({ scopeKey, items: [], status: "error" });
+      setErrorState({ scopeKey, queryKey: null, message: errorText(value) });
+    }
+  }, [organizationId, scopeKey]);
+  const loadBundle = useCallback(async () => {
+    if (!organizationId || !scopeKey || !roadmapId || !mountedRef.current || currentRequestRef.current.queryKey !== queryKey) return;
+    bundleControllerRef.current?.abort();
+    const controller = new AbortController(); bundleControllerRef.current = controller;
+    const id = ++requestRef.current;
+    const isCurrent = () => !controller.signal.aborted && mountedRef.current && id === requestRef.current && currentRequestRef.current.queryKey === queryKey;
+    setLoadingQueryKey(queryKey); setErrorState(null);
+    try {
+      const value = await getRoadmap(organizationId, roadmapId, filters, controller.signal);
+      if (isCurrent()) setBundleState({ scopeKey, queryKey, value });
+    } catch (value) {
+      if (isCurrent()) setErrorState({ scopeKey, queryKey, message: errorText(value) });
+    } finally {
+      if (isCurrent()) setLoadingQueryKey(null);
+    }
+  }, [organizationId, scopeKey, roadmapId, filters, queryKey]);
+  useEffect(() => {
+    mountedRef.current = true;
+    setSelection({ scopeKey, id: null }); setBundleState(null); setLoadingQueryKey(null); setErrorState(null);
+    setFilters(DEFAULT_ROADMAP_FILTERS); setDrawerOpen(false); setSelected(null);
+    void loadIndex();
+    return () => {
+      mountedRef.current = false;
+      indexControllerRef.current?.abort(); bundleControllerRef.current?.abort();
+    };
+  }, [scopeKey, loadIndex]);
   useEffect(() => { const adapt = () => { if (window.innerWidth < 760) setView("list"); }; adapt(); window.addEventListener("resize", adapt); return () => window.removeEventListener("resize", adapt); }, []);
-  useEffect(() => { const timer = window.setTimeout(() => void loadBundle(), filters.search ? 250 : 0); return () => window.clearTimeout(timer); }, [roadmapId, filters]);
-  async function quickCreateRoadmap() { if (!organizationId) return; const name = window.prompt("Nome do roadmap", `Roadmap ${organizationName || "da organização"}`); if (!name) return; const startDate = today(); const endDate = new Date(Date.now() + 120 * DAY).toISOString().slice(0, 10); try { const item = await createRoadmap(organizationId, { name, startDate, endDate, description: "Plano de prestação de serviços" }); setRoadmaps((current) => [item, ...current]); setRoadmapId(item.id); } catch (value) { setError(errorText(value)); } }
+  useEffect(() => {
+    const timer = filters.search ? window.setTimeout(() => void loadBundle(), 250) : null;
+    if (timer === null) void loadBundle();
+    return () => { if (timer !== null) window.clearTimeout(timer); bundleControllerRef.current?.abort(); };
+  }, [loadBundle, filters.search]);
+  async function quickCreateRoadmap() { if (!organizationId) return; const name = window.prompt("Nome do roadmap", `Roadmap ${organizationName || "da organização"}`); if (!name) return; const startDate = today(); const endDate = new Date(Date.now() + 120 * DAY).toISOString().slice(0, 10); try { const item = await createRoadmap(organizationId, { name, startDate, endDate, description: "Plano de prestação de serviços" }); if (!mountedRef.current || currentRequestRef.current.scopeKey !== scopeKey) return; setIndex(current => ({ ...current, items: [item, ...current.items] })); setRoadmapId(item.id); } catch (value) { if (mountedRef.current && currentRequestRef.current.scopeKey === scopeKey) setErrorState({ scopeKey, queryKey: null, message: errorText(value) }); } }
   const hasFilters = Object.values(filters).some(Boolean);
   const openTask = (task: RoadmapTask | null) => { setSelected(task); setDrawerOpen(true); };
   return <section className="roadmap-shell roadmap-workspace">
@@ -121,14 +217,14 @@ export default function RoadmapSection({ user, organizationId, organizationName,
         {roadmaps.length ? <MaonoSelect aria-label="Roadmap ativo" value={roadmapId || ""} onChange={event => setRoadmapId(Number(event.target.value))}>
           {roadmaps.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </MaonoSelect> : null}
-        {canManage ? <button className="mm-button roadmap-primary-action" type="button" onClick={() => bundle ? openTask(null) : void quickCreateRoadmap()}>
+        {canManage ? <button className="mm-button roadmap-primary-action" type="button" disabled={loading && !bundle} onClick={() => bundle ? openTask(null) : void quickCreateRoadmap()}>
           <DocumentIcon name="plus" />{bundle ? "Nova tarefa" : "Criar roadmap"}
         </button> : null}
       </div> : null}
     </header>
     {!organizationId ? <div className="roadmap-empty"><p>Selecione uma organização.</p></div> : !canView ? <div className="roadmap-empty"><p>Você não possui permissão para visualizar este roadmap.</p></div> : <>
       {error ? <div className="roadmap-error" role="alert"><span>{error}</span><button type="button" onClick={() => void (roadmapId ? loadBundle() : loadIndex())}>Tentar novamente</button></div> : null}
-      {loading && !bundle ? <div className="roadmap-skeleton" role="status" aria-label="Carregando roadmap">{Array.from({ length: 8 }).map((_, index) => <span key={index} />)}</div> : bundle ? <>
+      {loading && !bundle ? <RoadmapLoadingSkeleton view={view} /> : bundle ? <>
         <section className="roadmap-tools" aria-label="Filtros do roadmap">
           <header className="roadmap-filter-header">
             <strong><DocumentIcon name="filter" />Filtros</strong>
@@ -148,7 +244,7 @@ export default function RoadmapSection({ user, organizationId, organizationName,
           </div>
         </section>
         <RoadmapMetrics bundle={bundle} />
-        <section className="roadmap-content" aria-label="Tarefas do roadmap" aria-busy={paginationPending}>
+        <section className="roadmap-content" aria-label="Tarefas do roadmap">
           <header className="roadmap-content-header">
             <h2>{view === "gantt" ? "Cronograma" : "Tarefas"}</h2>
             <div className="roadmap-view-tools">
@@ -161,7 +257,7 @@ export default function RoadmapSection({ user, organizationId, organizationName,
               </div>
             </div>
           </header>
-          <div key={`${view}:${queryKey}:${page.pageIndex}:${page.pageSize}`} className="roadmap-scroll" tabIndex={0} role="region" aria-label={view === "gantt" ? "Rolagem do cronograma" : "Rolagem das tarefas"}>
+          <div key={`${view}:${queryKey}:${page.pageIndex}:${page.pageSize}`} className="roadmap-scroll" aria-busy={loading} tabIndex={0} role="region" aria-label={view === "gantt" ? "Rolagem do cronograma" : "Rolagem das tarefas"}>
             {bundle.tasks.length ? view === "gantt" ? <GanttView bundle={bundle} tasks={page.tasks} scale={scale} onOpen={openTask} /> : <ListView tasks={page.tasks} onOpen={openTask} /> : <div className="roadmap-empty"><strong>Nenhuma tarefa no período</strong><p>Ajuste os filtros ou registre a primeira entrega.</p>{canManage ? <button className="mm-button" type="button" onClick={() => openTask(null)}>Nova tarefa</button> : null}</div>}
           </div>
           <footer className="roadmap-pagination" aria-label="Paginação das tarefas">
@@ -175,7 +271,7 @@ export default function RoadmapSection({ user, organizationId, organizationName,
             />
           </footer>
         </section>
-        <TaskDrawer open={drawerOpen} task={selected} bundle={bundle} canManage={canManage} canComment={canComment} organizationId={organizationId} onClose={() => setDrawerOpen(false)} onSaved={() => void loadBundle(true)} />
+        <TaskDrawer open={drawerOpen} task={selected} bundle={bundle} canManage={canManage} canComment={canComment} organizationId={organizationId} onClose={() => setDrawerOpen(false)} onSaved={() => void loadBundle()} />
       </> : !error ? <div className="roadmap-empty"><strong>Nenhum roadmap ativo</strong><p>Crie um plano para organizar fases, tarefas e marcos.</p>{canManage ? <button className="mm-button" type="button" onClick={() => void quickCreateRoadmap()}>Criar roadmap</button> : null}</div> : null}
     </>}
   </section>;

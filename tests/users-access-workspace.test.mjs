@@ -46,7 +46,7 @@ test('Users rejects stale organization responses, resets context and shows hones
   assert.match(source, /const readRevision = \+\+requestRef.current/);
   assert.match(source, /if \(readRevision !== requestRef.current\) return;\s*setLoaded\(true\);\s*setPeople/);
   assert.match(source, /return \(\) => \{ requestRef.current \+= 1; \}/);
-  assert.match(source, /loading \? "Atualizando usuários\." : loaded \?/);
+  assert.match(source, /loading \? loaded \? "Atualizando usuários\." : "Carregando pessoas com acesso\.\.\." : loaded \?/);
   assert.match(source, /disabled=\{loading \|\| !loaded\} disablePageSize=\{loading \|\| !loaded\}/);
   assert.match(source, /loaded \? active : "—"/);
   assert.match(source, /onClick=\{\(\) => void load\(\)\}>Tentar novamente/);

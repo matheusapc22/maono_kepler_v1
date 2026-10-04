@@ -4,7 +4,7 @@ import projectPages from "./playwright.project-pages.config";
 // Built local application and synthetic, intercepted HTTP only. No production acceptance.
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: "users-access-workspace.spec.ts",
+  testMatch: ["users-access-workspace.spec.ts", "projects-section-loading.spec.ts"],
   outputDir: "test-results/users-access-workspace",
   timeout: 45_000,
   expect: { timeout: 10_000 },

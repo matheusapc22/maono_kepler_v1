@@ -525,7 +525,7 @@ test("both managers return focus to the same person after mouse and keyboard ope
   }
 });
 
-for (const action of ["Mapa", "Gerenciar"] as const) test(`${action} close reacquires the same person after a refresh replaces the row DOM`, async ({ page }) => {
+for (const action of ["Mapa", "Gerenciar"] as const) test(`${action} close restores the same person while refresh preserves the row DOM`, async ({ page }) => {
   let release!: () => void; const delay = new Promise<void>(resolve => { release = resolve; });
   const fixture = await setup(page, { allowMapWrite: true, allowPermissionWrite: true,
     beforeUsers: async (organizationId, attempt) => { if (organizationId === 1 && attempt === (action === "Mapa" ? 2 : 4)) await delay; } });
@@ -538,13 +538,14 @@ for (const action of ["Mapa", "Gerenciar"] as const) test(`${action} close reacq
     await dialog.getByRole("checkbox", { name: /Criar novos projetos/ }).check();
     await dialog.getByRole("button", { name: "Salvar acessos", exact: true }).click();
   }
-  await expect(workspace(page).getByText("Carregando pessoas com acesso...", { exact: true })).toBeVisible();
-  expect(await oldTrigger!.evaluate(element => element.isConnected), "A live DOM lookup is required; the opening button is detached").toBe(false);
+  await expect(footer(page).getByRole("status")).toHaveText("Atualizando usuários.");
+  expect(await oldTrigger!.evaluate(element => element.isConnected), "Refresh keeps the existing person row mounted").toBe(true);
+  await expect(workspace(page).locator(".mm-skeleton")).toHaveCount(0);
   release(); await expectPage(page, 10, 36, 1);
   await expect(workspace(page).locator('tr[data-user-id="3"]')).toContainText("Pessoa 03 atualizada");
   await dialog.getByRole("button", { name: "Fechar", exact: true }).first().click();
   await expect(personTrigger(page, 3)).toBeFocused();
-  expect(await oldTrigger!.evaluate(element => element.isConnected)).toBe(false);
+  expect(await oldTrigger!.evaluate(element => element.isConnected)).toBe(true);
 });
 
 for (const change of ["removed", "disabled"] as const) test(`closing after the target is ${change} never focuses another person`, async ({ page }) => {
@@ -590,11 +591,11 @@ test("closing while the team refresh is pending never schedules a late focus ste
   await expectPage(page, 10, 36, 1);
   const dialog = await openManager(page, "Mapa", "keyboard");
   await choose(page, "Rota do projeto Projeto de demonstração", "Editor", dialog);
-  await expect(workspace(page).getByText("Carregando pessoas com acesso...", { exact: true })).toBeVisible();
-  await expect(personTrigger(page, 3)).toHaveCount(0);
+  await expect(footer(page).getByRole("status")).toHaveText("Atualizando usuários.");
+  await expect(personTrigger(page, 3)).toHaveCount(1);
   await dialog.getByRole("button", { name: "Fechar", exact: true }).first().click();
   await expect(dialog).toHaveCount(0); await flushFrames(page);
-  await expect(workspace(page).locator(".mm-docs-menu-trigger:focus")).toHaveCount(0);
+  await expect(personTrigger(page, 3)).toBeFocused();
   await search(page).focus(); release();
   await expectPage(page, 10, 36, 1); await flushFrames(page);
   await expect(search(page)).toBeFocused(); await expect(personTrigger(page, 3)).not.toBeFocused();

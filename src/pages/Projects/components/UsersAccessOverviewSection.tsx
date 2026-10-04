@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { Link } from "react-router";
+import { UsersMetricsSkeleton, UsersTableSkeletonRows } from "./ProjectSectionSkeletons";
 import DocumentsPagination from "./DocumentsPagination";
 import { DocumentActionMenu, DocumentIcon } from "./DocumentsUi";
 import { paginateUsers, reconcileUsersPagination, type UsersPaginationState } from "./users-access-pagination";
@@ -275,25 +276,27 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
         </section>
 
         <section className="people-capacity-grid" aria-label="Indicadores da equipe" aria-busy={loading}>
+          {loading && !loaded ? <UsersMetricsSkeleton /> : <>
           <article><span>Pessoas com acesso</span><strong>{loaded ? active : "—"}</strong></article>
           <article><span>Limite da organização</span><strong>{loaded ? limit : "—"}</strong></article>
           <article><span>Vagas disponíveis</span><strong>{loaded ? available : "—"}</strong></article>
           <article><span>Acessos suspensos</span><strong>{loaded ? suspended : "—"}</strong></article>
+          </>}
         </section>
 
-        <section className="people-content" aria-label="Pessoas da organização" aria-busy={loading}>
+        <section className="people-content" aria-label="Pessoas da organização">
           <header className="people-content-header">
             <div><h2>Equipe</h2><p>{delegatedAlternative ? "Delegação limitada ativa: use Mapa e Gerenciar nas ações de cada pessoa." : isSuperAdmin ? "Use Mapa nas ações de cada pessoa para gerenciar as rotas de projeto." : "Consulta operacional: alterações de acesso exigem delegação."}</p></div>
             {loaded && <div className="people-capacity-progress"><span>{active} de {limit} acessos utilizados · {percent}%</span><progress aria-label="Capacidade de acessos utilizada" max="100" value={percent}>{percent}%</progress></div>}
           </header>
-          <div key={`${queryKey}:${page.pageIndex}:${page.pageSize}`} className="people-table-wrap" tabIndex={0} role="region" aria-label="Lista de pessoas">
+          <div key={`${queryKey}:${page.pageIndex}:${page.pageSize}`} className="people-table-wrap" tabIndex={0} role="region" aria-label="Lista de pessoas" aria-busy={loading}>
             <table aria-label="Usuários e acessos da organização">
               <thead><tr><th scope="col">Pessoa</th><th scope="col">Situação</th><th scope="col">Perfil</th><th scope="col">Acessos adicionais</th><th scope="col">Atualizado em</th><th scope="col">Ações</th></tr></thead>
               <tbody>
-                {loading && <tr><td colSpan={6} className="people-table-state"><span role="status">Carregando pessoas com acesso...</span></td></tr>}
+                {loading && !loaded ? <UsersTableSkeletonRows rows={page.pageSize} /> : null}
                 {!loading && !loaded && <tr><td colSpan={6} className="people-table-state">Não foi possível carregar a equipe. Tente novamente.</td></tr>}
-                {!loading && loaded && filtered.length === 0 && <tr><td colSpan={6} className="people-table-state">Nenhuma pessoa encontrada.</td></tr>}
-                {!loading && page.people.map((person) => {
+                {loaded && filtered.length === 0 && <tr><td colSpan={6} className="people-table-state">Nenhuma pessoa encontrada.</td></tr>}
+                {loaded && page.people.map((person) => {
                   const manageAdditional = canManagePerson(person);
                   const manageMap = canManageMapPerson(person);
                   return (
@@ -317,7 +320,7 @@ function UsersAccessWorkspace({ user, organizationId, onHome }: Props) {
           </div>
           <footer className="people-pagination" aria-label="Paginação de usuários">
             <DocumentsPagination
-              status={loading ? "Atualizando usuários." : loaded ? `Exibindo ${page.people.length}/${page.total}.` : "Não foi possível atualizar usuários."}
+              status={loading ? loaded ? "Atualizando usuários." : "Carregando pessoas com acesso..." : loaded ? `Exibindo ${page.people.length}/${page.total}.` : "Não foi possível atualizar usuários."}
               page={page.pageIndex + 1} pageSize={page.pageSize}
               canGoPrevious={page.canGoPrevious} canGoNext={page.canGoNext}
               disabled={loading || !loaded} disablePageSize={loading || !loaded}

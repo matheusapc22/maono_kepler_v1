@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { OrganizationSectionSkeleton } from "./ProjectSectionSkeletons";
 
 import type { MaonoUser } from "../../../auth/session";
 import {
@@ -168,7 +170,12 @@ function MetricCard({ label, value }: { label: string; value: number }) {
   return <div className="mm-card metric"><span>{label}</span><strong>{formatNumber(value)}</strong></div>;
 }
 
-export default function OrganizationSection({ user, projectsCount }: OrganizationSectionProps) {
+export default function OrganizationSection(props: OrganizationSectionProps) {
+  const contextKey = JSON.stringify([getOrganizationId(props.user), props.user?.id, getUserRole(props.user), getUserPermissions(props.user), getUserScopes(props.user)]);
+  return <OrganizationWorkspace key={contextKey} {...props} />;
+}
+
+function OrganizationWorkspace({ user, projectsCount }: OrganizationSectionProps) {
   const organizationId = useMemo(() => getOrganizationId(user), [user]);
   const fallbackOrganizationName = useMemo(() => getFallbackOrganizationName(user), [user]);
   const permissions = useMemo(() => ({
@@ -177,26 +184,32 @@ export default function OrganizationSection({ user, projectsCount }: Organizatio
   }), [user]);
 
   const [organization, setOrganization] = useState<OrganizationDetails | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(organizationId && permissions.view));
+  const requestRef = useRef(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadOrganization = useCallback(async () => {
     if (!organizationId || !permissions.view) return;
 
+    const revision = ++requestRef.current;
     setLoading(true);
     setErrorMessage(null);
 
     try {
       const response = await getOrganization(organizationId);
+      if (revision !== requestRef.current) return;
       setOrganization(response.organization);
     } catch (error) {
-      setErrorMessage(normalizeUserError(error).message);
+      if (revision === requestRef.current) setErrorMessage(normalizeUserError(error).message);
     } finally {
-      setLoading(false);
+      if (revision === requestRef.current) setLoading(false);
     }
   }, [organizationId, permissions.view]);
 
-  useEffect(() => { void loadOrganization(); }, [loadOrganization]);
+  useEffect(() => {
+    void loadOrganization();
+    return () => { requestRef.current += 1; };
+  }, [loadOrganization]);
 
   const metricItems = useMemo(
     () => buildMetricItems(organization?.metrics, projectsCount),
@@ -212,7 +225,7 @@ export default function OrganizationSection({ user, projectsCount }: Organizatio
   }
 
   return (
-    <section className="mm-card mm-section-card">
+    <section className="mm-card mm-section-card mm-organization-section">
       <h2>Organização</h2>
       <p>Resumo da organização, plano atual, status e métricas operacionais.</p>
 
@@ -220,13 +233,15 @@ export default function OrganizationSection({ user, projectsCount }: Organizatio
         <div className="mm-card" role="alert">
           <strong>Não foi possível carregar a organização</strong>
           <p>{errorMessage}</p>
-          <button type="button" className="mm-btn" onClick={() => void loadOrganization()}>Tentar novamente</button>
+          <button type="button" className="mm-btn" disabled={loading} onClick={() => void loadOrganization()}>Tentar novamente</button>
         </div>
       )}
 
-      {loading && <div className="mm-card"><p>Carregando dados da organização...</p></div>}
+      <span className="mm-sr-only" role="status">{loading ? organization ? "Atualizando dados da organização." : "Carregando dados da organização." : ""}</span>
+      <div className="mm-section-load-region" role="region" aria-label="Dados da organização" aria-busy={loading}>
+      {loading && !organization ? <OrganizationSectionSkeleton metrics={permissions.metricsView} /> : null}
 
-      {!loading && (
+      {organization && (
         <>
           <div className="mm-card">
             <h3>Dados principais</h3>
@@ -264,6 +279,7 @@ export default function OrganizationSection({ user, projectsCount }: Organizatio
           </div>
         </>
       )}
+      </div>
     </section>
   );
 }

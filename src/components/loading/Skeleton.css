@@ -343,3 +343,32 @@
   opacity: 1;
   transition: opacity 180ms ease;
 }
+
+/* Keep Projects section placeholders in the same responsive card geometry. */
+.mm-section-loading {
+  min-width: 0;
+}
+
+.mm-section-loading > .mm-card {
+  min-width: 0;
+}
+
+.mm-organization-section .mm-section-loading table {
+  table-layout: fixed;
+}
+
+.mm-organization-section .mm-section-loading th {
+  width: 44%;
+}
+
+.mm-organization-section .mm-section-loading tr {
+  height: 39px;
+}
+
+.mm-limits-usage-skeleton table {
+  min-width: 480px;
+}
+
+.mm-limits-usage-skeleton th:first-child {
+  width: 42%;
+}

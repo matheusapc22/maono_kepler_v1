@@ -25,6 +25,9 @@ on:
       - 'tests/helpers/*preservation.mjs'
       - 'tests/fixtures/users-access-*'
       - 'tests/browser/users-access-workspace.spec.ts'
+      - 'tests/browser/projects-section-loading.spec.ts'
+      - 'tests/projects-section-loading.test.mjs'
+      - 'src/components/loading/Skeleton*'
       - 'playwright.users-access.config.ts'
       - 'vite.config.ts'
       - 'tsconfig*.json'
@@ -49,14 +52,17 @@ jobs:
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Users workspace, original access logic and API contracts
         run: >-
-          node --experimental-strip-types --test tests/users-access*.test.mjs
+          node --experimental-strip-types --test tests/users-access*.test.mjs tests/projects-section-loading.test.mjs
           tests/user-access-commercial.test.mjs tests/access-delegation.test.mjs
           tests/maono-select-migration.test.mjs tests/documents-visual-contract.test.mjs
       - name: Scoped lint
         run: >-
           npx eslint src/pages/Projects/components/UsersAccessOverviewSection.tsx
           src/pages/Projects/components/users-access-pagination.ts
-          tests/browser/users-access-workspace.spec.ts playwright.users-access.config.ts
+          tests/browser/users-access-workspace.spec.ts tests/browser/projects-section-loading.spec.ts
+          src/pages/Projects/components/ProjectSectionSkeletons.tsx
+          src/pages/Projects/components/OrganizationSection.tsx src/pages/Projects/components/LimitsPlansSection.tsx
+          playwright.users-access.config.ts
       - name: Typecheck and build actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
@@ -78,6 +84,8 @@ jobs:
             test-results/users-access-workspace/
             users-access-workspace-results.json
             tests/browser/users-access-workspace.spec.ts
+            tests/browser/projects-section-loading.spec.ts
+            tests/projects-section-loading.test.mjs
             tests/users-access*.test.mjs
             playwright.users-access.config.ts
           if-no-files-found: warn

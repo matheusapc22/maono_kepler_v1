@@ -1,5 +1,7 @@
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { LimitsPlansSectionSkeleton } from "./ProjectSectionSkeletons";
 
 import type { MaonoUser } from "../../../auth/session";
 import {
@@ -232,7 +234,12 @@ function PendingRequestsTable({ requests }: { requests: OrganizationLimitRequest
   );
 }
 
-export default function LimitsPlansSection({ user, projectsCount }: LimitsPlansSectionProps) {
+export default function LimitsPlansSection(props: LimitsPlansSectionProps) {
+  const contextKey = JSON.stringify([getOrganizationId(props.user), props.user?.id, getUserRole(props.user), getUserPermissions(props.user), getUserScopes(props.user)]);
+  return <LimitsPlansWorkspace key={contextKey} {...props} />;
+}
+
+function LimitsPlansWorkspace({ user, projectsCount }: LimitsPlansSectionProps) {
   const organizationId = useMemo(() => getOrganizationId(user), [user]);
   const permissions = useMemo(() => ({
     view: canVisually(user, "limits.view"),
@@ -242,7 +249,8 @@ export default function LimitsPlansSection({ user, projectsCount }: LimitsPlansS
   const [limits, setLimits] = useState<OrganizationLimits | null>(null);
   const [pendingRequests, setPendingRequests] = useState<OrganizationLimitRequest[]>([]);
   const [form, setForm] = useState<UpgradeForm>(DEFAULT_UPGRADE_FORM);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(organizationId && permissions.view));
+  const requestRef = useRef(0);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -251,20 +259,25 @@ export default function LimitsPlansSection({ user, projectsCount }: LimitsPlansS
 
   const loadLimits = useCallback(async () => {
     if (!organizationId || !permissions.view) return;
+    const revision = ++requestRef.current;
     setLoading(true);
     setErrorMessage(null);
     try {
       const response = await getOrganizationLimits(organizationId);
+      if (revision !== requestRef.current) return;
       setLimits(response.limits);
       setPendingRequests(response.pendingRequests || []);
     } catch (error) {
-      setErrorMessage(normalizeUserError(error).message);
+      if (revision === requestRef.current) setErrorMessage(normalizeUserError(error).message);
     } finally {
-      setLoading(false);
+      if (revision === requestRef.current) setLoading(false);
     }
   }, [organizationId, permissions.view]);
 
-  useEffect(() => { void loadLimits(); }, [loadLimits]);
+  useEffect(() => {
+    void loadLimits();
+    return () => { requestRef.current += 1; };
+  }, [loadLimits]);
 
   function updateForm<K extends keyof UpgradeForm>(key: K, value: UpgradeForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -307,15 +320,17 @@ export default function LimitsPlansSection({ user, projectsCount }: LimitsPlansS
   if (!permissions.view) return <section className="mm-card mm-section-card"><h2>Limites e Planos</h2><p>Você não possui permissão para visualizar limites desta organização.</p></section>;
 
   return (
-    <section className="mm-card mm-section-card">
+    <section className="mm-card mm-section-card mm-limits-section">
       <h2>Limites e Planos</h2>
       <p>Acompanhe o uso atual da organização e solicite upgrade de plano ou aumento de limites.</p>
 
-      {errorMessage && <div className="mm-card" role="alert"><strong>Não foi possível concluir</strong><p>{errorMessage}</p><button type="button" className="mm-btn" onClick={() => void loadLimits()}>Recarregar</button></div>}
+      {errorMessage && <div className="mm-card" role="alert"><strong>Não foi possível concluir</strong><p>{errorMessage}</p><button type="button" className="mm-btn" disabled={loading} onClick={() => void loadLimits()}>Recarregar</button></div>}
       {successMessage && <div className="mm-card" role="status"><strong>Sucesso</strong><p>{successMessage}</p></div>}
-      {loading && <div className="mm-card"><p>Carregando limites da organização...</p></div>}
+      <span className="mm-sr-only" role="status">{loading ? limits ? "Atualizando limites da organização." : "Carregando limites da organização." : ""}</span>
+      <div className="mm-section-load-region" role="region" aria-label="Limites da organização" aria-busy={loading}>
+      {loading && !limits ? <LimitsPlansSectionSkeleton requestForm={permissions.increaseRequest} /> : null}
 
-      {!loading && <>
+      {limits && <>
         <div className="mm-card"><h3>Plano atual</h3><div className="mm-tags-list"><span className={planClassName(limits?.plan)}>{planLabel(limits?.plan)}</span></div><p>Alterações de plano são analisadas antes de entrarem em vigor.</p></div>
 
         <div className="mm-card"><h3>Uso e limites</h3><div className="mm-table-wrap"><table><thead><tr><th>Categoria</th><th>Uso atual</th><th>Limite</th><th>Uso</th></tr></thead><tbody>{limitItems.map((item) => <LimitUsageRow key={item.key} item={item} />)}</tbody></table></div></div>
@@ -335,6 +350,7 @@ export default function LimitsPlansSection({ user, projectsCount }: LimitsPlansS
 
         <div className="mm-card"><h3>Solicitações pendentes</h3><PendingRequestsTable requests={pendingRequests} /></div>
       </>}
+      </div>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { restoreLimitsPlansLoading } from "./helpers/projects-loading-preservation.mjs";
 import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { assertUsersAccessPreserved } from "./helpers/users-access-preservation.mjs";
 const root = new URL("../", import.meta.url);
@@ -64,6 +65,7 @@ const consumers = {
   },
   "src/pages/Projects/components/LimitsPlansSection.tsx": {
     "sha256": "47987125e6dc7c86e1adf810f3325c8a5b905659f8724d5242596b4eb0564042",
+    "restore": restoreLimitsPlansLoading,
     "controls": 2
   },
   "src/pages/Projects/components/UsersAccessOverviewSection.tsx": {
@@ -126,7 +128,7 @@ for (const [path, contract] of Object.entries(consumers)) {
     const source = read(path);
     assert.equal((source.match(/<MaonoSelect\b/g) || []).length, contract.controls);
     if (contract.preserve) contract.preserve(source);
-    else assert.equal(createHash("sha256").update(restoreMaonoSelect(source)).digest("hex"), contract.sha256);
+    else assert.equal(createHash("sha256").update(restoreMaonoSelect(contract.restore ? contract.restore(source) : source)).digest("hex"), contract.sha256);
   });
 }
 function files(directory) {
