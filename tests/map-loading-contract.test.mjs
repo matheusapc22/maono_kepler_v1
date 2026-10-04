@@ -118,7 +118,7 @@ test("MapPanelProvider consome contexto preparado e não mostra copy de espera",
 test("hidratação mantém Universal Loader até visual readiness", () => {
   assert.match(
     mapUrlLoader,
-    /useLoadingActivity\(isMapLoading,[\s\S]*label: "map-hydration"/,
+    /useLoadingActivity\(isMapLoading && \(!customMapShellEnabled \|\| \(Boolean\(projectSlug\) && !loadCycleComplete\)\),[\s\S]*label: "map-hydration"/,
   );
   assert.match(mapUrlLoader, /waitForMaonoMapVisualReadiness/);
   assert.match(mapUrlLoader, /loadCycleComplete/);

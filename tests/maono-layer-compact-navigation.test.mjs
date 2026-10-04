@@ -72,10 +72,11 @@ test("estilo usa divulgação progressiva e mantém apenas o essencial aberto", 
   assert.doesNotMatch(source.style, /open=\{true\}/);
 });
 
-test("filtros usam lista resumida e um editor focado por vez", () => {
+test("filtros usam lista resumida e um editor inline por vez", () => {
   assert.match(source.filters, /selectedFilterId/);
   assert.match(source.filters, /<FilterRow/);
-  assert.match(source.filters, /<FilterDetailView/);
+  assert.match(source.filters, /<FilterDetailView[\s\S]*?inline/);
+  assert.match(source.filters, /maono-filter-list-region/);
   assert.match(source.filterDetail, /<FilterValueEditor/);
   assert.match(source.filterDetail, /Centralizar resultados filtrados/);
   assert.match(source.filters, /1\. Base de dados/);

@@ -8,6 +8,8 @@
  */
 
 :root {
+  /* Native thin sidebar scrollbar, shared with Projects. */
+  --maono-sidebar-scroll-thumb: var(--mm-border-strong, #333a46);
   /* Brand accent — Maõno Gold */
   --maono-accent: #c5a059;
   --maono-accent-rgb: 197 160 89;

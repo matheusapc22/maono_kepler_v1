@@ -14,6 +14,7 @@ import {
   createDocumentFolder,
   listDocumentFolders,
   publicDocumentFolder,
+  validateDocumentFolderPayload,
 } from "../../../_lib/organization-file-folders.js";
 import {
   organizationFileErrorResponse,
@@ -90,7 +91,7 @@ export async function onRequestPost({ env, request, params }) {
     );
 
     await getOrganizationOrThrow(env, organizationId);
-    const payload = await readJsonBody(request);
+    const payload = validateDocumentFolderPayload(await readJsonBody(request));
     const folder = await createDocumentFolder(env, {
       organizationId,
       parentId: Object.prototype.hasOwnProperty.call(payload, "parentId")

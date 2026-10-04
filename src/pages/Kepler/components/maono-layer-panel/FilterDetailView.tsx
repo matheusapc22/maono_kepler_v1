@@ -14,6 +14,7 @@ import LayerPanelIcon from "./LayerPanelIcon.tsx";
 import PanelActionMenu, { type PanelActionMenuItem } from "./PanelActionMenu.tsx";
 
 type Props = {
+  inline?: boolean;
   filter: MaonoFilterSnapshot;
   datasets: MaonoDatasetSnapshot[];
   editable: boolean;
@@ -34,6 +35,7 @@ function firstFilterableField(dataset: MaonoDatasetSnapshot | undefined) {
 }
 
 export default function FilterDetailView({
+  inline = false,
   filter,
   datasets,
   editable,
@@ -82,7 +84,7 @@ export default function FilterDetailView({
 
   return (
     <section
-      className="maono-detail-view maono-filter-detail"
+      className={`maono-detail-view maono-filter-detail${inline ? " maono-filter-detail--inline" : ""}`}
       style={{ "--maono-filter-accent": accent } as CSSProperties}
       aria-label={`Configuração de ${title}`}
     >
@@ -91,10 +93,10 @@ export default function FilterDetailView({
           type="button"
           className="maono-detail-view__back"
           onClick={onBack}
-          aria-label="Voltar para a lista de filtros"
-          title="Voltar para filtros"
+          aria-label={inline ? "Recolher condição" : "Voltar para a lista de filtros"}
+          title={inline ? "Recolher condição" : "Voltar para filtros"}
         >
-          <LayerPanelIcon name="arrow-left" />
+          <LayerPanelIcon name={inline ? "chevron-down" : "arrow-left"} />
         </button>
         <div className="maono-detail-view__identity">
           <strong>{title}</strong>
@@ -116,6 +118,7 @@ export default function FilterDetailView({
               type="button"
               className="maono-style-toggle"
               role="switch"
+              aria-label={`Filtro ${title}`}
               aria-checked={filter.enabled}
               disabled={!canEdit}
               onClick={() => onToggle(filter.index, !filter.enabled)}

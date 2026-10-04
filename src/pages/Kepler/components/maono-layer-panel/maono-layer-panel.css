@@ -275,8 +275,7 @@
 .maono-progressive-section > summary span { display: grid; min-width: 0; gap: 2px; }
 .maono-progressive-section > summary strong { font-size: 11px; }
 .maono-progressive-section > summary small { color: #748298; font-size: 9px; }
-.maono-progressive-section > summary > svg { width: 15px; height: 15px; color: #8391a5; transition: transform 160ms ease; }
-.maono-progressive-section[open] > summary > svg { transform: rotate(180deg); }
+.maono-progressive-section > summary > svg { width: 15px; height: 15px; color: #8391a5; }
 .maono-progressive-section__content { display: grid; gap: 11px; padding: 0 12px 13px; border-top: 1px solid rgb(49 65 89 / 40%); }
 .maono-style-toggle { position: relative; display: inline-flex; width: 34px; height: 19px; padding: 2px; border: 0; border-radius: 999px; background: #263246; cursor: pointer; transition: background 150ms ease; }
 .maono-style-toggle > span { width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgb(0 0 0 / 40%); transition: transform 150ms ease; }
@@ -332,8 +331,23 @@
 .maono-detail-section > summary > span:first-child { display: grid; min-width: 0; gap: 2px; }
 .maono-detail-section > summary strong { font-size: 11px; }
 .maono-detail-section > summary small { color: #748298; font-size: 9px; }
-.maono-detail-section__chevron { color: #8391a5; font-size: 16px; transition: transform 160ms ease; }
-.maono-detail-section[open] .maono-detail-section__chevron { transform: rotate(180deg); }
+.maono-detail-section__chevron { width: 16px; height: 16px; color: #8391a5; }
+/* Rotate a stable SVG viewport, never an off-center text-glyph line box. */
+.maono-layer-panel :is(
+  .maono-add-layer__trigger > svg:last-child,
+  .maono-progressive-section > summary > svg,
+  .maono-detail-section > summary > .maono-detail-section__chevron
+) {
+  display: block;
+  flex-shrink: 0;
+  transform: rotate(0deg);
+  transform-box: view-box;
+  transform-origin: center;
+  transition: transform 160ms ease;
+}
+.maono-layer-panel .maono-add-layer__trigger[aria-expanded="true"] > svg:last-child,
+.maono-layer-panel .maono-progressive-section[open] > summary > svg,
+.maono-layer-panel .maono-detail-section[open] > summary > .maono-detail-section__chevron { transform: rotate(180deg); }
 .maono-detail-section__content { display: grid; gap: 11px; padding: 0 12px 13px; border-top: 1px solid rgb(49 65 89 / 40%); }
 .maono-style-subsection { display: grid; gap: 10px; padding-top: 11px; }
 .maono-style-subsection + .maono-style-subsection { border-top: 1px solid rgb(49 65 89 / 42%); }
@@ -349,4 +363,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .maono-layer-panel *, .maono-layer-panel *::before, .maono-layer-panel *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  .maono-layer-panel :is(
+    .maono-add-layer__trigger > svg:last-child,
+    .maono-progressive-section > summary > svg,
+    .maono-detail-section > summary > .maono-detail-section__chevron
+  ) { transition: none !important; }
 }

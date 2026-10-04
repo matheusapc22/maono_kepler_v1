@@ -42,6 +42,7 @@ import {
   MaonoAdaptivePointLayer,
 } from "../clustering/point-cluster-adaptive-layer.ts";
 import { generateHashId } from "../utils/strings";
+import { reconcileFilterEnabledState } from "./filter-enabled-compatibility.ts";
 
 // initialize kepler demo-app with DuckDB plugin
 /*
@@ -134,6 +135,8 @@ const demoReducer = combineReducers({
     // we are going to set the mapbox access token to be used
     // in the exported file
     uiState: {
+      // Import opens explicitly through the map rail or layer menu.
+      currentModal: null,
       locale: LOCALE_CODES.pt,
       exportMap: {
         ...DEFAULT_EXPORT_MAP,
@@ -154,7 +157,7 @@ const demoReducer = combineReducers({
       loaders: [], // Add additional loaders.gl loaders here
       loadOptions: {}, // Add additional loaders.gl loader options here
     },
-  }),
+  }).plugin(reconcileFilterEnabledState),
   app: appReducer,
   aiAssistant: aiAssistantReducer,
 });
@@ -282,7 +285,7 @@ const loadRemoteDatasetProcessedSuccess = (state, action) => {
     },
     keplerGl: {
       ...state.keplerGl, // in case you keep multiple instances
-      map: keplerGlInstance,
+      map: reconcileFilterEnabledState(keplerGlInstance),
     },
   };
 };

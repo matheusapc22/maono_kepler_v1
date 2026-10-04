@@ -5,6 +5,8 @@ import test from "node:test";
 const files = {
   filterPanel:
     "../src/pages/Kepler/components/maono-layer-panel/FilterPanel.tsx",
+  filterGroups: "../src/pages/Kepler/components/maono-layer-panel/filters/filter-groups.ts",
+  minimalStyles: "../src/pages/Kepler/components/maono-layer-panel/map-panel-minimal.css",
   filterValue:
     "../src/pages/Kepler/components/maono-layer-panel/filters/FilterValueEditor.tsx",
   filterUtils:
@@ -31,12 +33,14 @@ const source = Object.fromEntries(
 test("grupos de filtros usam camadas como identificação e começam recolhidos", () => {
   assert.match(source.filterPanel, /useKeplerState/);
   assert.match(source.filterPanel, /const \{ layers \} = useKeplerState\(\)/);
-  assert.match(source.filterPanel, /label: layer\.label/);
+  assert.match(source.filterPanel, /buildFilterGroups\(filters, datasets, layers\)/);
+  assert.match(source.filterGroups, /associatedLayers\.length === 1/);
   assert.match(source.filterPanel, /const \[expandedGroupKey, setExpandedGroupKey\] = useState<string \| null>\(null\)/);
   assert.match(source.filterPanel, /aria-expanded=\{expanded\}/);
   assert.match(source.filterPanel, /expanded \? \(/);
-  assert.match(source.filterPanel, /chevron-up/);
-  assert.match(source.filterPanel, /chevron-down/);
+  assert.match(source.filterPanel, /name="chevron-right"/);
+  assert.doesNotMatch(source.filterPanel, /name=\{expanded/);
+  assert.match(source.minimalStyles, /\.is-expanded \.maono-filter-group__chevron \{ transform: rotate\(90deg\)/);
   assert.doesNotMatch(source.filterPanel, /filteredRowCount/);
 });
 
@@ -46,7 +50,7 @@ test("accordion mantém somente um grupo aberto e fecha ao clicar novamente", ()
     /current === group\.key \? null : group\.key/,
   );
   assert.match(source.filterPanel, /setExpandedGroupKey\(group\.key\)/);
-  assert.match(source.filterPanel, /Filtros da camada \$\{group\.label\}/);
+  assert.match(source.filterPanel, /Filtros de \$\{group\.label\}/);
   assert.match(source.filterStyles, /\.maono-filter-group__toggle/);
   assert.match(source.filterStyles, /\.maono-filter-group\.is-expanded/);
   assert.doesNotMatch(source.filterStyles, /\.maono-filter-group__heading/);

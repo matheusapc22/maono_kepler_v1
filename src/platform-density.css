@@ -1,0 +1,297 @@
+/* Default compact chrome. Uses real layout dimensions, never page scaling.
+ * The 16px root, readable body text, map coordinates and native browser zoom
+ * remain unchanged. Explicit scopes also cover lazy routes and body portals. */
+:root {
+  --maono-density-space-1: 0.25rem;
+  --maono-density-space-2: 0.5rem;
+  --maono-density-space-3: 0.75rem;
+  --maono-density-space-4: 1rem;
+  --maono-density-space-5: 1.25rem;
+  --maono-density-space-6: 1.5rem;
+  --maono-density-gutter: clamp(1rem, 1.6vw, 1.5rem);
+  --maono-app-page-gutter: var(--maono-density-gutter);
+  --maono-density-control: 2.5rem;
+  --maono-density-control-small: 2.25rem;
+  --maono-density-icon: 1.125rem;
+  --maono-density-sidebar: 15rem;
+  --maono-density-sidebar-collapsed: 4.5rem;
+  --maono-density-map-rail: 4rem;
+  --maono-density-map-panel: 25.5rem;
+  --maono-density-heading: clamp(1.375rem, 1.65vw, 1.625rem);
+  --maono-density-panel-padding: 1rem;
+}
+
+/* Touch and narrow/high-zoom layouts keep generous targets, without changing
+ * the user's font scale or the existing stacked-navigation breakpoints. */
+@media (pointer: coarse), (max-width: 760px) {
+  :root {
+    --maono-density-control: 2.75rem;
+    --maono-density-control-small: 2.75rem;
+  }
+}
+
+/* Projects: aliases are inherited by the open/collapsed grid and its rail. */
+body .mm-projects-page {
+  --mm-sidebar-open: var(--maono-density-sidebar);
+  --mm-sidebar-collapsed: var(--maono-density-sidebar-collapsed);
+  --mm-logo-width: 168px;
+  --mm-logo-height: 44px;
+  --mm-sidebar-item-pad-left: 8px;
+  --mm-sidebar-icon-width: 18px;
+  --mm-sidebar-icon-label-gap: 8px;
+  --mm-sidebar-count-width: 24px;
+}
+body .mm-projects-page .mm-sidebar-head { padding: 14px 14px 12px; }
+body .mm-projects-page .mm-sidebar-brand-row { grid-template-columns: minmax(0, 1fr) 32px; gap: 6px; }
+body .mm-projects-page .mm-sidebar-logo-mask { margin-left: 0; }
+body .mm-projects-page .mm-sidebar-toggle { width: 32px; height: 32px; }
+body .mm-projects-page .mm-sidebar-user { grid-template-columns: 32px minmax(0, 1fr); gap: 8px; margin-top: 12px; padding: 8px 4px; }
+body .mm-projects-page .mm-sidebar-avatar { width: 32px; height: 32px; font-size: 14px; }
+body .mm-projects-page .mm-sidebar-search { margin-top: 8px; height: var(--maono-density-control-small); gap: 4px; padding-inline: 8px; }
+body .mm-projects-page .mm-organization-switcher { margin-top: 8px; }
+body .mm-projects-page .mm-organization-trigger { min-height: var(--maono-density-control); grid-template-columns: 28px minmax(0, 1fr) 14px; gap: 8px; padding: 6px 8px; }
+body .mm-projects-page .mm-organization-avatar { width: 28px; height: 28px; flex-basis: 28px; font-size: 11px; }
+body .mm-projects-page .mm-sidebar-nav { padding: 18px 10px 10px; }
+body .mm-projects-page .mm-sidebar-group + .mm-sidebar-group { margin-top: 20px; }
+body .mm-projects-page .mm-sidebar-title { gap: 8px; margin: 0 8px 8px; letter-spacing: .08em; }
+body .mm-projects-page .mm-sidebar-item { min-height: var(--maono-density-control-small); padding-right: 8px; font-size: 14px; }
+body .mm-projects-page .mm-sidebar-icon { height: 18px; font-size: 18px; }
+body .mm-projects-page .mm-sidebar-footer { margin-inline: 10px; padding: 10px 6px 12px; }
+body .mm-projects-page .mm-sidebar-logout { min-height: var(--maono-density-control-small); margin-top: 8px; padding: 4px; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-head { padding-inline: 0; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-brand-row { gap: 10px; }
+body .mm-projects-page .mm-projects-sidebar.collapsed :is(.mm-sidebar-logo-mask, .mm-sidebar-logo) { width: 44px; min-width: 44px; height: 44px; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-user { grid-template-columns: 32px; padding-inline: 0; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-search { height: 0; margin: 0; padding: 0; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-organization-switcher { width: 44px; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-organization-trigger { width: 44px; min-height: 44px; grid-template-columns: 1fr; padding: 0; gap: 0; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-nav { padding: 10px 8px; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-item { padding: 0; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-footer { padding: 0; margin: 8px; }
+body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-logout { margin: 0; padding: 0; }
+
+/* Shared workspaces, including all organization/management sub-tabs. */
+body :is(.mm-projects-page, .maono-admin-page) .mm-projects-topbar { min-height: 64px; padding: 12px var(--maono-density-gutter); }
+body :is(.mm-projects-page, .maono-admin-page) .mm-projects-topbar h1 { font-size: var(--maono-density-heading); }
+body .mm-projects-page .mm-projects-content,
+body .maono-admin-page .admin-content { padding: var(--maono-density-gutter); }
+body :is(.mm-projects-page, .maono-admin-page) :is(.mm-card, .projects-management-card, .projects-inline-form) { padding: var(--maono-density-panel-padding); }
+body :is(.mm-projects-page, .maono-admin-page) :is(.mm-metrics-grid, .projects-management-grid, .projects-limits-grid, .admin-command-grid) { gap: var(--maono-density-space-3); }
+body :is(.mm-projects-page, .maono-admin-page) :is(.mm-table-wrap, .admin-users-table) :is(th, td) { padding: 10px 12px; }
+body :is(.mm-projects-page, .maono-admin-page) :is(.mm-btn, .mm-button) { min-height: var(--maono-density-control-small); padding: 6px 10px; }
+
+/* Projects/Recent/Favorites share the same compact chrome and card anatomy. */
+body .mm-projects-page .mm-project-pages__breadcrumb { min-height: 52px; padding: 12px var(--maono-density-gutter); gap: 10px; }
+body .mm-projects-page .mm-project-pages__header { padding: 18px var(--maono-density-gutter) 16px; gap: var(--maono-density-space-5); }
+body .mm-projects-page .mm-project-pages__heading { gap: 14px; }
+body .mm-projects-page .mm-project-pages__heading > .mm-project-pages__icon { width: 38px; height: 42px; }
+body .mm-projects-page .mm-project-pages__heading h1 { font-size: var(--maono-density-heading); }
+body .mm-projects-page .mm-project-pages__heading p { margin-top: 6px; }
+body .mm-projects-page .mm-project-pages__button { min-height: var(--maono-density-control); padding: 8px 14px; gap: 8px; }
+body .mm-projects-page .mm-project-pages__new { min-width: 140px; margin-inline-end: 8px; }
+body .mm-projects-page .mm-project-pages__workspace { gap: var(--maono-density-space-5); }
+body .mm-projects-page .mm-project-pages__filters { gap: var(--maono-density-space-3); padding-bottom: var(--maono-density-space-4); }
+body .mm-projects-page .mm-project-pages__field { gap: 6px; }
+body .mm-projects-page .mm-project-pages__field :is(input, select),
+body .mm-projects-page .mm-project-pages__pagination select { min-height: var(--maono-density-control); padding: 8px 10px; }
+body .mm-projects-page .mm-project-pages__search-control .mm-project-pages__icon { left: 12px; top: calc((var(--maono-density-control) - 20px) / 2); }
+body .mm-projects-page .mm-project-pages__search-control input { padding-left: 38px; }
+body .mm-projects-page .mm-project-pages__footer { padding: 14px 16px; gap: 16px; }
+body .mm-projects-page .mm-project-pages__pagination { gap: 8px; }
+body .mm-projects-page .mm-project-pages__pagination .mm-project-pages__button,
+body .mm-projects-page .mm-project-pages__current { width: var(--maono-density-control); min-height: var(--maono-density-control); padding: 6px; }
+body .mm-projects-page .mm-projects-content { --project-grid-gap: var(--maono-density-space-5); --project-card-radius: 12px; }
+body .mm-projects-page .mm-project-card { padding: 12px; }
+body .mm-projects-page .mm-project-card__content { gap: 12px; padding: 16px 6px 4px; }
+body .mm-projects-page .mm-project-card__status { min-height: 34px; gap: 8px; }
+body .mm-projects-page .mm-project-card__chip { min-height: 32px; padding: 6px; gap: 4px; }
+body .mm-projects-page .mm-project-card__chip-icon { width: 16px; height: 16px; }
+body .mm-projects-page .mm-project-card__footer { gap: 12px; }
+body .mm-projects-page .mm-project-card__metadata { gap: 10px; padding-top: 12px; }
+body .mm-projects-page .mm-project-card__metadata-icon { width: 16px; height: 16px; }
+body .mm-projects-page .mm-projects-content .mm-project-card a.mm-project-card__open { min-height: var(--maono-density-control); padding: 8px 42px 8px 14px; }
+body .mm-projects-page .mm-projects-content :is(.mm-project-card__favorite, .mm-project-card__more) { width: var(--maono-density-control); height: var(--maono-density-control); min-width: var(--maono-density-control); min-height: var(--maono-density-control); flex-basis: var(--maono-density-control); }
+/* At the same browser width, a fourth card fits sooner. Container queries keep
+ * the grid honest when the sidebar changes width or text/browser zoom grows. */
+body .mm-projects-page .mm-project-pages__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container project-pages (max-width: 1159px) {
+  body .mm-projects-page .mm-project-pages__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container project-pages (max-width: 859px) {
+  body .mm-projects-page .mm-project-pages__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container project-pages (max-width: 559px) {
+  body .mm-projects-page .mm-project-pages__grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Document workspace and native top-layer dialogs. Do not alter portal
+ * positioning, native dialog focus/escape behavior or horizontal table scroll. */
+body .mm-projects-page .mm-docs { gap: var(--maono-density-space-3); }
+body .mm-projects-page .mm-docs h2 { font-size: var(--maono-density-heading); }
+body .mm-projects-page .mm-docs-panel-header { padding: 14px 16px; }
+body .mm-projects-page .mm-docs-folder-grid { padding: 0 16px 14px; gap: 10px; }
+body .mm-projects-page .mm-docs-folder-select { min-height: 72px; padding: 12px; gap: 10px; }
+body .mm-projects-page .mm-docs-filters { gap: 12px; padding: 0 16px 16px; }
+body .mm-projects-page .mm-docs .mm-docs-button,
+body .mm-projects-page .mm-docs-field :is(input, select),
+body .mm-projects-page .mm-docs-filter-actions > button { min-height: var(--maono-density-control); padding-block: 8px; }
+body .mm-projects-page .mm-docs .mm-docs-menu-trigger { min-height: var(--maono-density-control-small); width: var(--maono-density-control-small); min-width: var(--maono-density-control-small); flex-basis: var(--maono-density-control-small); padding: 0; }
+body .mm-projects-page .mm-docs-search-control .mm-docs-icon { top: calc((var(--maono-density-control) - 18px) / 2); }
+body .mm-projects-page .mm-docs-table td { padding: 10px 12px; }
+body .mm-projects-page .mm-docs-pagination { padding: 12px 16px; }
+body .mm-docs-dialog { padding: var(--maono-density-space-5); }
+body .mm-docs-dialog form { gap: var(--maono-density-space-5); }
+body .mm-docs-dialog input,
+body .mm-docs-dialog .mm-docs-dialog-actions .mm-docs-button { min-height: var(--maono-density-control); padding-block: 8px; }
+body .mm-docs-dialog .mm-docs-dialog-actions { gap: 10px; }
+body .mm-docs-dialog .mm-docs-dialog-heading { gap: 14px; }
+body .mm-docs-action-menu button { min-height: var(--maono-density-control-small); padding-block: 8px; }
+
+/* Tickets, roadmap and user access: reduce surrounding space, not information,
+ * row semantics, timeline coordinates or the existing accessibility contracts. */
+body .mm-projects-page :is(.ticket-center-shell, .roadmap-shell, .people-access-section) { gap: var(--maono-density-space-3); }
+body .mm-projects-page :is(.ticket-center-header, .roadmap-header, .people-access-header) { padding: var(--maono-density-space-5); gap: var(--maono-density-space-5); }
+body .mm-projects-page :is(.ticket-center-header, .roadmap-header, .people-access-header) h2 { font-size: var(--maono-density-heading); }
+body .mm-projects-page .ticket-center-headset { width: 60px; height: 60px; }
+body .mm-projects-page .ticket-center-headset svg { width: 28px; height: 28px; }
+body .mm-projects-page .ticket-filter-surface { padding: 12px 16px 14px; }
+body .mm-projects-page .ticket-filter-bar :is(input, select) { min-height: var(--maono-density-control); padding-block: 8px; }
+body .mm-projects-page .ticket-metrics > :is(button, article) { min-height: 70px; padding: 12px 14px; }
+body .mm-projects-page .ticket-list-header { min-height: 52px; padding: 10px 16px; }
+body .mm-projects-page .ticket-list-table :is(th, td) { padding: 9px 10px; }
+body .mm-projects-page .roadmap-metrics article { min-height: 68px; padding: 12px; gap: 10px; }
+body .mm-projects-page .roadmap-tools { padding: 10px; gap: 12px; flex-wrap: wrap; }
+body .mm-projects-page .roadmap-filters { flex-wrap: wrap; }
+body .mm-projects-page .roadmap-tools :is(button, select, input),
+body .mm-projects-page .people-toolbar :is(input, select) { min-height: var(--maono-density-control); padding-block: 8px; }
+body .mm-projects-page .people-table-wrap :is(th, td) { padding: 10px 12px; }
+body .people-drawer-form, body .people-drawer > header { padding: var(--maono-density-space-5); }
+body .people-drawer-form footer { bottom: calc(-1 * var(--maono-density-space-5)); margin: 0 calc(-1 * var(--maono-density-space-5)) calc(-1 * var(--maono-density-space-5)); padding: 14px var(--maono-density-space-5); }
+
+/* Admin uses the same rail/gutter/control family, retaining its 960px reflow. */
+@media (min-width: 961px) {
+  body .maono-admin-page.admin-page { grid-template-columns: var(--maono-density-sidebar) minmax(0, 1fr); }
+}
+body .maono-admin-page .admin-brand { min-height: 64px; padding: 14px; }
+body .maono-admin-page .admin-nav { padding: 12px 10px; }
+body .maono-admin-page .admin-nav button { min-height: var(--maono-density-control-small); padding-block: 6px; }
+body .maono-admin-page .admin-user-filters { padding: 12px; gap: 10px; }
+body .maono-admin-page .admin-user-filters :is(input, select) { height: var(--maono-density-control); }
+body .admin-user-dialog > header,
+body .admin-user-dialog-body,
+body .admin-user-dialog form { padding: var(--maono-density-panel-padding); gap: 14px; }
+
+/* Login keeps 16px editable text on touch devices and scrollable short screens. */
+@media (min-width: 768px) {
+  body .maono-login-page__card { width: min(calc(100vw - 32px), 1000px); min-height: min(540px, calc(var(--maono-app-viewport-height) - 32px)); }
+  body .maono-login-page .maono-login-page__content { min-height: min(540px, calc(var(--maono-app-viewport-height) - 32px)); padding: 32px 44px; }
+  body .maono-login-page .maono-login-page__content--floating { min-height: min(492px, calc(var(--maono-app-viewport-height) - 80px)); width: min(350px, calc(100% - 48px)); margin: 24px 0 24px 24px; padding: 28px; }
+}
+body .maono-login-page .maono-login-page__brand { margin-bottom: 28px; }
+body .maono-login-page .maono-login-page__logo { height: 76px; margin-bottom: 32px; }
+body .maono-login-page .maono-login-page__form { gap: 20px; }
+body .maono-login-page .maono-login-page__input { height: var(--maono-density-control); }
+
+/* Route-level map pages and review chrome. No geometry/data/Kepler viewport
+ * transforms: only outer spacing and bounded, scrollable information panels. */
+body .maono-map-management { padding: var(--maono-density-gutter); }
+body .maono-map-management__error { padding: var(--maono-density-space-5); }
+body .maono-editor-inbox { padding: var(--maono-density-gutter); }
+body .maono-editor-inbox .maono-editor-inbox__list { margin-block: 20px; gap: 10px; }
+body .maono-editor-inbox .maono-editor-inbox__list li { padding: 16px; gap: 16px; }
+body .maono-editor-inbox h1 { font-size: var(--maono-density-heading); }
+@media (min-width: 761px) {
+  body .maono-review-panel { top: 12px; right: 12px; bottom: 12px; width: min(350px, calc(100vw - 24px)); }
+}
+body .maono-review-panel .maono-review-panel__header,
+body .maono-review-panel .maono-review-panel__body { padding: 14px; gap: 12px; }
+
+@media (max-width: 760px) {
+  body .mm-projects-page .mm-project-pages__header { flex-wrap: wrap; }
+  body .mm-projects-page .mm-project-pages__new { width: 100%; margin-inline-end: 0; }
+  body .mm-projects-page .mm-project-pages__pagination { flex-wrap: wrap; }
+  body .mm-projects-page .mm-project-pages__pagination .mm-project-pages__button,
+  body .mm-projects-page .mm-project-pages__current { width: 44px; }
+  body .mm-projects-page .mm-sidebar-toggle { width: 44px; height: 44px; }
+  body .mm-projects-page .mm-sidebar-brand-row { grid-template-columns: minmax(0, 1fr) 44px; }
+  body .maono-login-page .maono-login-page__input { font-size: 16px; }
+}
+
+/* Map shell: desktop rail and panels share real dimensions. All anchor math,
+ * marker positions, map insets, histogram geometry and menu widths stay owned
+ * by their original components. The mobile bottom rail keeps its 64px height. */
+@media (min-width: 821px) {
+  body .maono-map-runtime {
+    --maono-map-rail-width: var(--maono-density-map-rail);
+    --maono-map-panel-width: min(var(--maono-density-map-panel), calc(100vw - var(--maono-density-map-rail) - 32px));
+  }
+  .maono-map-runtime .maono-map-sidebar { padding: 20px 9px 14px; }
+  .maono-map-runtime .maono-map-sidebar__brand { width: var(--maono-density-control); height: var(--maono-density-control); margin-bottom: 36px; }
+  .maono-map-runtime .maono-map-sidebar__brand img { width: 34px; height: 34px; }
+  .maono-map-runtime .maono-map-sidebar__nav { gap: 8px; }
+  .maono-map-runtime .maono-map-sidebar__nav :is(a, button),
+  .maono-map-runtime .maono-map-sidebar__logout { width: var(--maono-density-control); height: var(--maono-density-control); border-radius: 10px; }
+  .maono-map-runtime .maono-map-sidebar__tooltip { left: calc(var(--maono-density-control) + 10px); }
+  .maono-map-runtime .maono-map-topbar { gap: 16px; }
+  .maono-map-runtime .maono-map-topbar__account { min-height: var(--maono-density-control); padding: 4px 6px; }
+  .maono-map-runtime .maono-map-topbar__account-trigger { min-height: 30px; }
+  .maono-map-runtime .maono-map-topbar__avatar { width: 28px; height: 28px; flex-basis: 28px; }
+  body .maono-map-overlay__buttons { gap: 8px; }
+  body .maono-map-overlay__buttons > button { width: var(--maono-density-control); height: var(--maono-density-control); border-radius: 10px; }
+  .maono-map-runtime .maono-layer-panel__header { min-height: 48px; padding: 8px 12px; }
+  .maono-map-runtime .maono-layer-panel__tabs button { min-height: var(--maono-density-control-small); padding: 6px; }
+  .maono-map-runtime .maono-layer-panel__toolbar { min-height: 44px; padding: 6px 10px; }
+  .maono-map-runtime .maono-layer-row { min-height: 48px; padding: 6px; gap: 6px; }
+  .maono-map-runtime .maono-layer-list-region { padding: 6px 8px 12px; }
+  .maono-map-runtime .maono-layer-panel__save-footer { padding: 8px 10px; }
+  .maono-map-runtime .maono-layer-panel__save-button { min-height: var(--maono-density-control-small); }
+  .maono-map-runtime .maono-basemap-panel__header { padding: 18px 16px 14px; }
+  .maono-map-runtime .maono-basemap-panel__styles { padding: 14px; gap: 8px; }
+  .maono-map-runtime .maono-basemap-panel__option { grid-template-columns: 64px minmax(0, 1fr) 24px; min-height: 60px; gap: 10px; }
+  .maono-map-runtime .maono-basemap-panel__preview { width: 64px; height: 44px; }
+}
+
+body .maono-review-panel__header > div { min-width: 0; }
+body .maono-review-panel__header h1 { max-width: 100%; }
+body .maono-login-page .maono-login-page__submit { min-height: var(--maono-density-control); padding-block: 8px; }
+@media (pointer: coarse) {
+  body .mm-projects-page .mm-sidebar-toggle,
+  body .mm-projects-page .mm-projects-sidebar.collapsed .mm-sidebar-toggle { width: 44px; height: 44px; }
+  body .mm-projects-page .mm-sidebar-brand-row { grid-template-columns: minmax(0, 1fr) 44px; }
+  .maono-map-runtime .maono-map-topbar__account-trigger { min-height: 44px; }
+}
+
+/* The legacy action component supplies inline dimensions. Override only its
+ * presentation, keeping its event handlers and placement math untouched. */
+body .mm-projects-page .mm-projects-content .mm-project-card__more {
+  width: var(--maono-density-control) !important;
+  height: var(--maono-density-control) !important;
+}
+@container (max-width: 560px) {
+  body .mm-projects-page :is(.mm-docs-filters, .mm-docs-folder-grid, .mm-docs-panel-header) { padding-inline: 12px; }
+}
+@media (max-width: 820px) {
+  body .maono-map-overlay__buttons > button { width: 44px; height: 44px; }
+}
+
+/* Dense ticket filters use two balanced rows before falling back to the
+ * existing tablet/mobile stack, rather than a desktop-sized six-row form. */
+body .mm-projects-page :is(.ticket-primary-action, .ticket-view-control, .ticket-view-control select, .ticket-filter-input-wrap) { min-height: var(--maono-density-control); }
+body .mm-projects-page .ticket-primary-action { min-width: 176px; padding: 8px 12px; font-size: 14px; }
+body .mm-projects-page .ticket-view-control { min-width: 132px; }
+body .mm-projects-page :is(.ticket-view-control select, .ticket-filter-bar input, .ticket-filter-bar select) { font-size: 14px; }
+@container (min-width: 900px) {
+  body .mm-projects-page .ticket-filter-bar { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  body .mm-projects-page .ticket-filter-search { grid-column: span 2; }
+  body .mm-projects-page .ticket-filter-bar > label:nth-child(4) { grid-column: span 2; }
+  body .mm-projects-page .ticket-period-filter { grid-column: span 4; }
+  body .mm-projects-page .ticket-filter-bar > label:last-child { grid-column: span 2; width: 100%; }
+}
+@media (max-width: 960px) {
+  /* Override the viewport-height rail contract when Admin becomes a stack. */
+  body .maono-admin-page .admin-rail { min-height: 0 !important; }
+}
+@media (pointer: coarse) {
+  body .mm-projects-page .mm-sidebar-logo-mask { max-width: 100%; }
+  body .mm-projects-page .mm-sidebar-logo { width: min(var(--mm-logo-width), 100%); min-width: 0; }
+}

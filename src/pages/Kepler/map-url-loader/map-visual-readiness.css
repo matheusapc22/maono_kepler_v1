@@ -13,22 +13,22 @@
  * project is hydrating we keep the panel visually and interactively closed;
  * data-map-ready=false also covers the first paint before MapUrlLoader raises
  * isMapLoading, preventing a one-frame panel flash. */
-.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__panel,
-.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__backdrop,
-.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__panel,
-.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__backdrop {
+.maono-map-runtime:not([data-import-open="true"])[data-map-ready="false"] .maono-map-panel-host__panel,
+.maono-map-runtime:not([data-import-open="true"])[data-map-ready="false"] .maono-map-panel-host__backdrop,
+.maono-map-runtime:not([data-import-open="true"])[data-map-loading="true"] .maono-map-panel-host__panel,
+.maono-map-runtime:not([data-import-open="true"])[data-map-loading="true"] .maono-map-panel-host__backdrop {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
 }
 
-.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__panel,
-.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__panel {
+.maono-map-runtime:not([data-import-open="true"])[data-map-ready="false"] .maono-map-panel-host__panel,
+.maono-map-runtime:not([data-import-open="true"])[data-map-loading="true"] .maono-map-panel-host__panel {
   transform: translateX(-105%);
 }
 
-.maono-map-runtime[data-map-ready="false"] .maono-map-panel-host__handle,
-.maono-map-runtime[data-map-loading="true"] .maono-map-panel-host__handle {
+.maono-map-runtime:not([data-import-open="true"])[data-map-ready="false"] .maono-map-panel-host__handle,
+.maono-map-runtime:not([data-import-open="true"])[data-map-loading="true"] .maono-map-panel-host__handle {
   left: 0 !important;
   pointer-events: none;
 }

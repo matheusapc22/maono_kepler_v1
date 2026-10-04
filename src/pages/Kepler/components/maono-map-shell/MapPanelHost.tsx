@@ -48,7 +48,7 @@ export default function MapPanelHost({
       data-panel-open={open ? "true" : "false"}
       data-maono-no-preview="true"
     >
-      {open ? (
+      {open && activePanel !== "data" ? (
         <button
           type="button"
           className="maono-map-panel-host__backdrop"
@@ -75,7 +75,7 @@ export default function MapPanelHost({
         aria-label={actionLabel}
         title={actionLabel}
       >
-        <MapShellIcon name={open ? "chevron-left" : "chevron-right"} />
+        <MapShellIcon name={activePanel === "layers" ? "chevron-left" : open ? "chevron-left" : "chevron-right"} />
         <span className="maono-map-panel-host__label">{activeLabel}</span>
       </button>
     </div>

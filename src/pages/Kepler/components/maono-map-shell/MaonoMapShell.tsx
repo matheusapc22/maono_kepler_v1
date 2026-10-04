@@ -15,6 +15,7 @@ type MaonoMapShellProps = {
   topbar: ReactNode;
   panelHost: ReactNode;
   mode: MapRuntimeMode;
+  importOpen?: boolean;
   panelAvailable: boolean;
   panelOpen: boolean;
   activePanelTab: MaonoMapPanelTab;
@@ -34,6 +35,7 @@ export default function MaonoMapShell({
   topbar,
   panelHost,
   mode,
+  importOpen = false,
   panelAvailable,
   panelOpen,
   activePanelTab,
@@ -59,6 +61,7 @@ export default function MaonoMapShell({
           : "maono-map-runtime--panel-collapsed",
       ].join(" ")}
       data-map-mode={mode}
+      data-import-open={importOpen ? "true" : "false"}
       data-panel-tab={activePanelTab}
       data-panel-open={panelOpen ? "true" : "false"}
       data-map-ready={mapReady ? "true" : "false"}

@@ -499,6 +499,7 @@ const MaonoSaveButton: React.FC = () => {
     }
 
     let failureTelemetryEmitted = false;
+    let saveConflict = false;
 
     try {
       const result = await executePreparedProjectUpdate({
@@ -552,11 +553,15 @@ const MaonoSaveButton: React.FC = () => {
           serverTiming: responseDiagnostics.serverTiming,
         });
 
-        if (response.status === 403 || response.status === 409) {
+        if (response.status === 403) {
           void refresh();
         }
 
         if (response.status === 409) {
+          // Refresh remounts the map, discarding its unsaved draft. Keep the
+          // current context revision too, so a manual retry cannot overwrite
+          // a newer remote revision silently.
+          saveConflict = true;
           emitSaveTelemetry("map_save_conflict", {
             ...snapshot.attempt,
             mode: context?.mode ?? null,
@@ -655,7 +660,9 @@ const MaonoSaveButton: React.FC = () => {
         });
       }
 
-      const failure = getSaveFailureMessage(error);
+      const failure = saveConflict
+        ? "Não foi possível salvar devido a um conflito no projeto. Suas alterações continuam neste mapa e não foram salvas. Preserve-as antes de recarregar a página."
+        : getSaveFailureMessage(error);
       setMessageType("error");
       setMessage(failure);
       finishPendingMapSave("error", failure);

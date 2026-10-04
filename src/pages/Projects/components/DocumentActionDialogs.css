@@ -1,0 +1,89 @@
+/* Shared top-layer actions; scoped independently from workspace containment. */
+.mm-docs-dialog {
+  box-sizing: border-box; position: fixed; inset: 0; margin: auto;
+  width: min(680px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px);
+  padding: 28px; overflow: auto; border: 1px solid var(--maono-accent-border-strong, #b99035); border-radius: 14px;
+  background: linear-gradient(135deg, #10161c, #0a0f14); color: var(--mm-text, #f4f1e8);
+  box-shadow: 0 28px 90px #000a; font: 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+  animation: mm-docs-dialog-enter 140ms ease-out;
+}
+.mm-docs-dialog:not([open]) { display: none; }
+.mm-docs-dialog::backdrop { background: #000b; backdrop-filter: blur(2px); }
+.mm-docs-dialog *, .mm-docs-dialog *::before, .mm-docs-dialog *::after { box-sizing: border-box; }
+.mm-docs-dialog form { display: flex; flex-direction: column; gap: 24px; margin: 0; min-width: 0; }
+.mm-docs-dialog .mm-docs-icon { flex: 0 0 auto; width: 22px; height: 22px; }
+.mm-docs-dialog .mm-docs-dialog-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.mm-docs-dialog .mm-docs-dialog-heading { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.mm-docs-dialog .mm-docs-dialog-heading > .mm-docs-icon { width: 36px; height: 36px; color: var(--maono-accent-bright, #f2c766); }
+.mm-docs-dialog h3 { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.25; }
+.mm-docs-dialog .mm-docs-dialog-close { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 7px; border: 1px solid #46505c; border-radius: 7px; background: #0b1016; color: #f4f1e8; cursor: pointer; }
+.mm-docs-dialog .mm-docs-dialog-subtitle { margin: -12px 0 0; color: #c0c6cf; overflow-wrap: anywhere; }
+.mm-docs-dialog .mm-docs-dialog-body { min-width: 0; }
+.mm-docs-dialog .mm-docs-dialog-label { display: block; margin: 12px 0 8px; font-weight: 600; }
+.mm-docs-dialog .mm-docs-name-control { display: flex; align-items: stretch; gap: 14px; }
+.mm-docs-dialog input { width: 100%; min-width: 0; min-height: 48px; padding: 12px 14px; border: 1px solid #566170; border-radius: 8px; background: #090e13; color: #f4f1e8; color-scheme: dark; font: inherit; }
+.mm-docs .mm-docs-dialog input:focus-visible, .mm-docs-dialog input:focus { border-color: var(--maono-accent-bright, #f2c766); outline: 1px solid var(--maono-accent-bright, #f2c766); outline-offset: 0; }
+.mm-docs-dialog input[aria-invalid="true"] { border-color: #ec9a91; }
+.mm-docs-dialog .mm-docs-name-extension { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; max-width: 35%; padding: 10px 16px; border-radius: 8px; background: #1a2028; color: #f4f1e8; font-weight: 600; overflow-wrap: anywhere; }
+.mm-docs-dialog .mm-docs-dialog-error { margin: 0; padding: 10px 12px; border: 1px solid #8c514b; border-radius: 7px; color: #ffc1b9; background: #45242166; overflow-wrap: anywhere; }
+.mm-docs-dialog .mm-docs-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 20px; padding-top: 8px; }
+.mm-docs-dialog .mm-docs-dialog-actions { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 14px; }
+.mm-docs-dialog .mm-docs-dialog-actions .mm-docs-button { min-height: 46px; min-width: 124px; padding: 11px 20px; border: 1px solid #566170; border-radius: 8px; background: #0b1016; color: #f4f1e8; font: inherit; font-weight: 650; cursor: pointer; }
+.mm-docs-dialog .mm-docs-dialog-actions .is-primary { border-color: var(--maono-accent-bright, #f2c766); background: linear-gradient(135deg, var(--maono-accent-bright, #f2c766), var(--maono-accent-strong, #d9aa45)); color: #171105; }
+.mm-docs-dialog :is(button, input):disabled { opacity: .5; cursor: not-allowed; }
+.mm-docs-dialog button:hover:not(:disabled) { border-color: var(--maono-accent-bright, #f2c766); }
+.mm-docs-dialog :is(button, [tabindex]):focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 3px; }
+.mm-docs-folder-name-dialog { width: min(580px, calc(100vw - 32px)); }
+.mm-docs-move-dialog { width: min(880px, calc(100vw - 32px)); }
+.mm-docs-move-dialog form { gap: 18px; }
+.mm-docs-move-dialog .mm-docs-dialog-body { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.mm-docs-dialog .mm-docs-current-location { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.mm-docs-dialog .mm-docs-current-location > strong { flex-shrink: 0; }
+.mm-docs-dialog .mm-docs-current-location > span { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 14px; border: 1px solid #46505c; border-radius: 9px; overflow-wrap: anywhere; }
+.mm-docs-dialog .mm-docs-current-location .mm-docs-icon { color: var(--maono-accent-bright, #f2c766); }
+.mm-docs-dialog .mm-docs-destination-tools { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+.mm-docs-dialog .mm-docs-destination-tabs { display: flex; gap: 10px; min-width: 0; }
+.mm-docs-dialog .mm-docs-destination-tabs button { padding: 10px 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #c0c6cf; font: inherit; cursor: pointer; }
+.mm-docs-dialog .mm-docs-destination-tabs button[aria-selected="true"] { color: var(--maono-accent-bright, #f2c766); border-bottom-color: var(--maono-accent-bright, #f2c766); }
+.mm-docs-dialog .mm-docs-destination-search { position: relative; display: flex; align-items: center; flex: 1 1 200px; max-width: 260px; }
+.mm-docs-dialog .mm-docs-destination-search .mm-docs-icon { position: absolute; left: 12px; color: #b5bdc9; }
+.mm-docs-dialog .mm-docs-destination-search input { min-height: 42px; padding: 9px 12px 9px 42px; }
+.mm-docs-dialog .mm-docs-destination-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; }
+.mm-docs-dialog .mm-docs-destination-breadcrumb > span { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.mm-docs-dialog .mm-docs-destination-breadcrumb .mm-docs-icon { width: 14px; height: 14px; color: #8791a1; }
+.mm-docs-dialog .mm-docs-destination-breadcrumb button { padding: 3px; border: 0; border-radius: 3px; background: none; color: #c0c6cf; font: inherit; font-size: 13px; overflow-wrap: anywhere; cursor: pointer; }
+.mm-docs-dialog .mm-docs-destination-breadcrumb button[aria-current="page"] { color: var(--maono-accent-bright, #f2c766); }
+.mm-docs-dialog .mm-docs-destination-list { height: clamp(120px, 30dvh, 320px); overflow-y: auto; overscroll-behavior: contain; scrollbar-color: #5a626f #11171e; scrollbar-width: thin; padding: 5px 8px; border: 1px solid #343e4b; border-radius: 8px; }
+.mm-docs-dialog .mm-docs-destination-row { display: flex; width: 100%; align-items: center; gap: 16px; min-height: 46px; padding: 11px 10px; border: 1px solid transparent; border-bottom-color: #28313d; border-radius: 5px; background: transparent; color: #edf0f5; text-align: left; font: inherit; cursor: pointer; }
+.mm-docs-dialog .mm-docs-destination-row > .mm-docs-icon:first-child { color: var(--maono-accent-bright, #f2c766); fill: var(--maono-accent-surface, #f2c76620); }
+.mm-docs-dialog .mm-docs-destination-row > .mm-docs-icon:last-child { width: 16px; height: 16px; color: #a7b0bf; }
+.mm-docs-dialog .mm-docs-destination-row > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mm-docs-dialog .mm-docs-destination-row small { display: block; margin-top: 3px; color: #b5bdc9; font-size: 12px; }
+.mm-docs-dialog .mm-docs-destination-row:hover:not(:disabled) { background: var(--maono-accent-surface, #f2c76615); }
+.mm-docs-dialog .mm-docs-destination-empty { margin: 0; padding: 28px 16px; color: #b5bdc9; text-align: center; }
+.mm-docs-dialog .mm-docs-destination-hint { margin: 0; color: #b5bdc9; font-size: 12px; }
+.mm-docs-dialog .mm-docs-dialog-destination { flex: 1; min-width: 0; color: #b5bdc9; font-size: 13px; overflow-wrap: anywhere; }
+.mm-docs-dialog .mm-docs-dialog-destination strong { color: #edf0f5; }
+@keyframes mm-docs-dialog-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 600px) {
+  .mm-docs-dialog { padding: 20px; }
+  .mm-docs-dialog h3 { font-size: 19px; }
+  .mm-docs-dialog .mm-docs-dialog-heading { gap: 10px; }
+  .mm-docs-dialog .mm-docs-dialog-heading > .mm-docs-icon { width: 29px; height: 29px; }
+  .mm-docs-dialog .mm-docs-dialog-footer { align-items: stretch; flex-direction: column; gap: 12px; }
+  .mm-docs-dialog .mm-docs-dialog-actions { flex-direction: row; gap: 10px; }
+  .mm-docs-dialog .mm-docs-dialog-actions .mm-docs-button { flex: 1; min-width: 0; padding-inline: 12px; }
+  .mm-docs-dialog .mm-docs-name-control { gap: 8px; }
+  .mm-docs-dialog .mm-docs-name-extension { padding-inline: 10px; font-size: 12px; }
+  .mm-docs-dialog .mm-docs-destination-tools { gap: 10px; }
+  .mm-docs-dialog .mm-docs-destination-tabs { width: 100%; gap: 0; }
+  .mm-docs-dialog .mm-docs-destination-tabs button { flex: 1; padding-inline: 5px; font-size: 12px; }
+  .mm-docs-dialog .mm-docs-destination-search { max-width: none; }
+  .mm-docs-dialog .mm-docs-current-location { align-items: flex-start; gap: 10px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .mm-docs-dialog { animation: none; } }
+@media (forced-colors: active) {
+  .mm-docs-dialog { border-color: CanvasText; }
+  .mm-docs-dialog .mm-docs-dialog-actions .is-primary { background: ButtonFace; color: ButtonText; border-color: Highlight; }
+  .mm-docs-dialog .mm-docs-destination-tabs button[aria-selected="true"] { color: Highlight; border-color: Highlight; }
+}

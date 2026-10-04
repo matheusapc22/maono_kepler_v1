@@ -3,7 +3,8 @@ import type {
   TicketPerson,
   TicketViewMode,
 } from "./ticket-types";
-import HeadsetIcon from "../../../components/icons/HeadsetIcon";
+import { Link } from "react-router";
+import { DocumentIcon } from "./DocumentsUi";
 
 type TicketsToolbarProps = {
   organizationId: number | string;
@@ -15,6 +16,7 @@ type TicketsToolbarProps = {
   onFiltersChange: (filters: TicketFilters) => void;
   onViewModeChange: (viewMode: TicketViewMode) => void;
   onNewTicket: () => void;
+  onHome: () => void;
   newTicketButtonRef?: React.RefObject<HTMLButtonElement | null>;
 };
 
@@ -32,6 +34,7 @@ export default function TicketsToolbar({
   onFiltersChange,
   onViewModeChange,
   onNewTicket,
+  onHome,
   newTicketButtonRef,
 }: TicketsToolbarProps) {
   function updateFilter<Key extends keyof TicketFilters>(
@@ -47,14 +50,13 @@ export default function TicketsToolbar({
 
   return (
     <>
+      <nav className="ticket-center-breadcrumb" aria-label="Caminho da página">
+        <Link to="/projects" replace={false} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome(); }}>Início</Link>
+        <DocumentIcon name="chevron" /><span aria-current="page">Central de Chamados</span>
+      </nav>
       <header className="ticket-center-header">
-        <span className="ticket-center-headset" aria-hidden="true">
-          <HeadsetIcon />
-        </span>
         <div className="ticket-center-heading">
-          <span className="ticket-center-eyebrow">Atendimento operacional</span>
-          <h2>Central de Chamados</h2>
-          <p>Consulte, priorize e acompanhe solicitações operacionais.</p>
+          <h1>Central de Chamados</h1>
           <span className="mm-sr-only">
             Organização ativa: {organizationName?.trim() || `Organização #${organizationId}`}
           </span>
@@ -68,7 +70,7 @@ export default function TicketsToolbar({
               className="ticket-primary-action"
               onClick={onNewTicket}
             >
-              <span aria-hidden="true">＋</span>
+              <DocumentIcon name="plus" />
               Novo chamado
             </button>
           ) : null}
@@ -93,10 +95,9 @@ export default function TicketsToolbar({
       <section className="ticket-filter-surface" aria-label="Filtros de chamados">
         <header className="ticket-filter-header">
           <div className="ticket-filter-title">
-            <span aria-hidden="true">☷</span>
+            <DocumentIcon name="filter" />
             <strong>Filtros</strong>
           </div>
-          <span className="ticket-filter-help">Resultados por contexto, responsável ou período.</span>
           <button
             type="button"
             className="ticket-filter-clear"
@@ -114,7 +115,7 @@ export default function TicketsToolbar({
               })
             }
           >
-            <span aria-hidden="true">◌</span>
+            <DocumentIcon name="restore" />
             Limpar filtros
           </button>
         </header>
@@ -123,7 +124,7 @@ export default function TicketsToolbar({
           <label className="ticket-filter-search">
             <span className="ticket-filter-label">Buscar</span>
             <span className="ticket-filter-input-wrap">
-              <span aria-hidden="true">⌕</span>
+              <DocumentIcon name="search" />
               <input
                 type="search"
                 value={filters.q}
@@ -189,6 +190,8 @@ export default function TicketsToolbar({
             </select>
           </label>
 
+        </div>
+        <div className="ticket-filter-bar ticket-filter-secondary">
           <fieldset className="ticket-period-filter">
             <legend className="ticket-filter-label">Período</legend>
             <div>

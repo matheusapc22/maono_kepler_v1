@@ -36,6 +36,10 @@ import MaonoSaveButton from "./components/maono-save-button";
 import BackToProjectsButton from "./components/back-to-projects-button";
 import PointClusterSettingsPanel from "./components/point-cluster-settings-panel";
 import { usePointClustering } from "./hooks/use-point-clustering";
+import { replaceDataImportNotifications } from "./factories/data-import-notifications";
+import { replaceAddDataDialog } from "./factories/add-data-dialog";
+import { replaceFileUpload } from "./factories/file-upload";
+import { replaceExportHtmlMap, replaceExportJsonMap } from "./factories/export-map-help";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
 import { replaceMapControl } from "./factories/map-control";
 import { replaceMapLegendPanel } from "./factories/maono-map-legend-panel";
@@ -114,14 +118,20 @@ import "./map-panel/map-panel.css";
 
 const KeplerGl = injectComponents([
   replaceLoadDataModal(),
+  replaceFileUpload(),
+  replaceExportHtmlMap(),
+  replaceExportJsonMap(),
+  replaceAddDataDialog(),
   replaceMapControl(),
   replaceMapLegendPanel(),
   replaceLegendRow(),
   replaceMapPopover(),
-  replacePanelHeader(),
   replaceDatasetSection(),
   replaceLayerConfigurator(),
   replaceSidePanel(),
+  // Parent injection registers its dependencies; apply this child override last.
+  replacePanelHeader(),
+  replaceDataImportNotifications(),
 ]);
 
 function shouldForwardProp(propName, target) {

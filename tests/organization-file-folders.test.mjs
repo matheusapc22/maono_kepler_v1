@@ -163,6 +163,43 @@ test("pastas respeitam profundidade, conflito de nome e ciclos", async (t) => {
   );
 });
 
+test("mover pasta altera parent_id, preserva a subárvore e mantém guards de hierarquia", async (t) => {
+  const { env, db, calls } = persistenceFixture(t);
+
+  const origem = await createDocumentFolder(env, {
+    organizationId: 1,
+    name: "Origem",
+    userId: 1,
+  });
+  const destino = await createDocumentFolder(env, {
+    organizationId: 1,
+    name: "Destino",
+    userId: 1,
+  });
+  const filha = await createDocumentFolder(env, {
+    organizationId: 1,
+    parentId: origem.id,
+    name: "Filha",
+    userId: 1,
+  });
+
+  const moved = await updateDocumentFolder(env, 1, origem.id, {
+    parentId: destino.id,
+  });
+
+  assert.equal(moved.parent_id, destino.id);
+  assert.equal(
+    db.prepare("SELECT parent_id FROM organization_file_folders WHERE id = ?").get(filha.id)?.parent_id,
+    origem.id,
+  );
+  assert.deepEqual(calls, []);
+
+  await assert.rejects(
+    updateDocumentFolder(env, 1, destino.id, { parentId: filha.id }),
+    { code: "DOCUMENT_FOLDER_CYCLE" },
+  );
+});
+
 test("parent e arquivo não podem atravessar organizações", async (t) => {
   const { env, db } = persistenceFixture(t);
 

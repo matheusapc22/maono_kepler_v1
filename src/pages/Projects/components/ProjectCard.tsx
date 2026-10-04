@@ -1,5 +1,7 @@
 import React from "react";
-import { Link } from "react-router";
+import { useHref, useNavigate } from "react-router";
+
+import "./project-card-interactions.css";
 
 import type { ProjectListItem } from "../projects-api";
 import ProjectActionsMenu from "./ProjectActionsMenu";
@@ -7,7 +9,6 @@ import ProjectMapPlaceholder from "./ProjectMapPlaceholder";
 import {
   formatProjectRelativeDate,
   isProjectThumbnailDecoded,
-  normalizeProjectAccessLevel,
   normalizeProjectThumbnailStatus,
   projectPreviousReadyThumbnailUrl,
   rememberProjectThumbnailDecoded,
@@ -113,26 +114,6 @@ function ProjectPreviewNeutralState({
   );
 }
 
-function OwnerIcon() {
-  return (
-    <svg
-      className="mm-project-card__chip-icon"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
 function ClockIcon() {
   return (
     <svg
@@ -182,26 +163,6 @@ function TagIcon() {
   );
 }
 
-function ArrowIcon() {
-  return (
-    <svg
-      className="mm-project-card__open-icon"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d="M5 12h13m-5-5 5 5-5 5"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
 function FavoriteIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -223,7 +184,6 @@ function FavoriteIcon({ active }: { active: boolean }) {
 
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
-  canSave,
   canFavorite,
   canEditMetadata = false,
   actionsOpen = false,
@@ -234,6 +194,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onEditMetadata,
   onFavoriteToggle,
 }) => {
+  const navigate = useNavigate();
+  const projectDestination = `/projects/${encodeURIComponent(project.slug)}/manage`;
+  const projectHref = useHref(projectDestination);
+  const openingRef = React.useRef(false);
   const thumbnailStatus = normalizeProjectThumbnailStatus(
     project.thumbnailStatus,
   );
@@ -280,8 +244,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       };
     });
   const isFavorite = Boolean(project.favorite || project.favorited);
-  const accessLevel = normalizeProjectAccessLevel(project.accessLevel);
-  const isOwner = accessLevel === "owner";
 
   React.useEffect(() => {
     if (thumbnailStatus === "PENDING") {
@@ -602,6 +564,69 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     [displayImageUrl, markDisplayedImageFailed],
   );
 
+  const openProject = async () => {
+    if (opening || openingRef.current) {
+      return;
+    }
+
+    openingRef.current = true;
+    try {
+      if (onOpen) {
+        await onOpen(project);
+      } else {
+        await navigate(projectDestination);
+      }
+    } finally {
+      openingRef.current = false;
+    }
+  };
+
+  const handleCardClick = (event: React.MouseEvent<HTMLElement>) => {
+    // Disabled buttons can bubble clicks from their SVG in some browsers.
+    // Exclude the actual controls, never the empty space around them.
+    if (
+      event.defaultPrevented ||
+      (event.target instanceof Element &&
+        event.target.closest("button, [role='menu']"))
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    if (opening || openingRef.current) {
+      return;
+    }
+
+    if (
+      event.button === 1 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      window.open(projectHref, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (event.button === 0) {
+      void openProject();
+    }
+  };
+
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (
+      event.defaultPrevented ||
+      event.target !== event.currentTarget ||
+      event.key !== "Enter" ||
+      event.repeat
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    void openProject();
+  };
+
   const cardClassName = [
     "mm-project-card",
     previewBusy ? "is-media-pending" : "",
@@ -611,7 +636,19 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     .join(" ");
 
   return (
-    <article className={cardClassName} aria-busy={previewBusy}>
+    <article
+      className={cardClassName}
+      role="link"
+      tabIndex={opening ? -1 : 0}
+      aria-label={`Abrir projeto ${project.name}`}
+      aria-busy={previewBusy}
+      aria-disabled={opening}
+      onClick={handleCardClick}
+      onAuxClick={(event) => {
+        if (event.button === 1) handleCardClick(event);
+      }}
+      onKeyDown={handleCardKeyDown}
+    >
       <div
         className="mm-project-card__preview"
         data-preview-presentation={previewPresentation}
@@ -668,12 +705,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               alignItems: "center",
               gap: 8,
             }}
-            onClick={(
-              event: React.MouseEvent<HTMLDivElement>,
-            ) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
           >
             {canEditMetadata ? (
               <ProjectActionsMenu
@@ -706,6 +737,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 }
                 disabled={favoriteBusy}
                 style={{ position: "static", flex: "0 0 auto" }}
+                onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -725,27 +757,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       </div>
 
       <div className="mm-project-card__content">
-        <div className="mm-project-card__status" aria-label="Acesso ao projeto">
-          {isOwner ? (
-            <span className="mm-project-card__chip is-owner">
-              <OwnerIcon />
-              <span>Proprietário</span>
-            </span>
-          ) : null}
-
-          {canSave ? (
-            <span className="mm-project-card__chip is-save">
-              <span className="mm-project-card__status-dot" aria-hidden="true" />
-              <span>Pode salvar</span>
-            </span>
-          ) : (
-            <span className="mm-project-card__chip is-read-only">
-              <span className="mm-project-card__status-dot" aria-hidden="true" />
-              <span>Somente leitura</span>
-            </span>
-          )}
-        </div>
-
         <header className="mm-project-card__header">
           <h2 title={project.name}>{project.name}</h2>
           {project.createdBy?.name ? (
@@ -787,38 +798,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               <span className="mm-project-card__slug">{project.slug}</span>
             </span>
           </div>
-
-          <Link
-            to={`/projects/${encodeURIComponent(project.slug)}/manage`}
-            className="mm-project-card__open"
-            aria-disabled={opening}
-            tabIndex={opening ? -1 : 0}
-            onClick={(
-              event: React.MouseEvent<HTMLAnchorElement>,
-            ) => {
-              if (opening) {
-                event.preventDefault();
-                return;
-              }
-
-              if (
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.altKey
-              ) {
-                return;
-              }
-
-              if (onOpen) {
-                event.preventDefault();
-                void onOpen(project);
-              }
-            }}
-          >
-            <span>Abrir projeto</span>
-            <ArrowIcon />
-          </Link>
         </footer>
       </div>
     </article>

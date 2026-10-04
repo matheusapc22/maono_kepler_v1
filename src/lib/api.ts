@@ -70,6 +70,8 @@ export type OrganizationFileSort =
   | "updated_asc"
   | "name_asc"
   | "name_desc"
+  | "type_asc"
+  | "type_desc"
   | "size_asc"
   | "size_desc";
 
@@ -547,6 +549,20 @@ export function moveOrganizationFileToFolder(
     {
       method: "PATCH",
       body: JSON.stringify({ folderId }),
+    },
+  );
+}
+
+export function renameOrganizationFile(
+  organizationId: number | string,
+  fileId: number | string,
+  name: string,
+) {
+  return requestJson<{ ok: boolean; file: OrganizationFile }>(
+    `${organizationPath(organizationId)}/files/${pathSegment(fileId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
     },
   );
 }

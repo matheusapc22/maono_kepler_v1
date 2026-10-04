@@ -4,6 +4,8 @@ import TicketMetricsPanel from './TicketMetricsPanel';
 import TicketExportsPanel from './TicketExportsPanel';
 import TicketCasesPanel from './TicketCasesPanel';
 import "./ticket-flow.css";
+import "./ticket-center-visual.css";
+import { DocumentActionMenu } from "./DocumentsUi";
 import TicketFlowSettings from "./TicketFlowSettings";
 import { readTicketNavigation, ticketNavigationUrl } from "./ticket-navigation";
 import {
@@ -18,15 +20,12 @@ import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
 import {
   MetricsSkeleton,
-  TableSkeleton,
 } from "../../../components/loading/Skeleton";
 import NewTicketPopover from "./NewTicketPopover";
 import TicketCalendarView from "./TicketCalendarView";
 import TicketDetailDrawer from "./TicketDetailDrawer";
 import TicketKanbanBoard from "./TicketKanbanBoard";
-import TicketListView, {
-  TICKET_LIST_HEADERS,
-} from "./TicketListView";
+import TicketListView from "./TicketListView";
 import TicketsToolbar from "./TicketsToolbar";
 import TicketNotifications from "./TicketNotifications";
 import TicketErrorNotice from "./TicketErrorNotice";
@@ -56,6 +55,7 @@ type TicketsSectionProps = {
   user?: AccessControlUser | null;
   organizationId?: number | string | null;
   organizationName?: string | null;
+  onHome: () => void;
 };
 
 const EMPTY_FACETS: TicketFacets = {
@@ -110,9 +110,13 @@ function TicketsSectionContent({
   user,
   organizationId,
   organizationName,
+  onHome,
 }: TicketsSectionProps) {
   const navigation = useRef(readTicketNavigation(window.location.href, String(organizationId ?? ''))).current;
   const snapshotRef = useRef<string | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [exportOpenSignal, setExportOpenSignal] = useState(0);
+  const [exportAvailable, setExportAvailable] = useState(false);
   const [flowEnabled, setFlowEnabled] = useState(false);
   const [queuePolicies, setQueuePolicies] = useState<import('./ticket-types').TicketQueuePolicy[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -136,6 +140,8 @@ function TicketsSectionContent({
   const [viewMode, setViewMode] = useState<TicketViewMode>(() =>
     new URL(window.location.href).searchParams.get("cc_org") === String(organizationId) ? navigation.view : storedViewMode(organizationId),
   );
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
   const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<TicketApiError | null>(null);
@@ -235,7 +241,7 @@ function TicketsSectionContent({
           targetPage,
           controller.signal,
           {
-            limit: 50,
+            limit: viewModeRef.current === "list" ? pageSize : 50,
             includeUndated: true,
             snapshot: targetPage > 1 || options.reuseSnapshot ? snapshotRef.current : null,
           },
@@ -246,6 +252,15 @@ function TicketsSectionContent({
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
+        }
+
+        if (!response.pagination.snapshot && response.pagination.page > response.pagination.totalPages) {
+          const lastPage = Math.max(1, response.pagination.totalPages);
+          const clamped = await listTickets(organizationId, debouncedFilters, lastPage, controller.signal, {
+            limit: viewModeRef.current === "list" ? pageSize : 50, includeUndated: true,
+          });
+          if (requestSequence !== listRequestSequenceRef.current || requestOrganizationKey !== organizationKeyRef.current) return;
+          Object.assign(response, clamped);
         }
 
         setTickets((current) =>
@@ -278,9 +293,12 @@ function TicketsSectionContent({
           return;
         }
 
-        setError(
-          toTicketApiError(requestError, "Não foi possível carregar os chamados."),
-        );
+        const listFailure = toTicketApiError(requestError, "Não foi possível carregar os chamados.");
+        if (listFailure.status === 403 || listFailure.status === 404) {
+          setTickets([]); setFacets(EMPTY_FACETS); setPagination(EMPTY_PAGINATION);
+          snapshotRef.current = null;
+        }
+        setError(listFailure);
       } finally {
         if (
           requestSequence === listRequestSequenceRef.current &&
@@ -292,7 +310,7 @@ function TicketsSectionContent({
         }
       }
     },
-    [canView, debouncedFilters, organizationId],
+    [canView, debouncedFilters, organizationId, pageSize],
   );
 
   useEffect(() => {
@@ -527,6 +545,8 @@ function TicketsSectionContent({
 
   useEffect(() => {
     const restore = () => {
+      // The parent router owns leaving this organization / returning Home.
+      if (new URL(window.location.href).searchParams.get("cc_org") !== String(organizationId)) return;
       const next = readTicketNavigation(window.location.href, String(organizationId ?? ''));
       setFilters(next.filters); setDebouncedFilters(next.filters); setViewMode(next.view);
       setSelectedTicketId(next.ticketId); setDetail(null); setSuggestedStatus(null);
@@ -570,10 +590,7 @@ function TicketsSectionContent({
   const showInitialSkeleton = initialLoading && tickets.length === 0;
 
   return (
-    <section className="ticket-center-shell">
-      <TicketNotifications key={`${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
-        setSelectedTicketId(id); setSuggestedStatus(null); setDetail(null); void loadDetail(id);
-      }} />
+    <section className="ticket-center-shell ticket-center-final">
       <TicketsToolbar
         organizationId={organizationId}
         organizationName={organizationName}
@@ -583,6 +600,7 @@ function TicketsSectionContent({
         canCreate={canCreate}
         onFiltersChange={setFilters}
         onViewModeChange={setViewMode}
+        onHome={onHome}
         onNewTicket={() => setNewTicketOpen(true)}
         newTicketButtonRef={newTicketButtonRef}
       />
@@ -673,15 +691,18 @@ function TicketsSectionContent({
         </section>
       )}
 
+      <TicketNotifications key={`${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
+        setSelectedTicketId(id); setSuggestedStatus(null); setDetail(null); void loadDetail(id);
+      }} />
       <TicketFeedbackPanel key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />
       <TicketMetricsPanel organizationId={organizationId} canManage={canManage} />
       <TicketKnowledgePanel key={`knowledge:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} reviewers={assignees} />
       <TicketCasesPanel key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />
-      {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} />}
+      {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} openSignal={exportOpenSignal} onAvailabilityChange={setExportAvailable} />}
       {flowEnabled && canManage ? <TicketFlowSettings organizationId={organizationId} policies={queuePolicies} onSaved={() => void loadTicketsPage(1, { background: true })} /> : null}
-      <p role="status">{viewMode === "kanban" ? "Carregamento por fila" : `${tickets.length} carregados`} · {pagination.total} acessíveis nesta consulta{viewMode !== 'kanban' && tickets.length < pagination.total ? ' · Exibição parcial' : ''}.
-        {pagination.snapshotAt ? ' Ordem preservada por até 15 minutos; atualize para incluir novos chamados.' : ''}
-        <button type="button" disabled={refreshing} onClick={() => void loadTicketsPage(1, { background: true })}>Atualizar consulta</button>
+      <p className="mm-sr-only" role="status">
+        {viewMode === "kanban" ? "Carregamento por fila. " : ""}{pagination.total} acessíveis nesta consulta.
+        {pagination.snapshotAt ? " Ordem preservada por até 15 minutos; use Atualizar consulta no menu para incluir novos chamados." : ""}
       </p>
       {error ? (
         <TicketErrorNotice
@@ -694,49 +715,34 @@ function TicketsSectionContent({
         className="ticket-view-region"
         aria-busy={initialLoading || refreshing}
       >
-        {showInitialSkeleton ? (
-          viewMode === "list" ? (
-            <TableSkeleton headers={TICKET_LIST_HEADERS} rows={7} />
-          ) : (
-            <div className={`ticket-view-skeleton mode-${viewMode}`}>
-              {Array.from({ length: viewMode === "kanban" ? 4 : 12 }).map(
-                (_, index) => (
-                  <span key={index} />
-                ),
-              )}
-              <p className="mm-sr-only" role="status">
-                Carregando chamados.
-              </p>
-            </div>
-          )
-        ) : tickets.length === 0 && viewMode === "list" && !pagination.hasMore ? (
-          <div className="ticket-empty-state">
-            <span aria-hidden="true">▧</span>
-            <h3>Nenhum chamado encontrado</h3>
-            <p>
-              Ajuste os filtros ou registre a primeira solicitação desta
-              organização.
-            </p>
-            {canCreate ? (
-              <button
-                type="button"
-                className="ticket-primary-action"
-                onClick={() => setNewTicketOpen(true)}
-              >
-                Novo chamado
-              </button>
-            ) : null}
-          </div>
-        ) : viewMode === "list" ? (
+        {viewMode !== "list" ? <div className="ticket-view-actions"><DocumentActionMenu label="Mais opções dos chamados" disabled={initialLoading} actions={[{ label: "Atualizar consulta", onSelect: () => void loadTicketsPage(1, { background: true }), disabled: refreshing || filters !== debouncedFilters }]} /></div> : null}
+        {viewMode === "list" ? (
           <TicketListView
+            selectionScope={`${JSON.stringify(debouncedFilters)}:${pagination.page}:${pageSize}`}
             tickets={tickets}
             pagination={pagination}
+            pageSize={pageSize}
+            loading={initialLoading || refreshing || filters !== debouncedFilters}
+            initialLoading={showInitialSkeleton}
+            error={Boolean(error)}
+            canCreate={canCreate}
+            onNewTicket={() => setNewTicketOpen(true)}
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
+            onPageSizeChange={setPageSize}
+            onRefresh={() => void loadTicketsPage(1, { background: true })}
+            canExport={can(user, PERMISSION.EXPORT_VIEW, permissionContext)}
+            exportAvailable={exportAvailable}
+            onExport={() => setExportOpenSignal(current => current + 1)}
             onPageChange={(targetPage) =>
               void loadTicketsPage(targetPage, { background: true, reuseSnapshot: true })
             }
           />
+        ) : showInitialSkeleton ? (
+          <div className={`ticket-view-skeleton mode-${viewMode}`}>
+            {Array.from({ length: viewMode === "kanban" ? 4 : 12 }).map((_, index) => <span key={index} />)}
+            <p className="mm-sr-only" role="status">Carregando chamados.</p>
+          </div>
         ) : viewMode === "kanban" ? (
           <TicketKanbanBoard
             key={`${organizationId}:${pagination.snapshot || JSON.stringify(debouncedFilters)}`}

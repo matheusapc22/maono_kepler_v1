@@ -20,6 +20,8 @@ type Props = {
   organizationId: string | number;
   canCreate: boolean;
   canDownload: boolean;
+  openSignal?: number;
+  onAvailabilityChange?: (available: boolean) => void;
 };
 const states: Record<string, string> = {
   queued: "Na fila",
@@ -34,7 +36,8 @@ const states: Record<string, string> = {
 const active = (job: Job) =>
   ["queued", "capturing", "running"].includes(job.state);
 
-function Content({ organizationId, canCreate, canDownload }: Props) {
+function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAvailabilityChange }: Props) {
+  const panelRef = useRef<HTMLDetailsElement>(null);
   const [data, setData] = useState<List | null>(null),
     [error, setError] = useState<ReturnType<typeof toTicketApiError> | null>(
       null,
@@ -152,9 +155,16 @@ function Content({ organizationId, canCreate, canDownload }: Props) {
       if (mounted.current) setBusy(false);
     }
   }
+  useEffect(() => { onAvailabilityChange?.(data?.enabled === true); }, [data?.enabled, onAvailabilityChange]);
+  useEffect(() => {
+    if (!openSignal || !data?.enabled || !panelRef.current) return;
+    panelRef.current.open = true;
+    panelRef.current.scrollIntoView({ block: "nearest" });
+    panelRef.current.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+  }, [openSignal, data?.enabled]);
   if (data?.enabled === false) return null;
   return (
-    <details className="ticket-exports">
+    <details ref={panelRef} className="ticket-exports">
       <summary>Relatórios e exportações</summary>
       <p>
         Relatórios completos dos chamados que você pode acessar. Datas em UTC; o

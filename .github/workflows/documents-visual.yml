@@ -1,0 +1,77 @@
+name: Documents Visual Workspace
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/pages/Projects/components/Documents*'
+      - 'src/pages/Projects/components/DocumentActionDialogs*'
+      - 'src/lib/user-error-catalog.ts'
+      - 'functions/_lib/organization-file-folders.js'
+      - 'functions/api/organizations/**/document-folders*'
+      - 'tests/document-action-backend-integration.test.mjs'
+      - 'tests/documents-visual-contract.test.mjs'
+      - 'tests/organization-file-rename.test.mjs'
+      - 'tests/organization-file-query-sorting.test.mjs'
+      - 'functions/_lib/organization-file-query.js'
+      - 'functions/_lib/organization-file-rename.js'
+      - 'functions/api/organizations/**/files/**'
+      - 'src/lib/api.ts'
+      - 'tests/browser/documents-visual.spec.ts'
+      - 'playwright.documents.config.ts'
+      - '.github/workflows/documents-visual.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  documents-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify controller against the pinned original, not just a self-authored baseline
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import assert from 'node:assert/strict';
+          const original = execFileSync('git', ['show', '40f615e602d5f02c141ad8cd645fc591a72a80b5:src/pages/Projects/components/DocumentsSection.tsx'], {encoding:'utf8'});
+          const prefix = original.split('\n').slice(0,1227).join('\n')+'\n';
+          assert.equal(createHash('sha256').update(prefix).digest('hex'),'126eb4eddd554717f51acc5fe1ff9cf1b7f48a6b00d8a84f2b77851f8cc9ea58');
+          console.log('Original controller prefix verified against AD-VIS-01');
+          JS
+      - name: Install existing repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Presentation, hierarchy and backend preservation contracts
+        run: node --test tests/documents-visual-contract.test.mjs tests/projects-fallback-scope.test.mjs tests/organization-file-folders.test.mjs tests/organization-file-filters.test.mjs tests/organization-file-rename.test.mjs tests/organization-file-query-sorting.test.mjs tests/document-action-backend-integration.test.mjs
+      - name: Build application
+        run: npm run build
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Actual built React route with intercepted APIs (not production acceptance)
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: documents-visual-results.json
+        run: npx playwright test --config=playwright.documents.config.ts --reporter=list,json
+      - name: Evidence and local inspectable build (no credentials)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: documents-visual-${{ github.sha }}
+          path: |
+            test-results/
+            documents-visual-results.json
+            dist/
+            src/pages/Projects/components/DocumentsSection.tsx
+            src/pages/Projects/components/DocumentsSection.css
+            src/pages/Projects/components/DocumentsUi.tsx
+            src/pages/Projects/components/DocumentActionDialogs.tsx
+            src/pages/Projects/components/DocumentActionDialogs.css
+            src/pages/Projects/components/DocumentsTransferPanel.css
+            tests/documents-visual-contract.test.mjs
+            tests/browser/documents-visual.spec.ts
+          if-no-files-found: warn
+          retention-days: 14

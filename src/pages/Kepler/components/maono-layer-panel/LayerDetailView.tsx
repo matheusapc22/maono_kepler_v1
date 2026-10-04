@@ -158,6 +158,8 @@ export default function LayerDetailView({
                   event.preventDefault();
                   event.currentTarget.blur();
                 } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
                   setDraftLabel(layer.label);
                   setEditing(false);
                   setError(null);

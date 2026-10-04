@@ -31,6 +31,8 @@ import {
   paletteKindLabel,
   palettesForScale,
 } from "./palettes.ts";
+import PanelHint from "./PanelHint";
+import LayerPanelIcon from "./LayerPanelIcon";
 
 const COLOR_SCALE_LABELS: Record<MapColorScale, string> = {
   quantile: "Quantile (distribuição)",
@@ -185,6 +187,7 @@ function RangeControl({
       </span>
       <input
         type="range"
+        aria-label={label}
         min={minimum}
         max={maximum}
         step={step}
@@ -477,7 +480,7 @@ export default function LayerStyleEditor({
             <strong>Aparência</strong>
             <small>Paletas, escalas e contorno</small>
           </span>
-          <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+          <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
         </summary>
         <div className="maono-detail-section__content">
           {style.fillEnabled &&
@@ -596,7 +599,7 @@ export default function LayerStyleEditor({
               <strong>Dimensão e agrupamento</strong>
               <small>Tamanho dos símbolos e comportamento por zoom</small>
             </span>
-            <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+            <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
           </summary>
           <div className="maono-detail-section__content">
             {compatibility.radius ? (
@@ -714,26 +717,31 @@ export default function LayerStyleEditor({
             <strong>Avançado</strong>
             <small>Composição global do mapa</small>
           </span>
-          <span className="maono-detail-section__chevron" aria-hidden="true">⌄</span>
+          <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
         </summary>
         <div className="maono-detail-section__content">
-          <label className="maono-style-field">
-            <span>Camadas de dados</span>
-            <select
-              value={normalizedLayerBlending}
-              onChange={(event) => {
-                if (isLayerBlendingMode(event.target.value)) {
-                  onChange({ kind: "layerBlending", value: event.target.value });
-                }
-              }}
-            >
-              {LAYER_BLENDING_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {LAYER_BLENDING_LABELS[mode]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="maono-panel-hint-field">
+            <label className="maono-style-field">
+              <span>Camadas de dados</span>
+              <select
+                value={normalizedLayerBlending}
+                onChange={(event) => {
+                  if (isLayerBlendingMode(event.target.value)) {
+                    onChange({ kind: "layerBlending", value: event.target.value });
+                  }
+                }}
+              >
+                {LAYER_BLENDING_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {LAYER_BLENDING_LABELS[mode]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <PanelHint label="Sobre os modos de composição">
+              {"Estes modos são globais e afetam a composição de todas as camadas."}
+            </PanelHint>
+          </div>
 
           <label className="maono-style-field">
             <span>Overlays sobre o mapa-base</span>
@@ -753,9 +761,6 @@ export default function LayerStyleEditor({
             </select>
           </label>
 
-          <p className="maono-style-help">
-            Estes modos são globais e afetam a composição de todas as camadas.
-          </p>
         </div>
       </details>
 

@@ -2,9 +2,12 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { Link, useNavigate } from "react-router";
+import { useDispatch, useSelector } from "react-redux";
+import { toggleModal, wrapTo } from "@kepler.gl/actions";
 
 import { useSession } from "../../../../auth/session";
 import PointFromPinWorkflow from "../../change-requests/PointFromPinWorkflow";
@@ -20,7 +23,7 @@ import MaonoBasemapPanel from "./MaonoBasemapPanel";
 import MaonoMapShell from "./MaonoMapShell";
 import MapPanelHost from "./MapPanelHost";
 import MapSidebar from "./MapSidebar";
-import MapTopbar from "./MapTopbar";
+import { AddDataDockContext } from "./AddDataDockContext";
 import { installMaonoMapLayoutDebug } from "./map-layout-debug";
 import {
   MAONO_MAP_PANEL_TAB_CHANGED_EVENT,
@@ -47,10 +50,15 @@ export default function MaonoMapRuntime({
   children: ReactNode;
 }) {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const dataRequested = useSelector((state: {
+    demo?: { keplerGl?: { map?: { uiState?: { currentModal?: string | null } } } };
+  }) => state.demo?.keplerGl?.map?.uiState?.currentModal === "addData");
+  const [dataTarget, setDataTarget] = useState<HTMLDivElement | null>(null);
+  const dataSessionOpen = useRef(false);
+  const dataSessionKey = useRef<string | null>(null);
   const {
-    activeOrganization,
     logout,
-    user,
   } = useSession();
   const {
     context,
@@ -79,10 +87,49 @@ export default function MaonoMapRuntime({
       context?.capabilities.viewMap &&
       basemapController.available,
   );
-  const panelAvailable = layerPanelAvailable || basemapAvailable;
+  const dataContextKey = [context?.organization?.id, context?.project?.slug, context?.version, context?.mode].join(":");
+  const validDataSession = dataSessionOpen.current && dataSessionKey.current === dataContextKey;
+  const dataAvailable = Boolean(customMapShellEnabled && context?.capabilities.importData);
+  const panelAvailable = layerPanelAvailable || basemapAvailable || dataAvailable;
   const loadInteractionBlocked = Boolean(
     context?.project && (!engineState.ready || engineState.isLoading),
   );
+
+  const clearDataRequest = useCallback(() => {
+    if (dataRequested) dispatch(wrapTo("map", toggleModal(null)));
+  }, [dataRequested, dispatch]);
+
+  const closePanel = useCallback(() => {
+    setPanelOpen(false);
+    clearDataRequest();
+    if (activePanel === "data") {
+      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(
+        '.maono-map-sidebar button[aria-controls="map-add-data-sidebar"]',
+      )?.focus());
+    }
+  }, [activePanel, clearDataRequest]);
+
+  useEffect(() => {
+    if (!customMapShellEnabled || !context) return;
+    // A request authorized for one project/session must not survive a route,
+    // organization, revision or permission-context change.
+    if (dataSessionOpen.current && dataSessionKey.current !== dataContextKey) {
+      dataSessionOpen.current = false;
+      setPanelOpen(false);
+      clearDataRequest();
+      return;
+    }
+    if (dataRequested && dataAvailable && (!loadInteractionBlocked || validDataSession)) {
+      dataSessionOpen.current = true;
+      dataSessionKey.current = dataContextKey;
+      setActivePanel("data");
+      setPanelOpen(true);
+    } else if (!dataRequested || !dataAvailable) {
+      dataSessionOpen.current = false;
+      if (activePanel === "data") setPanelOpen(false);
+      if (dataRequested && !dataAvailable) clearDataRequest();
+    }
+  }, [activePanel, clearDataRequest, context, customMapShellEnabled, dataAvailable, dataContextKey, dataRequested, loadInteractionBlocked, validDataSession]);
 
   useEffect(() => {
     if (!panelAvailable) {
@@ -133,13 +180,13 @@ export default function MaonoMapRuntime({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setPanelOpen(false);
+        closePanel();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [panelOpen]);
+  }, [closePanel, panelOpen]);
 
   useEffect(() => {
     if (!customMapShellEnabled || !context) {
@@ -172,7 +219,7 @@ export default function MaonoMapRuntime({
 
   const selectPanelTab = useCallback(
     (tab: MaonoMapPanelTab) => {
-      if (!context || !layerPanelAvailable || loadInteractionBlocked) {
+      if (!context || !layerPanelAvailable || (loadInteractionBlocked && !validDataSession)) {
         return;
       }
 
@@ -185,22 +232,24 @@ export default function MaonoMapRuntime({
         return;
       }
 
+      clearDataRequest();
       setActivePanel("layers");
       setActivePanelTab(tab);
       setPanelOpen(true);
       requestMaonoMapPanelTab(tab);
     },
-    [context, layerPanelAvailable, loadInteractionBlocked],
+    [clearDataRequest, context, layerPanelAvailable, loadInteractionBlocked, validDataSession],
   );
 
   const openBasemapPanel = useCallback(() => {
-    if (!basemapAvailable || loadInteractionBlocked) {
+    if (!basemapAvailable || (loadInteractionBlocked && !validDataSession)) {
       return;
     }
 
+    clearDataRequest();
     setActivePanel("basemap");
     setPanelOpen(true);
-  }, [basemapAvailable, loadInteractionBlocked]);
+  }, [basemapAvailable, clearDataRequest, loadInteractionBlocked, validDataSession]);
 
   const togglePanel = useCallback(() => {
     if (!panelAvailable || loadInteractionBlocked) {
@@ -236,6 +285,7 @@ export default function MaonoMapRuntime({
   }, [loggingOut, logout, navigate]);
 
   const handleOpenData = useCallback(() => {
+    if (dataRequested) { closePanel(); return; }
     if (
       loadInteractionBlocked ||
       context?.capabilities.importData !== true
@@ -244,18 +294,21 @@ export default function MaonoMapRuntime({
     }
 
     commands.openAddDataModal();
-  }, [commands, context?.capabilities.importData, loadInteractionBlocked]);
+  }, [closePanel, commands, context?.capabilities.importData, dataRequested, loadInteractionBlocked]);
 
   if (!customMapShellEnabled || !context) {
     return <>{children}</>;
   }
 
   const effectivePanelOpen =
-    panelAvailable && panelOpen && !loadInteractionBlocked;
+    panelAvailable && panelOpen &&
+    (!loadInteractionBlocked || (activePanel === "data" && validDataSession));
 
   return (
+    <AddDataDockContext.Provider value={{ close: closePanel, target: dataTarget, enabled: dataAvailable && effectivePanelOpen && activePanel === "data" }}>
     <MaonoMapShell
       mode={context.mode}
+      importOpen={activePanel === "data" && effectivePanelOpen && validDataSession}
       panelAvailable={panelAvailable}
       panelOpen={effectivePanelOpen}
       activePanelTab={activePanelTab}
@@ -284,7 +337,7 @@ export default function MaonoMapRuntime({
           activePanel={activePanel}
           layerPanelAvailable={layerPanelAvailable}
           basemapAvailable={basemapAvailable}
-          mapLoading={loadInteractionBlocked}
+          mapLoading={loadInteractionBlocked && !validDataSession}
           loggingOut={loggingOut}
           onPanelTabSelect={selectPanelTab}
           onOpenBasemap={openBasemapPanel}
@@ -292,18 +345,7 @@ export default function MaonoMapRuntime({
           onLogout={handleLogout}
         />
       }
-      topbar={
-        <MapTopbar
-          context={context}
-          activeOrganization={activeOrganization}
-          user={user}
-          mapReady={engineState.ready}
-          mapLoading={engineState.isLoading}
-          hasUnsavedChanges={engineState.hasUnsavedChanges}
-          loggingOut={loggingOut}
-          onLogout={handleLogout}
-        />
-      }
+      topbar={null}
       panelHost={
         <MapPanelHost
           available={panelAvailable}
@@ -311,9 +353,11 @@ export default function MaonoMapRuntime({
           activePanel={activePanel}
           activeLayerTab={activePanelTab}
           onToggle={togglePanel}
-          onClose={() => setPanelOpen(false)}
+          onClose={closePanel}
         >
-          {activePanel === "basemap" ? (
+          {activePanel === "data" ? (
+            <div ref={setDataTarget} className="maono-map-data-outlet" />
+          ) : activePanel === "basemap" ? (
             <MaonoBasemapPanel
               controller={basemapController}
               mode={context.mode}
@@ -356,5 +400,6 @@ export default function MaonoMapRuntime({
         </>
       ) : null}
     </MaonoMapShell>
+    </AddDataDockContext.Provider>
   );
 }
