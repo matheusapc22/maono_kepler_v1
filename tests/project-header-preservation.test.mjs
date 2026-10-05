@@ -12,6 +12,7 @@ const hash = source => createHash('sha256').update(source).digest('hex');
 const ui = 'src/pages/Projects/components/ProjectPagesUi.tsx';
 const css = 'src/pages/Projects/components/ProjectPages.css';
 const copy = 'src/pages/Projects/components/project-page-query.ts';
+const section = 'src/pages/Projects/components/ProjectsSection.tsx';
 const hasOriginal = spawnSync('git', ['cat-file', '-e', `${projectHeaderBaselineCommit}^{commit}`], { cwd: root, stdio: 'ignore' }).status === 0;
 
 for (const [path, expected] of Object.entries(projectHeaderBaselines)) {
@@ -30,6 +31,7 @@ for (const [path, expected] of Object.entries(projectHeaderBaselines)) {
 
 test('header normalization precedes the old loading inverse without changing its pinned baseline', () => {
   assert.equal(hash(restoreAdminProjectsProgressiveLoading(ui, read(ui))), progressiveBaselines[ui]);
+  assert.equal(hash(restoreAdminProjectsProgressiveLoading(section, read(section))), progressiveBaselines[section]);
 });
 
 const mutations = [
@@ -49,9 +51,14 @@ const mutations = [
   [css, 'padding: 24px 24px 20px;', 'padding: 30px 24px 20px;'],
   [css, 'grid-template-columns: repeat(4, minmax(0, 1fr));', 'grid-template-columns: repeat(3, minmax(0, 1fr));'],
   [copy, 'description: null, icon: "idea"', 'description: null, icon: "map-pinned"'],
-  [copy, 'Veja os projetos acessados ou atualizados recentemente.', 'Novo texto de Recentes.'],
-  [copy, 'Encontre rapidamente seus projetos favoritos.', 'Novo texto de Favoritos.'],
+  [copy, 'title: "Recentes", description: null', 'title: "Recentes", description: "Novo texto de Recentes."'],
+  [copy, 'title: "Favoritos", description: null', 'title: "Favoritos", description: "Novo texto de Favoritos."'],
   [copy, '[10, 20, 50]', '[10, 25, 50]'],
+  [section, '{section === "all" ? <ProjectPageFiltersForm', '{section !== "favorites" ? <ProjectPageFiltersForm'],
+  [section, 'onSearchQueryChange(draftFilters.search)', 'onSearchQueryChange("")'],
+  [section, 'filterAndSortProjects(projects, { ...appliedFilters, search: searchQuery })', 'filterAndSortProjects(projects, DEFAULT_PROJECT_FILTERS)'],
+  [section, 'projectPage(filteredProjects, currentPage, pageSize)', 'projectPage(projects, currentPage, pageSize)'],
+  [section, 'onFavoriteToggle={onFavoriteToggle}', 'onFavoriteToggle={() => {}}'],
 ];
 for (const [path, before, after] of mutations) {
   test(`header scope guard rejects unrelated or altered delta: ${path}: ${before}`, () => {
@@ -70,6 +77,10 @@ test('header inverse rejects missing and duplicated edits instead of accepting p
   assert.ok(block.startsWith(line));
   assert.throws(() => restoreApprovedProjectsHeader(css, original.replace(block, '')), assert.AssertionError);
   assert.throws(() => restoreApprovedProjectsHeader(css, original + block), assert.AssertionError);
+  const sectionSource = read(section);
+  const filterStart = '      {section === "all" ? <ProjectPageFiltersForm\n';
+  assert.throws(() => restoreApprovedProjectsHeader(section, sectionSource.replace(filterStart, '      <ProjectPageFiltersForm\n')), assert.AssertionError);
+  assert.throws(() => restoreApprovedProjectsHeader(section, sectionSource + filterStart), assert.AssertionError);
 });
 
 test('header inverse leaves unrelated paths unchanged', () => {

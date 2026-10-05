@@ -127,8 +127,8 @@ async function titles(page: Page) { return cards(page).locator("h2").allTextCont
 
 for (const entry of [
   { name: "Todos os Projetos", description: null, icon: "map-pinned", emptyIcon: "idea", total: 73, endpoint: "/api/projects" },
-  { name: "Recentes", description: "Veja os projetos acessados ou atualizados recentemente.", icon: "clock", emptyIcon: "clock", total: 13, endpoint: "/api/projects/recent" },
-  { name: "Favoritos", description: "Encontre rapidamente seus projetos favoritos.", icon: "star", emptyIcon: "star", total: 11, endpoint: "/api/projects/favorites" },
+  { name: "Recentes", description: null, icon: "clock", emptyIcon: "clock", total: 13, endpoint: "/api/projects/recent" },
+  { name: "Favoritos", description: null, icon: "star", emptyIcon: "star", total: 11, endpoint: "/api/projects/favorites" },
 ]) {
   test(`${entry.name}: shared header, complete endpoint set, controls and empty state`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -140,18 +140,23 @@ for (const entry of [
     else await expect(heading.locator("p")).toHaveCount(0);
     const crumb = page.getByRole("navigation", { name: "Caminho da página" });
     await expect(crumb.getByRole("button", { name: "Início", exact: true }).or(crumb.getByRole("link", { name: "Início", exact: true }))).toBeVisible();
-    await expect(filters(page).getByLabel("Buscar", { exact: true })).toHaveAttribute("placeholder", "Nome do projeto...");
-    await expect(filters(page).getByRole("combobox", { name: "Status", exact: true }).locator("option:checked")).toHaveText("Todos os status");
-    await expect(filters(page).getByRole("combobox", { name: "Ordenar por", exact: true }).locator("option")).toHaveText(["Mais recentes", "Mais antigos"]);
+    if (entry.name === "Todos os Projetos") {
+      await expect(filters(page).getByLabel("Buscar", { exact: true })).toHaveAttribute("placeholder", "Nome do projeto...");
+      await expect(filters(page).getByRole("combobox", { name: "Status", exact: true }).locator("option:checked")).toHaveText("Todos os status");
+      await expect(filters(page).getByRole("combobox", { name: "Ordenar por", exact: true }).locator("option")).toHaveText(["Mais recentes", "Mais antigos"]);
+    } else await expect(filters(page)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Novo Projeto", exact: true })).toHaveAttribute("href", "/maps/new/create");
     await expectCount(page, 10, entry.total);
     expect(requests.some(item => item.path === entry.endpoint)).toBe(true);
     await page.locator(".mm-project-pages").screenshot({ path: testInfo.outputPath(`${entry.endpoint.split("/").at(-1)}-desktop.png`), animations: "disabled" });
-    await filters(page).getByLabel("Buscar", { exact: true }).fill("não existe"); await apply(page);
+    if (entry.name === "Todos os Projetos") {
+      await filters(page).getByLabel("Buscar", { exact: true }).fill("não existe"); await apply(page);
+    } else await page.getByRole("textbox", { name: "Buscar projetos", exact: true }).fill("não existe");
     await expectCount(page, 0, 0);
     await expect(page.locator(".mm-project-pages__empty h2")).toHaveText(entry.name === "Favoritos" ? "Nenhum projeto favorito." : entry.name === "Recentes" ? "Nenhum projeto recente." : "Nenhum projeto encontrado.");
     await expect(page.locator(".mm-project-pages__empty > svg")).toHaveAttribute("data-icon", entry.emptyIcon);
-    await page.getByRole("button", { name: "Limpar filtros", exact: true }).click();
+    if (entry.name === "Todos os Projetos") await page.getByRole("button", { name: "Limpar filtros", exact: true }).click();
+    else await page.getByRole("textbox", { name: "Buscar projetos", exact: true }).fill("");
     await expectCount(page, 10, entry.total);
     await expect(page.getByRole("heading", { name: entry.name, exact: true, level: 1 })).toBeVisible();
   });
@@ -194,15 +199,59 @@ test("all page sizes, last page and name search include items beyond first endpo
   await expectCount(page, 1, 1); expect(await titles(page)).toEqual([projects[71].name]);
 });
 
-test("Recentes keeps the server-defined set; clear does not navigate to all projects", async ({ page }) => {
+test("Recentes keeps the server-defined set; clearing sidebar search stays in the same tab", async ({ page }) => {
   await setup(page, { recentIds: [1, 73] }); await expectCount(page, 10, 73);
   await openSection(page, "Recentes"); await expectCount(page, 2, 2);
   expect(await titles(page)).toEqual([projects[72].name, projects[0].name]);
-  await filters(page).getByRole("combobox", { name: "Status", exact: true }).selectOption({ label: "Ativos" }); await apply(page);
+  await expect(filters(page)).toHaveCount(0);
+  await page.getByRole("textbox", { name: "Buscar projetos", exact: true }).fill("não existe");
   await expectCount(page, 0, 0);
-  await page.getByRole("button", { name: "Limpar filtros", exact: true }).click(); await expectCount(page, 2, 2);
+  await page.getByRole("textbox", { name: "Buscar projetos", exact: true }).fill(""); await expectCount(page, 2, 2);
   await expect(page.getByRole("heading", { name: "Recentes", exact: true, level: 1 })).toBeVisible();
 });
+
+for (const name of ["Recentes", "Favoritos"]) {
+  test(`${name}: no hidden status or order filter survives navigation; sidebar search remains recoverable`, async ({ page }) => {
+    const { requests } = await setup(page); await expectCount(page, 10, 73);
+    await filters(page).getByRole("combobox", { name: "Status", exact: true }).selectOption("inactive");
+    await filters(page).getByRole("combobox", { name: "Ordenar por", exact: true }).selectOption("oldest");
+    await filters(page).getByLabel("Buscar", { exact: true }).fill("não existe");
+    await apply(page); await expectCount(page, 0, 0);
+    await openSection(page, name);
+    await expect(filters(page)).toHaveCount(0);
+    await expectCount(page, 0, 0);
+    const sidebarSearch = page.getByRole("textbox", { name: "Buscar projetos", exact: true });
+    await expect(sidebarSearch).toHaveValue("não existe");
+    await sidebarSearch.fill("");
+    const expected = (name === "Recentes" ? projects.slice(40, 53) : projects.filter(project => project.favorite)).reverse();
+    await expectCount(page, 10, expected.length);
+    expect(await titles(page)).toEqual(expected.slice(0, 10).map(project => project.name));
+    await pagination(page).getByRole("button", { name: "Próxima página" }).click();
+    await expectCount(page, expected.length - 10, expected.length);
+    expect(await titles(page)).toEqual(expected.slice(10).map(project => project.name));
+    await expect(pagination(page).getByRole("button", { name: "Próxima página" })).toBeDisabled();
+    await openSection(page, "Todos os Projetos"); await expectCount(page, 10, 73);
+    await expect(filters(page).getByRole("combobox", { name: "Status", exact: true })).toHaveValue("all");
+    await expect(filters(page).getByRole("combobox", { name: "Ordenar por", exact: true })).toHaveValue("recent");
+    expect(listRequests(requests).every(request => request.query === "")).toBe(true);
+  });
+
+  test(`${name}: loading and failure never restore the removed filter panel`, async ({ page }) => {
+    const gate = deferred(); let fails = true;
+    const endpoint = name === "Recentes" ? "/api/projects/recent" : "/api/projects/favorites";
+    const { requests } = await setup(page, { beforeList: path => path === endpoint ? gate.promise : Promise.resolve(), failList: () => fails });
+    await openSection(page, name);
+    await expect(page.locator(".mm-project-skeleton").first()).toBeVisible();
+    await expect(filters(page)).toHaveCount(0);
+    gate.resolve();
+    await expect(page.getByRole("heading", { name: "Não foi possível carregar os projetos" })).toBeVisible();
+    await expect(filters(page)).toHaveCount(0);
+    fails = false; await page.getByRole("button", { name: "Tentar novamente" }).click();
+    await expectCount(page, 10, name === "Recentes" ? 13 : 11);
+    await expect(filters(page)).toHaveCount(0);
+    expect(requests.filter(request => request.path === endpoint)).toHaveLength(2);
+  });
+}
 
 test("favorite POST persists across section navigation and reload; DELETE updates the full result", async ({ page }) => {
   const { requests } = await setup(page); await expectCount(page, 10, 73);
@@ -249,9 +298,12 @@ test("removing the last favorite presents the Favorites empty state", async ({ p
 });
 
 for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
-  test(`${name}: empty endpoint retains header and filters`, async ({ page }) => {
+  test(`${name}: empty endpoint retains header and only the applicable controls`, async ({ page }) => {
     await setup(page, { dataset: [] }); await openSection(page, name); await expectCount(page, 0, 0);
-    await expect(filters(page)).toBeVisible(); await expect(page.locator(".mm-project-pages__empty h2")).toBeVisible();
+    if (name === "Todos os Projetos") await expect(filters(page)).toBeVisible();
+    else await expect(filters(page)).toHaveCount(0);
+    await expect(pagination(page)).toBeVisible();
+    await expect(page.locator(".mm-project-pages__empty h2")).toBeVisible();
   });
 }
 
@@ -1345,21 +1397,26 @@ test('Maono selectors: project filters and footer use real branded popups across
   await setup(page);
   for (const section of ['Todos os Projetos', 'Recentes', 'Favoritos']) {
     await openSection(page, section);
-    const field = filters(page).getByRole('combobox', { name: 'Status', exact: true });
-    await field.click();
-    const menu = page.locator('.maono-select-menu');
-    await expect(menu).toBeVisible();
-    await expect(menu).toHaveCSS('background-color', 'rgb(16, 23, 32)');
-    await menu.getByRole('option', { name: 'Inativos', exact: true }).click();
-    await expect(field).toHaveValue('inactive');
-    await apply(page);
-    await expect(cards(page).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click();
+    if (section === 'Todos os Projetos') {
+      const field = filters(page).getByRole('combobox', { name: 'Status', exact: true });
+      await field.click();
+      const menu = page.locator('.maono-select-menu');
+      await expect(menu).toBeVisible();
+      await expect(menu).toHaveCSS('background-color', 'rgb(16, 23, 32)');
+      await menu.getByRole('option', { name: 'Inativos', exact: true }).click();
+      await expect(field).toHaveValue('inactive');
+      await apply(page);
+      await expect(cards(page).first()).toBeVisible();
+      await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click();
+    } else await expect(filters(page)).toHaveCount(0);
+    const size = pagination(page).getByRole('combobox', { name: 'Itens por página', exact: true });
+    await size.click();
+    const sizeMenu = page.locator('.maono-select-menu');
+    await expect(sizeMenu).toHaveCSS('background-color', 'rgb(16, 23, 32)');
+    await sizeMenu.getByRole('option', { name: '20', exact: true }).click();
+    await expectCount(page, section === 'Todos os Projetos' ? 20 : section === 'Recentes' ? 13 : 11, section === 'Todos os Projetos' ? 73 : section === 'Recentes' ? 13 : 11);
   }
-  const size = pagination(page).getByRole('combobox', { name: 'Itens por página', exact: true });
-  await size.click();
-  await page.locator('.maono-select-menu').getByRole('option', { name: '20', exact: true }).click();
-  await expectCount(page, 11, 11);
+  await openSection(page, 'Todos os Projetos');
   await page.setViewportSize({ width: 390, height: 844 });
   await filters(page).getByRole('combobox', { name: 'Ordenar por', exact: true }).click();
   const menu = page.locator('.maono-select-menu');

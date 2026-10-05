@@ -3,8 +3,8 @@ import { parseProjectDate } from "./project-card-utils";
 
 export const PROJECT_PAGE_COPY = {
   all: { title: "Todos os Projetos", description: null, icon: "idea", empty: "Nenhum projeto encontrado." },
-  recent: { title: "Recentes", description: "Veja os projetos acessados ou atualizados recentemente.", icon: "clock", empty: "Nenhum projeto recente." },
-  favorites: { title: "Favoritos", description: "Encontre rapidamente seus projetos favoritos.", icon: "star", empty: "Nenhum projeto favorito." },
+  recent: { title: "Recentes", description: null, icon: "clock", empty: "Nenhum projeto recente." },
+  favorites: { title: "Favoritos", description: null, icon: "star", empty: "Nenhum projeto favorito." },
 } as const;
 
 export type ProjectStatusFilter = "all" | "active" | "inactive";

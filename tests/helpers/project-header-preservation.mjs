@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 
-// Only the approved Todos os Projetos header delta is reversed here. These
-// hashes were recorded from the pre-header commit, not from normalized output.
+// Only the approved project header deltas and Recentes/Favoritos filter-panel
+// removal are reversed here. These hashes come from the pre-header commit,
+// not from normalized output; behavior outside these exact edits stays pinned.
 export const projectHeaderBaselineCommit = '8d7d6b435cba1bfd95c6a3c7b9c758ed24372458';
 export const projectHeaderBaselines = {
   'src/pages/Projects/components/ProjectPagesUi.tsx': '920853928a6007163d9c5175487790abc5f2b9664f8ec8bff0f4308595a9b8f1',
   'src/pages/Projects/components/ProjectPages.css': '4e0f25bf1f58e6b645dbda9e5947ce13f0f5c0c9cb5a8daf4260563ea9d6bcec',
   'src/pages/Projects/components/project-page-query.ts': '494883bd8c7ac5d766a62c31d6d48bc44271e76c35a425ab203b89d8087e8b2d',
+  'src/pages/Projects/components/ProjectsSection.tsx': 'c373eecef3d0c06af8939e4ab88c372e59e3da1e39c8b2fcd1670129d47b700e',
 };
 
 const changes = {
@@ -33,6 +35,19 @@ const changes = {
   'src/pages/Projects/components/project-page-query.ts': [{
     before: '  all: { title: "Todos os Projetos", description: "Visualize e gerencie todos os seus projetos.", icon: "idea", empty: "Nenhum projeto encontrado." },',
     after: '  all: { title: "Todos os Projetos", description: null, icon: "idea", empty: "Nenhum projeto encontrado." },',
+  }, {
+    before: '  recent: { title: "Recentes", description: "Veja os projetos acessados ou atualizados recentemente.", icon: "clock", empty: "Nenhum projeto recente." },',
+    after: '  recent: { title: "Recentes", description: null, icon: "clock", empty: "Nenhum projeto recente." },',
+  }, {
+    before: '  favorites: { title: "Favoritos", description: "Encontre rapidamente seus projetos favoritos.", icon: "star", empty: "Nenhum projeto favorito." },',
+    after: '  favorites: { title: "Favoritos", description: null, icon: "star", empty: "Nenhum projeto favorito." },',
+  }],
+  'src/pages/Projects/components/ProjectsSection.tsx': [{
+    before: '      <ProjectPageFiltersForm\n',
+    after: '      {section === "all" ? <ProjectPageFiltersForm\n',
+  }, {
+    before: '      />\n      {actionError ?',
+    after: '      /> : null}\n      {actionError ?',
   }],
 };
 
