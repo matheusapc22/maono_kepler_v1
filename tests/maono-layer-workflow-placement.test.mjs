@@ -76,12 +76,14 @@ test("ações secundárias deixam a superfície e ficam em menu contextual", () 
 test("salvamento visível fica no rodapé fixo do painel e reutiliza executor existente", () => {
   assert.match(source.panel, /<PanelSaveAction \/>/);
   assert.match(source.saveAction, /"Salvar mapa"/);
-  assert.match(source.saveAction, /"Salvando mapa…"/);
-  assert.match(source.saveAction, /legacySaveButton\(\)\?\.click\(\)/);
+  assert.match(source.saveAction, /aria-busy=\{state.primary\?\.busy \?\? false\}/);
+  assert.match(source.saveAction, /invokeAction\("primary"\)/);
   assert.match(source.saveAction, /capabilities\?\.saveMap/);
   assert.match(source.saveStyles, /\.maono-layer-panel__save-footer/);
   assert.match(source.saveStyles, /flex: 0 0 auto/);
-  assert.match(source.saveStyles, /\[data-maono-no-preview="true"\]\.fixed\.bottom-6\.right-6[\s\S]*display: none !important/);
+  assert.match(source.saveStyles, /\[data-maono-save-controller="true"\][\s\S]*display: none !important/);
+  for (const action of ["export-current", "export-attempt", "archive-reviewed", "open-created", "stop-wait"]) assert.ok(source.saveAction.includes(`"${action}"`));
+  assert.doesNotMatch(source.saveAction, /legacySaveButton|:scope > button/);
 });
 
 test("topbar não reserva seletor de projeto nem seta de retorno", () => {

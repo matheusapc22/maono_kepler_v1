@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { dropboxContentHashHex } from '../../../functions/_lib/dropbox-content-hash.js';
 
 // Test-only transport fixtures. The application, CSV parser, reducer, selectors,
 // filter controls, serializer, save bridge and hydrator are never replaced.
@@ -58,6 +59,10 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
   let saveStatus = 200;
   let nextSaveGate: Promise<void> | undefined;
   const saves: SaveRequest[] = [];
+  const manifests: Record<string, any>[] = [];
+  const checks: string[] = [];
+  const operations = new Map<string, Record<string, any>>();
+  let configLoads = 0;
   const unexpectedWrites: string[] = [];
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -90,6 +95,7 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
       } } });
     }
     if (url.pathname === `${projectPath}/config-stream`) {
+      configLoads += 1;
       const bytes = Buffer.byteLength(JSON.stringify(saved));
       return route.fulfill({ headers: { 'X-Maono-Config-Transport': 'direct', 'X-Maono-Config-Revision': String(revision) }, json: {
         downloadUrl: `https://panel-fixture.example.test/config-${revision}.json`, projectId: 1, revision, sizeBytes: bytes,
@@ -98,18 +104,66 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
     if (url.hostname === 'panel-fixture.example.test') return route.fulfill({
       headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'application/json', body: JSON.stringify(saved),
     });
-    if (url.pathname === `${projectPath}/config` && method === 'PUT') {
-      const body = request.postDataJSON() as SaveRequest;
-      saves.push(body);
-      const gate = nextSaveGate;
-      nextSaveGate = undefined;
-      if (gate) await gate;
-      if (saveStatus !== 200) return route.fulfill({ status: saveStatus, json: { ok: false, error: {
-        code: 'PROJECT_VERSION_CONFLICT', category: 'CONFLICT', retryable: false, message: 'A revisão sintética mudou. Recarregue antes de salvar.',
-      } } });
-      saved = structuredClone(body.config);
-      revision += 1;
-      return route.fulfill({ json: { ok: true, configRevision: revision, project: { id: 1, slug: PROJECT_SLUG, configRevision: revision } } });
+    const operationRoot = `${projectPath}/save-operations`;
+    if (url.pathname === operationRoot || url.pathname.startsWith(`${operationRoot}/`)) {
+      expect(request.headers()['x-maono-client-contract']).toBe('2');
+      expect(request.headers()['x-maono-project-id']).toBe('1');
+      const [encodedId, action] = url.pathname.slice(operationRoot.length + 1).split('/');
+      const operationId = decodeURIComponent(encodedId);
+      const operation = operations.get(operationId);
+      const reply = (value: Record<string, any>) => ({ ok: true, operation: {
+        state: value.state, nextAction: value.nextAction, receipt: value.receipt, errorCode: value.errorCode, currentRevision: revision,
+      } });
+      if (method === 'GET' && operationId && !action) {
+        checks.push(operationId);
+        return operation ? route.fulfill({ json: reply(operation) }) : route.fulfill({ status: 404, json: { ok: false, error: { code: 'SAVE_OPERATION_NOT_FOUND' } } });
+      }
+      if (method === 'POST' && url.pathname === operationRoot) {
+        const manifest = request.postDataJSON();
+        const existing = operations.get(manifest.operationId);
+        if (existing) {
+          expect(existing.manifest).toEqual(manifest);
+          return route.fulfill({ status: 201, json: reply(existing) });
+        }
+        expect(manifest.operation).toBe('update');
+        manifests.push(manifest);
+        const created = { manifest, state: 'AWAITING_UPLOAD', nextAction: 'UPLOAD' };
+        operations.set(manifest.operationId, created);
+        return route.fulfill({ status: 201, json: reply(created) });
+      }
+      if (method === 'PUT' && action === 'payload' && operation) {
+        if (operation.state !== 'AWAITING_UPLOAD') return route.fulfill({ json: reply(operation) });
+        const { manifest } = operation;
+        const bytes = request.postDataBuffer()!;
+        expect(manifest.checksumAlgorithm).toBe('dropbox-content-hash');
+        expect(bytes.byteLength).toBe(manifest.payloadBytes);
+        expect(await dropboxContentHashHex(bytes)).toBe(manifest.contentHash);
+        const config = JSON.parse(bytes.toString('utf8'));
+        saves.push({ config, expectedConfigRevision: manifest.expectedConfigRevision, operationId: manifest.operationId });
+        const gate = nextSaveGate;
+        nextSaveGate = undefined;
+        if (gate) await gate;
+        if (saveStatus !== 200 || manifest.expectedConfigRevision !== revision) {
+          Object.assign(operation, { state: 'CONFLICT', nextAction: null, errorCode: 'PROJECT_CONFIG_REVISION_CONFLICT' });
+          // The real processor returns a durable terminal state in a 202 envelope.
+          // Keep a separate explicit HTTP409 injection for the older error case.
+          if (saveStatus !== 409) return route.fulfill({ status: 202, json: reply(operation) });
+          return route.fulfill({ status: 409, json: { ...reply(operation), ok: false, error: {
+            code: 'PROJECT_VERSION_CONFLICT', category: 'CONFLICT', retryable: false, message: 'A revisão sintética mudou. Revise a tentativa antes de salvar.',
+          } } });
+        }
+        saved = structuredClone(config);
+        revision += 1;
+        Object.assign(operation, { state: 'PUBLISHED', nextAction: null, receipt: {
+          operationId: manifest.operationId, organizationId: 1, projectId: 1,
+          baseRevision: manifest.expectedConfigRevision, publishedRevision: revision,
+          checksum: manifest.contentHash, checksumAlgorithm: manifest.checksumAlgorithm,
+          sizeBytes: manifest.payloadBytes, committedAt: new Date().toISOString(),
+        } });
+        return route.fulfill({ json: reply(operation) }).catch(() => { /* Client stopped waiting; the synthetic operation remains published. */ });
+      }
+      unexpectedWrites.push(`${method} ${url.pathname}`);
+      return route.fulfill({ status: 405, json: { ok: false } });
     }
     if (url.pathname.startsWith(`${projectPath}/thumbnail`)) return route.fulfill({ json: {
       ok: true, status: 'READY', thumbnailStatus: 'READY', revision, configRevision: revision, thumbnailRevision: revision, thumbnailAttempts: 1,
@@ -127,9 +181,11 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
     return route.continue();
   });
   return {
-    saves, unexpectedWrites, errors,
+    saves, manifests, checks, unexpectedWrites, errors,
+    get configLoads() { return configLoads; },
+    get revision() { return revision; },
     path: options.create ? '/maps/new/create' : `/projects/${PROJECT_SLUG}/${options.viewer ? 'view' : 'edit'}`,
-    rejectSaves(status = 409) { saveStatus = status; },
+    rejectSaves(status = 202) { saveStatus = status; },
     holdNextSave() {
       let release!: () => void;
       nextSaveGate = new Promise<void>(resolve => { release = resolve; });
@@ -199,33 +255,25 @@ export async function saveMap(page: Page, fixture: Awaited<ReturnType<typeof ins
   const layerName = await layerTitle.count() ? await layerTitle.innerText() : null;
   const openSections = await panel(page).locator('.maono-detail-view details[open] > summary strong').allTextContents();
   await expect(button).toBeEnabled();
-  const committed = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === `${projectPath}/config`);
-  const rehydrated = page.waitForResponse(response => new URL(response.url()).pathname === `${projectPath}/config-stream`);
+  const loadsBefore = fixture.configLoads;
+  const canvas = await canvasGeometry(page, true);
+  const committed = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname.startsWith(`${projectPath}/save-operations/`) && new URL(response.url()).pathname.endsWith('/payload'));
   await button.click();
   await expect.poll(() => fixture.saves.length).toBe(count + 1);
-  expect((await committed).status()).toBe(200);
-  await rehydrated;
-  await ready(page);
-  // Successful save increments context.version and rehydrates/remounts the map
-  // in the baseline application as well. Verify committed state, then reopen
-  // the previous editor using its real UI; do not fake a stable revision or
-  // require a transient local toast to survive that existing remount.
-  if (activeTab === 'filters') {
-    await openFilters(page);
-    if (filterField && filterGroup) {
-      await panel(page).getByRole('button', { name: filterGroup, exact: true }).click();
-      const exactField = new RegExp(`^${filterField.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
-      await panel(page).locator('.maono-filter-row__open').filter({ has: page.locator('strong', { hasText: exactField }) }).click();
-      await expect(editor).toBeVisible();
-    }
-  } else {
-    await openLayers(page);
-    if (layerName) {
-      await panel(page).getByTitle(`Configurar ${layerName}`, { exact: true }).click();
-      for (const title of openSections) await panel(page).locator('summary').filter({ hasText: title }).click();
-    }
-  }
+  const response = await committed;
+  expect(response.status()).toBe(200);
+  const receipt = (await response.json()).operation.receipt;
+  await expect(panel(page).locator('.maono-layer-panel__save-message[role=status]')).toHaveText(new RegExp(`^Projeto salvo na revisão ${receipt.publishedRevision}\\.`));
   await expect(button).toBeEnabled();
+  // The durable receipt preserves the live editor. Loading the saved map is an
+  // explicit reopen below in the specs, never an automatic save-side remount.
+  expect(fixture.configLoads).toBe(loadsBefore);
+  await expectStableCanvas(page, canvas);
+  await expect(panel(page)).toHaveAttribute('data-active-tab', activeTab!);
+  if (filterField) await expect(editor.getByRole('combobox', { name: 'Propriedade', exact: true })).toHaveValue(filterField);
+  if (filterGroup) expect(await editor.evaluate(element => element.closest('.maono-filter-group')?.querySelector('.maono-filter-group__toggle strong')?.textContent ?? '')).toBe(filterGroup);
+  if (layerName) await expect(layerTitle).toHaveText(layerName);
+  expect(await panel(page).locator('.maono-detail-view details[open] > summary strong').allTextContents()).toEqual(openSections);
   return fixture.saves.at(-1)!;
 }
 export async function canvasGeometry(page: Page, remember = false) {

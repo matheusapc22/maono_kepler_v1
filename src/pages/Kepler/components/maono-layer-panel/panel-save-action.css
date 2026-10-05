@@ -1,8 +1,10 @@
 .maono-layer-panel__save-footer {
   position: relative;
   z-index: 12;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
+  max-height: min(50vh, 360px);
   gap: 8px;
   padding: 11px 12px 12px;
   border-top: 1px solid rgba(31, 43, 62, 0.9);
@@ -11,15 +13,32 @@
   box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.3);
 }
 
+.maono-layer-panel__save-details {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.maono-layer-panel__save-details > * {
+  flex-shrink: 0;
+}
+
 .maono-layer-panel__save-message {
-  max-height: 76px;
+  max-height: 100px;
   padding: 8px 9px;
   overflow-y: auto;
   border: 1px solid rgba(110, 231, 183, 0.3);
   border-radius: 8px;
   color: #a7f3d0;
   background: rgba(6, 78, 59, 0.23);
-  font-size: 9px;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -29,7 +48,56 @@
   background: rgba(127, 29, 29, 0.24);
 }
 
+.maono-layer-panel__save-message.is-warning,
+.maono-map-runtime .maono-layer-panel__save-footer .maono-layer-panel__save-message.is-warning {
+  border-color: rgba(226, 194, 117, 0.45);
+  color: #f5dfa6;
+  background: rgba(120, 83, 21, 0.24);
+}
+
+.maono-layer-panel__save-retention {
+  margin: 0;
+  color: #bdc7d5;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.maono-layer-panel__save-secondary {
+  display: grid;
+  gap: 6px;
+}
+
+.maono-layer-panel__save-secondary-button {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid rgba(189, 199, 213, 0.3);
+  border-radius: 8px;
+  color: #e2e8f0;
+  background: #172235;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.maono-layer-panel__save-secondary-button:hover:not(:disabled) {
+  background: #25334b;
+}
+
+.maono-layer-panel__save-secondary-button[data-panel-save-proxy="stop-wait"] {
+  border-color: rgba(226, 194, 117, 0.55);
+  color: #f5dfa6;
+}
+
+.maono-layer-panel__save-footer :focus-visible {
+  outline: 2px solid #e2c275;
+  outline-offset: -2px;
+}
+
 .maono-layer-panel__save-button {
+  flex: 0 0 auto;
   min-height: 40px;
   padding: 9px 14px;
   border: 1px solid rgba(226, 194, 117, 0.72);
@@ -54,14 +122,14 @@
   transform: translateY(-1px);
 }
 
-.maono-layer-panel__save-button:disabled {
+.maono-layer-panel__save-button:disabled,
+.maono-layer-panel__save-secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
 
-/* O componente legado permanece montado como executor do fluxo seguro de save,
+/* O controlador durável permanece montado como executor do fluxo seguro de save,
    mas deixa de ocupar o mapa. A ação visível passa a existir somente no painel. */
-.maono-map-runtime
-  [data-maono-no-preview="true"].fixed.bottom-6.right-6 {
+.maono-map-runtime [data-maono-save-controller="true"] {
   display: none !important;
 }

@@ -80,8 +80,8 @@ test('shared minimal surface is scoped and preserves save bridge and quota domai
   assert.match(minimal, /width: 28px;\s*height: 52px/);
   assert.match(minimal, /prefers-reduced-motion: reduce/);
   assert.doesNotMatch(minimal, /\.maono-map-runtime__map\s*\{|\.maono-map-data-sidebar\s*\{|\.mm-sidebar/);
-  assert.match(save, /onClick=\{\(\) => legacySaveButton\(\)\?\.click\(\)\}/);
-  assert.match(save, /disabled=\{!state.available \|\| state.disabled\}/);
+  assert.match(save, /onClick=\{\(\) => invokeAction\("primary"\)\}/);
+  assert.match(save, /disabled=\{!state.primary \|\| state.primary.disabled\}/);
   assert.doesNotMatch(save, /progress|quota|maxLayers/);
 });
 
