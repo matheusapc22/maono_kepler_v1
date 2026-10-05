@@ -176,3 +176,28 @@ test("salvamento de mapa usa contrato central sem propagar corpo ou mensagem té
   assert.doesNotMatch(saveButtonSource, /getBackendErrorMessage/);
   assert.doesNotMatch(saveButtonSource, /getErrorReference/);
 });
+
+test("durable save UI uses stable local codes and never displays local or remote Error.message", async () => {
+  const ts = await import("typescript");
+  const { buildApiError } = await import("../src/lib/api-transport.ts");
+  const { DurableSaveError } = await import("../src/pages/Kepler/durable-save-controller.ts");
+  const { LocalSaveStorageError } = await import("../src/pages/Kepler/durable-save-store.ts");
+  const helper = saveButtonSource.match(/function getSaveFailureMessage\(error: unknown\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(helper);
+  const { outputText } = ts.transpileModule(helper, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } });
+  const present = new Function("normalizeUserError", "buildApiError", "DurableSaveError", `${outputText}; return getSaveFailureMessage;`)(normalizeUserError, buildApiError, DurableSaveError);
+  const secret = "Dropbox token=PRIVATE_SECRET; internal path /private/project; raw provider response";
+  for (const code of ["LOCAL_SAVE_STORAGE_UNAVAILABLE", "LOCAL_SAVE_QUOTA_EXCEEDED", "LOCAL_SAVE_CORRUPTED", "LOCAL_SAVE_CREATION_PAYLOAD_UNAVAILABLE"]) {
+    const error = new LocalSaveStorageError(code); error.message = secret;
+    const copy = present(error);
+    assert.match(copy, /Exporte/); assert.doesNotMatch(copy, /PRIVATE_SECRET|Dropbox|internal|provider/);
+  }
+  for (const code of ["SAVE_RECEIPT_UNVERIFIED", "SAVE_CREATION_ACTIVE_UNCONFIRMED", "SAVE_OPERATION_CONFLICT", "SAVE_OPERATION_FAILED_FINAL", "LOCAL_SAVE_PAYLOAD_EXPIRED", "LOCAL_SAVE_PAYLOAD_INTEGRITY_FAILED", "SAVE_OPERATION_STATE_UNRECOGNIZED"]) {
+    const error = new DurableSaveError(secret, new Response(null, { status: 200 }), { error: { message: secret } }, {}, code);
+    const copy = present(error);
+    assert.match(copy, /tentativa|rascunho|criação|alterações/i); assert.doesNotMatch(copy, /PRIVATE_SECRET|Dropbox|internal|provider/);
+  }
+  const remote = new DurableSaveError(secret, new Response(null, { status: 403 }), { error: { code: "PERMISSION_PROJECT_SAVE_DENIED", category: "PERMISSION", message: secret } }, {});
+  assert.match(present(remote), /permissão/); assert.doesNotMatch(present(remote), /PRIVATE_SECRET|Dropbox/);
+  assert.doesNotMatch(present(new Error(secret)), /PRIVATE_SECRET|Dropbox/);
+});

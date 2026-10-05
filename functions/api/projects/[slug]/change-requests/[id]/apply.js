@@ -1,5 +1,6 @@
 import {
   applyProjectChangeRequest,
+  getProjectChangeRequestApplyStatus,
 } from "../../../../../_lib/project-change-request-review.js";
 
 function routeValue(params, key) {
@@ -22,7 +23,7 @@ function errorResponse(error, request) {
       : error?.publicMessage || error?.message || "Erro ao aplicar a solicitação.";
 
   if (safeStatus >= 500) {
-    console.error(`[Maono change request apply][${requestId}][${code}]`, error);
+    console.error("[Maono change request apply]", {requestId,code,status:safeStatus});
   }
 
   return Response.json(
@@ -41,14 +42,18 @@ function errorResponse(error, request) {
 }
 
 export async function onRequest({ env, request, params }) {
-  if (request.method !== "POST") {
+  if (!["GET","POST"].includes(request.method)) {
     return new Response("Method Not Allowed", {
       status: 405,
-      headers: { Allow: "POST" },
+      headers: { Allow: "GET, POST" },
     });
   }
 
   try {
+    if (request.method === "GET") {
+      const operation=await getProjectChangeRequestApplyStatus(env,request,routeValue(params,"slug"),routeValue(params,"id"));
+      return Response.json({ok:true,operation},{headers:{"Cache-Control":"no-store"}});
+    }
     const result = await applyProjectChangeRequest(
       env,
       request,
@@ -58,10 +63,12 @@ export async function onRequest({ env, request, params }) {
     return Response.json({
       ok: true,
       appliedRevision: result.appliedRevision,
+      pending: result.pending || false,
+      operation: result.operation || null,
       idempotent: result.idempotent,
       projectIdentity: result.projectIdentity || null,
       review: result.workspace,
-    });
+    }, {status:result.pending ? 202:200,headers:{"Cache-Control":"no-store"}});
   } catch (error) {
     return errorResponse(error, request);
   }

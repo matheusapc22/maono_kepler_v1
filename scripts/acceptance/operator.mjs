@@ -1,3 +1,4 @@
+import { createExecutionBudget } from "./execution-budget.mjs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -42,7 +43,7 @@ function publicProject(project) {
   };
 }
 
-async function main(argv = process.argv.slice(2), env = process.env) {
+async function main(argv = process.argv.slice(2), env = process.env, runtime = {}) {
   let options;
   try {
     options = parseArgs(argv);
@@ -57,6 +58,8 @@ async function main(argv = process.argv.slice(2), env = process.env) {
 
   const suite = getSuite(options.suite);
   const manifest = suite.manifest;
+  const budget = createExecutionBudget(manifest, { now: runtime.now || Date.now });
+  const deps = { ...runtime, budget };
   const report = initialReport({
     mode: options.mode,
     suite: manifest.id,
@@ -71,12 +74,14 @@ async function main(argv = process.argv.slice(2), env = process.env) {
   let cleanupErrors = [];
 
   try {
+    budget.enter("preflight");
     const token = String(env.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN || "");
-    initialProject = await readProduction(token, manifest);
+    initialProject = await readProduction(token, manifest, deps);
     report.preflight = publicProject(initialProject);
 
     if (options.mode === "preflight") {
       assertProduction(initialProject, options.expectedCommit, manifest, { requireBaseline: true });
+      if (suite.verifyPreflight) suite.verifyPreflight(initialProject, options);
       report.ok = true;
       report.complete = true;
       report.acceptanceExecuted = false;
@@ -98,6 +103,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
           !initialProject.canonical.commit) {
         throw new Error("Estado canônico insuficiente para closure segura.");
       }
+      budget.enter("restoration");
       const desired = safeFlags(manifest);
       if (!flagsMatch(initialProject, desired)) {
         const restored = await transitionFlags({
@@ -105,6 +111,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
           sourceDeploymentId: initialProject.canonical.id,
           commit: initialProject.canonical.commit,
           manifest,
+          deps,
           values: desired,
           onMutationStart: () => { report.writesPerformed = true; },
         });
@@ -124,6 +131,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     }
 
     assertProduction(initialProject, options.expectedCommit, manifest, { requireBaseline: true });
+    if (suite.verifyPreflight) suite.verifyPreflight(initialProject, options);
     const credentialProfiles = parseCredentials(
       env.MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON,
       manifest.requiredProfiles,
@@ -133,6 +141,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
       credentialProfiles,
       manifest,
       options.organizationId,
+      deps,
     );
     report.qa = Object.fromEntries(Object.entries(profiles).map(([name, profile]) => [
       name,
@@ -149,19 +158,40 @@ async function main(argv = process.argv.slice(2), env = process.env) {
       projectSlug: options.projectSlug,
       profiles,
       mutationMode: manifest.mutationMode,
+      deps,
     });
+
+    // Keep the run identity in the terminal report and a pre-mutation checkpoint.
+    report.runId = context.runId;
+
+    // Registered read-only preparation must finish before a flag window opens.
+    if (suite.prepare) await suite.prepare(context);
+    const checkpoint = {
+      event: "ACCEPTANCE_RUN_PREPARED", runId: context.runId,
+      suite: manifest.id, organizationId: options.organizationId,
+      expectedCommit: options.expectedCommit, safeFlags: safeFlags(manifest),
+      cleanupContract: manifest.cleanup || null,
+      executionDeadline: new Date(budget.endAt).toISOString(),
+      message: "Prepared only; interrupted runs require independent closure and resource verification.",
+    };
+    await writeReport(`${options.reportPath}.checkpoint.json`, checkpoint, deps);
+    process.stdout.write(`${JSON.stringify(checkpoint)}\n`);
 
     let restorationRequired = false;
     const hasManagedFlags = Object.keys(manifest.managedFlags).length > 0;
     try {
       if (hasManagedFlags) {
+        budget.enter("activation");
         const activated = await transitionFlags({
           token,
           sourceDeploymentId: initialProject.canonical.id,
           commit: options.expectedCommit,
           manifest,
+          deps,
           values: activeFlags(manifest),
+          validateCurrent: (current) => { if (suite.verifyPreflight) suite.verifyPreflight(current, options); },
           onMutationStart: () => {
+            budget.assertAdmission();
             restorationRequired = true;
             report.writesPerformed = true;
           },
@@ -174,6 +204,8 @@ async function main(argv = process.argv.slice(2), env = process.env) {
         report.activation = { skipped: true, reason: "SUITE_HAS_NO_MANAGED_FLAGS" };
       }
 
+      budget.enter("suite");
+      budget.assertAdmission();
       report.acceptanceExecuted = true;
       if (manifest.mutationMode === "controlled_mutation") report.writesPerformed = true;
       report.resources = await suite.run(context);
@@ -182,17 +214,24 @@ async function main(argv = process.argv.slice(2), env = process.env) {
       operationError = error;
       report.cases = context.cases;
     } finally {
-      cleanupErrors = await context.cleanup();
+      try {
+        budget.enter("cleanup");
+        cleanupErrors = await context.cleanup();
+      } catch (cleanupError) {
+        cleanupErrors = [safeError(cleanupError)];
+      }
       report.cleanupErrors = cleanupErrors;
       report.cleanupComplete = cleanupErrors.length === 0;
 
       if (restorationRequired) {
         try {
+          budget.enter("restoration");
           const restored = await transitionFlags({
             token,
             sourceDeploymentId: initialProject.canonical.id,
             commit: options.expectedCommit,
             manifest,
+            deps,
             values: safeFlags(manifest),
           });
           report.restoredDeployment = restored.deployment;
@@ -226,10 +265,16 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     if (context) report.cases = context.cases;
     return 1;
   } finally {
-    report.finishedAt = new Date().toISOString();
+    // Hard termination can still bypass finally; checkpoint/logs identify the
+    // run for the separately authorized closure workflow.
     let reportFailed = false;
+    try { budget.enter("report"); } catch (error) {
+      report.budgetError = safeError(error);
+      report.ok = false; report.complete = false; reportFailed = true;
+    }
+    report.finishedAt = new Date().toISOString();
     try {
-      await writeReport(options.reportPath, report);
+      await writeReport(options.reportPath, report, deps);
     } catch (writeError) {
       process.stderr.write(`${JSON.stringify({ ok: false, error: safeError(writeError), report }, null, 2)}\n`);
       reportFailed = true;

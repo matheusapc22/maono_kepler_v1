@@ -6,21 +6,18 @@ import {
   createSaveTrace,
   getOrCreateSaveId,
   measureUtf8Bytes,
-  readSaveJsonBody,
 } from "../functions/_lib/save-observability.js";
 import {
   beginClientSaveAttempt,
   buildSaveRequestHeaders,
   measureUtf8PayloadBytes,
   serializeMapConfigTransport,
-  serializeSaveRequest,
 } from "../src/pages/Kepler/save-observability.ts";
 import {
   prepareProjectCreateTransport,
 } from "../src/pages/Kepler/project-create-transport.ts";
 import {
   executeProjectCreateFlow,
-  ProjectCreateFlowError,
 } from "../src/pages/Kepler/project-create-flow.ts";
 
 function captureSaveLogs() {
@@ -38,351 +35,69 @@ function captureSaveLogs() {
   };
 }
 
-function largeConfig(extraBytes = 1024) {
-  return {
-    version: "v1",
-    config: { visState: { layers: [] } },
-    datasets: [
-      {
-        info: { id: "dataset-large" },
-        data: {
-          id: "dataset-large",
-          fields: [],
-          rows: [["x".repeat(8 * 1024 * 1024 + extraBytes)]],
-        },
-      },
-    ],
-  };
-}
+import { memoryStore, response, status, receipt } from "./helpers/durable-save-browser-fixtures.mjs";
 
-function jsonResponse(body, init = {}) {
-  return new Response(JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Maono-Save-Id": init.saveId ?? "save_test_response",
-      "X-Correlation-Id": init.correlationId ?? "corr_test_response",
-      ...(init.headers || {}),
-    },
-  });
-}
-
-test("cada tentativa lógica recebe saveId e correlationId estáveis na request", () => {
-  const first = beginClientSaveAttempt("update");
-  const second = beginClientSaveAttempt("update");
-
-  assert.match(first.saveId, /^save_/);
-  assert.match(first.correlationId, /^corr_/);
-  assert.notEqual(first.saveId, second.saveId);
-  assert.notEqual(first.correlationId, second.correlationId);
-
-  const headersA = buildSaveRequestHeaders(first);
-  const headersB = buildSaveRequestHeaders(first);
-  assert.equal(headersA["X-Maono-Save-Id"], first.saveId);
-  assert.equal(headersA["X-Correlation-Id"], first.correlationId);
-  assert.deepEqual(headersA, headersB);
-
-  const request = new Request("https://maono.test/api/projects/demo/config", {
-    headers: { "X-Maono-Save-Id": first.saveId },
-  });
-  assert.equal(getOrCreateSaveId(request), first.saveId);
-});
-
-test("payloadBytes mede bytes UTF-8 reais e o mesmo body é enviado", async () => {
+test("operation ID remains stable while serializable transport headers are reconstructed", () => {
   const attempt = beginClientSaveAttempt("update");
-  const payload = {
-    title: "Maõno — João — Ação 🚀",
-    config: { version: "v1", config: {}, datasets: [] },
-  };
-  const serialized = serializeSaveRequest(attempt, payload);
-
-  assert.equal(
-    serialized.payloadBytes,
-    Buffer.byteLength(serialized.body, "utf8"),
-  );
-  assert.equal(
-    measureUtf8PayloadBytes(serialized.body),
-    Buffer.byteLength(serialized.body, "utf8"),
-  );
-  assert.equal(
-    measureUtf8Bytes(serialized.body),
-    Buffer.byteLength(serialized.body, "utf8"),
-  );
-  assert.notEqual(serialized.payloadBytes, serialized.body.length);
-
-  const trace = createSaveTrace({
-    saveId: attempt.saveId,
-    correlationId: attempt.correlationId,
-    operation: "update",
-  });
-  const request = new Request("https://maono.test/api/projects/demo/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: serialized.body,
-  });
-  const parsed = await readSaveJsonBody(request, trace);
-  assert.deepEqual(parsed, payload);
+  const config = { version: "v1", config: {}, datasets: [], title: "Maõno — Ação 🚀" };
+  const transport = serializeMapConfigTransport(attempt, config, 7);
+  const restored = structuredClone(transport);
+  assert.equal(restored.body, JSON.stringify(config));
+  assert.deepEqual(restored.headers, transport.headers);
+  assert.equal(restored.headers["X-Maono-Save-Id"], attempt.saveId);
+  assert.equal(restored.headers["X-Maono-Expected-Revision"], "7");
+  assert.equal(restored.headers["X-Maono-Client-Contract"], "2");
+  assert.equal(restored.payloadBytes, Buffer.byteLength(restored.body));
+  const envelope = transport;
+  assert.equal(envelope.payloadBytes, measureUtf8PayloadBytes(envelope.body));
+  assert.equal(envelope.payloadBytes, measureUtf8Bytes(envelope.body));
+  assert.equal(getOrCreateSaveId(new Request("https://maono.test/api/test", { headers: buildSaveRequestHeaders(attempt) })), attempt.saveId);
 });
-
-test("CREATE classifica MapConfig grande uma vez e separa metadata do corpo streaming", () => {
-  const attempt = beginClientSaveAttempt("create");
-  const config = largeConfig();
-  const idempotencyKey = "project-create:test-large-123456";
-  const prepared = prepareProjectCreateTransport(attempt, {
-    name: "Projeto grande",
-    description: "Teste",
-    organizationId: 9,
-    idempotencyKey,
-    config,
-    legacy: null,
+function creationOptions(overrides = {}) {
+  return { attempt: beginClientSaveAttempt("create"), name: "Projeto", description: "Criação durável", organizationId: 9, actorId: "22", idempotencyKey: "project-create:test-unique", config: { version: "v1", config: {}, datasets: [] }, editorSessionId: "editor", editGeneration: 1, ...overrides };
+}
+function active(snapshot) {
+  return response({ ok: true, project: { id: 12, slug: "created", active: true, lifecycle: { state: "ACTIVE" } }, operation: { state: "PUBLISHED", receipt: receipt(snapshot, 1), currentRevision: 1 } });
+}
+for (const padding of [0, 8 * 1024 * 1024 + 17]) {
+  test(`creation at ${padding} padding bytes reserves metadata and uses the exact same durable protocol`, async () => {
+    const store = memoryStore(); const calls = []; const options = creationOptions({ config: { version: "v1", config: {}, datasets: [], padding: "x".repeat(padding) } });
+    const prepared = prepareProjectCreateTransport(options.attempt, options);
+    assert.equal(JSON.parse(prepared.requestBody).durableSave, true); assert.equal("config" in JSON.parse(prepared.requestBody), false);
+    assert.equal(prepared.configBody, JSON.stringify(options.config)); assert.ok(prepared.requestBody.length < 2048);
+    const result = await executeProjectCreateFlow({ ...options, store, fetchImpl: async (url, init) => {
+      calls.push({ url, init }); const snapshot = (await store.listAccount("22", "9"))[0]; assert.ok(snapshot.serialized.body);
+      if (url === "/api/projects") return response({ ok: true, project: { id: 12, slug: "created", active: false } }, 202);
+      assert.equal(init.headers["X-Maono-Creation-Key"], options.idempotencyKey);
+      if (init.method === "GET") return response({ ok: false }, 404);
+      if (init.method === "POST") return status("AWAITING_UPLOAD");
+      assert.equal(await init.body.text(), prepared.configBody); return active(snapshot);
+    } });
+    assert.deepEqual(calls.map(value => value.init.method), ["POST", "GET", "POST", "PUT"]);
+    assert.equal(result.revision, 1); assert.equal(result.createdSlug, "created");
+    assert.equal((await store.listAccount("22", "9"))[0].serialized.body, null);
   });
-
-  assert.equal(prepared.large, true);
-  assert.equal(
-    prepared.configPayloadBytes,
-    Buffer.byteLength(prepared.configBody, "utf8"),
-  );
-  assert.ok(Buffer.byteLength(prepared.requestBody, "utf8") < 4096);
-  assert.doesNotMatch(prepared.requestBody, /dataset-large.{1000}/s);
-
-  const metadata = JSON.parse(prepared.requestBody);
-  assert.equal(metadata.largeConfig, true);
-  assert.equal(metadata.idempotencyKey, idempotencyKey);
-  assert.equal(metadata.configMetadata.sizeBytes, prepared.configPayloadBytes);
-  assert.equal(metadata.configMetadata.datasetCount, 1);
-
-  const postHeaders = buildSaveRequestHeaders(attempt, { forceJson: true });
-  assert.equal(postHeaders["Content-Type"], "application/json");
-  assert.equal(postHeaders["X-Maono-Large-Config"], undefined);
-
-  const streamHeaders = buildSaveRequestHeaders(attempt);
-  assert.equal(streamHeaders["X-Maono-Large-Config"], "1");
-  assert.equal(streamHeaders["X-Maono-Expected-Revision"], "0");
-  assert.equal(
-    Number(streamHeaders["X-Maono-Config-Size"]),
-    prepared.configPayloadBytes,
-  );
-
-  const direct = serializeMapConfigTransport(attempt, config, 0);
-  assert.equal(direct.large, true);
+}
+test("lost reservation response resumes same creation metadata, operation ID and clicked bytes", async () => {
+  const store = memoryStore(); const options = creationOptions(); let originalMetadata;
+  await assert.rejects(executeProjectCreateFlow({ ...options, store, fetchImpl: async (_url, init) => { originalMetadata = init.body; throw new TypeError("Failed to fetch"); } }));
+  const recovery = (await store.listAccount("22", "9"))[0];
+  const originalBody = await recovery.serialized.body.text(); let calls = 0;
+  const result = await executeProjectCreateFlow({ ...options, attempt: beginClientSaveAttempt("create"), config: { newerDraft: true }, snapshot: recovery, store, fetchImpl: async (url, init) => {
+    calls++; if (url === "/api/projects") { assert.equal(init.body, originalMetadata); return response({ ok: true, project: { id: 12, slug: "created" } }, 202); }
+    const stored = (await store.listAccount("22", "9"))[0];
+    if (init.method === "GET") return status("AWAITING_UPLOAD");
+    assert.equal(await init.body.text(), originalBody); assert.equal(init.headers["X-Maono-Save-Id"], recovery.manifest.operationId); return active(stored);
+  } });
+  assert.equal(calls, 3); assert.equal(result.snapshot.manifest.operationId, recovery.manifest.operationId);
 });
-
-test("CREATE inline mantém uma única request e só conclui quando ACTIVE", async () => {
-  const attempt = beginClientSaveAttempt("create");
-  const calls = [];
-  const stages = [];
-  const fetchImpl = async (url, init) => {
-    calls.push({ url, init });
-    return jsonResponse(
-      {
-        ok: true,
-        status: "active",
-        configRevision: 1,
-        project: {
-          slug: "projeto-inline",
-          active: true,
-          configRevision: 1,
-          lifecycle: { state: "ACTIVE" },
-        },
-      },
-      { status: 201 },
-    );
-  };
-
-  const result = await executeProjectCreateFlow({
-    attempt,
-    name: "Projeto inline",
-    description: "Pequeno",
-    organizationId: 9,
-    idempotencyKey: "project-create:inline-123456",
-    config: { version: "v1", config: {}, datasets: [] },
-    legacy: null,
-    fetchImpl,
-    onStage: (stage) => stages.push(stage),
-  });
-
-  assert.equal(result.transport, "inline");
-  assert.equal(result.createdSlug, "projeto-inline");
-  assert.equal(result.revision, 1);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "/api/projects");
-  assert.equal(calls[0].init.method, "POST");
-  assert.deepEqual(stages, ["creating_record", "finalizing"]);
-  const postBody = JSON.parse(calls[0].init.body);
-  assert.equal(postBody.config.version, "v1");
-});
-
-test("CREATE grande faz POST metadata-first e PUT do mesmo corpo/config com a mesma chave", async () => {
-  const attempt = beginClientSaveAttempt("create");
-  const calls = [];
-  const stages = [];
-  const idempotencyKey = "project-create:stream-123456";
-  const config = largeConfig(2048);
-  const fetchImpl = async (url, init) => {
-    calls.push({ url, init });
-    if (calls.length === 1) {
-      return jsonResponse(
-        {
-          ok: true,
-          status: "pending",
-          configRevision: 0,
-          project: {
-            slug: "projeto-stream",
-            active: false,
-            configRevision: 0,
-            lifecycle: { state: "PREPARING_STORAGE" },
-          },
-        },
-        { status: 202 },
-      );
-    }
-    return jsonResponse(
-      {
-        ok: true,
-        status: "active",
-        operation: "create",
-        transport: "stream",
-        configRevision: 1,
-        lifecycle: { state: "ACTIVE" },
-        project: {
-          slug: "projeto-stream",
-          active: true,
-          configRevision: 1,
-          lifecycle: { state: "ACTIVE" },
-        },
-      },
-      { status: 201 },
-    );
-  };
-
-  const result = await executeProjectCreateFlow({
-    attempt,
-    name: "Projeto stream",
-    description: "Grande",
-    organizationId: 9,
-    idempotencyKey,
-    config,
-    legacy: null,
-    fetchImpl,
-    onStage: (stage) => stages.push(stage),
-  });
-
-  assert.equal(result.transport, "stream");
-  assert.equal(result.revision, 1);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0].url, "/api/projects");
-  assert.equal(calls[0].init.method, "POST");
-  assert.equal(calls[0].init.headers["X-Maono-Large-Config"], undefined);
-  const metadata = JSON.parse(calls[0].init.body);
-  assert.equal(metadata.largeConfig, true);
-  assert.equal(metadata.idempotencyKey, idempotencyKey);
-
-  assert.equal(calls[1].url, "/api/projects/projeto-stream/config");
-  assert.equal(calls[1].init.method, "PUT");
-  assert.equal(calls[1].init.headers["X-Maono-Creation-Key"], idempotencyKey);
-  assert.equal(calls[1].init.headers["X-Maono-Large-Config"], "1");
-  assert.equal(calls[1].init.body, result.prepared.configBody);
-  assert.deepEqual(stages, [
-    "creating_record",
-    "preparing_files",
-    "finalizing",
-  ]);
-});
-
-test("retry após commit perdido não reenvia o MapConfig se POST idempotente já retorna ACTIVE", async () => {
-  const attempt = beginClientSaveAttempt("create");
-  const calls = [];
-  const config = largeConfig(3072);
-  const fetchImpl = async (url, init) => {
-    calls.push({ url, init });
-    return jsonResponse(
-      {
-        ok: true,
-        status: "active",
-        idempotent: true,
-        configRevision: 1,
-        project: {
-          slug: "projeto-recuperado",
-          active: true,
-          configRevision: 1,
-          lifecycle: { state: "ACTIVE" },
-        },
-      },
-      { status: 200 },
-    );
-  };
-
-  const result = await executeProjectCreateFlow({
-    attempt,
-    name: "Projeto recuperado",
-    description: "Retry",
-    organizationId: 9,
-    idempotencyKey: "project-create:retry-123456",
-    config,
-    legacy: null,
-    fetchImpl,
-  });
-
-  assert.equal(result.transport, "stream");
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "/api/projects");
-});
-
-test("falha no PUT streaming conserva estágio e contexto para retry seguro", async () => {
-  const attempt = beginClientSaveAttempt("create");
-  const idempotencyKey = "project-create:failure-123456";
-  let call = 0;
-  const fetchImpl = async (url, init) => {
-    call += 1;
-    if (call === 1) {
-      return jsonResponse(
-        {
-          ok: true,
-          status: "pending",
-          project: {
-            slug: "projeto-falha",
-            active: false,
-            lifecycle: { state: "PREPARING_STORAGE" },
-          },
-        },
-        { status: 202 },
-      );
-    }
-    assert.equal(init.headers["X-Maono-Creation-Key"], idempotencyKey);
-    return jsonResponse(
-      {
-        ok: false,
-        error: {
-          code: "MAP_CONFIG_STORAGE_UNAVAILABLE",
-          category: "STORAGE",
-          retryable: true,
-          message: "Dropbox indisponível",
-          details: { stage: "WRITE", retryable: true },
-        },
-      },
-      { status: 503 },
-    );
-  };
-
-  await assert.rejects(
-    executeProjectCreateFlow({
-      attempt,
-      name: "Projeto falha",
-      description: "Retry seguro",
-      organizationId: 9,
-      idempotencyKey,
-      config: largeConfig(4096),
-      legacy: null,
-      fetchImpl,
-    }),
-    (error) => {
-      assert.ok(error instanceof ProjectCreateFlowError);
-      assert.equal(error.stage, "preparing_files");
-      assert.equal(error.data.error.code, "MAP_CONFIG_STORAGE_UNAVAILABLE");
-      assert.equal(error.prepared.large, true);
-      return true;
-    },
-  );
+test("creation must not report success or purge bytes without ACTIVE lifecycle", async () => {
+  const store = memoryStore(); const options = creationOptions();
+  await assert.rejects(executeProjectCreateFlow({ ...options, store, fetchImpl: async (url) => {
+    if (url === "/api/projects") return response({ ok: true, project: { id: 12, slug: "created" } });
+    const saved = (await store.listAccount("22", "9"))[0]; return response({ ok: true, operation: { state: "PUBLISHED", receipt: receipt(saved, 1) } });
+  } }), /ACTIVE/);
+  assert.ok((await store.listAccount("22", "9"))[0].serialized.body);
 });
 
 test("trace registra os sete estágios oficiais em ordem e publica Server-Timing", async () => {
@@ -478,4 +193,37 @@ test("falha de estágio mantém evento do estágio e terminal normalizado separa
   } finally {
     capture.restore();
   }
+});
+
+for (const missing of ["expired", "removed"]) test(`unreserved creation with ${missing} exact bytes needs action without issuing any request`, async () => {
+  const { prepareProjectUpdateSnapshot } = await import("../src/pages/Kepler/durable-save-controller.ts");
+  const store = memoryStore(); const options = creationOptions();
+  const prepared = prepareProjectCreateTransport(options.attempt, options);
+  const snapshot = await prepareProjectUpdateSnapshot({ attempt: options.attempt, scope: { actorId: "22", organizationId: "9", projectKey: `create:${options.idempotencyKey}` }, projectSlug: "", config: options.config, expectedConfigRevision: 0, editorSessionId: "editor", editGeneration: 1, creation: { requestBody: prepared.requestBody, idempotencyKey: options.idempotencyKey } });
+  if (missing === "expired") snapshot.expiresAt = Date.now() - 1;
+  else snapshot.serialized.body = null;
+  await store.put(snapshot);
+  let fetches = 0; const phases = [];
+  await assert.rejects(executeProjectCreateFlow({ ...options, snapshot, store, onPhase: phase => phases.push(phase), fetchImpl: async () => { fetches++; throw new Error("No reservation should be sent"); } }), error => error.code === "LOCAL_SAVE_CREATION_PAYLOAD_UNAVAILABLE" && /Nenhuma nova reserva/.test(error.message));
+  assert.equal(fetches, 0);
+  assert.deepEqual(phases, ["NEEDS_ACTION"]);
+  assert.equal((await store.get(snapshot.key)).localState, "expired");
+});
+
+test("bound expired creation still retrieves historical receipt and purges reservation metadata", async () => {
+  const { prepareProjectUpdateSnapshot } = await import("../src/pages/Kepler/durable-save-controller.ts");
+  const store = memoryStore(); const options = creationOptions();
+  const prepared = prepareProjectCreateTransport(options.attempt, options);
+  const snapshot = await prepareProjectUpdateSnapshot({ attempt: options.attempt, scope: { actorId: "22", organizationId: "9", projectKey: `create:${options.idempotencyKey}`, projectId: "12" }, projectSlug: "created", config: options.config, expectedConfigRevision: 0, editorSessionId: "editor", editGeneration: 1, creation: { requestBody: prepared.requestBody, idempotencyKey: options.idempotencyKey } });
+  snapshot.expiresAt = Date.now() - 1; snapshot.serialized.body = null; snapshot.localState = "expired";
+  await store.put(snapshot);
+  const methods = [];
+  const result = await executeProjectCreateFlow({ ...options, snapshot, store, fetchImpl: async (_url, init) => { methods.push(init.method); return active(snapshot); } });
+  assert.deepEqual(methods, ["GET"]); assert.equal(result.revision, 1);
+  const confirmed = await store.get(snapshot.key);
+  assert.equal(confirmed.creation.requestBody, null);
+  assert.equal(confirmed.creation.idempotencyKey, options.idempotencyKey);
+  // Purged reservation metadata remains unnecessary for another historical lookup.
+  await executeProjectCreateFlow({ ...options, snapshot: confirmed, store, fetchImpl: async (_url, init) => { methods.push(init.method); return active(snapshot); } });
+  assert.deepEqual(methods, ["GET", "GET"]);
 });

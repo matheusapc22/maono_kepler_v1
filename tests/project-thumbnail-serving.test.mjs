@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
@@ -10,7 +11,6 @@ import { reconcileLegacyProjectLifecycle } from '../functions/_lib/project-lifec
 
 const thumbnailSource = await readFile(new URL('../functions/api/projects/[slug]/thumbnail/index.js', import.meta.url), 'utf8');
 const reconcileSource = await readFile(new URL('../functions/api/admin/project-previews/reconcile.js', import.meta.url), 'utf8');
-const migrations = await Promise.all(['0015_project_preview_lifecycle.sql', '0018_project_lifecycle.sql'].map(name => readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8')));
 const png = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64'));
 
 // Execute each complete endpoint with its real helpers/storage. Only session, ACL,
@@ -22,23 +22,19 @@ function endpoint(source, dependencies, extra = '') {
 
 function fixture() {
   const database = new DatabaseSync(':memory:');
+  database.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+  if (!database.prepare("SELECT name FROM sqlite_master WHERE name='project_save_operation_schema'").get()) {
+    database.exec(readFileSync(new URL('../migrations/0039_project_save_operations.sql', import.meta.url), 'utf8'));
+  }
   database.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
-    INSERT INTO users VALUES (10, 'Synthetic admin');
-    CREATE TABLE projects (
-      id INTEGER PRIMARY KEY, slug TEXT, organization_id INTEGER, organization_file_id INTEGER,
-      default_config_file TEXT DEFAULT 'config.kepler.json', dropbox_root_path TEXT DEFAULT '/fixture',
-      active INTEGER DEFAULT 1, updated_by INTEGER, updated_by_name_snapshot TEXT,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE organization_files (id INTEGER PRIMARY KEY, size_bytes INTEGER, sha256 TEXT,
-      status TEXT DEFAULT 'ACTIVE', active INTEGER DEFAULT 1, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
-    CREATE TABLE local_storage_objects (path TEXT PRIMARY KEY, content BLOB NOT NULL, content_type TEXT,
-      size_bytes INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
-    INSERT INTO projects (id, slug, organization_id) VALUES (1, 'example', 7);
+    CREATE TABLE local_storage_objects(path TEXT PRIMARY KEY,content BLOB NOT NULL,content_type TEXT,size_bytes INTEGER NOT NULL DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+    INSERT INTO users(id,email,name,role,password_hash) VALUES(10,'synthetic@offline.invalid','Synthetic admin','super_admin','not-a-login');
+    INSERT INTO organizations(id,name,slug,dropbox_root_path,storage_status) VALUES(7,'Synthetic','synthetic','/fixture','READY');
+    INSERT INTO organization_users(organization_id,user_id,access_level) VALUES(7,10,'owner');
+    INSERT INTO projects(id,name,slug,organization_id,dropbox_root_path,active) VALUES(1,'Example','example',7,'/fixture',1);
+    INSERT INTO user_projects(user_id,project_id,access_level) VALUES(10,1,'owner');
   `);
-  for (const migration of migrations) database.exec(migration);
-  const env = { APP_ENV: 'local', STORAGE_DRIVER: 'local-d1', DB: { prepare(sql) {
+  const env = { APP_ENV: 'local', STORAGE_DRIVER: 'local-d1', PROJECT_DURABLE_SAVE_V1:'true', DB: { batch(statements) { database.exec('BEGIN IMMEDIATE'); try { const result=statements.map(statement=>statement.run()); database.exec('COMMIT'); return result; } catch(error) { database.exec('ROLLBACK'); throw error; } }, prepare(sql) {
     const statement = database.prepare(sql); let args = [];
     return { bind(...values) { args = values.map(value => value instanceof ArrayBuffer ? new Uint8Array(value) : value); return this; },
       first() { return statement.get(...args) ?? null; }, run() { return statement.run(...args); }, all() { return { results: statement.all(...args) }; } };

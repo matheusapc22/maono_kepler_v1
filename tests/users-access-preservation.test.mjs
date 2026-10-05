@@ -38,7 +38,17 @@ test('redesigned overview preserves independently pinned helpers, gates, filters
   assertUsersAccessPreserved(source);
 });
 for (const [path, expected] of Object.entries(usersAccessBaseline.unchangedFiles)) {
-  test(`domain source is unchanged from 158e2b3: ${path}`, () => assert.equal(digest(read(path)), expected));
+  test(`domain source is unchanged from 158e2b3: ${path}`, () => {
+    let value=read(path);
+    if(path === "src/lib/api.ts") {
+      const marker="export function listOrganizationFiles(";
+      assert.equal(value.split(marker).length,2);
+      assert.doesNotMatch(value,/export function saveProjectConfig/);
+      const removed=`/** Mantido por compatibilidade com chamadas existentes. */\nexport function saveProjectConfig(projectSlug: string, config: unknown) {\n  return requestJson<{ ok: boolean; saved: boolean }>(\n    \`/api/projects/\${pathSegment(projectSlug)}/save\`,\n    {\n      method: "POST",\n      body: JSON.stringify({ config }),\n    },\n  );\n}\n\n`;
+      value=value.replace(marker,removed+marker);
+    }
+    assert.equal(digest(value),expected);
+  });
 }
 test('the contract catches mutations instead of accepting newly calculated hashes', () => {
   for (const [before, after] of [

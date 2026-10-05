@@ -51,7 +51,7 @@ const KeplerEngineAdapterContext =
   createContext<KeplerEngineAdapterValue | null>(null);
 
 type SaveRuntimeState = {
-  status: Exclude<MapSaveStatus, "dirty" | "read-only">;
+  status: Exclude<MapSaveStatus, "read-only">;
   lastConfirmedAt: string | null;
   error: string | null;
 };
@@ -73,7 +73,7 @@ const INITIAL_FLIGHT: MapFlightSnapshot = {
 function telemetryDetail(event: Event) {
   const detail = (event as CustomEvent<unknown>).detail;
   return detail && typeof detail === "object"
-    ? (detail as { event?: unknown; message?: unknown })
+    ? (detail as { event?: unknown; message?: unknown; snapshotMatchesCurrent?: unknown })
     : null;
 }
 
@@ -436,7 +436,6 @@ export function KeplerEngineAdapterProvider({
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
-    const handleLegacySaved = () => markClean();
     const handleTelemetry = (event: Event) => {
       const detail = telemetryDetail(event);
       const eventName = String(detail?.event ?? "");
@@ -448,8 +447,9 @@ export function KeplerEngineAdapterProvider({
           lastConfirmedAt: null,
           error: null,
         });
-      } else if (eventName === "map_save_succeeded") {
-        markClean();
+      } else if (eventName === "map_save_succeeded" || eventName === "map_save_recovery_succeeded") {
+        if (detail?.snapshotMatchesCurrent === true) markClean();
+        else setSaveRuntime({ status: "dirty", lastConfirmedAt: new Date().toISOString(), error: null });
       } else if (eventName === "map_save_conflict") {
         setSaveRuntime({
           status: "conflict",
@@ -463,7 +463,8 @@ export function KeplerEngineAdapterProvider({
       if (!result) return;
 
       if (result.status === "success") {
-        markClean();
+        if (result.snapshotMatchesCurrent === true) markClean();
+        else setSaveRuntime({ status: "dirty", lastConfirmedAt: new Date().toISOString(), error: null });
       } else if (result.status === "error") {
         setSaveRuntime({
           status: "error",
@@ -473,14 +474,10 @@ export function KeplerEngineAdapterProvider({
       }
     };
 
-    window.addEventListener("maono:map-saved", handleLegacySaved);
-    window.addEventListener("maono:map-save-succeeded", handleLegacySaved);
     window.addEventListener("maono:map-panel-telemetry", handleTelemetry);
     window.addEventListener(MAONO_MAP_SAVE_RESULT_EVENT, handleSaveResult);
 
     return () => {
-      window.removeEventListener("maono:map-saved", handleLegacySaved);
-      window.removeEventListener("maono:map-save-succeeded", handleLegacySaved);
       window.removeEventListener("maono:map-panel-telemetry", handleTelemetry);
       window.removeEventListener(MAONO_MAP_SAVE_RESULT_EVENT, handleSaveResult);
     };
@@ -577,7 +574,7 @@ export function KeplerEngineAdapterProvider({
     ).sort();
     const transient = new Set(transientDatasetIds);
     const hasUnsavedChanges = Boolean(
-      baselineHashRef.current && baselineHashRef.current !== revisionHash,
+      saveRuntime.status === "dirty" || (baselineHashRef.current && baselineHashRef.current !== revisionHash),
     );
     const saveStatus: MapSaveStatus = !capabilities.saveMap
       ? "read-only"

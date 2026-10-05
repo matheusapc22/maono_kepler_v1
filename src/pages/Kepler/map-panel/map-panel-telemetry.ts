@@ -25,6 +25,7 @@ type MapPanelTelemetryDetails = {
   serverTiming?: string | null;
   expectedRevision?: number | null;
   candidateRevision?: number | null;
+  snapshotMatchesCurrent?: boolean;
   provider?: string | null;
   providerStatus?: number | null;
   rowCount?: number | null;

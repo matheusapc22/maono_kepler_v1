@@ -491,44 +491,40 @@ const AdminFilesPage: React.FC = () => {
   }
 
   async function handleCreateProjectFromFile(file: OrganizationFile) {
-    const projectName = window.prompt("Nome do projeto:", file.name || file.fileName.replace(/\.json$/i, ""));
-
-    if (!projectName) return;
-
-    const confirmed = window.confirm(
-      "Criar projeto a partir deste JSON e copiar os usuários vinculados à organização para o projeto?"
-    );
-
-    if (!confirmed) return;
-
-    setTransformingFileId(file.id);
-    setError("");
-    setSuccess("");
-
-    try {
-      await fetch(`/api/admin/organization-files/${file.id}/project`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          name: projectName,
-          copyOrganizationAccess: true,
-        }),
-      }).then(readJson);
-
-      setSuccess("Projeto criado a partir do arquivo. Os usuários da organização foram vinculados ao projeto.");
-      if (selectedOrganizationId) {
-        await refreshOrganizationDetails(selectedOrganizationId);
-        await refreshOrganizations(selectedOrganizationId);
-      }
-    } catch (err) {
-      setError(normalizeUserError(err).message);
-    } finally {
-      setTransformingFileId(null);
+    if (!user?.id) return;
+    const key = `maono-file-project:${user.id}:${file.organizationId}:${file.id}`;
+    let intent: { operationId:string; name:string; copyOrganizationAccess:boolean } | null = null;
+    try { const stored=localStorage.getItem(key); if(stored)intent=JSON.parse(stored); }
+    catch { setError("Não foi possível recuperar a tentativa local. Preserve o arquivo antes de continuar."); return; }
+    if (!intent) {
+      const name=window.prompt("Nome do projeto:",file.name || file.fileName.replace(/\.json$/i,""));
+      if(!name || !window.confirm("Criar uma cópia durável deste mapa e vincular os usuários atuais da organização?"))return;
+      intent={operationId:`file-project-${crypto.randomUUID()}`,name,copyOrganizationAccess:true};
+      try {localStorage.setItem(key,JSON.stringify(intent));}
+      catch {setError("Não foi possível preservar esta tentativa no navegador. Nenhuma criação foi iniciada.");return;}
     }
+    setTransformingFileId(file.id);setError("");setSuccess("");
+    try {
+      const result=await fetch(`/api/admin/organization-files/${file.id}/project`,{
+        method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json","X-Maono-Client-Contract":"2"},body:JSON.stringify({...intent,organizationId:file.organizationId}),
+      }).then(readJson);
+      if(["CONFLICT","FAILED_FINAL"].includes(result.operation?.state)) {
+        if(window.confirm("A tentativa terminou sem publicar. O arquivo original foi preservado. Arquivar esta tentativa para permitir uma nova criação?"))localStorage.removeItem(key);
+        throw new Error("A criação precisa de revisão. O arquivo original continua disponível.");
+      }
+      if(result.operation?.state!=="PUBLISHED") {
+        setSuccess(result.operation?.payloadStored
+          ? "Mapa recebido. A criação continuará em segundo plano; use Criar projeto novamente para consultar esta mesma tentativa."
+          : "O envio ainda não terminou. Use Criar projeto novamente para retomar esta mesma tentativa.");
+        return;
+      }
+      const receipt=result.operation.receipt;
+      if(receipt?.operationId!==intent.operationId || Number(receipt.organizationId)!==file.organizationId || result.project?.active!==true)throw new Error("A ativação ainda não foi confirmada.");
+      localStorage.removeItem(key);
+      setSuccess("Projeto criado com recibo confirmado. O arquivo original foi preservado.");
+      if(selectedOrganizationId){await refreshOrganizationDetails(selectedOrganizationId);await refreshOrganizations(selectedOrganizationId);}
+    }catch(err){setError(normalizeUserError(err).message);}
+    finally{setTransformingFileId(null);}
   }
 
   async function handleDeleteFile(file: OrganizationFile, deleteDropbox = false) {

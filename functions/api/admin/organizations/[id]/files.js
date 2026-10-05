@@ -176,6 +176,22 @@ async function upsertOrganizationFile(env, organization, file, requestedName) {
     };
   }
 
+  if (/[\\/\x00-\x1f]/.test(fileName) || fileName === "." || fileName === "..") {
+    return {error:errorResponse("Nome de arquivo inválido.",400,"FILE_NAME_INVALID")};
+  }
+  const candidatePath = joinDropboxPath(organization.dropbox_root_path, fileName);
+  const protectedFile = await env.DB.prepare(`
+    SELECT 1 AS protected FROM organization_files f
+     WHERE lower(f.dropbox_path) = lower(?) AND (
+       f.is_project = 1 OR EXISTS (SELECT 1 FROM projects p WHERE p.organization_file_id = f.id)
+     )
+    UNION ALL
+    SELECT 1 AS protected FROM projects p
+     WHERE lower(rtrim(p.dropbox_root_path, '/') || '/' || p.default_config_file) = lower(?)
+    LIMIT 1`).bind(candidatePath,candidatePath).first();
+  if (protectedFile) {
+    return {error:errorResponse("Configurações de mapas devem usar o salvamento durável do projeto.",409,"PROJECT_CONFIG_DIRECT_OVERWRITE_FORBIDDEN")};
+  }
   const content = await file.arrayBuffer();
   const dropboxPath = joinDropboxPath(organization.dropbox_root_path, fileName);
   const fileType = inferFileType(fileName);

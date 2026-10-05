@@ -18,7 +18,7 @@ const migrationUrl = new URL(
 );
 const schemaUrl = new URL("../schema.sql", import.meta.url);
 const createUrl = new URL(
-  "../functions/_lib/project-creation-lifecycle-service.js",
+  "../functions/_lib/project-creation-reservation.js",
   import.meta.url,
 );
 const [migration, schema, creation] = await Promise.all([
@@ -295,8 +295,7 @@ test("schema canônico e criação usam a mesma máquina de estados de quota", (
 
   assert.match(creation, /reserveProjectQuota/);
   assert.match(creation, /markProjectQuotaProcessing/);
-  assert.match(creation, /commitProjectQuota/);
-  assert.match(creation, /releaseProjectQuota/);
-  assert.match(creation, /PROJECT_CREATION_IN_PROGRESS/);
+  assert.match(creation, /quotaReservationId/);
+  assert.match(creation, /PROJECT_CREATION_REQUEST_MISMATCH/);
   assert.match(creation, /PROJECT_LIFECYCLE_STATES/);
 });

@@ -1,3 +1,4 @@
+import { MAX_MUTATION_BUDGET_MS } from "./execution-budget.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -10,6 +11,7 @@ export const PRODUCTION_D1_ID = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db";
 
 const SHA40 = /^[0-9a-f]{40}$/i;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
+const DURABLE_SAVE_FLAGS = new Set(["PROJECT_DURABLE_SAVE_V1", "PROJECT_DURABLE_SAVE_INLINE_ENABLED"]);
 const TERMINAL = new Set(["success", "failure", "canceled"]);
 
 export class AcceptanceError extends Error {
@@ -25,7 +27,7 @@ export function fail(code, message) {
 }
 
 export function safeError(error) {
-  return error instanceof AcceptanceError
+  return error instanceof AcceptanceError || error?.name === "AcceptanceBudgetError"
     ? { code: error.code, message: error.message }
     : { code: "ACCEPTANCE_UNEXPECTED", message: "Falha inesperada no operador; revise o relatório antes de repetir." };
 }
@@ -70,14 +72,23 @@ export function parseArgs(argv) {
 }
 
 export function validateManifest(manifest) {
+  if (manifest?.mutationBudgetMs !== undefined && (!Number.isSafeInteger(manifest.mutationBudgetMs) || manifest.mutationBudgetMs <= 0 || manifest.mutationBudgetMs > MAX_MUTATION_BUDGET_MS)) fail("MANIFEST_INVALID", "mutationBudgetMs fora do limite revisado.");
   if (!manifest || !SAFE_ID.test(manifest.id || "")) fail("MANIFEST_INVALID", "Suite sem id válido.");
   if (!["read_only", "controlled_mutation"].includes(manifest.mutationMode)) fail("MANIFEST_INVALID", "mutationMode inválido.");
   if (!Array.isArray(manifest.requiredProfiles)) fail("MANIFEST_INVALID", "requiredProfiles deve ser array.");
+  if (manifest.requiredRoles && (typeof manifest.requiredRoles !== "object" || Array.isArray(manifest.requiredRoles) ||
+      Object.entries(manifest.requiredRoles).some(([name, role]) => !manifest.requiredProfiles.includes(name) || !["viewer", "editor", "admin", "super_admin"].includes(role)))) {
+    fail("MANIFEST_INVALID", "requiredRoles deve identificar perfis registrados e papéis conhecidos.");
+  }
+  if (manifest.requiredOrganization && (!Number.isSafeInteger(manifest.requiredOrganization.id) || manifest.requiredOrganization.id < 1 ||
+      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(manifest.requiredOrganization.slug || ""))) {
+    fail("MANIFEST_INVALID", "requiredOrganization deve fixar id e slug válidos.");
+  }
   if (!Array.isArray(manifest.cases) || !manifest.cases.length) fail("MANIFEST_INVALID", "A suite deve declarar casos.");
   if (!manifest.managedFlags || typeof manifest.managedFlags !== "object" || Array.isArray(manifest.managedFlags)) fail("MANIFEST_INVALID", "managedFlags inválido.");
   if (manifest.mutationMode === "read_only" && Object.keys(manifest.managedFlags).length) fail("MANIFEST_INVALID", "Suite read_only não pode alterar flags.");
   for (const [name, cfg] of Object.entries(manifest.managedFlags)) {
-    if (!/^MAONO_[A-Z0-9_]+$/.test(name)) fail("MANIFEST_INVALID", `Flag inválida: ${name}.`);
+    if (!/^MAONO_[A-Z0-9_]+$/.test(name) && !DURABLE_SAVE_FLAGS.has(name)) fail("MANIFEST_INVALID", `Flag inválida: ${name}.`);
     for (const key of ["requiredBefore", "activeValue", "safeValue"]) {
       if (typeof cfg?.[key] !== "boolean") fail("MANIFEST_INVALID", `${name}.${key} deve ser boolean.`);
     }
@@ -128,14 +139,14 @@ async function apiJson(response, code) {
   return envelope.result;
 }
 
-export async function cfRequest(token, path, { method = "GET", body = null, fetchImpl = fetch } = {}) {
+export async function cfRequest(token, path, { method = "GET", body = null, fetchImpl = fetch, budget = null } = {}) {
   if (!token) fail("CLOUDFLARE_TOKEN_MISSING", "Secret Cloudflare do acceptance ausente.");
   const url = new URL(path, CF_API_ORIGIN);
   if (url.origin !== CF_API_ORIGIN) fail("CLOUDFLARE_URL_INVALID", "Origem Cloudflare inválida.");
   const response = await fetchImpl(url, {
     method,
     redirect: "error",
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(budget ? budget.requestTimeoutMs(30_000) : 30_000),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
@@ -143,7 +154,9 @@ export async function cfRequest(token, path, { method = "GET", body = null, fetc
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  return apiJson(response, "CLOUDFLARE_API_FAILED");
+  const result = await apiJson(response, "CLOUDFLARE_API_FAILED");
+  budget?.assertActive();
+  return result;
 }
 
 function projectPath() {
@@ -205,13 +218,15 @@ export async function waitProductionQuiescent(token, manifest, {
   timeoutMs = 50 * 60_000,
   intervalMs = 15_000,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  now = Date.now,
   ...deps
 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  const deadline = now() + timeoutMs;
+  while (now() < deadline) {
     const project = await readProduction(token, manifest, deps);
     if (project.pendingProductionDeployments.length === 0) return project;
-    await sleep(intervalMs);
+    if (deps.budget) await deps.budget.pause(intervalMs, sleep);
+    else await sleep(intervalMs);
   }
   fail("PRODUCTION_DEPLOYMENT_QUEUE_TIMEOUT", "A fila de Produção não ficou quiescente dentro da janela.");
 }
@@ -244,16 +259,18 @@ export async function waitDeployment(token, deploymentId, manifest, {
   timeoutMs = 42 * 60_000,
   intervalMs = 15_000,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  now = Date.now,
   ...deps
 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  const deadline = now() + timeoutMs;
+  while (now() < deadline) {
     const d = await readDeployment(token, deploymentId, manifest, deps);
     if (TERMINAL.has(d.status)) {
       if (d.status !== "success" || d.stage !== "deploy") fail("PRODUCTION_DEPLOYMENT_FAILED", "Deployment do acceptance falhou.");
       return d;
     }
-    await sleep(intervalMs);
+    if (deps.budget) await deps.budget.pause(intervalMs, sleep);
+    else await sleep(intervalMs);
   }
   fail("PRODUCTION_DEPLOYMENT_TIMEOUT", "Deployment do acceptance não terminou dentro da janela.");
 }
@@ -262,10 +279,11 @@ export async function waitCanonical(token, deploymentId, commit, manifest, desir
   timeoutMs = 5 * 60_000,
   intervalMs = 5_000,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  now = Date.now,
   ...deps
 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  const deadline = now() + timeoutMs;
+  while (now() < deadline) {
     const project = await readProduction(token, manifest, deps);
     if (project.canonical.id === deploymentId) {
       assertProduction(project, commit, manifest, { requireBaseline: false });
@@ -277,7 +295,8 @@ export async function waitCanonical(token, deploymentId, commit, manifest, desir
       }
       return project;
     }
-    await sleep(intervalMs);
+    if (deps.budget) await deps.budget.pause(intervalMs, sleep);
+    else await sleep(intervalMs);
   }
   fail("PRODUCTION_CANONICAL_TIMEOUT", "Novo deployment não se tornou canônico.");
 }
@@ -290,11 +309,13 @@ export async function transitionFlags({
   values,
   deps = {},
   onMutationStart = () => {},
+  validateCurrent = () => {},
 }) {
   const current = await waitProductionQuiescent(token, manifest, deps);
   // A queued deployment may have changed the canonical product since preflight.
   // Never patch configuration or retry an old SHA across that drift.
   assertProduction(current, commit, manifest, { requireBaseline: false });
+  validateCurrent(current);
   onMutationStart();
   await patchFlags(token, values, deps);
   // Re-check after the config change. If another Production deployment appeared
@@ -350,6 +371,7 @@ export async function appRequest(baseUrl, path, {
   headers = {},
   fetchImpl = fetch,
   timeoutMs = 30_000,
+  budget = null,
 } = {}) {
   const base = new URL(baseUrl);
   const url = new URL(path, base);
@@ -357,7 +379,7 @@ export async function appRequest(baseUrl, path, {
   const response = await fetchImpl(url, {
     method,
     redirect: "error",
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: AbortSignal.timeout(budget ? budget.requestTimeoutMs(timeoutMs) : timeoutMs),
     headers: {
       Accept: "application/json",
       ...(cookie ? { Cookie: cookie } : {}),
@@ -368,9 +390,14 @@ export async function appRequest(baseUrl, path, {
     ...(body !== undefined ? { body } : {}),
   });
   const type = response.headers.get("content-type") || "";
+  const readFailure = (error, fallback) => {
+    if (["AbortError", "TimeoutError"].includes(error?.name)) throw error;
+    return fallback;
+  };
   const payload = type.includes("application/json")
-    ? await response.json().catch(() => null)
-    : await response.text().catch(() => "");
+    ? await response.json().catch((error) => readFailure(error, null))
+    : await response.text().catch((error) => readFailure(error, ""));
+  budget?.assertActive();
   return { status: response.status, ok: response.ok, headers: response.headers, body: payload };
 }
 
@@ -393,6 +420,7 @@ export async function loginProfile(baseUrl, credentials, organizationId, deps = 
   }
   return {
     cookie,
+    organization: { id: session.body.activeOrganization.id, slug: session.body.activeOrganization.slug },
     user: {
       id: session.body.user.id,
       role: session.body.user.role,
@@ -403,8 +431,20 @@ export async function loginProfile(baseUrl, credentials, organizationId, deps = 
 }
 
 export async function buildProfiles(baseUrl, credentials, manifest, organizationId, deps = {}) {
+  if (manifest.requiredOrganization && Number(organizationId) !== manifest.requiredOrganization.id) {
+    fail("QA_ORGANIZATION_MISMATCH", "A suite exige sua organização QA registrada.");
+  }
   const profiles = {};
   for (const name of manifest.requiredProfiles) profiles[name] = await loginProfile(baseUrl, credentials[name], organizationId, deps);
+  for (const name of manifest.requiredProfiles) {
+    if (manifest.requiredRoles?.[name] && profiles[name].user.role !== manifest.requiredRoles[name]) {
+      fail("QA_ROLE_MISMATCH", `Perfil ${name} não tem o papel QA registrado.`);
+    }
+    if (manifest.requiredOrganization && (Number(profiles[name].organization.id) !== manifest.requiredOrganization.id ||
+        profiles[name].organization.slug !== manifest.requiredOrganization.slug)) {
+      fail("QA_ORGANIZATION_MISMATCH", "A organização autenticada diverge da organização QA registrada.");
+    }
+  }
   const ids = manifest.requiredProfiles.map((name) => String(profiles[name].user.id));
   if (new Set(ids).size !== ids.length) fail("QA_IDENTITIES_NOT_DISTINCT", "Perfis QA devem usar contas distintas.");
   for (const [profile, permissions] of Object.entries(manifest.requiredPermissions || {})) {
@@ -440,6 +480,10 @@ export function suiteContext({
   return {
     runId, baseUrl, organizationId, projectSlug, profiles, cases, record,
     registerCleanup(fn) { cleanup.push(fn); },
+    async pause(ms) {
+      if (deps.budget) await deps.budget.pause(ms, deps.sleep);
+      else await (deps.sleep || ((duration) => new Promise((resolve) => setTimeout(resolve, duration))))(ms);
+    },
     async api(profileName, path, options = {}) {
       const profile = profiles[profileName];
       if (!profile) fail("QA_PROFILE_UNKNOWN", `Perfil QA desconhecido: ${profileName}.`);
@@ -447,7 +491,8 @@ export function suiteContext({
       if (mutationMode === "read_only" && !["GET", "HEAD", "OPTIONS"].includes(method)) {
         fail("READ_ONLY_SUITE_MUTATION_BLOCKED", `Suite read_only não pode executar ${method}.`);
       }
-      return appRequest(baseUrl, path, { ...deps, ...options, method, cookie: profile.cookie });
+      if (!["GET", "HEAD", "OPTIONS"].includes(method) && deps.budget?.phase === "suite") deps.budget.assertAdmission();
+      return appRequest(baseUrl, path, { ...deps, ...options, method, cookie: profile.cookie, budget: deps.budget });
     },
     async cleanupApi(profileName, path, options = {}, expectedStatuses = [200, 204]) {
       const response = await this.api(profileName, path, options);
@@ -479,8 +524,10 @@ export function initialReport(options) {
   };
 }
 
-export async function writeReport(path, report) {
+export async function writeReport(path, report, { budget = null } = {}) {
   if (!path || path === resolve(".")) fail("REPORT_REQUIRED", "--report deve apontar para arquivo JSON.");
+  budget?.assertActive();
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+  await writeFile(path, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600, flag: "wx", ...(budget ? { signal: AbortSignal.timeout(budget.requestTimeoutMs(5 * 60_000)) } : {}) });
+  budget?.assertActive();
 }

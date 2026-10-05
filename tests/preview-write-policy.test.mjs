@@ -39,7 +39,8 @@ test("runtime diferencia production, preview e configuração ausente", () => {
     preview: true,
     previewMutationsEnabled: true,
     previewQaOrganizationConfigured: true,
-    largeCreateStreamEnabled: false,
+    durableProjectSaveEnabled: false,
+    durableProjectSaveInlineEnabled: true,
   });
 });
 

@@ -6,7 +6,7 @@ import { UniversalLoader } from "../../../src/components/loading/UniversalLoader
 import {
   isSaveRequestAbort,
   runWithSaveStallNotice,
-} from "../../../src/pages/Kepler/save-operation-resilience";
+} from "../../../src/pages/Kepler/durable-save-controller";
 
 type SaveState = "idle" | "saving" | "stalled" | "cancelled";
 

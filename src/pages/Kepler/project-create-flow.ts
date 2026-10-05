@@ -1,291 +1,64 @@
 import { parseResponseJson } from "../../lib/api-transport.ts";
-
-import {
-  buildSaveRequestHeaders,
-  readSaveResponseDiagnostics,
-  type ClientSaveAttempt,
-  type SaveResponseDiagnostics,
-} from "./save-observability.ts";
-import {
-  prepareProjectCreateTransport,
-  type PreparedProjectCreateTransport,
-} from "./project-create-transport.ts";
-
-export type ProjectCreateRequestStage =
-  | "creating_record"
-  | "preparing_files"
-  | "finalizing";
-
-type LegacyPreview = {
-  dataUrl: string;
-  method: string;
-  diagnostics: string[];
-} | null;
-
-export type ProjectCreateFlowResult = {
-  response: Response;
-  data: any;
-  diagnostics: SaveResponseDiagnostics;
-  prepared: PreparedProjectCreateTransport;
-  transport: "inline" | "stream";
-  createdSlug: string;
-  revision: number;
-};
-
-type ProjectCreateFlowOptions = {
-  attempt: ClientSaveAttempt;
-  name: string;
-  description: string;
-  organizationId: unknown;
-  idempotencyKey: string;
-  config: any;
-  legacy: LegacyPreview;
-  fetchImpl?: typeof fetch;
-  signal?: AbortSignal;
-  onPrepared?: (prepared: PreparedProjectCreateTransport) => void;
-  onStage?: (stage: ProjectCreateRequestStage) => void;
-};
-
+import { beginClientSaveAttempt, buildSaveRequestHeaders, readSaveResponseDiagnostics, type ClientSaveAttempt, type SaveResponseDiagnostics } from "./save-observability.ts";
+import { prepareProjectCreateTransport, type PreparedProjectCreateTransport } from "./project-create-transport.ts";
+import { defaultDurableSaveStore, executePreparedProjectUpdate, prepareProjectUpdateSnapshot, receiptRevision, runWithSaveStallNotice, type SavePhase } from "./durable-save-controller.ts";
+import { LocalSaveStorageError, type DurableSaveSnapshot, type DurableSaveStore } from "./durable-save-store.ts";
+export type ProjectCreateRequestStage = "creating_record" | "preparing_files" | "finalizing";
+export type ProjectCreateFlowResult = { response: Response; data: any; diagnostics: SaveResponseDiagnostics; prepared?: PreparedProjectCreateTransport; snapshot: DurableSaveSnapshot; transport: "inline" | "stream"; createdSlug: string; revision: number };
 export class ProjectCreateFlowError extends Error {
-  response: Response;
-  data: any;
-  diagnostics: SaveResponseDiagnostics;
-  stage: ProjectCreateRequestStage;
-  prepared: PreparedProjectCreateTransport;
-
-  constructor(
-    message: string,
-    {
-      response,
-      data,
-      diagnostics,
-      stage,
-      prepared,
-    }: {
-      response: Response;
-      data: any;
-      diagnostics: SaveResponseDiagnostics;
-      stage: ProjectCreateRequestStage;
-      prepared: PreparedProjectCreateTransport;
-    },
-  ) {
-    super(message);
-    this.name = "ProjectCreateFlowError";
-    this.response = response;
-    this.data = data;
-    this.diagnostics = diagnostics;
-    this.stage = stage;
-    this.prepared = prepared;
+  response: Response; data: any; diagnostics: SaveResponseDiagnostics; stage: ProjectCreateRequestStage; prepared?: PreparedProjectCreateTransport;
+  constructor(message: string, context: { response: Response; data: any; diagnostics: SaveResponseDiagnostics; stage: ProjectCreateRequestStage; prepared?: PreparedProjectCreateTransport }) {
+    super(message); this.name = "ProjectCreateFlowError"; this.response = context.response; this.data = context.data; this.diagnostics = context.diagnostics; this.stage = context.stage; this.prepared = context.prepared;
   }
 }
-
-async function readJsonResponse(response: Response): Promise<any> {
-  const parsed = await parseResponseJson(response);
-
-  if (parsed.valid) {
-    return parsed.data;
-  }
-
-  return {
-    ok: false,
-    error: {
-      code: "INFRASTRUCTURE_UNEXPECTED_ERROR",
-      category: "INFRASTRUCTURE",
-      retryable: true,
-    },
-  };
-}
-
-function resolveConfigRevision(data: any) {
-  return Math.max(
-    0,
-    Number(
-      data?.configRevision ??
-        data?.thumbnail?.revision ??
-        data?.project?.configRevision ??
-        0,
-    ) || 0,
-  );
-}
-
 export function isProjectCreationActive(data: any) {
-  const lifecycleState =
-    data?.lifecycle?.state ??
-    data?.project?.lifecycle?.state ??
-    data?.project?.lifecycleState ??
-    null;
-
-  return Boolean(
-    data?.status === "active" ||
-      data?.project?.active === true ||
-      lifecycleState === "ACTIVE",
-  );
+  return Boolean(data?.status === "active" || data?.project?.active === true || (data?.lifecycle?.state ?? data?.project?.lifecycle?.state ?? data?.project?.lifecycleState ?? data?.operation?.receipt?.lifecycleState) === "ACTIVE");
 }
-
-function flowError(
-  response: Response,
-  data: any,
-  diagnostics: SaveResponseDiagnostics,
-  stage: ProjectCreateRequestStage,
-  prepared: PreparedProjectCreateTransport,
-) {
-  return new ProjectCreateFlowError(
-    data?.error?.message || "Não foi possível concluir a criação do projeto.",
-    { response, data, diagnostics, stage, prepared },
-  );
-}
-
-async function sendCreateRequest(
-  fetchImpl: typeof fetch,
-  attempt: ClientSaveAttempt,
-  prepared: PreparedProjectCreateTransport,
-  signal?: AbortSignal,
-) {
-  const response = await fetchImpl("/api/projects", {
-    method: "POST",
-    credentials: "include",
-    headers: buildSaveRequestHeaders(attempt, { forceJson: true }),
-    body: prepared.requestBody,
-    signal,
-  });
-  const diagnostics = readSaveResponseDiagnostics(response, attempt);
-  const data = await readJsonResponse(response);
-  return { response, diagnostics, data };
-}
-
-async function sendLargeConfig(
-  fetchImpl: typeof fetch,
-  attempt: ClientSaveAttempt,
-  prepared: PreparedProjectCreateTransport,
-  slug: string,
-  idempotencyKey: string,
-  signal?: AbortSignal,
-) {
-  const response = await fetchImpl(
-    `/api/projects/${encodeURIComponent(slug)}/config`,
-    {
-      method: "PUT",
-      credentials: "include",
-      headers: {
-        ...buildSaveRequestHeaders(attempt),
-        "X-Maono-Creation-Key": idempotencyKey,
-      },
-      body: prepared.configBody,
-      signal,
-    },
-  );
-  const diagnostics = readSaveResponseDiagnostics(response, attempt);
-  const data = await readJsonResponse(response);
-  return { response, diagnostics, data };
-}
-
-export async function executeProjectCreateFlow({
-  attempt,
-  name,
-  description,
-  organizationId,
-  idempotencyKey,
-  config,
-  legacy,
-  fetchImpl = fetch,
-  signal,
-  onPrepared = () => {},
-  onStage = () => {},
-}: ProjectCreateFlowOptions): Promise<ProjectCreateFlowResult> {
-  const prepared = prepareProjectCreateTransport(attempt, {
-    name,
-    description,
-    organizationId,
-    idempotencyKey,
-    config,
-    legacy,
-  });
-  onPrepared(prepared);
-
+async function executeCreate({ attempt, name, description, organizationId, actorId, idempotencyKey, config, editorSessionId, editGeneration, snapshot: recovery, store = defaultDurableSaveStore, fetchImpl = globalThis.fetch.bind(globalThis), signal, onPrepared = () => {}, onStage = () => {}, onPhase, isScopeCurrent = () => true }: {
+  attempt: ClientSaveAttempt; name: string; description: string; organizationId: unknown; actorId: string; idempotencyKey: string; config: any;
+  editorSessionId: string; editGeneration: number; legacy?: unknown; snapshot?: DurableSaveSnapshot; store?: DurableSaveStore; fetchImpl?: typeof fetch; signal?: AbortSignal;
+  onStall?: () => void;
+  onPrepared?: (prepared: PreparedProjectCreateTransport) => void; onStage?: (stage: ProjectCreateRequestStage) => void; onPhase?: (phase: SavePhase, data?: any) => void; isScopeCurrent?: () => boolean;
+}): Promise<ProjectCreateFlowResult> {
+  let prepared: PreparedProjectCreateTransport | undefined;
+  let snapshot = recovery;
+  if (!snapshot) {
+    prepared = prepareProjectCreateTransport(attempt, { name, description, organizationId, idempotencyKey, config });
+    onPrepared(prepared);
+    snapshot = await prepareProjectUpdateSnapshot({ attempt, scope: { actorId, organizationId: String(organizationId), projectKey: `create:${idempotencyKey}` }, projectSlug: "", config, expectedConfigRevision: 0, editorSessionId, editGeneration, creation: { requestBody: prepared.requestBody, idempotencyKey }, transport: prepared.configTransport });
+    await store.put(snapshot); // Reservation is never sent without the exact clicked snapshot on disk.
+  }
+  if (snapshot.scope.actorId !== actorId || snapshot.scope.organizationId !== String(organizationId) || !snapshot.creation) {
+    throw new Error("A criação pertence a outra conta ou organização.");
+  }
+  if (!isScopeCurrent() || signal?.aborted) throw new DOMException("O contexto mudou.", "AbortError");
+  // Without a known reservation, missing bytes cannot be completed and must not
+  // allocate another inactive project/quota. A bound slug still queries its receipt.
+  if (!snapshot.projectSlug && (!snapshot.serialized.body || snapshot.expiresAt <= Date.now())) {
+    const error = new LocalSaveStorageError("LOCAL_SAVE_CREATION_PAYLOAD_UNAVAILABLE");
+    onPhase?.("NEEDS_ACTION", { error: { code: error.code } });
+    await store.put({ ...snapshot, localState: "expired", serialized: { ...snapshot.serialized, body: null } });
+    throw error;
+  }
   onStage("creating_record");
-  const created = await sendCreateRequest(
-    fetchImpl,
-    attempt,
-    prepared,
-    signal,
-  );
-  if (
-    !created.response.ok ||
-    created.data?.ok === false ||
-    !created.data?.project?.slug
-  ) {
-    throw flowError(
-      created.response,
-      created.data,
-      created.diagnostics,
-      "creating_record",
-      prepared,
-    );
+  if (!snapshot.projectSlug) {
+    const requestAttempt = { ...snapshot.attempt, correlationId: beginClientSaveAttempt("create").correlationId };
+    const response = await fetchImpl("/api/projects", { method: "POST", credentials: "include", headers: buildSaveRequestHeaders(requestAttempt), body: snapshot.creation.requestBody, signal });
+    const parsed = await parseResponseJson(response);
+    const data: any = parsed.valid ? parsed.data : null;
+    const diagnostics = readSaveResponseDiagnostics(response, requestAttempt);
+    if (!isScopeCurrent() || signal?.aborted) throw new DOMException("O contexto mudou.", "AbortError");
+    if (!response.ok || !data?.project?.slug) throw new ProjectCreateFlowError(data?.error?.message || "A reserva não foi confirmada. A mesma tentativa poderá ser retomada.", { response, data, diagnostics, stage: "creating_record", prepared });
+    snapshot = { ...snapshot, projectSlug: String(data.project.slug), headers: { ...snapshot.headers, ...(data.project.id != null ? { "X-Maono-Project-Id": String(data.project.id) } : {}) }, scope: { ...snapshot.scope, ...(data.project.id != null ? { projectId: String(data.project.id) } : {}) } };
+    await store.put(snapshot);
   }
-
-  const createdSlug = String(created.data.project.slug);
-  let finalResponse = created.response;
-  let finalData = created.data;
-  let finalDiagnostics = created.diagnostics;
-
-  // Retry pós-commit: se a tentativa anterior terminou e só a resposta se
-  // perdeu, o POST idempotente devolve ACTIVE e o cliente não reenvia bytes.
-  if (prepared.large && !isProjectCreationActive(finalData)) {
-    onStage("preparing_files");
-    const streamed = await sendLargeConfig(
-      fetchImpl,
-      attempt,
-      prepared,
-      createdSlug,
-      idempotencyKey,
-      signal,
-    );
-    finalResponse = streamed.response;
-    finalData = streamed.data;
-    finalDiagnostics = streamed.diagnostics;
-
-    if (!finalResponse.ok || finalData?.ok === false) {
-      throw flowError(
-        finalResponse,
-        finalData,
-        finalDiagnostics,
-        "preparing_files",
-        prepared,
-      );
-    }
-  }
-
+  onStage("preparing_files");
+  const result = await executePreparedProjectUpdate({ snapshot, store, fetchImpl, signal, onPhase, isScopeCurrent });
   onStage("finalizing");
-  if (!isProjectCreationActive(finalData)) {
-    const inactiveData = {
-      ...(finalData || {}),
-      ok: false,
-      error: {
-        ...(finalData?.error || {}),
-        message:
-          finalData?.error?.message ||
-          "A criação terminou sem confirmar o estado ACTIVE do projeto.",
-        code: finalData?.error?.code || "PROJECT_CREATE_ACTIVE_NOT_CONFIRMED",
-        category: finalData?.error?.category || "PROJECT",
-        retryable: true,
-      },
-    };
-    throw flowError(
-      finalResponse,
-      inactiveData,
-      finalDiagnostics,
-      "finalizing",
-      prepared,
-    );
-  }
+  if (!isProjectCreationActive(result.data)) throw new ProjectCreateFlowError("A publicação não confirmou que o projeto está ACTIVE. Consulte o recibo da mesma tentativa novamente.", { ...result, stage: "finalizing", prepared });
+  return { ...result, prepared, transport: snapshot.manifest.payloadBytes > 8 * 1024 * 1024 ? "stream" : "inline", createdSlug: snapshot.projectSlug, revision: receiptRevision(result.data) };
+}
 
-  return {
-    response: finalResponse,
-    data: finalData,
-    diagnostics: finalDiagnostics,
-    prepared,
-    transport: prepared.large ? "stream" : "inline",
-    createdSlug,
-    revision: resolveConfigRevision(finalData),
-  };
+export async function executeProjectCreateFlow(options: Parameters<typeof executeCreate>[0]) {
+  return runWithSaveStallNotice({ onStall: options.onStall, operation: () => executeCreate(options) });
 }

@@ -15,7 +15,7 @@ const projectsIndexUrl = new URL(
   import.meta.url,
 );
 const creationServiceUrl = new URL(
-  "../functions/_lib/project-creation-lifecycle-service.js",
+  "../functions/_lib/project-creation-reservation.js",
   import.meta.url,
 );
 const saveButtonUrl = new URL(
@@ -23,7 +23,7 @@ const saveButtonUrl = new URL(
   import.meta.url,
 );
 const saveResilienceUrl = new URL(
-  "../src/pages/Kepler/save-operation-resilience.ts",
+  "../src/pages/Kepler/durable-save-controller.ts",
   import.meta.url,
 );
 const createPanelUrl = new URL(
@@ -79,7 +79,9 @@ function functionBlock(source, functionName) {
   const nextExport = source.indexOf("\nexport ", position);
   const nextFunction = source.indexOf("\nasync function ", position + 1);
   const nextPlainFunction = source.indexOf("\nfunction ", position + 1);
-  const candidates = [nextExport, nextFunction, nextPlainFunction]
+  const nested = /\n  (?:async )?function /.exec(source.slice(position + 1));
+  const nextNested = nested ? position + 1 + nested.index : -1;
+  const candidates = [nextExport, nextFunction, nextPlainFunction, nextNested]
     .filter((value) => value > position);
 
   const end = candidates.length ? Math.min(...candidates) : source.length;
@@ -120,202 +122,71 @@ test("metadataVersion administrativa continua condicional", () => {
   );
 });
 
-test("POST público delega ao lifecycle service com project.create e organização ativa", () => {
-  assert.match(projectsIndex, /createProjectFromKepler/);
+test("POST público reserva metadata com project.create e organização ativa antes do upload", () => {
+  assert.match(projectsIndex, /reserveProjectCreation/);
   assert.match(creationService, /"project\.create"/);
   assert.match(creationService, /requirePermission\(/);
   assert.match(creationService, /getActiveOrganizationId\(user\)/);
   assert.match(creationService, /ORGANIZATION_CONTEXT_MISMATCH/);
-});
-
-test("criação completa começa DRAFT e inativa antes da preparação", () => {
-  const createPending = functionBlock(
-    creationService,
-    "createOrLoadPendingProject",
-  );
-
-  assert.match(createPending, /createProjectRecord/);
-  assert.match(createPending, /active:\s*false/);
-  assert.match(createPending, /initializeProjectDraft/);
-  assert.match(creationService, /lifecycle_state = 'DRAFT'/);
-  assert.match(creationService, /status = 'PROCESSING'/);
-  assert.match(creationService, /status = 'ERROR'/);
-});
-
-test("ativação exige revision pronta e owner, sem depender do preview", () => {
-  const finalize = functionBlock(
-    creationService,
-    "finalizeProjectCreation",
-  );
-
-  const preparingIndex = finalize.indexOf("enterPreparingStorage");
-  const configIndex = finalize.indexOf("ensureInitialConfigPublished");
-  const readyIndex = finalize.indexOf("enterConfigReady");
-  const ownerIndex = finalize.indexOf("linkProjectOwner");
-  const fileIndex = finalize.indexOf("markOrganizationFileActive");
-  const activateIndex = finalize.indexOf("activateProject");
-  const previewIndex = finalize.indexOf("saveLegacyCreationPreview");
-
-  assert.ok(preparingIndex >= 0);
-  assert.ok(configIndex > preparingIndex);
-  assert.ok(readyIndex > configIndex);
-  assert.ok(ownerIndex > readyIndex);
-  assert.ok(fileIndex > ownerIndex);
-  assert.ok(activateIndex > fileIndex);
-  assert.ok(previewIndex > activateIndex);
-  assert.match(creationService, /PREPARING_STORAGE/);
-  assert.match(creationService, /CONFIG_READY/);
-  assert.match(creationService, /access_level\s*\)\s*VALUES \(\?, \?, 'owner'\)/);
-});
-
-test("falha parcial mantém projeto fora de ACTIVE e auditado", () => {
-  assert.match(creationService, /markCreationFailed/);
-  assert.match(creationService, /markProjectLifecycleFailed/);
-  assert.match(creationService, /PROJECT_LIFECYCLE_STATES\.FAILED|toState:\s*PROJECT_LIFECYCLE_STATES\.FAILED/);
-  assert.match(creationService, /action:\s*"project\.create\.failed"/);
-  assert.match(creationService, /retryable:\s*true/);
-  assert.match(
-    creationService,
-    /O projeto permaneceu inativo e pode ser retomado/,
-  );
-});
-
-test("idempotência usa chave persistida, reserva única e retry de lifecycle", () => {
+  assert.match(creationService, /createProjectRecord/);
+  assert.match(creationService, /active:\s*false/);
   assert.match(creationService, /idempotency_key/);
-  assert.match(creationService, /getCreationReservation/);
-  assert.match(creationService, /claimReservation/);
-  assert.match(creationService, /PROJECT_CREATION_IN_PROGRESS/);
-  assert.match(creationService, /project\.create\.idempotent/);
-  assert.match(creationService, /PROJECT_LIFECYCLE_STATES\.FAILED/);
+  assert.match(creationService, /getCreationByKey/);
 });
 
-test("Novo mapa exibe botão somente com capacidade backend sem projectSlug", () => {
-  assert.match(
-    saveButton,
-    /context\?\.capabilities\?\.saveMap/,
-  );
-  assert.match(
-    saveButton,
-    /authenticated\s*&&\s*!projectSlug\s*&&\s*activeOrganizationId\s*&&\s*context\?\.capabilities\?\.saveMap/,
-  );
-  assert.match(
-    saveButton,
-    /const allowed = projectSlug \? canSaveExisting : canCreateNew/,
-  );
+test("Novo mapa e mapa existente exigem capability, conta e organização", () => {
+  assert.match(saveButton, /authenticated && actorId && organizationId && context\?\.capabilities\?\.saveMap/);
+  assert.match(saveButton, /if \(!allowed\) \{ return null;/);
   assert.match(saveButton, /"Salvar como projeto"/);
   assert.match(saveButton, /<ProjectCreatePanel/);
 });
 
-test("mapa existente mantém PUT de config com optimistic concurrency", () => {
-  assert.match(
-    saveButton,
-    /projectSlug\s*&&\s*context\?\.capabilities\?\.saveMap/,
-  );
-  assert.match(
-    saveResilience,
-    /`\/api\/projects\/\$\{encodeURIComponent\(snapshot\.projectSlug\)\}\/config`/,
-  );
-  assert.match(saveResilience, /method:\s*"PUT"/);
+test("mapa existente mantém optimistic concurrency e nunca remonta o rascunho após resposta", () => {
+  assert.match(saveResilience, /save-operations/);
+  assert.match(saveResilience, /mutate\(`\$\{path\}\/payload`, "PUT", snapshot\.serialized\.body\)/);
   assert.match(saveButton, /handleExistingProjectSave/);
   assert.match(saveButton, /expectedConfigRevision/);
   assert.match(saveButton, /context\?\.version/);
-  assert.match(saveButton, /void refresh\(\)/);
+  assert.doesNotMatch(saveButton, /\brefresh\(/);
+  assert.match(saveButton, /if \(matches\) expectedRevisionRef\.current/);
 });
 
-test("criação serializa o mapa uma vez e delega a classificação de transporte", () => {
+test("criação serializa o clique uma vez; thumbnail independente usa snapshot salvo", () => {
   const create = functionBlock(saveButton, "handleCreateProject");
-  assert.equal(
-    (create.match(/serializeProjectConfig\(mapState\)/g) || []).length,
-    1,
-  );
-  assert.equal(
-    (create.match(/captureProjectThumbnail\(/g) || []).length,
-    0,
-  );
+  assert.equal((create.match(/captureClickedConfig\(\)/g) || []).length, 1);
   assert.match(create, /executeProjectCreateFlow\(/);
-  assert.match(create, /idempotencyKey,/);
-  assert.match(create, /config,/);
-  assert.match(create, /legacy,/);
-  assert.match(
-    create,
-    /enqueuePreview\(result\.createdSlug, result\.revision, config\)/,
-  );
+  assert.match(create, /config: clicked\.config/);
+  assert.match(saveButton, /savedConfig: config/);
+  assert.match(saveButton, /enqueueProjectThumbnailJob/);
   assert.match(saveButton, /operationInFlightRef\.current/);
 });
 
-test("criação escolhe inline ou metadata-first + streaming sem duplicar o JSON do MapConfig", () => {
-  const create = functionBlock(saveButton, "handleCreateProject");
-  const legacyCapture = functionBlock(saveButton, "legacyCapture");
-
-  assert.match(create, /executeProjectCreateFlow\(/);
-  assert.match(createTransport, /serializeMapConfigTransport\(attempt, config, 0\)/);
-  assert.equal(
-    (createTransport.match(/serializeMapConfigTransport\(attempt, config, 0\)/g) || []).length,
-    1,
-  );
-  assert.match(createTransport, /largeConfig:\s*true/);
+test("todo tamanho usa reserva durável e os mesmos bytes sem envelope inline", () => {
+  assert.equal((createTransport.match(/serializeMapConfigTransport\(attempt, config, 0\)/g) || []).length, 1);
+  assert.match(createTransport, /durableSave: true/);
   assert.match(createTransport, /configMetadata:/);
-  assert.match(createTransport, /appendRawConfigToJsonEnvelope/);
-
+  assert.doesNotMatch(createTransport, /appendRawConfigToJsonEnvelope/);
   assert.match(createFlow, /fetchImpl\("\/api\/projects"/);
-  assert.match(createFlow, /method:\s*"POST"/);
-  assert.match(createFlow, /forceJson:\s*true/);
-  assert.match(
-    createFlow,
-    /`\/api\/projects\/\$\{encodeURIComponent\(slug\)\}\/config`/,
-  );
-  assert.match(createFlow, /method:\s*"PUT"/);
-  assert.match(createFlow, /"X-Maono-Creation-Key":\s*idempotencyKey/);
-  assert.match(createFlow, /body:\s*prepared\.configBody/);
-  assert.match(createFlow, /prepared\.large && !isProjectCreationActive\(finalData\)/);
-  assert.match(createFlow, /if \(!isProjectCreationActive\(finalData\)\)/);
-
-  assert.match(create, /const legacy = await legacyCapture\(config\)/);
-  assert.match(
-    legacyCapture,
-    /if \(ASYNC_THUMBNAIL_ENABLED\) \{\s*return null;/,
-  );
+  assert.match(createFlow, /transport: prepared\.configTransport/);
+  assert.match(createFlow, /executePreparedProjectUpdate/);
+  assert.match(saveResilience, /headers\["X-Maono-Creation-Key"\] = creation\.idempotencyKey/);
 });
 
-test("sucesso só redireciona após o fluxo confirmar ACTIVE", () => {
+test("sucesso só redireciona após ACTIVE e se não houve edição posterior", () => {
   const create = functionBlock(saveButton, "handleCreateProject");
-  const execute = functionBlock(createFlow, "executeProjectCreateFlow");
-
   assert.match(saveButton, /useNavigate\(\)/);
-  assert.match(
-    saveButton,
-    /`\/projects\/\$\{encodeURIComponent\(result\.createdSlug\)\}\/edit`/,
-  );
-  assert.match(saveButton, /\{\s*replace:\s*true\s*\}/);
-  assert.match(execute, /if \(!isProjectCreationActive\(finalData\)\)/);
-  assert.ok(
-    create.indexOf("executeProjectCreateFlow") <
-      create.indexOf("navigate("),
-  );
-  assert.ok(
-    create.indexOf("clearCreationKey(activeOrganizationId)") <
-      create.indexOf("navigate("),
-  );
+  assert.match(createFlow, /if \(!isProjectCreationActive\(result\.data\)\)/);
+  assert.ok(create.indexOf("executeProjectCreateFlow") < create.indexOf("navigate("));
+  assert.match(create, /if \(confirmationMatchesEditor\(result\.snapshot, editorSessionId\.current, editGeneration\.current\)\) navigate/);
+  assert.match(saveButton, /Exporte as edições posteriores/);
 });
 
-test("retry reutiliza idempotency key e só limpa a chave após ACTIVE", () => {
-  const create = functionBlock(saveButton, "handleCreateProject");
-  assert.match(saveButton, /window\.sessionStorage\.getItem/);
-  assert.match(saveButton, /window\.sessionStorage\.setItem/);
-  assert.match(saveButton, /getOrCreateCreationKey/);
-  assert.match(saveButton, /clearCreationKey/);
-  assert.ok(
-    create.indexOf("const idempotencyKey = getOrCreateCreationKey") <
-      create.indexOf("executeProjectCreateFlow"),
-  );
-  assert.ok(
-    create.indexOf("executeProjectCreateFlow") <
-      create.indexOf("clearCreationKey(activeOrganizationId)"),
-  );
-  assert.match(
-    createFlow,
-    /prepared\.large && !isProjectCreationActive\(finalData\)/,
-  );
+test("retry reutiliza metadata, idempotency key e bytes persistidos antes da reserva", () => {
+  assert.doesNotMatch(saveButton, /sessionStorage/);
+  assert.match(createFlow, /await store\.put\(snapshot\)/);
+  assert.match(createFlow, /body: snapshot\.creation\.requestBody/);
+  assert.match(createFlow, /snapshot = recovery/);
+  assert.match(createFlow, /if \(!snapshot\.projectSlug\)/);
 });
 
 test("painel valida título e descrição sem campo de slug", () => {

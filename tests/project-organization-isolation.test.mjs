@@ -10,9 +10,9 @@ function fixture(t) {
   const db = new DatabaseSync(":memory:");
   db.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
   // Legacy optional permission tables are queried by the real permission engine.
-  db.exec(`CREATE TABLE user_permissions (id INTEGER PRIMARY KEY, user_id INTEGER,
+  db.exec(`CREATE TABLE IF NOT EXISTS user_permissions (id INTEGER PRIMARY KEY, user_id INTEGER,
     permission TEXT, organization_id INTEGER, project_id INTEGER, expires_at TEXT, active INTEGER);
-    CREATE TABLE role_permissions (role TEXT, permission TEXT, scope_type TEXT, active INTEGER);`);
+    CREATE TABLE IF NOT EXISTS role_permissions (role TEXT, permission TEXT, scope_type TEXT, active INTEGER);`);
   db.exec(`INSERT INTO users (id,email,password_hash,role) VALUES (1,'fixture@example.invalid','unused','viewer');
     INSERT INTO organizations (id,name,slug,dropbox_root_path) VALUES
       (1,'A','a','/projects/a'),(2,'B','b','/projects/b');

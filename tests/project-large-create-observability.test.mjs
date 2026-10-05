@@ -1,85 +1,35 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { reconcileProjectSaveOperations } from "../functions/_lib/project-save-operations.js";
+import { persistenceFixture, interruption } from "./helpers/project-persistence-fixture.mjs";
+import { config,create,readyForRetry,status } from "./helpers/durable-project-http.mjs";
 
-import { publicRuntimeDiagnostics } from "../functions/_lib/runtime-environment.js";
-import { isLargeProjectCreationEnabled } from "../functions/_lib/project-large-creation.js";
-
-const saveButtonSource = await readFile(
-  new URL("../src/pages/Kepler/components/maono-save-button.tsx", import.meta.url),
-  "utf8",
-);
-const largeCreationSource = await readFile(
-  new URL("../functions/_lib/project-large-creation.js", import.meta.url),
-  "utf8",
-);
-const middlewareSource = await readFile(
-  new URL("../functions/api/projects/[slug]/_middleware.js", import.meta.url),
-  "utf8",
-);
-const healthSource = await readFile(
-  new URL("../functions/api/health.js", import.meta.url),
-  "utf8",
-);
-
-test("health expõe apenas o estado booleano da feature flag Large CREATE", () => {
-  const disabled = publicRuntimeDiagnostics({
-    MAONO_RUNTIME_ENV: "preview",
-    PROJECT_CREATE_LARGE_STREAM_V1: "false",
-  });
-  const enabled = publicRuntimeDiagnostics({
-    MAONO_RUNTIME_ENV: "preview",
-    PROJECT_CREATE_LARGE_STREAM_V1: "true",
-  });
-
-  assert.equal(disabled.largeCreateStreamEnabled, false);
-  assert.equal(enabled.largeCreateStreamEnabled, true);
-  assert.equal(
-    enabled.largeCreateStreamEnabled,
-    isLargeProjectCreationEnabled({ PROJECT_CREATE_LARGE_STREAM_V1: "true" }),
-  );
-  assert.match(healthSource, /publicRuntimeDiagnostics\(env\)/);
+test("creation audit records operational identifiers and receipt without map bytes or session secrets",async t=>{
+  const f=persistenceFixture(t),map={...config("PRIVATE_MAP_DATA_DO_NOT_LOG"),privateNotes:"PRIVATE_EXTRA_SENTINEL"};
+  const created=await create(f,map);
+  await reconcileProjectSaveOperations(f.env);
+  const rows=f.db.prepare("SELECT action,details FROM audit_logs").all();
+  assert.ok(rows.some(row=>row.action==="project_create_reserved"));
+  const commit=rows.find(row=>row.action==="project.save.durable");assert.ok(commit);
+  const audit=JSON.parse(commit.details);
+  assert.equal(audit.metadata.operationId,created.registered.input.operationId);
+  assert.equal(audit.metadata.revision,1);
+  const serialized=JSON.stringify(rows);
+  for(const sensitive of ["PRIVATE_MAP_DATA_DO_NOT_LOG","PRIVATE_EXTRA_SENTINEL","offline-session-1","offline-provider-fixture-only"])
+    assert.equal(serialized.includes(sensitive),false,`audit must omit ${sensitive}`);
 });
 
-test("telemetria cliente diferencia inline/stream e preserva IDs de correlação", () => {
-  assert.match(saveButtonSource, /transport:\s*result\.transport/);
-  assert.match(saveButtonSource, /payloadBytes/);
-  assert.match(saveButtonSource, /serializeDurationMs/);
-  assert.match(saveButtonSource, /candidateRevision:\s*result\.revision/);
-  assert.match(saveButtonSource, /saveId:\s*result\.diagnostics\.saveId/);
-  assert.match(saveButtonSource, /correlationId:\s*result\.diagnostics\.correlationId/);
-  assert.match(saveButtonSource, /serverTiming:\s*result\.diagnostics\.serverTiming/);
-});
-
-test("auditoria Large CREATE registra metadados operacionais, nunca o MapConfig ou segredos", () => {
-  assert.match(largeCreationSource, /action:\s*"project_create_reserved"/);
-  assert.match(largeCreationSource, /payloadBytes:\s*configMetadata\.sizeBytes/);
-  assert.match(largeCreationSource, /transport:\s*"stream"/);
-  assert.match(largeCreationSource, /action:\s*"project_create_activated"/);
-  assert.match(largeCreationSource, /configRevision:\s*1/);
-  assert.match(largeCreationSource, /checksumAlgorithm:\s*artifact\.checksumAlgorithm/);
-
-  for (const forbidden of [
-    "DROPBOX_REFRESH_TOKEN",
-    "DROPBOX_APP_SECRET",
-    "maono_session",
-    "Authorization: `Bearer",
-  ]) {
-    assert.equal(
-      largeCreationSource.includes(forbidden),
-      false,
-      `auditoria Large CREATE não deve tocar em ${forbidden}`,
-    );
-  }
-});
-
-test("middleware registra falha com estágio/provider sem logar corpo do MapConfig", () => {
-  assert.match(middlewareSource, /operation === "create"[\s\S]{0,160}"project_create_stream"/);
-  assert.match(middlewareSource, /correlationId/);
-  assert.match(middlewareSource, /saveId:\s*trace\.saveId/);
-  assert.match(middlewareSource, /code:\s*normalized\.code/);
-  assert.match(middlewareSource, /retryable:\s*normalized\.retryable/);
-  assert.match(middlewareSource, /transport:\s*"stream"/);
-  assert.doesNotMatch(middlewareSource, /metadata:\s*\{[\s\S]{0,500}configBody/);
-  assert.doesNotMatch(middlewareSource, /console\.(?:log|info|error)\([^)]*request\.body/);
+test("audit failure stays in its own outbox and cannot undo a published receipt",async t=>{
+  let fail=true;
+  const f=persistenceFixture(t,{beforeSql({sql}){if(fail&&sql.includes("INSERT INTO audit_logs")&&sql.includes("project.save.durable"))throw interruption();}});
+  const created=await create(f);
+  await reconcileProjectSaveOperations(f.env);
+  const audit=f.db.prepare("SELECT * FROM project_save_outbox WHERE effect='AUDIT'").get();
+  assert.equal(audit.state,"PENDING");assert.equal(audit.attempts,1);
+  assert.equal(f.project().config_revision,1);
+  assert.deepEqual((await status(f,created.registered.input.operationId)).data.operation.receipt,created.data.operation.receipt);
+  fail=false;readyForRetry(f);await reconcileProjectSaveOperations(f.env);
+  assert.equal(f.db.prepare("SELECT state FROM project_save_outbox WHERE effect='AUDIT'").get().state,"DONE");
+  await reconcileProjectSaveOperations(f.env);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM audit_logs WHERE action='project.save.durable'").get().n,1);
 });

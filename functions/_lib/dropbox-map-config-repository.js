@@ -1,16 +1,14 @@
+import { uploadProjectSaveOperationPayload, verifyStoredProjectSaveOperation, recoverStoredProjectSaveOperation } from "./project-save-operation-payload.js";
 import { dropboxContentHashHex } from "./dropbox-content-hash.js";
 import {
   downloadDropboxBinaryFile,
   ensureDropboxFolder,
   getDropboxMetadata,
-  uploadDropboxBinaryFile,
 } from "./dropbox.js";
 import { isLocalStorageMode } from "./local-storage.js";
-import { MAP_CONFIG_SAVE_MODES } from "./map-config-repository.js";
 import {
   assertMapConfigStorageRef,
-  createMapConfigStorageRef,
-  getMapConfigRevisionFileName,
+  resolveMapConfigStorageFileName,
 } from "./map-config-storage-ref.js";
 
 const DEFAULT_CONTENT_TYPE = "application/json; charset=utf-8";
@@ -104,16 +102,6 @@ function mapConfigStorageError(error, operation) {
   return wrapped;
 }
 
-function isWriteConflict(error) {
-  const code = String(error?.code || "");
-  const message = String(error?.message || "");
-  return (
-    code === "DROPBOX_PATH_CONFLICT" ||
-    code === "LOCAL_STORAGE_PATH_CONFLICT" ||
-    (Number(error?.status || 0) === 409 && /path\/conflict|constraint/i.test(message))
-  );
-}
-
 function assertProjectStorageContext(project) {
   if (!project?.id || !project?.dropbox_root_path) {
     const error = new Error("Projeto sem contexto interno de storage.");
@@ -121,55 +109,6 @@ function assertProjectStorageContext(project) {
     error.code = "MAP_CONFIG_STORAGE_CONTEXT_INVALID";
     throw error;
   }
-}
-
-function normalizeBytes(bytes) {
-  if (bytes instanceof Uint8Array) return bytes;
-  if (bytes instanceof ArrayBuffer) return new Uint8Array(bytes);
-  const error = new Error("Bytes de MapConfig inválidos.");
-  error.status = 400;
-  error.code = "MAP_CONFIG_BYTES_INVALID";
-  throw error;
-}
-
-function bytesEqual(left, right) {
-  const a = normalizeBytes(left);
-  const b = normalizeBytes(right);
-  if (a.byteLength !== b.byteLength) return false;
-  for (let index = 0; index < a.byteLength; index += 1) {
-    if (a[index] !== b[index]) return false;
-  }
-  return true;
-}
-
-function immutableViolation(project, revision, storageRef) {
-  const error = new Error(
-    "A revisão imutável já existe com conteúdo diferente.",
-  );
-  error.status = 409;
-  error.code = "MAP_CONFIG_REVISION_IMMUTABILITY_VIOLATION";
-  error.details = {
-    projectId: project?.id ?? null,
-    revision: Number(revision || 0),
-    storageRef,
-  };
-  return error;
-}
-
-function providerIntegrityError(project, revision, storageRef) {
-  const error = new Error(
-    "O storage não confirmou a integridade da revisão persistida.",
-  );
-  error.status = 502;
-  error.code = "MAP_CONFIG_STORAGE_INTEGRITY_MISMATCH";
-  error.details = {
-    provider: "dropbox",
-    projectId: project?.id ?? null,
-    revision: Number(revision || 0),
-    storageRef,
-    retryable: true,
-  };
-  return error;
 }
 
 function normalizeProviderMetadata(provider, metadata, fallbackSize = 0) {
@@ -186,6 +125,18 @@ export class DropboxMapConfigRepository {
   constructor(env) {
     this.env = env;
     this.provider = isLocalStorageMode(env) ? "local-d1" : "dropbox";
+  }
+
+  async uploadOperationPayload(args) {
+    return uploadProjectSaveOperationPayload(this.env, args);
+  }
+
+  async verifyOperationPayload(args) {
+    return verifyStoredProjectSaveOperation(this.env, args);
+  }
+
+  async recoverOperationPayload(args) {
+    return recoverStoredProjectSaveOperation(this.env, args);
   }
 
   async prepare({ project }) {
@@ -230,204 +181,10 @@ export class DropboxMapConfigRepository {
     }
   }
 
-  async findExistingRevision({ project, revision, storageRef }) {
-    try {
-      return await this.getRevision({ project, revision, storageRef });
-    } catch (error) {
-      if (error?.code === "MAP_CONFIG_NOT_FOUND") return null;
-      throw error;
-    }
-  }
-
-  async findExistingMetadata({ project, revision, storageRef }) {
-    try {
-      return await this.getMetadata({
-        project,
-        revision,
-        storageRef,
-        mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-      });
-    } catch (error) {
-      if (error?.code === "MAP_CONFIG_NOT_FOUND") return null;
-      throw error;
-    }
-  }
-
-  async existingRevisionResult({
-    project,
-    revision,
-    storageRef,
-    source,
-    contentType,
-    expectedProviderHash = null,
-  }) {
-    if (this.provider === "dropbox" && expectedProviderHash) {
-      const metadata = await this.findExistingMetadata({
-        project,
-        revision,
-        storageRef,
-      });
-      if (!metadata) return null;
-      if (metadata.providerHash) {
-        if (
-          String(metadata.providerHash).toLowerCase() !==
-          String(expectedProviderHash).toLowerCase()
-        ) {
-          throw immutableViolation(project, revision, storageRef);
-        }
-        return {
-          ...metadata,
-          storageRef,
-          contentType,
-          source: "revision",
-          idempotent: true,
-          createdNew: false,
-          contentVerified: true,
-          verificationMethod: "provider-content-hash",
-        };
-      }
-    }
-
-    const existing = await this.findExistingRevision({
-      project,
-      revision,
-      storageRef,
-    });
-    if (!existing) return null;
-    if (!bytesEqual(existing.bytes, source)) {
-      throw immutableViolation(project, revision, storageRef);
-    }
-    const metadata = await this.getMetadata({
-      project,
-      revision,
-      storageRef,
-      mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-    });
-    return {
-      ...metadata,
-      storageRef,
-      contentType,
-      source: "revision",
-      idempotent: true,
-      createdNew: false,
-      contentVerified: true,
-      verificationMethod: "byte-compare",
-    };
-  }
-
-  async saveRevision({
-    project,
-    revision,
-    storageRef = null,
-    bytes,
-    contentType = DEFAULT_CONTENT_TYPE,
-    mode = MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-  }) {
-    assertProjectStorageContext(project);
-    const source = normalizeBytes(bytes);
-    let fileName;
-    let normalizedStorageRef = storageRef;
-    let expectedProviderHash = null;
-
-    if (mode === MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE) {
-      fileName = project.default_config_file || "config.kepler.json";
-      normalizedStorageRef = null;
-    } else if (mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE) {
-      normalizedStorageRef =
-        storageRef || createMapConfigStorageRef(project.id, revision);
-      assertMapConfigStorageRef(normalizedStorageRef, project.id, revision);
-      fileName = getMapConfigRevisionFileName(
-        project.default_config_file || "config.kepler.json",
-        revision,
-      );
-      if (this.provider === "dropbox") {
-        expectedProviderHash = await dropboxContentHashHex(source);
-      }
-
-      const existing = await this.existingRevisionResult({
-        project,
-        revision,
-        storageRef: normalizedStorageRef,
-        source,
-        contentType,
-        expectedProviderHash,
-      });
-      if (existing) return existing;
-    } else {
-      const error = new Error("Modo de persistência de MapConfig inválido.");
-      error.status = 400;
-      error.code = "MAP_CONFIG_SAVE_MODE_INVALID";
-      throw error;
-    }
-
-    try {
-      const rawMetadata = await uploadDropboxBinaryFile(
-        this.env,
-        project.dropbox_root_path,
-        fileName,
-        source,
-        contentType,
-        {
-          writeMode:
-            mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE ? "create" : "overwrite",
-        },
-      );
-      const metadata = normalizeProviderMetadata(
-        this.provider,
-        rawMetadata,
-        source.byteLength,
-      );
-      let contentVerified = false;
-      let verificationMethod = null;
-
-      if (this.provider === "dropbox" && expectedProviderHash) {
-        if (
-          !metadata.providerHash ||
-          String(metadata.providerHash).toLowerCase() !==
-            String(expectedProviderHash).toLowerCase()
-        ) {
-          throw providerIntegrityError(project, revision, normalizedStorageRef);
-        }
-        contentVerified = true;
-        verificationMethod = "provider-content-hash";
-      }
-
-      return {
-        ...metadata,
-        storageRef: normalizedStorageRef,
-        contentType,
-        source:
-          mode === MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE
-            ? "legacy"
-            : "revision",
-        idempotent: false,
-        createdNew: mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-        contentVerified,
-        verificationMethod,
-      };
-    } catch (error) {
-      if (mode === MAP_CONFIG_SAVE_MODES.IMMUTABLE && isWriteConflict(error)) {
-        const existing = await this.existingRevisionResult({
-          project,
-          revision,
-          storageRef: normalizedStorageRef,
-          source,
-          contentType,
-          expectedProviderHash,
-        });
-        if (existing) return existing;
-      }
-      throw mapConfigStorageError(error, "write");
-    }
-  }
-
   async getRevision({ project, revision, storageRef }) {
     assertProjectStorageContext(project);
-    assertMapConfigStorageRef(storageRef, project.id, revision);
-    const fileName = getMapConfigRevisionFileName(
-      project.default_config_file || "config.kepler.json",
-      revision,
-    );
+    assertMapConfigStorageRef(storageRef, project.id, revision, project.organization_id);
+    const fileName = resolveMapConfigStorageFileName({ project, revision, storageRef });
     try {
       const response = await downloadDropboxBinaryFile(
         this.env,
@@ -448,36 +205,51 @@ export class DropboxMapConfigRepository {
     }
   }
 
-  async getMetadata({
-    project,
-    revision = null,
-    storageRef = null,
-    mode = MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-  }) {
+  async getMetadata({ project, revision = null, storageRef = null }) {
     assertProjectStorageContext(project);
-    let fileName;
-    if (mode === MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE) {
-      fileName = project.default_config_file || "config.kepler.json";
-    } else {
-      assertMapConfigStorageRef(storageRef, project.id, revision);
-      fileName = getMapConfigRevisionFileName(
-        project.default_config_file || "config.kepler.json",
-        revision,
-      );
-    }
+    const fileName = storageRef
+      ? resolveMapConfigStorageFileName({ project, revision, storageRef })
+      : project.default_config_file || "config.kepler.json";
     try {
-      const metadata = await getDropboxMetadata(
-        this.env,
-        project.dropbox_root_path,
-        fileName,
-      );
-      return {
-        ...normalizeProviderMetadata(this.provider, metadata),
-        storageRef:
-          mode === MAP_CONFIG_SAVE_MODES.LEGACY_OVERWRITE ? null : storageRef,
-      };
+      const metadata = await getDropboxMetadata(this.env, project.dropbox_root_path, fileName);
+      return { ...normalizeProviderMetadata(this.provider, metadata), storageRef };
     } catch (error) {
       throw mapConfigStorageError(error, "metadata");
     }
+  }
+
+  // A legacy reader only: promotion writes through the durable operation API.
+  // Dropbox content_hash binds the streamed source to the new manifest without
+  // materializing large configurations in the application or D1.
+  async loadLegacyStream({ project }) {
+    assertProjectStorageContext(project);
+    const fileName = project.default_config_file || "config.kepler.json";
+    try {
+      const metadata = await getDropboxMetadata(this.env, project.dropbox_root_path, fileName);
+      const sizeBytes = Number(metadata?.size);
+      if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0) {
+        throw Object.assign(new Error("Tamanho da configuração legada inválido."), { status: 409, code: "MAP_CONFIG_STORAGE_INTEGRITY_MISMATCH" });
+      }
+      if (this.provider === "local-d1" && sizeBytes > 8 * 1024 * 1024) {
+        throw Object.assign(new Error("O storage local de blobs não suporta mapas grandes."), { status: 413, code: "PROJECT_CONFIG_LOCAL_STREAM_UNSUPPORTED" });
+      }
+      const response = await downloadDropboxBinaryFile(this.env, project.dropbox_root_path, fileName);
+      let body = response.body;
+      let checksum = String(metadata?.content_hash || "").toLowerCase();
+      if (this.provider === "local-d1") {
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        checksum = await dropboxContentHashHex(bytes);
+        body = new Response(bytes).body;
+      }
+      if (!/^[0-9a-f]{64}$/.test(checksum)) {
+        try { await body?.cancel(); } catch { /* Preserve integrity error. */ }
+        throw Object.assign(new Error("O storage não retornou o hash da configuração legada."), { status: 502, code: "MAP_CONFIG_STORAGE_INTEGRITY_MISMATCH" });
+      }
+      return {
+        body, sizeBytes, checksum, checksumAlgorithm: "dropbox-content-hash",
+        schemaName: "legacy-kepler", schemaVersion: 1, serializationVersion: 1,
+        configVersion: null, datasetCount: null, contentType: DEFAULT_CONTENT_TYPE,
+      };
+    } catch (error) { throw mapConfigStorageError(error, "read"); }
   }
 }

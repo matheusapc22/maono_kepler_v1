@@ -34,7 +34,6 @@ const preserved = {
   'src/pages/Projects/components/ProjectMetadataPanel.tsx': '2f49b53dd47e8e9540b027febab2fb6394b0905c8008905edb4a7632c630dbb8',
   'src/pages/Projects/maono-card-list-accent.css': 'aa117f523564c51956d5d683c00a38389ab1672ed8d3aadd11a82d49336dbd69',
   'src/pages/Projects/projects-api.ts': '658b7edb0a98434bbaade6eed1c8a582d5fe73c0397b079967e9bf48e7d5b0a9',
-  'functions/api/projects/index.js': 'e0d4cc187c5e02de4d07009e30c39e02981302a1afa512bf3927d59f2bf03036',
   'functions/api/projects/recent.js': '5899804a88b2cb49f0ae66cc607a3285f0890c5dcb048c592777689b5f176b44',
   'functions/api/projects/favorites.js': '865f51ebd6921535e23176d29672bf5b63cba98520eaa8fa1ff46d4afcb69cbd',
 };
@@ -353,4 +352,12 @@ test('sidebar and organization styling do not modify page, card, table, modal or
   };
   const baseline = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
   assert.deepEqual(withoutSidebar(read(path)), withoutSidebar(baseline));
+});
+
+// The save refactor intentionally replaces only this endpoint's POST writer.
+test('public project listing still authorizes session before listing the active organization',()=>{
+ const endpoint=read('functions/api/projects/index.js');
+ assert.ok(endpoint.indexOf('await requireSession') < endpoint.indexOf('await listProjectsForActiveOrganization'));
+ assert.match(endpoint,/request.method === "GET"[\s\S]*listProjectsForActiveOrganization\(env,user\)/);
+ assert.match(endpoint,/reserveProjectCreation/);
 });

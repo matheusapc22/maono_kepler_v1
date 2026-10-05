@@ -1,8 +1,10 @@
+import * as durableSave from "./suites/durable-project-save.mjs";
 import * as cc04 from "./suites/cc04-selective-access.mjs";
 import { fail, validateManifest } from "./production-acceptance-lib.mjs";
 
 const suites = new Map([
   [cc04.manifest.id, cc04],
+  [durableSave.manifest.id, durableSave],
 ]);
 
 export function listSuites() {
@@ -24,9 +26,14 @@ export function publicManifest(id) {
     version: manifest.version,
     description: manifest.description,
     mutationMode: manifest.mutationMode,
+    mutationBudgetMs: manifest.mutationBudgetMs,
     requiresBrowser: manifest.requiresBrowser === true,
     requiredProfiles: [...manifest.requiredProfiles],
     requiredPermissions: manifest.requiredPermissions || {},
+    requiredRoles: manifest.requiredRoles || {},
+    requiredOrganization: manifest.requiredOrganization || null,
+    prerequisites: manifest.prerequisites || [],
+    cleanup: manifest.cleanup || null,
     managedFlags: manifest.managedFlags,
     cases: [...manifest.cases],
   };

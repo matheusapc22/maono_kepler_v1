@@ -1,74 +1,17 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import {readFile} from "node:fs/promises";
 import test from "node:test";
-
-const serviceSource = await readFile(
-  new URL("../functions/_lib/project-config-service.js", import.meta.url),
-  "utf8",
-);
-
-test("sync de organization_files é auxiliar e não rebaixa save persistido", () => {
-  assert.match(
-    serviceSource,
-    /async function updateLinkedOrganizationFile[\s\S]*try \{[\s\S]*UPDATE organization_files[\s\S]*catch \(error\) \{[\s\S]*organization_file_sync/,
-  );
-  assert.match(
-    serviceSource,
-    /PROJECT_ORGANIZATION_FILE_SYNC_FAILED/,
-  );
-  assert.match(
-    serviceSource,
-    /auxiliaryWarnings:/,
-  );
+const source=await readFile(new URL('../functions/_lib/project-save-operations.js',import.meta.url),'utf8');
+test('success is an immutable historical receipt rather than the current head',()=>{
+ assert.match(source,/receipt_json/);assert.match(source,/publishedRevision/);
+ assert.match(source,/PROJECT_SAVE_TERMINAL_STATES/);
 });
-
-test("revisão já publicada nunca é marcada FAILED por etapa auxiliar posterior", () => {
-  assert.match(
-    serviceSource,
-    /publicationCompleted = Boolean\(reservation\.alreadyPublished\)/,
-  );
-  assert.match(
-    serviceSource,
-    /const updatedProject = await runObservedStage\(trace, "PUBLISH",[\s\S]*publishProjectConfigRevision\(env,[\s\S]*publicationCompleted = true/,
-  );
-  assert.match(
-    serviceSource,
-    /if \(\s*reservation &&\s*!publicationCompleted &&[\s\S]*markProjectConfigRevisionFailed/,
-  );
+test('publication and its dependent writes share the guarded SQL batch',()=>{
+ assert.match(source,/project_save_transaction_guard/);assert.match(source,/changes\(\) = 1/);
+ assert.match(source,/await db.batch\(statements\)/);
+ assert.match(source,/save_operation_id/);
 });
-
-test("legado distingue upload feito de commit de metadata não confirmado", () => {
-  assert.match(
-    serviceSource,
-    /PROJECT_CONFIG_COMMIT_NOT_CONFIRMED/,
-  );
-  assert.match(
-    serviceSource,
-    /stage: "project_metadata_commit"/,
-  );
-  assert.match(
-    serviceSource,
-    /storageWriteCompleted: true/,
-  );
-  assert.match(
-    serviceSource,
-    /retryable: true/,
-  );
-});
-
-
-test("PRL-10: recovery de UPDATE depende do contrato idempotente revisão + checksum", async () => {
-  const revisionsSource = await readFile(
-    new URL("../functions/_lib/project-config-revisions.js", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(
-    revisionsSource,
-    /currentRevision === nextRevision[\s\S]*config_checksum[\s\S]*publishedLedger\?\.status === "READY"[\s\S]*alreadyPublished: true/,
-  );
-  assert.match(
-    revisionsSource,
-    /existing\.status === "FAILED"[\s\S]*attempts = attempts \+ 1/,
-  );
+test('auxiliary work is durable outbox work and cannot downgrade PUBLISHED',()=>{
+ assert.match(source,/project_save_outbox/);assert.match(source,/AUDIT/);assert.match(source,/PUBLISHED/);
+ assert.doesNotMatch(source,/markProjectConfigRevisionFailed|reserveProjectConfigRevision/);
 });

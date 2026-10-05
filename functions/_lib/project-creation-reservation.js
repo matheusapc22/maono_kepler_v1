@@ -1,16 +1,13 @@
+import { normalizeRole } from "./auth.js";
 import { joinDropboxPath } from "./dropbox.js";
 import {
-  commitProjectQuota,
   isProjectQuotaReservationEnabled,
   markProjectQuotaProcessing,
-  releaseProjectQuota,
   reserveProjectQuota,
 } from "./organization-limit-service.js";
-import { LARGE_CONFIG_THRESHOLD_BYTES } from "./project-large-config-save.js";
 import {
   PROJECT_LIFECYCLE_STATES,
   getProjectLifecycleRow,
-  markProjectLifecycleFailed,
   normalizeLifecycleState,
   transitionProjectLifecycle,
 } from "./project-lifecycle.js";
@@ -20,11 +17,11 @@ import {
   validateProjectDescription,
   validateProjectName,
 } from "./project-service.js";
-import { getActiveOrganizationId } from "./projects.js";
+import { getActiveOrganizationId, getAuthorizedProject } from "./projects.js";
 import { recordAuditLog, requirePermission } from "./permissions.js";
 
-export const LARGE_CREATE_CONTEXT_HEADER = "X-Maono-Creation-Key";
-export const LARGE_CREATE_FLAG = "PROJECT_CREATE_LARGE_STREAM_V1";
+export const PROJECT_CREATE_CONTEXT_HEADER = "X-Maono-Creation-Key";
+export const PROJECT_CREATE_FLAG = "PROJECT_DURABLE_SAVE_V1";
 
 const DEFAULT_CONFIG_FILE = "config.kepler.json";
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9:_-]{12,128}$/;
@@ -68,7 +65,7 @@ function validateIdempotencyKey(value) {
   return key;
 }
 
-function normalizeConfigMetadata(body) {
+function normalizeConfigMetadata(body, {allowUnknown = false} = {}) {
   const metadata = body?.configMetadata;
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     throw largeCreateError(
@@ -80,32 +77,31 @@ function normalizeConfigMetadata(body) {
   }
 
   const sizeBytes = Number(metadata.sizeBytes);
-  const datasetCount = Number(metadata.datasetCount);
+  const datasetCount = metadata.datasetCount == null && allowUnknown ? null : Number(metadata.datasetCount);
   const schemaName = normalizeText(metadata.schemaName || "legacy-kepler");
   const schemaVersion = Number(metadata.schemaVersion || 1);
   const configVersion = normalizeText(metadata.configVersion);
 
-  if (!Number.isInteger(sizeBytes) || sizeBytes <= LARGE_CONFIG_THRESHOLD_BYTES) {
+  if (!Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 100 * 1024 * 1024) {
     throw largeCreateError(
-      "O modo de criação streaming é exclusivo para MapConfig grande.",
+      "O tamanho do mapa deve estar entre 1 byte e 100 MiB.",
       400,
       "PROJECT_LARGE_CREATE_NOT_REQUIRED",
       {
         retryable: false,
         sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null,
-        largeThresholdBytes: LARGE_CONFIG_THRESHOLD_BYTES,
       },
     );
   }
-  if (!Number.isInteger(datasetCount) || datasetCount < 0) {
+  if (datasetCount !== null && (!Number.isInteger(datasetCount) || datasetCount < 0)) {
     throw largeCreateError(
-      "Quantidade de datasets inválida para criação streaming.",
+      "Quantidade de datasets inválida para criação durável.",
       400,
       "PROJECT_LARGE_CREATE_METADATA_INVALID",
       { retryable: false, field: "datasetCount" },
     );
   }
-  if (schemaName !== "legacy-kepler" || schemaVersion !== 1 || !configVersion) {
+  if (schemaName !== "legacy-kepler" || schemaVersion !== 1 || (!configVersion && !allowUnknown)) {
     throw largeCreateError(
       "Schema ou versão do MapConfig grande não suportados.",
       400,
@@ -119,21 +115,21 @@ function normalizeConfigMetadata(body) {
     datasetCount,
     schemaName,
     schemaVersion,
-    configVersion: configVersion.slice(0, 80),
+    configVersion: configVersion ? configVersion.slice(0, 80) : null,
   };
 }
 
-export function isLargeProjectCreationEnabled(env) {
-  return String(env?.[LARGE_CREATE_FLAG] ?? "false").trim().toLowerCase() === "true";
+export function isProjectCreationAdmissionEnabled(env) {
+  return String(env?.[PROJECT_CREATE_FLAG] ?? "false").trim().toLowerCase() === "true";
 }
 
-export function hasLargeCreationContext(request) {
-  return Boolean(normalizeText(request?.headers?.get?.(LARGE_CREATE_CONTEXT_HEADER)));
+export function hasProjectCreationContext(request) {
+  return Boolean(normalizeText(request?.headers?.get?.(PROJECT_CREATE_CONTEXT_HEADER)));
 }
 
-export function getLargeCreationKeyFromRequest(request) {
+export function getProjectCreationKeyFromRequest(request) {
   return validateIdempotencyKey(
-    request?.headers?.get?.(LARGE_CREATE_CONTEXT_HEADER),
+    request?.headers?.get?.(PROJECT_CREATE_CONTEXT_HEADER),
   );
 }
 
@@ -152,6 +148,14 @@ async function safeAudit(env, request, event) {
       action: event?.action ?? null,
       code: error?.code || "AUDIT_WRITE_FAILED",
     });
+  }
+}
+
+async function assertCurrentCreationMembership(env,user,organizationId) {
+  const organization=await env.DB.prepare("SELECT active FROM organizations WHERE id=?").bind(organizationId).first();
+  const membership=await env.DB.prepare("SELECT 1 AS present FROM organization_users WHERE organization_id=? AND user_id=?").bind(organizationId,user.id).first();
+  if(Number(organization?.active)!==1 || (!membership && normalizeRole(user.role)!=="super_admin")) {
+    throw largeCreateError("Acesso atual à organização não disponível.",403,"PROJECT_CREATION_CONTEXT_FORBIDDEN");
   }
 }
 
@@ -381,27 +385,37 @@ async function createPendingProject(
     normalizeText(reservation.reservation_dropbox_path)
       .replace(/\/config\.kepler\.json$/i, "");
 
-  const project = await createProjectRecord(env, {
-    organizationId: organization.id,
-    organizationFileId: reservation.reservation_id,
-    name,
-    slug,
-    description,
-    dropboxRootPath: projectRoot,
-    defaultConfigFile: DEFAULT_CONFIG_FILE,
-    active: false,
-    actor,
-  });
+  // A response/process may disappear after INSERT projects but before the
+  // reservation's forward link. Recover the reverse link before inserting.
+  const findReservedProject = () => env.DB.prepare(`SELECT * FROM projects
+    WHERE organization_id = ? AND organization_file_id = ? LIMIT 1`)
+    .bind(organization.id,reservation.reservation_id).first();
+  let project = await findReservedProject();
+  if (!project) {
+    try {
+      project = await createProjectRecord(env, {
+        organizationId:organization.id, organizationFileId:reservation.reservation_id,
+        name,slug,description,dropboxRootPath:projectRoot,defaultConfigFile:DEFAULT_CONFIG_FILE,
+        active:false,actor,
+      });
+    } catch(error) {
+      // A concurrent same-key reservation may have won the identical insert.
+      project = await findReservedProject();
+      if (!project) throw error;
+    }
+  }
+  if (!sameId(project.created_by,actor.id) || !sameId(project.organization_id,organization.id) ||
+      normalizeText(project.name)!==normalizeText(name) || normalizeText(project.description)!==normalizeText(description)) {
+    throw largeCreateError("A reserva pertence a outra criação.",409,"PROJECT_CREATION_REQUEST_MISMATCH");
+  }
   const draft = (await initializeDraft(env, project.id, id)) || project;
-
-  await env.DB.prepare(
-    `UPDATE organization_files
-        SET project_id = ?, status = 'PROCESSING', active = 0,
-            error_message = NULL, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
-  )
-    .bind(project.id, reservation.reservation_id)
-    .run();
+  const linked = await env.DB.prepare(`UPDATE organization_files
+    SET project_id = ?, status = CASE WHEN status = 'ACTIVE' THEN status ELSE 'PROCESSING' END,
+        error_message = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND organization_id = ? AND uploaded_by = ?
+      AND (project_id IS NULL OR project_id = ?) RETURNING id`)
+    .bind(project.id,reservation.reservation_id,organization.id,actor.id,project.id).first();
+  if (!linked) throw largeCreateError("A reserva mudou durante a criação.",409,"PROJECT_CREATION_RESERVATION_INVALID");
 
   return draft;
 }
@@ -427,7 +441,7 @@ async function ensurePreparingStorage(env, project, organizationId, id) {
     state !== PROJECT_LIFECYCLE_STATES.FAILED
   ) {
     throw largeCreateError(
-      "Projeto em estado incompatível com criação streaming.",
+      "Projeto em estado incompatível com criação durável.",
       409,
       "PROJECT_LIFECYCLE_STATE_INVALID",
       { lifecycleState: state, retryable: false },
@@ -447,7 +461,7 @@ async function ensurePreparingStorage(env, project, organizationId, id) {
 function assertCreationOwnership(record, user, idempotencyKey) {
   if (!record?.id) {
     throw largeCreateError(
-      "Projeto de criação streaming não encontrado.",
+      "Projeto de criação durável não encontrado.",
       404,
       "PROJECT_NOT_FOUND",
       { retryable: false },
@@ -481,20 +495,13 @@ function assertCreationShape(record, name, description) {
   }
 }
 
-export async function reserveLargeProjectCreation(
+export async function reserveProjectCreation(
   env,
   request,
   user,
   body,
+  options = {},
 ) {
-  if (!isLargeProjectCreationEnabled(env)) {
-    throw largeCreateError(
-      "A criação streaming de projetos grandes ainda não está habilitada neste ambiente.",
-      503,
-      "PROJECT_CREATE_LARGE_STREAM_DISABLED",
-      { retryable: true },
-    );
-  }
 
   const activeOrganizationId = getActiveOrganizationId(user);
   const requestedOrganizationId =
@@ -519,6 +526,7 @@ export async function reserveLargeProjectCreation(
     );
   }
 
+  await assertCurrentCreationMembership(env,user,activeOrganizationId);
   await requirePermission(
     env,
     request,
@@ -562,7 +570,14 @@ export async function reserveLargeProjectCreation(
   const name = validateProjectName(body?.name);
   const description = validateProjectDescription(body?.description);
   const idempotencyKey = validateIdempotencyKey(body?.idempotencyKey);
-  const configMetadata = normalizeConfigMetadata(body);
+  const configMetadata = normalizeConfigMetadata(body,options);
+  const existing = await getCreationByKey(env, organization.id, idempotencyKey);
+  if (existing && (!sameId(existing.uploaded_by,user.id) || normalizeText(existing.idempotency_key)!==idempotencyKey)) {
+    throw largeCreateError("Esta reserva pertence a outra conta.",403,"PROJECT_CREATION_CONTEXT_FORBIDDEN");
+  }
+  if (!existing && !isProjectCreationAdmissionEnabled(env)) {
+    throw largeCreateError("Novas criações estão pausadas. Preserve suas alterações.", 503, "PROJECT_DURABLE_SAVE_ADMISSION_PAUSED", { retryable:true });
+  }
   const actor = { id: user.id, name: user.name || "Usuário" };
   const id = transitionId();
 
@@ -584,6 +599,9 @@ export async function reserveLargeProjectCreation(
     actor,
   });
   let record = reserved.record;
+  if (!sameId(record.uploaded_by,user.id) || normalizeText(record.idempotency_key)!==idempotencyKey) {
+    throw largeCreateError("Esta reserva pertence a outra conta.",403,"PROJECT_CREATION_CONTEXT_FORBIDDEN");
+  }
   if (record?.id) {
     assertCreationOwnership(record, user, idempotencyKey);
     assertCreationShape(record, name, description);
@@ -607,10 +625,6 @@ export async function reserveLargeProjectCreation(
   }
 
   if (project.lifecycle_state === PROJECT_LIFECYCLE_STATES.ACTIVE) {
-    await commitProjectQuota(env, {
-      reservationId: quotaReservation?.id,
-      projectId: project.id,
-    });
     return {
       status: 200,
       idempotent: true,
@@ -655,7 +669,7 @@ export async function reserveLargeProjectCreation(
       idempotencyKey,
       slug: project.slug,
       payloadBytes: configMetadata.sizeBytes,
-      transport: "stream",
+      transport: "durable-operation",
       quotaReservationId: quotaReservation?.id ?? null,
       idempotent: !reserved.inserted,
     },
@@ -676,20 +690,12 @@ export async function reserveLargeProjectCreation(
   };
 }
 
-export async function authorizeLargeProjectCreation(
+export async function authorizeProjectCreation(
   env,
   request,
   user,
   slug,
 ) {
-  if (!isLargeProjectCreationEnabled(env)) {
-    throw largeCreateError(
-      "A criação streaming de projetos grandes ainda não está habilitada neste ambiente.",
-      503,
-      "PROJECT_CREATE_LARGE_STREAM_DISABLED",
-      { retryable: true },
-    );
-  }
 
   const organizationId = getActiveOrganizationId(user);
   if (!organizationId) {
@@ -700,8 +706,9 @@ export async function authorizeLargeProjectCreation(
       { retryable: false },
     );
   }
-  const idempotencyKey = getLargeCreationKeyFromRequest(request);
+  const idempotencyKey = getProjectCreationKeyFromRequest(request);
 
+  await assertCurrentCreationMembership(env,user,organizationId);
   await requirePermission(
     env,
     request,
@@ -720,6 +727,9 @@ export async function authorizeLargeProjectCreation(
   assertCreationOwnership(record, user, idempotencyKey);
 
   const state = normalizeLifecycleState(record.lifecycle_state);
+  if (state === PROJECT_LIFECYCLE_STATES.ACTIVE && !(await getAuthorizedProject(env,user,slug))) {
+    throw largeCreateError("Projeto não encontrado ou sem acesso atual.",404,"PROJECT_NOT_FOUND");
+  }
   const allowedStates = new Set([
     PROJECT_LIFECYCLE_STATES.PREPARING_STORAGE,
     PROJECT_LIFECYCLE_STATES.CONFIG_READY,
@@ -739,7 +749,7 @@ export async function authorizeLargeProjectCreation(
   );
   if (expectedRevision !== 0) {
     throw largeCreateError(
-      "A criação streaming deve usar expectedRevision=0.",
+      "A criação durável deve usar expectedRevision=0.",
       409,
       "PROJECT_CREATION_REVISION_INVALID",
       { retryable: false, expectedRevision },
@@ -751,275 +761,6 @@ export async function authorizeLargeProjectCreation(
     project: record,
     idempotencyKey,
     organizationId,
+    quotaReservationId: (await quotaReservationByKey(env, organizationId, idempotencyKey))?.id ?? null,
   };
-}
-
-async function ensurePublishedInitialRevision(project, artifact) {
-  if (Number(project?.config_revision || 0) !== 1) {
-    throw largeCreateError(
-      "A criação não possui revisão 1 publicada.",
-      409,
-      "PROJECT_CREATION_REVISION_NOT_READY",
-      { retryable: true, configRevision: Number(project?.config_revision || 0) },
-    );
-  }
-  if (
-    normalizeText(project?.config_checksum).toLowerCase() !==
-      normalizeText(artifact?.checksum).toLowerCase() ||
-    Number(project?.config_size_bytes || 0) !== Number(artifact?.sizeBytes || 0)
-  ) {
-    throw largeCreateError(
-      "A revisão inicial publicada não corresponde ao MapConfig enviado.",
-      409,
-      "PROJECT_CREATION_REQUEST_MISMATCH",
-      { retryable: false },
-    );
-  }
-}
-
-async function linkOwner(env, projectId, userId) {
-  await env.DB.prepare(
-    `INSERT INTO user_projects (user_id, project_id, access_level)
-     VALUES (?, ?, 'owner')
-     ON CONFLICT(user_id, project_id)
-     DO UPDATE SET access_level = 'owner'`,
-  )
-    .bind(userId, projectId)
-    .run();
-}
-
-async function activateOrganizationFile(env, record, artifact, userId) {
-  const conventionalSha256 =
-    normalizeText(artifact?.checksumAlgorithm).toLowerCase() === "sha256"
-      ? normalizeText(artifact?.checksum).toLowerCase()
-      : null;
-
-  await env.DB.prepare(
-    `UPDATE organization_files
-        SET project_id = ?,
-            name = ?,
-            original_name = ?,
-            file_name = ?,
-            file_type = 'json',
-            mime_type = 'application/json',
-            size_bytes = ?,
-            sha256 = ?,
-            status = 'ACTIVE',
-            error_message = NULL,
-            uploaded_by = ?,
-            is_project = 1,
-            active = 1,
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
-  )
-    .bind(
-      record.id,
-      record.name,
-      record.default_config_file || DEFAULT_CONFIG_FILE,
-      record.default_config_file || DEFAULT_CONFIG_FILE,
-      artifact.sizeBytes,
-      conventionalSha256,
-      userId,
-      record.reservation_id || record.organization_file_id,
-    )
-    .run();
-}
-
-export async function finalizeLargeProjectCreation(
-  env,
-  request,
-  user,
-  { project, artifact, idempotencyKey },
-) {
-  const organizationId = project.organization_id;
-  let current = await getCreationBySlug(env, organizationId, project.slug);
-  assertCreationOwnership(current, user, idempotencyKey);
-  await ensurePublishedInitialRevision(current, artifact);
-
-  let state = normalizeLifecycleState(current.lifecycle_state);
-  const id = transitionId();
-  if (state === PROJECT_LIFECYCLE_STATES.PREPARING_STORAGE) {
-    current = await transitionProjectLifecycle(env, {
-      projectId: current.id,
-      organizationId,
-      fromState: PROJECT_LIFECYCLE_STATES.PREPARING_STORAGE,
-      expectedVersion: Number(current.lifecycle_version || 0),
-      toState: PROJECT_LIFECYCLE_STATES.CONFIG_READY,
-      transitionId: id,
-    });
-    current = { ...project, ...current, reservation_id: project.reservation_id || current.reservation_id };
-    state = PROJECT_LIFECYCLE_STATES.CONFIG_READY;
-  }
-
-  if (state === PROJECT_LIFECYCLE_STATES.CONFIG_READY) {
-    const hydrated = await getCreationBySlug(env, organizationId, project.slug);
-    current = { ...current, ...hydrated };
-    await linkOwner(env, current.id, user.id);
-    await activateOrganizationFile(env, current, artifact, user.id);
-
-    const quota = await quotaReservationByKey(env, organizationId, idempotencyKey);
-    if (
-      isProjectQuotaReservationEnabled(env) &&
-      (!quota || !["RESERVED", "PROCESSING", "COMMITTED"].includes(String(quota.status || "").toUpperCase()))
-    ) {
-      throw largeCreateError(
-        "A reserva de quota expirou antes da ativação do projeto.",
-        409,
-        "PROJECT_QUOTA_RESERVATION_EXPIRED",
-        { retryable: true },
-      );
-    }
-
-    current = await transitionProjectLifecycle(env, {
-      projectId: current.id,
-      organizationId,
-      fromState: PROJECT_LIFECYCLE_STATES.CONFIG_READY,
-      expectedVersion: Number(current.lifecycle_version || 0),
-      toState: PROJECT_LIFECYCLE_STATES.ACTIVE,
-      transitionId: id,
-    });
-  } else if (state !== PROJECT_LIFECYCLE_STATES.ACTIVE) {
-    throw largeCreateError(
-      "O projeto não pode ser finalizado no estado atual.",
-      409,
-      "PROJECT_LIFECYCLE_STATE_INVALID",
-      { lifecycleState: state, retryable: true },
-    );
-  }
-
-  const quota = await quotaReservationByKey(env, organizationId, idempotencyKey);
-  await commitProjectQuota(env, {
-    reservationId: quota?.id,
-    projectId: current.id,
-  });
-
-  const finalRecord = await getCreationBySlug(env, organizationId, project.slug);
-  await safeAudit(env, request, {
-    actorUserId: user.id,
-    organizationId,
-    projectId: current.id,
-    action: "project_create_activated",
-    resourceType: "project",
-    resourceId: current.id,
-    result: "success",
-    metadata: {
-      idempotencyKey,
-      transitionId: id,
-      configRevision: 1,
-      sizeBytes: artifact.sizeBytes,
-      checksumAlgorithm: artifact.checksumAlgorithm,
-      transport: "stream",
-    },
-  });
-
-  return {
-    ...finalRecord,
-    access_level: "owner",
-  };
-}
-
-export function isRetryableLargeCreationError(error) {
-  if (typeof error?.retryable === "boolean") return error.retryable;
-  if (typeof error?.details?.retryable === "boolean") return error.details.retryable;
-  const status = Number(error?.status || 500);
-  const code = normalizeText(error?.code).toUpperCase();
-  if (status === 429 || status >= 500) return true;
-  return new Set([
-    "PROJECT_CREATION_IN_PROGRESS",
-    "PROJECT_CREATION_REVISION_NOT_READY",
-    "PROJECT_LIFECYCLE_VERSION_CONFLICT",
-    "PROJECT_QUOTA_RESERVATION_EXPIRED",
-  ]).has(code);
-}
-
-export async function markLargeProjectCreationFailed(
-  env,
-  request,
-  user,
-  { project, idempotencyKey, error, stage = "WRITE" },
-) {
-  if (!project?.id || !project?.organization_id) return null;
-  const retryable = isRetryableLargeCreationError(error);
-  let current = await getProjectLifecycleRow(env, {
-    projectId: project.id,
-    organizationId: project.organization_id,
-  }).catch(() => project);
-  const state = normalizeLifecycleState(current?.lifecycle_state);
-
-  if (
-    state === PROJECT_LIFECYCLE_STATES.PREPARING_STORAGE ||
-    state === PROJECT_LIFECYCLE_STATES.CONFIG_READY
-  ) {
-    current = await markProjectLifecycleFailed(env, {
-      projectId: current.id,
-      organizationId: current.organization_id,
-      currentState: state,
-      expectedVersion: Number(current.lifecycle_version || 0),
-      transitionId: transitionId(),
-      failureStage: stage,
-      failureCode: error?.code || "PROJECT_CREATE_LARGE_FAILED",
-      retryable,
-    }).catch(() => current);
-  }
-
-  await env.DB.prepare(
-    `UPDATE organization_files
-        SET status = 'ERROR', active = 0,
-            error_message = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-        AND organization_id = ?
-        AND NOT EXISTS (
-          SELECT 1 FROM projects
-           WHERE projects.organization_file_id = organization_files.id
-             AND (projects.lifecycle_state = 'ACTIVE'
-                  OR projects.lifecycle_version <> ?)
-        )`,
-  )
-    .bind(
-      String(error?.message || "Falha na criação streaming.").slice(0, 800),
-      project.organization_file_id || project.reservation_id,
-      project.organization_id,
-      Number(current?.lifecycle_version ?? -1),
-    )
-    .run()
-    .catch(() => null);
-
-  const quota = await quotaReservationByKey(
-    env,
-    project.organization_id,
-    idempotencyKey,
-  );
-  if (retryable) {
-    await touchQuotaReservation(
-      env,
-      project.organization_id,
-      idempotencyKey,
-    ).catch(() => null);
-  } else {
-    await releaseProjectQuota(env, {
-      reservationId: quota?.id,
-      errorCode: error?.code || "PROJECT_CREATE_LARGE_FAILED",
-      expectedProject: current,
-    }).catch(() => null);
-  }
-
-  await safeAudit(env, request, {
-    actorUserId: user?.id ?? null,
-    organizationId: project.organization_id,
-    projectId: project.id,
-    action: "project_create_failed",
-    resourceType: "project",
-    resourceId: project.id,
-    result: "error",
-    metadata: {
-      idempotencyKey,
-      stage,
-      code: error?.code || "PROJECT_CREATE_LARGE_FAILED",
-      retryable,
-      lifecycleState: current?.lifecycle_state ?? null,
-      transport: "stream",
-    },
-  });
-
-  return current;
 }

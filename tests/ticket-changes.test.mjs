@@ -383,145 +383,30 @@ test("CR feedback blocks approval and authorized resubmission preserves lineage 
   assert.equal(db.rows("project_change_request_lineage")[0].next_id, "cr-next");
   assert.equal(db.row(1).status, "new");
 });
-test("CT52 streamed 90MiB applies through real revision ledger with bounded provider chunks and durable lineage", async (t) => {
-  const { saveLargeProjectConfigStream } = await import(
-    "../functions/_lib/project-large-config-save.js"
-  );
-  const {
-    dropboxContentHashBlockDigest,
-    dropboxContentHashFromBlockDigestsHex,
-  } = await import("../functions/_lib/dropbox-content-hash.js");
-  const db = await fixture(t);
-  const total = 90 * 1024 * 1024,
-    blockSize = 4 * 1024 * 1024;
-  const prefix = new TextEncoder().encode(
-      '{"version":"v1","datasets":[],"config":{},"padding":"',
-    ),
-    suffix = new TextEncoder().encode('"}');
-  function chunkAt(index) {
-    const length = Math.min(blockSize, total - index * blockSize),
-      chunk = new Uint8Array(length).fill(120);
-    if (index === 0) chunk.set(prefix);
-    if ((index + 1) * blockSize >= total)
-      chunk.set(suffix, length - suffix.length);
-    return chunk;
-  }
-  const digests = [];
-  for (let i = 0; i < Math.ceil(total / blockSize); i++)
-    digests.push(await dropboxContentHashBlockDigest(chunkAt(i)));
-  const checksum = await dropboxContentHashFromBlockDigestsHex(digests);
-  let uploaded = 0,
-    maxChunk = 0;
-  const original = globalThis.fetch;
-  t.after(() => {
-    globalThis.fetch = original;
-  });
-  globalThis.fetch = async (url, init) => {
-    const u = String(url);
-    if (u.includes("oauth2/token"))
-      return Response.json({
-        access_token: "synthetic-local-only",
-        expires_in: 3600,
-      });
-    if (u.includes("create_folder"))
-      return Response.json({
-        metadata: { ".tag": "folder", path_display: "/mapa" },
-      });
-    if (u.endsWith("/start"))
-      return Response.json({ session_id: "local-session" });
-    if (u.includes("/append_v2") || u.endsWith("/finish")) {
-      const bytes = init.body;
-      maxChunk = Math.max(maxChunk, bytes.byteLength);
-      uploaded += bytes.byteLength;
-      if (u.endsWith("/finish"))
-        return Response.json({
-          id: "local",
-          path_display: "/mapa/config.rev-2.json",
-          size: total,
-          content_hash: checksum,
-        });
-      return Response.json(null);
-    }
-    throw new Error("Unexpected network " + u);
-  };
-  Object.assign(db.env, {
-    DROPBOX_APP_KEY: "synthetic",
-    DROPBOX_APP_SECRET: "synthetic",
-    DROPBOX_REFRESH_TOKEN: "synthetic",
-  });
-  db.sqlite.exec(
-    "UPDATE projects SET config_revision=1,lifecycle_state='ACTIVE' WHERE id=1",
-  );
-  const project = {
-    ...db.sqlite.prepare("SELECT * FROM projects WHERE id=1").get(),
-  };
-  let index = 0;
-  const requestFor = () =>
-    new Request("https://local.test/apply", {
-      method: "POST",
-      duplex: "half",
-      headers: {
-        "Content-Type": "application/vnd.maono.map-config+json",
-        "X-Maono-Large-Config": "1",
-        "X-Maono-Expected-Revision": "1",
-        "X-Maono-Config-Size": String(total),
-        "X-Maono-Config-Schema": "legacy-kepler",
-        "X-Maono-Config-Schema-Version": "1",
-        "X-Maono-Config-Version": "v1",
-        "X-Maono-Dataset-Count": "0",
-      },
-      body: new ReadableStream(
-        {
-          pull(controller) {
-            if (index * blockSize >= total) controller.close();
-            else controller.enqueue(chunkAt(index++));
-          },
-        },
-        { highWaterMark: 1 },
-      ),
-    });
-  await assert.rejects(
-    () =>
-      saveLargeProjectConfigStream(db.env, {
-        request: requestFor(),
-        project,
-        user: admin,
-        expectedContentHash: "b".repeat(64),
-        allowSmall: true,
-        syncOrganizationFile: false,
-      }),
-    (e) => e.code === "CHANGE_REQUEST_APPLY_CHECKSUM_MISMATCH",
-  );
-  assert.equal(
-    db.sqlite
-      .prepare(
-        "SELECT COUNT(*) AS n FROM project_config_revisions WHERE project_id=1 AND revision=2",
-      )
-      .get().n,
-    0,
-  );
-  index = 0;
-  uploaded = 0;
-  const result = await saveLargeProjectConfigStream(db.env, {
-    request: requestFor(),
-    project,
-    user: admin,
-    expectedContentHash: checksum,
-    allowSmall: true,
-    syncOrganizationFile: false,
-    saveTrace: { saveId: "cc08:cr-a", updateContext() {} },
-  });
-  assert.equal(result.revision, 2);
-  assert.equal(uploaded, total);
-  assert.ok(maxChunk <= blockSize);
-  const ledger = db.sqlite
-    .prepare(
-      "SELECT * FROM project_config_revisions WHERE project_id=1 AND revision=2",
-    )
-    .get();
-  assert.equal(ledger.checksum, checksum);
-  assert.equal(ledger.transition_id, "cc08:cr-a");
-  assert.ok(ledger.published_at);
+test("CT52 streamed90MiB publishes an approved artifact through durable receipt and lineage",async t=>{
+ const {persistenceFixture}=await import('./helpers/project-persistence-fixture.mjs');
+ const {config,create,request,parse}=await import('./helpers/durable-project-http.mjs');
+ const {dropboxContentHashHex}=await import('../functions/_lib/dropbox-content-hash.js');
+ const {onRequest:apply}=await import('../functions/api/projects/[slug]/change-requests/[id]/apply.js');
+ const f=persistenceFixture(t);
+ assert.equal((await create(f)).status,200);
+ f.env.MAONO_TICKET_CHANGES_ENABLED='true';
+ const map={...config('approved90MiB'),padding:'x'.repeat(90*1024*1024)};
+ const bytes=new TextEncoder().encode(JSON.stringify(map)),checksum=await dropboxContentHashHex(bytes);
+ f.db.prepare(`INSERT INTO project_change_requests(id,organization_id,project_id,requested_by_user_id,base_revision,status,reason,idempotency_key,submission_hash,decision,lifecycle_version,decided_by_user_id)
+ VALUES('ct52-large',1,1,1,1,'approved','Synthetic90MiB','ct52-large','ct52-large','approved',1,1)`).run();
+ f.db.prepare('INSERT INTO project_change_request_apply_artifacts(change_request_id,checksum,size_bytes,base_revision,approved_by) VALUES(?,?,?,?,?)').run('ct52-large',checksum,bytes.length,1,1);
+ let offset=0;
+ const stream=new ReadableStream({pull(controller){if(offset>=bytes.length){controller.close();return;}const end=Math.min(offset+65536,bytes.length);controller.enqueue(bytes.subarray(offset,end));offset=end;}});
+ const response=await parse(await apply({env:f.env,params:{slug:f.project().slug,id:'ct52-large'},request:request(f,'/api/projects/'+f.project().slug+'/change-requests/ct52-large/apply',{method:'POST',body:stream,headers:{
+   'Content-Type':'application/vnd.maono.map-config+json','X-Maono-Large-Config':'1','X-Maono-Expected-Revision':'1','X-Maono-Config-Size':String(bytes.length),'X-Maono-Config-Checksum':checksum,'X-Maono-Config-Version':String(map.version),'X-Maono-Dataset-Count':String(map.datasets.length),
+ }})}));
+ assert.equal(response.status,200,JSON.stringify(response.data));assert.equal(response.data.appliedRevision,2);
+ assert.equal(response.data.operation.state,'PUBLISHED');
+ assert.equal(f.ledger(1,2).transition_id,'cc08:ct52-large');assert.ok(f.ledger(1,2).save_operation_id);
+ assert.equal(f.ledger(1,2).checksum,checksum);assert.ok(f.ledger(1,2).published_at);
+ const chunks=f.calls.filter(x=>x.op.startsWith('upload_session/'));
+ assert.ok(chunks.length>20);assert.ok(chunks.every(x=>x.size<=4*1024*1024));
 });
 
 test("consumer OFF does no DB work; scope and runtime mandatory", async (t) => {

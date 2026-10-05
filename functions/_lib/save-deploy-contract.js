@@ -1,7 +1,7 @@
 import { createMaonoError } from "./maono-error.js";
 
-export const SAVE_CLIENT_CONTRACT_VERSION = 1;
-export const SAVE_API_CONTRACT_VERSION = 1;
+export const SAVE_CLIENT_CONTRACT_VERSION = 2;
+export const SAVE_API_CONTRACT_VERSION = 2;
 export const SAVE_EXPECTED_DB_SCHEMA_VERSION = 19;
 
 const CLIENT_CONTRACT_HEADER = "X-Maono-Client-Contract";
@@ -66,14 +66,12 @@ export async function assertSaveDeployCompatibility(env, request, options = {}) 
   const client = getSaveClientMetadata(request);
   const deployment = getSaveDeploymentMetadata(env);
 
-  // Rollout seguro: abas antigas sem o header continuam aceitas. Apenas clientes
-  // versionados e explicitamente incompatíveis são bloqueados.
+  // Only the durable protocol may write. Never fall back to the retired writer.
   if (
-    !client.legacy &&
-    client.clientContract !== SAVE_CLIENT_CONTRACT_VERSION
+    client.legacy || client.clientContract !== SAVE_CLIENT_CONTRACT_VERSION
   ) {
     throw createMaonoError("SAVE_CLIENT_CONTRACT_UNSUPPORTED", {
-      message: "A versão aberta da Maõno não é compatível com o serviço de salvamento.",
+      message: "Preserve ou exporte suas alterações antes de atualizar esta página para o novo salvamento.",
       // 412 evita confundir drift de deploy com o 409 reservado a conflito
       // de revisão concorrente do projeto.
       status: 412,
@@ -95,6 +93,17 @@ export async function assertSaveDeployCompatibility(env, request, options = {}) 
         expectedDbSchema: deployment.expectedDbSchema,
         actualDbSchema,
       },
+    });
+  }
+
+  let capability = null;
+  try { capability = await env.DB.prepare("SELECT version FROM project_save_operation_schema WHERE version = 1").first(); }
+  catch { /* additive migration is intentionally human gated */ }
+  if (Number(capability?.version) !== 1) {
+    throw createMaonoError("SAVE_DB_SCHEMA_MISMATCH", {
+      message:"O salvamento durável aguarda a ativação da estrutura. Preserve suas alterações.",
+      status:503,retryable:true,
+      details:{expectedDbSchema:SAVE_EXPECTED_DB_SCHEMA_VERSION,actualDbSchema,requiredCapability:"project-save-operations-v1"},
     });
   }
 

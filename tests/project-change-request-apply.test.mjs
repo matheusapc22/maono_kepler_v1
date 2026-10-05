@@ -1,90 +1,14 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-
-import { DropboxMapConfigRepository } from "../functions/_lib/dropbox-map-config-repository.js";
-import { createMapConfigStorageRef } from "../functions/_lib/map-config-storage-ref.js";
-import { buildProjectConfigArtifact } from "../functions/_lib/project-config-integrity.js";
-import { saveVersionedProjectConfig } from "../functions/_lib/project-config-service.js";
 import { buildProjectChangeProposal } from "../functions/_lib/project-change-request-operations.js";
-
-const lifecycleMigration = await readFile(
-  new URL("../migrations/0018_project_lifecycle.sql", import.meta.url),
-  "utf8",
-);
-
-function normalizeSqliteValue(value) {
-  if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  return value;
-}
-
-function fixture() {
-  const database = new DatabaseSync(":memory:");
-  database.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
-    CREATE TABLE projects (
-      id INTEGER PRIMARY KEY,
-      slug TEXT NOT NULL UNIQUE,
-      organization_id INTEGER NOT NULL,
-      organization_file_id INTEGER,
-      dropbox_root_path TEXT NOT NULL,
-      default_config_file TEXT NOT NULL DEFAULT 'config.kepler.json',
-      active INTEGER NOT NULL DEFAULT 1,
-      config_revision INTEGER NOT NULL DEFAULT 0,
-      preview_status TEXT NOT NULL DEFAULT 'UNKNOWN',
-      preview_revision INTEGER,
-      preview_updated_at TEXT,
-      preview_attempts INTEGER NOT NULL DEFAULT 0,
-      preview_last_error TEXT,
-      preview_capture_method TEXT,
-      updated_by INTEGER,
-      updated_by_name_snapshot TEXT,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE local_storage_objects (
-      path TEXT PRIMARY KEY,
-      content BLOB NOT NULL,
-      content_type TEXT,
-      size_bytes INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    INSERT INTO users (id, name) VALUES (10, 'Editor');
-  `);
-  database.exec(lifecycleMigration);
-  return database;
-}
-
-function envFor(database) {
-  return {
-    APP_ENV: "local",
-    STORAGE_DRIVER: "local-d1",
-    DB: {
-      prepare(sql) {
-        const statement = database.prepare(sql);
-        let parameters = [];
-        return {
-          bind(...values) {
-            parameters = values.map(normalizeSqliteValue);
-            return this;
-          },
-          first() {
-            return statement.get(...parameters) ?? null;
-          },
-          run() {
-            return statement.run(...parameters);
-          },
-          all() {
-            return { results: statement.all(...parameters) };
-          },
-        };
-      },
-    },
-  };
-}
-
+import { buildProjectConfigArtifact } from "../functions/_lib/project-config-integrity.js";
+import { createMapConfigStorageRef } from "../functions/_lib/map-config-storage-ref.js";
+import { readPublishedProjectConfig } from "../functions/_lib/project-config-service.js";
+import { reconcileProjectSaveOperations } from "../functions/_lib/project-save-operations.js";
+import { onRequest as applyEndpoint } from "../functions/api/projects/[slug]/change-requests/[id]/apply.js";
+import { onRequest as reviewEndpoint } from "../functions/api/projects/[slug]/change-requests/[id]/review.js";
+import { persistenceFixture,interruption } from "./helpers/project-persistence-fixture.mjs";
+import { request,parse,readyForRetry,status,update,manifest,bytesStream } from "./helpers/durable-project-http.mjs";
 function revision184Config() {
   return {
     version: "v1",
@@ -124,87 +48,136 @@ function revision184Config() {
   };
 }
 
-async function insertProjectAt184(database) {
-  const artifact = await buildProjectConfigArtifact(revision184Config());
-  database
-    .prepare(
-      `INSERT INTO projects (
-         id, slug, organization_id, dropbox_root_path, default_config_file,
-         active, config_revision, lifecycle_state, lifecycle_version,
-         config_checksum, config_checksum_algorithm,
-         config_storage_provider, config_storage_ref,
-         config_schema, config_schema_version, config_size_bytes,
-         config_content_type
-       ) VALUES (42, 'leads-sp', 7, '/project-42', 'config.kepler.json',
-         1, 184, 'ACTIVE', 4, ?, ?, 'local-d1', ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      artifact.checksum,
-      artifact.checksumAlgorithm,
-      createMapConfigStorageRef(42, 184),
-      artifact.schemaName,
-      artifact.schemaVersion,
-      artifact.sizeBytes,
-      artifact.contentType,
-    );
+const point={id:"point-operation-0001",sequence:0,type:"point.create",version:1,createdAt:"2026-09-05T12:00:00.000Z",
+  payload:{tempId:"tmp-1",latitude:-15.78,longitude:-47.92,targetLayerId:"leads-layer",targetDataId:"leads",targetLabel:"Leads",
+    fieldMap:{latitude:"lat",longitude:"lng",name:"name"},properties:{name:"Novo lead"},origin:"pin"}};
+async function seed(f,{enabled=false}={}) {
+  f.env.MAONO_TICKET_CHANGES_ENABLED=String(enabled);
+  const artifact=await buildProjectConfigArtifact(revision184Config());
+  const ref=createMapConfigStorageRef(1,184);
+  const metadata=await f.store("/offline/a/leads-sp/config.kepler.r000184.json",artifact.bytes);
+  f.db.prepare(`INSERT INTO projects(id,name,slug,organization_id,dropbox_root_path,active,config_revision,lifecycle_state,lifecycle_version,
+    config_checksum,config_checksum_algorithm,config_storage_provider,config_storage_ref,config_schema,config_schema_version,config_size_bytes,config_content_type)
+    VALUES(1,'Leads','leads-sp',1,'/offline/a/leads-sp',1,184,'ACTIVE',4,?,?,'dropbox',?,?,?,?,?)`)
+    .run(artifact.checksum,artifact.checksumAlgorithm,ref,artifact.schemaName,artifact.schemaVersion,artifact.sizeBytes,artifact.contentType);
+  f.db.prepare(`INSERT INTO project_config_revisions(project_id,revision,status,checksum_algorithm,checksum,storage_provider,storage_ref,
+    storage_provider_hash,schema_name,schema_version,size_bytes,content_type,published_at)
+    VALUES(1,184,'READY',?,?,'dropbox',?,?,?,?,?,?,CURRENT_TIMESTAMP)`)
+    .run(artifact.checksumAlgorithm,artifact.checksum,ref,metadata.content_hash,artifact.schemaName,artifact.schemaVersion,artifact.sizeBytes,artifact.contentType);
+  f.db.exec("INSERT INTO user_projects(user_id,project_id,access_level) VALUES(1,1,'owner')");
+  f.db.prepare(`INSERT INTO project_change_requests(id,organization_id,project_id,requested_by_user_id,base_revision,reason,idempotency_key,submission_hash)
+    VALUES('offline-change-0001',1,1,1,184,'Adicionar ponto aprovado','offline-change-key-0001',?)`).run("a".repeat(64));
+  f.db.prepare("INSERT INTO project_change_operations(id,change_request_id,sequence,operation_type,operation_json) VALUES(?,'offline-change-0001',0,?,?)")
+    .run(point.id,point.type,JSON.stringify(point));
 }
-
-function project(database) {
-  return database.prepare("SELECT * FROM projects WHERE id = 42 LIMIT 1").get();
+async function review(f,{action="approve",artifact,...options}={}) {
+  return parse(await reviewEndpoint({env:f.env,params:{slug:"leads-sp",id:"offline-change-0001"},
+    request:request(f,"/api/projects/leads-sp/change-requests/offline-change-0001/review",{method:"POST",body:JSON.stringify({action,artifact}),...options})}));
 }
+async function apply(f,options={}) {
+  return parse(await applyEndpoint({env:f.env,params:{slug:"leads-sp",id:"offline-change-0001"},
+    request:request(f,"/api/projects/leads-sp/change-requests/offline-change-0001/apply",{method:"POST",...options})}));
+}
+const change=f=>f.db.prepare("SELECT * FROM project_change_requests WHERE id='offline-change-0001'").get();
+const proposal=()=>buildProjectChangeProposal({baseConfig:revision184Config(),operations:[point]}).config;
 
-test("PR4 golden: REV184 + point.create publica REV185 sem criar projeto nem trocar slug/ID", async () => {
-  const database = fixture();
-  await insertProjectAt184(database);
-  const env = envFor(database);
-  const repository = new DropboxMapConfigRepository(env);
-  const before = project(database);
+async function approve(f,options={}) { const result=await review(f,options);assert.equal(result.status,200,JSON.stringify(result.data));assert.equal(change(f).status,"approved");return result; }
 
-  const proposal = buildProjectChangeProposal({
-    baseConfig: revision184Config(),
-    operations: [
-      {
-        id: "op-1",
-        sequence: 0,
-        type: "point.create",
-        version: 1,
-        createdAt: "2026-09-05T12:00:00.000Z",
-        payload: {
-          tempId: "tmp-1",
-          latitude: -15.78,
-          longitude: -47.92,
-          targetLayerId: "leads-layer",
-          targetDataId: "leads",
-          targetLabel: "Leads",
-          fieldMap: { latitude: "lat", longitude: "lng", name: "name" },
-          properties: { name: "Novo lead" },
-          origin: "pin",
-        },
-      },
-    ],
-  });
+test("REV184 + approved point.create atomically publishes REV185 and records applied status without replacing project",async t=>{
+  const f=persistenceFixture(t);await seed(f);await approve(f);
+  const result=await apply(f);
+  assert.equal(result.status,200,JSON.stringify(result.data));assert.equal(result.data.appliedRevision,185);
+  assert.equal(result.data.operation.state,"PUBLISHED");
+  assert.equal(f.project().config_revision,185);assert.equal(f.project().slug,"leads-sp");assert.equal(f.project().id,1);
+  assert.equal(change(f).status,"applied");assert.equal(change(f).applied_revision,185);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM projects").get().n,1);
+  const persisted=(await readPublishedProjectConfig(f.env,f.project())).config;
+  assert.deepEqual(persisted,proposal());assert.equal(persisted.datasets[0].data.allData[1][2],"Novo lead");
+  assert.equal(f.db.prepare("SELECT count(*) n FROM project_change_request_events WHERE to_status='applied'").get().n,1);
+  const count=f.calls.length,retry=await apply(f);assert.equal(retry.status,200);assert.equal(retry.data.appliedRevision,185);assert.equal(retry.data.idempotent,true);
+  assert.equal(f.calls.slice(count).filter(c=>c.op==="upload_session/finish").length,0);
+});
 
-  const saved = await saveVersionedProjectConfig(env, {
-    project: before,
-    config: proposal.config,
-    expectedConfigRevision: 184,
-    actor: { id: 10, name: "Editor" },
-    mapConfigRepository: repository,
-  });
+test("unapproved change, viewer and foreign organization cannot publish",async t=>{
+  const f=persistenceFixture(t);await seed(f);
+  const unapproved=await apply(f);assert.equal(unapproved.status,409);assert.equal(unapproved.data.error.code,"CHANGE_REQUEST_APPROVAL_REQUIRED");
+  assert.equal(f.db.prepare("SELECT count(*) n FROM project_save_operations").get().n,0);
+  const foreign=await apply(f,{userId:2});assert.ok([403,404].includes(foreign.status));
+  f.db.exec("UPDATE users SET role='viewer' WHERE id=1");
+  const viewer=await apply(f);assert.equal(viewer.status,403);
+  assert.equal(f.project().config_revision,184);assert.equal(change(f).status,"submitted");
+});
 
-  const after = project(database);
-  assert.equal(saved.revision, 185);
-  assert.equal(after.config_revision, 185);
-  assert.equal(after.id, 42);
-  assert.equal(after.slug, "leads-sp");
-  assert.equal(database.prepare("SELECT COUNT(*) AS total FROM projects").get().total, 1);
+test("D1 failure at applied status rolls back project pointer, ledger and receipt then worker completes atomically",async t=>{
+  let fail=false;
+  const f=persistenceFixture(t,{beforeSql({sql,kind}){if(fail&&kind==="batch"&&sql.includes("UPDATE project_change_requests SET status = 'applied'"))throw interruption();}});
+  await seed(f);await approve(f);fail=true;
+  const result=await apply(f);assert.equal(result.status,202,JSON.stringify(result.data));assert.equal(result.data.operation.state,"RETRY_WAIT");
+  assert.equal(f.project().config_revision,184);assert.equal(f.ledger(1,185),undefined);
+  assert.equal(change(f).status,"applying");assert.equal(change(f).applied_revision,null);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM project_change_request_events WHERE to_status='applied'").get().n,0);
+  const uploads=f.calls.filter(c=>c.op==="upload_session/finish").length;
+  fail=false;readyForRetry(f);await reconcileProjectSaveOperations(f.env);
+  assert.equal(f.project().config_revision,185);assert.equal(change(f).status,"applied");assert.equal(change(f).applied_revision,185);
+  assert.equal(f.calls.filter(c=>c.op==="upload_session/finish").length,uploads);
+  assert.equal((await status(f,"change-request-offline-change-0001")).data.operation.receipt.publishedRevision,185);
+});
 
-  const revision185 = await repository.getRevision({
-    project: after,
-    revision: 185,
-    storageRef: createMapConfigStorageRef(42, 185),
-  });
-  const persisted = JSON.parse(new TextDecoder().decode(revision185.bytes));
-  assert.equal(persisted.datasets[0].data.allData.length, 2);
-  assert.equal(persisted.datasets[0].data.allData[1][2], "Novo lead");
+test("applied historical revision remains185 after head advances to186 and response is lost",async t=>{
+  const f=persistenceFixture(t);await seed(f);await approve(f);assert.equal((await apply(f)).status,200);
+  await update(f,{...proposal(),laterEdit:true});
+  const recovered=await apply(f);assert.equal(recovered.status,200);assert.equal(recovered.data.appliedRevision,185);
+  assert.equal(f.project().config_revision,186);assert.equal(change(f).applied_revision,185);
+});
+
+test("remote save after approval yields conflict without publishing the stale approved proposal",async t=>{
+  const f=persistenceFixture(t);await seed(f);await approve(f);
+  await update(f,{...revision184Config(),otherWriter:true});
+  const result=await apply(f);assert.equal(result.status,409,JSON.stringify(result.data));assert.equal(result.data.error.code,"CHANGE_REQUEST_REVIEW_CONFLICT");
+  assert.equal(f.project().config_revision,185);assert.equal(f.ledger(1,186),undefined);assert.equal(change(f).applied_revision,null);
+  assert.equal(f.db.prepare("SELECT state FROM project_save_operations WHERE kind='change-request'").get().state,"CONFLICT");
+});
+
+test("CC08 enabled requires the exact approved artifact and refuses a tampered upload",async t=>{
+  const f=persistenceFixture(t);await seed(f,{enabled:true});
+  const prepared=await manifest(proposal(),{expected:184,kind:"update"});
+  await approve(f,{artifact:{checksum:prepared.input.contentHash,checksumAlgorithm:"dropbox-content-hash",sizeBytes:prepared.bytes.length,baseRevision:184,version:change(f).lifecycle_version}});
+  const noArtifact=await apply(f);assert.equal(noArtifact.status,409);assert.equal(noArtifact.data.error.code,"CHANGE_REQUEST_APPROVED_ARTIFACT_REQUIRED");
+  const headers={"Content-Type":"application/vnd.maono.map-config+json","X-Maono-Large-Config":"1","X-Maono-Expected-Revision":"184",
+    "X-Maono-Config-Size":String(prepared.bytes.length),"X-Maono-Config-Checksum":prepared.input.contentHash,"X-Maono-Checksum-Algorithm":"dropbox-content-hash",
+    "X-Maono-Config-Version":"v1","X-Maono-Dataset-Count":"1"};
+  const tampered=await apply(f,{headers:{...headers,"X-Maono-Config-Checksum":"0".repeat(64)},body:bytesStream(prepared.bytes)});
+  assert.equal(tampered.status,409);assert.equal(f.project().config_revision,184);assert.equal(change(f).status,"approved");
+  const result=await apply(f,{headers,body:bytesStream(prepared.bytes)});
+  assert.equal(result.status,200,JSON.stringify(result.data));assert.equal(result.data.appliedRevision,185);
+});
+
+test("CC08 reviewer in another active organization applies and recovers using the request's verified project scope",async t=>{
+  const f=persistenceFixture(t);await seed(f,{enabled:true});
+  f.db.exec("INSERT INTO organization_users(organization_id,user_id,access_level) VALUES(2,1,'owner'); UPDATE sessions SET active_organization_id=2 WHERE user_id=1");
+  const absent=await apply(f,{method:"GET"});assert.equal(absent.status,404);assert.equal(absent.data.error.code,"SAVE_OPERATION_NOT_FOUND");
+  const prepared=await manifest(proposal(),{expected:184,kind:"update"});
+  await approve(f,{artifact:{checksum:prepared.input.contentHash,sizeBytes:prepared.bytes.length,baseRevision:184,version:change(f).lifecycle_version}});
+  const headers={"Content-Type":"application/vnd.maono.map-config+json","X-Maono-Large-Config":"1","X-Maono-Expected-Revision":"184",
+    "X-Maono-Config-Size":String(prepared.bytes.length),"X-Maono-Config-Checksum":prepared.input.contentHash,
+    "X-Maono-Config-Version":"v1","X-Maono-Dataset-Count":"1"};
+  const applied=await apply(f,{headers,body:bytesStream(prepared.bytes)});assert.equal(applied.status,200,JSON.stringify(applied.data));
+  const recovered=await apply(f,{method:"GET"});assert.equal(recovered.status,200,JSON.stringify(recovered.data));
+  assert.equal(recovered.data.operation.receipt.publishedRevision,185);assert.equal(recovered.data.operation.organizationId,1);
+  assert.equal(f.db.prepare("SELECT active_organization_id FROM sessions WHERE user_id=1").get().active_organization_id,2,"request-local context must not change session organization");
+  const wrongProject=await parse(await applyEndpoint({env:f.env,params:{slug:"missing-project",id:"offline-change-0001"},request:request(f,"/api/projects/missing-project/change-requests/offline-change-0001/apply")}));
+  assert.equal(wrongProject.status,404);assert.notEqual(wrongProject.data.error.code,"SAVE_OPERATION_NOT_FOUND");
+});
+
+test("worker conflict exits applying after a competing save without emitting an applied lifecycle event",async t=>{
+  let fail=false;
+  const f=persistenceFixture(t,{beforeSql({sql,kind}){if(fail&&kind==="batch"&&sql.includes("UPDATE project_change_requests SET status = 'applied'"))throw interruption();}});
+  await seed(f);await approve(f);fail=true;
+  const accepted=await apply(f);assert.equal(accepted.status,202);assert.equal(change(f).status,"applying");
+  fail=false;await update(f,{...revision184Config(),competingEditor:true});
+  readyForRetry(f);await reconcileProjectSaveOperations(f.env);
+  const operation=f.db.prepare("SELECT * FROM project_save_operations WHERE kind='change-request'").get();
+  assert.equal(operation.state,"CONFLICT");assert.equal(change(f).status,"conflict");assert.equal(change(f).applied_revision,null);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM project_change_request_events WHERE to_status='applied'").get().n,0);
+  assert.equal(f.project().config_revision,185);assert.equal(f.ledger(1,186),undefined);
 });

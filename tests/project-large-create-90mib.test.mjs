@@ -9,7 +9,6 @@ import {
 } from "../scripts/large-create/build-large-create-fixture.mjs";
 import {
   beginClientSaveAttempt,
-  buildSaveRequestHeaders,
 } from "../src/pages/Kepler/save-observability.ts";
 import { prepareProjectCreateTransport } from "../src/pages/Kepler/project-create-transport.ts";
 
@@ -38,7 +37,7 @@ test("fixture de acceptance fica entre 90 e 100 MiB e usa CREATE streaming metad
   assert.ok(Buffer.byteLength(prepared.requestBody, "utf8") < 64 * 1024);
 
   const metadata = JSON.parse(prepared.requestBody);
-  assert.equal(metadata.largeConfig, true);
+  assert.equal(metadata.durableSave, true);
   assert.equal(metadata.organizationId, 9);
   assert.equal(metadata.idempotencyKey, idempotencyKey);
   assert.equal(metadata.configMetadata.sizeBytes, fixture.sizeBytes);
@@ -47,7 +46,7 @@ test("fixture de acceptance fica entre 90 e 100 MiB e usa CREATE streaming metad
   assert.equal(metadata.configMetadata.schemaVersion, 1);
   assert.equal("config" in metadata, false);
 
-  const streamHeaders = buildSaveRequestHeaders(attempt);
+  const streamHeaders = structuredClone(prepared.configTransport.headers);
   assert.equal(streamHeaders["X-Maono-Large-Config"], "1");
   assert.equal(streamHeaders["X-Maono-Expected-Revision"], "0");
   assert.equal(streamHeaders["X-Maono-Config-Size"], String(fixture.sizeBytes));

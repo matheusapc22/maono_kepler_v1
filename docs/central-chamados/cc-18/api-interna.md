@@ -1,6 +1,6 @@
 # API interna — CC18 v1
 
-Público: integrações internas e engenharia. [openapi.json](openapi.json) usa OpenAPI3.0.3, com51 caminhos e81 operações do produto. Serve como inventário HTTP e contrato dos fluxos críticos; objetos de domínio extensos mantêm schema aberto e apontam `x-domain-sources` para validação normativa. Não é SDK gerado nem promessa de campos arbitrários aceitos. Use UI/cliente do produto para políticas, ACL, CR e instrumentos complexos.
+Público: integrações internas e engenharia. [openapi.json](openapi.json) usa OpenAPI3.0.3, com51 caminhos e82 operações do produto. Serve como inventário HTTP e contrato dos fluxos críticos; objetos de domínio extensos mantêm schema aberto e apontam `x-domain-sources` para validação normativa. Não é SDK gerado nem promessa de campos arbitrários aceitos. Use UI/cliente do produto para políticas, ACL, CR e instrumentos complexos.
 
 Autenticação: sessão `maono_session` gerenciada pela aplicação, no mesmo origin. Nunca colocar cookie, token ou credencial em exemplos, artifacts ou planilhas. Cada operação revalida capacidades, organização/projeto e ACL/audiência; URL, ID ou papel amplo não substituem autorização. Mutação segue a política de Preview e validação de origem do endpoint.
 
@@ -59,3 +59,7 @@ npm run validate:cc18
 O validador OpenAPI é fixado em13.1.0 num pacote isolado. O gate compara paths/métodos e hash de rotas/fábricas com a especificação, verifica vínculos40/60 e links locais. Alteração de implementação requer revisão consciente do contrato; atualizar somente o hash não é revisão funcional. CI não executa chamadas produtivas.
 
 Para regenerar após revisar semântica, schemas e exemplos, atualizar `scripts/central-chamados/cc18/generate-openapi.mjs` e executar `node scripts/central-chamados/cc18/generate-openapi.mjs`. Revisar o diff gerado antes de validar; o gerador não descobre sozinho as regras de negócio.
+
+## Recuperação de aplicação durável
+
+O salvamento durável acrescenta `GET /api/projects/{slug}/change-requests/{id}/apply` para consultar estado/recibo com autorização atual do reviewer, sem alterar a organização ativa da sessão. O POST correspondente aceita o artefato aprovado, exige contrato de cliente 2 e pode responder 202 antes da publicação. A contagem atual é de 82 operações; o registro de execução original preserva as 81 existentes naquela data.

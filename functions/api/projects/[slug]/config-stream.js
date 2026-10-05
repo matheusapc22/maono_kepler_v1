@@ -25,7 +25,7 @@ import {
 } from "../../../_lib/project-lifecycle.js";
 import {
   assertMapConfigStorageRef,
-  getMapConfigRevisionFileName,
+  resolveMapConfigStorageFileName,
 } from "../../../_lib/map-config-storage-ref.js";
 
 const STREAM_START_TIMEOUT_MS = 20_000;
@@ -180,10 +180,10 @@ function resolvePublishedFile(project) {
   assertActiveProjectInvariant(project);
 
   const revision = Number(project.config_revision);
-  assertMapConfigStorageRef(project.config_storage_ref, project.id, revision);
+  assertMapConfigStorageRef(project.config_storage_ref, project.id, revision, organizationId(project));
 
   return {
-    fileName: getMapConfigRevisionFileName(defaultFile, revision),
+    fileName: resolveMapConfigStorageFileName({ project, revision, storageRef: project.config_storage_ref }),
     revision,
     sizeBytes: Number(project.config_size_bytes || 0),
     providerHash: project.config_storage_provider_hash || null,
@@ -218,7 +218,6 @@ function assertPublishedMetadata(published, metadata) {
 
   if (
     published.sizeBytes > 0 &&
-    metadataSize > 0 &&
     published.sizeBytes !== metadataSize
   ) {
     throw streamError(
@@ -232,7 +231,7 @@ function assertPublishedMetadata(published, metadata) {
     );
   }
 
-  if (expectedHash && metadataHash && expectedHash !== metadataHash) {
+  if (expectedHash && expectedHash !== metadataHash) {
     throw streamError(
       "O storage não confirmou a revisão publicada do projeto.",
       409,

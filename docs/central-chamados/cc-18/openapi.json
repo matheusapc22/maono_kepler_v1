@@ -3,7 +3,7 @@
   "info": {
     "title": "Maõno — Central de Chamados / API interna",
     "version": "cc18-v1",
-    "description": "Inventário das rotas de chamados e CR na baseline f17882fe846b05d97e5b81c7d2547e30574715b4. Sessão, vínculo organizacional, capacidades e ACL/audiência são reavaliados pelo servidor. Flags/schema/rollout independentes. Schemas abertos apontam a fonte de domínio; não são permissão para campos arbitrários."
+    "description": "Inventário das rotas de chamados e CR na baseline f17882fe846b05d97e5b81c7d2547e30574715b4. Sessão, vínculo organizacional, capacidades e ACL/audiência são reavaliados pelo servidor. Flags/schema/rollout independentes. Schemas abertos apontam a fonte de domínio; não são permissão para campos arbitrários. A atualização de salvamento durável acrescenta a consulta GET de aplicação de CR e o contrato de cliente 2 para publicação; os demais caminhos preservam o inventário original."
   },
   "servers": [
     {
@@ -4828,7 +4828,7 @@
     },
     "/api/projects/{slug}/change-requests/{id}/apply": {
       "x-source-file": "functions/api/projects/[slug]/change-requests/[id]/apply.js",
-      "x-source-sha256": "1534db8f0d799b4119e67010ca276f6271feacdca3889ce92abdeb5a990b2238",
+      "x-source-sha256": "319381a45e885d8200a7e9b2783fb0352ac52613b4beed3be64dc442a89bcc6f",
       "parameters": [
         {
           "name": "slug",
@@ -4855,7 +4855,7 @@
         "tags": [
           "Change Requests"
         ],
-        "description": "Implementação: functions/api/projects/[slug]/change-requests/[id]/apply.js. Mutação sujeita a capacidades, ACL, readiness, precondições e política de Preview.",
+        "description": "Aplica bytes do artefato aprovado usando uma operação durável. Exige contrato de cliente 2; 202 confirma payload verificado e outbox persistida, 200 com recibo confirma publicação e estado aplicado atômicos.",
         "x-domain-sources": [
           "functions/_lib/project-change-request-review.js"
         ],
@@ -4870,6 +4870,9 @@
                 }
               }
             }
+          },
+          "202": {
+            "description": "Conteúdo recebido de forma durável; consultar GET nesta rota para resultado terminal."
           },
           "default": {
             "description": "Erro público conforme HTTP:400 inválido,401 sessão,403/404 autorização/recurso,409 conflito,412 token antigo,413 limite,415 tipo,428 precondição,429 limite de uso,503 readiness/provedor. Nem todos se aplicam a todas as rotas.",
@@ -4888,6 +4891,33 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/DomainCommand"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "get__api_projects_slug_change_requests_id_apply",
+        "summary": "Consultar aplicação durável da solicitação",
+        "tags": [
+          "Change Requests"
+        ],
+        "description": "Consulta autenticada, sem cache, com autorização atual do reviewer no projeto mesmo quando outra organização está ativa na sessão. Retorna estado, erro e recibo histórico da tentativa do ator; 404 SAVE_OPERATION_NOT_FOUND indica ausência após leitura consistente.",
+        "x-domain-sources": [
+          "functions/_lib/project-change-request-review.js",
+          "functions/_lib/project-save-operations.js"
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado durável, recibo histórico e revisão atual separada."
+          },
+          "default": {
+            "description": "Erro público conforme HTTP:400 inválido,401 sessão,403/404 autorização/recurso,409 conflito,412 token antigo,413 limite,415 tipo,428 precondição,429 limite de uso,503 readiness/provedor. Nem todos se aplicam a todas as rotas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           }

@@ -2,23 +2,13 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { persistenceFixture } from "./helpers/project-persistence-fixture.mjs";
+import { config as mapConfig, create as createDurable, update as updateDurable, status as operationStatus } from "./helpers/durable-project-http.mjs";
+import { markProjectPreviewFailed, markProjectPreviewReady } from "../functions/_lib/project-preview.js";
 
 const urls = {
   migration: new URL(
     "../migrations/0015_project_preview_lifecycle.sql",
-    import.meta.url,
-  ),
-  config: new URL(
-    "../functions/api/projects/[slug]/config.js",
-    import.meta.url,
-  ),
-  configService: new URL(
-    "../functions/_lib/project-config-service.js",
-    import.meta.url,
-  ),
-  create: new URL("../functions/api/projects/index.js", import.meta.url),
-  creationService: new URL(
-    "../functions/_lib/project-creation-lifecycle-service.js",
     import.meta.url,
   ),
   thumbnail: new URL(
@@ -43,7 +33,7 @@ const urls = {
     import.meta.url,
   ),
   saveResilience: new URL(
-    "../src/pages/Kepler/save-operation-resilience.ts",
+    "../src/pages/Kepler/durable-save-controller.ts",
     import.meta.url,
   ),
   job: new URL(
@@ -62,10 +52,6 @@ const urls = {
 
 const [
   migration,
-  config,
-  configService,
-  create,
-  creationService,
   thumbnail,
   status,
   previewHelper,
@@ -77,10 +63,6 @@ const [
   reconcile,
 ] = await Promise.all([
   readFile(urls.migration, "utf8"),
-  readFile(urls.config, "utf8"),
-  readFile(urls.configService, "utf8"),
-  readFile(urls.create, "utf8"),
-  readFile(urls.creationService, "utf8"),
   readFile(urls.thumbnail, "utf8"),
   readFile(urls.status, "utf8"),
   readFile(urls.previewHelper, "utf8"),
@@ -260,42 +242,31 @@ test("revisão obsoleta nunca altera o estado da revisão atual", async () => {
   );
 });
 
-test("config publica JSON/revisão via MapConfigRepository antes de responder PENDING e não espera PNG por padrão", () => {
-  assert.match(config, /const saved = await saveProjectConfig/);
-  assert.match(configService, /repository\.saveRevision\(/);
-  assert.match(configService, /MAP_CONFIG_SAVE_MODES\.IMMUTABLE/);
-  assert.match(configService, /markProjectConfigRevisionReady/);
-  assert.match(configService, /publishProjectConfigRevision/);
-  assert.ok(
-    configService.indexOf("repository.saveRevision(") <
-      configService.indexOf("publishProjectConfigRevision("),
-  );
-  assert.match(config, /configRevision/);
-  assert.match(config, /thumbnail:\s*\{\s*status:/);
-  assert.match(
-    config,
-    /!asyncThumbnailEnabled\(env\)[\s\S]*body\?\.thumbnailDataUrl/,
-  );
-  assert.match(
-    config,
-    /combineHeaders\(saveTrace,\s*deploymentMetadata\)/,
-  );
+test("durable publication responds PENDING without waiting for PNG and retains a previously saved thumbnail", async t => {
+  const f=persistenceFixture(t),created=await createDurable(f);
+  assert.equal(created.data.operation.state,"PUBLISHED");
+  assert.equal(f.project().preview_status,"PENDING");
+  await markProjectPreviewReady(f.env,{projectId:1,organizationId:1,revision:1,captureMethod:"canvas"});
+  const png=new Uint8Array([137,80,78,71,13,10,26,10]);
+  const path=`${f.project().dropbox_root_path}/config.kepler.r1.png`;
+  await f.store(path,png);
+  const saved=await updateDurable(f,mapConfig("new revision"));
+  assert.equal(saved.data.operation.state,"PUBLISHED");
+  assert.equal(f.project().preview_status,"PENDING");
+  assert.equal(f.project().preview_revision,1,"retain previously published PNG identity while replacement is pending");
+  assert.deepEqual(f.objects.get(path).bytes,png);
+  assert.equal(f.calls.some(call=>call.op==="delete_v2"&&call.args.path===path),false);
 });
 
-test("criação também deixa o PNG fora do caminho crítico do lifecycle", () => {
-  assert.match(create, /createProjectFromKepler/);
-  assert.match(
-    creationService,
-    /const thumbnail = asyncThumbnailEnabled\(env\)\s*\?\s*null\s*:\s*decodeImageDataUrl/,
-  );
-  assert.match(creationService, /previewStatus = "PENDING"/);
-  assert.match(creationService, /enterConfigReady/);
-  assert.match(creationService, /activateProject/);
-  assert.match(creationService, /saveLegacyCreationPreview/);
-  assert.ok(
-    creationService.indexOf("activateProject(") <
-      creationService.lastIndexOf("saveLegacyCreationPreview("),
-  );
+test("PNG failure after initial activation cannot downgrade config, receipt or committed quota", async t => {
+  const f=persistenceFixture(t),created=await createDurable(f);
+  await markProjectPreviewFailed(f.env,{projectId:1,organizationId:1,revision:1,captureMethod:"canvas",errorCode:"PNG_UNAVAILABLE"});
+  assert.equal(f.project().preview_status,"FAILED");
+  assert.equal(f.project().active,1);assert.equal(f.project().lifecycle_state,"ACTIVE");
+  assert.equal(f.db.prepare("SELECT status FROM organization_resource_reservations").get().status,"COMMITTED");
+  const recovered=await operationStatus(f,created.registered.input.operationId);
+  assert.equal(recovered.data.operation.state,"PUBLISHED");
+  assert.deepEqual(recovered.data.operation.receipt,created.data.operation.receipt);
 });
 
 test("endpoint binário valida permissão, revisão, tipo, tamanho e assinatura", () => {
@@ -327,23 +298,15 @@ test("rota de thumbnail aceita status separado sem conflito de Pages Functions",
   assert.match(status, /"project\.view"/);
 });
 
-test("frontend confirma resposta persistida antes de enfileirar captura", () => {
-  const saveFlow = saveButton.match(
-    /async function executeExistingProjectSnapshot\([\s\S]*?\n  \}/,
-  )?.[0];
-
-  assert.ok(saveFlow);
-  assert.match(saveResilience, /await runWithSaveStallNotice\(/);
-  assert.match(saveResilience, /fetchImpl\(/);
-  assert.match(saveFlow, /if \(!response\.ok/);
-  assert.match(saveFlow, /enqueuePreview\(/);
-  assert.ok(
-    saveFlow.indexOf("enqueuePreview(") >
-      saveFlow.indexOf("if (!response.ok"),
-  );
-  assert.match(saveButton, /ASYNC_THUMBNAIL_ENABLED/);
-  assert.match(saveButton, /serializeProjectConfig\(mapState\)/);
-  assert.match(saveButton, /expectedConfigRevision/);
+test("frontend queues thumbnail only after the durable receipt and guards later editor generations", () => {
+  const accepted=saveButton.slice(saveButton.indexOf("async function accepted("),saveButton.indexOf("async function runSnapshot("));
+  assert.match(accepted,/receiptRevision\(result\.data\)/);
+  assert.match(accepted,/confirmationMatchesEditor/);
+  assert.match(accepted,/currentRevision === revision/);
+  assert.match(accepted,/void enqueueProjectThumbnailJob/);
+  assert.ok(accepted.indexOf("receiptRevision(")<accepted.indexOf("enqueueProjectThumbnailJob("));
+  assert.match(saveResilience,/PUBLISHED/);
+  assert.match(saveButton,/ASYNC_THUMBNAIL_ENABLED/);
 });
 
 test("job possui cancelamento, retry limitado e storage só de metadados", () => {

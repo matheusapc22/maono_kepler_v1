@@ -142,6 +142,73 @@ const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
     message: "Você não possui permissão para salvar alterações neste projeto.",
     severity: "warning",
   },
+  // Durable saves expose only these stable, local messages, never Error.message.
+  LOCAL_SAVE_STORAGE_UNAVAILABLE: {
+    title: "Recuperação local indisponível",
+    message: "A recuperação local não está disponível neste navegador. Exporte o mapa antes de fechar ou recarregar. A recuperação local não está garantida.",
+    severity: "warning",
+    retryable: false,
+  },
+  LOCAL_SAVE_QUOTA_EXCEEDED: {
+    title: "Sem espaço para recuperar a tentativa",
+    message: "Não há espaço no navegador para preservar esta tentativa. Exporte o mapa antes de fechar ou recarregar. A recuperação local não está garantida.",
+    severity: "warning",
+    retryable: false,
+  },
+  LOCAL_SAVE_CORRUPTED: {
+    title: "A cópia local precisa de revisão",
+    message: "A cópia local desta tentativa está inválida. Exporte o rascunho atual antes de fechar ou recarregar; o conteúdo inválido não será enviado.",
+    severity: "warning",
+    retryable: false,
+  },
+  LOCAL_SAVE_CREATION_PAYLOAD_UNAVAILABLE: {
+    title: "A tentativa de criação precisa de revisão",
+    message: "A cópia local desta tentativa expirou ou foi removida. Nenhuma nova reserva foi iniciada. Exporte o rascunho atual e revise a tentativa antes de criar o projeto novamente.",
+    severity: "warning",
+    retryable: false,
+  },
+  SAVE_RECEIPT_UNVERIFIED: {
+    title: "Salvamento ainda não confirmado",
+    message: "Não foi possível verificar a confirmação desta tentativa. Sua cópia foi preservada; verifique a mesma tentativa novamente.",
+    severity: "warning",
+    retryable: false,
+  },
+  SAVE_CREATION_ACTIVE_UNCONFIRMED: {
+    title: "Criação ainda não confirmada",
+    message: "A criação ainda não foi confirmada como disponível. A tentativa foi preservada para revisão.",
+    severity: "warning",
+    retryable: false,
+  },
+  SAVE_OPERATION_CONFLICT: {
+    title: "O projeto foi atualizado",
+    message: "O projeto mudou antes da publicação. Suas alterações foram preservadas para revisão. Exporte o rascunho antes de recarregar.",
+    severity: "warning",
+    retryable: false,
+  },
+  SAVE_OPERATION_FAILED_FINAL: {
+    title: "A tentativa precisa de revisão",
+    message: "A tentativa não pôde ser concluída. A cópia foi preservada para exportação e revisão.",
+    severity: "warning",
+    retryable: false,
+  },
+  LOCAL_SAVE_PAYLOAD_EXPIRED: {
+    title: "A cópia local expirou",
+    message: "A cópia local desta tentativa expirou após 7 dias ou foi removida. O servidor ainda não recebeu todo o mapa. Preserve o rascunho atual antes de recarregar.",
+    severity: "warning",
+    retryable: false,
+  },
+  LOCAL_SAVE_PAYLOAD_INTEGRITY_FAILED: {
+    title: "A cópia local precisa de revisão",
+    message: "A cópia local não passou na verificação de integridade. Exporte o rascunho atual; esta tentativa não será reenviada.",
+    severity: "warning",
+    retryable: false,
+  },
+  SAVE_OPERATION_STATE_UNRECOGNIZED: {
+    title: "Salvamento ainda não confirmado",
+    message: "O estado desta tentativa ainda não pôde ser confirmado. Preserve o rascunho e verifique a mesma tentativa novamente.",
+    severity: "warning",
+    retryable: false,
+  },
   PROJECT_NOT_FOUND: {
     title: "Projeto indisponível",
     message: "O projeto não foi encontrado ou não está disponível para este usuário.",

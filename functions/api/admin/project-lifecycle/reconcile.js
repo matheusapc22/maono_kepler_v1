@@ -5,6 +5,8 @@ import {
   readJsonBody,
 } from "../../../_lib/http.js";
 import { requireSession } from "../../../_lib/auth.js";
+import { assertSaveDeployCompatibility } from "../../../_lib/save-deploy-contract.js";
+import { assertSameSaveOrigin } from "../../../_lib/project-save-protocol.js";
 import { recordAuditLog } from "../../../_lib/permissions.js";
 import { getActiveOrganizationId } from "../../../_lib/projects.js";
 import { reconcileLegacyProjectLifecycle } from "../../../_lib/project-lifecycle-reconciler.js";
@@ -52,6 +54,8 @@ export async function onRequest(context) {
       );
     }
 
+    assertSameSaveOrigin(request);
+    await assertSaveDeployCompatibility(env,request);
     const body = await readJsonBody(request);
     const limit = normalizeLimit(body?.limit);
     const afterProjectId = normalizeCursor(body?.afterProjectId);
@@ -89,7 +93,8 @@ export async function onRequest(context) {
         else summary.reconciled += 1;
         summary.items.push({
           projectId: project.id,
-          status: "ACTIVE",
+          status: result.pending ? "PENDING" : "ACTIVE",
+          operation: result.operation || null,
           revision: result.revision,
           sizeBytes: result.sizeBytes,
         });

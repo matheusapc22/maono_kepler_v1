@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { getDropboxClient } from "../../functions/_lib/dropbox-client.js";
@@ -30,6 +31,11 @@ export function waitForPause(entered, running) {
 export function persistenceFixture(t, hooks = {}) {
   const db = new DatabaseSync(":memory:");
   db.exec(readFileSync(new URL("../../schema.sql", import.meta.url), "utf8"));
+  if (!db.prepare("SELECT name FROM sqlite_master WHERE name='project_save_operation_schema'").get()) {
+    db.exec(readFileSync(new URL("../../migrations/0039_project_save_operations.sql", import.meta.url), "utf8"));
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS app_schema_metadata (id INTEGER PRIMARY KEY, schema_version INTEGER NOT NULL);
+    INSERT OR REPLACE INTO app_schema_metadata(id,schema_version) VALUES(1,19);`);
   db.exec(`
     INSERT INTO users (id,email,name,role,password_hash) VALUES
       (1,'owner@offline.invalid','Offline owner','client','not-a-login'),
@@ -40,16 +46,45 @@ export function persistenceFixture(t, hooks = {}) {
     INSERT INTO organization_users (organization_id,user_id,access_level) VALUES
       (1,1,'owner'),(2,2,'owner');
   `);
+  for (const [userId, organizationId] of [[1,1],[2,2]]) {
+    db.prepare("INSERT INTO sessions(token_hash,user_id,active_organization_id,expires_at) VALUES(?,?,?,?)")
+      .run(createHash("sha256").update(`offline-session-${userId}`).digest("hex"), userId, organizationId, "2099-01-01T00:00:00.000Z");
+  }
   t.after(() => db.close());
+  let queue = Promise.resolve();
+  const serialize = task => { const pending = queue.then(task); queue = pending.catch(() => {}); return pending; };
+  const sqlCalls = [];
+  let primaryReads = 0;
   const env = {
     APP_ENV: "local",
     STORAGE_DRIVER: "dropbox",
-    PROJECT_CREATE_LARGE_STREAM_V1: "true",
+    DROPBOX_APP_KEY: "offline-fixture", DROPBOX_APP_SECRET: "offline-fixture", DROPBOX_REFRESH_TOKEN: "offline-fixture",
+    PROJECT_DURABLE_SAVE_V1: "true",
     PROJECT_QUOTA_RESERVATION_V1: "true",
     DB: {
+      withSession(mode) { assert.equal(mode, "first-primary"); primaryReads += 1; return this; },
+      batch(statements) {
+        return serialize(async () => {
+          await hooks.beforeBatch?.({db, statements});
+          db.exec("BEGIN IMMEDIATE");
+          let committed = false;
+          try {
+            const result = [];
+            for (const statement of statements) result.push(await statement.execute("batch"));
+            db.exec("COMMIT");
+            committed = true;
+            await hooks.afterBatch?.({db, statements, result});
+            return result;
+          } catch (error) {
+            if (!committed) db.exec("ROLLBACK");
+            throw error;
+          }
+        });
+      },
       prepare(sql) {
         let args = [];
         async function execute(kind) {
+          sqlCalls.push({sql, args: [...args], kind});
           await hooks.beforeSql?.({
             sql,
             args,
@@ -83,9 +118,11 @@ export function persistenceFixture(t, hooks = {}) {
             args = values.map(v => v instanceof ArrayBuffer ? new Uint8Array(v) : v);
             return this;
           },
-          first: () => execute("first"),
-          all: () => execute("all"),
-          run: () => execute("run")
+          sql,
+          execute,
+          first: () => serialize(() => execute("first")),
+          all: () => serialize(() => execute("all")),
+          run: () => serialize(() => execute("run"))
         };
       }
     }
@@ -137,6 +174,7 @@ export function persistenceFixture(t, hooks = {}) {
   client.fetchFn = async (url, init) => {
     const parsed = new URL(url);
     assert.ok(["api.dropboxapi.com", "content.dropboxapi.com"].includes(parsed.host));
+    if (parsed.pathname === "/oauth2/token") return json({access_token:"offline-provider-fixture-only",expires_in:86400});
     const op = parsed.pathname.replace("/2/files/", "");
     const argHeader = new Headers(init.headers).get("Dropbox-API-Arg");
     const args = JSON.parse(argHeader || init.body || "{}");
@@ -167,7 +205,7 @@ export function persistenceFixture(t, hooks = {}) {
         "Content-Type": "application/json",
         "Dropbox-API-Result": JSON.stringify(objects.get(args.path).metadata)
       }
-    }) : missing();else if (op === "delete_v2") {
+    }) : missing();else if (op === "get_temporary_link") response = objects.has(args.path) ? json({link:"https://offline.invalid/temporary-config",metadata:objects.get(args.path).metadata}) : missing();else if (op === "delete_v2") {
       const object = objects.get(args.path);
       objects.delete(args.path);
       response = object ? json({
@@ -215,6 +253,9 @@ export function persistenceFixture(t, hooks = {}) {
       response
     })) || response;
   };
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = client.fetchFn;
+  t.after(() => { globalThis.fetch = previousFetch; });
   const user = {
     id: 1,
     name: "Offline owner",
@@ -225,6 +266,9 @@ export function persistenceFixture(t, hooks = {}) {
     env,
     db,
     user,
+    sqlCalls,
+    get primaryReads() { return primaryReads; },
+    headers: (userId = 1) => ({ Cookie: `maono_session=offline-session-${userId}`, "X-Maono-Client-Contract": "2" }),
     objects,
     sessions,
     calls,

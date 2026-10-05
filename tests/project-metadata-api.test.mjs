@@ -19,7 +19,7 @@ const configServiceUrl = new URL(
   import.meta.url,
 );
 const revisionsUrl = new URL(
-  "../functions/_lib/project-config-revisions.js",
+  "../functions/_lib/project-save-operations.js",
   import.meta.url,
 );
 
@@ -140,57 +140,20 @@ test("payload público de metadados não expõe e-mail nem campos Dropbox", () =
   assert.doesNotMatch(metadataSource, /\bemail\s*:/i);
 });
 
-test("salvamento do mapa mantém último editor no Control Plane", () => {
-  assert.match(configSource, /saveProjectConfig/);
-  assert.match(configSource, /touchProjectAfterConfigSave/);
-  assert.match(
-    configSource,
-    /actor:\s*\{\s*id:\s*user\.id,\s*name:\s*user\.name/,
-  );
-  assert.match(configServiceSource, /touchProjectAfterConfigSave\(env/);
-  assert.match(revisionsSource, /updated_by = \?/);
-  assert.match(revisionsSource, /updated_by_name_snapshot = \?/);
+test("salvamento mantém autoria no commit atômico sem reescrever metadataVersion", () => {
+  assert.match(revisionsSource,/updated_by = \?/);
+  assert.match(revisionsSource,/updated_by_name_snapshot = \?/);
+  assert.doesNotMatch(revisionsSource,/metadata_version\s*=\s*metadata_version/);
+  assert.doesNotMatch(serviceSource,/export async function touchProjectAfterConfigSave/);
 });
-
-test("salvar mapa não incrementa metadata_version", () => {
-  const touchFunction = serviceSource.match(
-    /export async function touchProjectAfterConfigSave\([\s\S]*?\n\}/,
-  );
-
-  assert.ok(touchFunction, "touchProjectAfterConfigSave deve existir.");
-  assert.match(touchFunction[0], /updated_by\s*=/);
-  assert.match(touchFunction[0], /updated_by_name_snapshot\s*=/);
-  assert.match(touchFunction[0], /updated_at\s*=\s*CURRENT_TIMESTAMP/);
-  assert.doesNotMatch(
-    touchFunction[0],
-    /metadata_version\s*=\s*metadata_version\s*\+\s*1/,
-  );
-  assert.doesNotMatch(revisionsSource, /metadata_version\s*=\s*metadata_version/);
+test("preview permanece independente do recibo publicado",()=>{
+  assert.match(revisionsSource,/preview_status = CASE/);
+  assert.match(revisionsSource,/operation.kind === 'legacy-promotion'/);
+  assert.match(revisionsSource,/receipt_json/);
 });
-
-test("política de preview continua independente do salvamento do JSON", () => {
-  assert.match(configSource, /const saved = await saveProjectConfig/);
-  assert.match(configSource, /asyncThumbnailEnabled\(env\)/);
-  assert.match(configSource, /configRevision/);
-  assert.match(configSource, /preview_status = 'PENDING'|thumbnailState/);
-  assert.match(
-    configSource,
-    /combineHeaders\(saveTrace,\s*deploymentMetadata\)/,
-  );
-  assert.match(configServiceSource, /publishProjectConfigRevision/);
-
-  const saveIndex = configSource.indexOf("const saved = await saveProjectConfig");
-  const previewIndex = configSource.indexOf("!asyncThumbnailEnabled(env)");
-  assert.ok(saveIndex >= 0 && previewIndex > saveIndex);
-});
-
-test("resposta do config inclui último editor, versão e lifecycle seguro", () => {
-  assert.match(configSource, /updatedBy:\s*base\.updatedBy\s*\?\?\s*null/);
-  assert.match(configSource, /metadataVersion:\s*Number\(/);
-  assert.match(configSource, /publicProjectForConfigResponse\(updatedProject\)/);
-  assert.match(configSource, /lifecycle:\s*publicProjectLifecycle\(updatedProject\)/);
-  assert.doesNotMatch(
-    configSource.match(/function publicProjectForConfigResponse[\s\S]*?\n\}/)?.[0] || "",
-    /config_storage_ref|config_checksum\s*:/,
-  );
+test("leitura compatível conserva metadata e lifecycle públicos sem storage privado",()=>{
+  assert.match(configSource,/publicProject\(project\)/);
+  assert.match(configSource,/publicProjectLifecycle\(project\)/);
+  assert.match(configServiceSource,/readPublishedProjectConfig/);
+  assert.doesNotMatch(configSource,/config_storage_ref\s*:|config_checksum\s*:/);
 });

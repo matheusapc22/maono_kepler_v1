@@ -8,7 +8,7 @@ Fluxo:
 
 `CI normal → preflight → aprovação humana → acceptance controlado → cleanup → restauração de configuração → evidência`
 
-O operador é genérico. Cada funcionalidade registra uma **suite versionada** em `scripts/acceptance/suites/`. A primeira suite é `cc04-selective-access`.
+O operador é genérico. Cada funcionalidade registra uma **suite versionada** em `scripts/acceptance/suites/`. As suites registradas são `cc04-selective-access` e `durable-project-save`.
 
 ## GitHub Environment
 
@@ -36,7 +36,7 @@ O Environment usa dois secrets próprios, separados do operador de migrations:
 2. `MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON`
    - JSON com contas QA dedicadas;
    - nunca usar usuários pessoais ou dados reais;
-   - formato atual:
+   - exemplo de perfis exigidos pela suite CC-04:
 
 ```json
 {
@@ -131,7 +131,7 @@ Não existe input de shell, URL ou código arbitrário no workflow. O usuário s
 
 Suite: `cc04-selective-access`
 
-Esta é a única suite remota registrada neste snapshot. Ela não executa CT55–58 nem substitui os aceites herdados CC05–16. A CC17 acrescenta automação local e um validador offline de evidências; novos executores remotos de carga/caos exigem contrato versionado, parâmetros aprovados e revisão antes da janela.
+Esta suite não executa CT55–58 nem substitui os aceites herdados CC05–16. A CC17 acrescenta automação local e um validador offline de evidências; novos executores remotos de carga/caos exigem contrato versionado, parâmetros aprovados e revisão antes da janela.
 
 Casos:
 
@@ -148,6 +148,31 @@ A suite detecta as capabilities reais de triagem/lifecycle antes de montar o pay
 - esvazia/desativa o grupo sintético.
 
 O chamado sintético pode permanecer como registro de QA na organização dedicada; nunca deve conter informação real ou sensível.
+
+## Salvamento durável de projetos
+
+Suite: `durable-project-save`. Contrato detalhado:
+[Durable project saving](../ops/durable-project-saving.md#registered-synthetic-acceptance-code-prepared-execution-separately-gated).
+
+- Organização fixa: 9 / `maono-preview-qa`; `project_slug` vazio.
+- Perfis no mesmo secret QA existente: `creator` editor com `project.create` e
+  `administrator` super_admin com `admin.panel.access`. Somente contas dedicadas.
+- Baseline/seguro: `PROJECT_DURABLE_SAVE_V1=false` e
+  `PROJECT_DURABLE_SAVE_INLINE_ENABLED=true`; janela: true/false, respectivamente.
+- Worker agendado e seus bindings precisam de auditoria e autorização de
+  deployment independentes. A suite não o provisiona nem faz deploy.
+- `PROJECT_QUOTA_RESERVATION_V1` deve estar ausente/desabilitada nos snapshots
+  configurado e publicado; a suite bloqueia quota ativa, sem modificar essa flag,
+  porque falta cleanup verificável de reservas incompletas pelas APIs atuais.
+- Até dois projetos sintéticos, incluindo 94 MiB; cleanup remove projetos e
+  desativa arquivos. Objetos imutáveis, recibos e tombstones permanecem retidos.
+- `report.runId` identifica os recursos mesmo se o run falhar. Falha ou interrupção
+  não permite declarar cleanup completo nem abrir outra janela sem reconciliação.
+- Resposta perdida é modelada por descarte do ACK; leitura grande verifica o
+  descriptor e recibo validado pelo servidor, sem afirmar download independente.
+
+O antigo workflow de Preview está aposentado e não oferece rota alternativa.
+Esta nova suite está preparada em código; não há execução ou rollout implícito.
 
 ## Feature flags e rollback
 
@@ -188,3 +213,22 @@ O artifact contém somente informação sanitizada:
 - erro público, quando houver.
 
 Senhas, cookies e tokens nunca são gravados no artifact ou Job Summary.
+
+
+## Orçamento de execução e interrupções
+
+Os limites revisados por fase são 10 min de preflight, 60 de ativação, 45 de
+mutações da suite, 10 de cleanup, 60 de restauração e 5 de relatório: até 190 min.
+O job protegido tem 210 min. Os próprios passos de setup somam no máximo 11 min;
+o operador tem teto de 192 min; resumo/artifact somam 3 min. A soma dos tetos de
+passos é 206 min, com 4 min adicionais de margem do job. Setup lento falha antes
+da entrega de secrets ao operador; não consome silenciosamente a reserva final.
+
+Cada requisição, leitura de resposta e espera respeita o deadline da fase. A
+admissão exige reserva de cleanup/restauração, e esses passos recebem deadlines
+novos depois de timeout da suite. Após autenticar o QA, há checkpoint sanitizado
+e run ID no log antes de alterar flags ou recursos da suite. Interrupção dura pode impedir finally e upload de artifacts;
+o checkpoint/log identifica o run, mas não comprova fechamento. Usar closure com
+aprovação separada e verificar recursos. Uma reserva sem resposta confirmada
+continua incerta mesmo com inventário vazio, pois a requisição original pode
+concluir depois. Recursos sintéticos de runs anteriores bloqueiam nova janela.

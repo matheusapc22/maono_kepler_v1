@@ -672,6 +672,17 @@ function ReviewWorkspaceOverlay({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (review?.changeRequest.status !== "applying") return;
+    let active = true;
+    const timer = window.setInterval(() => {
+      void getProjectChangeReview(projectSlug,changeRequestId,{force:true}).then(next => {
+        if (active) setReview(next);
+      }).catch(() => { /* Keep the pending state until a verified outcome is available. */ });
+    },3000);
+    return () => { active=false; window.clearInterval(timer); };
+  },[review?.changeRequest.status,projectSlug,changeRequestId]);
+
   const operations = review?.proposal?.operations || [];
   useEffect(() => {
     if (!operations.length) {
@@ -774,7 +785,11 @@ function ReviewWorkspaceOverlay({
       const result = await applyProjectChangeReview(projectSlug, changeRequestId);
       setReview(result.review);
       setToast(
-        `Alterações aplicadas na REV ${result.appliedRevision} do mesmo projeto.`,
+        result.pending
+          ? result.payloadStored
+            ? "Proposta recebida. A publicação continuará mesmo com esta página fechada."
+            : "O envio ainda não foi recebido por completo. Mantenha a página aberta e retome a mesma tentativa."
+          : `Alterações aplicadas na REV ${result.appliedRevision} do mesmo projeto.`,
       );
     } catch (actionError) {
       setError(safeMessage(actionError));
