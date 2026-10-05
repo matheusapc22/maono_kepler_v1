@@ -67,15 +67,19 @@ for (const width of [1440, 390]) for (const mode of ["list", "grid"] as const) t
   await page.setViewportSize({ width, height: 900 }); const gate = deferred();
   await setup(page, { beforeRead: async url => { if (url.pathname.endsWith("/files")) await gate.promise; } });
   await open(page, "Arquivos e Documentos");
-  if (mode === "grid") await page.getByRole("button", { name: "Visualização em grade" }).click();
+  // Settle the independent folder reveal before clicking a view control below it.
+  const readyFolder = page.locator('.mm-docs-folder-card:not(.mm-loading-folder-card)').first();
+  await expect(readyFolder).toBeVisible(); await expect(readyFolder).not.toContainText('0 documentos');
+  if (mode === "grid") {
+    const gridButton = page.getByRole("button", { name: "Visualização em grade" });
+    await gridButton.click();
+    await expect(gridButton).toHaveAttribute("aria-pressed", "true");
+  }
   const results = docs(page); await expect(results.locator(".mm-skeleton").first()).toBeVisible();
   await expect(page.locator(".mm-docs-folder-card").first()).not.toContainText("0 documentos");
   await expect(results).not.toContainText("Exibindo 0/0"); await expect(results.getByText("Itens por página")).toBeVisible();
   await expect(results.locator(mode === "list" ? ".mm-loading-table-row" : ".mm-loading-document-card").first()).toBeVisible();
   expect(await results.getByRole('status').evaluateAll(nodes => nodes.length === 1 && nodes.every(node => !node.closest('[aria-busy="true"]')))).toBe(true);
-  // Isolate file geometry from the independent folder response and its unknown count.
-  const readyFolder = page.locator('.mm-docs-folder-card:not(.mm-loading-folder-card)').first();
-  await expect(readyFolder).toBeVisible(); await expect(readyFolder).not.toContainText('0 documentos');
   await page.screenshot({ path: info.outputPath(`documents-${mode}-${width}-initial.png`), fullPage: true });
   // WebKit trace: viewportY447.5+scroll1558 === viewportY699.5+scroll1306.
   // Document Y stayed2005.5; settle the capture/click scroll before measuring.

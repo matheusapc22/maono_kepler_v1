@@ -16,6 +16,9 @@
 .mm-project-pages .mm-project-pages__heading > .mm-project-pages__icon { width: 48px; height: 52px; color: var(--maono-accent-bright); }
 .mm-project-pages .mm-project-pages__heading h1 { margin: 0; color: var(--mm-text); font-size: clamp(24px, 2vw, 30px); font-weight: 800; line-height: 1.2; letter-spacing: -.025em; }
 .mm-project-pages .mm-project-pages__heading p { margin: 8px 0 0; color: var(--mm-text-soft); font-size: 14px; line-height: 1.5; }
+.mm-project-pages .mm-project-pages__heading.mm-project-pages__heading--all { align-items: center; gap: 14px; }
+.mm-project-pages .mm-project-pages__heading.mm-project-pages__heading--all > .mm-project-pages__icon { width: 42px; height: 42px; }
+.mm-project-pages .mm-project-pages__heading--all > div, .mm-project-pages .mm-project-pages__heading--all h1 { min-width: 0; }
 .mm-project-pages .mm-project-pages__icon { width: 20px; height: 20px; flex: 0 0 auto; }
 .mm-project-pages .mm-project-pages__button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 10px 18px; border: 1px solid var(--mm-border-strong, #343c47); border-radius: 8px; background: #0b1016; color: var(--mm-text); font: inherit; font-size: 14px; font-weight: 650; line-height: 1.4; text-decoration: none; cursor: pointer; white-space: nowrap; box-sizing: border-box; transition: border-color 140ms ease, background-color 140ms ease; }
 .mm-project-pages .mm-project-pages__button:hover:not(:disabled) { border-color: var(--maono-accent-border-strong); background: var(--maono-accent-surface); }

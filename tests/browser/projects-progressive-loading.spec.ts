@@ -55,11 +55,24 @@ async function reopenAll(page: Page) {
 }
 test.afterEach(async ({ page }) => { expect(errors.get(page) ?? []).toEqual([]); expect(writes.get(page) ?? []).toEqual([]); });
 
-for (const width of [1440, 390]) test(`Projects ${width}px keeps structure and unknown pending footer, then reveals results`, async ({ page }, testInfo) => {
+for (const width of [1440, 768, 390]) test(`Projects ${width}px keeps structure and unknown pending footer, then reveals results`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
   const gate = deferred(); await setup(page, { count: 17, beforeRead: async path => { if (path === '/api/projects') await gate.promise; } });
   await expect(page.getByRole('heading', { name: 'Todos os Projetos', exact: true, level: 1 })).toBeVisible();
   await expect(search(page)).toBeEnabled(); await search(page).fill('Texto de busca ainda não aplicado');
+  const header = page.locator('.mm-project-pages__heading');
+  const icon = header.locator(':scope > svg');
+  await expect(icon).toHaveAttribute('data-icon', 'map-pinned');
+  await expect(icon).toHaveAttribute('aria-hidden', 'true');
+  await expect(header.locator('p')).toHaveCount(0);
+  const titleBox = await header.locator('h1').boundingBox();
+  const iconBox = await icon.boundingBox();
+  expect(iconBox!.width).toBe(42); expect(iconBox!.height).toBe(42);
+  expect(Math.abs(iconBox!.y + iconBox!.height / 2 - titleBox!.y - titleBox!.height / 2)).toBeLessThanOrEqual(1);
+  expect(await icon.evaluate(element => getComputedStyle(element).color)).toBe(await header.evaluate(element => {
+    const probe = document.createElement('span'); probe.style.color = 'var(--maono-accent-bright)'; element.append(probe);
+    const color = getComputedStyle(probe).color; probe.remove(); return color;
+  }));
   await expect(page.locator('.mm-project-skeleton').first()).toBeVisible();
   const count = await page.locator('.mm-project-skeleton').count();
   expect(count).toBeGreaterThan(0); expect(count).toBeLessThanOrEqual(width === 390 ? 3 : 9);
@@ -82,7 +95,10 @@ for (const width of [1440, 390]) test(`Projects ${width}px keeps structure and u
   // Creator metadata is optional; only that short row may differ from the estimate.
   expect(Math.abs(readyCard!.height - pendingCard!.height)).toBeLessThanOrEqual(32);
   expect(await page.locator('.mm-project-pages__grid').evaluate(element => getComputedStyle(element).gridTemplateColumns)).toBe(pendingColumns);
-  expect((await page.locator('.mm-project-pages__heading').boundingBox())?.y).toBe(heading?.y);
+  expect(await header.boundingBox()).toEqual(heading);
+  expect(await header.locator('h1').boundingBox()).toEqual(titleBox);
+  expect(await icon.boundingBox()).toEqual(iconBox);
+  await expect(header.locator('p')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath(`projects-${width}-ready.png`), fullPage: true });
 });

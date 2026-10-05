@@ -231,7 +231,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   const hasAppliedFilters = Boolean(searchQuery.trim()) || appliedFilters.status !== "all";
   return (
     <div className="mm-project-pages__workspace">
-      <ProjectPageFiltersForm
+      {section === "all" ? <ProjectPageFiltersForm
         structurePending={structurePending}
         value={draftFilters}
         disabled={false}
@@ -249,7 +249,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
           onSearchQueryChange("");
           setCurrentPage(1);
         }}
-      />
+      /> : null}
       {actionError ? <div className="mm-project-pages__error" role="alert"><p>{actionError}</p>{onDismissActionError ? <button type="button" className="mm-project-pages__button" onClick={onDismissActionError}>Fechar aviso</button> : null}</div> : null}
       {error ? <section className="mm-project-pages__empty" role="alert">
         <h2>Não foi possível carregar os projetos</h2><p>{error}</p>

@@ -53,18 +53,26 @@ async function expectPixels(page:Page) {
  const state=await result.jsonValue();
  expect(state).toBe('ready');
 }
+async function expectSimplifiedPreview(page:Page) {
+ await expect(modal(page).getByText('PDF e imagens • leitura segura',{exact:true})).toHaveCount(0);
+ await expect(modal(page).getByText('Arquivo original preservado',{exact:true})).toHaveCount(0);
+ await expect(modal(page).locator('details,summary,.mm-preview-page-text,.mm-preview-text-fallback')).toHaveCount(0);
+ await expect(modal(page).getByText('Esc para fechar',{exact:true})).toBeVisible();
+ await expect(modal(page).getByRole('button',{name:'Baixar original'})).toBeVisible();
+}
 
 test('PDF real em canvas, páginas, zoom, texto acessível, foco, Escape e retorno na lista',async({page},info)=>{
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
- await setup(page);await open(page,files[0].name);await expectPixels(page);
+ await setup(page);await open(page,files[0].name);await expectPixels(page);await expectSimplifiedPreview(page);
  await expect(modal(page).getByRole('button',{name:'Fechar prévia'})).toBeFocused();
  await expect(page.getByText('Página 1 de 2',{exact:true})).toBeVisible();
  await modal(page).getByRole('button',{name:'Próxima página'}).click();await expectPixels(page);await expect(page.getByText('Página 2 de 2',{exact:true})).toBeVisible();
+ await expect(modal(page).getByRole('img',{name:'Página 2 do documento PDF.',exact:true})).toHaveAccessibleDescription(/Potencial por regiao/);
  await modal(page).getByRole('button',{name:'Página anterior'}).click();await expectPixels(page);
  await page.getByRole('button',{name:'Aumentar zoom'}).click();await expectPixels(page);await expect(page.getByRole('button',{name:'Ajustar à largura'})).toHaveText('125%');
  await page.getByRole('button',{name:'Ajustar à largura'}).click();await expectPixels(page);
  await page.screenshot({path:info.outputPath('preview-pdf-desktop.png'),fullPage:true});
- await page.getByText('Texto desta página',{exact:true}).click();await expect(page.locator('.mm-preview-page-text p')).toContainText('Panorama de mercado');
+ await expect(modal(page).getByRole('img',{name:'Página 1 do documento PDF.',exact:true})).toHaveAccessibleDescription(/Panorama de mercado/);
  for(const key of ['Tab','Shift+Tab'])for(let i=0;i<14;i++){await page.keyboard.press(key);expect(await modal(page).evaluate(el=>el.contains(document.activeElement))).toBe(true);}
  await page.keyboard.press('Escape');await expect(modal(page)).toHaveCount(0);await expect(page.getByRole('button',{name:`Abrir prévia de ${files[0].name}`})).toBeFocused();expect(errors).toEqual([]);
 });
@@ -73,6 +81,7 @@ test('grade, imagens reais PNG/JPG/WebP, abre/fecha repetido sem URLs retidas',a
  await setup(page);await page.getByRole('button',{name:'Visualização em grade'}).click();
  for(const file of [files[1],files[5],files[6],files[1]]) {
   await open(page,file.name);const img=modal(page).getByRole('img',{name:file.name});await expect(img).toBeVisible();await expect.poll(()=>img.evaluate((el:HTMLImageElement)=>el.naturalWidth)).toBe(1000);
+  await expectSimplifiedPreview(page);
   await page.getByRole('button',{name:'Aumentar zoom'}).click();
   if(file===files[1])await page.screenshot({path:info.outputPath('preview-image-grid.png'),fullPage:true});
   await page.getByRole('button',{name:'Fechar prévia'}).click();await expect(modal(page)).toHaveCount(0);
@@ -81,7 +90,7 @@ test('grade, imagens reais PNG/JPG/WebP, abre/fecha repetido sem URLs retidas',a
 });
 
 test('mobile 390px: cabeçalho/controles cabem, PDF navega e zoom rola internamente',async({page},info)=>{
- await page.setViewportSize({width:390,height:844});await setup(page);await open(page,files[0].name);await expectPixels(page);
+ await page.setViewportSize({width:390,height:844});await setup(page);await open(page,files[0].name);await expectPixels(page);await expectSimplifiedPreview(page);
  const box=await modal(page).boundingBox();expect(box!.width).toBeLessThanOrEqual(390);expect(box!.height).toBeLessThanOrEqual(844);
  for(const name of ['Fechar prévia','Aumentar zoom','Baixar original']) {const b=await page.getByRole('button',{name}).boundingBox();expect(b!.x).toBeGreaterThanOrEqual(0);expect(b!.x+b!.width).toBeLessThanOrEqual(390);}
  await page.screenshot({path:info.outputPath('preview-mobile.png'),fullPage:false});
@@ -162,5 +171,5 @@ test('falha do módulo leitor orienta atualizar a página e preserva o download'
 
 test('PDF real mantém texto acessível sem iteração assíncrona de ReadableStream',async({page})=>{
  await page.addInitScript(()=>{Object.defineProperty(ReadableStream.prototype,Symbol.asyncIterator,{configurable:true,value:undefined});});
- await setup(page);await open(page,files[0].name);await expectPixels(page);await page.getByText('Texto desta página',{exact:true}).click();await expect(page.locator('.mm-preview-page-text p')).toContainText('Panorama de mercado');await expect(modal(page).getByRole('alert')).toHaveCount(0);
+ await setup(page);await open(page,files[0].name);await expectPixels(page);await expect(modal(page).getByRole('img',{name:'Página 1 do documento PDF.',exact:true})).toHaveAccessibleDescription(/Panorama de mercado/);await expect(modal(page).getByRole('alert')).toHaveCount(0);await expectSimplifiedPreview(page);
 });
