@@ -25,7 +25,7 @@ const initialBootLoader = await readFile(
   "utf8",
 );
 
-test("Cloudflare build grants Vite a 6144 MB heap", () => {
+test("Cloudflare build grants Vite a 4096 MB heap", () => {
   assert.match(
     packageJson.scripts.build,
     /vite\.js build/,
@@ -33,8 +33,8 @@ test("Cloudflare build grants Vite a 6144 MB heap", () => {
   );
   assert.match(
     packageJson.scripts.build,
-    /--max-old-space-size=6144[^&]*vite\.js build/,
-    "the Vite process must receive a 6144 MB heap",
+    /--max-old-space-size=4096[^&]*vite\.js build/,
+    "the Vite process must receive a 4096 MB heap",
   );
 });
 

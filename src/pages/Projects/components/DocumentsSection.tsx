@@ -36,6 +36,7 @@ import "./DocumentsTransferPanel.css";
 import "./DocumentsSection.css";
 import DocumentsPagination from "./DocumentsPagination";
 import { DocumentActionMenu, DocumentIcon, DocumentSortHeading } from "./DocumentsUi";
+import DocumentPreviewDialog from "./DocumentPreviewDialog";
 import { DocumentMoveDialog, DocumentNameDialog } from "./DocumentActionDialogs";
 
 type DocumentsSectionProps = {
@@ -425,6 +426,7 @@ function OrganizationDocuments({
   const [fileMoveDraft, setFileMoveDraft] = useState<{
     file: OrganizationFile;
   } | null>(null);
+  const [previewFile, setPreviewFile] = useState<OrganizationFile | null>(null);
   const [fileRenameDraft, setFileRenameDraft] = useState<OrganizationFile | null>(null);
   const [createFolderDraft, setCreateFolderDraft] = useState<{ parentId: string | null } | null>(null);
   const [filterDraft, setFilterDraft] = useState<DocumentFilterState>({
@@ -750,6 +752,7 @@ function OrganizationDocuments({
   function clearDeniedDocuments() {
     // Invalidate companion reads and mutation-triggered refreshes from this context.
     accessDeniedRef.current = true;
+    setPreviewFile(null);
     loadSequenceRef.current += 1;
     folderSequenceRef.current += 1;
     setFiles([]); setFolders([]); setHasLoadedFiles(false); setFoldersError(true);
@@ -960,7 +963,7 @@ function OrganizationDocuments({
     }
   }
 
-  async function handleDownload(file: OrganizationFile) {
+  async function handleDownload(file: OrganizationFile, reportFailure = false) {
     if (!organizationId || !canDownload || transferBusy) return;
 
     stopProcessingTimer();
@@ -1017,6 +1020,7 @@ function OrganizationDocuments({
         detail: formattedError,
       }));
       scheduleTransferDismiss(6500);
+      if (reportFailure) throw requestError;
     } finally {
       setBusyFileId(null);
     }
@@ -1421,6 +1425,7 @@ function OrganizationDocuments({
         </nav>
       </section> : null}
 
+      {previewFile && canDownload && documentState === "active" ? <DocumentPreviewDialog key={`${organizationId}:${previewFile.id}`} file={previewFile} organizationId={organizationId} canDownload={canDownload} downloadBusy={transferBusy} onDownload={file => handleDownload(file, true)} onClose={() => setPreviewFile(null)} /> : null}
       {fileRenameDraft ? <DocumentNameDialog name={fileRenameDraft.name} onClose={() => setFileRenameDraft(null)} onSubmit={name => handleRenameFile(fileRenameDraft, name)} /> : null}
       {createFolderDraft ? <DocumentNameDialog onClose={() => setCreateFolderDraft(null)} onSubmit={handleCreateFolder} /> : null}
       {fileMoveDraft ? <DocumentMoveDialog kind="file" name={fileMoveDraft.file.name} itemId={fileMoveDraft.file.id}
@@ -1470,6 +1475,7 @@ function OrganizationDocuments({
         folderOrigin={appliedFilters.folderId === "" ? fileFolderOrigin : undefined}
         onRename={file => setFileRenameDraft(file)}
         onMove={beginMoveFile}
+        onPreview={file => { if (canDownload && !accessDeniedRef.current) setPreviewFile(file); }}
         onDownload={handleDownload}
         onDelete={handleDelete}
         onLoadMore={loadMoreDocuments}
@@ -1513,6 +1519,7 @@ type ActiveDocumentsResultsProps = {
   canDownload: boolean;
   canDelete: boolean;
   folderOrigin?: (file: OrganizationFile) => string;
+  onPreview: (file: OrganizationFile) => void;
   onRename: (file: OrganizationFile) => void;
   onMove: (file: OrganizationFile) => void;
   onDownload: (file: OrganizationFile) => Promise<void>;
@@ -1530,9 +1537,9 @@ function documentVisualType(file: OrganizationFile) {
   return { tone: "document", mark: "DOC" };
 }
 
-function DocumentFileIdentity({ file, folderOrigin }: { file: OrganizationFile; folderOrigin?: string }) {
+function DocumentFileIdentity({ file, folderOrigin, onPreview }: { file: OrganizationFile; folderOrigin?: string; onPreview?: () => void }) {
   const visual = documentVisualType(file);
-  return <div className="mm-docs-file-identity"><span className={`mm-docs-file-icon is-${visual.tone}`} aria-hidden="true"><span>{visual.mark}</span></span><span className="mm-docs-file-copy"><span className="documents-file-name" title={file.name}>{file.name}</span>{file.projectName ? <span className="documents-file-project">{file.projectName}</span> : null}{folderOrigin ? <span className="documents-file-origin" title={folderOrigin}><DocumentIcon name="folder" />Pasta: {folderOrigin}</span> : null}</span></div>;
+  return <div className="mm-docs-file-identity"><span className={`mm-docs-file-icon is-${visual.tone}`} aria-hidden="true"><span>{visual.mark}</span></span><span className="mm-docs-file-copy">{onPreview ? <button type="button" className="documents-file-name mm-docs-preview-trigger" title={file.name} aria-label={`Abrir prévia de ${file.name}`} onClick={event => { event.currentTarget.focus({ preventScroll: true }); onPreview(); }}>{file.name}</button> : <span className="documents-file-name" title={file.name}>{file.name}</span>}{file.projectName ? <span className="documents-file-project">{file.projectName}</span> : null}{folderOrigin ? <span className="documents-file-origin" title={folderOrigin}><DocumentIcon name="folder" />Pasta: {folderOrigin}</span> : null}</span></div>;
 }
 
 function ActiveDocumentActions({
@@ -1626,11 +1633,11 @@ function ActiveDocumentsResults(props: ActiveDocumentsResultsProps) {
       {viewMode === "list" ? <div className="mm-docs-table-scroll" role="region" aria-label="Tabela de documentos" tabIndex={0} aria-busy={contentPending || initialLoading || refreshing || loadingMore || pendingNext}>
         <table className="mm-docs-table"><thead><tr>{DOCUMENT_SORT_COLUMNS.map((column, index) => <DocumentSortHeading structurePending={structurePending} key={column} column={column} label={DOCUMENT_HEADERS[index]} sort={displayedSort} onSort={props.onSort} />)}<th scope="col"><StaticLoadingText pending={structurePending}>Ações</StaticLoadingText></th></tr></thead><tbody>{(contentPending ? [] : visibleFiles).map(file => {
           const busy = String(props.busyFileId) === String(file.id);
-          return <tr key={file.id}><td><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} /></td><td title={file.mimeType || undefined}><span className="mm-docs-type-badge">{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</span></td><td>{formatBytes(file.size)}</td><td>{formatDate(file.updatedAt || file.createdAt)}</td><td><ActiveDocumentActions {...props} file={file} busy={busy} /></td></tr>;
+          return <tr key={file.id}><td><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} onPreview={props.canDownload && !busy && !props.transferBusy ? () => props.onPreview(file) : undefined} /></td><td title={file.mimeType || undefined}><span className="mm-docs-type-badge">{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</span></td><td>{formatBytes(file.size)}</td><td>{formatDate(file.updatedAt || file.createdAt)}</td><td><ActiveDocumentActions {...props} file={file} busy={busy} /></td></tr>;
         })}{contentPending || loadingMore ? <LoadingTableRows columns={DOCUMENT_HEADERS.length} count={loadingMore ? expansionCount : skeletonCount} /> : null}</tbody></table>
       </div> : <div className="mm-docs-file-grid" role="list" aria-label="Grade de documentos" aria-busy={contentPending || initialLoading || refreshing || loadingMore || pendingNext}>{(contentPending ? [] : visibleFiles).map(file => {
         const busy = String(props.busyFileId) === String(file.id);
-        return <article className="mm-docs-file-card" role="listitem" key={file.id}><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} /><div className="mm-docs-file-card-meta"><span><small>Tipo</small><strong>{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</strong></span><span><small>Tamanho</small><strong>{formatBytes(file.size)}</strong></span><span><small>Atualizado em</small><strong>{formatDate(file.updatedAt || file.createdAt)}</strong></span></div><ActiveDocumentActions {...props} file={file} busy={busy} /></article>;
+        return <article className="mm-docs-file-card" role="listitem" key={file.id}><DocumentFileIdentity file={file} folderOrigin={props.folderOrigin?.(file)} onPreview={props.canDownload && !busy && !props.transferBusy ? () => props.onPreview(file) : undefined} /><div className="mm-docs-file-card-meta"><span><small>Tipo</small><strong>{file.fileType ? fileTypeLabel(file.fileType) : file.mimeType || "—"}</strong></span><span><small>Tamanho</small><strong>{formatBytes(file.size)}</strong></span><span><small>Atualizado em</small><strong>{formatDate(file.updatedAt || file.createdAt)}</strong></span></div><ActiveDocumentActions {...props} file={file} busy={busy} /></article>;
       })}{contentPending || loadingMore ? <DocumentGridSkeleton structurePending={structurePending} count={loadingMore ? expansionCount : skeletonCount} /> : null}</div>}
       </>}
       <DocumentsPagination structurePending={structurePending} status={contentPending || initialLoading || refreshing || loadingMore || pendingNext ? <LoadingStatus loading refreshing={files.length > 0 && !contentPending} label="Carregando documentos." refreshingLabel={loadingMore ? "Carregando mais documentos." : "Atualizando documentos."} announce={false} visuallyHidden={false} /> : error && files.length === 0 ? "A consulta precisa de atenção." : `Exibindo ${visibleFiles.length}/${pagination.total}.`} page={safePageIndex + 1} pageSize={pageSize} canGoPrevious={canGoPrevious} canGoNext={canGoNext} disabled={initialLoading || refreshing || loadingMore || pendingNext} onPageSize={size => { setPageSize(size); setPageIndex(0); setPendingNext(false); }} onPrevious={() => setPageIndex(Math.max(0, safePageIndex - 1))} onNext={goNext} />

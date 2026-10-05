@@ -35,7 +35,7 @@ export const renderCalendar=p=>renderToStaticMarkup(<TicketCalendarView {...p}/>
 export const renderDocuments=p=>renderToStaticMarkup(<ActiveDocumentsResults {...p}/>);
 export const renderDetail=()=>renderToStaticMarkup(<TicketDetailSkeleton/>);
 export const renderGrid=p=>renderToStaticMarkup(<DocumentGridSkeleton {...p}/>);
-`, resolveDir: new URL('src/pages/Projects/components/',root).pathname, loader:'tsx' }, bundle:true, platform:'node', format:'esm', jsx:'automatic',write:false, loader:{'.css':'empty','.png':'dataurl'}, external:['react','react-dom','react-dom/server','react/jsx-runtime'], plugins:[{name:'test-document-results',setup(builder){builder.onLoad({filter:/\/DocumentsSection\.tsx$/},({path})=>({contents:readFileSync(path,'utf8')+'\nexport { ActiveDocumentsResults };',loader:'tsx'}));}}] });
+`, resolveDir: new URL('src/pages/Projects/components/',root).pathname, loader:'tsx' }, bundle:true, platform:'node', format:'esm', jsx:'automatic',write:false, loader:{'.css':'empty','.png':'dataurl'}, external:['react','react-dom','react-dom/server','react/jsx-runtime','pdfjs-dist','pdfjs-dist/*'], plugins:[{name:'test-document-results',setup(builder){builder.onLoad({filter:/\/DocumentPreviewDialog\.tsx$/},()=>({contents:'export default function UnmountedPreview(){return null}',loader:'tsx'}));builder.onLoad({filter:/\/DocumentsSection\.tsx$/},({path})=>({contents:readFileSync(path,'utf8')+'\nexport { ActiveDocumentsResults };',loader:'tsx'}));}}] });
 let runtime;
 try { const path=join(directory,'render.mjs'); writeFileSync(path,bundle.outputFiles[0].text); runtime=await import(path); } finally { rmSync(directory,{recursive:true}); }
 const noop=()=>{};

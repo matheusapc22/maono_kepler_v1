@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build",
+    "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:preview-safety": "node --test tests/preview-write-policy.test.mjs tests/preview-middleware.test.mjs tests/preview-golden-builder.test.mjs tests/buffer-preview-policy.test.mjs && node scripts/preview/assert-preview-safety.mjs",
@@ -62,7 +62,9 @@
     "gate:cc17": "node scripts/central-chamados/cc17/evidence-gate.mjs",
     "test:cc18": "node --test tests/cc18-delivery.test.mjs tests/cc18-docs.test.mjs",
     "validate:cc18": "node scripts/central-chamados/cc18/validate-docs.mjs",
-    "gate:cc18": "node scripts/central-chamados/cc18/delivery-gate.mjs"
+    "gate:cc18": "node scripts/central-chamados/cc18/delivery-gate.mjs",
+    "test:document-preview": "node --experimental-strip-types --test tests/document-preview.test.mjs tests/document-preview-api.test.mjs tests/documents-visual-contract.test.mjs tests/document-action-backend-integration.test.mjs",
+    "test:document-preview-browser": "playwright test --config=playwright.document-preview.config.ts"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",
@@ -120,7 +122,8 @@
     "redux-thunk": "^1.0.0",
     "styled-components": "6.1.8",
     "tailwind-merge": "^3.3.1",
-    "usehooks-ts": "^3.1.0"
+    "usehooks-ts": "^3.1.0",
+    "pdfjs-dist": "6.4.299"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

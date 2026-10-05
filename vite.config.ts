@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import { pdfPreviewAssets } from "./scripts/vite/pdf-preview-assets";
 
 export default defineConfig({
   // Preserve the larger Node heap configured in package.json, but let
@@ -16,7 +17,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 2500,
     commonjsOptions: { transformMixedEsModules: true },
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), pdfPreviewAssets()],
   optimizeDeps: {
     exclude: ["kepler.gl", "react-audio-voice-recorder"],
   },
