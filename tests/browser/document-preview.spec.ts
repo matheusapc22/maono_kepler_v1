@@ -16,19 +16,6 @@ async function setup(page: Page, options: Options = {}) {
  const organizations=[{id:1,name:'Demonstração Maõno',slug:'demo',active:true},{id:2,name:'Outra organização',slug:'other',active:true}];
  const session=()=>({authenticated:true,user:{id:1,name:'Operador sintético',email:'qa@example.test',role:options.noDownload?'viewer':'super_admin',permissions:options.noDownload?['document.view']:[],activeOrganizationId:currentOrg},projects:[],organizations,activeOrganization:organizations[currentOrg-1]});
  await page.addInitScript(()=>{
-  // Synthetic fixture only: retain caught renderer exceptions as test evidence,
-  // never in application logging or UI. The original rejection result is kept.
-  const rejections: Array<{name:string;message:string;stack:string}>=[];
-  Object.assign(window,{previewRejections:rejections});
-  const originalCatch=Promise.prototype.catch;
-  Promise.prototype.catch=function(handler) {
-   if(typeof handler!=="function")return originalCatch.call(this,handler);
-   return originalCatch.call(this,reason=>{
-    rejections.push({name:String(reason?.name||""),message:String(reason?.message||""),stack:String(reason?.stack||"")});
-    if(rejections.length>100)rejections.shift();
-    return handler(reason);
-   });
-  };
   const created:string[]=[];const revoked:string[]=[];
   Object.assign(window,{previewUrlEvents:{created,revoked}});
   const create=URL.createObjectURL.bind(URL);const revoke=URL.revokeObjectURL.bind(URL);
@@ -64,7 +51,6 @@ async function expectPixels(page:Page) {
   return canvas?.width && canvas.height && !document.querySelector('.mm-preview-rendering') ? 'ready' : false;
  },undefined,{timeout:12_000});
  const state=await result.jsonValue();
- if(state!=="ready")await test.info().attach('synthetic-pdf-renderer-rejections',{body:JSON.stringify(await page.evaluate(()=>(window as any).previewRejections),null,2),contentType:'application/json'});
  expect(state).toBe('ready');
 }
 
@@ -165,11 +151,16 @@ test('falha transitória permite nova tentativa e PDF malformado mostra somente 
   if(index===1)return route.fulfill({status:503,json:{message:'PRIVATE PROVIDER DETAIL'}});
   return route.fulfill({contentType:'application/pdf',body:id===14?'%PDF-1.7\n%%EOF':fixture('market-report.pdf')});
  }});
- await open(page,files[0].name);await expect(modal(page).getByRole('alert')).toContainText('Não foi possível carregar a prévia');await expect(modal(page)).not.toContainText('PRIVATE');await page.getByRole('button',{name:'Tentar novamente'}).click();await expectPixels(page);await page.keyboard.press('Escape');
+ await open(page,files[0].name);await expect(modal(page).getByRole('alert')).toContainText('Não foi possível carregar a prévia');await expect(modal(page)).not.toContainText('PRIVATE');await page.getByRole('button',{name:'Tentar novamente'}).click();await expect(modal(page).getByRole('alert')).toHaveCount(0);await expectPixels(page);await page.keyboard.press('Escape');
  await open(page,files[4].name);await expect(modal(page).getByRole('alert')).toContainText('Não foi possível exibir este PDF');await expect(modal(page).getByRole('button',{name:'Baixar original'})).toBeEnabled();
 });
 
 test('falha do módulo leitor orienta atualizar a página e preserva o download',async({page})=>{
  await setup(page);await page.route('**/assets/DocumentPdfPreview-*.js',route=>route.abort('failed'));
  await open(page,files[0].name);await expect(modal(page).getByRole('alert')).toContainText('Atualize a página ou baixe o original');await expect(modal(page).getByRole('button',{name:'Baixar original'})).toBeEnabled();await page.keyboard.press('Escape');await expect(modal(page)).toHaveCount(0);
+});
+
+test('PDF real mantém texto acessível sem iteração assíncrona de ReadableStream',async({page})=>{
+ await page.addInitScript(()=>{Object.defineProperty(ReadableStream.prototype,Symbol.asyncIterator,{configurable:true,value:undefined});});
+ await setup(page);await open(page,files[0].name);await expectPixels(page);await page.getByText('Texto desta página',{exact:true}).click();await expect(page.locator('.mm-preview-page-text p')).toContainText('Panorama de mercado');await expect(modal(page).getByRole('alert')).toHaveCount(0);
 });

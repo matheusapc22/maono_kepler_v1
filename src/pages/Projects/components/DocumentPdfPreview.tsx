@@ -3,6 +3,8 @@ import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTas
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { MAX_IMAGE_PIXELS, type PreviewErrorReason } from "../../../lib/document-preview";
 
+import { readPreviewText } from "../../../lib/document-preview-text";
+
 GlobalWorkerOptions.workerSrc = workerUrl;
 const ASSETS = "/assets/pdfjs-6.4.299/";
 
@@ -12,6 +14,7 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
   const [pageNumber, setPageNumber] = useState(1);
   const [rendering, setRendering] = useState(true);
   const [pageText, setPageText] = useState("");
+  const [textUnavailable, setTextUnavailable] = useState(false);
   const [width, setWidth] = useState(640);
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -53,6 +56,8 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
     let page: Awaited<ReturnType<PDFDocumentProxy["getPage"]>> | undefined;
     setRendering(true);
     setPageText("");
+    setTextUnavailable(false);
+    const textController = new AbortController();
     const canvas = canvasRef.current;
     // Never leave pixels from a previous page visible while a new one loads.
     if (canvas) { canvas.width = 0; canvas.height = 0; }
@@ -78,14 +83,20 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
       if (!active) return;
       window.clearTimeout(timeout);
       setRendering(false);
-      const text = await page.getTextContent();
-      if (active) setPageText(text.items.map(item => "str" in item ? item.str : "").join(" ").slice(0, 100_000));
+      // Text is optional. A stream/decoder failure must not discard valid pixels.
+      const textTimeout = window.setTimeout(() => textController.abort(), 10_000);
+      try {
+        const text = await readPreviewText(page.streamTextContent(), textController.signal);
+        if (active) setPageText(text);
+      } catch {
+        if (active) setTextUnavailable(true);
+      } finally { window.clearTimeout(textTimeout); }
     }).catch(error => {
       if (!active || error?.name === "RenderingCancelledException") return;
       window.clearTimeout(timeout);
       errorRef.current("pdf-page");
     });
-    return () => { active = false; window.clearTimeout(timeout); render?.cancel(); if (render) void render.promise.catch(() => {}).then(() => page?.cleanup()); else page?.cleanup(); if (canvas) { canvas.width = 0; canvas.height = 0; } };
+    return () => { active = false; textController.abort(); window.clearTimeout(timeout); render?.cancel(); if (render) void render.promise.catch(() => {}).then(() => page?.cleanup()); else page?.cleanup(); if (canvas) { canvas.width = 0; canvas.height = 0; } };
   }, [pdf, pageNumber, width, zoom]);
   return <div className="mm-preview-pdf" ref={hostRef}>
     <div className="mm-preview-pages" role="group" aria-label="Navegação do PDF">
@@ -95,6 +106,7 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
     </div>
     {rendering ? <p className="mm-preview-rendering" role="status">Preparando página...</p> : null}
     <div className="mm-preview-canvas-scroll" tabIndex={0} role="region" aria-label="Página do PDF, use as setas para rolar"><canvas ref={canvasRef} role="img" aria-label={`Página ${pageNumber} do documento PDF. Texto disponível abaixo quando presente.`} /></div>
+    {textUnavailable ? <p className="mm-preview-text-fallback" role="status">O texto desta página não está disponível. Você pode baixar o original.</p> : null}
     {pageText ? <details className="mm-preview-page-text"><summary>Texto desta página</summary><p>{pageText}</p></details> : null}
   </div>;
 }

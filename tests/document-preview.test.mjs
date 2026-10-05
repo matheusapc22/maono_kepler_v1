@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { previewMime, validatePreviewBytes, loadDocumentPreview, MAX_PREVIEW_BYTES, DocumentPreviewError, previewErrorPresentation } from '../src/lib/document-preview.ts';
+import { readPreviewText, MAX_PREVIEW_TEXT_CHARS } from '../src/lib/document-preview-text.ts';
 import { restoreDocumentPreview } from './helpers/document-preview-preservation.mjs';
 const bytes = name => new Uint8Array(readFileSync(new URL(`./fixtures/document-preview/${name}`, import.meta.url)));
 const file = { id: 12, name: 'map.png', size: 1, mimeType: 'image/png' };
@@ -83,4 +84,28 @@ test('preview presentation never renders exception messages or unknown reason fi
  for(const value of [new Error('SECRET'),{reason:'access',message:'SECRET'},null]) assert.equal(previewErrorPresentation(value).code,'network');
  failure.reason='constructor';assert.equal(previewErrorPresentation(failure).code,'network');
  assert.match(previewErrorPresentation(new DocumentPreviewError('reader-load')).message,/Atualize a página/);
+});
+
+test('PDF text extraction supports WebKit streams without async iteration',async()=>{
+ const stream=new ReadableStream({start(c){c.enqueue({items:[{str:'Texto'},{type:'beginMarkedContent'},{str:'acessível'}]});c.close();}});
+ Object.defineProperty(stream,Symbol.asyncIterator,{value:undefined});
+ assert.equal(await readPreviewText(stream,new AbortController().signal),'Texto acessível');assert.equal(stream.locked,false);
+});
+test('PDF text extraction stops and cancels at its character budget',async()=>{
+ let cancelled=false;let reads=0;
+ const stream=new ReadableStream({pull(c){reads++;c.enqueue({items:[{str:'x'.repeat(60_000)}]});},cancel(reason){assert.ok(reason instanceof Error);cancelled=true;}});
+ assert.equal((await readPreviewText(stream,new AbortController().signal)).length,MAX_PREVIEW_TEXT_CHARS);assert.equal(cancelled,true);assert.ok(reads<=3);assert.equal(stream.locked,false);
+});
+test('PDF text extraction aborts a pending reader and releases its lock',async()=>{
+ let cancelled=false;const stream=new ReadableStream({cancel(reason){assert.ok(reason instanceof Error);cancelled=true;}});const controller=new AbortController();
+ const loading=readPreviewText(stream,controller.signal);controller.abort();await assert.rejects(loading,{name:'AbortError'});assert.equal(cancelled,true);assert.equal(stream.locked,false);
+});
+test('PDF optional-text failures cannot enter the raster failure handler',()=>{
+ const source=readFileSync(new URL('../src/pages/Projects/components/DocumentPdfPreview.tsx',import.meta.url),'utf8');
+ assert.doesNotMatch(source,/page\.getTextContent\(/);assert.match(source,/catch \{\s*if \(active\) setTextUnavailable\(true\);/);assert.match(source,/readPreviewText\(page\.streamTextContent\(\), textController\.signal\)/);
+});
+
+test('PDF text cap releases its lock without waiting for a stalled worker cancellation ack',async()=>{
+ const stream=new ReadableStream({start(c){c.enqueue({items:[{str:'x'.repeat(MAX_PREVIEW_TEXT_CHARS)}]});},cancel(reason){assert.ok(reason instanceof Error);return new Promise(()=>{});}});
+ const result=await readPreviewText(stream,new AbortController().signal);assert.equal(result.length,MAX_PREVIEW_TEXT_CHARS);assert.equal(stream.locked,false);
 });

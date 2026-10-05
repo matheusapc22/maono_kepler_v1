@@ -60,3 +60,5 @@
 .mm-docs .mm-docs-preview-trigger:focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 3px; border-radius: 3px; }
 
 .mm-preview-download-error { margin: 0; padding: 8px 24px; color: #ffc1b9; background: #45242166; border-block: 1px solid #8c514b; }
+
+.mm-preview-text-fallback { flex-shrink: 0; margin: 0; padding: 8px 16px; color: #b5bdc9; font-size: 12px; }

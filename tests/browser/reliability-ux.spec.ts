@@ -106,7 +106,7 @@ test("upload com falha preserva arquivo e chave; repetição explícita termina 
   expect(await input.evaluate((element: HTMLInputElement) => element.files?.[0]?.name)).toBe("relatorio.txt");
   await expectSafeCopy(page);
   await retry.click();
-  await expect(page.getByRole("cell", { name: "relatorio.txt", exact: true })).toBeVisible();
+  await expect(page.locator(".documents-file-name").filter({ hasText: /^relatorio\.txt$/ })).toBeVisible();
   await expect(retry).toHaveCount(0);
   await expect(input).toBeEnabled();
   expect(keys).toHaveLength(2);
@@ -131,12 +131,12 @@ test("troca de organização ignora resposta tardia da anterior", async ({ page 
   await page.goto(fixture);
   await expect.poll(() => oldRequested).toBe(true);
   await page.getByRole("button", { name: "Trocar organização" }).click();
-  await expect(page.getByRole("cell", { name: "arquivo-atual.txt", exact: true })).toBeVisible();
+  await expect(page.locator(".documents-file-name").filter({ hasText: /^arquivo-atual\.txt$/ })).toBeVisible();
   const oldResponse = page.waitForResponse((response) => response.url().includes("/organizations/1/files"));
   releaseOld();
   await oldResponse;
   await expect(page.getByText("arquivo-outra-organizacao.txt")).toHaveCount(0);
-  await expect(page.getByRole("cell", { name: "arquivo-atual.txt", exact: true })).toBeVisible();
+  await expect(page.locator(".documents-file-name").filter({ hasText: /^arquivo-atual\.txt$/ })).toBeVisible();
 });
 
 test("gate real de mapa não repete falha terminal nem expõe mensagem remota", async ({ page }) => {
