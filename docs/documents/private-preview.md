@@ -27,8 +27,9 @@ The PDF and image fixtures are synthetic test artwork generated locally. They co
 
 ### Local evidence (2026-10-05)
 
-- Expanded Node suite: 2,559 passing tests; real SQLite/API permission tests included.
+- Expanded Node suite: 2,560 passing tests; real SQLite/API permission tests included.
 - Typecheck and production Vite build passed with a 4 GiB V8 heap. `build` now uses that verified budget; the existing heap contract was updated accordingly. Earlier 6 GiB attempts were killed under shared host memory pressure.
-- 22/22 built-app browser checks passed in Chromium and Firefox. [Desktop PDF](evidence/preview-pdf-desktop.png), [mobile PDF](evidence/preview-mobile.png), [image from grid](evidence/preview-image-grid.png) were visually inspected. Only synthetic API responses were intercepted; PDF.js, worker, image decoding, dialog, keyboard and downloads ran in the actual application.
+- 26/26 built-app browser checks passed in Chromium and Firefox. [Desktop PDF](evidence/preview-pdf-desktop.png), [mobile PDF](evidence/preview-mobile.png), [image from grid](evidence/preview-image-grid.png) were visually inspected. Only synthetic API responses were intercepted; PDF.js, worker, image decoding, dialog, keyboard and downloads ran in the actual application.
 - Local WebKit could not launch: its preexisting runtime has dangling native-library links. This is unverified locally, not a passing test. The new CI gate installs official browser dependencies and runs all three engines.
+- Preview error text is selected from a closed reason catalog; exception messages never enter the UI. The unchanged strict error-sink ratchet passes.
 - Targeted ESLint and `git diff --check` pass. Full-repository lint still reports 119 errors and 53 warnings in untouched files; those are outside this feature.

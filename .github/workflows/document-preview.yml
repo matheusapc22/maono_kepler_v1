@@ -4,7 +4,7 @@ on:
     branches: [mano_kepler_v1]
     paths:
       - 'src/pages/Projects/components/Document*'
-      - 'src/lib/document-preview.ts'
+      - 'src/lib/document-preview*.ts'
       - 'src/lib/file-transfer.ts'
       - 'functions/api/organizations/**/files/**'
       - 'functions/_lib/permissions.js'
@@ -39,8 +39,9 @@ jobs:
         run: |
           npm run test:document-preview
           node --test tests/ticket-document-progressive-loading.test.mjs
+          node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
       - name: Lint changed preview code
-        run: npx eslint src/lib/document-preview.ts src/pages/Projects/components/DocumentPreviewDialog.tsx src/pages/Projects/components/DocumentPdfPreview.tsx src/pages/Projects/components/DocumentsSection.tsx scripts/vite/pdf-preview-assets.ts tests/browser/document-preview.spec.ts playwright.document-preview.config.ts vite.config.ts
+        run: npx eslint src/lib/document-preview*.ts src/pages/Projects/components/DocumentPreviewDialog.tsx src/pages/Projects/components/DocumentPdfPreview.tsx src/pages/Projects/components/DocumentsSection.tsx scripts/vite/pdf-preview-assets.ts tests/browser/document-preview.spec.ts playwright.document-preview.config.ts vite.config.ts
       - name: Typecheck and build including same-origin PDF worker and assets
         run: npm run build
       - name: Install browser engines

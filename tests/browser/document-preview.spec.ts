@@ -16,6 +16,19 @@ async function setup(page: Page, options: Options = {}) {
  const organizations=[{id:1,name:'Demonstração Maõno',slug:'demo',active:true},{id:2,name:'Outra organização',slug:'other',active:true}];
  const session=()=>({authenticated:true,user:{id:1,name:'Operador sintético',email:'qa@example.test',role:options.noDownload?'viewer':'super_admin',permissions:options.noDownload?['document.view']:[],activeOrganizationId:currentOrg},projects:[],organizations,activeOrganization:organizations[currentOrg-1]});
  await page.addInitScript(()=>{
+  // Synthetic fixture only: retain caught renderer exceptions as test evidence,
+  // never in application logging or UI. The original rejection result is kept.
+  const rejections: Array<{name:string;message:string;stack:string}>=[];
+  Object.assign(window,{previewRejections:rejections});
+  const originalCatch=Promise.prototype.catch;
+  Promise.prototype.catch=function(handler) {
+   if(typeof handler!=="function")return originalCatch.call(this,handler);
+   return originalCatch.call(this,reason=>{
+    rejections.push({name:String(reason?.name||""),message:String(reason?.message||""),stack:String(reason?.stack||"")});
+    if(rejections.length>100)rejections.shift();
+    return handler(reason);
+   });
+  };
   const created:string[]=[];const revoked:string[]=[];
   Object.assign(window,{previewUrlEvents:{created,revoked}});
   const create=URL.createObjectURL.bind(URL);const revoke=URL.revokeObjectURL.bind(URL);
@@ -36,7 +49,7 @@ async function setup(page: Page, options: Options = {}) {
   if(url.pathname.endsWith('/files'))return route.fulfill({json:{ok:true,files:currentOrg===1?files:[],facets:{types:['pdf','image','spreadsheet'],projects:[],rootCount:7,folderCounts:[]},pagination:{limit:50,total:currentOrg===1?7:0,hasMore:false,nextCursor:null,sort:'updated_desc'},capabilities:{permanentPurgeEnabled:false}}});
   return route.fulfill({json:{ok:true,projects:[],tickets:[],users:[],items:[],organizations,pagination:{total:0,hasMore:false,nextCursor:null}}});
  });
- await page.route(url=>!['127.0.0.1','localhost'].includes(url.hostname),route=>route.abort());
+ await page.route(url=>['http:','https:'].includes(url.protocol)&&!['127.0.0.1','localhost'].includes(url.hostname),route=>route.abort());
  await page.goto('/projects');
  await page.getByRole('button',{name:'Arquivos e Documentos',exact:true}).click();
  await expect(page.locator('.documents-file-name')).toHaveCount(7);
@@ -45,9 +58,14 @@ async function setup(page: Page, options: Options = {}) {
 const open=(page:Page,name:string)=>page.getByRole('button',{name:`Abrir prévia de ${name}`,exact:true}).click();
 const modal=(page:Page)=>page.getByRole('dialog',{name:/Panorama|Área|Planilha|Relatório|Arquivo|Fotografia|Mapa/});
 async function expectPixels(page:Page) {
- await expect(page.locator('.mm-preview-dialog canvas')).toBeVisible();
- await expect(page.getByText('Preparando página...', {exact:true})).toHaveCount(0);
- expect(await page.locator('.mm-preview-dialog canvas').evaluate((c:HTMLCanvasElement)=>c.width>0&&c.height>0)).toBe(true);
+ const result=await page.waitForFunction(()=>{
+  if(document.querySelector('.mm-preview-dialog [role="alert"]'))return 'error';
+  const canvas=document.querySelector<HTMLCanvasElement>('.mm-preview-dialog canvas');
+  return canvas?.width && canvas.height && !document.querySelector('.mm-preview-rendering') ? 'ready' : false;
+ },undefined,{timeout:12_000});
+ const state=await result.jsonValue();
+ if(state!=="ready")await test.info().attach('synthetic-pdf-renderer-rejections',{body:JSON.stringify(await page.evaluate(()=>(window as any).previewRejections),null,2),contentType:'application/json'});
+ expect(state).toBe('ready');
 }
 
 test('PDF real em canvas, páginas, zoom, texto acessível, foco, Escape e retorno na lista',async({page},info)=>{
@@ -140,4 +158,18 @@ test('download atrasado de organização anterior não é entregue após troca d
  await setup(page,{download:async(route,_id,index)=>{if(index>1){waiting=true;await gate;}await route.fulfill({contentType:'image/png',headers:{'Content-Disposition':'attachment; filename="area-map.png"'},body:fixture('area-map.png')}).catch(()=>{});}});
  await open(page,files[1].name);await expect(modal(page).getByRole('img',{name:files[1].name})).toBeVisible();await page.getByRole('button',{name:'Baixar original'}).click();await expect.poll(()=>waiting).toBe(true);
  await page.locator('.mm-organization-trigger').evaluate((el:HTMLButtonElement)=>el.click());await page.locator('.mm-organization-option').filter({hasText:'Outra organização'}).evaluate((el:HTMLElement)=>el.click());await expect(modal(page)).toHaveCount(0);release();await page.waitForTimeout(300);expect(saved).toBe(0);
+});
+
+test('falha transitória permite nova tentativa e PDF malformado mostra somente a apresentação local',async({page})=>{
+ await setup(page,{download:(route,id,index)=>{
+  if(index===1)return route.fulfill({status:503,json:{message:'PRIVATE PROVIDER DETAIL'}});
+  return route.fulfill({contentType:'application/pdf',body:id===14?'%PDF-1.7\n%%EOF':fixture('market-report.pdf')});
+ }});
+ await open(page,files[0].name);await expect(modal(page).getByRole('alert')).toContainText('Não foi possível carregar a prévia');await expect(modal(page)).not.toContainText('PRIVATE');await page.getByRole('button',{name:'Tentar novamente'}).click();await expectPixels(page);await page.keyboard.press('Escape');
+ await open(page,files[4].name);await expect(modal(page).getByRole('alert')).toContainText('Não foi possível exibir este PDF');await expect(modal(page).getByRole('button',{name:'Baixar original'})).toBeEnabled();
+});
+
+test('falha do módulo leitor orienta atualizar a página e preserva o download',async({page})=>{
+ await setup(page);await page.route('**/assets/DocumentPdfPreview-*.js',route=>route.abort('failed'));
+ await open(page,files[0].name);await expect(modal(page).getByRole('alert')).toContainText('Atualize a página ou baixe o original');await expect(modal(page).getByRole('button',{name:'Baixar original'})).toBeEnabled();await page.keyboard.press('Escape');await expect(modal(page)).toHaveCount(0);
 });

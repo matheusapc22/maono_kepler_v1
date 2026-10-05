@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
-import { MAX_IMAGE_PIXELS } from "../../../lib/document-preview";
+import { MAX_IMAGE_PIXELS, type PreviewErrorReason } from "../../../lib/document-preview";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const ASSETS = "/assets/pdfjs-6.4.299/";
 
 /** A canvas-only renderer: no PDF scripts, forms, links, attachments or HTML. */
-export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob; zoom: number; onError: (message: string) => void }) {
+export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob; zoom: number; onError: (reason: PreviewErrorReason) => void }) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [rendering, setRendering] = useState(true);
@@ -31,7 +31,7 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
       if (!active) return;
       active = false;
       void task?.destroy();
-      errorRef.current("Este PDF demorou demais para abrir. Baixe o original para continuar.");
+      errorRef.current("pdf-timeout");
     }, 30_000);
     void blob.arrayBuffer().then(data => {
       if (!active) return;
@@ -42,7 +42,7 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
     }).catch(error => {
       if (!active) return;
       window.clearTimeout(timeout);
-      errorRef.current(error?.name === "PasswordException" ? "Este PDF é protegido por senha. Baixe o original para abri-lo." : "Não foi possível exibir este PDF. Baixe o original para abri-lo.");
+      errorRef.current(error?.name === "PasswordException" ? "pdf-password" : "pdf-open");
     });
     return () => { active = false; window.clearTimeout(timeout); void task?.destroy(); };
   }, [blob]);
@@ -60,7 +60,7 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
       if (!active) return;
       active = false;
       render?.cancel();
-      errorRef.current("Esta página demorou demais para renderizar. Baixe o original para continuar.");
+      errorRef.current("pdf-page-timeout");
     }, 30_000);
     void pdf.getPage(pageNumber).then(async nextPage => {
       page = nextPage;
@@ -83,7 +83,7 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
     }).catch(error => {
       if (!active || error?.name === "RenderingCancelledException") return;
       window.clearTimeout(timeout);
-      errorRef.current("Não foi possível exibir esta página. Baixe o original para abri-la.");
+      errorRef.current("pdf-page");
     });
     return () => { active = false; window.clearTimeout(timeout); render?.cancel(); if (render) void render.promise.catch(() => {}).then(() => page?.cleanup()); else page?.cleanup(); if (canvas) { canvas.width = 0; canvas.height = 0; } };
   }, [pdf, pageNumber, width, zoom]);

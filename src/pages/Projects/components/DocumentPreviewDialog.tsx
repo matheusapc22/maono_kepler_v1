@@ -1,6 +1,6 @@
 import { Component, type ReactNode, lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { OrganizationFile } from "../../../lib/api";
-import { DocumentPreviewError, loadDocumentPreview, type PreviewContent, type PreviewProgress } from "../../../lib/document-preview";
+import { DocumentPreviewError, previewErrorPresentation, type PreviewErrorReason, loadDocumentPreview, type PreviewContent, type PreviewProgress } from "../../../lib/document-preview";
 import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { DocumentIcon } from "./DocumentsUi";
 import "./DocumentPreviewDialog.css";
@@ -29,7 +29,8 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
   const [error, setError] = useState<DocumentPreviewError | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [zoom, setZoom] = useState(1);
-  const denied = error?.code === "access" || error?.code === "unavailable";
+  const presentation = previewErrorPresentation(error);
+  const denied = Boolean(error) && (presentation.code === "access" || presentation.code === "unavailable");
   useLayoutEffect(() => {
     mountedRef.current = true;
     const dialog = dialogRef.current;
@@ -52,10 +53,10 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
     const controller = new AbortController(); let active = true;
     requestRef.current = controller;
     setContent(null); setError(null); setProgress({ loaded: 0, total: null }); setZoom(1);
-    if (!canDownload) { setError(new DocumentPreviewError("access", "Você não tem permissão para abrir este documento.")); return () => controller.abort(); }
+    if (!canDownload) { setError(new DocumentPreviewError("access")); return () => controller.abort(); }
     void loadDocumentPreview(organizationId, file, controller.signal, value => { if (active) setProgress(value); }).then(value => {
       if (active && !controller.signal.aborted) setContent(value);
-    }).catch(reason => { if (active && !controller.signal.aborted) setError(reason instanceof DocumentPreviewError ? reason : new DocumentPreviewError("network", "Não foi possível carregar a prévia.")); });
+    }).catch(reason => { if (active && !controller.signal.aborted) setError(reason instanceof DocumentPreviewError ? reason : new DocumentPreviewError("network")); });
     return () => { active = false; controller.abort(); if (requestRef.current === controller) requestRef.current = null; };
   }, [organizationId, file, canDownload, attempt]);
   async function download() {
@@ -67,11 +68,11 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
       if (isRegionAccessDenied(reason) || status === 404 || status === 410) {
         requestRef.current?.abort();
         setContent(null);
-        setError(status === 404 || status === 410 ? new DocumentPreviewError("unavailable", "Este documento não está mais disponível.") : new DocumentPreviewError("access", "Seu acesso a este documento não está disponível. Feche a prévia e atualize a página."));
+        setError(status === 404 || status === 410 ? new DocumentPreviewError("unavailable") : new DocumentPreviewError("access"));
       } else setDownloadError("Não foi possível baixar o original. Tente novamente.");
     }
   }
-  function renderError(message: string) { setContent(null); setError(new DocumentPreviewError("invalid", message)); }
+  function renderError(reason: PreviewErrorReason) { setContent(null); setError(new DocumentPreviewError(reason)); }
   return <dialog ref={dialogRef} className="mm-preview-dialog" aria-labelledby={titleId} aria-describedby={descriptionId}
     onCancel={event => { event.preventDefault(); onClose(); }}
     onKeyDown={event => {
@@ -91,7 +92,7 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
     </div></div>
     {downloadError ? <p className="mm-preview-download-error" role="alert">{downloadError}</p> : null}
     <div className="mm-preview-body" aria-busy={!content && !error}>
-      {error ? <div className="mm-preview-state" role="alert"><DocumentIcon name="file" /><h3>{error.code === "unsupported" ? "Prévia indisponível para este formato" : error.code === "too-large" ? "Arquivo grande para a prévia" : "Não foi possível abrir a prévia"}</h3><p>{error.message}</p>{error.code === "network" ? <button type="button" onClick={() => setAttempt(value => value + 1)}>Tentar novamente</button> : null}</div> : !content ? <div className="mm-preview-state" role="status"><span className="mm-preview-spinner" aria-hidden="true" /><h3>Carregando documento...</h3><progress aria-label="Carregamento do documento" max={progress.total || undefined} value={progress.total ? progress.loaded : undefined} /><p>{progress.loaded ? `${(progress.loaded / 1024 / 1024).toFixed(1)} MB recebidos${progress.total ? ` de ${(progress.total / 1024 / 1024).toFixed(1)} MB` : ""}` : "Preparando arquivo. Você pode fechar a qualquer momento."}</p></div> : content.kind === "image" ? <ImagePreview content={content} name={file.name} zoom={zoom} onError={() => renderError("Não foi possível decodificar esta imagem. Baixe o original para abri-la.")} /> : <PreviewBoundary onError={() => renderError("O leitor de PDF não carregou. Feche e abra a prévia novamente ou baixe o original.")}><Suspense fallback={<div className="mm-preview-state" role="status">Abrindo leitor de PDF...</div>}><PdfPreview blob={content.blob} zoom={zoom} onError={renderError} /></Suspense></PreviewBoundary>}
+      {error ? <div className="mm-preview-state" role="alert"><DocumentIcon name="file" /><h3>{presentation.code === "unsupported" ? "Prévia indisponível para este formato" : presentation.code === "too-large" ? "Arquivo grande para a prévia" : "Não foi possível abrir a prévia"}</h3><p>{presentation.message}</p>{presentation.code === "network" ? <button type="button" onClick={() => setAttempt(value => value + 1)}>Tentar novamente</button> : null}</div> : !content ? <div className="mm-preview-state" role="status"><span className="mm-preview-spinner" aria-hidden="true" /><h3>Carregando documento...</h3><progress aria-label="Carregamento do documento" max={progress.total || undefined} value={progress.total ? progress.loaded : undefined} /><p>{progress.loaded ? `${(progress.loaded / 1024 / 1024).toFixed(1)} MB recebidos${progress.total ? ` de ${(progress.total / 1024 / 1024).toFixed(1)} MB` : ""}` : "Preparando arquivo. Você pode fechar a qualquer momento."}</p></div> : content.kind === "image" ? <ImagePreview content={content} name={file.name} zoom={zoom} onError={() => renderError("image-decode")} /> : <PreviewBoundary onError={() => renderError("reader-load")}><Suspense fallback={<div className="mm-preview-state" role="status">Abrindo leitor de PDF...</div>}><PdfPreview blob={content.blob} zoom={zoom} onError={renderError} /></Suspense></PreviewBoundary>}
     </div>
     <footer className="mm-preview-footer"><span>Arquivo original preservado</span><span>Esc para fechar</span></footer>
   </dialog>;

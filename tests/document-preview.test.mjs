@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { previewMime, validatePreviewBytes, loadDocumentPreview, MAX_PREVIEW_BYTES } from '../src/lib/document-preview.ts';
+import { createHash } from 'node:crypto';
+import { previewMime, validatePreviewBytes, loadDocumentPreview, MAX_PREVIEW_BYTES, DocumentPreviewError, previewErrorPresentation } from '../src/lib/document-preview.ts';
 import { restoreDocumentPreview } from './helpers/document-preview-preservation.mjs';
 const bytes = name => new Uint8Array(readFileSync(new URL(`./fixtures/document-preview/${name}`, import.meta.url)));
 const file = { id: 12, name: 'map.png', size: 1, mimeType: 'image/png' };
 function mockFetch(t, handler) { const original = globalThis.fetch; globalThis.fetch = handler; t.after(() => { globalThis.fetch = original; }); }
 test('preview integration preserves every unrelated controller line', () => {
  const current = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8');
- const original = execFileSync('git', ['show','83ba80d0fe19b695e6380d4ee242a2a9b8a98de5:src/pages/Projects/components/DocumentsSection.tsx'], {encoding:'utf8'});
- assert.equal(restoreDocumentPreview(current),original);
+ // Exact original file at 83ba80d; independent of shallow CI checkout history.
+ const expected = '73d9ec1cb5be7e44805ae6b93a25f616c0721ea44760b52713b34a7e282206dc';
+ assert.equal(createHash('sha256').update(restoreDocumentPreview(current)).digest('hex'), expected);
 });
 test('extension, declared MIME and byte signatures must agree; no active content', () => {
  for (const name of ['file.svg','file.html','file.docx','file.xlsx','file.json','file.pdf.html','file.constructor','file.__proto__','pdf']) assert.throws(() => previewMime({...file,name}), {code:'unsupported'});
@@ -74,4 +75,12 @@ test('PDF core, worker and private resource bundle stay version-aligned without 
  const renderer=readFileSync(new URL('src/pages/Projects/components/DocumentPdfPreview.tsx',root),'utf8');const plugin=readFileSync(new URL('scripts/vite/pdf-preview-assets.ts',root),'utf8');
  assert.ok(renderer.includes(`/assets/pdfjs-${version}/`));assert.ok(plugin.includes(`assets/pdfjs-${version}/`));assert.ok(renderer.includes('pdfjs-dist/legacy/build/pdf.mjs'));assert.ok(renderer.includes('pdfjs-dist/legacy/build/pdf.worker.mjs?url'));
  assert.doesNotMatch(plugin,/quickjs|sandbox/);assert.ok(plugin.includes('openjpeg_nowasm_fallback.js'));assert.ok(plugin.includes('jbig2_nowasm_fallback.js'));
+});
+
+test('preview presentation never renders exception messages or unknown reason fields',()=>{
+ const failure=new DocumentPreviewError('access');failure.message='SECRET FROM PROVIDER';
+ assert.equal(previewErrorPresentation(failure).code,'access');assert.doesNotMatch(previewErrorPresentation(failure).message,/SECRET/);
+ for(const value of [new Error('SECRET'),{reason:'access',message:'SECRET'},null]) assert.equal(previewErrorPresentation(value).code,'network');
+ failure.reason='constructor';assert.equal(previewErrorPresentation(failure).code,'network');
+ assert.match(previewErrorPresentation(new DocumentPreviewError('reader-load')).message,/Atualize a página/);
 });

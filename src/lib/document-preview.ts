@@ -1,3 +1,7 @@
+import { DocumentPreviewError } from "./document-preview-errors.ts";
+export { DocumentPreviewError, previewErrorPresentation } from "./document-preview-errors.ts";
+export type { PreviewErrorReason } from "./document-preview-errors.ts";
+
 /** Private, bounded preview transport. Never opens provider/public viewer URLs. */
 export const MAX_PREVIEW_BYTES = 20 * 1024 * 1024;
 export const MAX_IMAGE_PIXELS = 16_000_000;
@@ -7,16 +11,12 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 export type PreviewFile = { id: number | string; name: string; size?: number; mimeType?: string };
 export type PreviewProgress = { loaded: number; total: number | null };
 export type PreviewContent = { blob: Blob; kind: "pdf" | "image"; width?: number; height?: number };
-export class DocumentPreviewError extends Error {
-  code: "unsupported" | "too-large" | "invalid" | "access" | "unavailable" | "network";
-  constructor(code: DocumentPreviewError["code"], message: string) { super(message); this.name = "DocumentPreviewError"; this.code = code; }
-}
-const invalid = () => new DocumentPreviewError("invalid", "O conteúdo do arquivo não corresponde a um PDF ou imagem válido. Baixe o original para conferir.");
-const tooLarge = () => new DocumentPreviewError("too-large", "A prévia está disponível para arquivos de até 20 MB. Baixe o original para abrir este documento.");
+const invalid = () => new DocumentPreviewError("invalid");
+const tooLarge = () => new DocumentPreviewError("too-large");
 export function previewMime(file: PreviewFile): string {
   const extension = /\.([a-z0-9]+)$/i.exec(file.name)?.[1].toLowerCase() || "";
   const mime = Object.hasOwn(MIME_BY_EXTENSION, extension) ? MIME_BY_EXTENSION[extension] : undefined;
-  if (!mime) throw new DocumentPreviewError("unsupported", "A prévia está disponível para PDF, PNG, JPG e WebP. Baixe este documento para abri-lo no seu aplicativo.");
+  if (!mime) throw new DocumentPreviewError("unsupported");
   if (file.size != null && file.size > MAX_PREVIEW_BYTES) throw tooLarge();
   const declared = file.mimeType?.split(";")[0].trim().toLowerCase();
   if (declared && declared !== "application/octet-stream" && declared !== mime) throw invalid();
@@ -58,7 +58,7 @@ export function validatePreviewBytes(bytes: Uint8Array, mime: string): PreviewCo
     return { kind: "pdf", blob: new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mime }) };
   }
   const [width, height] = dimensions(bytes, mime);
-  if (!width || !height || width > 12000 || height > 12000 || width * height > MAX_IMAGE_PIXELS) throw new DocumentPreviewError("too-large", "Esta imagem tem dimensões muito grandes para a prévia. Baixe o original para abri-la.");
+  if (!width || !height || width > 12000 || height > 12000 || width * height > MAX_IMAGE_PIXELS) throw new DocumentPreviewError("image-too-large");
   // APNG is deliberately excluded too. The UI displays static images only.
   if (mime === "image/png") {
     for (let offset = 8; offset + 12 <= bytes.length;) {
@@ -77,7 +77,7 @@ export async function loadDocumentPreview(organizationId: number | string, file:
   const controller = new AbortController();
   const abort = () => controller.abort(signal.reason);
   signal.addEventListener("abort", abort, { once: true });
-  const timeout = setTimeout(() => controller.abort(new DocumentPreviewError("network", "A prévia demorou demais. Tente novamente ou baixe o original.")), 120_000);
+  const timeout = setTimeout(() => controller.abort(new DocumentPreviewError("timeout")), 120_000);
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
     const response = await fetch(`/api/organizations/${encodeURIComponent(String(organizationId))}/files/${encodeURIComponent(String(file.id))}/download`, {
@@ -85,9 +85,9 @@ export async function loadDocumentPreview(organizationId: number | string, file:
     });
     if (!response.ok) {
       await response.body?.cancel();
-      if (response.status === 401 || response.status === 403) throw new DocumentPreviewError("access", "Seu acesso a este documento não está disponível. Feche a prévia e atualize a página.");
-      if (response.status === 404 || response.status === 410) throw new DocumentPreviewError("unavailable", "Este documento não está mais disponível.");
-      throw new DocumentPreviewError("network", "Não foi possível carregar a prévia. Tente novamente ou baixe o original.");
+      if (response.status === 401 || response.status === 403) throw new DocumentPreviewError("access");
+      if (response.status === 404 || response.status === 410) throw new DocumentPreviewError("unavailable");
+      throw new DocumentPreviewError("network");
     }
     const declared = response.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase();
     if (declared && declared !== "application/octet-stream" && declared !== mime) { await response.body?.cancel(); throw invalid(); }
@@ -117,7 +117,7 @@ export async function loadDocumentPreview(organizationId: number | string, file:
     if (signal.aborted) throw signal.reason;
     if (controller.signal.aborted) throw controller.signal.reason;
     if (error instanceof DocumentPreviewError) throw error;
-    throw new DocumentPreviewError("network", "Não foi possível carregar a prévia. Tente novamente ou baixe o original.");
+    throw new DocumentPreviewError("network");
   } finally {
     await reader?.cancel().catch(() => {});
     reader?.releaseLock();
