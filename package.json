@@ -11,7 +11,7 @@
     "test:preview-safety": "node --test tests/preview-write-policy.test.mjs tests/preview-middleware.test.mjs tests/preview-golden-builder.test.mjs tests/buffer-preview-policy.test.mjs && node scripts/preview/assert-preview-safety.mjs",
     "test:error-contract": "node --test tests/result-types.test.mjs tests/error-taxonomy.test.mjs tests/error-envelope-contract.test.mjs tests/api-error-client.test.mjs",
     "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs",
-    "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs",
+    "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs tests/project-thumbnail-serving.test.mjs",
     "test:map-config-repository": "node --test tests/map-config-repository.test.mjs",
     "test:project-revisions": "node --test tests/dropbox-content-hash.test.mjs tests/project-config-atomic-save.test.mjs tests/project-config-revision-concurrency.test.mjs tests/project-organization-isolation.test.mjs",
     "test:persistence-integration": "node --experimental-strip-types --test tests/project-recycle-recovery.test.mjs tests/project-persistence-integration.test.mjs",

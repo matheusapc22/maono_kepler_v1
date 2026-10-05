@@ -42,6 +42,39 @@ const skeletonStyles = await readFile(
   "utf8",
 );
 
+const { transform } = await import("esbuild");
+const compiledUtils = await transform(
+  utils.replaceAll(
+    '"./project-preview-presentation.mjs"',
+    JSON.stringify(new URL("../src/pages/Projects/components/project-preview-presentation.mjs", import.meta.url).href),
+  ),
+  { loader: "ts", format: "esm" },
+);
+const thumbnailIdentity = await import(`data:text/javascript;base64,${Buffer.from(compiledUtils.code).toString("base64")}`);
+
+test("a identidade do PNG legado não assume a revisão positiva do config", () => {
+  const project = { slug: "projeto legado", configRevision: 9, thumbnailStatus: "UNKNOWN", thumbnailRevision: null };
+  assert.equal(thumbnailIdentity.projectThumbnailUrl(project), "/api/projects/projeto%20legado/thumbnail?v=0");
+  assert.equal(thumbnailIdentity.projectThumbnailRevision(project), 0);
+  assert.equal(thumbnailIdentity.projectPreviousReadyThumbnailUrl(project), null);
+  const ready = { ...project, thumbnailStatus: "READY", thumbnailRevision: 0 };
+  assert.equal(thumbnailIdentity.projectThumbnailUrl(ready), "/api/projects/projeto%20legado/thumbnail?v=0");
+  assert.equal(thumbnailIdentity.projectThumbnailRevision(ready), 0);
+  assert.equal(thumbnailIdentity.projectPreviousReadyThumbnailUrl(ready), "/api/projects/projeto%20legado/thumbnail?v=0");
+});
+
+test("revisão ausente não vira legado zero e URLs explícitas permanecem preservadas", () => {
+  const project = { slug: "example", configRevision: 4, thumbnailStatus: "READY" };
+  for (const thumbnailRevision of [null, undefined]) {
+    const withoutRevision = { ...project, thumbnailRevision };
+    assert.equal(thumbnailIdentity.projectThumbnailUrl(withoutRevision), null);
+    assert.equal(thumbnailIdentity.projectThumbnailRevision(withoutRevision), null);
+    assert.equal(thumbnailIdentity.projectPreviousReadyThumbnailUrl(withoutRevision), null);
+  }
+  assert.equal(thumbnailIdentity.projectThumbnailUrl({ ...project, thumbnailRevision: 3 }), "/api/projects/example/thumbnail?v=3");
+  assert.equal(thumbnailIdentity.projectThumbnailUrl({ ...project, thumbnailUrl: "/api/explicit-preview" }), "/api/explicit-preview");
+});
+
 test("grade não fica bloqueada aguardando todos os PNGs", () => {
   assert.doesNotMatch(section, /settledThumbnailKeys/);
   assert.doesNotMatch(section, /allVisibleThumbnailsSettled/);

@@ -27,12 +27,9 @@ function normalizeLimit(value) {
 }
 
 function isDropboxNotFound(error) {
-  const message = String(error?.message || "");
-
   return (
-    error?.code === "DROPBOX_PATH_NOT_FOUND" ||
-    message.includes("path/not_found") ||
-    message.includes("not_found")
+    error?.code === "DROPBOX_PATH_NOT_FOUND" &&
+    [404, 409].includes(Number(error?.status))
   );
 }
 
@@ -74,7 +71,8 @@ export async function onRequest(context) {
         dropbox_root_path,
         default_config_file,
         config_revision,
-        preview_status
+        preview_status,
+        preview_revision
        FROM projects
        WHERE organization_id = ?
          AND active = 1
@@ -107,8 +105,9 @@ export async function onRequest(context) {
         const ready = await markProjectPreviewReady(env, {
           projectId: project.id,
           organizationId,
-          revision: Number(project.config_revision || 0),
+          revision: 0,
           captureMethod: "admin-reconcile",
+          expectedState: project,
         });
 
         if (ready) {
@@ -116,12 +115,12 @@ export async function onRequest(context) {
         }
       } catch (error) {
         if (isDropboxNotFound(error)) {
-          await markProjectPreviewMissing(env, {
+          const missing = await markProjectPreviewMissing(env, {
             projectId: project.id,
             organizationId,
-            expectedStatus: "UNKNOWN",
+            expectedState: project,
           });
-          summary.missing += 1;
+          if (missing) summary.missing += 1;
         } else {
           summary.errors += 1;
         }

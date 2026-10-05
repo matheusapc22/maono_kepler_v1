@@ -70,7 +70,9 @@ export function resolvePreviewPresentation({
 
   if (normalizedStatus === "UNKNOWN") {
     if (imageError || !hasCurrentImage) {
-      return "missing-neutral";
+      // Image errors also include expired sessions, temporary storage failures
+      // and decode failures. They do not establish that no preview exists.
+      return "failed-neutral";
     }
 
     return currentImageDecoded

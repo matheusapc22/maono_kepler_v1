@@ -5,13 +5,15 @@ import { expect, test, type Page } from '@playwright/test';
 function deferred() { let release!: () => void; const promise = new Promise<void>(resolve => { release = resolve; }); return { promise, release }; }
 const errors = new WeakMap<Page, string[]>(), writes = new WeakMap<Page, string[]>();
 async function setup(page: Page, options: {
-  count?: number; sessionCount?: number; image?: boolean; imageStatus?: number;
+  count?: number; sessionCount?: number; image?: boolean; imageStatus?: number; favorite?: boolean;
+  imageState?: 'READY' | 'UNKNOWN' | 'MISSING' | 'FAILED'; imageRevision?: number | null; invalidImage?: boolean;
   beforeRead?: (path: string, attempt: number) => Promise<void>;
   status?: (path: string, attempt: number) => number;
 } = {}) {
   const attempts = new Map<string, number>();
+  const thumbnailQueries: string[] = [];
   const organization = { id: 1, name: 'Organização sintética', slug: 'synthetic', active: true };
-  const projects = Array.from({ length: options.count ?? 4 }, (_, index) => ({ id: index + 1, slug: `mapa-${index + 1}`, name: `Projeto pronto ${index + 1}`, description: 'Conteúdo conhecido durante o carregamento da imagem.', organizationId: 1, accessLevel: 'owner', active: true, thumbnailStatus: options.image ? 'READY' : 'MISSING', configRevision: 1, thumbnailRevision: options.image ? 1 : null }));
+  const projects = Array.from({ length: options.count ?? 4 }, (_, index) => ({ id: index + 1, slug: `mapa-${index + 1}`, name: `Projeto pronto ${index + 1}`, description: 'Conteúdo conhecido durante o carregamento da imagem.', organizationId: 1, accessLevel: 'owner', active: true, ...(options.favorite ? { favorite: true } : {}), thumbnailStatus: options.imageState ?? (options.image ? 'READY' : 'MISSING'), configRevision: 1, thumbnailRevision: options.imageRevision !== undefined ? options.imageRevision : options.image ? 1 : null }));
   const sessionProjects = Array.from({ length: options.sessionCount ?? 0 }, (_, index) => ({ id: index + 101, slug: `cache-${index}`, name: `Projeto em cache ${index}`, organizationId: 1, accessLevel: 'owner', active: true }));
   errors.set(page, []); writes.set(page, []); page.on('pageerror', error => errors.get(page)!.push(error.message));
   await page.route('**/api/**', async route => {
@@ -21,9 +23,11 @@ async function setup(page: Page, options: {
     const attempt = (attempts.get(path) ?? 0) + 1; attempts.set(path, attempt);
     await options.beforeRead?.(path, attempt);
     if (path.endsWith('/thumbnail')) {
+      thumbnailQueries.push(new URL(request.url()).search);
       // Browsers can decode a valid image even on an HTTP error response. A
       // real failed thumbnail delivers a non-image error body, not a valid SVG.
       if (options.imageStatus && options.imageStatus !== 200) return route.fulfill({ status: options.imageStatus, json: { ok: false, error: 'Synthetic thumbnail unavailable' } });
+      if (options.invalidImage) return route.fulfill({ status: 200, contentType: 'image/png', body: 'Invalid synthetic image bytes' });
       return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#183124"/></svg>' });
     }
     if (['/api/projects', '/api/projects/recent', '/api/projects/favorites'].includes(path)) {
@@ -41,7 +45,7 @@ async function setup(page: Page, options: {
   await expect(page.locator('.mm-sidebar-nav').getByRole('button', { name: 'Todos os Projetos', exact: true })).toBeVisible();
   await expect(page.locator('.mm-project-pages__heading h1')).toHaveText('Todos os Projetos');
   await expect.poll(() => attempts.get('/api/projects')).toBe(1);
-  return { attempts };
+  return { attempts, thumbnailQueries };
 }
 const cards = (page: Page) => page.locator('.mm-project-card:not(.mm-project-skeleton):visible');
 const search = (page: Page) => page.getByRole('form', { name: 'Filtros de projetos' }).getByLabel('Buscar', { exact: true });
@@ -148,6 +152,55 @@ test('Project pending media honors reduced motion', async ({ page }) => {
   const placeholder = cards(page).locator('.mm-skeleton'); await expect(placeholder).toBeVisible();
   expect(await placeholder.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
   gate.release(); await expect(placeholder).toHaveCount(0);
+});
+
+for (const imageStatus of [401, 403, 404, 503, 200]) test(`Unknown preview ${imageStatus}: load failure never claims absence in any Projects tab`, async ({ page }) => {
+  await setup(page, { count: 1, favorite: true, imageState: 'UNKNOWN', imageStatus, invalidImage: imageStatus === 200 });
+  for (const section of ['Todos os Projetos', 'Recentes', 'Favoritos']) {
+    if (section !== 'Todos os Projetos') await page.locator('.mm-sidebar-nav').getByRole('button', { name: section, exact: true }).click();
+    const card = cards(page);
+    await expect(card).toHaveCount(1);
+    await expect(card.locator('.mm-project-card__preview')).toHaveAttribute('data-preview-presentation', 'failed-neutral');
+    await expect(card.getByText('Prévia indisponível', { exact: true })).toBeVisible();
+    await expect(card.getByText('Sem prévia', { exact: true })).toHaveCount(0);
+    await expect(card.locator('.mm-project-card__preview')).toHaveAttribute('aria-busy', 'false');
+    await expect(card.locator('.mm-project-card__content')).toContainText('Projeto pronto 1');
+    await expect(card.getByRole('button', { name: 'Remover projeto dos favoritos' })).toBeEnabled();
+  }
+});
+
+test('Unknown valid preview decodes normally', async ({ page }) => {
+  const fixture = await setup(page, { count: 1, imageState: 'UNKNOWN' });
+  await expect(cards(page).locator('img.is-loaded')).toBeVisible();
+  await expect(cards(page).locator('.mm-project-card__preview')).toHaveAttribute('data-preview-presentation', 'current-image');
+  await expect(cards(page).getByText('Sem prévia', { exact: true })).toHaveCount(0);
+  expect(fixture.thumbnailQueries).toEqual(['?v=0']);
+});
+
+test('Authoritative MISSING keeps the absence state without requesting an image', async ({ page }) => {
+  const fixture = await setup(page, { count: 1, imageState: 'MISSING' });
+  await expect(cards(page).getByText('Sem prévia', { exact: true })).toBeVisible();
+  await expect(cards(page).locator('img')).toHaveCount(0);
+  expect(fixture.attempts.get('/api/projects/mapa-1/thumbnail') ?? 0).toBe(0);
+});
+
+test('Failed generation with no previous revision does not invent a legacy image', async ({ page }) => {
+  const fixture = await setup(page, { count: 1, imageState: 'FAILED', imageRevision: null });
+  await expect(cards(page).getByText('Prévia indisponível', { exact: true })).toBeVisible();
+  await expect(cards(page).locator('img')).toHaveCount(0);
+  expect(fixture.thumbnailQueries).toEqual([]);
+});
+
+test('Failed generation preserves a real legacy revision zero in every Projects tab', async ({ page }) => {
+  const fixture = await setup(page, { count: 1, favorite: true, imageState: 'FAILED', imageRevision: 0 });
+  for (const section of ['Todos os Projetos', 'Recentes', 'Favoritos']) {
+    if (section !== 'Todos os Projetos') await page.locator('.mm-sidebar-nav').getByRole('button', { name: section, exact: true }).click();
+    await expect(cards(page).locator('img.is-loaded')).toBeVisible();
+    await expect(cards(page).locator('.mm-project-card__preview')).toHaveAttribute('data-preview-presentation', 'failed-previous-image');
+    await expect(cards(page).getByText('Falha ao atualizar. Exibindo a última prévia.', { exact: true })).toBeVisible();
+  }
+  expect(fixture.thumbnailQueries.length).toBeGreaterThan(0);
+  expect(fixture.thumbnailQueries.every(query => query === '?v=0')).toBe(true);
 });
 
 test('prolonged thumbnail status never shifts already revealed card text', async ({ page }, testInfo) => {

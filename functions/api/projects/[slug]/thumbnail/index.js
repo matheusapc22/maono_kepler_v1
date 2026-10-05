@@ -81,12 +81,9 @@ function isPng(bytes) {
 }
 
 function isDropboxNotFound(error) {
-  const message = String(error?.message || "");
-
   return (
-    error?.code === "DROPBOX_PATH_NOT_FOUND" ||
-    message.includes("path/not_found") ||
-    message.includes("not_found")
+    error?.code === "DROPBOX_PATH_NOT_FOUND" &&
+    [404, 409].includes(Number(error?.status))
   );
 }
 
@@ -147,13 +144,18 @@ async function cleanupPreviousPreview(env, project, previousRevision, revision) 
   if (
     previousRevision !== null &&
     previousRevision !== undefined &&
+    Number(previousRevision) > 0 &&
     Number(previousRevision) !== Number(revision)
   ) {
     fileName = getRevisionedPreviewFileNameFromConfigFile(
       configFileName,
       previousRevision,
     );
-  } else if (previousRevision === null || previousRevision === undefined) {
+  } else if (
+    previousRevision === null ||
+    previousRevision === undefined ||
+    Number(previousRevision) === 0
+  ) {
     fileName = getPreviewFileNameFromConfigFile(configFileName);
   }
 
@@ -315,9 +317,13 @@ async function handleThumbnailGet(context, user, project, slug) {
   const requestedRevision = requestedImageRevision(request);
   const readyRevision = normalizePreviewRevision(state?.preview_revision);
   const configFileName = project.default_config_file || "config.kepler.json";
+  const previousFailedPreview =
+    status === "FAILED" &&
+    readyRevision !== null &&
+    requestedRevision !== null;
 
   if (
-    status === "READY" &&
+    (status === "READY" || previousFailedPreview) &&
     requestedRevision !== null &&
     requestedRevision !== readyRevision
   ) {
@@ -328,7 +334,11 @@ async function handleThumbnailGet(context, user, project, slug) {
     );
   }
 
-  if (!["READY", "UNKNOWN"].includes(status)) {
+  if (
+    !state ||
+    (!["READY", "UNKNOWN"].includes(status) && !previousFailedPreview) ||
+    (status === "READY" && readyRevision === null)
+  ) {
     return errorResponse(
       "A visualização real deste projeto ainda não está disponível.",
       404,
@@ -337,7 +347,7 @@ async function handleThumbnailGet(context, user, project, slug) {
   }
 
   const previewFileName =
-    status === "READY" &&
+    status !== "UNKNOWN" &&
     readyRevision !== null &&
     readyRevision > 0
       ? getRevisionedPreviewFileNameFromConfigFile(
@@ -354,32 +364,61 @@ async function handleThumbnailGet(context, user, project, slug) {
     );
     const body = await dropboxResponse.arrayBuffer();
 
+    let imageRevision = readyRevision;
     if (status === "UNKNOWN") {
-      await markProjectPreviewReady(env, {
+      // A canonical legacy PNG has its own identity (revision zero). The
+      // lifecycle backfill may have advanced the config without creating PNGs.
+      const ready = await markProjectPreviewReady(env, {
         projectId: project.id,
         organizationId: getProjectOrganizationId(project),
-        revision: Number(state?.config_revision || 0),
+        revision: 0,
         captureMethod: "legacy-reconcile",
+        expectedState: state,
       });
+      imageRevision = 0;
+
+      // Another reader may have reconciled the same PNG. A newer config or
+      // preview, however, must never be replaced by this delayed legacy read.
+      const current = ready || await getProjectPreviewState(env, {
+        projectId: project.id,
+        organizationId: getProjectOrganizationId(project),
+      });
+      if (
+        normalizePreviewStatus(current?.preview_status) !== "READY" ||
+        normalizePreviewRevision(current?.preview_revision) !== 0 ||
+        Number(current?.config_revision) !== Number(state.config_revision) ||
+        (requestedRevision !== null && requestedRevision !== 0)
+      ) {
+        return errorResponse(
+          "A revisão solicitada não é mais a visualização atual.",
+          404,
+          "PROJECT_THUMBNAIL_REVISION_NOT_FOUND",
+          current ? publicProjectPreview(current) : null,
+        );
+      }
     }
 
     return new Response(body, {
       status: 200,
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": "private, max-age=31536000, immutable",
-        "X-Maono-Thumbnail-Revision": String(
-          readyRevision ?? state?.config_revision ?? 0,
-        ),
+        "Cache-Control": requestedRevision === null
+          ? "no-store"
+          : "private, max-age=31536000, immutable",
+        "X-Maono-Thumbnail-Revision": String(imageRevision),
       },
     });
   } catch (error) {
     if (isDropboxNotFound(error)) {
-      await markProjectPreviewMissing(env, {
-        projectId: project.id,
-        organizationId: getProjectOrganizationId(project),
-        expectedStatus: status,
-      });
+      // Failure to load an older preview must not replace the current failed
+      // generation state. Only the exact READY/UNKNOWN snapshot may be changed.
+      if (status !== "FAILED") {
+        await markProjectPreviewMissing(env, {
+          projectId: project.id,
+          organizationId: getProjectOrganizationId(project),
+          expectedState: state,
+        });
+      }
 
       return errorResponse(
         "Preview PNG não encontrado para este projeto.",
