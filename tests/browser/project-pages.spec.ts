@@ -772,8 +772,8 @@ for (const [role, label] of [
     const sidebar = page.locator('.mm-projects-sidebar');
     const identity = sidebar.locator('.mm-sidebar-user-copy');
     await expect(identity.locator('strong')).toHaveText(`Ana Oliveira - ${label}`);
-    await expect(identity.locator('span')).toHaveText('ana.oliveira@example.test');
-    const [nameBox, emailBox] = await Promise.all([identity.locator('strong').boundingBox(), identity.locator('span').boundingBox()]);
+    await expect(identity.locator(':scope > span')).toHaveText('ana.oliveira@example.test');
+    const [nameBox, emailBox] = await Promise.all([identity.locator('strong').boundingBox(), identity.locator(':scope > span').boundingBox()]);
     expect(emailBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height);
     await expect(sidebar.locator('.mm-sidebar-footer')).toHaveText(/^\s*Maõno Maps\s*Sair\s*$/);
     const membership = sidebar.locator('.mm-organization-trigger-copy > span');
