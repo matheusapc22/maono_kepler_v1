@@ -126,14 +126,18 @@ async function apply(page: Page) { await filters(page).getByRole("button", { nam
 async function titles(page: Page) { return cards(page).locator("h2").allTextContents(); }
 
 for (const entry of [
-  { name: "Todos os Projetos", description: "Visualize e gerencie todos os seus projetos.", total: 73, endpoint: "/api/projects" },
-  { name: "Recentes", description: "Veja os projetos acessados ou atualizados recentemente.", total: 13, endpoint: "/api/projects/recent" },
-  { name: "Favoritos", description: "Encontre rapidamente seus projetos favoritos.", total: 11, endpoint: "/api/projects/favorites" },
+  { name: "Todos os Projetos", description: null, icon: "map-pinned", emptyIcon: "idea", total: 73, endpoint: "/api/projects" },
+  { name: "Recentes", description: "Veja os projetos acessados ou atualizados recentemente.", icon: "clock", emptyIcon: "clock", total: 13, endpoint: "/api/projects/recent" },
+  { name: "Favoritos", description: "Encontre rapidamente seus projetos favoritos.", icon: "star", emptyIcon: "star", total: 11, endpoint: "/api/projects/favorites" },
 ]) {
   test(`${entry.name}: shared header, complete endpoint set, controls and empty state`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     const { requests } = await setup(page); await openSection(page, entry.name);
-    await expect(page.getByText(entry.description, { exact: true })).toBeVisible();
+    const heading = page.locator(".mm-project-pages__heading");
+    await expect(heading.locator(":scope > svg")).toHaveAttribute("data-icon", entry.icon);
+    await expect(heading.locator(":scope > svg")).toHaveAttribute("aria-hidden", "true");
+    if (entry.description) await expect(heading.locator("p")).toHaveText(entry.description);
+    else await expect(heading.locator("p")).toHaveCount(0);
     const crumb = page.getByRole("navigation", { name: "Caminho da página" });
     await expect(crumb.getByRole("button", { name: "Início", exact: true }).or(crumb.getByRole("link", { name: "Início", exact: true }))).toBeVisible();
     await expect(filters(page).getByLabel("Buscar", { exact: true })).toHaveAttribute("placeholder", "Nome do projeto...");
@@ -146,6 +150,7 @@ for (const entry of [
     await filters(page).getByLabel("Buscar", { exact: true }).fill("não existe"); await apply(page);
     await expectCount(page, 0, 0);
     await expect(page.locator(".mm-project-pages__empty h2")).toHaveText(entry.name === "Favoritos" ? "Nenhum projeto favorito." : entry.name === "Recentes" ? "Nenhum projeto recente." : "Nenhum projeto encontrado.");
+    await expect(page.locator(".mm-project-pages__empty > svg")).toHaveAttribute("data-icon", entry.emptyIcon);
     await page.getByRole("button", { name: "Limpar filtros", exact: true }).click();
     await expectCount(page, 10, entry.total);
     await expect(page.getByRole("heading", { name: entry.name, exact: true, level: 1 })).toBeVisible();

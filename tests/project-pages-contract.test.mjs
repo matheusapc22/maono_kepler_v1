@@ -98,7 +98,7 @@ const filters = overrides => ({ ...DEFAULT_PROJECT_FILTERS, ...overrides });
 test('exact approved copy and icons are shared by all three sections', () => {
   assert.deepEqual(Object.keys(PROJECT_PAGE_COPY), ['all', 'recent', 'favorites']);
   assert.deepEqual(Object.values(PROJECT_PAGE_COPY).map(item => [item.title, item.description, item.icon]), [
-    ['Todos os Projetos', 'Visualize e gerencie todos os seus projetos.', 'idea'],
+    ['Todos os Projetos', null, 'idea'],
     ['Recentes', 'Veja os projetos acessados ou atualizados recentemente.', 'clock'],
     ['Favoritos', 'Encontre rapidamente seus projetos favoritos.', 'star'],
   ]);

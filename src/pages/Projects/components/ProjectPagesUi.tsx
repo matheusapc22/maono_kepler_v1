@@ -6,8 +6,9 @@ import { Link } from "react-router";
 import type { ProjectSectionKey } from "../projects-api";
 import { PROJECT_PAGE_COPY, type ProjectPageFilters } from "./project-page-query";
 
-type IconName = "idea" | "clock" | "star" | "search" | "filter" | "plus" | "next" | "previous";
+type IconName = "idea" | "map-pinned" | "clock" | "star" | "search" | "filter" | "plus" | "next" | "previous";
 const paths: Record<IconName, string> = {
+  "map-pinned": "m9 5-6 2v15l6-3 6 3 6-3v-7M9 5v14m0-14 2 1m4 9v7M21 6c0 3-4 7-4 7s-4-4-4-7a4 4 0 0 1 8 0ZM18 6a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z",
   idea: "M17 5a8 8 0 0 0-9 13c1.6 1.3 2 2.6 2 4v2h8v-2c0-1.2.3-2.2 1-3M10 28h8m-7 4h6M8 9c-2 2-2 5 0 7M23 2h4l.5 3 2 1 2.5-1 2 3-2 2v2l2 2-2 3-2.5-1-2 1-.5 3h-4l-.5-3-2-1-2.5 1-2-3 2-2v-2l-2-2 2-3 2.5 1 2-1L23 2ZM28 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
   clock: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7v5l3 2",
   star: "m12 3 2.75 5.57 6.15.9-4.45 4.33 1.05 6.12L12 17.03l-5.5 2.89 1.05-6.12L3.1 9.47l6.15-.9L12 3Z",
@@ -36,9 +37,9 @@ export function ProjectPagesHeader({ section, canCreateMap, onNewMap, onHome, st
       <span aria-current="page"><StaticLoadingText pending={structurePending}>{copy.title}</StaticLoadingText></span>
     </nav>
     <header className="mm-project-pages__header">
-      <div className="mm-project-pages__heading">
-        <ProjectPageIcon name={copy.icon} />
-        <div><h1><StaticLoadingText pending={structurePending}>{copy.title}</StaticLoadingText></h1><p><StaticLoadingText pending={structurePending}>{copy.description}</StaticLoadingText></p></div>
+      <div className={`mm-project-pages__heading${section === "all" ? " mm-project-pages__heading--all" : ""}`}>
+        <ProjectPageIcon name={section === "all" ? "map-pinned" : copy.icon} />
+        <div><h1><StaticLoadingText pending={structurePending}>{copy.title}</StaticLoadingText></h1>{copy.description ? <p><StaticLoadingText pending={structurePending}>{copy.description}</StaticLoadingText></p> : null}</div>
       </div>
       {canCreateMap ? <Link to="/maps/new/create" className="mm-project-pages__button is-primary mm-project-pages__new" onClick={onNewMap}><ProjectPageIcon name="plus" /><StaticLoadingText pending={structurePending}>Novo Projeto</StaticLoadingText></Link> : null}
     </header>
