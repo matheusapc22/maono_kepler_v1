@@ -449,6 +449,26 @@ test("old favorite failure after A→B→A cannot roll back or unlock a new same
   second.resolve(); await expect(pending).toBeEnabled();
 });
 
+function expectUnstretchedCardHeights(actual: number[], original: number[], label: string) {
+  expect(actual, `${label}: card count must remain unchanged`).toHaveLength(original.length);
+  // DOMRect subtraction can differ by 0.000122px after relayout. Precision 3
+  // permits < 0.0005px, still far below one CSS layout unit (1/64px).
+  actual.forEach((height, index) => {
+    expect(height, `${label}: card ${index + 1} must not stretch`).toBeCloseTo(original[index], 3);
+  });
+}
+
+test('footer card-height guard tolerates DOMRect noise but rejects real layout changes', () => {
+  const height = 400.9375;
+  expect(() => expectUnstretchedCardHeights([height, height], [height, height], 'unchanged cards')).not.toThrow();
+  expect(() => expectUnstretchedCardHeights([400.9376220703125], [height], 'observed rounding')).not.toThrow();
+  for (const delta of [-1 / 64, 1 / 64, 1, 20]) {
+    expect(() => expectUnstretchedCardHeights([height, height + delta], [height, height], 'real size change')).toThrow();
+  }
+  expect(() => expectUnstretchedCardHeights([], [height], 'missing card')).toThrow();
+  expect(() => expectUnstretchedCardHeights([height, height], [height], 'extra card')).toThrow();
+});
+
 // Footer stays in natural content flow inside the desktop scroller (document on mobile).
 // Exercise every tab with both spare space and content taller than the viewport.
 for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
@@ -504,7 +524,7 @@ for (const name of ["Todos os Projetos", "Recentes", "Favoritos"]) {
             expect(top.footerTop, label).toBeGreaterThan(viewport.height);
           }
           const cardHeights = await cards(page).evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
-          expect(cardHeights, `${label}: spare space must not stretch the cards`).toEqual(originalCardHeights);
+          expectUnstretchedCardHeights(cardHeights, originalCardHeights, `${label}: spare space must not stretch the cards`);
           // Scroll the actual owner, retaining a reachable natural-flow footer.
           await scrollWorkspace(page, "end");
           await expect.poll(async () => (await footerGeometry(page)).scrollY).toBeCloseTo(Math.max(0, top.scrollContentBottom - viewport.height), 0);
