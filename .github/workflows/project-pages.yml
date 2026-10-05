@@ -57,7 +57,9 @@ jobs:
   project-pages:
     runs-on: ubuntu-latest
     # Includes native map import, localization and nested-scroll checks in three engines.
-    timeout-minutes: 60
+    # The serial three-engine suite takes ~53 minutes, plus build/install and
+    # evidence upload. Preserve every case and per-test timeout with job headroom.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:

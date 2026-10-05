@@ -1,0 +1,64 @@
+.mm-preview-dialog { box-sizing: border-box; position: fixed; inset: 0; margin: auto; width: min(1440px, calc(100vw - 48px)); height: calc(100dvh - 48px); max-width: none; max-height: none; padding: 0; border: 1px solid var(--maono-accent-border-strong, #b99035); border-radius: 14px; background: #10161c; color: #f4f1e8; box-shadow: 0 28px 90px #000a; font: 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
+.mm-preview-dialog[open] { display: flex; flex-direction: column; }
+.mm-preview-dialog::backdrop { background: #000c; backdrop-filter: blur(3px); }
+.mm-preview-dialog *, .mm-preview-dialog *::before, .mm-preview-dialog *::after { box-sizing: border-box; }
+.mm-preview-dialog button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; min-width: 40px; min-height: 40px; padding: 8px 12px; border: 1px solid #46505c; border-radius: 7px; background: #141c25; color: #f4f1e8; font: inherit; cursor: pointer; }
+.mm-preview-dialog button:hover:not(:disabled) { border-color: var(--maono-accent-bright, #f2c766); background: #202a34; }
+.mm-preview-dialog button:disabled { opacity: .45; cursor: not-allowed; }
+.mm-preview-dialog :is(button, summary, [tabindex]):focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 3px; }
+.mm-preview-dialog .mm-docs-icon { width: 20px; height: 20px; flex-shrink: 0; }
+.mm-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #303944; flex-shrink: 0; }
+.mm-preview-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.mm-preview-title > .mm-docs-icon { width: 32px; height: 32px; color: var(--maono-accent-bright, #f2c766); }
+.mm-preview-title > div { min-width: 0; }
+.mm-preview-title span { color: #b5bdc9; font-size: 12px; }
+.mm-preview-title h2 { font-size: 18px; line-height: 1.4; margin: 3px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-preview-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; flex-shrink: 0; }
+.mm-preview-toolbar p { margin: 0; color: #b5bdc9; font-size: 12px; }
+.mm-preview-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mm-preview-controls .mm-preview-download { margin-left: 8px; border-color: var(--maono-accent-border-strong, #b99035); color: var(--maono-accent-bright, #f2c766); }
+.mm-preview-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: auto; background: #070b10; overscroll-behavior: contain; scrollbar-color: #5a626f #11171e; scrollbar-width: thin; }
+.mm-preview-state { margin: auto; width: min(100%, 520px); padding: 32px; text-align: center; overflow-wrap: anywhere; }
+.mm-preview-state > .mm-docs-icon { width: 44px; height: 44px; color: var(--maono-accent-bright, #f2c766); }
+.mm-preview-state h3 { margin: 16px 0 8px; font-size: 18px; }
+.mm-preview-state p { margin: 8px 0 16px; color: #b5bdc9; }
+.mm-preview-state progress { width: min(100%, 300px); height: 8px; accent-color: var(--maono-accent-bright, #f2c766); }
+.mm-preview-spinner { display: inline-block; width: 30px; height: 30px; border: 3px solid #46505c; border-top-color: var(--maono-accent-bright, #f2c766); border-radius: 50%; animation: mm-preview-spin .8s linear infinite; }
+.mm-preview-footer { display: flex; justify-content: space-between; gap: 16px; padding: 10px 24px; color: #a5adba; font-size: 11px; border-top: 1px solid #303944; flex-shrink: 0; }
+.mm-preview-image-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto; padding: 24px; }
+.mm-preview-image-scroll img { display: block; height: auto; margin: auto; object-fit: contain; }
+.mm-preview-pdf { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.mm-preview-pages { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 16px; padding: 10px 16px; background: #10161c; }
+.mm-preview-pages span { min-width: 110px; text-align: center; font-size: 12px; }
+.mm-preview-rendering { margin: 0; padding: 4px 16px; text-align: center; color: #b5bdc9; }
+.mm-preview-canvas-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.mm-preview-canvas-scroll canvas { display: block; margin: auto; background: white; }
+.mm-preview-page-text { flex-shrink: 0; padding: 8px 16px; border-top: 1px solid #303944; color: #c7cdd6; }
+.mm-preview-page-text summary { cursor: pointer; }
+.mm-preview-page-text p { max-height: 140px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+@keyframes mm-preview-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .mm-preview-dialog { width: calc(100vw - 16px); height: calc(100dvh - 16px); border-radius: 10px; }
+  .mm-preview-header { padding: 12px; gap: 8px; }
+  .mm-preview-title { gap: 8px; }
+  .mm-preview-title h2 { font-size: 15px; }
+  .mm-preview-title > .mm-docs-icon { width: 24px; height: 24px; }
+  .mm-preview-toolbar { padding: 8px 12px; gap: 8px; }
+  .mm-preview-controls { width: 100%; gap: 6px; }
+  .mm-preview-controls .mm-preview-download { margin-left: auto; font-size: 12px; padding-inline: 8px; }
+  .mm-preview-dialog button { min-height: 44px; }
+  .mm-preview-pages { gap: 8px; padding: 8px; }
+  .mm-preview-pages button { padding-inline: 8px; }
+  .mm-preview-state { padding: 20px; }
+  .mm-preview-footer { padding: 8px 12px; }
+  .mm-preview-image-scroll { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .mm-preview-spinner { animation: none; } }
+@media (forced-colors: active) { .mm-preview-dialog { border-color: CanvasText; } .mm-preview-dialog button { border-color: ButtonText; } }
+.mm-docs .mm-docs-preview-trigger { display: block; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: inherit; text-align: left; cursor: pointer; max-width: 100%; }
+.mm-docs .mm-docs-preview-trigger:hover { color: var(--maono-accent-bright, #f2c766); text-decoration: underline; }
+.mm-docs .mm-docs-preview-trigger:focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 3px; border-radius: 3px; }
+
+.mm-preview-download-error { margin: 0; padding: 8px 24px; color: #ffc1b9; background: #45242166; border-block: 1px solid #8c514b; }
+
+.mm-preview-text-fallback { flex-shrink: 0; margin: 0; padding: 8px 16px; color: #b5bdc9; font-size: 12px; }

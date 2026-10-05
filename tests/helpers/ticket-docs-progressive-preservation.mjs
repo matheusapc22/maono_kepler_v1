@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { restoreDocumentPreview } from "./document-preview-preservation.mjs";
 
 // Exact inverse of the reviewed progressive loading edits against 1ec6b11.
 // The original selector and project-page source hashes remain unchanged.
@@ -485,6 +486,7 @@ const initialPresentationChanges = {
   ]
 };
 export function restoreTicketDocumentInitialPresentation(source, name) {
+  if (name === "DocumentsSection" && source.includes("DocumentPreviewDialog")) source = restoreDocumentPreview(source);
   for (const {after, before} of initialPresentationChanges[name]) {
     assert.equal(source.split(after).length - 1, 1, `exact approved ${name} initial presentation change`);
     source = source.replace(after, before);

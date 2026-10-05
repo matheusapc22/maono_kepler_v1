@@ -429,6 +429,8 @@ test("menu ignora scroll atrasado da abertura e fecha quando a âncora realmente
   await expect(page.getByRole("menu")).toHaveCount(0);
 
   await trigger.click(); await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("button", { name: "Abrir prévia de config_kepler.json", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
   await expect(sortButton(page, "updated")).toBeFocused();
   await expect(page.getByRole("menu")).toHaveCount(0);
   for (const column of ["size", "type", "name"] as const) {
@@ -438,6 +440,8 @@ test("menu ignora scroll atrasado da abertura e fecha quando a âncora realmente
   await page.keyboard.press("Shift+Tab");
   await expect(page.locator(".mm-docs-table-scroll")).toBeFocused();
   await trigger.click(); await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Abrir prévia de Relatório de mercado e oportunidades.pdf", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Ações de Relatório de mercado e oportunidades.pdf", exact: true })).toBeFocused();
   await expect(page.getByRole("menu")).toHaveCount(0);
 });

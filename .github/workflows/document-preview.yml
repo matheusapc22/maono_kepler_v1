@@ -1,0 +1,61 @@
+name: Private Document Preview
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/pages/Projects/components/Document*'
+      - 'src/lib/document-preview*.ts'
+      - 'src/lib/file-transfer.ts'
+      - 'functions/api/organizations/**/files/**'
+      - 'functions/_lib/permissions.js'
+      - 'scripts/vite/pdf-preview-assets.ts'
+      - 'tests/document-preview*'
+      - 'tests/helpers/document-preview-preservation.mjs'
+      - 'tests/helpers/ticket-docs-progressive-preservation.mjs'
+      - 'tests/browser/document-preview.spec.ts'
+      - 'tests/fixtures/document-preview/**'
+      - 'playwright.document-preview.config.ts'
+      - 'vite.config.ts'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/document-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-document-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Preview, permissions and preserved document contracts
+        run: |
+          npm run test:document-preview
+          node --test tests/ticket-document-progressive-loading.test.mjs
+          node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
+      - name: Lint changed preview code
+        run: npx eslint src/lib/document-preview*.ts src/pages/Projects/components/DocumentPreviewDialog.tsx src/pages/Projects/components/DocumentPdfPreview.tsx src/pages/Projects/components/DocumentsSection.tsx scripts/vite/pdf-preview-assets.ts tests/browser/document-preview.spec.ts playwright.document-preview.config.ts vite.config.ts
+      - name: Typecheck and build including same-origin PDF worker and assets
+        run: npm run build
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Built app, real PDF/image rendering, synthetic intercepted APIs
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: document-preview-results.json
+        run: npm run test:document-preview-browser -- --reporter=list,json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: document-preview-${{ github.sha }}
+          path: |
+            test-results/
+            document-preview-results.json
+          retention-days: 14
+          if-no-files-found: warn
