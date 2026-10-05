@@ -105,6 +105,20 @@ test('PDF optional-text failures cannot enter the raster failure handler',()=>{
  assert.doesNotMatch(source,/page\.getTextContent\(/);assert.match(source,/catch \{\s*if \(active\) setTextUnavailable\(true\);/);assert.match(source,/readPreviewText\(page\.streamTextContent\(\), textController\.signal\)/);
 });
 
+test('preview removes the marked labels and text disclosure while retaining accessible PDF text',()=>{
+ const dialog=readFileSync(new URL('../src/pages/Projects/components/DocumentPreviewDialog.tsx',import.meta.url),'utf8');
+ const pdf=readFileSync(new URL('../src/pages/Projects/components/DocumentPdfPreview.tsx',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../src/pages/Projects/components/DocumentPreviewDialog.css',import.meta.url),'utf8');
+ assert.doesNotMatch(dialog,/PDF e imagens|leitura segura|Arquivo original preservado|descriptionId|summary/);
+ assert.doesNotMatch(pdf,/<details|<summary|Texto desta página|Texto disponível abaixo|mm-preview-page-text|mm-preview-text-fallback/);
+ assert.doesNotMatch(css,/mm-preview-page-text|mm-preview-text-fallback|summary/);
+ assert.match(pdf,/aria-describedby=\{pageText \|\| textUnavailable \? textId : undefined\}/);
+ assert.match(pdf,/<p id=\{textId\} className="mm-preview-sr-only">/);
+ assert.match(css,/\.mm-preview-sr-only \{[^}]*position: absolute;[^}]*clip-path: inset\(50%\);/);
+ for(const label of ['Diminuir zoom','Ajustar à largura','Aumentar zoom','Baixar original','Esc para fechar']) assert.ok(dialog.includes(label));
+ for(const label of ['Página anterior','Próxima página']) assert.ok(pdf.includes(label));
+});
+
 test('PDF text cap releases its lock without waiting for a stalled worker cancellation ack',async()=>{
  const stream=new ReadableStream({start(c){c.enqueue({items:[{str:'x'.repeat(MAX_PREVIEW_TEXT_CHARS)}]});},cancel(reason){assert.ok(reason instanceof Error);return new Promise(()=>{});}});
  const result=await readPreviewText(stream,new AbortController().signal);assert.equal(result.length,MAX_PREVIEW_TEXT_CHARS);assert.equal(stream.locked,false);

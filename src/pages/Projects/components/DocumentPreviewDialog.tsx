@@ -23,7 +23,7 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
   const requestRef = useRef<AbortController | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const titleId = useId(); const descriptionId = useId();
+  const titleId = useId();
   const [content, setContent] = useState<PreviewContent | null>(null);
   const [progress, setProgress] = useState<PreviewProgress>({ loaded: 0, total: null });
   const [error, setError] = useState<DocumentPreviewError | null>(null);
@@ -73,11 +73,11 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
     }
   }
   function renderError(reason: PreviewErrorReason) { setContent(null); setError(new DocumentPreviewError(reason)); }
-  return <dialog ref={dialogRef} className="mm-preview-dialog" aria-labelledby={titleId} aria-describedby={descriptionId}
+  return <dialog ref={dialogRef} className="mm-preview-dialog" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); onClose(); }}
     onKeyDown={event => {
       if (event.key !== "Tab") return;
-      const stops = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), summary, [tabindex="0"]')).filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0);
+      const stops = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]')).filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0);
       const first = stops[0]; const last = stops.at(-1);
       if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -86,7 +86,7 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
       if (event.target === event.currentTarget && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) onClose();
     }}>
     <header className="mm-preview-header"><div className="mm-preview-title"><DocumentIcon name="file" /><div><span>Prévia do documento</span><h2 id={titleId} title={file.name}>{file.name}</h2></div></div><button ref={closeRef} type="button" aria-label="Fechar prévia" onClick={onClose}><DocumentIcon name="close" /></button></header>
-    <div className="mm-preview-toolbar"><p id={descriptionId}>PDF e imagens • leitura segura</p><div className="mm-preview-controls" role="group" aria-label="Controles da prévia">
+    <div className="mm-preview-toolbar"><div className="mm-preview-controls" role="group" aria-label="Controles da prévia">
       <button type="button" aria-label="Diminuir zoom" disabled={!content || zoom <= 0.5} onClick={() => setZoom(value => Math.max(0.5, value - 0.25))}>−</button><button type="button" aria-label="Ajustar à largura" disabled={!content} onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button type="button" aria-label="Aumentar zoom" disabled={!content || zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + 0.25))}>+</button>
       {canDownload ? <button type="button" className="mm-preview-download" disabled={downloadBusy || denied || (!content && !error)} onClick={() => void download()}><DocumentIcon name="download" />{downloadBusy ? "Baixando..." : "Baixar original"}</button> : null}
     </div></div>
@@ -94,6 +94,6 @@ export default function DocumentPreviewDialog({ file, organizationId, canDownloa
     <div className="mm-preview-body" aria-busy={!content && !error}>
       {error ? <div className="mm-preview-state" role="alert"><DocumentIcon name="file" /><h3>{presentation.code === "unsupported" ? "Prévia indisponível para este formato" : presentation.code === "too-large" ? "Arquivo grande para a prévia" : "Não foi possível abrir a prévia"}</h3><p>{presentation.message}</p>{presentation.code === "network" ? <button type="button" onClick={() => setAttempt(value => value + 1)}>Tentar novamente</button> : null}</div> : !content ? <div className="mm-preview-state" role="status"><span className="mm-preview-spinner" aria-hidden="true" /><h3>Carregando documento...</h3><progress aria-label="Carregamento do documento" max={progress.total || undefined} value={progress.total ? progress.loaded : undefined} /><p>{progress.loaded ? `${(progress.loaded / 1024 / 1024).toFixed(1)} MB recebidos${progress.total ? ` de ${(progress.total / 1024 / 1024).toFixed(1)} MB` : ""}` : "Preparando arquivo. Você pode fechar a qualquer momento."}</p></div> : content.kind === "image" ? <ImagePreview content={content} name={file.name} zoom={zoom} onError={() => renderError("image-decode")} /> : <PreviewBoundary onError={() => renderError("reader-load")}><Suspense fallback={<div className="mm-preview-state" role="status">Abrindo leitor de PDF...</div>}><PdfPreview blob={content.blob} zoom={zoom} onError={renderError} /></Suspense></PreviewBoundary>}
     </div>
-    <footer className="mm-preview-footer"><span>Arquivo original preservado</span><span>Esc para fechar</span></footer>
+    <footer className="mm-preview-footer"><span>Esc para fechar</span></footer>
   </dialog>;
 }
