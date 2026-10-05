@@ -44,10 +44,15 @@ async function setup(page: Page, hooks: { index?: () => Promise<void>; bundle?: 
     return route.fulfill({ json: { ok: true, notifications: [], unreadCount: 0, jobs: [], enabled: false } });
   });
   await page.goto("/projects");
+  const roadmapNavigation = page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" });
+  // The load event can precede the authorized shell's transition out of its
+  // bootstrap skeleton. Freezing earlier can hold that unrelated handoff and
+  // leave no Roadmap button to click. The region's own clock starts on entry.
+  await expect(roadmapNavigation).toBeVisible();
   if (hooks.pauseInitial) {
     await page.clock.pauseAt(new Date("2026-10-04T12:01:00Z"));
-    await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).evaluate((node: HTMLButtonElement) => node.click());
-  } else await page.locator(".mm-sidebar-item").filter({ hasText: "Roadmap" }).click();
+    await roadmapNavigation.evaluate((node: HTMLButtonElement) => node.click());
+  } else await roadmapNavigation.click();
   await expect(shell(page).getByRole("heading", { name: "Roadmap", exact: true })).toBeVisible();
   return { reads, settled, errors };
 }
