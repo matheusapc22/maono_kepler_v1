@@ -772,8 +772,8 @@ for (const [role, label] of [
     const sidebar = page.locator('.mm-projects-sidebar');
     const identity = sidebar.locator('.mm-sidebar-user-copy');
     await expect(identity.locator('strong')).toHaveText(`Ana Oliveira - ${label}`);
-    await expect(identity.locator('span')).toHaveText('ana.oliveira@example.test');
-    const [nameBox, emailBox] = await Promise.all([identity.locator('strong').boundingBox(), identity.locator('span').boundingBox()]);
+    await expect(identity.locator(':scope > span')).toHaveText('ana.oliveira@example.test');
+    const [nameBox, emailBox] = await Promise.all([identity.locator('strong').boundingBox(), identity.locator(':scope > span').boundingBox()]);
     expect(emailBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height);
     await expect(sidebar.locator('.mm-sidebar-footer')).toHaveText(/^\s*Maõno Maps\s*Sair\s*$/);
     const membership = sidebar.locator('.mm-organization-trigger-copy > span');
@@ -1335,3 +1335,32 @@ for (const viewport of [{ width: 1440, height: 950 }, { width: 390, height: 844 
     await trigger.click(); await expect.poll(async () => (await geometry()).rotate).toBe(180);
   });
 }
+
+test('Maono selectors: project filters and footer use real branded popups across sections', async ({ page }, testInfo) => {
+  await setup(page);
+  for (const section of ['Todos os Projetos', 'Recentes', 'Favoritos']) {
+    await openSection(page, section);
+    const field = filters(page).getByRole('combobox', { name: 'Status', exact: true });
+    await field.click();
+    const menu = page.locator('.maono-select-menu');
+    await expect(menu).toBeVisible();
+    await expect(menu).toHaveCSS('background-color', 'rgb(16, 23, 32)');
+    await menu.getByRole('option', { name: 'Inativos', exact: true }).click();
+    await expect(field).toHaveValue('inactive');
+    await apply(page);
+    await expect(cards(page).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click();
+  }
+  const size = pagination(page).getByRole('combobox', { name: 'Itens por página', exact: true });
+  await size.click();
+  await page.locator('.maono-select-menu').getByRole('option', { name: '20', exact: true }).click();
+  await expectCount(page, 11, 11);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await filters(page).getByRole('combobox', { name: 'Ordenar por', exact: true }).click();
+  const menu = page.locator('.maono-select-menu');
+  await expect(menu).toBeVisible();
+  const box = (await menu.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath('maono-project-select-mobile.png') });
+  await page.keyboard.press('Escape');
+});

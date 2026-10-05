@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../../components/selection/MaonoSelect";
 import { useState } from "react";
 
 import {
@@ -181,7 +182,7 @@ export default function LayerInspector({
             <section className="maono-layer-structure" aria-label="Estrutura da camada">
               <label className="maono-style-field">
                 <span>Dataset associado</span>
-                <select
+                <MaonoSelect
                   value={datasetId ?? ""}
                   disabled={!canEditStructure}
                   onChange={(event) => changeDataset(event.target.value)}
@@ -195,7 +196,7 @@ export default function LayerInspector({
                       {candidate.label}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
 
               {dataset ? (
@@ -216,7 +217,7 @@ export default function LayerInspector({
                           {COLUMN_LABELS[column]}
                           {required ? " *" : ""}
                         </span>
-                        <select
+                        <MaonoSelect
                           value={current ?? ""}
                           disabled={!canEditStructure}
                           onChange={(event) =>
@@ -238,7 +239,7 @@ export default function LayerInspector({
                               {field.name}
                             </option>
                           ))}
-                        </select>
+                        </MaonoSelect>
                       </label>
                     );
                   })}

@@ -169,7 +169,7 @@ export function projectThumbnailUrl(project: ProjectListItem) {
   const revision =
     status === "READY"
       ? project.thumbnailRevision
-      : project.configRevision ?? 0;
+      : 0;
 
   if (
     status === "READY" &&
@@ -190,7 +190,12 @@ export function projectThumbnailRevision(project: ProjectListItem) {
   const revision =
     status === "READY"
       ? project.thumbnailRevision
-      : project.configRevision;
+      : status === "UNKNOWN"
+        ? 0
+        : project.configRevision;
+  if (revision === null || revision === undefined) {
+    return null;
+  }
   const normalized = Number(revision);
 
   return Number.isInteger(normalized) && normalized >= 0
@@ -201,6 +206,9 @@ export function projectThumbnailRevision(project: ProjectListItem) {
 export function projectPreviousReadyThumbnailUrl(
   project: ProjectListItem,
 ) {
+  if (project.thumbnailRevision === null || project.thumbnailRevision === undefined) {
+    return null;
+  }
   const revision = Number(project.thumbnailRevision);
 
   if (!Number.isInteger(revision) || revision < 0) {

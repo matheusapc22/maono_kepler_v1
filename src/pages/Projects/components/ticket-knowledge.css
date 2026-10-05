@@ -1,10 +1,10 @@
 .ticket-knowledge {
   margin: 12px 0;
   padding: 14px;
-  border: 1px solid #d5dfd8;
+  border: 1px solid var(--mm-border);
   border-radius: 8px;
-  background: #fff;
-  color: #203b2b;
+  background: var(--mm-bg-soft);
+  color: var(--mm-text);
 }
 .ticket-knowledge summary {
   cursor: pointer;
@@ -27,18 +27,18 @@
   width: 100%;
   box-sizing: border-box;
   padding: 8px;
-  border: 1px solid #899e90;
+  border: 1px solid var(--mm-border-strong);
   border-radius: 5px;
   color: inherit;
-  background: white;
+  background: var(--mm-bg-soft);
 }
 .ticket-knowledge button {
   padding: 8px 12px;
   margin: 4px;
-  border: 1px solid #678d73;
+  border: 1px solid var(--mm-border-strong);
   border-radius: 5px;
-  background: #f0f7f2;
-  color: #20492d;
+  background: var(--mm-surface);
+  color: var(--mm-text);
   cursor: pointer;
 }
 .ticket-knowledge button:disabled {
@@ -46,7 +46,7 @@
   cursor: default;
 }
 .ticket-knowledge :focus-visible {
-  outline: 3px solid #2a7d49;
+  outline: 3px solid var(--maono-focus-ring);
   outline-offset: 2px;
 }
 .ticket-knowledge-body {
@@ -61,7 +61,7 @@
 .ticket-knowledge-comparison > div {
   min-width: 0;
   padding: 8px;
-  border: 1px solid #d5dfd8;
+  border: 1px solid var(--mm-border);
 }
 @media (max-width: 700px) {
   .ticket-knowledge-comparison {

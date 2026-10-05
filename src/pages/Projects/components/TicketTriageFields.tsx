@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useRef, useState } from "react";
 import type { Ticket, TicketDemandNature, TicketPerson } from "./ticket-types";
 import { formatTicketDateTime, ticketPersonName } from "./ticket-format";
@@ -57,7 +58,7 @@ export default function TicketTriageFields({
       <div className="ticket-triage-grid">
         <label className="ticket-triage-wide" htmlFor={fieldId("demandNature")}>
           <span>Natureza da demanda *</span>
-          <select
+          <MaonoSelect
             ref={natureRef} id={fieldId("demandNature")} value={value.demandNature} required
             aria-describedby={describedBy("demandNature")} aria-invalid={validationIssue?.field === "demandNature" || undefined}
             onChange={(event) => {
@@ -73,7 +74,7 @@ export default function TicketTriageFields({
           >
             <option value="">Selecione a natureza</option>
             {Object.entries(DEMAND_NATURE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
+          </MaonoSelect>
           <small id={`${fieldId("demandNature")}-help`}>Escolha a natureza pelo trabalho necessário. Alterar o domínio não muda essa escolha.</small>
         </label>
         {pendingNature !== null ? (
@@ -96,20 +97,20 @@ export default function TicketTriageFields({
         {textField("expectedResult", "Resultado esperado", "O que você precisa conseguir fazer ao final do atendimento?", true)}
         <label htmlFor={fieldId("impact")}>
           <span>Quem foi afetado? *</span>
-          <select id={fieldId("impact")} value={value.impact} required aria-describedby={describedBy("impact")}
+          <MaonoSelect id={fieldId("impact")} value={value.impact} required aria-describedby={describedBy("impact")}
             aria-invalid={validationIssue?.field === "impact" || undefined} onChange={(event) => onChange({ ...value, impact: event.target.value as TicketTriageForm["impact"] })}>
             <option value="">Selecione o impacto</option>
             {Object.entries(IMPACT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
+          </MaonoSelect>
           <small id={`${fieldId("impact")}-help`}>Considere o alcance da dificuldade.</small>
         </label>
         <label htmlFor={fieldId("urgency")}>
           <span>A atividade pode continuar? *</span>
-          <select id={fieldId("urgency")} value={value.urgency} required aria-describedby={describedBy("urgency")}
+          <MaonoSelect id={fieldId("urgency")} value={value.urgency} required aria-describedby={describedBy("urgency")}
             aria-invalid={validationIssue?.field === "urgency" || undefined} onChange={(event) => onChange({ ...value, urgency: event.target.value as TicketTriageForm["urgency"] })}>
             <option value="">Selecione a urgência</option>
             {Object.entries(URGENCY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
+          </MaonoSelect>
           <small id={`${fieldId("urgency")}-help`}>Isso ajuda a triagem e não define um prazo de atendimento.</small>
         </label>
         {getTicketTriageQuestions(value.demandNature).map((question) => (

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isRegionAccessDenied } from "../components/loading/region-loading-policy";
 import { useNavigate } from "react-router";
 
 import {
@@ -18,6 +19,7 @@ import {
   LoadingOverlay,
   useCompleteLoadingHandoff,
   useInitialBootReadiness,
+  useInitialLoadingPresentation,
 } from "../components/loading";
 import { ProjectsPageSkeleton } from "../components/loading/Skeleton";
 import { usePreparedNavigate } from "../hooks/usePreparedNavigate";
@@ -71,7 +73,7 @@ type ManagementSectionProps = {
  */
 const UsersAccessSectionWithProps =
   UsersAccessSection as React.ComponentType<
-    Pick<ManagementSectionProps, "user" | "organizationId" | "projects">
+    Pick<ManagementSectionProps, "user" | "organizationId" | "projects"> & { onHome?: () => void }
   >;
 
 const OrganizationSectionWithProps =
@@ -323,8 +325,12 @@ const ProjectsPage: React.FC = () => {
   const [sidebarSection, setSidebarSection] =
     useState<ProjectSidebarSection>("all");
   const [allProjects, setAllProjects] = useState<ProjectListItem[]>([]);
+  const [allProjectsReadState, setAllProjectsReadState] = useState<{ organizationKey: string; status: "ready" | "denied" } | null>(null);
   const [projectItems, setProjectItems] = useState<ProjectListItem[]>([]);
   const [loadedProjectSection, setLoadedProjectSection] = useState<ProjectSectionKey | null>(null);
+  const [projectDataKey, setProjectDataKey] = useState<string | null>(null);
+  const projectDataKeyRef = useRef(projectDataKey);
+  projectDataKeyRef.current = projectDataKey;
   const [projectActionError, setProjectActionError] = useState<string | null>(null);
   const currentSidebarSectionRef = useRef(sidebarSection);
   currentSidebarSectionRef.current = sidebarSection;
@@ -416,8 +422,10 @@ const ProjectsPage: React.FC = () => {
     async (section: ProjectSectionKey) => {
       if (!activeOrganizationId) {
         setAllProjects([]);
+        setAllProjectsReadState(null);
         setProjectItems([]);
         setProjectsContextKey(null);
+        setProjectDataKey(null);
         setProjectsLoading(false);
         return;
       }
@@ -425,6 +433,7 @@ const ProjectsPage: React.FC = () => {
       projectsRequestSequenceRef.current += 1;
       const requestSequence = projectsRequestSequenceRef.current;
       const requestOrganizationKey = String(activeOrganizationId);
+      const requestDataKey = JSON.stringify([requestOrganizationKey, section]);
       projectsRequestControllerRef.current?.abort();
       const controller = new AbortController();
       projectsRequestControllerRef.current = controller;
@@ -464,8 +473,10 @@ const ProjectsPage: React.FC = () => {
         }
         if (section === "all") {
           setAllProjects(reconciled);
+          setAllProjectsReadState({ organizationKey: requestOrganizationKey, status: "ready" });
         }
         setProjectItems(reconciled);
+        setProjectDataKey(requestDataKey);
         setLoadedProjectSection(section);
       } catch (requestFailure) {
         if (
@@ -482,7 +493,19 @@ const ProjectsPage: React.FC = () => {
           return;
         }
 
-        setProjectItems([]);
+        const failure = requestFailure as { status?: number; category?: string; code?: string };
+        const status = Number(failure?.status || 0);
+        const accessDenied = isRegionAccessDenied(requestFailure);
+        const transient = !accessDenied && (status === 0 || status >= 500 || [408, 425, 429].includes(status));
+        const retainCurrentData = transient && projectDataKeyRef.current === requestDataKey;
+        if (!retainCurrentData) {
+          setProjectItems([]);
+          setProjectDataKey(null);
+          if (section === "all" || accessDenied) {
+            setAllProjects([]);
+            setAllProjectsReadState(accessDenied ? { organizationKey: requestOrganizationKey, status: "denied" } : null);
+          }
+        }
         setLoadedProjectSection(section);
         setProjectsError(normalizeUserError(requestFailure).message);
       } finally {
@@ -511,6 +534,14 @@ const ProjectsPage: React.FC = () => {
 
   const projectContextIsCurrent =
     projectsContextKey === activeOrganizationKey;
+  const projectPresentation = useInitialLoadingPresentation({
+    pending: !loading && authenticated && Boolean(activeOrganizationId) && isProjectSection(sidebarSection) &&
+      (projectsLoading || (loadedProjectSection !== sidebarSection && !projectsError)),
+    hasData: projectContextIsCurrent && projectDataKey === JSON.stringify([activeOrganizationKey, sidebarSection]),
+    scopeKey: JSON.stringify([user?.id, activeOrganizationKey, sidebarSection]),
+    failed: projectContextIsCurrent && loadedProjectSection === sidebarSection && Boolean(projectsError),
+    cancelled: !authenticated || !activeOrganizationId || !isProjectSection(sidebarSection),
+  });
   const loginProjectsReady =
     !loading &&
     authenticated &&
@@ -557,14 +588,19 @@ const ProjectsPage: React.FC = () => {
     switchingOrganization || organizationTransitionPending || ticketLinkRestoring;
   const visibleProjectItems = projectContextIsCurrent && loadedProjectSection === sidebarSection ? projectItems : [];
 
+  const currentAllProjectsRead = allProjectsReadState?.organizationKey === activeOrganizationKey ? allProjectsReadState.status : null;
   const activeProjects = useMemo(() => {
-    const source =
-      projectContextIsCurrent && allProjects.length > 0
+    const source = currentAllProjectsRead === "denied" ? []
+      : projectContextIsCurrent && currentAllProjectsRead === "ready"
         ? allProjects
         : sessionProjects;
 
     return source.filter((project) => project.active !== false);
-  }, [allProjects, projectContextIsCurrent, sessionProjects]);
+  }, [allProjects, currentAllProjectsRead, projectContextIsCurrent, sessionProjects]);
+  // An empty normalized session may also mean unavailable list metadata. Only
+  // a completed all-projects read proves zero; nonempty authorized cache is usable.
+  const activeProjectsCount = currentAllProjectsRead === "denied" ? null
+    : currentAllProjectsRead === "ready" || sessionProjects.length > 0 ? activeProjects.length : null;
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -616,8 +652,10 @@ const ProjectsPage: React.FC = () => {
     setSearchQuery("");
     setSidebarSection("all");
     setAllProjects([]);
+    setAllProjectsReadState(null);
     setProjectItems([]);
     setProjectsContextKey(null);
+    setProjectDataKey(null);
     setProjectsError(null);
     setProjectsLoading(false);
     setFavoriteBusySlugs({});
@@ -723,7 +761,8 @@ const ProjectsPage: React.FC = () => {
           organizations={organizations}
           switchingOrganization={organizationTransitionActive}
           organizationSwitchError={organizationSwitchError}
-          activeProjectsCount={activeProjects.length}
+          activeProjectsCount={activeProjectsCount}
+          projectsUnavailable={Boolean(projectsError)}
           searchQuery={searchQuery}
           sidebarSection={sidebarSection}
           onSearchQueryChange={setSearchQuery}
@@ -756,6 +795,7 @@ const ProjectsPage: React.FC = () => {
 
           {isProjectSection(sidebarSection) ? <ProjectPagesHeader
             section={sidebarSection}
+            structurePending={projectPresentation.structurePending}
             canCreateMap={canCreateMap}
             onNewMap={handleNewMapNavigation}
             onHome={() => { setSidebarSection("all"); setSearchQuery(""); setProjectActionError(null); }}
@@ -782,6 +822,9 @@ const ProjectsPage: React.FC = () => {
                 actionError={projectActionError}
                 onDismissActionError={() => setProjectActionError(null)}
                 loading={projectsLoading || (loadedProjectSection !== sidebarSection && !projectsError)}
+                loaded={projectContextIsCurrent && projectDataKey === JSON.stringify([activeOrganizationKey, sidebarSection])}
+                structurePending={projectPresentation.structurePending}
+                contentPending={projectPresentation.contentPending}
                 error={projectsError}
                 favoriteBusySlugs={favoriteBusySlugs}
                 canProjectSave={(project) =>
@@ -875,12 +918,14 @@ function ProjectsSectionRouter({
           user={accessControlUser}
           organizationId={organizationId}
           organizationName={organizationName}
+          onHome={onHome}
         />
       );
 
     case "users":
       return (
         <UsersAccessSectionWithProps
+          onHome={onHome}
           user={user}
           organizationId={organizationId}
           projects={projects}

@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../selection/MaonoSelect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -396,7 +397,7 @@ export default function OrganizationPermissionManager({
 
               <label className="org-permission-target">
                 Pessoa
-                <select
+                <MaonoSelect
                   value={String(targetId)}
                   disabled={initialTargetUserId !== undefined || saving}
                   onChange={(event) => setTargetId(event.target.value)}
@@ -411,7 +412,7 @@ export default function OrganizationPermissionManager({
                         profileLabel(person)}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
 
               {target && hasAdminOrOwnerNativeProfile(target) && (

@@ -1,3 +1,4 @@
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
 import type {
   TicketFilters,
   TicketPerson,
@@ -5,8 +6,11 @@ import type {
 } from "./ticket-types";
 import { Link } from "react-router";
 import { DocumentIcon } from "./DocumentsUi";
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 
 type TicketsToolbarProps = {
+  structurePending?: boolean;
+  contentPending?: boolean;
   organizationId: number | string;
   organizationName?: string | null;
   filters: TicketFilters;
@@ -27,6 +31,8 @@ function assigneeLabel(assignee: TicketPerson) {
 export default function TicketsToolbar({
   organizationId,
   organizationName,
+  structurePending = false,
+  contentPending = false,
   filters,
   assignees,
   viewMode,
@@ -51,12 +57,12 @@ export default function TicketsToolbar({
   return (
     <>
       <nav className="ticket-center-breadcrumb" aria-label="Caminho da página">
-        <Link to="/projects" replace={false} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome(); }}>Início</Link>
-        <DocumentIcon name="chevron" /><span aria-current="page">Central de Chamados</span>
+        <Link to="/projects" replace={false} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onHome(); }}><StaticLoadingText pending={structurePending}>Início</StaticLoadingText></Link>
+        <DocumentIcon name="chevron" /><span aria-current="page"><StaticLoadingText pending={structurePending}>Central de Chamados</StaticLoadingText></span>
       </nav>
       <header className="ticket-center-header">
         <div className="ticket-center-heading">
-          <h1>Central de Chamados</h1>
+          <h1><StaticLoadingText pending={structurePending}>Central de Chamados</StaticLoadingText></h1>
           <span className="mm-sr-only">
             Organização ativa: {organizationName?.trim() || `Organização #${organizationId}`}
           </span>
@@ -71,13 +77,13 @@ export default function TicketsToolbar({
               onClick={onNewTicket}
             >
               <DocumentIcon name="plus" />
-              Novo chamado
+              <StaticLoadingText pending={structurePending}>Novo chamado</StaticLoadingText>
             </button>
           ) : null}
 
           <label className="ticket-view-control">
             <span className="mm-sr-only">Visualização ativa</span>
-            <select
+            <MaonoSelect
               value={viewMode}
               aria-label="Visualização dos chamados"
               onChange={(event) =>
@@ -87,7 +93,7 @@ export default function TicketsToolbar({
               <option value="list">Lista</option>
               <option value="kanban">Kanban</option>
               <option value="calendar">Calendário</option>
-            </select>
+            </MaonoSelect>
           </label>
         </div>
       </header>
@@ -96,7 +102,7 @@ export default function TicketsToolbar({
         <header className="ticket-filter-header">
           <div className="ticket-filter-title">
             <DocumentIcon name="filter" />
-            <strong>Filtros</strong>
+            <strong><StaticLoadingText pending={structurePending}>Filtros</StaticLoadingText></strong>
           </div>
           <button
             type="button"
@@ -116,13 +122,13 @@ export default function TicketsToolbar({
             }
           >
             <DocumentIcon name="restore" />
-            Limpar filtros
+            <StaticLoadingText pending={structurePending}>Limpar filtros</StaticLoadingText>
           </button>
         </header>
 
         <div className="ticket-filter-bar">
           <label className="ticket-filter-search">
-            <span className="ticket-filter-label">Buscar</span>
+            <span className="ticket-filter-label"><StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText></span>
             <span className="ticket-filter-input-wrap">
               <DocumentIcon name="search" />
               <input
@@ -135,8 +141,8 @@ export default function TicketsToolbar({
           </label>
 
           <label>
-            <span className="ticket-filter-label">Situação</span>
-            <select
+            <span className="ticket-filter-label"><StaticLoadingText pending={structurePending}>Situação</StaticLoadingText></span>
+            <MaonoSelect
               value={filters.status}
               onChange={(event) =>
                 updateFilter(
@@ -151,12 +157,12 @@ export default function TicketsToolbar({
               <option value="in_progress">Em andamento</option>
               <option value="in_review">Em revisão</option>
               <option value="closed">Concluído</option>
-            </select>
+            </MaonoSelect>
           </label>
 
           <label>
-            <span className="ticket-filter-label">Prioridade</span>
-            <select
+            <span className="ticket-filter-label"><StaticLoadingText pending={structurePending}>Prioridade</StaticLoadingText></span>
+            <MaonoSelect
               value={filters.priority}
               onChange={(event) =>
                 updateFilter(
@@ -169,12 +175,12 @@ export default function TicketsToolbar({
               <option value="high">Alta</option>
               <option value="normal">Normal</option>
               <option value="low">Baixa</option>
-            </select>
+            </MaonoSelect>
           </label>
 
           <label>
-            <span className="ticket-filter-label">Atendente</span>
-            <select
+            <span className="ticket-filter-label"><StaticLoadingText pending={structurePending}>Atendente</StaticLoadingText></span>
+            <MaonoSelect
               value={filters.assigneeId}
               onChange={(event) =>
                 updateFilter("assigneeId", event.target.value)
@@ -182,21 +188,22 @@ export default function TicketsToolbar({
             >
               <option value="">Todos os atendentes</option>
               <option value="unassigned">Não atribuído</option>
-              {assignees.map((assignee) => (
+              {contentPending && filters.assigneeId && filters.assigneeId !== "unassigned" ? <option value={filters.assigneeId} disabled>Carregando atendente…</option> : null}
+              {(contentPending ? [] : assignees).map((assignee) => (
                 <option key={assignee.id} value={String(assignee.id)}>
                   {assigneeLabel(assignee)}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
 
         </div>
         <div className="ticket-filter-bar ticket-filter-secondary">
           <fieldset className="ticket-period-filter">
-            <legend className="ticket-filter-label">Período</legend>
+            <legend className="ticket-filter-label"><StaticLoadingText pending={structurePending}>Período</StaticLoadingText></legend>
             <div>
               <label className="ticket-date-filter">
-                <span className="ticket-filter-label">De</span>
+                <span className="ticket-filter-label"><StaticLoadingText pending={structurePending}>De</StaticLoadingText></span>
                 <input
                   type="date"
                   value={filters.from}
@@ -205,7 +212,7 @@ export default function TicketsToolbar({
               </label>
 
               <label className="ticket-date-filter">
-                <span className="ticket-filter-label">Até</span>
+                <span className="ticket-filter-label"><StaticLoadingText pending={structurePending}>Até</StaticLoadingText></span>
                 <input
                   type="date"
                   value={filters.to}
@@ -216,8 +223,8 @@ export default function TicketsToolbar({
           </fieldset>
 
           <label>
-            <span className="ticket-filter-label">Ordenar por</span>
-            <select
+            <span className="ticket-filter-label"><StaticLoadingText pending={structurePending}>Ordenar por</StaticLoadingText></span>
+            <MaonoSelect
               value={filters.sort}
               onChange={(event) =>
                 updateFilter(
@@ -230,7 +237,7 @@ export default function TicketsToolbar({
               <option value="updated_asc">Atualizados há mais tempo</option>
               <option value="due_asc">Prazo mais próximo</option>
               <option value="priority_desc">Maior prioridade</option>
-            </select>
+            </MaonoSelect>
           </label>
         </div>
       </section>

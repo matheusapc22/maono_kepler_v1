@@ -1,3 +1,8 @@
+import { useTicketOptionalPresentation } from "./useTicketOptionalPresentation";
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
+import TicketOptionalPanelState from "./TicketOptionalPanelState";
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
 import { toTicketApiError } from "./tickets-api";
@@ -21,7 +26,7 @@ type Detail = {
   canManage: boolean;
 };
 type List = { enabled: boolean; items: Case[]; nextCursor: string | null };
-type Props = { organizationId: string | number; canManage: boolean };
+type Props = { organizationId: string | number; canManage: boolean; structurePending?: boolean; stagePending?: boolean };
 const labels: Record<string, string> = {
   open: "Aberto",
   mitigating: "Em mitigação",
@@ -112,8 +117,10 @@ function HistoryData({ data }: { data: Record<string, unknown> }) {
     </dl>
   );
 }
-function Content({ organizationId, canManage }: Props) {
+function Content({ organizationId, canManage, structurePending = false, stagePending = false }: Props) {
   const endpoint = `/api/organizations/${organizationId}/ticket-cases`;
+  // Keep confirmed availability while same-context payloads refresh or recover.
+  const [available, setAvailable] = useState(false);
   const [list, setList] = useState<List | null>(null),
     [detail, setDetail] = useState<Detail | null>(null),
     [error, setError] = useState<ReturnType<typeof toTicketApiError> | null>(
@@ -164,7 +171,9 @@ function Content({ organizationId, canManage }: Props) {
         if (mounted.current && g === generation.current) apply(data);
       } catch (e) {
         if (mounted.current && g === generation.current && !c.signal.aborted) {
-          setError(toTicketApiError(e));
+          const failure = toTicketApiError(e);
+          setError(failure);
+          if (isRegionAccessDenied(failure)) { setAvailable(false); setPending(null); }
           setDetail(null);
           setList(null);
         }
@@ -179,7 +188,7 @@ function Content({ organizationId, canManage }: Props) {
       run<List>(
         `${endpoint}?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(query)}&after=${encodeURIComponent(after)}`,
         {},
-        setList,
+        value => { setList(value); setAvailable(value.enabled === true); },
       ),
     [endpoint, kind, query, run],
   );
@@ -234,11 +243,18 @@ function Content({ organizationId, canManage }: Props) {
       },
     );
   }
-  if (list?.enabled === false) return null;
+  const presentation = useTicketOptionalPresentation({ structurePending, stagePending, error });
+  if (!available) return <TicketOptionalPanelState
+    title="Incidentes e problemas"
+    error={list?.enabled === false ? null : error}
+    onRetry={() => void (pending && !isRegionAccessDenied(error) ? send(pending) : load())}
+    onRefresh={pending && !isRegionAccessDenied(error) ? () => void load() : undefined}
+  />;
   const writable = canManage && detail?.canManage;
   return (
     <details className="ticket-cases">
-      <summary>Incidentes e problemas</summary>
+      <summary><StaticLoadingText pending={presentation.structurePending}>Incidentes e problemas</StaticLoadingText></summary>
+      <div className="ticket-optional-panel-body" data-ticket-optional-body="" hidden={presentation.stagePending}>
       <p>
         Coordene a restauração e investigue causas. Cada chamado mantém sua
         própria validação.
@@ -279,7 +295,7 @@ function Content({ organizationId, canManage }: Props) {
         </label>
         <label>
           Tipo
-          <select
+          <MaonoSelect
             disabled={busy || !!pending}
             value={kind}
             onChange={(e) => {
@@ -290,7 +306,7 @@ function Content({ organizationId, canManage }: Props) {
             <option value="">Todos</option>
             <option value="incident">Incidentes</option>
             <option value="problem">Problemas</option>
-          </select>
+          </MaonoSelect>
         </label>
         <button disabled={busy} type="button" onClick={() => void load()}>
           Atualizar
@@ -315,13 +331,13 @@ function Content({ organizationId, canManage }: Props) {
           </label>
           <label>
             Natureza
-            <select
+            <MaonoSelect
               value={newKind}
               onChange={(e) => setNewKind(e.target.value)}
             >
               <option value="incident">Incidente</option>
               <option value="problem">Problema recorrente</option>
-            </select>
+            </MaonoSelect>
           </label>
           <button disabled={busy || !!pending} type="submit">
             Criar registro
@@ -400,7 +416,7 @@ function Content({ organizationId, canManage }: Props) {
               ))}
               <label>
                 Situação da causa
-                <select
+                <MaonoSelect
                   value={fields.causeStatus || "unknown"}
                   onChange={(e) =>
                     setFields({
@@ -415,7 +431,7 @@ function Content({ organizationId, canManage }: Props) {
                   <option value="unknown">Desconhecida</option>
                   <option value="hypothesis">Hipótese</option>
                   <option value="confirmed">Confirmada com evidência</option>
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Coordenador (ID de usuário)
@@ -429,7 +445,7 @@ function Content({ organizationId, canManage }: Props) {
               </label>
               <label>
                 Próximo estado
-                <select
+                <MaonoSelect
                   value={nextState}
                   onChange={(e) => setNextState(e.target.value)}
                 >
@@ -441,7 +457,7 @@ function Content({ organizationId, canManage }: Props) {
                       {labels[s]}
                     </option>
                   ))}
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Motivo da revisão/transição
@@ -475,13 +491,13 @@ function Content({ organizationId, canManage }: Props) {
                 </p>
                 <label>
                   Visibilidade
-                  <select
+                  <MaonoSelect
                     value={visibility}
                     onChange={(e) => setVisibility(e.target.value)}
                   >
                     <option value="private">Privado</option>
                     <option value="organization">Organização</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <label>
                   Substituir membros adicionais (IDs separados por vírgula)
@@ -509,14 +525,14 @@ function Content({ organizationId, canManage }: Props) {
                 <h4>Adicionar relação</h4>
                 <label>
                   Alvo
-                  <select
+                  <MaonoSelect
                     value={targetType}
                     onChange={(e) => setTargetType(e.target.value)}
                   >
                     <option value="ticket">Chamado</option>
                     <option value="case">Incidente/problema</option>
                     <option value="change">Registro de mudança (CR)</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <label>
                   ID do alvo
@@ -528,7 +544,7 @@ function Content({ organizationId, canManage }: Props) {
                 </label>
                 <label>
                   Relação
-                  <select
+                  <MaonoSelect
                     value={relation}
                     onChange={(e) => setRelation(e.target.value)}
                   >
@@ -537,7 +553,7 @@ function Content({ organizationId, canManage }: Props) {
                       Possível duplicidade
                     </option>
                     <option value="implements">Implementa</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <button disabled={busy || !!pending}>Vincular</button>
               </form>
@@ -619,7 +635,7 @@ function Content({ organizationId, canManage }: Props) {
               </p>
               <label>
                 Chamado
-                <select
+                <MaonoSelect
                   required
                   value={messageTicket}
                   onChange={(e) => setMessageTicket(e.target.value)}
@@ -632,17 +648,17 @@ function Content({ organizationId, canManage }: Props) {
                         {l.target.id}
                       </option>
                     ))}
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Audiência da mensagem
-                <select
+                <MaonoSelect
                   value={messageKind}
                   onChange={(e) => setMessageKind(e.target.value)}
                 >
                   <option value="response">Resposta ao chamado</option>
                   <option value="internal">Nota interna</option>
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Mensagem revisada
@@ -670,6 +686,7 @@ function Content({ organizationId, canManage }: Props) {
           </details>
         </section>
       )}
+      </div>
     </details>
   );
 }

@@ -1,3 +1,5 @@
+import { useInitialLoadingPresentation } from "../../../components/loading/useInitialLoadingPresentation";
+import { isRegionAccessDenied, isRegionAuthenticationError } from "../../../components/loading/region-loading-policy";
 import TicketFeedbackPanel from "./TicketFeedbackPanel";
 import TicketKnowledgePanel from "./TicketKnowledgePanel";
 import TicketMetricsPanel from './TicketMetricsPanel';
@@ -19,12 +21,13 @@ import {
 import { can, type AccessControlUser } from "../../../access-control/can";
 import { PERMISSION } from "../../../access-control/permissions";
 import {
-  MetricsSkeleton,
+  LoadingStatus, Skeleton, StaticLoadingText,
 } from "../../../components/loading/Skeleton";
 import NewTicketPopover from "./NewTicketPopover";
 import TicketCalendarView from "./TicketCalendarView";
 import TicketDetailDrawer from "./TicketDetailDrawer";
 import TicketKanbanBoard from "./TicketKanbanBoard";
+import { changeTicketFacets, matchesTicketFilters, ticketQueryKey, type TicketChange } from "./ticket-live-state";
 import TicketListView from "./TicketListView";
 import TicketsToolbar from "./TicketsToolbar";
 import TicketNotifications from "./TicketNotifications";
@@ -103,7 +106,7 @@ function storedViewMode(organizationId: number | string | null | undefined) {
 }
 
 export default function TicketsSection(props: TicketsSectionProps) {
-  return <TicketsSectionContent key={`${props.organizationId ?? ''}:${props.user?.id ?? ''}`} {...props} />;
+  return <TicketsSectionContent key={JSON.stringify([props.organizationId, props.user?.id, props.user?.role, props.user?.permissions, props.user?.deniedPermissions, props.user?.scopes])} {...props} />;
 }
 
 function TicketsSectionContent({
@@ -114,6 +117,7 @@ function TicketsSectionContent({
 }: TicketsSectionProps) {
   const navigation = useRef(readTicketNavigation(window.location.href, String(organizationId ?? ''))).current;
   const snapshotRef = useRef<string | null>(null);
+  const snapshotQueryKeyRef = useRef<string | null>(null);
   const [pageSize, setPageSize] = useState(10);
   const [exportOpenSignal, setExportOpenSignal] = useState(0);
   const [exportAvailable, setExportAvailable] = useState(false);
@@ -142,20 +146,40 @@ function TicketsSectionContent({
   );
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
-  const [initialLoading, setInitialLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasLoadedQuery, setHasLoadedQuery] = useState(false);
   const [error, setError] = useState<TicketApiError | null>(null);
+  const [queryAccessRevoked, setQueryAccessRevoked] = useState(false);
+  const queryAccessRevokedRef = useRef(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<
     number | string | null
   >(navigation.ticketId);
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(Boolean(navigation.ticketId));
   const [detailError, setDetailError] = useState<TicketApiError | null>(null);
   const [detailSaving, setDetailSaving] = useState(false);
   const [busyTicketIds, setBusyTicketIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [ticketChanges, setTicketChanges] = useState<TicketChange[]>([]);
+  const [boardRefresh, setBoardRefresh] = useState(0);
+  // Presentation cancellation outlives the query-keyed Kanban controller.
+  const [cancelledQueuePresentations, setCancelledQueuePresentations] = useState<ReadonlySet<string>>(() => new Set());
+  const cancelQueuePresentations = useCallback((queues: string[]) => {
+    setCancelledQueuePresentations(current => queues.every(queue => current.has(queue))
+      ? current : new Set([...current, ...queues]));
+  }, []);
+  const mutationLocks = useRef(new Set<string>());
+  const mutationRevision = useRef(0);
+  const mounted = useRef(true);
+  const liveFiltersRef = useRef(debouncedFilters); liveFiltersRef.current = debouncedFilters;
+  const knownTicketsRef = useRef(new Map<string, Ticket>());
+  const queryKeyRef = useRef(ticketQueryKey(debouncedFilters));
+  queryKeyRef.current = ticketQueryKey(debouncedFilters);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [toast, setToast] = useState<string | null>(null);
 
   const listRequestSequenceRef = useRef(0);
@@ -181,6 +205,13 @@ function TicketsSectionContent({
   const canCreate = can(user, PERMISSION.TICKET_CREATE, permissionContext);
   const canManage = can(user, PERMISSION.TICKET_MANAGE, permissionContext);
   const canUpload = canCreate || canManage;
+  const { structurePending, contentPending, stagePending } = useInitialLoadingPresentation({
+    pending: initialLoading,
+    hasData: hasLoadedQuery && snapshotQueryKeyRef.current === ticketQueryKey(debouncedFilters),
+    scopeKey: String(organizationId),
+    failed: Boolean(error),
+    cancelled: !organizationId || !canView || queryAccessRevoked,
+  });
 
   useEffect(() => {
     const timeout = window.setTimeout(
@@ -192,7 +223,7 @@ function TicketsSectionContent({
 
   useEffect(() => {
     setViewMode(new URL(window.location.href).searchParams.get("cc_org") === String(organizationId) ? navigation.view : storedViewMode(organizationId));
-  }, [organizationId]);
+  }, [organizationId, navigation.view]);
 
   useEffect(() => {
     if (!organizationId || typeof window === "undefined") return;
@@ -210,11 +241,26 @@ function TicketsSectionContent({
 
   useEffect(() => { setTriageEnabled(false); setLifecycleEnabled(false); }, [organizationId]);
 
+  const invalidateQueryAccess = useCallback(() => {
+    queryAccessRevokedRef.current = true;
+    listRequestSequenceRef.current += 1;
+    listControllerRef.current?.abort();
+    detailRequestSequenceRef.current += 1;
+    detailControllerRef.current?.abort();
+    setInitialLoading(false); setRefreshing(false); setLoadingMore(false); setDetailLoading(false);
+    setQueryAccessRevoked(true); setHasLoadedQuery(false);
+    setDetail(null); setSelectedTicketId(null); setSuggestedStatus(null); setNewTicketOpen(false);
+    knownTicketsRef.current.clear(); setTicketChanges([]);
+    setTickets([]); setFacets(EMPTY_FACETS); setPagination(EMPTY_PAGINATION); setAssignees([]);
+    snapshotRef.current = null;
+  }, []);
+
   const loadTicketsPage = useCallback(
     async (
       targetPage = 1,
-      options: { append?: boolean; background?: boolean; reuseSnapshot?: boolean } = {},
+      options: { append?: boolean; background?: boolean; reuseSnapshot?: boolean; preserveError?: boolean } = {},
     ) => {
+      if (mutationLocks.current.size) return;
       if (!organizationId || !canView) {
         setTickets([]);
         return;
@@ -222,17 +268,19 @@ function TicketsSectionContent({
 
       listRequestSequenceRef.current += 1;
       const requestSequence = listRequestSequenceRef.current;
+      const requestRevision = mutationRevision.current;
       const requestOrganizationKey = String(organizationId);
       listControllerRef.current?.abort();
       const controller = new AbortController();
       listControllerRef.current = controller;
 
+      setLoadingMore(Boolean(options.append));
       if (options.background || options.append || targetPage > 1) {
         setRefreshing(true);
       } else {
         setInitialLoading(true);
       }
-      setError(null);
+      if (!options.preserveError) setError(null);
 
       try {
         const response = await listTickets(
@@ -248,7 +296,7 @@ function TicketsSectionContent({
         );
 
         if (
-          requestSequence !== listRequestSequenceRef.current ||
+          requestSequence !== listRequestSequenceRef.current || requestRevision !== mutationRevision.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -259,16 +307,21 @@ function TicketsSectionContent({
           const clamped = await listTickets(organizationId, debouncedFilters, lastPage, controller.signal, {
             limit: viewModeRef.current === "list" ? pageSize : 50, includeUndated: true,
           });
-          if (requestSequence !== listRequestSequenceRef.current || requestOrganizationKey !== organizationKeyRef.current) return;
+          if (requestSequence !== listRequestSequenceRef.current || requestRevision !== mutationRevision.current || !mounted.current || requestOrganizationKey !== organizationKeyRef.current) return;
           Object.assign(response, clamped);
         }
 
+        queryAccessRevokedRef.current = false;
+        setHasLoadedQuery(true);
+        setQueryAccessRevoked(false);
+        for (const ticket of response.tickets) knownTicketsRef.current.set(String(ticket.id), ticket);
         setTickets((current) =>
           options.append
             ? mergeTickets(current, response.tickets)
             : response.tickets,
         );
         snapshotRef.current = response.pagination.snapshot || null;
+        snapshotQueryKeyRef.current = ticketQueryKey(debouncedFilters);
         setFlowEnabled(response.flowEnabled === true);
         setQueuePolicies(response.queuePolicies || []);
         setTriageEnabled(response.triageEnabled === true);
@@ -287,16 +340,15 @@ function TicketsSectionContent({
           return;
         }
         if (
-          requestSequence !== listRequestSequenceRef.current ||
+          requestSequence !== listRequestSequenceRef.current || requestRevision !== mutationRevision.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
         }
 
         const listFailure = toTicketApiError(requestError, "Não foi possível carregar os chamados.");
-        if (listFailure.status === 403 || listFailure.status === 404) {
-          setTickets([]); setFacets(EMPTY_FACETS); setPagination(EMPTY_PAGINATION);
-          snapshotRef.current = null;
+        if (isRegionAccessDenied(listFailure) || listFailure.status === 404) {
+          invalidateQueryAccess();
         }
         setError(listFailure);
       } finally {
@@ -306,15 +358,17 @@ function TicketsSectionContent({
         ) {
           setInitialLoading(false);
           setRefreshing(false);
+          setLoadingMore(false);
           listControllerRef.current = null;
         }
       }
     },
-    [canView, debouncedFilters, organizationId, pageSize],
+    [canView, debouncedFilters, organizationId, pageSize, invalidateQueryAccess],
   );
 
   useEffect(() => {
     snapshotRef.current = null;
+    setHasLoadedQuery(false);
     setTickets([]);
     setPagination(EMPTY_PAGINATION);
     setFacets(EMPTY_FACETS);
@@ -332,6 +386,47 @@ function TicketsSectionContent({
     previousView.current = viewMode;
     if (viewMode !== 'kanban') void loadTicketsPage(1, { background: true, reuseSnapshot: true });
   }, [viewMode, loadTicketsPage]);
+
+  const reloadListRef = useRef(loadTicketsPage);
+  reloadListRef.current = loadTicketsPage;
+
+  const recordTicketChange = useCallback((previous: Ticket | null, ticket: Ticket | null, queryKey = queryKeyRef.current, retain = true) => {
+    if (!mounted.current || queryAccessRevokedRef.current) return;
+    const revision = ++mutationRevision.current;
+    setTicketChanges(current => [...current, { revision, queryKey, previous, ticket, retain }]);
+    if (ticket) knownTicketsRef.current.set(String(ticket.id), ticket);
+    else if (previous) knownTicketsRef.current.delete(String(previous.id));
+    if (queryKey !== queryKeyRef.current) return;
+    const id = String((ticket || previous)!.id);
+    setTickets(current => {
+      const without = current.filter(item => String(item.id) !== id);
+      return ticket && matchesTicketFilters(ticket, liveFiltersRef.current) ? replaceTicket(without, ticket) : without;
+    });
+    setFacets(current => changeTicketFacets(current, previous, ticket, liveFiltersRef.current, Boolean(snapshotRef.current)));
+  }, []);
+
+  function lockTicket(ticketId: number | string) {
+    const id = String(ticketId);
+    if (mutationLocks.current.has(id)) return false;
+    mutationLocks.current.add(id);
+    setBusyTicketIds(new Set(mutationLocks.current));
+    listRequestSequenceRef.current += 1;
+    listControllerRef.current?.abort();
+    setRefreshing(false);
+    if (selectedTicketKeyRef.current === id) {
+      detailRequestSequenceRef.current += 1;
+      detailControllerRef.current?.abort();
+      setDetailLoading(false);
+    }
+    return true;
+  }
+
+  function unlockTicket(ticketId: number | string) {
+    mutationLocks.current.delete(String(ticketId));
+    if (!mounted.current) return;
+    setBusyTicketIds(new Set(mutationLocks.current));
+    if (!mutationLocks.current.size) void reloadListRef.current(1, { background: true, preserveError: true });
+  }
 
   const loadDetail = useCallback(
     async (ticketId: number | string) => {
@@ -355,13 +450,19 @@ function TicketsSectionContent({
         );
 
         if (
-          requestSequence !== detailRequestSequenceRef.current ||
+          requestSequence !== detailRequestSequenceRef.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
         }
 
         setDetail(response);
+        const known = knownTicketsRef.current.get(String(ticketId));
+        if (!mutationLocks.current.has(String(ticketId)) && known && JSON.stringify(known) !== JSON.stringify(response.ticket)) {
+          recordTicketChange(known, response.ticket);
+          void reloadListRef.current(1, { background: true, preserveError: true });
+        }
+        knownTicketsRef.current.set(String(ticketId), response.ticket);
         setLifecycleEnabled(response.lifecycleEnabled === true);
         setAttachmentLimits(
           response.attachmentLimits || DEFAULT_TICKET_ATTACHMENT_LIMITS,
@@ -374,7 +475,7 @@ function TicketsSectionContent({
           return;
         }
         if (
-          requestSequence !== detailRequestSequenceRef.current ||
+          requestSequence !== detailRequestSequenceRef.current || !mounted.current ||
           requestOrganizationKey !== organizationKeyRef.current
         ) {
           return;
@@ -384,10 +485,17 @@ function TicketsSectionContent({
           requestError,
           "Não foi possível carregar o chamado.",
         );
-        if (detailFailure.status === 404 || detailFailure.status === 403) {
-          setTickets((current) =>
-            current.filter((ticket) => String(ticket.id) !== String(ticketId)),
-          );
+        if (isRegionAuthenticationError(detailFailure)) {
+          invalidateQueryAccess();
+          setError(detailFailure);
+          return;
+        }
+        if (detailFailure.status === 404 || isRegionAccessDenied(detailFailure)) {
+          const removed = knownTicketsRef.current.get(String(ticketId));
+          if (removed) {
+            recordTicketChange(removed, null);
+            void reloadListRef.current(1, { background: true, preserveError: true });
+          }
           setDetail(null);
           setSelectedTicketId(null);
           setSuggestedStatus(null);
@@ -403,11 +511,12 @@ function TicketsSectionContent({
         }
       }
     },
-    [organizationId],
+    [organizationId, recordTicketChange, invalidateQueryAccess],
   );
 
   const openTicket = useCallback(
     (ticket: Ticket) => {
+      knownTicketsRef.current.set(String(ticket.id), ticket);
       setSelectedTicketId(ticket.id);
       setSuggestedStatus(null);
       setDetail(null);
@@ -430,89 +539,64 @@ function TicketsSectionContent({
   }, []);
 
   async function changeStatus(ticket: Ticket, status: TicketStatus) {
-    if (!organizationId || !canManage || ticket.status === status) return;
+    if (!organizationId || !canManage || ticket.status === status || mutationLocks.current.has(String(ticket.id))) return;
     if (lifecycleEnabled) {
       openTicket(ticket);
       setSuggestedStatus(status);
       setToast("Complete os campos e confirme a mudança no detalhe do chamado.");
       return;
     }
-
-    const previous = ticket;
-    const ticketKey = String(ticket.id);
-    const requestOrganizationKey = String(organizationId);
-    setBusyTicketIds((current) => new Set(current).add(ticketKey));
-    setTickets((current) =>
-      current.map((item) =>
-        String(item.id) === ticketKey ? { ...item, status } : item,
-      ),
-    );
+    if (!lockTicket(ticket.id)) return;
+    const queryKey = queryKeyRef.current;
+    const optimistic = { ...ticket, status };
+    recordTicketChange(ticket, optimistic, queryKey);
     setError(null);
-
     try {
-      const updated = await updateTicket(
-        organizationId,
-        ticket.id,
-        { status },
-        undefined,
-        { etag: ticket.etag },
-      );
-      if (requestOrganizationKey !== organizationKeyRef.current) return;
-      setTickets((current) => replaceTicket(current, updated));
-      if (String(selectedTicketId) === ticketKey) {
-        void loadDetail(ticket.id);
-      }
+      const updated = await updateTicket(organizationId, ticket.id, { status }, undefined, { etag: ticket.etag });
+      if (!mounted.current) return;
+      recordTicketChange(optimistic, updated, queryKey);
+      if (String(ticket.id) === selectedTicketKeyRef.current) void loadDetail(ticket.id);
     } catch (requestError) {
-      if (requestOrganizationKey !== organizationKeyRef.current) return;
-      setTickets((current) => replaceTicket(current, previous));
+      if (!mounted.current) return;
       const statusError = toTicketApiError(requestError, "Não foi possível alterar a situação.");
-      setError(statusError);
-      if (statusError.status === 428 || statusError.status === 412) void loadTicketsPage(pagination.page, { background: true });
+      const unavailable = isRegionAccessDenied(statusError) || statusError.status === 404;
+      recordTicketChange(optimistic, unavailable ? null : ticket, queryKey, false);
+      if (unavailable && String(ticket.id) === selectedTicketKeyRef.current) closeDetail();
+      if (queryKey === queryKeyRef.current) setError(statusError);
     } finally {
-      if (requestOrganizationKey === organizationKeyRef.current) {
-        setBusyTicketIds((current) => {
-          const next = new Set(current);
-          next.delete(ticketKey);
-          return next;
-        });
-      }
+      unlockTicket(ticket.id);
     }
   }
 
   async function mutateSelectedTicket(write: (organization: number | string, ticketId: number | string) => Promise<Ticket>) {
-    if (!organizationId || !selectedTicketId || !canManage || detailSaving) return;
+    if (!organizationId || !selectedTicketId || !canManage || detailSaving || !lockTicket(selectedTicketId)) return;
     setDetailSaving(true);
-    const requestOrganizationKey = String(organizationId);
     const requestTicketId = selectedTicketId;
+    const previous = detail?.ticket || tickets.find(ticket => String(ticket.id) === String(requestTicketId)) || null;
+    const queryKey = queryKeyRef.current;
     try {
       const updated = await write(organizationId, requestTicketId);
-      if (requestOrganizationKey !== organizationKeyRef.current) return;
-      setTickets((current) => replaceTicket(current, updated));
+      if (!mounted.current) return;
+      recordTicketChange(previous, updated, queryKey);
       if (String(requestTicketId) === selectedTicketKeyRef.current) {
-        setDetail((current) => current && String(current.ticket.id) === String(requestTicketId) ? { ...current, ticket: updated } : current);
+        setDetail(current => current && String(current.ticket.id) === String(requestTicketId) ? { ...current, ticket: updated } : current);
         await loadDetail(requestTicketId);
       }
-      void loadTicketsPage(1, { background: true });
       setToast(`${updated.code}: ação registrada no chamado.`);
     } catch (requestError) {
-      if (requestOrganizationKey !== organizationKeyRef.current) throw requestError;
-      const mutationFailure = toTicketApiError(
-        requestError,
-        "Não foi possível atualizar o chamado.",
-      );
-      if (mutationFailure.status === 404 || mutationFailure.status === 403) {
-        setTickets((current) =>
-          current.filter((ticket) => String(ticket.id) !== String(requestTicketId)),
-        );
-        setDetail(null);
-        setSelectedTicketId(null);
-        setSuggestedStatus(null);
-        setDetailError(null);
+      if (!mounted.current) throw requestError;
+      const mutationFailure = toTicketApiError(requestError, "Não foi possível atualizar o chamado.");
+      if (mutationFailure.status === 404 || isRegionAccessDenied(mutationFailure)) {
+        if (previous) recordTicketChange(previous, null, queryKey);
+        if (String(requestTicketId) === selectedTicketKeyRef.current) {
+          closeDetail();
+        }
         setToast("O chamado não está mais disponível para seu acesso.");
       }
       throw mutationFailure;
     } finally {
-      if (requestOrganizationKey === organizationKeyRef.current) setDetailSaving(false);
+      if (mounted.current) setDetailSaving(false);
+      unlockTicket(requestTicketId);
     }
   }
 
@@ -524,9 +608,17 @@ function TicketsSectionContent({
     await mutateSelectedTicket((organization, ticketId) => runTicketCommand(organization, ticketId, command, etag));
   }
 
+  function refreshTickets() {
+    if (mutationLocks.current.size) return;
+    snapshotRef.current = null;
+    setBoardRefresh(current => current + 1);
+    setTicketChanges([]);
+    void loadTicketsPage(1, { background: true });
+  }
+
   function handleCreated(ticket: Ticket, failedFiles: File[]) {
     if (String(ticket.organizationId) !== organizationKeyRef.current) return;
-    setTickets((current) => replaceTicket(current, ticket));
+    recordTicketChange(null, ticket);
     setToast(
       failedFiles.length > 0
         ? `${ticket.code} criado; ${failedFiles.length} anexo(s) aguardam nova tentativa.`
@@ -587,11 +679,13 @@ function TicketsSectionContent({
 
   const openCount =
     facets.byStatus.open;
-  const showInitialSkeleton = initialLoading && tickets.length === 0;
+  const showInitialSkeleton = contentPending;
 
   return (
     <section className="ticket-center-shell ticket-center-final">
       <TicketsToolbar
+        structurePending={structurePending}
+        contentPending={contentPending}
         organizationId={organizationId}
         organizationName={organizationName}
         filters={filters}
@@ -605,13 +699,11 @@ function TicketsSectionContent({
         newTicketButtonRef={newTicketButtonRef}
       />
 
-      {showInitialSkeleton ? (
-        <MetricsSkeleton count={5} />
-      ) : (
+      <LoadingStatus loading={contentPending || initialLoading || refreshing || filters !== debouncedFilters} refreshing={hasLoadedQuery && !contentPending} label="Carregando resumo dos chamados." refreshingLabel="Atualizando resumo dos chamados." />
         <section
           className="ticket-metrics"
           aria-label="Resumo dos chamados"
-          aria-busy={refreshing}
+          aria-busy={contentPending || initialLoading || refreshing || filters !== debouncedFilters}
         >
           <button
             type="button"
@@ -626,7 +718,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-open" aria-hidden="true">▣</span>
-            <span className="ticket-metric-copy"><span>Abertos</span><strong>{openCount}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Abertos</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : openCount}</strong></span>
           </button>
           <button
             type="button"
@@ -641,7 +733,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-progress" aria-hidden="true">◔</span>
-            <span className="ticket-metric-copy"><span>Em andamento</span><strong>{facets.byStatus.in_progress}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Em andamento</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.byStatus.in_progress}</strong></span>
           </button>
           <button
             type="button"
@@ -656,7 +748,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-review" aria-hidden="true">◉</span>
-            <span className="ticket-metric-copy"><span>Em revisão</span><strong>{facets.byStatus.in_review}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Em revisão</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.byStatus.in_review}</strong></span>
           </button>
           <button
             type="button"
@@ -671,7 +763,7 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-overdue" aria-hidden="true">⚠</span>
-            <span className="ticket-metric-copy"><span>Vencidos</span><strong>{facets.overdue}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Vencidos</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.overdue}</strong></span>
           </button>
           <button
             type="button"
@@ -686,24 +778,23 @@ function TicketsSectionContent({
             }
           >
             <span className="ticket-metric-icon metric-closed" aria-hidden="true">✓</span>
-            <span className="ticket-metric-copy"><span>Concluídos</span><strong>{facets.byStatus.closed}</strong></span>
+            <span className="ticket-metric-copy"><span><StaticLoadingText pending={structurePending}>Concluídos</StaticLoadingText></span><strong>{contentPending ? <Skeleton width={38} height={25} /> : !hasLoadedQuery ? "—" : facets.byStatus.closed}</strong></span>
           </button>
         </section>
-      )}
 
-      <TicketNotifications key={`${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
+      <TicketNotifications key={`notifications:${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
         setSelectedTicketId(id); setSuggestedStatus(null); setDetail(null); void loadDetail(id);
       }} />
-      <TicketFeedbackPanel key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />
-      <TicketMetricsPanel organizationId={organizationId} canManage={canManage} />
-      <TicketKnowledgePanel key={`knowledge:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} reviewers={assignees} />
-      <TicketCasesPanel key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />
-      {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} openSignal={exportOpenSignal} onAvailabilityChange={setExportAvailable} />}
+      <TicketFeedbackPanel structurePending={structurePending} stagePending={stagePending} key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />
+      <TicketMetricsPanel structurePending={structurePending} stagePending={stagePending} organizationId={organizationId} canManage={canManage} />
+      <TicketKnowledgePanel structurePending={structurePending} stagePending={stagePending} key={`knowledge:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} reviewers={assignees} />
+      <TicketCasesPanel structurePending={structurePending} stagePending={stagePending} key={`cases:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} />
+      {can(user, PERMISSION.EXPORT_VIEW, permissionContext) && <TicketExportsPanel structurePending={structurePending} stagePending={stagePending} key={`exports:${organizationId}:${user?.id}`} organizationId={organizationId} canCreate={can(user, PERMISSION.EXPORT_CREATE, permissionContext)} canDownload={can(user, PERMISSION.EXPORT_DOWNLOAD, permissionContext)} openSignal={exportOpenSignal} onAvailabilityChange={setExportAvailable} />}
       {flowEnabled && canManage ? <TicketFlowSettings organizationId={organizationId} policies={queuePolicies} onSaved={() => void loadTicketsPage(1, { background: true })} /> : null}
-      <p className="mm-sr-only" role="status">
+      {hasLoadedQuery && !contentPending ? <p className="mm-sr-only" role="status">
         {viewMode === "kanban" ? "Carregamento por fila. " : ""}{pagination.total} acessíveis nesta consulta.
         {pagination.snapshotAt ? " Ordem preservada por até 15 minutos; use Atualizar consulta no menu para incluir novos chamados." : ""}
-      </p>
+      </p> : null}
       {error ? (
         <TicketErrorNotice
           error={error}
@@ -713,24 +804,25 @@ function TicketsSectionContent({
 
       <div
         className="ticket-view-region"
-        aria-busy={initialLoading || refreshing}
       >
-        {viewMode !== "list" ? <div className="ticket-view-actions"><DocumentActionMenu label="Mais opções dos chamados" disabled={initialLoading} actions={[{ label: "Atualizar consulta", onSelect: () => void loadTicketsPage(1, { background: true }), disabled: refreshing || filters !== debouncedFilters }]} /></div> : null}
-        {viewMode === "list" ? (
+        {viewMode !== "list" ? <div className="ticket-view-actions"><DocumentActionMenu label="Mais opções dos chamados" disabled={initialLoading} actions={[{ label: "Atualizar consulta", onSelect: refreshTickets, disabled: refreshing || filters !== debouncedFilters }]} /></div> : null}
+        {queryAccessRevoked && viewMode === "kanban" ? null : viewMode === "list" ? (
           <TicketListView
             selectionScope={`${JSON.stringify(debouncedFilters)}:${pagination.page}:${pageSize}`}
             tickets={tickets}
             pagination={pagination}
             pageSize={pageSize}
             loading={initialLoading || refreshing || filters !== debouncedFilters}
-            initialLoading={showInitialSkeleton}
+            initialLoading={initialLoading && tickets.length === 0}
+            contentPending={showInitialSkeleton}
+            structurePending={structurePending}
             error={Boolean(error)}
             canCreate={canCreate}
             onNewTicket={() => setNewTicketOpen(true)}
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
             onPageSizeChange={setPageSize}
-            onRefresh={() => void loadTicketsPage(1, { background: true })}
+            onRefresh={refreshTickets}
             canExport={can(user, PERMISSION.EXPORT_VIEW, permissionContext)}
             exportAvailable={exportAvailable}
             onExport={() => setExportOpenSignal(current => current + 1)}
@@ -738,18 +830,18 @@ function TicketsSectionContent({
               void loadTicketsPage(targetPage, { background: true, reuseSnapshot: true })
             }
           />
-        ) : showInitialSkeleton ? (
-          <div className={`ticket-view-skeleton mode-${viewMode}`}>
-            {Array.from({ length: viewMode === "kanban" ? 4 : 12 }).map((_, index) => <span key={index} />)}
-            <p className="mm-sr-only" role="status">Carregando chamados.</p>
-          </div>
         ) : viewMode === "kanban" ? (
           <TicketKanbanBoard
-            key={`${organizationId}:${pagination.snapshot || JSON.stringify(debouncedFilters)}`}
+            cancelledQueuePresentations={cancelledQueuePresentations}
+            onCancelQueuePresentations={cancelQueuePresentations}
+            structurePending={structurePending}
+            stagePending={stagePending}
+            key={`${organizationId}:${ticketQueryKey(debouncedFilters)}`}
+            refreshKey={boardRefresh}
             organizationId={organizationId}
             filters={debouncedFilters}
-            snapshot={pagination.snapshot}
-            policies={queuePolicies}
+            snapshot={boardRefresh || snapshotQueryKeyRef.current !== ticketQueryKey(debouncedFilters) ? null : pagination.snapshot}
+            changes={ticketChanges}
             canManage={canManage}
             busyTicketIds={busyTicketIds}
             onOpen={openTicket}
@@ -760,6 +852,12 @@ function TicketsSectionContent({
         ) : (
           <TicketCalendarView
             from={filters.from}
+            loading={initialLoading || refreshing || filters !== debouncedFilters}
+            initialLoading={initialLoading && tickets.length === 0}
+            contentPending={showInitialSkeleton}
+            structurePending={structurePending}
+            loadingMore={loadingMore}
+            error={Boolean(error)}
             tickets={tickets}
             onOpen={openTicket}
             onRangeChange={handleCalendarRange}
@@ -785,12 +883,6 @@ function TicketsSectionContent({
         ) : null}
       </div>
 
-      {refreshing ? (
-        <span className="mm-sr-only" role="status">
-          Atualizando chamados.
-        </span>
-      ) : null}
-
       {toast ? (
         <div className="ticket-toast" role="status">
           {toast}
@@ -812,13 +904,13 @@ function TicketsSectionContent({
       />
 
       <TicketDetailDrawer
-        key={`${organizationId}:${selectedTicketId ?? "closed"}`}
+        key={`detail:${organizationId}:${selectedTicketId ?? "closed"}`}
         open={selectedTicketId !== null}
         organizationId={organizationId}
         detail={detail}
         loading={detailLoading}
         error={detailError}
-        saving={detailSaving}
+        saving={detailSaving || busyTicketIds.has(String(selectedTicketId))}
         canManage={canManage}
         canUpload={canUpload}
         attachmentLimits={attachmentLimits}

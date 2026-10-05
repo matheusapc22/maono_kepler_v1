@@ -1,0 +1,12 @@
+/* Specific audited gaps only. Native date/time/file dialogs stay owned by the
+ * browser; these rules theme their DOM faces and ordinary range/check controls. */
+.people-toolbar input,
+.maono-point-dialog :is(input, textarea),
+.maono-editor-inbox :is(input, textarea),
+.maono-isochrone-dialog input,
+.maono-admin-page :is(input[type="date"], input[type="datetime-local"]),
+.ticket-center-shell :is(input[type="date"], input[type="datetime-local"]) { color-scheme: dark; }
+.people-toolbar input:focus-visible,
+.maono-point-dialog :is(input, textarea, button):focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 2px; }
+.maono-filter-editor.is-boolean input[type="radio"],
+.maono-filter-editor input[type="checkbox"] { accent-color: var(--maono-accent, #c5a059); }

@@ -1,3 +1,7 @@
+import { StaticLoadingText } from "../../../components/loading";
+import { Skeleton } from "../../../components/loading/Skeleton";
+import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import OrganizationPermissionManager from "../../../components/access/OrganizationPermissionManager";
@@ -105,6 +109,12 @@ function toDateTimeLocal(value?: string | null) {
 export default function AdminUserManager({
   users,
   organizations,
+  loading = false,
+  usersLoaded = true,
+  organizationsLoaded = true,
+  structurePending = false,
+  usersContentPending = false,
+  organizationsContentPending = false,
   initialOrganizationId,
   currentUserId,
   isSuperAdmin,
@@ -113,12 +123,19 @@ export default function AdminUserManager({
 }: {
   users: User[];
   organizations: Organization[];
+  loading?: boolean;
+  usersLoaded?: boolean;
+  organizationsLoaded?: boolean;
+  structurePending?: boolean;
+  usersContentPending?: boolean;
+  organizationsContentPending?: boolean;
   initialOrganizationId?: number | string | null;
-  currentUserId?: number;
+  currentUserId?: number | string;
   isSuperAdmin: boolean;
   onRefresh: () => Promise<void>;
   onMessage: (kind: "error" | "success", text: string) => void;
 }) {
+  const skeletonRows = useSkeletonCount({ layout: "table", itemHeight: 54, reservedHeight: 320, maxCount: 10 });
   const [selected, setSelected] = useState<User | null>(null);
   const [selectedView, setSelectedView] =
     useState<UserManagementView>("profile");
@@ -572,10 +589,9 @@ export default function AdminUserManager({
     <section className="admin-user-manager">
       <header>
         <div>
-          <h2>Usuários e Permissões</h2>
+          <h2><StaticLoadingText pending={structurePending}>Usuários e Permissões</StaticLoadingText></h2>
           <p>
-            Gerencie contas da plataforma, vínculos organizacionais e os limites
-            da delegação de acessos.
+            <StaticLoadingText pending={structurePending}>Gerencie contas da plataforma, vínculos organizacionais e os limites da delegação de acessos.</StaticLoadingText>
           </p>
         </div>
         <button
@@ -583,13 +599,13 @@ export default function AdminUserManager({
           type="button"
           onClick={() => setCreating(true)}
         >
-          ＋ Novo usuário
+          <StaticLoadingText pending={structurePending}>＋ Novo usuário</StaticLoadingText>
         </button>
       </header>
 
       <div className="admin-user-filters" aria-label="Filtros de usuários">
         <label className="wide">
-          Buscar
+          <StaticLoadingText pending={structurePending}>Buscar</StaticLoadingText>
           <input
             type="search"
             value={searchQuery}
@@ -598,22 +614,23 @@ export default function AdminUserManager({
           />
         </label>
         <label>
-          Organização
-          <select
+          <StaticLoadingText pending={structurePending}>Organização</StaticLoadingText>
+          <MaonoSelect
             value={organizationFilter}
+            disabled={!organizationsLoaded || organizationsContentPending}
             onChange={(event) => setOrganizationFilter(event.target.value)}
           >
             <option value="all">Todas</option>
-            {organizations.map((organization) => (
+            {(organizationsContentPending ? [] : organizations).map((organization) => (
               <option key={organization.id} value={organization.id}>
                 {organization.name}
               </option>
             ))}
-          </select>
+          </MaonoSelect>
         </label>
         <label>
-          Perfil
-          <select
+          <StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText>
+          <MaonoSelect
             value={profileFilter}
             onChange={(event) => setProfileFilter(event.target.value)}
           >
@@ -623,38 +640,41 @@ export default function AdminUserManager({
             <option value="owner">Owner</option>
             <option value="editor">Editor</option>
             <option value="viewer">Viewer</option>
-          </select>
+          </MaonoSelect>
         </label>
         <label>
-          Status
-          <select
+          <StaticLoadingText pending={structurePending}>Status</StaticLoadingText>
+          <MaonoSelect
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
             <option value="all">Todos</option>
             <option value="active">Ativos</option>
             <option value="inactive">Inativos</option>
-          </select>
+          </MaonoSelect>
         </label>
         <span className="admin-user-filter-count">
-          {filteredUsers.length} de {users.length} usuário(s)
+          {usersContentPending ? "Carregando usuários." : usersLoaded ? <>{filteredUsers.length} de {users.length} usuário(s)</> : loading ? "Carregando usuários." : "Contagem indisponível."}
         </span>
       </div>
 
-      <div className="admin-users-table">
+      <div className="admin-users-table" aria-busy={loading || usersContentPending}>
         <table>
           <thead>
             <tr>
-              <th>Nome</th>
-              <th>E-mail</th>
-              <th>Perfil</th>
-              <th>Projetos</th>
-              <th>Status</th>
-              <th>Ações</th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Nome</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>E-mail</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Perfil</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Projetos</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Status</StaticLoadingText></th>
+              <th scope="col"><StaticLoadingText pending={structurePending}>Ações</StaticLoadingText></th>
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map((user) => (
+            {usersContentPending || loading && !usersLoaded ? Array.from({ length: skeletonRows }, (_, rowIndex) => (
+              <tr key={`pending-${rowIndex}`} aria-hidden="true">{Array.from({ length: 6 }, (_, columnIndex) => <td key={columnIndex}><Skeleton width={`${55 + ((rowIndex + columnIndex) % 4) * 10}%`} height={12} /></td>)}</tr>
+            )) : null}
+            {usersLoaded && !usersContentPending && filteredUsers.map((user) => (
               <tr key={user.id}>
                 <td>{user.name || "—"}</td>
                 <td>{user.email}</td>
@@ -681,7 +701,8 @@ export default function AdminUserManager({
                 </td>
               </tr>
             ))}
-            {filteredUsers.length === 0 && (
+            {!loading && !usersContentPending && !usersLoaded ? <tr><td colSpan={6} className="admin-users-empty">Dados de usuários indisponíveis.</td></tr> : null}
+            {usersLoaded && !usersContentPending && filteredUsers.length === 0 && (
               <tr>
                 <td colSpan={6} className="admin-users-empty">
                   Nenhum usuário corresponde aos filtros selecionados.
@@ -795,7 +816,7 @@ export default function AdminUserManager({
                       </label>
                       <label>
                         Perfil nativo da plataforma
-                        <select
+                        <MaonoSelect
                           value={draft.role}
                           disabled={role(selected.role) === "super_admin"}
                           onChange={(event) =>
@@ -809,11 +830,11 @@ export default function AdminUserManager({
                           <option value="editor">Editor</option>
                           <option value="client">Owner</option>
                           <option value="admin">Admin</option>
-                        </select>
+                        </MaonoSelect>
                       </label>
                       <label>
                         Situação da conta
-                        <select
+                        <MaonoSelect
                           value={draft.active ? "active" : "inactive"}
                           disabled={selected.id === currentUserId}
                           onChange={(event) =>
@@ -825,7 +846,7 @@ export default function AdminUserManager({
                         >
                           <option value="active">Ativo</option>
                           <option value="inactive">Inativo</option>
-                        </select>
+                        </MaonoSelect>
                       </label>
                       <label>
                         Projetos vinculados
@@ -919,7 +940,7 @@ export default function AdminUserManager({
                         </label>
                         <label className="admin-membership-level">
                           Perfil na organização
-                          <select
+                          <MaonoSelect
                             value={organization.accessLevel}
                             disabled={!organization.assigned || busy}
                             onChange={(event) =>
@@ -933,7 +954,7 @@ export default function AdminUserManager({
                             <option value="viewer">Viewer / Consulta</option>
                             <option value="editor">Editor / Colaborador</option>
                             <option value="owner">Owner / Responsável</option>
-                          </select>
+                          </MaonoSelect>
                         </label>
                         <span
                           className={
@@ -1311,12 +1332,12 @@ export default function AdminUserManager({
                 </label>
                 <label>
                   Perfil
-                  <select name="role">
+                  <MaonoSelect name="role">
                     <option value="viewer">Viewer</option>
                     <option value="editor">Editor</option>
                     <option value="client">Cliente/Owner</option>
                     <option value="admin">Admin</option>
-                  </select>
+                  </MaonoSelect>
                 </label>
                 <label>
                   Senha inicial

@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { requestJson } from "../../../lib/api-transport";
 import TicketErrorNotice from "./TicketErrorNotice";
 import { toTicketApiError } from "./tickets-api";
@@ -340,10 +341,10 @@ export function TicketChanges({
           </p>
           <label>
             Domínio
-            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
+            <MaonoSelect value={domain} onChange={(e) => setDomain(e.target.value)}>
               <option value="platform">Plataforma</option>
               <option value="database">Banco</option>
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Título

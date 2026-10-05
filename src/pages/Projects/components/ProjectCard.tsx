@@ -1,4 +1,5 @@
 import React from "react";
+import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
 import { useHref, useNavigate } from "react-router";
 
 import "./project-card-interactions.css";
@@ -26,6 +27,7 @@ type ProjectCardProps = {
   actionsOpen?: boolean;
   favoriteBusy?: boolean;
   opening?: boolean;
+  initialPresentationPending?: boolean;
   onOpen?: (project: ProjectListItem) => void | Promise<void>;
   onActionsOpenChange?: (open: boolean) => void;
   onEditMetadata?: (project: ProjectListItem) => void;
@@ -103,10 +105,11 @@ function ProjectPreviewNeutralState({
   return (
     <div
       className={`mm-project-card__preview-fallback is-${presentation}`}
-      role={presentation === "loading-neutral" ? "status" : "img"}
+      role="img"
       aria-label={`${copy.title} do projeto ${projectName}. ${copy.description}`}
       data-preview-state={presentation}
     >
+      {presentation === "loading-neutral" ? <Skeleton className="mm-skeleton-fill" radius={0} /> : null}
       <span aria-hidden="true">{copy.icon}</span>
       <strong>{copy.title}</strong>
       <small>{copy.description}</small>
@@ -189,6 +192,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   actionsOpen = false,
   favoriteBusy = false,
   opening = false,
+  initialPresentationPending = false,
   onOpen,
   onActionsOpenChange,
   onEditMetadata,
@@ -424,6 +428,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     (previewState.decodedUrl === displayImageUrl ||
       isProjectThumbnailDecoded(project, displayImageUrl));
   displayedSourceRef.current = displayImageUrl;
+  React.useEffect(() => {
+    displayedSourceRef.current = displayImageUrl;
+    return () => { displayedSourceRef.current = null; };
+  }, [displayImageUrl]);
   const showGenerationSvg =
     previewPresentation === "generation-svg";
   const neutralPresentation:
@@ -443,10 +451,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     thumbnailStatus === "PENDING" ||
     (PROJECT_PREVIEW_TRANSITION_V2_ENABLED &&
       thumbnailStatus === "READY" &&
-      showGenerationSvg);
+      showGenerationSvg) || neutralPresentation === "loading-neutral";
 
   const markDisplayedImageFailed = React.useCallback(
     (failedUrl: string) => {
+      if (displayedSourceRef.current !== failedUrl) return;
       logPreviewTransition(
         "image-error",
         project.slug,
@@ -641,7 +650,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       role="link"
       tabIndex={opening ? -1 : 0}
       aria-label={`Abrir projeto ${project.name}`}
-      aria-busy={previewBusy}
       aria-disabled={opening}
       onClick={handleCardClick}
       onAuxClick={(event) => {
@@ -649,8 +657,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       }}
       onKeyDown={handleCardKeyDown}
     >
+      <div className="mm-project-card__media-region">
       <div
         className="mm-project-card__preview"
+        aria-busy={previewBusy}
         data-preview-presentation={previewPresentation}
       >
         {showGenerationSvg ? (
@@ -672,7 +682,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 ? `Última prévia válida do projeto ${project.name}`
                 : `Prévia do projeto ${project.name}`
             }
-            loading={showGenerationSvg ? "eager" : "lazy"}
+            loading={initialPresentationPending || showGenerationSvg ? "eager" : "lazy"}
             decoding="async"
             className={
               displayImageDecoded ? "is-loaded" : "is-loading"
@@ -756,6 +766,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         ) : null}
       </div>
 
+      <LoadingStatus loading={previewBusy} label={`Carregando prévia do projeto ${project.name}.`} prolongedLabel={`A prévia do projeto ${project.name} continua em preparação.`} />
+      </div>
       <div className="mm-project-card__content">
         <header className="mm-project-card__header">
           <h2 title={project.name}>{project.name}</h2>

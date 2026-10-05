@@ -1,3 +1,8 @@
+import { useTicketOptionalPresentation } from "./useTicketOptionalPresentation";
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
+import TicketOptionalPanelState from "./TicketOptionalPanelState";
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
 import { toTicketApiError } from "./tickets-api";
@@ -21,6 +26,8 @@ type Props = {
   canCreate: boolean;
   canDownload: boolean;
   openSignal?: number;
+  structurePending?: boolean;
+  stagePending?: boolean;
   onAvailabilityChange?: (available: boolean) => void;
 };
 const states: Record<string, string> = {
@@ -36,8 +43,10 @@ const states: Record<string, string> = {
 const active = (job: Job) =>
   ["queued", "capturing", "running"].includes(job.state);
 
-function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAvailabilityChange }: Props) {
+function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAvailabilityChange, structurePending = false, stagePending = false }: Props) {
   const panelRef = useRef<HTMLDetailsElement>(null);
+  // Keep confirmed availability while same-context payloads refresh or recover.
+  const [available, setAvailable] = useState(false);
   const [data, setData] = useState<List | null>(null),
     [error, setError] = useState<ReturnType<typeof toTicketApiError> | null>(
       null,
@@ -71,12 +80,15 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
         );
         if (mounted.current && g === generation.current) {
           setData(result);
+          setAvailable(result.enabled === true);
           setError(null);
         }
       } catch (e) {
         if (mounted.current && g === generation.current && !c.signal.aborted) {
           setData(null);
-          setError(toTicketApiError(e));
+          const failure = toTicketApiError(e);
+          setError(failure);
+          if (isRegionAccessDenied(failure)) { setAvailable(false); setPending(null); }
         }
       }
     },
@@ -118,7 +130,9 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
     } catch (e) {
       if (mounted.current && !c.signal.aborted) {
         setData(null);
-        setError(toTicketApiError(e));
+        const failure = toTicketApiError(e);
+        setError(failure);
+        if (isRegionAccessDenied(failure)) { setAvailable(false); setPending(null); }
       }
     } finally {
       if (mounted.current) setBusy(false);
@@ -149,7 +163,9 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
     } catch (e) {
       if (mounted.current && !c.signal.aborted) {
         setData(null);
-        setError(toTicketApiError(e));
+        const failure = toTicketApiError(e);
+        setError(failure);
+        if (isRegionAccessDenied(failure)) { setAvailable(false); setPending(null); }
       }
     } finally {
       if (mounted.current) setBusy(false);
@@ -162,10 +178,17 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
     panelRef.current.scrollIntoView({ block: "nearest" });
     panelRef.current.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
   }, [openSignal, data?.enabled]);
-  if (data?.enabled === false) return null;
+  const presentation = useTicketOptionalPresentation({ structurePending, stagePending, error });
+  if (!available) return <TicketOptionalPanelState
+    title="Relatórios e exportações"
+    error={data?.enabled === false ? null : error}
+    onRetry={() => void (pending && !isRegionAccessDenied(error) ? mutate(pending.url, pending.body) : load())}
+    onRefresh={pending && !isRegionAccessDenied(error) ? () => void load() : undefined}
+  />;
   return (
     <details ref={panelRef} className="ticket-exports">
-      <summary>Relatórios e exportações</summary>
+      <summary><StaticLoadingText pending={presentation.structurePending}>Relatórios e exportações</StaticLoadingText></summary>
+      <div className="ticket-optional-panel-body" data-ticket-optional-body="" hidden={presentation.stagePending}>
       <p>
         Relatórios completos dos chamados que você pode acessar. Datas em UTC; o
         fim do período é exclusivo. Incidentes e causas usam os vínculos autorizados atuais e exigem a funcionalidade ativa.
@@ -210,18 +233,18 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
           </label>
           <label>
             Relatório
-            <select value={report} onChange={(e) => setReport(e.target.value)}>
+            <MaonoSelect value={report} onChange={(e) => setReport(e.target.value)}>
               <option value="all">Visão completa</option>
               <option value="incidents">Chamados com incidentes</option>
               <option value="causes">Incidentes e causas por chamado</option>
               <option value="backlog">Backlog no instante de referência</option>
               <option value="cycles">Ciclos encerrados no período</option>
               <option value="sla">SLA e cobertura</option>
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Domínio
-            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
+            <MaonoSelect value={domain} onChange={(e) => setDomain(e.target.value)}>
               <option value="">Todos</option>
               {[
                 ["map", "Mapa"],
@@ -235,11 +258,11 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
                   {n}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Natureza
-            <select value={nature} onChange={(e) => setNature(e.target.value)}>
+            <MaonoSelect value={nature} onChange={(e) => setNature(e.target.value)}>
               <option value="">Todas</option>
               {[
                 ["question_request", "Dúvida/solicitação"],
@@ -253,7 +276,7 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
                   {n}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <button type="submit" disabled={busy || !!pending}>
             Solicitar exportação
@@ -333,6 +356,7 @@ function Content({ organizationId, canCreate, canDownload, openSignal = 0, onAva
           Exportações anteriores
         </button>
       )}
+      </div>
     </details>
   );
 }

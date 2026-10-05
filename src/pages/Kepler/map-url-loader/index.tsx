@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { connect, useStore } from "react-redux";
 import { useLocation, useParams } from "react-router";
 import { addDataToMap, removeDataset, toggleModal } from "@kepler.gl/actions";
@@ -38,6 +39,7 @@ import {
   isSavedConfigHydrationError,
   validateSavedKeplerConfig,
 } from "./saved-config-hydrator.ts";
+import MapErrorNotice from "../components/map-notice/MapErrorNotice";
 import "./map-visual-readiness.css";
 
 const POINT_CLUSTERING_FEATURE_ENABLED =
@@ -358,20 +360,20 @@ const MapUrlLoader = connectStore(
     ]);
 
     if (error) {
-      return (
-        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4 bg-black/70 p-6 text-white">
-          <div className="max-w-xl rounded-2xl border border-red-300/30 bg-red-950/80 p-6 shadow-2xl">
-            <h2 className="text-xl font-semibold">Erro ao carregar o projeto</h2>
-            <p className="mt-3 text-sm text-red-100">{error}</p>
+      // Escape the canvas stacking context so rail/panels cannot cover the
+      // notice or intercept its action. The React context and retry stay here.
+      return createPortal(
+        <div className="maono-map-notice-viewport maono-map-notice-viewport--overlay">
+          <MapErrorNotice title="Erro ao carregar o projeto" message={error}>
             <button
-              className="mt-5 rounded-lg bg-white px-4 py-2 font-semibold text-red-950"
               type="button"
               onClick={() => setRetryToken((current) => current + 1)}
             >
-              Tentar novamente
+              Tentar carregar novamente
             </button>
-          </div>
-        </div>
+          </MapErrorNotice>
+        </div>,
+        document.getElementById("root")!,
       );
     }
 

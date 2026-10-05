@@ -1,0 +1,23 @@
+.ticket-optional-panel-error {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--mm-border);
+  border-radius: 10px;
+  background: var(--mm-bg-soft);
+  color: var(--mm-text);
+}
+.ticket-optional-panel-error h3 { margin: 0 0 10px; font-size: 14px; }
+.ticket-optional-panel-error > button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 7px;
+  background: var(--mm-surface);
+  color: var(--mm-text);
+  cursor: pointer;
+}
+.ticket-optional-panel-error > button:focus-visible { outline: 2px solid var(--maono-focus-ring); outline-offset: 3px; }
+
+/* Preserve mounted descendants without adding a layout box after first reveal. */
+.ticket-optional-panel-body { display: contents; }
+.ticket-optional-panel-body[hidden] { display: none; }

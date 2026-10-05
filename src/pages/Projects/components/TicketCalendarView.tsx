@@ -1,3 +1,6 @@
+import { LoadingStatus, Skeleton, StaticLoadingText } from "../../../components/loading/Skeleton";
+import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
+import "./TicketLoadingSkeletons.css";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -12,6 +15,11 @@ import {
 
 type TicketCalendarViewProps = {
   tickets: Ticket[];
+  loading?: boolean;
+  initialLoading?: boolean;
+  contentPending?: boolean; structurePending?: boolean;
+  loadingMore?: boolean;
+  error?: boolean;
   from?: string;
   onOpen: (ticket: Ticket) => void;
   onRangeChange: (from: string, to: string) => void;
@@ -65,10 +73,12 @@ function monthTitle(date: Date) {
 }
 
 export default function TicketCalendarView({
-  tickets, from,
+  tickets, from, loading = false, initialLoading = false, loadingMore = false, error = false,
   onOpen,
   onRangeChange,
+  contentPending = initialLoading, structurePending = false,
 }: TicketCalendarViewProps) {
+  const skeletonCount = useSkeletonCount({ layout: "list", itemHeight: 64, reservedHeight: 400, maxCount: 6 });
   const [month, setMonthState] = useState(
     () => from ? new Date(Number(from.slice(0,4)), Number(from.slice(5,7)) - 1, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
@@ -111,8 +121,8 @@ export default function TicketCalendarView({
     <section className="ticket-calendar" aria-label="Calendário de chamados">
       <header className="ticket-calendar-toolbar">
         <div>
-          <h3>{monthTitle(month)}</h3>
-          <p>Prazo operacional em UTC. A agenda inclui os itens carregados da consulta; os botões de mês ajustam o período.</p>
+          <h3><StaticLoadingText pending={structurePending}>{monthTitle(month)}</StaticLoadingText></h3>
+          <p><StaticLoadingText pending={structurePending}>Prazo operacional em UTC. A agenda inclui os itens carregados da consulta; os botões de mês ajustam o período.</StaticLoadingText></p>
         </div>
         <div>
           <button
@@ -134,7 +144,7 @@ export default function TicketCalendarView({
               setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
             }}
           >
-            Hoje
+            <StaticLoadingText pending={structurePending}>Hoje</StaticLoadingText>
           </button>
           <button
             type="button"
@@ -151,10 +161,11 @@ export default function TicketCalendarView({
         </div>
       </header>
 
-      <div className="ticket-calendar-grid">
+      <LoadingStatus loading={loading || contentPending} refreshing={!contentPending} label="Carregando calendário de chamados." refreshingLabel={loadingMore ? "Carregando mais chamados." : "Atualizando calendário de chamados."} />
+      <div className="ticket-calendar-grid" aria-busy={loading || contentPending}>
         {WEEKDAYS.map((weekday) => (
           <div className="ticket-calendar-weekday" key={weekday}>
-            {weekday}
+            <StaticLoadingText pending={structurePending}>{weekday}</StaticLoadingText>
           </div>
         ))}
 
@@ -187,9 +198,10 @@ export default function TicketCalendarView({
               key={key}
               aria-label={fullDate}
             >
-              <time dateTime={key}>{date.getDate()}</time>
+              <time dateTime={key}><StaticLoadingText pending={structurePending}>{date.getDate()}</StaticLoadingText></time>
               <div className="ticket-calendar-events">
-                {visible.map((ticket) => (
+                {contentPending && index % 4 === 0 ? <div className="ticket-calendar-event mm-loading-calendar-event" aria-hidden="true"><Skeleton width="48%" height={10} /><Skeleton width="84%" height={12} /></div> : null}
+                {(contentPending ? [] : visible).map((ticket) => (
                   <button
                     type="button"
                     key={ticket.id}
@@ -201,7 +213,7 @@ export default function TicketCalendarView({
                     <span>{ticket.subject}</span>
                   </button>
                 ))}
-                {hiddenCount > 0 ? (
+                {!contentPending && hiddenCount > 0 ? (
                   <button
                     type="button"
                     className="ticket-calendar-more"
@@ -224,8 +236,8 @@ export default function TicketCalendarView({
         })}
       </div>
 
-      <div className="ticket-calendar-agenda" aria-label="Agenda do mês">
-        {agendaTickets.length === 0 ? (
+      <div className="ticket-calendar-agenda" aria-label="Agenda do mês" aria-busy={loading || contentPending}>
+        {contentPending ? Array.from({ length: skeletonCount }, (_, index) => <div className="mm-loading-calendar-event" aria-hidden="true" key={index}><Skeleton width={72} height={14} /><Skeleton width="55%" height={16} /></div>) : agendaTickets.length === 0 && !error ? (
           <p>Nenhum chamado com prazo neste mês.</p>
         ) : (
           agendaTickets.map((ticket) => (
@@ -247,12 +259,12 @@ export default function TicketCalendarView({
         )}
       </div>
 
-      <aside className="ticket-calendar-undated">
+      <aside className="ticket-calendar-undated" aria-busy={loading || contentPending}>
         <header>
-          <h4>Sem data</h4>
-          <span>{withoutDate.length}</span>
+          <h4><StaticLoadingText pending={structurePending}>Sem data</StaticLoadingText></h4>
+          <span>{contentPending ? <Skeleton width={28} height={14} /> : error && !tickets.length ? "—" : withoutDate.length}</span>
         </header>
-        {withoutDate.length === 0 ? (
+        {contentPending ? <div className="mm-skeleton-stack" aria-hidden="true"><Skeleton width="60%" height={14} /><Skeleton width="42%" height={12} /></div> : withoutDate.length === 0 && !error ? (
           <p>Todos os chamados exibidos possuem prazo.</p>
         ) : (
           <div>
@@ -269,6 +281,7 @@ export default function TicketCalendarView({
           </div>
         )}
       </aside>
+      {loadingMore ? <div className="mm-skeleton-stack ticket-loading-expansion" aria-hidden="true"><Skeleton width="72%" height={36} /><Skeleton width="58%" height={36} /></div> : null}
     </section>
   );
 }

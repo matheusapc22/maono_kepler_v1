@@ -257,3 +257,9 @@
     flex: 1 1 100%;
   }
 }
+
+/* Selection/focus stays branded in both Projects and the Admin modal. */
+.org-permission-panel :is(input, textarea, select) { color-scheme: dark; }
+.org-permission-panel :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--maono-accent, #c5a059); }
+.org-permission-panel :is(input, textarea, select, button):focus-visible { outline: 2px solid var(--maono-focus-ring, #f2c766); outline-offset: 2px; }
+.org-permission-option > .maono-select { min-width: 100px; flex: 0 1 150px; margin-inline-start: auto; }

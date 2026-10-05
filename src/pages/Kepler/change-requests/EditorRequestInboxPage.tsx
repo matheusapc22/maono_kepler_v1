@@ -1,3 +1,4 @@
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router";
 
@@ -120,7 +121,7 @@ function Inbox({ projectSlug }: { projectSlug: string }) {
       <div className="maono-editor-inbox__filters">
         <label>
           Situação{" "}
-          <select
+          <MaonoSelect
             value={status}
             onChange={(event) => {
               setStatus(event.target.value);
@@ -132,7 +133,7 @@ function Inbox({ projectSlug }: { projectSlug: string }) {
                 {label}
               </option>
             ))}
-          </select>
+          </MaonoSelect>
         </label>
         <button
           disabled={loading}

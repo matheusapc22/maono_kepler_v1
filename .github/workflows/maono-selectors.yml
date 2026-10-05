@@ -1,0 +1,48 @@
+name: Maono Selection Controls
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/components/selection/**'
+      - 'src/components/access/**'
+      - 'src/pages/Projects/**'
+      - 'src/pages/Admin/**'
+      - 'src/pages/Kepler/**'
+      - 'tests/maono-select*.test.mjs'
+      - 'tests/helpers/maono-select-preservation.mjs'
+      - 'tests/browser/maono-select.spec.ts'
+      - 'tests/browser/fixtures/maono-select.*'
+      - 'playwright.selectors.config.ts'
+      - '.github/workflows/maono-selectors.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  selection-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Native contracts, consumer logic and scope
+        run: node --test tests/maono-select-migration.test.mjs
+      - name: Typecheck and scoped lint
+        run: |
+          npx tsc -b
+          npx eslint src/components/selection/MaonoSelect.tsx tests/browser/maono-select.spec.ts tests/browser/fixtures/maono-select.tsx playwright.selectors.config.ts
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Actual shared component, five desktop and touch browser profiles
+        run: npx playwright test --config=playwright.selectors.config.ts
+      - name: Regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maono-selection-controls-${{ github.sha }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14

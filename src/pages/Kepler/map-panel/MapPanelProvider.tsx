@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { Link, useLocation, useParams } from "react-router";
 
+import MapErrorNotice from "../components/map-notice/MapErrorNotice";
 import { useSession } from "../../../auth/session";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import {
@@ -503,28 +504,21 @@ export function MapPanelAccessGate({
       BLOCKED_MESSAGES[state.error?.code || ""] || presentation.message;
 
     return (
-      <main className="maono-map-gate">
-        <div className="maono-map-gate__card" role="alert">
-          <strong>
-            {state.status === "blocked"
-              ? "Acesso não disponível"
-              : "Não foi possível abrir o mapa"}
-          </strong>
-          <span>{message}</span>
-          {presentation.supportReference ? (
-            <small>Referência: {presentation.supportReference}</small>
+      <main className="maono-map-gate maono-map-notice-viewport">
+        <MapErrorNotice
+          title={state.status === "blocked" ? "Acesso não disponível" : "Não foi possível abrir o mapa"}
+          message={message}
+          supportReference={presentation.supportReference}
+        >
+          {replacementRoute ? (
+            <Link to={replacementRoute}>Abrir rota atribuída</Link>
+          ) : fallback === "viewer" && projectSlug ? (
+            <Link to={`/projects/${encodeURIComponent(projectSlug)}/view`}>
+              Abrir visualizador
+            </Link>
           ) : null}
-          <div className="maono-map-gate__actions">
-            {replacementRoute ? (
-              <Link to={replacementRoute}>Abrir rota atribuída</Link>
-            ) : fallback === "viewer" && projectSlug ? (
-              <Link to={`/projects/${encodeURIComponent(projectSlug)}/view`}>
-                Abrir visualizador
-              </Link>
-            ) : null}
-            <Link to="/projects">Voltar aos projetos</Link>
-          </div>
-        </div>
+          <Link to="/projects">Voltar aos projetos</Link>
+        </MapErrorNotice>
       </main>
     );
   }

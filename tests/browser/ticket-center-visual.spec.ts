@@ -25,10 +25,15 @@ const attachmentLimits = { maxFiles: 5, maxFileBytes: 83886080, maxTicketBytes: 
 type RequestRecord = { method: string; path: string; params: URLSearchParams; body: string | null; headers: Record<string, string>; organizationId: number };
 type FixtureOptions = {
   dataset?: Ticket[]; role?: string; permissions?: string[]; deniedPermissions?: string[];
-  organizationPermissions?: Record<number, string[]>; snapshot?: boolean; exportsEnabled?: boolean;
+  organizationPermissions?: Record<number, string[]>; snapshot?: boolean; exportsEnabled?: boolean; lifecycleEnabled?: boolean;
   beforeList?: (request: RequestRecord, response: TicketListResponse) => Promise<void>;
   failList?: (request: RequestRecord) => boolean | number; startUrl?: string;
   beforeOrganizationSwitch?: (organizationId: number) => Promise<void>;
+  beforePatch?: (request: RequestRecord, ticket: Ticket) => Promise<void>;
+  failPatch?: (request: RequestRecord) => boolean | number;
+  beforeCommand?: (request: RequestRecord) => Promise<void>;
+  failDetail?: (request: RequestRecord) => boolean | number;
+  beforeDetail?: (request: RequestRecord) => Promise<void>;
 };
 const diagnostics = new WeakMap<Page, { errors: string[]; unexpectedWrites: string[]; allowedStatuses: Set<number> }>();
 function deferred() {
@@ -64,6 +69,8 @@ async function setup(page: Page, options: FixtureOptions = {}) {
   const requests: RequestRecord[] = [];
   const hiddenIds = new Set<number>();
   const snapshots = new Map<string, number[]>();
+  const snapshotQueues = new Map<string, Map<number, string>>();
+  const snapshotQueries = new Map<string, string>();
   let organizationId = 1;
   const diagnostic = { errors: [] as string[], unexpectedWrites: [] as string[], allowedStatuses: new Set<number>() };
   diagnostics.set(page, diagnostic);
@@ -102,11 +109,27 @@ async function setup(page: Page, options: FixtureOptions = {}) {
       let query = sorted(filtered(authorized, params), params.get("sort") || undefined);
       let snapshot = params.get("snapshot"), ordinalIds: number[] | null = null;
       if (options.snapshot) {
+        // Production freezes broad query membership AND the queue at capture.
+        // Queue reads reuse that token and partition by frozen queue ordinals;
+        // live content/ACL still apply, so a moved ticket can arrive in its old
+        // queue and must be reconciled by the client rather than duplicated.
+        const broadParams = new URLSearchParams(params);
+        for (const key of ["page", "limit", "snapshot", "queue"]) broadParams.delete(key);
+        broadParams.sort();
+        const queryKey = `${requestedOrg}:${broadParams}`;
         if (!snapshot) {
           snapshot = `fixture-snapshot-${snapshots.size + 1}`;
-          snapshots.set(snapshot, query.map(ticket => Number(ticket.id)));
+          const members = sorted(filtered(authorized, broadParams), params.get("sort") || undefined);
+          snapshots.set(snapshot, members.map(ticket => Number(ticket.id)));
+          snapshotQueues.set(snapshot, new Map(members.map(ticket => [Number(ticket.id), ["new", "open"].includes(ticket.status) ? "open" : ticket.status])));
+          snapshotQueries.set(snapshot, queryKey);
         }
-        ordinalIds = snapshots.get(snapshot) ?? [];
+        if (snapshotQueries.get(snapshot) !== queryKey) {
+          diagnostic.allowedStatuses.add(409);
+          return route.fulfill({ status: 409, json: { ok: false, error: { code: "TICKET_QUERY_EXPIRED", category: "CONFLICT", retryable: true } } });
+        }
+        const frozenQueues = snapshotQueues.get(snapshot);
+        ordinalIds = (snapshots.get(snapshot) ?? []).filter(id => !params.get("queue") || frozenQueues?.get(id) === params.get("queue"));
         query = ordinalIds.map(id => authorized.find(ticket => Number(ticket.id) === id)).filter((ticket): ticket is Ticket => Boolean(ticket));
       }
       const start = (pageNumber - 1) * limit;
@@ -117,7 +140,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
         pagination: { page: pageNumber, limit, total: query.length, totalPages: Math.max(1, Math.ceil(size / limit)), hasMore: start + limit < size,
           snapshot: options.snapshot ? snapshot : null, snapshotAt: options.snapshot ? NOW : null, loaded: visible.length },
         range: { from: params.get("from"), to: params.get("to") }, assignees: people, attachmentLimits,
-        flowEnabled: Boolean(options.snapshot), queuePolicies: [], lifecycleEnabled: false, triageEnabled: false,
+        flowEnabled: Boolean(options.snapshot), queuePolicies: [], lifecycleEnabled: Boolean(options.lifecycleEnabled), triageEnabled: false,
       };
       await options.beforeList?.(record, response);
       const failure = options.failList?.(record);
@@ -136,17 +159,48 @@ async function setup(page: Page, options: FixtureOptions = {}) {
       state.push(ticket);
       return route.fulfill({ json: { ok: true, ticket } });
     }
+    const transitionMatch = path.match(/^\/api\/organizations\/(\d+)\/tickets\/(\d+)\/transitions$/);
+    if (transitionMatch && options.lifecycleEnabled && request.method() === "POST") {
+      const ticket = state.find(item => Number(item.organizationId) === Number(transitionMatch[1]) && Number(item.id) === Number(transitionMatch[2]));
+      if (!ticket) { diagnostic.allowedStatuses.add(404); return route.fulfill({ status: 404, json: { ok: false } }); }
+      await options.beforeCommand?.(record);
+      expect(record.headers["if-match"], "Lifecycle command keeps the conditional write contract").toBe(ticket.etag);
+      const payload = JSON.parse(record.body || "{}");
+      expect(payload.nextAction, "No direct drag may bypass the required next action").toBeTruthy();
+      const version = Number(ticket.version) + 1;
+      Object.assign(ticket, payload, { version, updatedAt: NOW, etag: `"ticket-${ticket.id}-v${version}"` });
+      return route.fulfill({ json: { ok: true, ticket } });
+    }
     const detailMatch = path.match(/^\/api\/organizations\/(\d+)\/tickets\/(\d+)$/);
     if (detailMatch) {
       const ticket = state.find(item => Number(item.organizationId) === Number(detailMatch[1]) && Number(item.id) === Number(detailMatch[2]));
       if (!ticket) { diagnostic.allowedStatuses.add(404); return route.fulfill({ status: 404, json: { ok: false } }); }
       if (request.method() === "PATCH") {
         const payload = JSON.parse(record.body || "{}");
-        Object.assign(ticket, payload, { assignedTo: people.find(person => String(person.id) === String(payload.assignedTo)) ?? null, version: Number(ticket.version) + 1, updatedAt: NOW, etag: `"ticket-${ticket.id}-v${Number(ticket.version) + 1}"` });
+        await options.beforePatch?.(record, structuredClone(ticket));
+        const failure = options.failPatch?.(record);
+        const stale = record.headers["if-match"] && record.headers["if-match"] !== ticket.etag;
+        if (failure || stale) {
+          const status = stale ? 412 : typeof failure === "number" ? failure : 503;
+          diagnostic.allowedStatuses.add(status);
+          return route.fulfill({ status, json: { ok: false, error: { code: status === 412 ? "TICKET_VERSION_CONFLICT" : "TICKET_SERVICE_UNAVAILABLE", category: status === 412 ? "CONFLICT" : "INFRASTRUCTURE", retryable: true } } });
+        }
+        const version = Number(ticket.version) + 1;
+        Object.assign(ticket, payload, { version, updatedAt: NOW, etag: `"ticket-${ticket.id}-v${version}"` });
+        if (Object.hasOwn(payload, "assignedTo")) ticket.assignedTo = people.find(person => String(person.id) === String(payload.assignedTo)) ?? null;
         return route.fulfill({ json: { ok: true, ticket } });
       }
-      if (request.method() === "GET") return route.fulfill({ json: { ok: true, ticket, attachments: [], events: [], assignees: people, attachmentLimits, lifecycleEnabled: false, triageEnabled: false,
-        conversation: { enabled: false, schemaReady: true, permissions: { comment: false, noteView: false, noteCreate: false }, messages: [], drafts: [], hasMore: false } } });
+      if (request.method() === "GET" && options.failDetail?.(record)) {
+        const failure = options.failDetail(record), status = typeof failure === "number" ? failure : 403;
+        diagnostic.allowedStatuses.add(status);
+        return route.fulfill({ status, json: { ok: false, error: { code: "AUTH_PERMISSION_DENIED", category: "AUTH", retryable: false } } });
+      }
+      if (request.method() === "GET") {
+        const response = { ok: true, ticket: structuredClone(ticket), attachments: [], events: [], assignees: people, attachmentLimits, lifecycleEnabled: Boolean(options.lifecycleEnabled), triageEnabled: false,
+          conversation: { enabled: false, schemaReady: true, permissions: { comment: false, noteView: false, noteCreate: false }, messages: [], drafts: [], hasMore: false } };
+        await options.beforeDetail?.(record);
+        return route.fulfill({ json: response });
+      }
     }
     if (/\/tickets\/exports$/.test(path) && request.method() === "GET") return route.fulfill({ json: { enabled: options.exportsEnabled ?? false, jobs: [], nextCursor: null } });
     if (request.method() !== "GET") {
@@ -180,6 +234,10 @@ async function expectCount(page: Page, visible: number, total: number) {
   await expect(pagination(page).getByRole("status")).toHaveText(`Exibindo ${visible}/${total}.`);
 }
 async function rowCodes(page: Page) { return rows(page).locator(".ticket-code").allTextContents(); }
+async function chooseView(page: Page, label: "Lista" | "Kanban" | "Calendário") {
+  await shell(page).getByRole("combobox", { name: "Visualização dos chamados", exact: true }).click();
+  await page.getByRole("listbox").getByRole("option", { name: label, exact: true }).click();
+}
 async function clear(page: Page) { await filters(page).getByRole("button", { name: "Limpar filtros", exact: true }).click(); }
 async function refresh(page: Page) {
   await shell(page).getByRole("button", { name: "Mais opções dos chamados", exact: true }).click();
@@ -191,6 +249,73 @@ async function switchOrganization(page: Page, name: string) {
   await expect(page.getByRole("heading", { name: "Todos os Projetos", exact: true, level: 1 })).toBeVisible();
 }
 
+for (const width of [1440, 390]) {
+  test(`gold summary icons and red review Kanban preserve labels, counts and view semantics at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const { requests } = await setup(page); await openCentral(page); await expectCount(page, 10, 63);
+    const metrics = shell(page).getByRole("region", { name: "Resumo dos chamados" });
+    const icons = metrics.locator(".ticket-metric-icon");
+    const assertGold = async () => {
+      await expect(icons).toHaveCount(5);
+      for (const icon of await icons.all()) {
+        await expect(icon).toHaveCSS("color", "rgb(242, 199, 102)");
+        await expect(icon).toHaveCSS("background-color", "rgba(197, 160, 89, 0.12)");
+        await expect(icon).toHaveAttribute("aria-hidden", "true");
+      }
+      await expect(metrics.locator(".ticket-metric-copy > span")).toHaveText(["Abertos", "Em andamento", "Em revisão", "Vencidos", "Concluídos"]);
+    };
+    await assertGold();
+    const reviewCard = metrics.getByRole("button", { name: /^Em revisão/ });
+    await reviewCard.focus(); await expect(reviewCard).toBeFocused();
+    await page.keyboard.press("Enter"); await expectCount(page, 10, 12);
+    await expect(reviewCard).toHaveAttribute("aria-pressed", "true");
+    const listBadgeColor = await rows(page).first().locator(".status-in_review").evaluate(element => getComputedStyle(element).color);
+    await clear(page); await expectCount(page, 10, 63);
+    await chooseView(page, "Kanban");
+    const review = shell(page).locator(".ticket-kanban-column.column-in_review");
+    await expect(review.locator("header h3")).toHaveText("Em revisão");
+    await expect(review.locator("header > span")).toHaveText("12 / 12");
+    await expect(review).toHaveCSS("border-top-color", "rgb(239, 68, 68)");
+    await assertGold();
+    const reviewStyles = await review.evaluate(element => {
+      const rgba = (color: string) => {
+        // Resolve color-mix() identically across the browser engines via Canvas.
+        const canvas = document.createElement("canvas"), context = canvas.getContext("2d")!;
+        context.fillStyle = color; context.fillRect(0, 0, 1, 1);
+        return [...context.getImageData(0, 0, 1, 1).data];
+      };
+      const backgroundOf = (node: Element | null): number[] => {
+        if (!node) return [255, 255, 255];
+        const color = rgba(getComputedStyle(node).backgroundColor), alpha = color[3] / 255;
+        if (alpha === 1) return color.slice(0, 3);
+        const below = backgroundOf(node.parentElement);
+        return color.slice(0, 3).map((channel, index) => channel * alpha + below[index] * (1 - alpha));
+      };
+      const luminance = (color: number[]) => color.map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+      return [...element.querySelectorAll("header h3, header > span")].map(node => {
+        const style = getComputedStyle(node), foreground = rgba(style.color).slice(0, 3);
+        const background = backgroundOf(node);
+        const a = luminance(foreground), b = luminance(background);
+        return { foreground, contrast: (Math.max(a, b) + .05) / (Math.min(a, b) + .05) };
+      });
+    });
+    for (const style of reviewStyles) {
+      expect(style.foreground[0]).toBeGreaterThan(style.foreground[1] * 1.4);
+      expect(style.contrast).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const column of ["open", "in_progress", "closed"]) {
+      await expect(shell(page).locator(`.column-${column}`)).not.toHaveCSS("border-top-color", "rgb(239, 68, 68)");
+    }
+    await metrics.screenshot({ path: testInfo.outputPath(`ticket-gold-metrics-${width}.png`), animations: "disabled" });
+    await review.locator("header").screenshot({ path: testInfo.outputPath(`ticket-review-red-${width}.png`), animations: "disabled" });
+    await chooseView(page, "Calendário"); await assertGold();
+    await chooseView(page, "Lista"); await expectCount(page, 10, 63); await assertGold();
+    await reviewCard.click(); await expectCount(page, 10, 12);
+    await expect(rows(page).first().locator(".status-in_review")).toHaveCSS("color", listBadgeColor);
+    expect(requests.filter(request => !["GET", "HEAD"].includes(request.method))).toEqual([]);
+  });
+}
+
 test("Central uses the shared composition, real API paging, named columns and optional export gating", async ({ page }) => {
   const { requests } = await setup(page); await openCentral(page); await expectCount(page, 10, 63);
   await expect(shell(page).getByRole("navigation", { name: "Caminho da página" }).getByRole("link", { name: "Início", exact: true })).toHaveAttribute("href", "/projects");
@@ -198,7 +323,9 @@ test("Central uses the shared composition, real API paging, named columns and op
   await expect(filters(page).getByRole("searchbox", { name: "Buscar", exact: true })).toHaveAttribute("placeholder", "Código, assunto ou descrição");
   await expect(rows(page).first().locator("td")).toHaveCount(8);
   await expect(shell(page).getByRole("columnheader")).toHaveText(["", "Código", "Assunto", "Prioridade", "Situação", "Atendente", "Última atualização", "Ações"]);
-  await expect(shell(page).getByRole("combobox", { name: "Visualização dos chamados" }).locator("option")).toHaveText(["Lista", "Kanban", "Calendário"]);
+  await shell(page).getByRole("combobox", { name: "Visualização dos chamados" }).click();
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveText(["Lista", "Kanban", "Calendário"]);
+  await page.keyboard.press("Escape");
   await expect(pagination(page).getByRole("combobox", { name: "Itens por página" }).locator("option")).toHaveText(["10", "25", "50"]);
   await expect(shell(page).getByRole("button", { name: "Exportar", exact: true })).toBeDisabled();
   await expect(shell(page).locator(".ticket-exports")).toHaveCount(0);
@@ -383,8 +510,11 @@ test("an authorization failure clears cached rows and facets before a successful
   await rows(page).first().getByRole("checkbox").check();
   revoked = true; await refresh(page);
   await expect(shell(page).getByRole("alert")).toBeVisible();
-  await expectCount(page, 0, 0);
-  await expect(shell(page).locator(".ticket-metric-copy strong")).toHaveText(["0", "0", "0", "0", "0"]);
+  await expect(rows(page)).toHaveCount(0);
+  await expect(pagination(page).getByRole("status")).toHaveText("A consulta precisa de atenção.");
+  await expect(shell(page).locator(".ticket-metric-copy strong")).toHaveText(["—", "—", "—", "—", "—"]);
+  await expect(shell(page).locator('.ticket-list-region [aria-busy="true"], .ticket-metrics[aria-busy="true"]')).toHaveCount(0);
+  await expect(shell(page).locator(".mm-skeleton")).toHaveCount(0);
   await expect(shell(page).getByText(tickets[62].subject, { exact: true })).toHaveCount(0);
   revoked = false; await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
   await expectCount(page, 10, 63); await expect(rows(page).locator('input:checked')).toHaveCount(0);
@@ -561,8 +691,7 @@ test("create, interrupted draft, detail opening and existing PATCH update remain
 
 test("existing Kanban and Calendar controls remain wired to queue and date-range APIs", async ({ page }) => {
   const { requests } = await setup(page); await openCentral(page); await expectCount(page, 10, 63);
-  const view = shell(page).getByRole("combobox", { name: "Visualização dos chamados" });
-  await view.selectOption("kanban");
+  await chooseView(page, "Kanban");
   await expect(shell(page).getByRole("region", { name: "Kanban de chamados", exact: true })).toBeVisible();
   await expect.poll(() => new Set(listRequests(requests).map(request => request.params.get("queue")).filter(Boolean)).size).toBe(4);
   for (const queue of ["open", "in_progress", "in_review", "closed"]) {
@@ -572,13 +701,13 @@ test("existing Kanban and Calendar controls remain wired to queue and date-range
   await expect(shell(page).locator(".ticket-kanban-column.column-open .ticket-kanban-card")).toHaveCount(25);
   await shell(page).locator(".ticket-kanban-column.column-open").getByRole("button", { name: "Carregar mais nesta fila" }).click();
   await expect(shell(page).locator(".ticket-kanban-column.column-open .ticket-kanban-card")).toHaveCount(26);
-  await view.selectOption("calendar");
+  await chooseView(page, "Calendário");
   await expect(shell(page).getByRole("region", { name: "Calendário de chamados", exact: true })).toBeVisible();
   await shell(page).getByRole("button", { name: "Próximo mês", exact: true }).click();
   await expect.poll(() => listRequests(requests).at(-1)?.params.get("from")).toBe("2026-11-01");
   expect(listRequests(requests).at(-1)?.params.get("to")).toBe("2026-11-30");
   expect(listRequests(requests).at(-1)?.params.get("limit")).toBe("50");
-  await view.selectOption("list"); await expectCount(page, 7, 7);
+  await chooseView(page, "Lista"); await expectCount(page, 7, 7);
   expect(listRequests(requests).at(-1)?.params.get("limit")).toBe("10");
   await clear(page); await expectCount(page, 10, 63);
 });
@@ -663,12 +792,422 @@ test("refresh keeps keyboard focus while a delayed request disables only the pen
     await trigger.focus(); await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Atualizar consulta", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(shell(page).locator(".ticket-view-region")).toHaveAttribute("aria-busy", "true");
+    await expect(shell(page).locator(".ticket-list-scroll")).toHaveAttribute("aria-busy", "true");
     await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Atualizar consulta", exact: true })).toBeDisabled();
     await page.keyboard.press("Escape"); await expect(trigger).toBeFocused();
     pending = false; gate.resolve(); await expectCount(page, 10, 63);
+    await expect(shell(page).locator(".ticket-list-scroll")).toHaveAttribute("aria-busy", "false");
     await expect(trigger).toBeFocused();
   } finally { gate.resolve(); }
+});
+
+// These cases deliberately keep mutation responses pending. Seeing the final
+// server state alone would miss a board that only moves after manual refresh.
+const kanbanColumn = (page: Page, queue: string) => shell(page).locator(`.ticket-kanban-column.column-${queue}`);
+const kanbanCard = (page: Page, code: string) => shell(page).locator(".ticket-kanban-card").filter({ has: page.locator(".ticket-kanban-card-topline strong", { hasText: new RegExp(`^${code}$`) }) });
+const patchRequests = (requests: RequestRecord[]) => requests.filter(request => request.method === "PATCH" && /\/tickets\/\d+$/.test(request.path));
+async function openKanban(page: Page, total = 5) {
+  await openCentral(page); await expectCount(page, Math.min(total, 10), total);
+  await chooseView(page, "Kanban");
+  await expect(shell(page).getByRole("region", { name: "Kanban de chamados", exact: true })).toBeVisible();
+  await expect(kanbanCard(page, "CH-0001")).toHaveCount(1);
+}
+async function expectQueueCount(page: Page, queue: string, loaded: number, total: number) {
+  await expect(kanbanColumn(page, queue).locator(".ticket-kanban-card")).toHaveCount(loaded);
+  await expect(kanbanColumn(page, queue).locator("header > span")).toHaveText(`${loaded} / ${total}`);
+}
+async function dragTicket(page: Page, code: string, queue: string) {
+  await kanbanCard(page, code).dragTo(kanbanColumn(page, queue).locator("h3"));
+}
+
+for (const snapshot of [false, true]) {
+test(`Kanban moves Novo immediately before PATCH resolves, guards duplicate drops, and keeps the confirmed position (${snapshot ? "frozen snapshot" : "offset query"})`, async ({ page }) => {
+  const gate = deferred();
+  const { requests, state } = await setup(page, { dataset: tickets.slice(0, 5), snapshot, beforePatch: () => gate.promise });
+  try {
+    await openKanban(page);
+    await expectQueueCount(page, "open", 2, 2); await expectQueueCount(page, "in_progress", 1, 1);
+    await dragTicket(page, "CH-0001", "in_progress");
+    await expect.poll(() => patchRequests(requests).length).toBe(1);
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    expect(state[0].status, "The deferred server has not changed yet").toBe("new");
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox", { name: "Mover CH-0001 para", exact: true })).toBeDisabled();
+    await expect(kanbanCard(page, "CH-0001")).toHaveAttribute("draggable", "false");
+    // A repeated drop can already be queued before React disables dragging.
+    // Use the browser's DataTransfer rather than calling component internals.
+    await kanbanColumn(page, "in_review").evaluate(element => {
+      const dataTransfer = new DataTransfer(); dataTransfer.setData("text/ticket-id", "1");
+      element.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
+    });
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    expect(patchRequests(requests)).toHaveLength(1);
+    expect(patchRequests(requests)[0].headers["if-match"]).toBe('"ticket-1-v1"');
+    gate.resolve();
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toHaveValue("in_progress");
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(1);
+    expect(state[0].status).toBe("in_progress");
+    await expect(shell(page).getByText(/Atualize a consulta para reposicionar/)).toHaveCount(0);
+    await refresh(page);
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+  } finally { gate.resolve(); }
+});
+}
+
+test("Kanban rolls back a rejected optimistic move and its counts, then retries with the original ETag", async ({ page }) => {
+  const gate = deferred(); let reject = true;
+  const { requests, state } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, beforePatch: () => gate.promise, failPatch: () => reject });
+  try {
+    await openKanban(page);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    gate.resolve();
+    await expect(shell(page).getByRole("alert")).toBeVisible();
+    await expectQueueCount(page, "open", 2, 2); await expectQueueCount(page, "in_progress", 1, 1);
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toHaveValue("new");
+    expect(state[0].status).toBe("new");
+    reject = false;
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    await expect(shell(page).getByRole("alert")).toHaveCount(0);
+    expect(patchRequests(requests)).toHaveLength(2);
+    expect(patchRequests(requests).map(request => request.headers["if-match"])).toEqual(['"ticket-1-v1"', '"ticket-1-v1"']);
+  } finally { gate.resolve(); }
+});
+
+test("Kanban keyboard status control uses the same immediate and conditional mutation path", async ({ page }) => {
+  const gate = deferred();
+  const { requests, state } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, beforePatch: () => gate.promise });
+  try {
+    await openKanban(page);
+    const select = kanbanCard(page, "CH-0002").getByRole("combobox", { name: "Mover CH-0002 para", exact: true });
+    await select.focus(); await expect(select).toBeFocused();
+    await page.keyboard.press("Space"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter");
+    await expect.poll(() => patchRequests(requests).length).toBe(1);
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0002", { exact: true })).toBeVisible();
+    await expect(kanbanCard(page, "CH-0002").getByRole("combobox")).toBeDisabled();
+    expect(state[1].status).toBe("open");
+    expect(JSON.parse(patchRequests(requests)[0].body || "{}")).toEqual({ status: "in_progress" });
+    expect(patchRequests(requests)[0].headers["if-match"]).toBe('"ticket-2-v1"');
+    gate.resolve();
+    await expect(kanbanCard(page, "CH-0002").getByRole("combobox")).toBeEnabled();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+  } finally { gate.resolve(); }
+});
+
+test("Kanban status filtering removes a moved ticket from excluded queues and preserves accurate loaded counts", async ({ page }) => {
+  const gate = deferred();
+  await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, beforePatch: () => gate.promise });
+  try {
+    await openKanban(page);
+    await filters(page).getByRole("combobox", { name: "Situação", exact: true }).selectOption("new");
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 0, 0);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(0);
+    await expectQueueCount(page, "open", 0, 0); await expectQueueCount(page, "in_progress", 0, 0);
+    gate.resolve();
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(0);
+    await filters(page).getByRole("combobox", { name: "Situação", exact: true }).selectOption("in_progress");
+    await expectQueueCount(page, "open", 0, 0); await expectQueueCount(page, "in_progress", 2, 2);
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(1);
+  } finally { gate.resolve(); }
+});
+
+test("Kanban delayed old queue page cannot undo a confirmed move or duplicate frozen snapshot membership", async ({ page }) => {
+  const oldPage = deferred();
+  const dataset = tickets.slice(0, 31).map(ticket => ({ ...ticket, status: "new" as const }));
+  const { requests } = await setup(page, { dataset, snapshot: true, beforeList: request => request.params.get("queue") === "open" && request.params.get("page") === "2" ? oldPage.promise : Promise.resolve() });
+  try {
+    await openCentral(page); await expectCount(page, 10, 31);
+    await chooseView(page, "Kanban");
+    await expectQueueCount(page, "open", 25, 31);
+    const broad = listRequests(requests).find(request => !request.params.has("queue"));
+    const queueRequests = listRequests(requests).filter(request => request.params.has("queue"));
+    expect(broad).toBeDefined();
+    expect(new Set(queueRequests.map(request => request.params.get("snapshot"))).size).toBe(1);
+    expect(queueRequests.every(request => Boolean(request.params.get("snapshot")))).toBe(true);
+    await kanbanColumn(page, "open").getByRole("button", { name: "Carregar mais nesta fila" }).click();
+    await expect.poll(() => listRequests(requests).some(request => request.params.get("queue") === "open" && request.params.get("page") === "2")).toBe(true);
+    await kanbanCard(page, "CH-0031").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanCard(page, "CH-0031").getByRole("combobox")).toBeEnabled();
+    await expectQueueCount(page, "in_progress", 1, 1);
+    oldPage.resolve();
+    // Reconciliation may cancel the unfinished old page. Load the remaining
+    // tickets from the new snapshot; already visible cards must stay unique.
+    await expect(kanbanColumn(page, "open").getByText("CH-0031", { exact: true })).toHaveCount(0);
+    const more = kanbanColumn(page, "open").getByRole("button", { name: "Carregar mais nesta fila" });
+    if (await more.count()) { await expect(more).toBeEnabled(); await more.click(); }
+    await expectQueueCount(page, "open", 30, 30); await expectQueueCount(page, "in_progress", 1, 1);
+    await expect(kanbanCard(page, "CH-0031")).toHaveCount(1);
+    await expect(kanbanColumn(page, "open").getByRole("button", { name: "Carregar mais nesta fila" })).toHaveCount(0);
+    const codes = await shell(page).locator(".ticket-kanban-card-topline strong").allTextContents();
+    expect(new Set(codes).size).toBe(31);
+    await expect(shell(page).getByText(/Atualize a consulta para reposicionar/)).toHaveCount(0);
+  } finally { oldPage.resolve(); }
+});
+
+test("Kanban concurrent ticket moves resolve independently without rolling back another ticket", async ({ page }) => {
+  const first = deferred(), second = deferred();
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforePatch: request => request.path.endsWith("/1") ? first.promise : second.promise,
+    failPatch: request => request.path.endsWith("/2") });
+  try {
+    await openKanban(page);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await kanbanCard(page, "CH-0002").getByRole("combobox").selectOption("in_review");
+    await expect.poll(() => patchRequests(requests).length).toBe(2);
+    await expectQueueCount(page, "open", 0, 0); await expectQueueCount(page, "in_progress", 2, 2); await expectQueueCount(page, "in_review", 2, 2);
+    first.resolve();
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+    await expect(kanbanCard(page, "CH-0002").getByRole("combobox")).toBeDisabled();
+    second.resolve();
+    await expect(shell(page).getByRole("alert")).toBeVisible();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2); await expectQueueCount(page, "in_review", 1, 1);
+    await expect(kanbanColumn(page, "open").getByText("CH-0002", { exact: true })).toBeVisible();
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+  } finally { first.resolve(); second.resolve(); }
+});
+
+test("Kanban late mutation after an organization switch cannot change another organization's matching ticket ID", async ({ page }) => {
+  const gate = deferred();
+  const other = { ...tickets[0], organizationId: 2, code: "OTHER-0001", subject: "Somente organização dois" };
+  const { state } = await setup(page, { dataset: [...tickets.slice(0, 5), other], snapshot: true, beforePatch: () => gate.promise });
+  try {
+    await openKanban(page);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    await switchOrganization(page, "Outra organização"); await openCentral(page); await expectCount(page, 1, 1);
+    await chooseView(page, "Kanban");
+    await expect(kanbanCard(page, "OTHER-0001")).toHaveCount(1);
+    gate.resolve();
+    await expect.poll(() => state.find(ticket => Number(ticket.organizationId) === 1 && Number(ticket.id) === 1)?.status).toBe("in_progress");
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 0, 0);
+    await expect(kanbanCard(page, "OTHER-0001").getByRole("combobox")).toBeEnabled();
+    await expect(kanbanCard(page, "OTHER-0001").getByRole("combobox")).toHaveValue("new");
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(0);
+    await expect(shell(page).getByRole("alert")).toHaveCount(0);
+  } finally { gate.resolve(); }
+});
+
+test("Kanban reflects a drawer status save before its background list refresh finishes", async ({ page }) => {
+  const refreshedList = deferred(); let holdRefresh = false;
+  await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, beforePatch: async () => { holdRefresh = true; }, beforeList: () => holdRefresh ? refreshedList.promise : Promise.resolve() });
+  try {
+    await openKanban(page);
+    await kanbanCard(page, "CH-0001").getByRole("button", { name: tickets[0].subject, exact: true }).click();
+    const detail = page.getByRole("dialog", { name: tickets[0].subject, exact: true });
+    await expect(detail).toBeVisible();
+    await detail.getByRole("combobox", { name: "Situação", exact: true }).selectOption("in_progress");
+    await detail.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    await expect(detail.getByRole("button", { name: "Salvar alterações", exact: true })).toBeEnabled();
+    await detail.getByRole("button", { name: "Fechar detalhes", exact: true }).click();
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    refreshedList.resolve();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(1);
+  } finally { refreshedList.resolve(); }
+});
+
+test("Kanban lifecycle mode still opens the required detail command without bypassing validation", async ({ page }) => {
+  const gate = deferred();
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, lifecycleEnabled: true, beforeCommand: () => gate.promise });
+  try {
+    await openKanban(page);
+    await dragTicket(page, "CH-0002", "in_progress");
+    const detail = page.getByRole("dialog", { name: tickets[1].subject, exact: true });
+    await expect(detail).toBeVisible();
+    await expect(detail.getByRole("combobox", { name: "Próxima situação", exact: true })).toHaveValue("in_progress");
+    await expectQueueCount(page, "open", 2, 2); await expectQueueCount(page, "in_progress", 1, 1);
+    expect(patchRequests(requests)).toEqual([]);
+    expect(requests.filter(request => request.method !== "GET")).toEqual([]);
+    await expect(detail.getByRole("textbox", { name: /^Próxima ação \*/ })).toBeVisible();
+    await expect(detail.getByRole("combobox", { name: "Situação", exact: true })).toHaveCount(0);
+    await detail.getByRole("button", { name: "Confirmar mudança de situação", exact: true }).click();
+    await expect(detail.getByRole("alert")).toHaveText("Informe a próxima ação do atendimento.");
+    expect(requests.filter(request => request.method !== "GET")).toEqual([]);
+    await detail.getByRole("textbox", { name: /^Próxima ação \*/ }).fill("Revisar as informações e registrar o resultado do atendimento.");
+    await detail.getByRole("button", { name: "Confirmar mudança de situação", exact: true }).click();
+    await expect.poll(() => requests.filter(request => request.path.endsWith("/transitions")).length).toBe(1);
+    await expectQueueCount(page, "open", 2, 2); await expectQueueCount(page, "in_progress", 1, 1);
+    await expect(detail.getByRole("button", { name: "Registrando...", exact: true })).toBeDisabled();
+    gate.resolve();
+    await expect(detail.getByText("Ação registrada no chamado. Nenhuma alteração vinculada foi aprovada ou aplicada.", { exact: true })).toBeVisible();
+    await detail.getByRole("button", { name: "Fechar detalhes", exact: true }).click();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0002", { exact: true })).toBeVisible();
+    expect(patchRequests(requests)).toEqual([]);
+  } finally { gate.resolve(); }
+});
+
+
+test("Kanban version conflict adopts the authoritative server status without replaying the write", async ({ page }) => {
+  const gate = deferred();
+  const { requests, state } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, beforePatch: () => gate.promise });
+  try {
+    await openKanban(page);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    Object.assign(state[0], { status: "in_review", version: 2, etag: '"ticket-1-v2"', updatedAt: NOW });
+    gate.resolve();
+    await expect(shell(page).getByRole("alert")).toContainText("O chamado mudou desde sua última leitura.");
+    await expect(kanbanColumn(page, "in_review").getByText("CH-0001", { exact: true })).toBeVisible();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 1, 1); await expectQueueCount(page, "in_review", 2, 2);
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toHaveValue("in_review");
+    expect(patchRequests(requests)).toHaveLength(1);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+    expect(patchRequests(requests)).toHaveLength(2);
+    expect(patchRequests(requests)[1].headers["if-match"]).toBe('"ticket-1-v2"');
+  } finally { gate.resolve(); }
+});
+
+test("Kanban discards a delayed old broad-list response after a newer status mutation", async ({ page }) => {
+  const oldList = deferred(); let holdNextList = false;
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforeList: request => {
+      if (holdNextList && !request.params.has("queue")) { holdNextList = false; return oldList.promise; }
+      return Promise.resolve();
+    } });
+  try {
+    await openKanban(page);
+    const before = listRequests(requests).length;
+    holdNextList = true; await refresh(page);
+    await expect.poll(() => listRequests(requests).length).toBeGreaterThan(before);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    oldList.resolve();
+    for (const queue of ["open", "in_progress", "in_review", "closed"]) {
+      await expect(kanbanColumn(page, queue).locator(".ticket-kanban-stack")).toHaveAttribute("aria-busy", "false");
+    }
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+    await expect(shell(page).getByRole("region", { name: "Resumo dos chamados" }).getByRole("button", { name: /^Em andamento/ }).locator("strong")).toHaveText("2");
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(1);
+    expect(patchRequests(requests)).toHaveLength(1);
+  } finally { oldList.resolve(); }
+});
+
+
+test("Kanban retains a moved ticket beyond the loaded destination page only while its detail remains authorized", async ({ page }) => {
+  let revokePin = false;
+  const dataset = tickets.slice(0, 31).map((ticket, index) => ({ ...ticket, status: index === 0 ? "new" as const : "in_progress" as const,
+    dueAt: index === 0 ? "2026-12-31T12:00:00.000Z" : `2026-10-${String(index % 20 + 1).padStart(2, "0")}T12:00:00.000Z` }));
+  const { requests, hiddenIds } = await setup(page, { dataset, snapshot: true, failDetail: request => revokePin && request.path.endsWith("/1") ? 403 : false });
+  await openKanban(page, 31);
+  await filters(page).getByRole("combobox", { name: "Ordenar por", exact: true }).selectOption("due_asc");
+  await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 25, 30);
+  await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+  await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+  await expect.poll(() => requests.filter(request => request.method === "GET" && request.path === "/api/organizations/1/tickets/1").length).toBeGreaterThan(0);
+  await expectQueueCount(page, "open", 0, 0); await expectQueueCount(page, "in_progress", 26, 31);
+  await expect(kanbanCard(page, "CH-0001")).toHaveCount(1);
+  const detailReads = requests.filter(request => request.method === "GET" && request.path === "/api/organizations/1/tickets/1").length;
+  revokePin = true; hiddenIds.add(1);
+  // A second authorized move reconciles the existing board and re-checks pins.
+  await kanbanColumn(page, "in_progress").locator(".ticket-kanban-card").filter({ hasNotText: "CH-0001" }).first().getByRole("combobox").selectOption("in_review");
+  await expect.poll(() => requests.filter(request => request.method === "GET" && request.path === "/api/organizations/1/tickets/1").length).toBeGreaterThan(detailReads);
+  await expect(kanbanCard(page, "CH-0001")).toHaveCount(0);
+  await expectQueueCount(page, "in_progress", 25, 29); await expectQueueCount(page, "in_review", 1, 1);
+  expect(patchRequests(requests)).toHaveLength(2);
+});
+
+test("Kanban keeps a confirmed move through a failed queue refresh and a successful retry unlocks paging", async ({ page }) => {
+  let rejectQueue = false;
+  const dataset = tickets.slice(0, 31).map(ticket => ({ ...ticket, status: "new" as const }));
+  const { requests } = await setup(page, { dataset, snapshot: true, failList: request => rejectQueue && request.params.get("queue") === "in_progress" ? 503 : false });
+  await openCentral(page); await expectCount(page, 10, 31); await chooseView(page, "Kanban");
+  await expectQueueCount(page, "open", 25, 31);
+  rejectQueue = true;
+  await kanbanCard(page, "CH-0031").getByRole("combobox").selectOption("in_progress");
+  await expect(kanbanCard(page, "CH-0031").getByRole("combobox")).toBeEnabled();
+  await expect(shell(page).getByRole("alert")).toBeVisible();
+  await expectQueueCount(page, "open", 24, 30); await expectQueueCount(page, "in_progress", 1, 1);
+  await expect(kanbanCard(page, "CH-0031")).toHaveCount(1);
+  const queueReads = listRequests(requests).length;
+  rejectQueue = false;
+  await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
+  await expect.poll(() => listRequests(requests).length).toBeGreaterThan(queueReads);
+  await expect(shell(page).getByRole("alert")).toHaveCount(0);
+  await expectQueueCount(page, "open", 25, 30); await expectQueueCount(page, "in_progress", 1, 1);
+  const more = kanbanColumn(page, "open").getByRole("button", { name: "Carregar mais nesta fila" });
+  await expect(more).toBeEnabled(); await more.click();
+  await expectQueueCount(page, "open", 30, 30);
+  await expect(kanbanCard(page, "CH-0031")).toHaveCount(1);
+});
+
+test("Kanban aggregate authorization failure removes board content and cached moved cards until access is restored", async ({ page }) => {
+  let revoked = false;
+  await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, failList: request => revoked && !request.params.has("queue") ? 403 : false });
+  await openKanban(page);
+  await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+  await expect(kanbanCard(page, "CH-0001").getByRole("combobox")).toBeEnabled();
+  await expectQueueCount(page, "in_progress", 2, 2);
+  revoked = true; await refresh(page);
+  await expect(shell(page).getByRole("alert")).toContainText("Você não possui permissão para esta ação.");
+  await expect(shell(page).getByRole("region", { name: "Kanban de chamados", exact: true })).toHaveCount(0);
+  await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
+  await expect(shell(page).locator(".ticket-metric-copy strong")).toHaveText(["—", "—", "—", "—", "—"]);
+  await expect(shell(page).locator('.ticket-metrics[aria-busy="true"], .ticket-kanban-stack[aria-busy="true"]')).toHaveCount(0);
+  await expect(shell(page).locator(".mm-skeleton")).toHaveCount(0);
+  revoked = false; await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
+  await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 2, 2);
+  await expect(shell(page).getByRole("alert")).toHaveCount(0);
+});
+
+
+test("Kanban rejected access closes a detail opened during the pending move and ignores its late response", async ({ page }) => {
+  const patch = deferred(), detail = deferred(); let detailReleased = false;
+  const { requests, hiddenIds } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforePatch: () => patch.promise, failPatch: () => 403,
+    beforeDetail: async request => { if (request.path.endsWith("/1")) { await detail.promise; detailReleased = true; } } });
+  try {
+    await openKanban(page);
+    await kanbanCard(page, "CH-0001").getByRole("combobox").selectOption("in_progress");
+    await expect(kanbanColumn(page, "in_progress").getByText("CH-0001", { exact: true })).toBeVisible();
+    await kanbanCard(page, "CH-0001").getByRole("button", { name: tickets[0].subject, exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect.poll(() => requests.some(request => request.method === "GET" && request.path === "/api/organizations/1/tickets/1")).toBe(true);
+    hiddenIds.add(1); patch.resolve();
+    await expect(shell(page).getByRole("alert")).toContainText("Você não possui permissão para esta ação.");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(0);
+    detail.resolve(); await expect.poll(() => detailReleased).toBe(true);
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 1, 1);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(kanbanCard(page, "CH-0001")).toHaveCount(0);
+    expect(patchRequests(requests)).toHaveLength(1);
+  } finally { patch.resolve(); detail.resolve(); }
+});
+
+test("Kanban filter changes never reuse a snapshot from the previous query while the new broad response is delayed", async ({ page }) => {
+  const broad = deferred();
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforeList: request => request.params.get("status") === "new" && !request.params.has("queue") ? broad.promise : Promise.resolve() });
+  try {
+    await openKanban(page);
+    await expectQueueCount(page, "open", 2, 2);
+    const originalSnapshot = listRequests(requests).find(request => request.params.get("queue") === "open")!.params.get("snapshot");
+    expect(originalSnapshot).toBeTruthy();
+    await filters(page).getByRole("combobox", { name: "Situação", exact: true }).selectOption("new");
+    await expect.poll(() => listRequests(requests).some(request => request.params.get("status") === "new" && !request.params.has("queue"))).toBe(true);
+    // Allow the new filter's render/effects to run while the old broad snapshot
+    // is still the only completed parent response. No sleep or backend timing.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    broad.resolve();
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "in_progress", 0, 0);
+    await expect(shell(page).getByRole("alert")).toHaveCount(0);
+    const filteredQueueRequests = listRequests(requests).filter(request => request.params.get("status") === "new" && request.params.has("queue"));
+    expect(filteredQueueRequests.length).toBeGreaterThan(0);
+    expect(filteredQueueRequests.every(request => request.params.get("snapshot") !== originalSnapshot)).toBe(true);
+  } finally { broad.resolve(); }
 });

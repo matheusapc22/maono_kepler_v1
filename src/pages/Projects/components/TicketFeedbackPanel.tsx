@@ -1,3 +1,9 @@
+import { useManualRefreshFocus } from "./useManualRefreshFocus";
+import { useTicketOptionalPresentation } from "./useTicketOptionalPresentation";
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
+import TicketOptionalPanelState from "./TicketOptionalPanelState";
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
+import { MaonoSelect } from "../../../components/selection/MaonoSelect";
 import { useEffect, useRef, useState } from "react";
 import { requestJson } from "../../../lib/api-transport";
 import { toTicketApiError } from "./tickets-api";
@@ -59,7 +65,7 @@ function Answer({
           <legend>Sua avaliação</legend>
           <label>
             {item.definition.resultQuestion}
-            <select
+            <MaonoSelect
               value={outcome}
               onChange={(e) => setOutcome(e.target.value)}
             >
@@ -67,18 +73,18 @@ function Answer({
               {item.definition.outcomes.map((o) => (
                 <option key={o}>{o}</option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             {item.definition.effortQuestion}
-            <select value={effort} onChange={(e) => setEffort(e.target.value)}>
+            <MaonoSelect value={effort} onChange={(e) => setEffort(e.target.value)}>
               <option value="">Selecione</option>
               {item.definition.effortLabels.map((o, i) => (
                 <option key={i} value={i}>
                   {o}
                 </option>
               ))}
-            </select>
+            </MaonoSelect>
           </label>
           <label>
             Comentário opcional — somente você, sem envio à conversa
@@ -149,11 +155,17 @@ export default function TicketFeedbackPanel({
   organizationId,
   canManage,
   onOpen,
+  structurePending = false,
+  stagePending = false,
 }: {
   organizationId: string | number;
   canManage: boolean;
   onOpen: (id: number) => void;
+  structurePending?: boolean;
+  stagePending?: boolean;
 }) {
+  // Keep confirmed availability while same-context payloads refresh or recover.
+  const [available, setAvailable] = useState(false);
   const [data, setData] = useState<List | null>(null),
     [error, setError] = useState<ReturnType<typeof toTicketApiError> | null>(
       null,
@@ -196,11 +208,15 @@ export default function TicketFeedbackPanel({
       }
       if (mounted.current && g === generation.current) {
         setData(value);
+        setAvailable(value.enabled === true);
         setVersion(v);
       }
     } catch (e) {
-      if (mounted.current && g === generation.current)
-        setError(toTicketApiError(e));
+      if (mounted.current && g === generation.current) {
+        const failure = toTicketApiError(e);
+        setError(failure);
+        if (isRegionAccessDenied(failure)) { setAvailable(false); pending.current = null; setUncertain(false); }
+      }
     } finally {
       if (mounted.current && g === generation.current) setBusy(false);
     }
@@ -254,6 +270,7 @@ export default function TicketFeedbackPanel({
       if (mounted.current && g === generation.current) {
         const failure = toTicketApiError(e);
         setError(failure);
+        if (isRegionAccessDenied(failure)) setAvailable(false);
         if (
           failure.status >= 400 &&
           failure.status < 500 &&
@@ -269,11 +286,18 @@ export default function TicketFeedbackPanel({
       if (mounted.current) setBusy(false);
     }
   }
-  if (data?.enabled === false) return null;
+  const rememberRefreshFocus = useManualRefreshFocus(busy);
+  const presentation = useTicketOptionalPresentation({ structurePending, stagePending, error });
+  if (!available) return <TicketOptionalPanelState
+    title="Resultado, esforço e feedback"
+    error={data?.enabled === false ? null : error}
+    onRetry={() => void (pending.current && !isRegionAccessDenied(error) ? mutate(pending.current.path, pending.current.body) : load())}
+    onRefresh={pending.current && !isRegionAccessDenied(error) ? () => void load() : undefined}
+  />;
   return (
     <details className="ticket-feedback-panel">
-      <summary>Resultado, esforço e feedback</summary>
-      <section aria-label="Pesquisas de atendimento" aria-busy={busy}>
+      <summary><StaticLoadingText pending={presentation.structurePending}>Resultado, esforço e feedback</StaticLoadingText></summary>
+      <section aria-label="Pesquisas de atendimento" aria-busy={busy} data-ticket-optional-body="" hidden={presentation.stagePending}>
         <p>
           Pesquisas opcionais por ciclo encerrado. Não responder não conta como
           resultado positivo.
@@ -289,7 +313,7 @@ export default function TicketFeedbackPanel({
           />
         ) : null}
         {status ? <p role="status">{status}</p> : null}
-        <button disabled={busy || uncertain} onClick={() => void load()}>
+        <button disabled={busy || uncertain} onClick={event => { rememberRefreshFocus(event.currentTarget); void load(); }}>
           Atualizar pesquisas
         </button>
         {data?.items.length === 0 ? <p>Nenhuma pesquisa disponível.</p> : null}
@@ -358,7 +382,7 @@ export default function TicketFeedbackPanel({
               </label>
               <label>
                 Direção da escala
-                <select
+                <MaonoSelect
                   value={direction}
                   onChange={(e) => setDirection(e.target.value)}
                 >
@@ -369,7 +393,7 @@ export default function TicketFeedbackPanel({
                   <option value="descending">
                     Do maior para o menor esforço
                   </option>
-                </select>
+                </MaonoSelect>
               </label>
               <label>
                 Prazo aprovado em horas

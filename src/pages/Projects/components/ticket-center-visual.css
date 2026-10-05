@@ -14,7 +14,9 @@ body .ticket-center-shell.ticket-center-final .ticket-center-header { display: f
 body .ticket-center-shell.ticket-center-final .ticket-center-heading h1 { margin: 0; color: var(--mm-text); font-size: clamp(26px, 2vw, 32px); font-weight: 550; letter-spacing: -.025em; line-height: 1.2; }
 body .ticket-center-shell.ticket-center-final .ticket-center-actions { gap: 12px; }
 body .ticket-center-shell.ticket-center-final .ticket-primary-action { min-height: var(--maono-density-control, 40px); border-radius: 7px; box-shadow: none; }
-body .ticket-center-shell.ticket-center-final .ticket-view-control { border-radius: 7px; background: var(--mm-bg-soft); }
+body .ticket-center-shell.ticket-center-final .ticket-view-control { padding: 0; border-radius: 7px; background: var(--mm-bg-soft); }
+body .ticket-center-shell.ticket-center-final .ticket-view-control .maono-select { width: 100%; border-radius: inherit; }
+body .ticket-center-shell.ticket-center-final .ticket-view-control select { width: 100%; padding-left: 14px; background-color: transparent; border: 0; border-radius: inherit; font-weight: 550; }
 body .ticket-center-shell.ticket-center-final .ticket-filter-surface { padding: 12px 16px 16px; gap: 14px; border-radius: 10px; background: var(--mm-bg-soft); box-shadow: none; }
 body .ticket-center-shell.ticket-center-final .ticket-filter-header { flex-direction: row; align-items: center; flex-wrap: wrap; min-height: 46px; padding-bottom: 12px; }
 body .ticket-center-shell.ticket-center-final .ticket-filter-header strong { font-size: 14px; font-weight: 650; }
@@ -35,10 +37,15 @@ body .ticket-center-shell.ticket-center-final .ticket-metrics { grid-template-co
 body .ticket-center-shell.ticket-center-final .ticket-metrics > button { min-width: 0; min-height: 76px; padding: 12px 14px; gap: 12px; border-radius: 10px; background: var(--mm-surface); box-shadow: none; }
 body .ticket-center-shell.ticket-center-final .ticket-metrics > button:hover,
 body .ticket-center-shell.ticket-center-final .ticket-metrics > button.is-active { background: var(--mm-surface-2); }
-body .ticket-center-shell.ticket-center-final .ticket-metric-icon { width: 40px; height: 40px; min-width: 40px; border-radius: 9px; font-size: 25px; }
+/* Decorative summary icons share the Roadmap's gold treatment in every view. */
+body .ticket-center-shell.ticket-center-final .ticket-metric-icon { width: 40px; height: 40px; min-width: 40px; border-radius: 9px; font-size: 25px; color: var(--maono-accent-bright); background: var(--maono-accent-surface); }
 body .ticket-center-shell.ticket-center-final .ticket-metric-copy { gap: 3px; }
 body .ticket-center-shell.ticket-center-final .ticket-metric-copy > span { font-size: 12px; color: var(--mm-text-soft); font-weight: 500; }
 body .ticket-center-shell.ticket-center-final .ticket-metric-copy > strong { color: var(--mm-text); font-size: 25px; line-height: 1.15; font-weight: 550; }
+/* Review is red only in the Kanban queue; priority/overdue and other views retain their semantics. */
+body .ticket-center-shell.ticket-center-final .ticket-kanban-column.column-in_review { border-top-color: var(--maono-semantic-danger); }
+body .ticket-center-shell.ticket-center-final .ticket-kanban-column.column-in_review > header h3,
+body .ticket-center-shell.ticket-center-final .ticket-kanban-column.column-in_review > header > span { color: color-mix(in srgb, var(--maono-semantic-danger) 75%, var(--mm-text)); }
 body .ticket-center-shell.ticket-center-final .ticket-list-region { min-width: 0; overflow: hidden; border-radius: 10px; background: var(--mm-bg-soft); box-shadow: none; }
 body .ticket-center-shell.ticket-center-final .ticket-list-header { min-height: 56px; padding: 12px 16px; gap: 14px; flex-wrap: wrap; }
 body .ticket-center-shell.ticket-center-final .ticket-list-header h3 { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
@@ -60,15 +67,8 @@ body .ticket-center-shell.ticket-center-final .ticket-subject-button { font-weig
 body .ticket-center-shell.ticket-center-final .ticket-view-actions { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 body .ticket-center-shell.ticket-center-final :is(button, select, input):disabled { opacity: .5; cursor: not-allowed; }
 body .ticket-center-shell.ticket-center-final :is(a, button, select, input, [tabindex]):focus-visible { outline: 2px solid var(--maono-focus-ring); outline-offset: 3px; }
-/* Keep native semantics while avoiding platform-specific select/checkbox paints. */
-body .ticket-center-shell.ticket-center-final :is(.ticket-filter-bar, .ticket-view-control) select {
-  appearance: none; -webkit-appearance: none; padding-right: 32px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--mm-text-soft) 50%), linear-gradient(135deg, var(--mm-text-soft) 50%, transparent 50%);
-  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
-  background-size: 5px 5px; background-repeat: no-repeat;
-}
-body .ticket-center-shell.ticket-center-final .ticket-view-control { padding: 0; }
-body .ticket-center-shell.ticket-center-final .ticket-view-control select { width: 100%; padding-left: 14px; background-color: transparent; border: 0; border-radius: inherit; }
+/* Shared MaonoSelect owns the single chevron and its dark/gold popup. */
+body .ticket-center-shell.ticket-center-final :is(.ticket-filter-bar, .ticket-view-control) select { appearance: none; -webkit-appearance: none; padding-right: 36px; background-image: none; }
 body .ticket-center-shell.ticket-center-final .ticket-select-control { display: inline-grid; place-items: center; min-width: 28px; min-height: 28px; cursor: pointer; }
 body .ticket-center-shell.ticket-center-final .ticket-list-table input[type="checkbox"] {
   appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center;
@@ -81,7 +81,6 @@ body .ticket-center-shell.ticket-center-final .ticket-list-table input[type="che
 @media (forced-colors: active) {
   body .ticket-center-shell.ticket-center-final .ticket-list-table input[type="checkbox"] { appearance: auto; -webkit-appearance: checkbox; }
   body .ticket-center-shell.ticket-center-final .ticket-list-table input[type="checkbox"]::after { display: none; }
-  body .ticket-center-shell.ticket-center-final :is(.ticket-filter-bar, .ticket-view-control) select { appearance: auto; background-image: none; }
 }
 @container (max-width: 900px) {
   body .ticket-center-shell.ticket-center-final .ticket-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -103,4 +102,5 @@ body .ticket-center-shell.ticket-center-final .ticket-list-table input[type="che
   body .ticket-center-shell.ticket-center-final .ticket-select-control { min-width: 44px; min-height: 44px; }
   body .ticket-center-shell.ticket-center-final :is(.mm-docs-page-arrow, .mm-docs-menu-trigger, .ticket-table-action, .ticket-filter-clear, .ticket-list-tool) { min-width: 44px; min-height: 44px; }
   body .ticket-center-shell.ticket-center-final .ticket-filter-bar :is(input, select) { min-height: 44px; }
+  body .ticket-center-shell.ticket-center-final .ticket-view-control select { min-height: 44px; }
 }

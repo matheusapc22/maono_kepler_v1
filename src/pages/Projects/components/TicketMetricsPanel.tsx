@@ -1,3 +1,8 @@
+import { useManualRefreshFocus } from "./useManualRefreshFocus";
+import { useTicketOptionalPresentation } from "./useTicketOptionalPresentation";
+import { StaticLoadingText } from "../../../components/loading/Skeleton";
+import TicketOptionalPanelState from "./TicketOptionalPanelState";
+import { isRegionAccessDenied } from "../../../components/loading/region-loading-policy";
 import { useEffect, useRef, useState } from 'react';
 import { requestJson } from '../../../lib/api-transport';
 import { toTicketApiError } from './tickets-api';
@@ -65,10 +70,14 @@ type Metrics = {
     };
 };
 const duration = (ms: number | null) => ms == null ? 'Indisponível' : `${(ms / 3600000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h`;
-function MetricsContent({ organizationId, canManage }: {
+function MetricsContent({ organizationId, canManage, structurePending = false, stagePending = false }: {
     organizationId: number | string;
     canManage: boolean;
+    structurePending?: boolean;
+    stagePending?: boolean;
 }) {
+    // Keep confirmed availability while same-context payloads refresh or recover.
+    const [available, setAvailable] = useState(false);
     const [data, setData] = useState<Metrics | null>(null), [error, setError] = useState<ReturnType<typeof toTicketApiError> | null>(null), [busy, setBusy] = useState(false);
     const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)), [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
     const [horizon, setHorizon] = useState(''), [reason, setReason] = useState(''), [approved, setApproved] = useState(false), [pending, setPending] = useState<Record<string, unknown> | null>(null);
@@ -76,12 +85,17 @@ function MetricsContent({ organizationId, canManage }: {
     async function load(window?: Metrics['window']) { const g = ++generation.current; setBusy(true); setData(null); setError(null); try {
         const w = window || { from: new Date(from + 'T00:00:00Z').toISOString(), to: new Date(to + 'T00:00:00Z').toISOString(), asOf: new Date().toISOString() };
         const result = await requestJson<Metrics>(`${endpoint}?${new URLSearchParams(w)}`);
-        if (mounted.current && g === generation.current)
+        if (mounted.current && g === generation.current) {
             setData(result);
+            setAvailable(result.enabled === true);
+        }
     }
     catch (e) {
-        if (mounted.current && g === generation.current)
-            setError(toTicketApiError(e));
+        if (mounted.current && g === generation.current) {
+            const failure = toTicketApiError(e);
+            setError(failure);
+            if (isRegionAccessDenied(failure)) { setAvailable(false); setPending(null); }
+        }
     }
     finally {
         if (mounted.current && g === generation.current)
@@ -100,6 +114,7 @@ function MetricsContent({ organizationId, canManage }: {
         if (mounted.current && g === generation.current) {
             const failure = toTicketApiError(e);
             setError(failure);
+            if (isRegionAccessDenied(failure)) setAvailable(false);
             if (failure.status >= 400 && failure.status < 500 && ![408, 429].includes(failure.status))
                 setPending(null);
         }
@@ -108,11 +123,17 @@ function MetricsContent({ organizationId, canManage }: {
         if (mounted.current && g === generation.current)
             setBusy(false);
     } }
-    if (data?.enabled === false)
-        return null;
-    return <details className="ticket-metrics-panel"><summary>Métricas do atendimento</summary><section aria-label="Métricas do atendimento" aria-busy={busy}>
+    const rememberRefreshFocus = useManualRefreshFocus(busy);
+    const presentation = useTicketOptionalPresentation({ structurePending, stagePending, error });
+    if (!available) return <TicketOptionalPanelState
+        title="Métricas do atendimento"
+        error={data?.enabled === false ? null : error}
+        onRetry={() => void (pending && !isRegionAccessDenied(error) ? mutate(pending) : load())}
+        onRefresh={pending && !isRegionAccessDenied(error) ? () => void load() : undefined}
+    />;
+    return <details className="ticket-metrics-panel"><summary><StaticLoadingText pending={presentation.structurePending}>Métricas do atendimento</StaticLoadingText></summary><section aria-label="Métricas do atendimento" aria-busy={busy} data-ticket-optional-body="" hidden={presentation.stagePending}>
  <p>Somente chamados autorizados. Datas em UTC, início incluído e fim excluído. Indicadores independentes dos filtros da lista.</p>
- <div className="ticket-metrics-controls"><label>Início (UTC)<input type="date" value={from} onChange={e => setFrom(e.target.value)} disabled={busy || !!pending}/></label><label>Fim exclusivo (UTC)<input type="date" value={to} onChange={e => setTo(e.target.value)} disabled={busy || !!pending}/></label><button disabled={busy || !!pending || !from || !to || from >= to} onClick={() => void load()}>Consultar métricas</button></div>
+ <div className="ticket-metrics-controls"><label>Início (UTC)<input type="date" value={from} onChange={e => setFrom(e.target.value)} disabled={busy || !!pending}/></label><label>Fim exclusivo (UTC)<input type="date" value={to} onChange={e => setTo(e.target.value)} disabled={busy || !!pending}/></label><button disabled={busy || !!pending || !from || !to || from >= to} onClick={event => { rememberRefreshFocus(event.currentTarget); void load(); }}>Consultar métricas</button></div>
  {busy ? <p role="status">Calculando indicadores…</p> : null}
  {error ? <TicketErrorNotice error={error} onRetry={() => void (pending ? mutate(pending) : load())}/> : null}
  {pending && !busy ? <button onClick={() => void mutate(pending)}>Verificar tentativa anterior</button> : null}
@@ -135,4 +156,6 @@ function MetricsContent({ organizationId, canManage }: {
 export default function TicketMetricsPanel(props: {
     organizationId: number | string;
     canManage: boolean;
+    structurePending?: boolean;
+    stagePending?: boolean;
 }) { return <MetricsContent key={props.organizationId} {...props}/>; }

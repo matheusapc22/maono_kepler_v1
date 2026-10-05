@@ -28,6 +28,9 @@ function normalizeOrganizationId(value) {
 }
 
 export function normalizePreviewRevision(value, { allowZero = true } = {}) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
   const normalized = Number(value);
   const minimum = allowZero ? 0 : 1;
 
@@ -199,16 +202,23 @@ export async function markProjectPreviewReady(
     organizationId,
     revision,
     captureMethod,
+    expectedState = null,
   },
 ) {
   const normalizedProjectId = normalizeProjectId(projectId);
   const normalizedOrganizationId = normalizeOrganizationId(organizationId);
   const normalizedRevision = normalizePreviewRevision(revision);
+  // Legacy PNG revision zero is independent of the lifecycle config revision.
+  // Reconciliation must compare the complete snapshot it inspected in storage.
+  const expectedConfigRevision = expectedState
+    ? normalizePreviewRevision(expectedState.config_revision)
+    : normalizedRevision;
 
   if (
     !normalizedProjectId ||
     !normalizedOrganizationId ||
-    normalizedRevision === null
+    normalizedRevision === null ||
+    expectedConfigRevision === null
   ) {
     return null;
   }
@@ -225,6 +235,7 @@ export async function markProjectPreviewReady(
        AND organization_id = ?
        AND active = 1
        AND config_revision = ?
+       AND (? = 0 OR (preview_status = ? AND preview_revision IS ?))
      RETURNING
        config_revision,
        preview_status,
@@ -238,7 +249,14 @@ export async function markProjectPreviewReady(
       sanitizeCaptureMethod(captureMethod),
       normalizedProjectId,
       normalizedOrganizationId,
-      normalizedRevision,
+      expectedConfigRevision,
+      expectedState ? 1 : 0,
+      expectedState
+        ? normalizePreviewStatus(expectedState.preview_status)
+        : null,
+      expectedState
+        ? normalizePreviewRevision(expectedState.preview_revision)
+        : null,
     )
     .first();
 }
@@ -302,15 +320,24 @@ export async function markProjectPreviewMissing(
   {
     projectId,
     organizationId,
-    expectedStatus = PROJECT_PREVIEW_STATUS.UNKNOWN,
+    expectedState,
     errorCode = "PROJECT_THUMBNAIL_NOT_FOUND",
   },
 ) {
   const normalizedProjectId = normalizeProjectId(projectId);
   const normalizedOrganizationId = normalizeOrganizationId(organizationId);
-  const normalizedExpectedStatus = normalizePreviewStatus(expectedStatus);
+  const normalizedExpectedStatus = normalizePreviewStatus(
+    expectedState?.preview_status,
+  );
+  const expectedConfigRevision = normalizePreviewRevision(
+    expectedState?.config_revision,
+  );
 
-  if (!normalizedProjectId || !normalizedOrganizationId) {
+  if (
+    !normalizedProjectId ||
+    !normalizedOrganizationId ||
+    expectedConfigRevision === null
+  ) {
     return null;
   }
 
@@ -324,6 +351,8 @@ export async function markProjectPreviewMissing(
        AND organization_id = ?
        AND active = 1
        AND preview_status = ?
+       AND config_revision = ?
+       AND preview_revision IS ?
      RETURNING
        config_revision,
        preview_status,
@@ -337,6 +366,8 @@ export async function markProjectPreviewMissing(
       normalizedProjectId,
       normalizedOrganizationId,
       normalizedExpectedStatus,
+      expectedConfigRevision,
+      normalizePreviewRevision(expectedState?.preview_revision),
     )
     .first();
 }

@@ -6,6 +6,10 @@ const extractedFooter = "      <DocumentsPagination status={refreshing || pendin
 const homeCallback = "                onHome={() => {\n                  setSidebarSection(\"all\"); setSearchQuery(\"\"); setProjectActionError(null);\n                }}\n";
 export function restoreTicketVisualExtraction(path, source) {
   if (path.endsWith('/DocumentsSection.css')) {
+    // Roadmap and Users only join the exact shared pagination selectors; declaration hashes remain intact.
+    const roadmapScope = ':is(.mm-docs, .ticket-center-shell, .roadmap-workspace, .users-access-workspace)';
+    assert.equal(source.split(roadmapScope).length - 1, 11);
+    source = source.replaceAll(roadmapScope, ':is(.mm-docs, .ticket-center-shell)');
     return source.replaceAll(':is(.mm-docs, .ticket-center-shell) .mm-docs-page', '.mm-docs .mm-docs-page').replaceAll(':is(.mm-docs, .ticket-center-shell) .mm-docs-pagination', '.mm-docs .mm-docs-pagination');
   }
   if (path.endsWith('/DocumentsSection.tsx')) {
@@ -14,6 +18,7 @@ export function restoreTicketVisualExtraction(path, source) {
   }
   if (path === 'src/pages/Projects.tsx') {
     assert.equal(source.split(homeCallback).length - 1, 1);
+    source = source.replace('Pick<ManagementSectionProps, "user" | "organizationId" | "projects"> & { onHome?: () => void }', 'Pick<ManagementSectionProps, "user" | "organizationId" | "projects">').replace('<UsersAccessSectionWithProps\n          onHome={onHome}\n', '<UsersAccessSectionWithProps\n');
     source = source.replace(homeCallback, '').replace("      if (!target) {\n        ticketLinkEpoch.current += 1;\n        setTicketLinkRestoring(false); setTicketLinkError(null);\n        if (currentSidebarSectionRef.current === \"requests\") {\n          setSidebarSection(\"all\"); setSearchQuery(\"\"); setProjectActionError(null);\n        }\n        return;\n      }", "      if (!target) return;");
     const split = source.indexOf('function ProjectsSectionRouter(');
     return source.slice(0, split) + source.slice(split)

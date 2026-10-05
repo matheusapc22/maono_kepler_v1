@@ -396,8 +396,9 @@ test("Create é independente da rota e usa negação explícita", () => {
 
 test("Usuários e Acessos oferece gestor exclusivo de mapa sem substituir permissões adicionais", () => {
   assert.match(sources.usersAccess, /ProjectMapAccessManager/);
-  assert.match(sources.usersAccess, />\s*Mapa\s*<\/button>/);
-  assert.match(sources.usersAccess, />\s*Gerenciar\s*<\/button>/);
+  assert.match(sources.usersAccess, /DocumentActionMenu/);
+  assert.ok(sources.usersAccess.includes('...(manageMap ? [{ label: "Mapa", onSelect: () => setMapAccessTargetUserId(person.id) }] : [])'));
+  assert.ok(sources.usersAccess.includes('...(manageAdditional ? [{ label: "Gerenciar", onSelect: () => setManagementTargetUserId(person.id) }] : [])'));
   assert.match(sources.mapAccessManager, /<option value="viewer">Viewer<\/option>/);
   assert.match(sources.mapAccessManager, /<option value="editor">Editor<\/option>/);
   assert.match(sources.mapAccessManager, /viewerRole[\s\S]*disabled=/);

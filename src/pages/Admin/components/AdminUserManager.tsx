@@ -62,6 +62,8 @@ function syncMembershipStateButtons(root: HTMLElement) {
 }
 
 function ensureMembershipLevelSurface(select: HTMLSelectElement) {
+  // MaonoSelect supplies a deterministic face, chevron and DOM popup already.
+  if (select.dataset.maonoSelect) return null;
   const label = select.closest<HTMLElement>(".admin-membership-level");
   if (!label) return null;
 

@@ -1,3 +1,7 @@
+import { restoreAdminProjectsProgressiveLoading } from "./helpers/admin-projects-progressive-preservation.mjs";
+import { restoreApprovedThumbnailReliability } from "./helpers/project-thumbnail-preservation.mjs";
+import { restoreTicketDocumentsProgressiveLoading } from "./helpers/ticket-docs-progressive-preservation.mjs";
+import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { restoreApprovedDocumentHelperRemoval } from "./helpers/document-helper-preservation.mjs";
 import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
 import test from 'node:test';
@@ -63,13 +67,24 @@ function restoreApprovedDocumentTitleDelta(path, source) {
 }
 for (const [path, expected] of Object.entries(preserved)) {
   test(`preserves original source: ${path}`, () => {
-    assert.equal(sha256(restoreApprovedDocumentTitleDelta(path, restoreTicketVisualExtraction(path, restoreApprovedDocumentHelperRemoval(path, read(path))))), expected, 'only the approved Documents title/helper cleanup and shared footer extraction may differ; unrelated presentation, preview, metadata and endpoints stay unchanged');
+    assert.equal(sha256(restoreApprovedThumbnailReliability(path, restoreApprovedDocumentTitleDelta(path, restoreTicketVisualExtraction(path, restoreApprovedDocumentHelperRemoval(path, restoreMaonoSelect(restoreTicketDocumentsProgressiveLoading(path, read(path)))))))), expected, 'only exact approved deltas may differ, including the separately authorized thumbnail reliability fix; unrelated presentation, metadata and endpoints stay unchanged');
     if (hasOriginal) {
       const fromGit = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
       assert.equal(sha256(fromGit), expected, 'pinned original is independently verified');
     }
   });
 }
+
+test('thumbnail inverse rejects unrelated access changes and altered identity/error policies', () => {
+  const utilsPath = 'src/pages/Projects/components/project-card-utils.ts';
+  const presentationPath = 'src/pages/Projects/components/project-preview-presentation.mjs';
+  const utils = read(utilsPath), presentation = read(presentationPath);
+  const mutatedAccess = utils.replace('return "owner";', 'return "editor";');
+  assert.notEqual(mutatedAccess, utils);
+  assert.notEqual(sha256(restoreApprovedThumbnailReliability(utilsPath, mutatedAccess)), preserved[utilsPath]);
+  assert.throws(() => restoreApprovedThumbnailReliability(utilsPath, utils.replace(': 0;', ': 1;')), assert.AssertionError);
+  assert.throws(() => restoreApprovedThumbnailReliability(presentationPath, presentation.replace('      return "failed-neutral";', '      return "missing-neutral";')), assert.AssertionError);
+});
 
 const bundle = await build({ entryPoints: [new URL('src/pages/Projects/components/project-page-query.ts', root).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
 const { filterAndSortProjects, projectPage, PROJECT_PAGE_COPY, DEFAULT_PROJECT_FILTERS } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
@@ -235,7 +250,7 @@ test('base CTA keeps fallback desktop inset and mobile reset beneath density pol
 // Sidebar presentation is now explicitly in scope. Keep its item registry,
 // icons, labels, hrefs, permission rules and count wiring independently pinned.
 test('sidebar redesign preserves the original navigation and permission contract', () => {
-  const sidebar = read('src/pages/ProjectsSidebar.tsx');
+  const sidebar = restoreAdminProjectsProgressiveLoading('src/pages/ProjectsSidebar.tsx', read('src/pages/ProjectsSidebar.tsx'));
   assert.equal(sha256(sidebar.split('function SectionTitle(')[0]), 'f9499bd8d0ee1dd8665914086f911ba48eae75ce21976ba781ab8e3782453d46');
   assert.match(sidebar, /active=\{section === sidebarSection\}/);
   assert.match(sidebar, /onSidebarSectionChange\(section\)/);
@@ -248,7 +263,7 @@ test('sidebar redesign preserves the original navigation and permission contract
 });
 
 test('sidebar identity uses the real session role and keeps logout on its existing callback', () => {
-  const sidebar = read('src/pages/ProjectsSidebar.tsx');
+  const sidebar = restoreAdminProjectsProgressiveLoading('src/pages/ProjectsSidebar.tsx', read('src/pages/ProjectsSidebar.tsx'));
   assert.match(sidebar, /const roleLabel = user\?\.role\?\.trim\(\) \? normalizeRoleLabel\(user\.role\) : ""/);
   assert.match(sidebar, /const userIdentity = roleLabel \? `\$\{userName\} - \$\{roleLabel\}` : userName/);
   assert.match(sidebar, /<strong title=\{userIdentity\}>\{userIdentity\}<\/strong>/);

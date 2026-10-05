@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 // Actual built React application; fixture-only HTTP, no production URL or credentials.
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: ["project-pages.spec.ts", "platform-density-map.spec.ts", "map-add-data-sidebar.spec.ts", "map-data-localization.spec.ts", "map-sidebar-scrollbars.spec.ts", "map-panel-minimal.spec.ts", "map-panel-hint-compatibility.spec.ts"],
+  testMatch: ["map-error-notice.spec.ts", "platform-selectors.spec.ts", "project-pages.spec.ts", "platform-density-map.spec.ts", "map-add-data-sidebar.spec.ts", "map-data-localization.spec.ts", "map-sidebar-scrollbars.spec.ts", "map-panel-minimal.spec.ts", "map-panel-hint-compatibility.spec.ts"],
   timeout: 45_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

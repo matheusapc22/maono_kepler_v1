@@ -1,0 +1,79 @@
+name: Roadmap Workspace
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/main.tsx'
+      - 'src/pages/Projects.tsx'
+      - 'src/pages/ProjectsSidebar.tsx'
+      - 'src/pages/Projects/**'
+      - 'src/components/selection/**'
+      - 'src/access-control/**'
+      - 'src/auth/session.tsx'
+      - 'src/platform-density.css'
+      - 'src/platform-layout.css'
+      - 'src/maono-design-tokens.css'
+      - 'functions/_lib/roadmaps.js'
+      - 'functions/api/organizations/**/roadmaps*'
+      - 'functions/api/organizations/**/roadmaps/**'
+      - 'tests/roadmap*.test.mjs'
+      - 'tests/organization-switcher-redesign.test.mjs'
+      - 'tests/helpers/*preservation.mjs'
+      - 'tests/browser/roadmap-workspace.spec.ts'
+      - 'playwright.roadmap.config.ts'
+      - 'playwright.project-pages.config.ts'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/roadmap-workspace.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  roadmap-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install existing repository dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Roadmap contracts and original controller preservation
+        env:
+          PROJECT_PAGES_REQUIRE_BASELINE: "1"
+        run: node --experimental-strip-types --test tests/roadmap*.test.mjs tests/organization-switcher-redesign.test.mjs
+      - name: Scoped lint
+        run: >-
+          npx eslint src/pages/Projects/components/RoadmapSection.tsx
+          src/pages/Projects/components/roadmap-pagination.ts
+          tests/browser/roadmap-workspace.spec.ts playwright.roadmap.config.ts
+      - name: Typecheck and build actual application
+        env:
+          VITE_MAONO_MAP_SHELL_V1: "true"
+          VITE_MAONO_LAYER_MANAGER_V1: "true"
+          VITE_MAONO_MAP_OVERLAY_V1: "true"
+        run: npm run build
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Compiled Roadmap route with fixture APIs, not production acceptance
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: roadmap-workspace-results.json
+        run: npx playwright test --config=playwright.roadmap.config.ts --reporter=list,json
+      - name: Browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadmap-workspace-${{ github.sha }}
+          path: |
+            test-results/roadmap-workspace/
+            roadmap-workspace-results.json
+            tests/browser/roadmap-workspace.spec.ts
+            tests/roadmap-workspace.test.mjs
+            playwright.roadmap.config.ts
+          if-no-files-found: warn
+          retention-days: 14

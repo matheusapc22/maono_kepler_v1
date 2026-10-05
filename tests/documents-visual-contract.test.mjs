@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { restoreTicketDocumentInitialPresentation } from './helpers/ticket-docs-progressive-preservation.mjs';
 
-const component = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8');
-const pagination = readFileSync(new URL('../src/pages/Projects/components/DocumentsPagination.tsx', import.meta.url), 'utf8');
+const component = restoreTicketDocumentInitialPresentation(readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.tsx', import.meta.url), 'utf8'), 'DocumentsSection');
+const pagination = restoreTicketDocumentInitialPresentation(readFileSync(new URL('../src/pages/Projects/components/DocumentsPagination.tsx', import.meta.url), 'utf8'), 'DocumentsPagination');
 const css = readFileSync(new URL('../src/pages/Projects/components/DocumentsSection.css', import.meta.url), 'utf8');
 const densityCss = readFileSync(new URL('../src/platform-density.css', import.meta.url), 'utf8');
-const menu = readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8');
+const menu = restoreTicketDocumentInitialPresentation(readFileSync(new URL('../src/pages/Projects/components/DocumentsUi.tsx', import.meta.url), 'utf8'), 'DocumentsUi');
 const dialogs = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.tsx', import.meta.url), 'utf8');
 const dialogCss = readFileSync(new URL('../src/pages/Projects/components/DocumentActionDialogs.css', import.meta.url), 'utf8');
 const transfer = readFileSync(new URL('../src/pages/Projects/components/DocumentsTransferPanel.css', import.meta.url), 'utf8');
@@ -189,10 +190,13 @@ test('document titles omit the duplicate folder icon in normal and unavailable-a
 });
 
 
-test('Documents and Central use one unchanged pagination presentation with the real count supplied by each controller', () => {
+test('Documents, Central and Roadmap use one unchanged pagination presentation with the real count supplied by each controller', () => {
   assert.ok(component.includes('<DocumentsPagination status={'));
   for (const token of ['mm-docs-page-controls', 'Itens por página', 'value={10}', 'value={25}', 'value={50}', 'Página anterior', 'Próxima página', 'aria-current="page"']) assert.ok(pagination.includes(token), token);
-  assert.ok(css.includes(':is(.mm-docs, .ticket-center-shell) .mm-docs-pagination'));
+  assert.ok(css.includes(':is(.mm-docs, .ticket-center-shell, .roadmap-workspace, .users-access-workspace) .mm-docs-pagination'));
+  const roadmap = readFileSync(new URL('../src/pages/Projects/components/RoadmapSection.tsx', import.meta.url), 'utf8');
+  assert.ok(roadmap.includes('<DocumentsPagination'));
+  assert.ok(roadmap.includes('Exibindo ${page.tasks.length}/${page.total}.'));
 });
 
 test('only screenshot-marked helper paragraphs disappear; headings and state guidance stay', () => {

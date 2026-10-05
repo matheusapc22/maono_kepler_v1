@@ -3,6 +3,7 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'src/components/selection/**'
       - 'src/main.tsx'
       - 'src/pages/Projects.tsx'
       - 'src/pages/Projects/**'
@@ -18,6 +19,7 @@ on:
       - 'tests/helpers/ticket*.mjs'
       - 'tests/helpers/document-helper-preservation.mjs'
       - 'tests/browser/ticket-center-visual.spec.ts'
+      - 'tests/browser/ticket-view-selector.spec.ts'
       - 'tests/documents-visual-contract.test.mjs'
       - 'tests/project-pages-contract.test.mjs'
       - 'tests/organization-switcher-redesign.test.mjs'
@@ -54,10 +56,14 @@ jobs:
           tests/organization-switcher-redesign.test.mjs tests/organization-file-filters.test.mjs
       - name: Scoped lint
         run: >-
-          npx eslint src/pages/Projects/components/TicketsSection.tsx
+          npx eslint src/components/selection/MaonoSelect.tsx
+          src/pages/Projects/components/TicketKanbanBoard.tsx src/pages/Projects/components/TicketKanbanView.tsx
+          src/pages/Projects/components/ticket-live-state.ts
+          src/pages/Projects/components/TicketsSection.tsx
           src/pages/Projects/components/TicketsToolbar.tsx src/pages/Projects/components/TicketListView.tsx
           src/pages/Projects/components/TicketExportsPanel.tsx src/pages/Projects/components/DocumentsPagination.tsx
-          tests/browser/ticket-center-visual.spec.ts tests/ticket-center-visual-contract.test.mjs
+          tests/browser/ticket-center-visual.spec.ts tests/browser/ticket-view-selector.spec.ts
+          tests/ticket-center-visual-contract.test.mjs
           tests/ticket-pagination-contract.test.mjs tests/helpers/ticket-visual-preservation.mjs
       - name: Typecheck and build actual application
         env:
@@ -86,6 +92,7 @@ jobs:
             test-results/
             ticket-center-results.json
             tests/browser/ticket-center-visual.spec.ts
+            tests/browser/ticket-view-selector.spec.ts
             tests/ticket-center-visual-contract.test.mjs
             tests/ticket-pagination-contract.test.mjs
             playwright.ticket-center.config.ts

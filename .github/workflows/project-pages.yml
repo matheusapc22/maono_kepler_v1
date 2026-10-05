@@ -3,6 +3,12 @@ on:
   pull_request:
     branches: [mano_kepler_v1]
     paths:
+      - 'src/components/selection/**'
+      - 'src/components/access/**'
+      - 'src/pages/Admin/**'
+      - 'tests/browser/platform-selectors.spec.ts'
+      - 'tests/helpers/maono-select-preservation.mjs'
+      - 'tests/maono-select-migration.test.mjs'
       - 'src/main.tsx'
       - 'vite.config.ts'
       - 'src/platform-density.css'
@@ -15,7 +21,9 @@ on:
       - 'src/access-control/**'
       - 'src/auth/session.tsx'
       - 'functions/_lib/project-list.js'
+      - 'functions/_lib/project-preview.js'
       - 'functions/api/projects/**'
+      - 'functions/api/admin/project-previews/**'
       - 'tests/platform-density.test.mjs'
       - 'tests/browser/platform-density-map.spec.ts'
       - 'tests/browser/map-add-data-sidebar.spec.ts'
@@ -27,12 +35,17 @@ on:
       - 'tests/browser/map-panel-minimal.spec.ts'
       - 'tests/browser/map-panel-hint-compatibility.spec.ts'
       - 'tests/browser/fixtures/map-panel-minimal.ts'
+      - 'tests/map-error-notice.test.mjs'
+      - 'tests/browser/map-error-notice.spec.ts'
       - 'tests/map-panel-minimal.test.mjs'
       - 'tests/map-panel-hints.test.mjs'
       - 'tests/map-filter-enabled-native.test.mjs'
       - 'tests/map-save-conflict-preservation.test.mjs'
       - 'tests/browser/map-data-localization.spec.ts'
       - 'tests/project-pages-contract.test.mjs'
+      - 'tests/project-thumbnail*.test.mjs'
+      - 'tests/project-preview*.test.mjs'
+      - 'tests/helpers/project-thumbnail-preservation.mjs'
       - 'tests/projects-scrollbars.test.mjs'
       - 'tests/browser/project-pages.spec.ts'
       - 'playwright.project-pages.config.ts'
@@ -58,12 +71,12 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --experimental-strip-types --test tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/map-panel-hints.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
+          node --experimental-strip-types --test tests/map-error-notice.test.mjs tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/map-panel-hints.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
-          tests/project-preview-lifecycle.test.mjs tests/project-metadata-api.test.mjs
+          tests/project-preview-lifecycle.test.mjs tests/project-thumbnail-serving.test.mjs tests/project-metadata-api.test.mjs
           tests/project-route-semantics.test.mjs tests/projects-fallback-scope.test.mjs
-          tests/documents-visual-contract.test.mjs
+          tests/documents-visual-contract.test.mjs tests/maono-select-migration.test.mjs
       - name: Build application
         id: build
         env:
@@ -122,6 +135,8 @@ jobs:
             src/pages/Projects/projects-scrollbars.css
             tests/browser/project-pages.spec.ts
             tests/browser/platform-density-map.spec.ts
+            tests/browser/map-error-notice.spec.ts
+            tests/map-error-notice.test.mjs
             tests/browser/map-panel-minimal.spec.ts
             tests/browser/map-panel-hint-compatibility.spec.ts
             tests/browser/fixtures/map-panel-minimal.ts

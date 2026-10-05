@@ -70,6 +70,19 @@ test("UNKNOWN tenta a imagem canônica sobre fundo neutro", () => {
   );
 });
 
+test("falha de imagem UNKNOWN não afirma que o projeto não tem prévia", () => {
+  // <img onError> cannot distinguish 401/403/404/5xx, a network failure,
+  // or invalid image bytes. Only authoritative MISSING means no preview.
+  assert.equal(
+    resolve({ status: "UNKNOWN", imageError: true }),
+    "failed-neutral",
+  );
+  assert.equal(
+    resolve({ status: "UNKNOWN", currentUrl: null }),
+    "failed-neutral",
+  );
+});
+
 test("MISSING sempre usa estado neutro", () => {
   assert.equal(
     resolve({

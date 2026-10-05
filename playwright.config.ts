@@ -5,7 +5,7 @@ export default defineConfig({
   // This new route suite owns a compiled-preview, three-engine gate. Running it
   // against Vite dev can reload /projects while Kepler dependencies reoptimize.
   // All preexisting loading/reliability suites remain in this development gate.
-  testIgnore: ["**/ticket-center-visual.spec.ts", "**/login-redesign.spec.ts", "**/project-pages.spec.ts", "**/platform-density-map.spec.ts", "**/map-add-data-sidebar.spec.ts", "**/map-data-localization.spec.ts", "**/map-sidebar-scrollbars.spec.ts", "**/map-panel-minimal.spec.ts", "**/map-panel-hint-compatibility.spec.ts"],
+  testIgnore: ["**/admin-progressive-loading.spec.ts", "**/projects-progressive-loading.spec.ts", "**/roadmap-progressive-loading.spec.ts", "**/ticket-documents-progressive-loading.spec.ts", "**/ticket-optional-progressive-loading.spec.ts", "**/projects-section-loading.spec.ts", "**/map-error-notice.spec.ts", "**/users-access-workspace.spec.ts", "**/platform-selectors.spec.ts", "**/roadmap-workspace.spec.ts", "**/ticket-view-selector.spec.ts", "**/maono-select.spec.ts", "**/ticket-center-visual.spec.ts", "**/login-redesign.spec.ts", "**/project-pages.spec.ts", "**/platform-density-map.spec.ts", "**/map-add-data-sidebar.spec.ts", "**/map-data-localization.spec.ts", "**/map-sidebar-scrollbars.spec.ts", "**/map-panel-minimal.spec.ts", "**/map-panel-hint-compatibility.spec.ts"],
   timeout: 30_000,
   expect: {
     timeout: 7_500,

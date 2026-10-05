@@ -437,7 +437,9 @@ test("Projects mantém consulta e abre a delegação por usuário elegível", as
   assert.match(overviewSource, /governance\?\.mode === "organization"/);
   assert.match(overviewSource, /governance\.canManageAdditionalAccesses/);
   assert.doesNotMatch(overviewSource, /!hasAdminPanelAccess/);
-  assert.match(overviewSource, /people-manage-button/);
+  assert.match(overviewSource, /DocumentActionMenu/);
+  assert.ok(overviewSource.includes('...(manageMap ? [{ label: "Mapa", onSelect: () => setMapAccessTargetUserId(person.id) }] : [])'));
+  assert.ok(overviewSource.includes('...(manageAdditional ? [{ label: "Gerenciar", onSelect: () => setManagementTargetUserId(person.id) }] : [])'));
   assert.match(overviewSource, /canManagePerson\(person\)/);
   assert.match(overviewSource, /managementTargetUserId !== null/);
   assert.match(

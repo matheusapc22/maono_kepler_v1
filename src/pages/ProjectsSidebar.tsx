@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router";
+import { StaticLoadingText, useInitialLoadingPresentation } from "../components/loading";
 
 import {
   can,
@@ -35,7 +36,8 @@ type ProjectsSidebarProps = {
   organizations: MaonoOrganization[];
   switchingOrganization: boolean;
   organizationSwitchError: string | null;
-  activeProjectsCount: number;
+  activeProjectsCount: number | null;
+  projectsUnavailable?: boolean;
   searchQuery: string;
   sidebarSection: ProjectSidebarSection;
   onSearchQueryChange: (value: string) => void;
@@ -55,7 +57,7 @@ type SidebarItem = {
   key?: ProjectSidebarSection;
   label: string;
   icon: React.ReactNode;
-  count?: number;
+  count?: number | null;
   href?: string;
   permission?: Permission;
 };
@@ -277,7 +279,7 @@ function canShowItem(
   return can(user as AccessControlUser, item.permission, context);
 }
 
-function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
+function createSidebarGroups(activeProjectsCount: number | null): SidebarGroup[] {
   return [
     {
       title: "Projetos",
@@ -369,26 +371,32 @@ function createSidebarGroups(activeProjectsCount: number): SidebarGroup[] {
 function SectionTitle({
   children,
   expanded,
+  structurePending,
 }: {
-  children: React.ReactNode;
+  children: string;
   expanded: boolean;
+  structurePending: boolean;
 }) {
   if (!expanded) {
     return <div className="mm-sidebar-divider" aria-hidden="true" />;
   }
 
-  return <div className="mm-sidebar-title">{children}</div>;
+  return <div className="mm-sidebar-title"><StaticLoadingText pending={structurePending}>{children}</StaticLoadingText></div>;
 }
 
 function ItemButton({
   item,
   active,
   expanded,
+  structurePending,
+  contentPending,
   onClick,
 }: {
   item: SidebarItem;
   active?: boolean;
   expanded: boolean;
+  structurePending: boolean;
+  contentPending: boolean;
   onClick?: () => void;
 }) {
   const className = active ? "mm-sidebar-item active" : "mm-sidebar-item";
@@ -399,10 +407,12 @@ function ItemButton({
         {item.icon}
       </span>
 
-      <span className="mm-sidebar-label">{item.label}</span>
+      <span className="mm-sidebar-label"><StaticLoadingText pending={structurePending}>{item.label}</StaticLoadingText></span>
 
       {typeof item.count === "number" ? (
-        <span className="mm-sidebar-count">{item.count}</span>
+        <span className="mm-sidebar-count"><StaticLoadingText pending={contentPending}>{item.count}</StaticLoadingText></span>
+      ) : item.count === null ? (
+        <span className="mm-sidebar-count" aria-label="Contagem de projetos indisponível">—</span>
       ) : null}
     </>
   );
@@ -442,6 +452,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
   switchingOrganization,
   organizationSwitchError,
   activeProjectsCount,
+  projectsUnavailable = false,
   searchQuery,
   sidebarSection,
   onSearchQueryChange,
@@ -451,6 +462,11 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
   onLogout,
 }) => {
   const [expanded, setExpanded] = useState(true);
+  const { structurePending, contentPending } = useInitialLoadingPresentation({
+    pending: activeProjectsCount === null, hasData: activeProjectsCount !== null,
+    scopeKey: JSON.stringify([user?.id, activeOrganization?.id]),
+    cancelled: !user || !activeOrganization, failed: projectsUnavailable,
+  });
   const roleLabel = user?.role?.trim() ? normalizeRoleLabel(user.role) : "";
   const userName = user?.name || "Usuário Maõno";
   const userIdentity = roleLabel ? `${userName} - ${roleLabel}` : userName;
@@ -512,8 +528,8 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
             </div>
 
             <div className="mm-sidebar-user-copy">
-              <strong title={userIdentity}>{userIdentity}</strong>
-              <span title={user?.email}>{user?.email}</span>
+              <strong title={userIdentity}><StaticLoadingText pending={structurePending}>{userIdentity}</StaticLoadingText></strong>
+              <span title={user?.email}><StaticLoadingText pending={structurePending}>{user?.email || ""}</StaticLoadingText></span>
             </div>
           </div>
         ) : null}
@@ -544,7 +560,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
       <nav className="mm-sidebar-nav" aria-label="Navegação da área de projetos">
         {groups.map((group) => (
           <div key={group.title} className="mm-sidebar-group">
-            <SectionTitle expanded={expanded}>{group.title}</SectionTitle>
+            <SectionTitle expanded={expanded} structurePending={structurePending}>{group.title}</SectionTitle>
 
             <div className="mm-sidebar-items">
               {group.items.map((item) => {
@@ -554,6 +570,8 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
                   <ItemButton
                     key={item.href || section || item.label}
                     item={item}
+                    structurePending={structurePending}
+                    contentPending={contentPending}
                     expanded={expanded}
                     active={section === sidebarSection}
                     onClick={
@@ -571,7 +589,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
 
       <footer className="mm-sidebar-footer">
         {expanded ? (
-          <strong className="mm-sidebar-footer-brand">Maõno Maps</strong>
+          <strong className="mm-sidebar-footer-brand"><StaticLoadingText pending={structurePending}>Maõno Maps</StaticLoadingText></strong>
         ) : null}
 
         <button
@@ -598,7 +616,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <path d="m16 17 5-5-5-5M21 12H9" />
           </svg>
-          <span className="mm-sidebar-label">Sair</span>
+          <span className="mm-sidebar-label"><StaticLoadingText pending={structurePending}>Sair</StaticLoadingText></span>
         </button>
       </footer>
     </aside>
