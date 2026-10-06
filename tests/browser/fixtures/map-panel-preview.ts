@@ -77,19 +77,27 @@ export async function installPanelPreview(page: Page, input: {
       if (gate) await gate;
       expect(request.headers()['content-type']).toBe('image/png');
       const bytes = request.postDataBuffer()!;
-      const verified = await validatePreviewPng(bytes);
+      let verified;
+      try { verified = await validatePreviewPng(bytes); }
+      catch (error: any) {
+        operation.state = 'FAILED_FINAL';
+        return route.fulfill({ status: Number(error.status || 422), json: { ok: false, error: { code: error.code } } });
+      }
       expect(verified.width).toBe(960); expect(verified.height).toBe(540);
       expect(verified.sizeBytes).toBe(operation.manifest.sizeBytes);
       expect(verified.imageChecksum).toBe(operation.manifest.imageChecksum);
       if (superseded()) { operation.state = 'SUPERSEDED'; return route.fulfill({ status: 409, json: publicOperation(operation) }); }
-      const receipt = { ...operation.manifest, artifactId: `synthetic:${operation.manifest.operationId}` };
+      const receipt = { ...operation.manifest, artifactId: `synthetic:${operation.manifest.operationId}`, committedAt: new Date().toISOString() };
       operation.state = 'READY'; operation.receipt = receipt;
       uploads.push({ manifest: operation.manifest, bytes, receipt });
       return route.fulfill({ json: publicOperation(operation) });
     }
     if (method === 'GET' && url.pathname === root) {
       const uploaded = uploads.find(value => value.receipt.artifactId === url.searchParams.get('artifactId'));
-      return uploaded ? route.fulfill({ contentType: 'image/png', body: uploaded.bytes }) : route.fulfill({ status: 404 });
+      return uploaded ? route.fulfill({ contentType: 'image/png', body: uploaded.bytes, headers: {
+        'X-Maono-Thumbnail-Revision': String(uploaded.receipt.revision), 'X-Maono-Thumbnail-Artifact': uploaded.receipt.artifactId,
+        ETag: `"png-${uploaded.receipt.imageChecksum}"`, 'Cache-Control': 'private, no-cache', Vary: 'Cookie, Authorization',
+      } }) : route.fulfill({ status: 404 });
     }
     throw new Error(`Unexpected preview fixture request: ${method} ${url.pathname}`);
   });

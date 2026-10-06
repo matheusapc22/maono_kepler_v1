@@ -1,0 +1,54 @@
+name: Acceptance PNG local validation
+on:
+  pull_request:
+    paths:
+      - 'scripts/acceptance/**'
+      - 'tests/production-acceptance-operator*.test.mjs'
+      - 'tests/browser/production-acceptance-preview.spec.ts'
+      - 'tests/browser/fixtures/map-panel-minimal.ts'
+      - 'tests/browser/fixtures/map-panel-preview.ts'
+      - 'tests/browser/fixtures/local-http-route.ts'
+      - 'tests/browser/fixtures/map-fidelity-style.json'
+      - 'tests/helpers/local-browser-url.mjs'
+      - 'src/pages/Kepler/**'
+      - 'functions/_lib/project-preview*.js'
+      - 'functions/_lib/project-save*.js'
+      - 'functions/_lib/project-config-stream-validator.js'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'playwright.production-acceptance.config.ts'
+      - '.github/workflows/acceptance-preview-validation.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: node --test tests/production-acceptance-operator*.test.mjs
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Build synthetic local browser target
+        env:
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+          VITE_PROJECT_PREVIEW_OPERATIONS_V1: 'true'
+          VITE_ASYNC_PROJECT_THUMBNAIL: 'true'
+          VITE_POINT_CLUSTERING_V1: 'true'
+        run: npm run build
+      - name: Test acceptance assertions against synthetic local accounts and HTTP storage
+        run: npx playwright test --config=playwright.production-acceptance.config.ts
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: acceptance-preview-local-only
+          path: test-results/production-acceptance-local/
+          if-no-files-found: ignore

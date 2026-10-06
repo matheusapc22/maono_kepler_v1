@@ -135,7 +135,9 @@ export async function installLocalHttpRoute(
           // cancellation. Preserve that work for the next receipt/status query;
           // never manufacture a successful response for the cancelled fetch.
           if (response.destroyed || response.writableEnded) return;
-          response.writeHead(options.status ?? 200, { ...outputHeaders, ...corsHeaders(entry.origin) });
+          response.writeHead(options.status ?? 200, { ...outputHeaders, ...corsHeaders(entry.origin),
+            vary: [outputHeaders.vary, "Origin"].filter(Boolean).join(", "),
+          });
           response.end(outputBody);
         },
       });
