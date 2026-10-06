@@ -1,0 +1,6 @@
+{
+  "name": "maono-project-save-worker-toolchain",
+  "private": true,
+  "type": "module",
+  "dependencies": { "wrangler": "4.139.0" }
+}
