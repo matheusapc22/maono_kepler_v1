@@ -76,7 +76,7 @@ export async function withBrowserDeadline(owner, timeoutMs, perform) {
 
 export async function run(ctx) {
   const body = await readFile(new URL('../fixtures/preview-points.kepler.json', import.meta.url), 'utf8');
-  let owner = null;
+  let owner = null, checkGuard = null;
   const seeded = await createSyntheticProjectForPreview(ctx, body, { beforeCleanup: async () => {
     if (owner) await owner.close();
     check(!owner || owner.closed, 'Cleanup bloqueado: navegador ainda pode escrever.', 'PNG_BROWSER_CLOSURE_UNVERIFIED');
@@ -98,26 +98,29 @@ export async function run(ctx) {
     const rawCookie = ctx.profiles.creator.cookie, separator = rawCookie.indexOf('=');
     await context.addCookies([{ name: rawCookie.slice(0, separator), value: rawCookie.slice(separator + 1), url: ctx.baseUrl, httpOnly: true, secure: true, sameSite: 'Lax' }]);
     const page = await context.newPage();
-    const checkGuard = await installBrowserWriteGuard(page, browserCtx, seeded.project);
-    const open = async () => {
-      await page.goto(`${ctx.baseUrl}/projects/${encodeURIComponent(seeded.project.slug)}/edit`, { waitUntil: 'domcontentloaded', timeout: ctx.requestTimeoutMs(60_000) });
-      await page.locator('.maono-map-runtime[data-map-ready="true"][data-map-loading="false"]').waitFor({ timeout: ctx.requestTimeoutMs(60_000) });
-      await page.locator('.maono-map-sidebar').getByRole('button', { name: 'Camadas', exact: true }).click();
-      await page.locator('#maono-map-engine-panel').getByRole('tab', { name: /^Camadas/ }).click();
-      check(await page.locator('#maono-map-engine-panel .maono-layer-row').count() === 1, 'Fixture carregada não possui sua camada sintética.');
-    };
-    await open();
-    const first = await saveAndCapture(page, browserCtx, seeded.project, 1);
-    ctx.record('PNG-CAPTURE', 'PASS', { revision: first.saved.publishedRevision, sizeBytes: first.image.sizeBytes, imageChecksum: first.image.imageChecksum,
-      width: first.image.width, height: first.image.height, captureMethod: first.preview.captureMethod,
-      renderer: 'Chromium headless / ANGLE SwiftShader', realEditor: true, realHttpStorage: true, mocks: false });
-    await open(); // Full navigation reconstructs the editor from persisted JSON.
-    const reloaded = await readPngEvidence(page, browserCtx, seeded.project, first.receipt);
-    check(reloaded.imageChecksum === first.image.imageChecksum, 'Refresh perdeu o PNG publicado.');
-    const second = await saveAndCapture(page, browserCtx, seeded.project, 2);
-    check(second.saved.publishedRevision === 3 && second.preview.editorSessionId !== first.preview.editorSessionId, 'Refresh não produziu nova sessão com revisão persistida.');
-    ctx.record('PNG-REFRESH', 'PASS', { persistedRevision: 2, nextRevision: 3, imageAfterReload: true, newEditorSession: true });
-    await verifyNegativePreviewCases(page, browserCtx, seeded.project, first, second);
-    checkGuard();
+    checkGuard = await installBrowserWriteGuard(page, browserCtx, seeded.project);
+    return checkGuard.run(async () => {
+      const open = async () => {
+        await page.goto(`${ctx.baseUrl}/projects/${encodeURIComponent(seeded.project.slug)}/edit`, { waitUntil: 'domcontentloaded', timeout: ctx.requestTimeoutMs(60_000) });
+        await page.locator('.maono-map-runtime[data-map-ready="true"][data-map-loading="false"]').waitFor({ timeout: ctx.requestTimeoutMs(60_000) });
+        await page.locator('.maono-map-sidebar').getByRole('button', { name: 'Camadas', exact: true }).click();
+        await page.locator('#maono-map-engine-panel').getByRole('tab', { name: /^Camadas/ }).click();
+        check(await page.locator('#maono-map-engine-panel .maono-layer-row').count() === 1, 'Fixture carregada não possui sua camada sintética.');
+      };
+      await open();
+      const first = await saveAndCapture(page, browserCtx, seeded.project, 1);
+      ctx.record('PNG-CAPTURE', 'PASS', { revision: first.saved.publishedRevision, sizeBytes: first.image.sizeBytes, imageChecksum: first.image.imageChecksum,
+        width: first.image.width, height: first.image.height, captureMethod: first.preview.captureMethod,
+        renderer: 'Chromium headless / ANGLE SwiftShader', realEditor: true, realHttpStorage: true, mocks: false });
+      await open(); // Full navigation reconstructs the editor from persisted JSON.
+      const reloaded = await readPngEvidence(page, browserCtx, seeded.project, first.receipt);
+      check(reloaded.imageChecksum === first.image.imageChecksum, 'Refresh perdeu o PNG publicado.');
+      const second = await saveAndCapture(page, browserCtx, seeded.project, 2);
+      check(second.saved.publishedRevision === 3 && second.preview.editorSessionId !== first.preview.editorSessionId, 'Refresh não produziu nova sessão com revisão persistida.');
+      ctx.record('PNG-REFRESH', 'PASS', { persistedRevision: 2, nextRevision: 3, imageAfterReload: true, newEditorSession: true });
+      await verifyNegativePreviewCases(page, browserCtx, seeded.project, first, second);
+      checkGuard();
+    });
   });
+  checkGuard?.();
 }

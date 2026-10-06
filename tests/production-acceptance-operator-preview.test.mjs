@@ -65,10 +65,14 @@ test('receipt evidence checks scope, revision, JSON bytes and every captured PNG
     assert.throws(() => verifySaveReceipt(bad, input, project, 9, body));
   }
   const png = { operationId: 'pv2:123456789', saveOperationId: saved.operationId, revision: 2, configChecksum: saved.checksum, organizationId: '9', projectId: '101',
-    editorSessionId: 'editor-123456789', editGeneration: 0, rendererVersion: 'maono-png-v2', captureMethod: 'canvas', imageChecksum: 'b'.repeat(64), sizeBytes: 100 };
+    editorSessionId: 'editor-123456789', editGeneration: 0, rendererVersion: 'maono-png-v2', captureMethod: 'canvas-composite', imageChecksum: 'b'.repeat(64), sizeBytes: 100 };
   const receipt = { ...png, artifactId: 'artifact-id', committedAt: saved.committedAt };
   assert.doesNotThrow(() => verifyPreviewReceipt(receipt, png, saved, project, 9));
   for (const key of Object.keys(png)) assert.throws(() => verifyPreviewReceipt({ ...receipt, [key]: null }, png, saved, project, 9));
+  assert.doesNotThrow(() => verifyPreviewReceipt({ ...receipt, captureMethod: 'html2canvas' }, { ...png, captureMethod: 'html2canvas' }, saved, project, 9));
+  for (const captureMethod of ['generated-technical-preview', 'canvas', '', null]) {
+    assert.throws(() => verifyPreviewReceipt({ ...receipt, captureMethod }, { ...png, captureMethod }, saved, project, 9));
+  }
 });
 
 test('browser owner closes exactly once on success and failure and cannot consume closure reserve indefinitely', async () => {

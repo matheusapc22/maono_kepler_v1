@@ -17,6 +17,7 @@ on:
       - 'package.json'
       - 'yarn.lock'
       - 'playwright.production-acceptance.config.ts'
+      - 'playwright.config.ts'
       - '.github/workflows/acceptance-preview-validation.yml'
 permissions:
   contents: read

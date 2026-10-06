@@ -28,6 +28,8 @@ O operador de implantação do Worker é uma PR independente; Pages não o cria.
    PUBLISHED, incluindo projeto, organização, revisão, tamanho e content hash.
 6. Confere manifesto/recibo READY da prévia contra o recibo JSON, sessão e geração
    do editor, versão de renderizador, checksum e tamanho dos bytes PNG enviados.
+   Exige método fiel `canvas-composite` ou `html2canvas`; uma imagem técnica
+   degradada nunca conta como captura fiel, mesmo se tiver pixels coloridos.
 7. Faz GET autenticado da imagem por artefato imutável, com limite de 4 MiB;
    exige SHA-256 idêntico, decode real 960 × 540, pixels não vazios e a cor da
    camada sintética. Confere artifactId, revisão, ETag e cache privado.
@@ -102,6 +104,18 @@ de um limite externo de 45 segundos.
 Se não puder confirmar que o navegador fechou, não executa DELETE da fixture e
 marca cleanup como não comprovado; restauração de flags ainda é tentada.
 
+Callbacks de observação e roteamento do navegador nunca propagam exceções fora
+da Promise supervisionada da suite. JSON/URI/corpo não verificável, falha de
+fallback ou abort geram somente um código e mensagem fixos; texto bruto de
+parser, URL ou payload não entra no relatório. Falhas conhecidas durante o
+fechamento são tratadas sem rejeição não supervisionada. Os testes de processo
+Node isolado verificam que catch/finally continuam executando, e o teste do
+operador verifica cleanup e restauração das cinco flags após a falha.
+
+A evidência de cache exige tokens exatos `private`, `no-cache`, `Cookie` e
+`Authorization`, e rejeita `public` conflitante ou nomes que apenas contêm esses
+textos. Um cabeçalho parecido não constitui prova de cache privado.
+
 O operador completo mantém 190 minutos internos, passo 192 e job 210. Cleanup,
 restauração e relatório têm reservas próprias. O bootstrap #227 valida esse
 contrato antes dos secrets. Cancelamento forçado/perda do runner pode impedir
@@ -129,7 +143,9 @@ com flags locais e exercita as mesmas asserções com React/Kepler, Chromium e
 bytes PNG reais, mas contas/serviço/storage HTTP sintéticos. Não usa secrets,
 Environment de produção, dispatch ou writes remotos. Os testes SQLite existentes
 verificam as transações e rejeições do backend. Isso prova o código do acceptance,
-não a disponibilidade do D1/Dropbox/contas reais.
+não a disponibilidade do D1/Dropbox/contas reais. A spec de acceptance só entra
+no gate compilado `playwright.production-acceptance.config.ts`, porta 4187; ela é
+excluída explicitamente do gate Vite dev padrão, cujos testes existentes permanecem.
 
 A futura execução protegida cobre o Chromium headless em ANGLE/SwiftShader.
 Ela não comprova hardware físico, Safari/Firefox reais, SLO de latência, queda
