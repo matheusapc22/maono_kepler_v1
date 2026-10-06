@@ -32,6 +32,13 @@ new bytes are sent. Different attempts cannot overwrite each other's object.
 
 Only explicit save snapshots are persisted, with account + organization + project
 scope, exact Blob bytes, versioned manifest, operation ID and edit generation.
+When a browser rejects native Blob persistence, the same IndexedDB store uses a
+versioned ArrayBuffer encoding and reconstructs the exact Blob on read. Existing
+Blob records remain readable. Only the known native Blob preparation/cloning
+failures permit this encoding change; quota, corruption and transaction failures
+still block transmission. A save is locally accepted only after the transaction
+commits. Expiry purges both payload bytes and creation metadata; a later verified
+server receipt can still confirm an expired local attempt without restoring bytes.
 No cookie/token is stored. Later edits are not autosaved and are not guaranteed to
 survive closing the tab. A late receipt cannot remount the editor or mark newer
 edits saved. Recovery queries status before deciding whether upload is needed.

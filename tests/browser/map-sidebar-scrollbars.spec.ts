@@ -1,3 +1,4 @@
+import { isLocalBrowserBlob } from '../helpers/local-browser-url.mjs';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
@@ -51,6 +52,7 @@ async function openMap(page: Page) {
     if (url.href.includes('svg-icons.json')) return route.fulfill({ json: { svgIcons: [] } });
     if ((url.hostname === 'basemaps.cartocdn.com' && /^\/gl\/[^/]+\/style\.json$/.test(url.pathname)) ||
         (url.hostname === 'api.mapbox.com' && /^\/styles\/v1\//.test(url.pathname))) return route.fulfill({ json: style });
+    if (isLocalBrowserBlob(url, page.url())) return route.continue();
     if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
     return route.continue();
   });

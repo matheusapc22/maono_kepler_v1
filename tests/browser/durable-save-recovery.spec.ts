@@ -1,3 +1,4 @@
+import { installLocalHttpRoute } from './fixtures/local-http-route';
 import { expect, test } from "@playwright/test";
 const harness = "/tests/browser/fixtures/durable-save.html";
 const controllerPath = "/src/pages/Kepler/durable-save-controller.ts";
@@ -17,7 +18,7 @@ function receipt(value: any) { return { operationId: value.manifest.operationId,
 test("IndexedDB survives reload; historical receipt at N+2 prevents upload and purges bytes", async ({ page }) => {
   await page.goto(harness); const value = await prepare(page); await page.reload();
   const calls: string[] = [];
-  await page.route("**/api/projects/demo/save-operations/**", async route => { calls.push(route.request().method()); await route.fulfill({ json: { ok: true, operation: { state: "PUBLISHED", receipt: receipt(value), currentRevision: 9 } } }); });
+  await installLocalHttpRoute(page, "**/api/projects/demo/save-operations/**", async route => { calls.push(route.request().method()); await route.fulfill({ json: { ok: true, operation: { state: "PUBLISHED", receipt: receipt(value), currentRevision: 9 } } }); });
   const result = await page.evaluate(async ({ controllerPath, key }: any) => {
     const { defaultDurableSaveStore, executePreparedProjectUpdate } = await import(/* @vite-ignore */ controllerPath);
     const snapshot = await defaultDurableSaveStore.get(key);
@@ -30,7 +31,7 @@ test("IndexedDB survives reload; historical receipt at N+2 prevents upload and p
 test("large payload and reconstructed serializable headers are byte-identical after reload", async ({ page }) => {
   await page.goto(harness); const value = await prepare(page, 8 * 1024 * 1024 + 17); await page.reload();
   const calls: string[] = []; let bytes: Buffer | null = null; let headers: any;
-  await page.route("**/api/projects/demo/save-operations/**", async route => {
+  await installLocalHttpRoute(page, "**/api/projects/demo/save-operations/**", async route => {
     const request = route.request(); calls.push(request.method());
     if (request.method() === "GET") await route.fulfill({ json: { ok: true, operation: { state: "AWAITING_UPLOAD", nextAction: "UPLOAD" } } });
     else { bytes = request.postDataBuffer(); headers = request.headers(); await route.fulfill({ json: { ok: true, operation: { state: "PUBLISHED", receipt: receipt(value), currentRevision: 8 } } }); }
@@ -53,7 +54,7 @@ test("offline interruption preserves bytes and online retry queries status first
   }, { controllerPath, key: value.key });
   expect(failure).toBe(true); await context.setOffline(false); await page.reload();
   const calls: string[] = [];
-  await page.route("**/api/projects/demo/save-operations/**", async route => { calls.push(`${route.request().method()}:${route.request().headers()["x-maono-save-id"]}`); await route.fulfill({ json: { ok: true, operation: { state: "PUBLISHED", receipt: receipt(value), currentRevision: 8 } } }); });
+  await installLocalHttpRoute(page, "**/api/projects/demo/save-operations/**", async route => { calls.push(`${route.request().method()}:${route.request().headers()["x-maono-save-id"]}`); await route.fulfill({ json: { ok: true, operation: { state: "PUBLISHED", receipt: receipt(value), currentRevision: 8 } } }); });
   await page.evaluate(async ({ controllerPath, key }: any) => { const { defaultDurableSaveStore, executePreparedProjectUpdate } = await import(/* @vite-ignore */ controllerPath); await executePreparedProjectUpdate({ snapshot: await defaultDurableSaveStore.get(key) }); }, { controllerPath, key: value.key });
   expect(calls).toEqual([`GET:${value.manifest.operationId}`]);
 });
@@ -87,7 +88,7 @@ for (const edit of [false, true]) test(`mounted Save button preserves late draft
   const canReply = new Promise<void>(resolve => { release = resolve; });
   const manifests: any[] = []; const uploads: string[] = [];
   let payloadEntered = false;
-  await page.route(/\/api\/projects\/demo\/save-operations/, async route => {
+  await installLocalHttpRoute(page, /\/api\/projects\/demo\/save-operations/, async route => {
     const request = route.request();
     if (request.method() === "GET") { await route.fulfill({ status: 404, json: { ok: false } }); return; }
     if (request.method() === "POST") { manifests.push(JSON.parse(request.postData()!)); await route.fulfill({ json: { ok: true, operation: { state: "AWAITING_UPLOAD" } } }); return; }
@@ -116,12 +117,12 @@ test("mounted account switch hides original snapshot; login recovers status with
   const canReply = new Promise<void>(resolve => { release = resolve; });
   let manifest: any = null; let uploaded = false; let published = false; const methods: string[] = [];
   const publishedBody = () => ({ ok: true, operation: { state: "PUBLISHED", receipt: { operationId: manifest.operationId, organizationId: 9, projectId: 12, baseRevision: 7, publishedRevision: 8, checksum: manifest.contentHash, checksumAlgorithm: "dropbox-content-hash", sizeBytes: manifest.payloadBytes }, currentRevision: 8 } });
-  await page.route(/\/api\/projects\/demo\/save-operations/, async route => {
+  await installLocalHttpRoute(page, /\/api\/projects\/demo\/save-operations/, async route => {
     const request = route.request(); methods.push(request.method());
     if (request.method() === "GET") { await route.fulfill(published ? { json: publishedBody() } : { status: 404, json: { ok: false } }); return; }
     if (request.method() === "POST") { manifest = JSON.parse(request.postData()!); await route.fulfill({ json: { ok: true, operation: { state: "AWAITING_UPLOAD" } } }); return; }
     uploaded = true; await canReply; published = true;
-    await route.fulfill({ json: publishedBody() }).catch(() => {});
+    await route.fulfill({ json: publishedBody() });
   });
   await mountSaveButton(page);
   await page.getByRole("button", { name: "Salvar na Maõno", exact: true }).click();

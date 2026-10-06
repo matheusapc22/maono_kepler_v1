@@ -476,7 +476,7 @@ test('empty create panel has persistent search, project-layer count and only Sav
   await expect(panel(page).getByRole('button', { name: 'Adicionar camada', exact: true })).toBeVisible();
   const footer = panel(page).locator('.maono-layer-panel__save-footer');
   await expect(footer.getByRole('button')).toHaveCount(1);
-  await expect(footer.getByRole('button')).toHaveText('Salvar mapa');
+  await expect(footer.getByRole('button')).toHaveText('Salvar como projeto');
   await visualEvidence(page, testInfo, 'minimal-empty-layers');
   await openFilters(page);
   await expect(panel(page).locator('.maono-layer-panel__header')).toContainText('0 camadas');
@@ -1114,7 +1114,9 @@ test('stopping the wait preserves the received operation and later edits while p
   // Receipt recovery must not silently rebase these newer edits.
   await save.click();
   await expect.poll(() => fixture.saves.length).toBe(2);
-  await expect(panel(page).locator('.maono-layer-panel__save-message[role=alert]')).toBeVisible();
+  await expect(panel(page).getByRole('button', { name: 'Arquivar tentativa revisada e liberar novos salvamentos', exact: true })).toBeVisible();
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText(/mudou|precisa de revisão/);
+  expect(fixture.operationState(fixture.manifests[1].operationId)).toBe('CONFLICT');
   expect(fixture.manifests[1].expectedConfigRevision).toBe(1);
   expect(fixture.revision).toBe(2);
   expect(fixture.unexpectedWrites).toEqual([]);

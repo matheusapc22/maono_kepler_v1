@@ -49,6 +49,15 @@ export type DurableSaveSnapshot = {
   /** Kept until a lost reservation response is recovered using its original key. */
   creation?: { requestBody: string | null; idempotencyKey: string };
 };
+// This encoding is local to IndexedDB. The controller still receives the original
+// Blob, and the manifest, request headers and server serialization stay unchanged.
+type StoredSaveSnapshot = Omit<DurableSaveSnapshot, "serialized"> & {
+  serialized: Omit<DurableSaveSnapshot["serialized"], "body"> & {
+    body: Blob | ArrayBuffer | null;
+    bodyEncoding?: "arraybuffer-v1";
+    bodyType?: string;
+  };
+};
 export function snapshotMatchesProject(snapshot: DurableSaveSnapshot, actorId: string, organizationId: string, projectSlug: string, projectId: string) {
   return snapshot.scope.actorId === actorId && snapshot.scope.organizationId === organizationId && snapshot.projectSlug === projectSlug && Boolean(projectId) && snapshot.scope.projectId === projectId;
 }
@@ -105,6 +114,8 @@ export function validateLocalSnapshot(value: DurableSaveSnapshot) {
     value.manifest.checksumAlgorithm !== "dropbox-content-hash" || !/^[a-f0-9]{64}$/.test(value.manifest.contentHash) ||
     value.manifest.expectedConfigRevision !== value.expectedConfigRevision ||
     (value.scope.projectId && value.manifest.operation !== "change_request" && value.headers["X-Maono-Project-Id"] !== value.scope.projectId) ||
+    (value.serialized.body !== null && !(value.serialized.body instanceof Blob)) ||
+    value.serialized.payloadBytes !== value.manifest.payloadBytes ||
     (value.serialized.body && value.serialized.body.size !== value.manifest.payloadBytes)) {
     throw new LocalSaveStorageError("LOCAL_SAVE_CORRUPTED");
   }
@@ -125,10 +136,36 @@ export function mergeLocalSaveSnapshot(existing: DurableSaveSnapshot | undefined
     ...(existing.resolvedAt ? { resolvedAt: existing.resolvedAt } : {}),
   };
   if (existing.localState === "confirmed") return { ...result, localState: "confirmed" as const, receipt: existing.receipt, creation: existing.creation ? { ...existing.creation, requestBody: null } : undefined, serialized: { ...incoming.serialized, body: null } };
-  if (existing.localState === "expired") return { ...result, serialized: { ...incoming.serialized, body: null } };
+  if (existing.localState === "expired") return { ...result, localState: incoming.localState === "confirmed" ? "confirmed" as const : "expired" as const, creation: existing.creation ? { ...existing.creation, requestBody: null } : undefined, serialized: { ...incoming.serialized, body: null } };
   return result;
 }
+function readStoredSnapshot(value: StoredSaveSnapshot): DurableSaveSnapshot {
+  try {
+    const { body, bodyEncoding, bodyType, ...serialized } = value.serialized;
+    if (bodyEncoding === undefined) return validateLocalSnapshot(value as DurableSaveSnapshot);
+    if (bodyEncoding !== "arraybuffer-v1" || typeof bodyType !== "string" || (body !== null && !(body instanceof ArrayBuffer))) {
+      throw new LocalSaveStorageError("LOCAL_SAVE_CORRUPTED");
+    }
+    return validateLocalSnapshot({ ...value, serialized: { ...serialized, body: body === null ? null : new Blob([body], { type: bodyType }) } });
+  } catch (error) {
+    throw error instanceof LocalSaveStorageError ? error : new LocalSaveStorageError("LOCAL_SAVE_CORRUPTED", error);
+  }
+}
+function purgeSnapshotPayload<T extends StoredSaveSnapshot>(value: T): T {
+  return { ...value, localState: value.localState === "confirmed" ? "confirmed" : "expired",
+    creation: value.creation ? { ...value.creation, requestBody: null } : undefined,
+    serialized: { ...value.serialized, body: null },
+  };
+}
+function isBlobStorageFailure(error: unknown) {
+  const cause = error instanceof LocalSaveStorageError ? error.cause : error;
+  const { name, message } = (cause ?? {}) as { name?: string; message?: string };
+  if (/corrupt|quota/i.test(message ?? "")) return false;
+  return (name === "UnknownError" && /\bpreparing blob(?:\/file)? data\b/i.test(message ?? "")) ||
+    (name === "DataCloneError" && /\bblob\b/i.test(message ?? ""));
+}
 export function createIndexedDbSaveStore(indexedDb: IDBFactory | undefined = globalThis.indexedDB): DurableSaveStore {
+  let useByteEncoding = false;
   async function open() {
     if (!indexedDb) throw new LocalSaveStorageError("LOCAL_SAVE_STORAGE_UNAVAILABLE");
     return new Promise<IDBDatabase>((resolve, reject) => {
@@ -148,8 +185,8 @@ export function createIndexedDbSaveStore(indexedDb: IDBFactory | undefined = glo
         cursor.onsuccess = () => {
           const row = cursor.result;
           if (!row) return;
-          const value = row.value as DurableSaveSnapshot;
-          if (value.serialized?.body) row.update({ ...value, localState: value.localState === "confirmed" ? "confirmed" : "expired", serialized: { ...value.serialized, body: null } });
+          const value = row.value as StoredSaveSnapshot;
+          if (value.serialized?.body || value.creation?.requestBody) row.update(purgeSnapshotPayload(value));
           row.continue();
         };
         tx.oncomplete = () => resolve(db);
@@ -170,38 +207,69 @@ export function createIndexedDbSaveStore(indexedDb: IDBFactory | undefined = glo
       });
     } catch (error) { throw storageError(error); } finally { db.close(); }
   }
-  async function expire(values: DurableSaveSnapshot[]) {
-    for (const value of values) {
-      validateLocalSnapshot(value);
-      if (value.expiresAt <= Date.now() && value.serialized.body) {
-        value.serialized.body = null;
-        if (value.localState !== "confirmed") value.localState = "expired";
-        await transaction("readwrite", store => store.put(value));
-      }
-    }
-    return values.sort((a, b) => a.createdAt - b.createdAt);
-  }
-  return {
-    async put(value) {
-      validateLocalSnapshot(value);
-      const db = await open();
-      try {
-        await new Promise<void>((resolve, reject) => {
+  async function write(value: DurableSaveSnapshot, bytes?: ArrayBuffer) {
+    const db = await open();
+    try {
+      return await new Promise<DurableSaveSnapshot>((resolve, reject) => {
           const tx = db.transaction(STORE, "readwrite");
           const store = tx.objectStore(STORE);
           const read = store.get(value.key);
           let failure: unknown;
+          let merged: DurableSaveSnapshot;
           read.onsuccess = () => {
-            try { store.put(mergeLocalSaveSnapshot(read.result, value)); }
+            try {
+              merged = mergeLocalSaveSnapshot(read.result ? readStoredSnapshot(read.result) : undefined, value);
+              if (merged.localState === "confirmed" || merged.localState === "expired" || merged.expiresAt <= Date.now()) merged = purgeSnapshotPayload(merged);
+              validateLocalSnapshot(merged);
+              const stored: StoredSaveSnapshot = bytes === undefined ? merged : { ...merged, serialized: {
+                ...merged.serialized, body: merged.serialized.body ? bytes : null,
+                bodyEncoding: "arraybuffer-v1", bodyType: merged.serialized.body?.type ?? "",
+              } };
+              const put = store.put(stored);
+              put.onerror = () => { failure = put.error; };
+            }
             catch (error) { failure = error; tx.abort(); }
           };
-          tx.oncomplete = () => resolve();
-          tx.onabort = tx.onerror = () => reject(storageError(failure || tx.error || read.error));
-        });
-      } catch (error) { throw storageError(error); } finally { db.close(); }
-    },
+          // Request errors precede tx.error in WebKit. Retain the native failure,
+          // and wait for abort before a retry or for commit before acknowledging.
+          tx.onerror = () => { failure ||= tx.error || read.error; };
+          tx.oncomplete = () => failure ? reject(storageError(failure)) : resolve(merged);
+          tx.onabort = () => reject(storageError(failure || tx.error || read.error));
+      });
+    } catch (error) { throw storageError(error); } finally { db.close(); }
+  }
+  async function putSnapshot(value: DurableSaveSnapshot) {
+    validateLocalSnapshot(value);
+    if (value.localState === "confirmed" || value.localState === "expired" || value.expiresAt <= Date.now()) value = purgeSnapshotPayload(value);
+    if (!useByteEncoding || !value.serialized.body) {
+      try { return await write(value); }
+      catch (error) {
+        if (!value.serialized.body || !isBlobStorageFailure(error)) throw error;
+      }
+    }
+    // Finish asynchronous Blob reading before opening a transaction. Awaiting it
+    // in an IndexedDB request callback lets WebKit make the transaction inactive.
+    try {
+      const bytes = await value.serialized.body!.arrayBuffer();
+      if (bytes.byteLength !== value.manifest.payloadBytes) throw new LocalSaveStorageError("LOCAL_SAVE_CORRUPTED");
+      const stored = await write(value, bytes);
+      useByteEncoding = true;
+      return stored;
+    } catch (error) { throw storageError(error); }
+  }
+  async function expire(values: StoredSaveSnapshot[]) {
+    const snapshots: DurableSaveSnapshot[] = [];
+    for (const stored of values) {
+      let value = readStoredSnapshot(stored);
+      if (value.expiresAt <= Date.now() && (value.serialized.body || value.creation?.requestBody)) value = await putSnapshot(value);
+      snapshots.push(value);
+    }
+    return snapshots.sort((a, b) => a.createdAt - b.createdAt);
+  }
+  return {
+    async put(value) { await putSnapshot(value); },
     async get(key) {
-      const value = await transaction<DurableSaveSnapshot | undefined>("readonly", store => store.get(key));
+      const value = await transaction<StoredSaveSnapshot | undefined>("readonly", store => store.get(key));
       return value ? (await expire([value]))[0] : null;
     },
     async list(scope) {

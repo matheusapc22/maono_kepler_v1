@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { restoreApprovedProjectsHeader } from './project-header-preservation.mjs';
 
 // Exact inverse of only the reviewed progressive-loading changes. Independently
 // pinned pre-change hashes below do not accept arbitrary selector/API changes.
@@ -737,6 +738,9 @@ const initialStageChanges = {
 };
 
 export function restoreAdminProjectsProgressiveLoading(path, source) {
+  // The later header-only change must be reversed before the initial-loading
+  // inverse looks for its original title/description markup. Older hashes stay pinned.
+  source = restoreApprovedProjectsHeader(path, source);
   for (const { before, after } of [...(initialStageChanges[path] || [])].reverse()) {
     assert.equal(source.split(after).length - 1, 1, `exact approved initial-presentation edit: ${path}`);
     source = source.replace(after, before);

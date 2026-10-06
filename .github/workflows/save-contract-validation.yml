@@ -70,8 +70,8 @@ jobs:
       - name: Durable operation SQL, HTTP, storage and browser-controller gates
         run: npm run test:durable-save
 
-      - name: Install Chromium for isolated recovery QA
-        run: npx playwright install --with-deps chromium
+      - name: Install browser engines for isolated recovery QA
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Real IndexedDB and mounted save-button recovery QA
         run: npm run test:durable-save-browser

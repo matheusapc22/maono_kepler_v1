@@ -97,9 +97,9 @@ const filters = overrides => ({ ...DEFAULT_PROJECT_FILTERS, ...overrides });
 test('exact approved copy and icons are shared by all three sections', () => {
   assert.deepEqual(Object.keys(PROJECT_PAGE_COPY), ['all', 'recent', 'favorites']);
   assert.deepEqual(Object.values(PROJECT_PAGE_COPY).map(item => [item.title, item.description, item.icon]), [
-    ['Todos os Projetos', 'Visualize e gerencie todos os seus projetos.', 'idea'],
-    ['Recentes', 'Veja os projetos acessados ou atualizados recentemente.', 'clock'],
-    ['Favoritos', 'Encontre rapidamente seus projetos favoritos.', 'star'],
+    ['Todos os Projetos', null, 'idea'],
+    ['Recentes', null, 'clock'],
+    ['Favoritos', null, 'star'],
   ]);
 });
 
@@ -184,9 +184,11 @@ test('native accessible controls, footer live count and new-map permission wirin
   const ui = read('src/pages/Projects/components/ProjectPagesUi.tsx');
   for (const token of ['aria-label="Caminho da página"', 'aria-label="Filtros de projetos"', 'Nome do projeto...', 'Todos os status', 'Mais recentes', 'Mais antigos', 'Limpar filtros', 'aria-label="Paginação dos projetos"', 'Itens por página', 'Exibindo {visibleCount}/{total}.', 'aria-current="page"', 'aria-live="polite"', 'canCreateMap ?', 'onClick={onNewMap}', 'to="/maps/new/create"', 'Novo Projeto']) assert.ok(ui.includes(token), token);
   const section = read('src/pages/Projects/components/ProjectsSection.tsx');
+  assert.ok(section.includes('{section === "all" ? <ProjectPageFiltersForm\n'));
   assert.ok(section.includes('filterAndSortProjects(')); assert.ok(section.includes('projectPage('));
   for (const token of ['prepareProjectMapDestination(', 'fetchProjectThumbnailStatus(', '<ProjectMetadataPanel', 'onFavoriteToggle={onFavoriteToggle}', 'visibleProjects.map(']) assert.ok(section.includes(token), token);
   const shell = read('src/pages/Projects.tsx');
+  assert.ok(shell.includes('key={`${activeOrganizationKey}:${sidebarSection}`}'), 'tab-local status and ordering reset when switching sections');
   for (const token of ['PERMISSION.PROJECT_CREATE', 'setProjectFavorite(', 'requestOrganizationKey !== activeOrganizationKeyRef.current']) assert.ok(shell.includes(token), token);
 });
 

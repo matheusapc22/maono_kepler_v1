@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { MAX_IMAGE_PIXELS, type PreviewErrorReason } from "../../../lib/document-preview";
@@ -15,6 +15,7 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
   const [rendering, setRendering] = useState(true);
   const [pageText, setPageText] = useState("");
   const [textUnavailable, setTextUnavailable] = useState(false);
+  const textId = useId();
   const [width, setWidth] = useState(640);
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,8 +106,8 @@ export default function DocumentPdfPreview({ blob, zoom, onError }: { blob: Blob
       <button type="button" disabled={!pdf || pageNumber >= pdf.numPages} onClick={() => setPageNumber(value => value + 1)} aria-label="Próxima página">Próxima</button>
     </div>
     {rendering ? <p className="mm-preview-rendering" role="status">Preparando página...</p> : null}
-    <div className="mm-preview-canvas-scroll" tabIndex={0} role="region" aria-label="Página do PDF, use as setas para rolar"><canvas ref={canvasRef} role="img" aria-label={`Página ${pageNumber} do documento PDF. Texto disponível abaixo quando presente.`} /></div>
-    {textUnavailable ? <p className="mm-preview-text-fallback" role="status">O texto desta página não está disponível. Você pode baixar o original.</p> : null}
-    {pageText ? <details className="mm-preview-page-text"><summary>Texto desta página</summary><p>{pageText}</p></details> : null}
+    <div className="mm-preview-canvas-scroll" tabIndex={0} role="region" aria-label="Página do PDF, use as setas para rolar"><canvas ref={canvasRef} role="img" aria-label={`Página ${pageNumber} do documento PDF.`} aria-describedby={pageText || textUnavailable ? textId : undefined} /></div>
+    {/* Keep the page readable to assistive technology without a visible text panel. */}
+    {pageText || textUnavailable ? <p id={textId} className="mm-preview-sr-only">{pageText || "O texto desta página não está disponível. Você pode baixar o original."}</p> : null}
   </div>;
 }
