@@ -1,3 +1,4 @@
+import { restoreApprovedPreviewPipeline } from "./helpers/project-thumbnail-preservation.mjs";
 import { restoreAdminProjectsProgressiveLoading } from "./helpers/admin-projects-progressive-preservation.mjs";
 import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
@@ -84,7 +85,7 @@ const preserved = {
 };
 for (const [path, hash] of Object.entries(preserved)) {
   test(`card/switcher revision preserves ${path}`, () => {
-    let source = restoreTicketVisualExtraction(path, restoreMaonoSelect(restoreAdminProjectsProgressiveLoading(path, read(path))));
+    let source = restoreTicketVisualExtraction(path, restoreMaonoSelect(restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, read(path)))));
     // The later Roadmap workspace redesign adds only the existing home callback.
     // Reverse exactly that prop in this scope guard; all controller bytes stay frozen.
     if (path === 'src/pages/Projects.tsx') {
@@ -125,7 +126,7 @@ for (const [path, hash] of Object.entries(preserved)) {
 }
 
 test('card preview lifecycle is unchanged by the new root interaction', () => {
-  const card = restoreAdminProjectsProgressiveLoading('src/pages/Projects/components/ProjectCard.tsx', read('src/pages/Projects/components/ProjectCard.tsx'));
+  const card = restoreAdminProjectsProgressiveLoading('src/pages/Projects/components/ProjectCard.tsx', restoreApprovedPreviewPipeline('src/pages/Projects/components/ProjectCard.tsx', read('src/pages/Projects/components/ProjectCard.tsx')));
   const preview = source => source.slice(source.indexOf('  const thumbnailStatus ='), source.includes('  const openProject =') ? source.indexOf('  const openProject =') : source.indexOf('  const cardClassName ='))
     .replace(/  const accessLevel = normalizeProjectAccessLevel\(project\.accessLevel\);\n  const isOwner = accessLevel === "owner";\n/, '');
   const expected = '5ff89d56f48d3354446a2caaee1e554b3afd23dd34588754f71dd38674c0b8b0';

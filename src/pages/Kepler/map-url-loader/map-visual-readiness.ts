@@ -1,3 +1,8 @@
+import type { PointClusterCaptureExpectation } from "../clustering/point-cluster-render-provenance.ts";
+import type { CaptureStyleExpectation, CaptureView } from "../thumbnail/capture-render-generation.ts";
+import { maonoDeckGenerationAcknowledgment, maonoCaptureStylesReady, maonoCaptureStyleRuntimes, maonoCaptureDeckRuntimes, captureCameraMatches } from "../thumbnail/capture-render-generation.ts";
+import { boundedCaptureWait, captureAnimationFrame, captureAbortError } from "../thumbnail/capture-waits.ts";
+
 import {
   collectionToArray,
   readValue,
@@ -20,12 +25,25 @@ type StoreLike = {
 
 type MapRuntimeLike = {
   isStyleLoaded?: () => boolean;
+  areTilesLoaded?: () => boolean;
+  isMoving?: () => boolean;
+  getCanvas?: () => HTMLCanvasElement;
+  getCenter?: () => { lng: number; lat: number };
+  getZoom?: () => number;
+  getPitch?: () => number;
+  getBearing?: () => number;
   triggerRepaint?: () => void;
   on?: (event: string, handler: () => void) => void;
   off?: (event: string, handler: () => void) => void;
 };
 
 type DeckRuntimeLike = {
+  props?: { layers?: unknown };
+  canvas?: HTMLCanvasElement;
+  gl?: { canvas?: HTMLCanvasElement; isContextLost?: () => boolean };
+  isInitialized?: boolean;
+  layerManager?: { getLayers?: () => { isLoaded?: boolean; props?: { visible?: boolean } }[]; needsUpdate?: () => unknown };
+  getViewports?: () => Record<string, number>[];
   redraw?: (reason?: string | boolean) => void;
 };
 
@@ -647,5 +665,122 @@ export async function waitForMaonoMapVisualReadiness({
     pendingVisualReadiness = Math.max(0, pendingVisualReadiness - 1);
     window.clearTimeout(timeoutId);
     signal.removeEventListener("abort", handleParentAbort);
+  }
+}
+
+
+export type MapCaptureGeneration = {
+  root: HTMLElement;
+  editorSessionId: string;
+  editGeneration: number;
+  camera: Record<string, number>;
+  requireDeck: boolean;
+  renderInputs: unknown[];
+  clusterExpectation: PointClusterCaptureExpectation;
+  styleExpectation: CaptureStyleExpectation;
+  views: CaptureView[];
+  isCurrent: () => boolean;
+  signal: AbortSignal;
+  timeoutMs?: number;
+};
+
+/** A new render for THIS editor generation, separate from the initial loader's
+ * ready boolean. The callback runs synchronously at the map render boundary,
+ * after a forced Deck redraw, before live pixels can change again. */
+export async function freezeMaonoMapCaptureGeneration<T>(options: MapCaptureGeneration, freeze: () => T): Promise<T> {
+  const { root, requireDeck, isCurrent, signal, timeoutMs = 8000 } = options;
+  const assertCurrent = () => {
+    if (signal.aborted || !root.isConnected || !isCurrent()) throw captureAbortError();
+  };
+  assertCurrent();
+  if (!options.editorSessionId || !Number.isSafeInteger(options.editGeneration)) throw new Error("CAPTURE_IDENTITY_REQUIRED");
+  if (!options.clusterExpectation) throw new Error("CAPTURE_EXTENSION_EXPECTATION_REQUIRED");
+  const maps = maonoCaptureStyleRuntimes(root);
+  const decks = maonoCaptureDeckRuntimes(root);
+  if (!maps.length || (requireDeck && options.views.some(view => decks.filter(entry => entry.index === view.index).length !== 1))) throw new Error("CAPTURE_EDITOR_RUNTIME_MISMATCH");
+  const canvases = maps.map(entry => entry.map.getCanvas?.()).filter((canvas): canvas is HTMLCanvasElement => Boolean(canvas));
+  const assertRuntimes = () => {
+    const nowMaps = maonoCaptureStyleRuntimes(root), nowDecks = maonoCaptureDeckRuntimes(root);
+    if (maps.length !== nowMaps.length || maps.some(entry => !nowMaps.includes(entry)) || decks.length !== nowDecks.length || decks.some(entry => !nowDecks.includes(entry))) throw new Error("CAPTURE_RUNTIME_REPLACED");
+    for (const canvas of canvases) {
+      const gl = canvas.getContext?.("webgl2") || canvas.getContext?.("webgl");
+      if (gl?.isContextLost()) throw new Error("CAPTURE_CONTEXT_LOST");
+    }
+  };
+  const controller = new AbortController();
+  const relayAbort = () => controller.abort();
+  signal.addEventListener("abort", relayAbort, { once: true });
+  let expired = false;
+  const timeout = setTimeout(() => { expired = true; controller.abort(); }, timeoutMs);
+  try {
+    if (document.visibilityState === "hidden") {
+      await boundedCaptureWait<void>((resolve) => {
+        const onVisible = () => { if (document.visibilityState !== "hidden") resolve(); };
+        document.addEventListener("visibilitychange", onVisible);
+        return () => document.removeEventListener("visibilitychange", onVisible);
+      }, controller.signal, timeoutMs, "visible-document");
+    }
+    if (document.fonts?.status === "loading") {
+      await boundedCaptureWait<void>((resolve, reject) => { document.fonts.ready.then(() => resolve(), reject); }, controller.signal, timeoutMs, "fonts");
+    }
+    // This only yields control to React. It is NOT the proof of consumed state;
+    // that comes from each MapContainer's real render acknowledgment below.
+    await captureAnimationFrame(controller.signal, timeoutMs);
+    assertCurrent(); assertRuntimes();
+    return await boundedCaptureWait<T>((resolve, reject) => {
+      let frame = 0;
+      let finished = false;
+      const repaint = () => maps.forEach(entry => entry.map.triggerRepaint?.());
+      const schedule = () => {
+        if (!frame && !finished) frame = requestAnimationFrame(() => {
+          frame = 0;
+          try { assertCurrent(); assertRuntimes(); repaint(); } catch (error) { reject(error); }
+        });
+      };
+      const check = () => {
+        if (finished) return;
+        try {
+          assertCurrent(); assertRuntimes();
+          if (document.visibilityState === "hidden" || !maonoCaptureStylesReady(root, options.styleExpectation, options.views)) { schedule(); return; }
+          if (requireDeck) for (const { index, deck } of decks) {
+            const camera = options.views.find(view => view.index === index)?.camera;
+            if (!camera || deck.isInitialized === false || deck.gl?.isContextLost?.() || deck.layerManager?.needsUpdate?.()) { schedule(); return; }
+            const layers = deck.layerManager?.getLayers?.();
+            if (!layers || layers.some(layer => layer.props?.visible !== false && layer.isLoaded === false)) { schedule(); return; }
+            if (!deck.getViewports?.().some(viewport => captureCameraMatches(viewport, camera))) { schedule(); return; }
+            const beforeRedraw = maonoDeckGenerationAcknowledgment(deck.props?.layers, options.renderInputs, options.clusterExpectation, index)?.sequence || 0;
+            deck.redraw?.("maono-exact-thumbnail-generation");
+            const acknowledged = maonoDeckGenerationAcknowledgment(deck.props?.layers, options.renderInputs, options.clusterExpectation, index);
+            if (!acknowledged || acknowledged.sequence <= beforeRedraw) { schedule(); return; }
+          }
+          assertCurrent(); assertRuntimes();
+          const value = freeze();
+          assertCurrent();
+          finished = true;
+          resolve(value);
+        } catch (error) { reject(error); }
+      };
+      const onRuntimeChanged = () => { try { assertRuntimes(); } catch (error) { reject(error); } };
+      const onContextLost = () => reject(new Error("CAPTURE_CONTEXT_LOST"));
+      for (const canvas of canvases) canvas.addEventListener?.("webglcontextlost", onContextLost);
+      for (const { map } of maps) map.on?.("render", check);
+      mapRuntimeListeners.add(onRuntimeChanged);
+      deckRuntimeListeners.add(onRuntimeChanged);
+      repaint();
+      return () => {
+        finished = true;
+        if (frame) cancelAnimationFrame(frame);
+        for (const { map } of maps) map.off?.("render", check);
+        for (const canvas of canvases) canvas.removeEventListener?.("webglcontextlost", onContextLost);
+        mapRuntimeListeners.delete(onRuntimeChanged);
+        deckRuntimeListeners.delete(onRuntimeChanged);
+      };
+    }, controller.signal, timeoutMs, "generation-render");
+  } catch (error) {
+    if (expired) throw new Error("CAPTURE_TIMEOUT:generation-render");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    signal.removeEventListener("abort", relayAbort);
   }
 }

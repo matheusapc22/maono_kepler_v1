@@ -11,7 +11,7 @@
     "test:preview-safety": "node --test tests/preview-write-policy.test.mjs tests/preview-middleware.test.mjs tests/preview-golden-builder.test.mjs tests/buffer-preview-policy.test.mjs && node scripts/preview/assert-preview-safety.mjs",
     "test:error-contract": "node --test tests/result-types.test.mjs tests/error-taxonomy.test.mjs tests/error-envelope-contract.test.mjs tests/api-error-client.test.mjs",
     "test:project-cards": "node --test tests/project-card-redesign.test.mjs tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs",
-    "test:project-preview": "node --test tests/project-preview-lifecycle.test.mjs tests/project-thumbnail-serving.test.mjs",
+    "test:project-preview": "node --experimental-strip-types --test tests/project-preview-lifecycle.test.mjs tests/project-thumbnail-serving.test.mjs tests/project-preview-operations.test.mjs tests/project-preview-recovery.test.mjs tests/project-preview-client-http.test.mjs tests/project-preview-metrics.test.mjs tests/project-thumbnail-capture.test.mjs tests/project-preview-worker.test.mjs tests/project-preview-image-error.test.mjs tests/project-preview-message-owner.test.mjs tests/point-cluster-capture-provenance.test.mjs",
     "test:map-config-repository": "node --test tests/map-config-repository.test.mjs",
     "test:project-revisions": "node --test tests/dropbox-content-hash.test.mjs tests/project-config-atomic-save.test.mjs tests/project-config-revision-concurrency.test.mjs tests/project-organization-isolation.test.mjs",
     "test:persistence-integration": "node --experimental-strip-types --test tests/project-recycle-recovery.test.mjs tests/project-persistence-integration.test.mjs",
@@ -24,7 +24,7 @@
     "test:map-analysis-menu": "node --experimental-strip-types --test tests/map-analysis-menu.test.mjs",
     "test:map-point-config": "node --experimental-strip-types --test tests/map-point-configuration.test.mjs",
     "test:s05-boundary": "node --test tests/map-isochrone-context-menu.test.mjs",
-    "test:point-clustering": "node --experimental-strip-types --test tests/point-cluster-single-layer.test.mjs tests/point-cluster-fidelity.test.mjs tests/point-clustering-policy.test.mjs tests/point-clustering-zoom.test.mjs tests/point-clustering-integration.test.mjs",
+    "test:point-clustering": "node --experimental-strip-types --test tests/point-cluster-single-layer.test.mjs tests/point-cluster-fidelity.test.mjs tests/point-clustering-policy.test.mjs tests/point-clustering-zoom.test.mjs tests/point-clustering-integration.test.mjs tests/point-cluster-capture-provenance.test.mjs",
     "test:map-flight": "node --experimental-strip-types --test tests/kepler-map-flight.test.mjs",
     "test:smart-histogram": "node --experimental-strip-types --test tests/smart-filter-histogram.test.mjs",
     "test:filter-accordion": "node --test tests/maono-filter-accordion-branding.test.mjs",
@@ -66,7 +66,8 @@
     "test:document-preview": "node --experimental-strip-types --test tests/document-preview.test.mjs tests/document-preview-api.test.mjs tests/documents-visual-contract.test.mjs tests/document-action-backend-integration.test.mjs",
     "test:document-preview-browser": "playwright test --config=playwright.document-preview.config.ts",
     "test:durable-save": "node --experimental-strip-types --test tests/project-save-operations.test.mjs tests/project-save-operation-payload.test.mjs tests/project-save-runtime-operations.test.mjs tests/project-config-atomic-save.test.mjs tests/project-config-revision-concurrency.test.mjs tests/project-persistence-integration.test.mjs tests/project-change-request-apply.test.mjs tests/project-durable-import-integration.test.mjs tests/save-ui-resilience.test.mjs tests/map-save-conflict-preservation.test.mjs tests/durable-save-frontend-http.test.mjs",
-    "test:durable-save-browser": "playwright test --config=playwright.durable-save.config.ts"
+    "test:durable-save-browser": "playwright test --config=playwright.durable-save.config.ts",
+    "test:project-preview-browser": "playwright test --config=playwright.thumbnail-capture.config.ts && playwright test --config=playwright.preview-pipeline.config.ts"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "^2.1.2",

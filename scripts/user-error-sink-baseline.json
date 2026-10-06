@@ -40,8 +40,9 @@
     "src/pages/Kepler/reducers/index.ts::raw-error-message": 1,
     "src/pages/Kepler/save-observability.ts::diagnostic-id": 6,
     "src/pages/Kepler/save-observability.ts::raw-error-message": 1,
-    "src/pages/Kepler/thumbnail/capture-thumbnail.ts::raw-error-message": 1,
-    "src/pages/Kepler/thumbnail/thumbnail-api.ts::raw-response-text": 1,
+    "src/pages/Kepler/thumbnail/background-thumbnail-job.ts::diagnostic-id": 1,
+    "src/pages/Kepler/thumbnail/preview-metrics.ts::diagnostic-id": 3,
+    "src/pages/Kepler/thumbnail/preview-spool.ts::diagnostic-id": 2,
     "src/pages/Projects/components/TicketMetricsPanel.tsx::diagnostic-id": 1,
     "src/pages/Projects/components/TicketSlaPanel.tsx::diagnostic-id": 3
   }

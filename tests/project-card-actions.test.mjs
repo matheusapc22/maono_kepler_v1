@@ -95,11 +95,8 @@ test("cards deixam de depender de um gate global de thumbnails", () => {
   assert.doesNotMatch(sectionSource, /allVisibleThumbnailsSettled/);
   assert.doesNotMatch(sectionSource, /holdThumbnailShimmer/);
   assert.doesNotMatch(sectionSource, /onThumbnailSettled/);
-  assert.match(
-    sectionSource,
-    /const delays = \[2000, 4000, 8000, 15000\]/,
-  );
-  assert.match(sectionSource, /new AbortController\(\)/);
+  assert.match(sectionSource, /subscribePreviewStatus/);
+  assert.match(sectionSource, /FAILED_FINAL.*SUPERSEDED/);
 });
 
 test("drawer consulta metadados atuais e edita somente título e descrição", () => {

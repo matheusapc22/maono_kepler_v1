@@ -1,7 +1,7 @@
 import {
   serializePublicProjectMetadata,
 } from "./project-service.js";
-import { publicProjectPreview } from "./project-preview.js";
+import { publicProjectPreview, previewProjectSelect } from "./project-preview.js";
 import {
   isProjectPublicable,
   publicProjectLifecycle,
@@ -70,6 +70,7 @@ export async function listProjectsForUser(env, user) {
     const { results } = await env.DB.prepare(
       `SELECT
         ${INTERNAL_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
         'owner' AS access_level
       FROM projects
       INNER JOIN organizations
@@ -89,6 +90,7 @@ export async function listProjectsForUser(env, user) {
   const { results } = await env.DB.prepare(
     `SELECT
       ${INTERNAL_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
       user_projects.access_level
     FROM user_projects
     INNER JOIN projects ON projects.id = user_projects.project_id
@@ -121,6 +123,7 @@ export async function getAuthorizedProject(env, user, slug) {
     const project = await env.DB.prepare(
       `SELECT
         ${INTERNAL_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
         'owner' AS access_level
       FROM projects
       INNER JOIN organizations
@@ -141,6 +144,7 @@ export async function getAuthorizedProject(env, user, slug) {
   const project = await env.DB.prepare(
     `SELECT
       ${INTERNAL_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
       user_projects.access_level
     FROM user_projects
     INNER JOIN projects ON projects.id = user_projects.project_id

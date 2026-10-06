@@ -1,4 +1,5 @@
 import { installLocalHttpRoute, type LocalHttpRoute } from './local-http-route';
+import { installPanelPreview } from './map-panel-preview';
 import { isLocalBrowserBlob } from '../../helpers/local-browser-url.mjs';
 import { expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -174,10 +175,8 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
     if (url.hostname === 'panel-fixture.example.test') return route.fulfill({
       headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'application/json', body: JSON.stringify(saved),
     });
-    if (url.pathname.startsWith(`${projectPath}/thumbnail`)) return route.fulfill({ json: {
-      ok: true, status: 'READY', thumbnailStatus: 'READY', revision, configRevision: revision, thumbnailRevision: revision, thumbnailAttempts: 1,
-    } });
     if (url.pathname === '/api/observability/map-load' && method === 'POST') return route.fulfill({ json: { ok: true } });
+    if (url.pathname === '/api/observability/project-preview' && method === 'POST') return route.fulfill({ json: { ok: true } });
     if (url.pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
       unexpectedWrites.push(`${method} ${url.pathname}`);
       return route.fulfill({ status: 405, json: { ok: false, error: 'Unexpected synthetic mutation' } });
@@ -190,8 +189,9 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
     return route.continue();
   });
   await installLocalHttpRoute(page, url => url.pathname === operationRoot || url.pathname.startsWith(`${operationRoot}/`), saveRoute);
+  const previews = await installPanelPreview(page, { projectPath, revision: () => revision, savedOperation: id => operations.get(id) });
   return {
-    saves, manifests, checks, unexpectedWrites, errors,
+    saves, manifests, checks, unexpectedWrites, errors, previews,
     get configLoads() { return configLoads; },
     get revision() { return revision; },
     operationState(id: string) { return operations.get(id)?.state; },

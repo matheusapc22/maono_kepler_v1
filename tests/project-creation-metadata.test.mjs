@@ -156,7 +156,8 @@ test("criação serializa o clique uma vez; thumbnail independente usa snapshot 
   assert.equal((create.match(/captureClickedConfig\(\)/g) || []).length, 1);
   assert.match(create, /executeProjectCreateFlow\(/);
   assert.match(create, /config: clicked\.config/);
-  assert.match(saveButton, /savedConfig: config/);
+  assert.match(saveButton, /savedConfig: clicked\.config/);
+  assert.match(create, /prepareClickedPreview/);
   assert.match(saveButton, /enqueueProjectThumbnailJob/);
   assert.match(saveButton, /operationInFlightRef\.current/);
 });

@@ -186,7 +186,7 @@ test('native accessible controls, footer live count and new-map permission wirin
   const section = read('src/pages/Projects/components/ProjectsSection.tsx');
   assert.ok(section.includes('{section === "all" ? <ProjectPageFiltersForm\n'));
   assert.ok(section.includes('filterAndSortProjects(')); assert.ok(section.includes('projectPage('));
-  for (const token of ['prepareProjectMapDestination(', 'fetchProjectThumbnailStatus(', '<ProjectMetadataPanel', 'onFavoriteToggle={onFavoriteToggle}', 'visibleProjects.map(']) assert.ok(section.includes(token), token);
+  for (const token of ['prepareProjectMapDestination(', 'subscribePreviewStatus(', '<ProjectMetadataPanel', 'onFavoriteToggle={onFavoriteToggle}', 'visibleProjects.map(']) assert.ok(section.includes(token), token);
   const shell = read('src/pages/Projects.tsx');
   assert.ok(shell.includes('key={`${activeOrganizationKey}:${sidebarSection}`}'), 'tab-local status and ordering reset when switching sections');
   for (const token of ['PERMISSION.PROJECT_CREATE', 'setProjectFavorite(', 'requestOrganizationKey !== activeOrganizationKeyRef.current']) assert.ok(shell.includes(token), token);

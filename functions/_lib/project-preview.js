@@ -98,6 +98,9 @@ export function publicProjectPreview(project) {
       project?.thumbnailUpdatedAt ??
       project?.thumbnail_updated_at ??
       null,
+    artifactId: project?.preview_artifact_id ?? project?.artifactId ?? null,
+    jobState: project?.preview_job_state ?? project?.jobState ??
+      (normalizePreviewStatus(project?.preview_status ?? project?.thumbnailStatus) === "PENDING" ? "WAITING_CAPTURE" : null),
     thumbnailAttempts: Math.max(
       0,
       Number(
@@ -122,18 +125,7 @@ export async function getProjectPreviewState(
   }
 
   return env.DB.prepare(
-    `SELECT
-      id,
-      organization_id,
-      default_config_file,
-      dropbox_root_path,
-      config_revision,
-      preview_status,
-      preview_revision,
-      preview_updated_at,
-      preview_attempts,
-      preview_last_error,
-      preview_capture_method
+    `SELECT *
      FROM projects
      WHERE id = ?
        AND organization_id = ?
@@ -144,230 +136,13 @@ export async function getProjectPreviewState(
     .first();
 }
 
-export async function markProjectPreviewAttempt(
-  env,
-  {
-    projectId,
-    organizationId,
-    revision,
-    captureMethod,
-  },
-) {
-  const normalizedProjectId = normalizeProjectId(projectId);
-  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
-  const normalizedRevision = normalizePreviewRevision(revision, {
-    allowZero: false,
-  });
-
-  if (
-    !normalizedProjectId ||
-    !normalizedOrganizationId ||
-    !normalizedRevision
-  ) {
-    return null;
-  }
-
-  return env.DB.prepare(
-    `UPDATE projects
-     SET
-       preview_status = 'PENDING',
-       preview_attempts = preview_attempts + 1,
-       preview_last_error = NULL,
-       preview_capture_method = ?
-     WHERE id = ?
-       AND organization_id = ?
-       AND active = 1
-       AND config_revision = ?
-     RETURNING
-       config_revision,
-       preview_status,
-       preview_revision,
-       preview_updated_at,
-       preview_attempts,
-       preview_capture_method`,
-  )
-    .bind(
-      sanitizeCaptureMethod(captureMethod),
-      normalizedProjectId,
-      normalizedOrganizationId,
-      normalizedRevision,
-    )
-    .first();
-}
-
-export async function markProjectPreviewReady(
-  env,
-  {
-    projectId,
-    organizationId,
-    revision,
-    captureMethod,
-    expectedState = null,
-  },
-) {
-  const normalizedProjectId = normalizeProjectId(projectId);
-  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
-  const normalizedRevision = normalizePreviewRevision(revision);
-  // Legacy PNG revision zero is independent of the lifecycle config revision.
-  // Reconciliation must compare the complete snapshot it inspected in storage.
-  const expectedConfigRevision = expectedState
-    ? normalizePreviewRevision(expectedState.config_revision)
-    : normalizedRevision;
-
-  if (
-    !normalizedProjectId ||
-    !normalizedOrganizationId ||
-    normalizedRevision === null ||
-    expectedConfigRevision === null
-  ) {
-    return null;
-  }
-
-  return env.DB.prepare(
-    `UPDATE projects
-     SET
-       preview_status = 'READY',
-       preview_revision = ?,
-       preview_updated_at = CURRENT_TIMESTAMP,
-       preview_last_error = NULL,
-       preview_capture_method = ?
-     WHERE id = ?
-       AND organization_id = ?
-       AND active = 1
-       AND config_revision = ?
-       AND (? = 0 OR (preview_status = ? AND preview_revision IS ?))
-     RETURNING
-       config_revision,
-       preview_status,
-       preview_revision,
-       preview_updated_at,
-       preview_attempts,
-       preview_capture_method`,
-  )
-    .bind(
-      normalizedRevision,
-      sanitizeCaptureMethod(captureMethod),
-      normalizedProjectId,
-      normalizedOrganizationId,
-      expectedConfigRevision,
-      expectedState ? 1 : 0,
-      expectedState
-        ? normalizePreviewStatus(expectedState.preview_status)
-        : null,
-      expectedState
-        ? normalizePreviewRevision(expectedState.preview_revision)
-        : null,
-    )
-    .first();
-}
-
-export async function markProjectPreviewFailed(
-  env,
-  {
-    projectId,
-    organizationId,
-    revision,
-    errorCode,
-    captureMethod,
-  },
-) {
-  const normalizedProjectId = normalizeProjectId(projectId);
-  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
-  const normalizedRevision = normalizePreviewRevision(revision, {
-    allowZero: false,
-  });
-
-  if (
-    !normalizedProjectId ||
-    !normalizedOrganizationId ||
-    !normalizedRevision
-  ) {
-    return null;
-  }
-
-  return env.DB.prepare(
-    `UPDATE projects
-     SET
-       preview_status = 'FAILED',
-       preview_updated_at = CURRENT_TIMESTAMP,
-       preview_last_error = ?,
-       preview_capture_method = ?
-     WHERE id = ?
-       AND organization_id = ?
-       AND active = 1
-       AND config_revision = ?
-     RETURNING
-       config_revision,
-       preview_status,
-       preview_revision,
-       preview_updated_at,
-       preview_attempts,
-       preview_last_error,
-       preview_capture_method`,
-  )
-    .bind(
-      sanitizePreviewCode(errorCode),
-      sanitizeCaptureMethod(captureMethod),
-      normalizedProjectId,
-      normalizedOrganizationId,
-      normalizedRevision,
-    )
-    .first();
-}
-
-export async function markProjectPreviewMissing(
-  env,
-  {
-    projectId,
-    organizationId,
-    expectedState,
-    errorCode = "PROJECT_THUMBNAIL_NOT_FOUND",
-  },
-) {
-  const normalizedProjectId = normalizeProjectId(projectId);
-  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
-  const normalizedExpectedStatus = normalizePreviewStatus(
-    expectedState?.preview_status,
-  );
-  const expectedConfigRevision = normalizePreviewRevision(
-    expectedState?.config_revision,
-  );
-
-  if (
-    !normalizedProjectId ||
-    !normalizedOrganizationId ||
-    expectedConfigRevision === null
-  ) {
-    return null;
-  }
-
-  return env.DB.prepare(
-    `UPDATE projects
-     SET
-       preview_status = 'MISSING',
-       preview_updated_at = CURRENT_TIMESTAMP,
-       preview_last_error = ?
-     WHERE id = ?
-       AND organization_id = ?
-       AND active = 1
-       AND preview_status = ?
-       AND config_revision = ?
-       AND preview_revision IS ?
-     RETURNING
-       config_revision,
-       preview_status,
-       preview_revision,
-       preview_updated_at,
-       preview_attempts,
-       preview_last_error`,
-  )
-    .bind(
-      sanitizePreviewCode(errorCode),
-      normalizedProjectId,
-      normalizedOrganizationId,
-      normalizedExpectedStatus,
-      expectedConfigRevision,
-      normalizePreviewRevision(expectedState?.preview_revision),
-    )
-    .first();
+// Capability-aware projection preserves readers before migration 0040 is applied.
+// Never infer capability from an activation flag: accepted work remains readable.
+export async function previewProjectSelect(env) {
+  const installed = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'project_preview_operation_schema'").first();
+  return installed ? `projects.preview_artifact_id,
+    (SELECT po.state FROM project_preview_operations po WHERE po.id = projects.preview_operation_id
+      AND po.organization_id = projects.organization_id AND po.project_id = projects.id
+      AND po.revision = projects.config_revision) AS preview_job_state` :
+    "NULL AS preview_artifact_id, NULL AS preview_job_state";
 }

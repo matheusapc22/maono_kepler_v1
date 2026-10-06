@@ -95,7 +95,8 @@ test("card limita o SVG à apresentação de geração e conclui no decode", () 
   assert.match(card, /decodedRevision/);
   assert.match(card, /previousReadyUrl/);
   assert.match(card, /typeof image\.decode === "function"/);
-  assert.match(card, /await image\.decode\(\)/);
+  assert.match(card, /Promise\.race\(\[image\.decode\(\)/);
+  assert.match(card, /PREVIEW_DECODE_TIMEOUT/);
   assert.match(
     card,
     /displayImageDecoded \? "is-loaded" : "is-loading"/,
@@ -147,13 +148,16 @@ test("READY e UNKNOWN carregam imagem; falhas usam fallback neutro ou anterior",
   assert.match(cardStyles, /is-failed-neutral/);
 });
 
-test("PENDING usa polling progressivo e cancelável", () => {
-  assert.match(section, /normalizeProjectThumbnailStatus\(/);
-  assert.match(section, /\) === "PENDING"/);
-  assert.match(section, /\[2000, 4000, 8000, 15000\]/);
-  assert.match(section, /new AbortController\(\)/);
-  assert.match(section, /controller\.abort\(\)/);
-  assert.match(section, /window\.clearTimeout\(timer\)/);
+test("PENDING usa polling compartilhado, progressivo, cancelável e pausado em aba oculta", async () => {
+  const polling = await readFile(new URL("../src/pages/Projects/components/preview-status-polling.ts", import.meta.url), "utf8");
+  assert.match(section, /subscribePreviewStatus/);
+  assert.match(section, /FAILED_FINAL.*SUPERSEDED/);
+  assert.match(polling, /new AbortController/);
+  assert.match(polling, /controller.signal.aborted/);
+  assert.match(polling, /clearTimeout/);
+  assert.match(polling, /document.visibilityState === "hidden"/);
+  assert.match(polling, /retryAfterMs/);
+  assert.match(polling, /401, 403, 404/);
 });
 
 test("transição não causa flash e respeita redução de movimento", () => {
@@ -204,4 +208,10 @@ test("altura fixa legada e shimmer de sidebar permanecem ausentes", () => {
     skeletonStyles,
     /\.mm-projects-sidebar[^}]*animation:\s*mm-shimmer/s,
   );
+});
+
+test("operation-owned artifact identity takes precedence over a legacy explicit image URL", () => {
+  const project = {slug:"map",thumbnailStatus:"READY",thumbnailRevision:2,artifactId:"immutable-one",thumbnailUrl:"/old/reused.png"};
+  assert.equal(thumbnailIdentity.projectThumbnailUrl(project),"/api/projects/map/thumbnail?v=2&artifactId=immutable-one");
+  assert.equal(thumbnailIdentity.projectPreviousReadyThumbnailUrl({...project,thumbnailStatus:"FAILED"}),"/api/projects/map/thumbnail?v=2&artifactId=immutable-one");
 });

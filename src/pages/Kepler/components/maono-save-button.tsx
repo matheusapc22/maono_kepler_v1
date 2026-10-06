@@ -7,7 +7,9 @@ import { normalizeUserError } from "../../../lib/user-error-catalog";
 import { UniversalLoader } from "../../../components/loading";
 import { serializeProjectConfig } from "../thumbnail/capture-thumbnail";
 import { getMaonoConfigForSave, subscribePointClusterStore } from "../clustering/point-cluster-store";
-import { enqueueProjectThumbnailJob } from "../thumbnail/background-thumbnail-job";
+import { enqueueProjectThumbnailJob, prepareProjectThumbnailCapture, type PreparedPreviewCapture } from "../thumbnail/background-thumbnail-job";
+import { isPreviewSessionCurrent } from "../thumbnail/preview-recovery";
+import { ownsPreviewMessage, previewSnapshotWithoutPayload, type PreviewMessageOwner } from "../thumbnail/preview-message-owner";
 import ProjectCreatePanel, { type ProjectCreateInput, type ProjectCreationStage } from "./project-create-panel";
 import { useKeplerEngineAdapter } from "../engine-adapter";
 import { useMapPanel } from "../map-panel/MapPanelContext";
@@ -19,7 +21,7 @@ import { executeProjectCreateFlow } from "../project-create-flow";
 import { confirmationMatchesEditor, defaultDurableSaveStore, DurableSaveError, executePreparedProjectUpdate, isSaveRequestAbort, operationState, prepareProjectUpdateSnapshot, receiptRevision, type SavePhase, type ProjectUpdateFlowResult } from "../durable-save-controller";
 import { saveAccountKey, isPendingSaveSnapshot, archiveReviewedSaveSnapshot, snapshotMatchesProject, type DurableSaveSnapshot } from "../durable-save-store";
 
-const ASYNC_THUMBNAIL_ENABLED = String(import.meta.env.VITE_ASYNC_PROJECT_THUMBNAIL ?? "true").toLowerCase() !== "false";
+const ASYNC_THUMBNAIL_ENABLED = String(import.meta.env.VITE_ASYNC_PROJECT_THUMBNAIL ?? "true").toLowerCase() !== "false" && String(import.meta.env.VITE_PROJECT_PREVIEW_OPERATIONS_V1 ?? "false").toLowerCase() === "true";
 function activeOrganizationId(user: any) { return user?.activeOrganizationId ?? user?.active_organization_id ?? user?.organizationId ?? user?.organization_id ?? user?.organization?.id ?? null; }
 function emitSaveTelemetry(event: string, details: Parameters<typeof emitMapPanelTelemetry>[1] = {}) {
   try { emitMapPanelTelemetry(event, details); } catch { /* Telemetry never changes a committed result. */ }
@@ -53,6 +55,17 @@ const MaonoSaveButton: React.FC = () => {
   const expectedRevisionRef = useRef<{ route: string; revision: number } | null>(null);
   if (context?.capabilities?.saveMap && expectedRevisionRef.current?.route !== routeKey) expectedRevisionRef.current = { route: routeKey, revision: Number(context?.version ?? context?.project?.configRevision ?? 0) };
   const operationInFlightRef = useRef(false);
+  const previewCaptures = useRef(new Map<string, PreparedPreviewCapture>());
+  const previewMessageOwnerRef = useRef<PreviewMessageOwner | null>(null);
+  function releasePreparedPreview(operationId: string) {
+    previewCaptures.current.get(operationId)?.cancel();
+    previewCaptures.current.delete(operationId);
+  }
+  useEffect(() => () => {
+    for (const capture of previewCaptures.current.values()) capture.cancel();
+    previewCaptures.current.clear();
+    previewMessageOwnerRef.current = null;
+  }, [routeKey]);
   const controllerRef = useRef<AbortController | null>(null);
   const primaryActionRef = useRef<(request?: MapSaveRequestDetail | null) => void>(() => {});
   const resumeRef = useRef<(snapshot: DurableSaveSnapshot) => Promise<void>>(async () => {});
@@ -159,6 +172,16 @@ const MaonoSaveButton: React.FC = () => {
     const maono = getMaonoConfigForSave(); if (maono) config.maono = maono;
     return { config, generation: editGeneration.current, mapState: current };
   }
+  function prepareClickedPreview(clicked: ReturnType<typeof captureClickedConfig>, saveOperationId: string, route: string) {
+    if (!ASYNC_THUMBNAIL_ENABLED) return;
+    const roots = document.querySelectorAll<HTMLElement>(".maono-kepler-viewport");
+    const root = roots.length === 1 ? roots[0] : null;
+    previewCaptures.current.set(saveOperationId, prepareProjectThumbnailCapture({
+      actorId, organizationId, saveOperationId, root, editorSessionId: editorSessionId.current, editGeneration: clicked.generation,
+      mapState: clicked.mapState, savedConfig: clicked.config,
+      isCurrent: () => contextRef.current === route && editGeneration.current === clicked.generation,
+    }));
+  }
   function phaseChanged(phase: SavePhase, data?: any) {
     setMessageType("warning");
     if (phase === "SENDING") setMessage("Enviando o mapa. Mantenha esta página aberta.");
@@ -167,13 +190,15 @@ const MaonoSaveButton: React.FC = () => {
       ? "Mapa recebido. Você pode sair; a confirmação será recuperada ao voltar."
       : "Verificando o resultado da mesma tentativa de salvamento.");
   }
-  async function accepted(result: ProjectUpdateFlowResult, recovery: boolean, route: string, clickedMapState?: any) {
+  async function accepted(result: ProjectUpdateFlowResult, recovery: boolean, route: string) {
     if (contextRef.current !== route) return;
     const snapshot = result.snapshot;
     const revision = receiptRevision(result.data);
     const currentRevision = Number(result.data?.operation?.currentRevision ?? result.data?.currentRevision ?? revision);
     const matches = confirmationMatchesEditor(snapshot, editorSessionId.current, editGeneration.current) && currentRevision === revision;
     if (matches) expectedRevisionRef.current = { route, revision };
+    const previewMessageOwner = { route, operationId: snapshot.manifest.operationId, revision };
+    previewMessageOwnerRef.current = previewMessageOwner;
     setPending(null);
     emitSaveTelemetry(recovery ? "map_save_recovery_succeeded" : "map_save_succeeded", { operation: snapshot.attempt.operation, saveId: snapshot.attempt.saveId, correlationId: result.diagnostics.correlationId, expectedRevision: snapshot.expectedConfigRevision, candidateRevision: revision, snapshotMatchesCurrent: matches, payloadBytes: snapshot.manifest.payloadBytes, serializeDurationMs: snapshot.serialized.serializeDurationMs, httpStatus: result.response.status, serverTiming: result.diagnostics.serverTiming, durationMs: clientSaveTotalDurationMs(snapshot.attempt) });
     setMessageType(matches ? "success" : "warning");
@@ -183,27 +208,29 @@ const MaonoSaveButton: React.FC = () => {
     if (result.data?.localCleanupWarning) { setMessageType("warning"); setMessage(`Projeto salvo na revisão ${revision}. O navegador não conseguiu remover a cópia local; a próxima consulta verificará o mesmo recibo.`); }
     finishPendingMapSave("success", null, matches);
     if (typeof BroadcastChannel !== "undefined") { const channel = new BroadcastChannel(`maono-save:${accountKey}`); channel.postMessage({ operationId: snapshot.manifest.operationId }); channel.close(); }
-    // PR 222: PNG is an independent best-effort job, never a condition for map success.
-    if (ASYNC_THUMBNAIL_ENABLED && snapshot.serialized.body && currentRevision === revision) {
-      try {
-      const config = JSON.parse(await snapshot.serialized.body.text());
-      if (contextRef.current !== route) return;
-      void enqueueProjectThumbnailJob({ slug: snapshot.projectSlug, organizationId: snapshot.scope.organizationId, revision, mapState: clickedMapState ?? mapState, savedConfig: config,
-        onState: state => {
-          if (contextRef.current !== route || !confirmationMatchesEditor(snapshot, editorSessionId.current, editGeneration.current)) return;
+    // The frame was frozen at the click. JSON confirmation never waits for PNG encoding/upload.
+    const capture = previewCaptures.current.get(snapshot.manifest.operationId);
+    previewCaptures.current.delete(snapshot.manifest.operationId);
+    if (!ASYNC_THUMBNAIL_ENABLED || currentRevision !== revision) capture?.cancel();
+    if (ASYNC_THUMBNAIL_ENABLED && currentRevision === revision) {
+      const previewSnapshot = previewSnapshotWithoutPayload(snapshot);
+      void enqueueProjectThumbnailJob({ snapshot: previewSnapshot, data: { receipt: result.data?.operation?.receipt ?? result.data?.receipt }, capture,
+        isCurrent: () => isPreviewSessionCurrent(previewSnapshot.scope.actorId, previewSnapshot.scope.organizationId),
+        onState: (state, detail) => {
+          if (contextRef.current !== route || !ownsPreviewMessage(previewMessageOwnerRef.current, previewMessageOwner) ||
+            !confirmationMatchesEditor(previewSnapshot, editorSessionId.current, editGeneration.current)) return;
           if (state === "READY") { setMessageType("success"); setMessage(`Projeto salvo na revisão ${revision}. A visualização PNG já foi atualizada.`); }
-          if (state === "FAILED") { setMessageType("warning"); setMessage(`Projeto salvo na revisão ${revision}, mas a visualização PNG não pôde ser atualizada. O mapa continua disponível.`); }
+          if (state === "FAILED" || state === "WAITING_CAPTURE") { setMessageType("warning"); setMessage(`Projeto salvo na revisão ${revision}. A prévia aguarda uma captura válida do mapa; o salvamento foi preservado.`); }
+          if (detail?.errorCode === "PREVIEW_LOCAL_STORAGE_UNAVAILABLE") { setMessageType("warning"); setMessage(`Projeto salvo na revisão ${revision}. A prévia será enviada enquanto esta página estiver aberta; não há espaço local para recuperá-la após fechar.`); }
         },
-      });
-      } catch {
-        if (contextRef.current === route) { setMessageType("warning"); setMessage(`Projeto salvo na revisão ${revision}, mas a visualização PNG não pôde ser preparada. O mapa continua disponível.`); }
-      }
+      }).catch(() => { /* PNG recovery is independent of JSON success. */ });
     }
   }
-  async function runSnapshot(snapshot: DurableSaveSnapshot, recovery = true, clickedMapState?: any) {
+  async function runSnapshot(snapshot: DurableSaveSnapshot, recovery = true) {
     if (operationInFlightRef.current || !allowed) return;
     if (snapshot.scope.actorId !== actorId || snapshot.scope.organizationId !== organizationId || (projectSlug && !snapshotMatchesProject(snapshot, actorId, organizationId, projectSlug, projectId))) return;
     const route = routeKey;
+    previewMessageOwnerRef.current = null;
     const controller = new AbortController(); controllerRef.current = controller;
     operationInFlightRef.current = true; setSaving(true); setSaveStalled(false); setPending(snapshot);
     const current = () => contextRef.current === route;
@@ -219,7 +246,7 @@ const MaonoSaveButton: React.FC = () => {
       } else {
         result = await executePreparedProjectUpdate({ ...common, scope: { ...snapshot.scope, actorId, organizationId, projectId }, onStall });
       }
-      await accepted(result, recovery, route, clickedMapState);
+      await accepted(result, recovery, route);
       if (snapshot.attempt.operation === "create" && current() && confirmationMatchesEditor(snapshot, editorSessionId.current, editGeneration.current)) navigate(`/projects/${encodeURIComponent(snapshot.projectSlug || result.snapshot.projectSlug)}/edit`, { replace: true });
     } catch (error) {
       if (!current()) return;
@@ -252,17 +279,23 @@ const MaonoSaveButton: React.FC = () => {
     if (pending) { await runSnapshot(pending); return; }
     if (operationInFlightRef.current) return;
     const route = routeKey;
+    let clickedOperationId: string | null = null;
+    previewMessageOwnerRef.current = null;
+    let snapshotPersisted = false;
     operationInFlightRef.current = true; setSaving(true);
     try {
       const clicked = captureClickedConfig();
       const attempt = beginClientSaveAttempt("update");
+      clickedOperationId = attempt.saveId;
+      prepareClickedPreview(clicked, attempt.saveId, route);
       emitSaveTelemetry("map_save_requested", { operation: "update", saveId: attempt.saveId, correlationId: attempt.correlationId });
       const snapshot = await prepareProjectUpdateSnapshot({ attempt, scope: { actorId, organizationId, projectKey: `project:${projectId}`, projectId }, projectSlug, config: clicked.config, expectedConfigRevision: expectedRevisionRef.current!.revision, editorSessionId: editorSessionId.current, editGeneration: clicked.generation });
       if (contextRef.current !== route) return;
-      await defaultDurableSaveStore.put(snapshot);
+      await defaultDurableSaveStore.put(snapshot); snapshotPersisted = true;
       emitSaveTelemetry("map_save_serialized", { operation: "update", saveId: attempt.saveId, payloadBytes: snapshot.manifest.payloadBytes, serializeDurationMs: snapshot.serialized.serializeDurationMs, expectedRevision: snapshot.expectedConfigRevision });
-      operationInFlightRef.current = false; await runSnapshot(snapshot, false, clicked.mapState);
+      operationInFlightRef.current = false; await runSnapshot(snapshot, false);
     } catch (error) {
+      if (clickedOperationId && !snapshotPersisted) releasePreparedPreview(clickedOperationId);
       if (contextRef.current === route) { setMessageType("error"); setMessage(getSaveFailureMessage(error)); finishPendingMapSave("error", getSaveFailureMessage(error)); }
     } finally { operationInFlightRef.current = false; if (contextRef.current === route) setSaving(false); }
   }
@@ -270,10 +303,14 @@ const MaonoSaveButton: React.FC = () => {
     if (!allowed || operationInFlightRef.current) return;
     if (pending) { await runSnapshot(pending); return; }
     const route = routeKey;
+    let clickedOperationId: string | null = null;
+    previewMessageOwnerRef.current = null;
     operationInFlightRef.current = true; setSaving(true); setCreationDraft(input); setCreationError(null); setCreationFailedStage(null); setCreationStage("creating_record");
     try {
       const clicked = captureClickedConfig();
       const attempt = beginClientSaveAttempt("create");
+      clickedOperationId = attempt.saveId;
+      prepareClickedPreview(clicked, attempt.saveId, route);
       emitSaveTelemetry("map_save_requested", { operation: "create", saveId: attempt.saveId, correlationId: attempt.correlationId });
       const result = await executeProjectCreateFlow({ attempt, name: input.name, description: input.description, actorId, organizationId, idempotencyKey: `project-create:${attempt.saveId}`, config: clicked.config, editorSessionId: editorSessionId.current, editGeneration: clicked.generation, isScopeCurrent: () => contextRef.current === route,
         signal: (controllerRef.current = new AbortController()).signal,
@@ -282,13 +319,15 @@ const MaonoSaveButton: React.FC = () => {
       });
       if (contextRef.current !== route) return;
       setCreationStage("success"); setCreatePanelOpen(false); setCreatedSlug(result.createdSlug);
-      await accepted(result, false, route, clicked.mapState);
+      await accepted(result, false, route);
       if (confirmationMatchesEditor(result.snapshot, editorSessionId.current, editGeneration.current)) navigate(`/projects/${encodeURIComponent(result.createdSlug)}/edit`, { replace: true });
     } catch (error) {
       if (contextRef.current !== route) return;
       const records = await defaultDurableSaveStore.listAccount(actorId, organizationId).catch(() => []);
       if (contextRef.current !== route) return;
-      setPending(records.find(value => value.manifest.operation === "create" && isPendingSaveSnapshot(value)) ?? null);
+      const retained = records.find(value => value.manifest.operation === "create" && isPendingSaveSnapshot(value));
+      setPending(retained ?? null);
+      if (clickedOperationId && retained?.manifest.operationId !== clickedOperationId) releasePreparedPreview(clickedOperationId);
       const failure = isSaveRequestAbort(error) ? "A espera foi interrompida. A mesma criação será consultada ao retomar." : getSaveFailureMessage(error);
       markCreationFailure(); setCreationError(failure); setMessageType("warning"); setMessage(failure);
       emitSaveTelemetry("map_save_failed", { operation: "create", retryable: true });
@@ -306,6 +345,7 @@ const MaonoSaveButton: React.FC = () => {
     if (!pending || saving) return;
     try {
       await archiveReviewedSaveSnapshot(defaultDurableSaveStore, pending);
+      releasePreparedPreview(pending.manifest.operationId);
       setArchived(pending); setPending(null); setCreationError(null); setCreationFailedStage(null); setCreationStage("ready");
       setMessageType("warning");
       setMessage("Tentativa arquivada para revisão; a cópia permanece disponível por até 7 dias. Exporte seu rascunho antes de recarregar a revisão atual. A revisão-base não foi alterada automaticamente.");

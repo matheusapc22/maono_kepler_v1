@@ -79,7 +79,7 @@ async function mountSaveButton(page: any) {
   await page.route("**/src/auth/session.tsx*", (route: any) => route.fulfill({ contentType: "application/javascript", body: 'export const useSession = () => globalThis.__durableFixtureSession ?? ({ authenticated: true, user: { id: "22", activeOrganizationId: "9" }, activeOrganization: { id: "9" } });' }));
   await page.route("**/src/pages/Kepler/engine-adapter/index.ts*", (route: any) => route.fulfill({ contentType: "application/javascript", body: 'export const useKeplerEngineAdapter = () => ({ commands: {}, state: { transientDatasetIds: [] } });' }));
   await page.route("**/src/pages/Kepler/thumbnail/capture-thumbnail.ts*", (route: any) => route.fulfill({ contentType: "application/javascript", body: 'export const serializeProjectConfig = state => structuredClone(state.savedConfig);' }));
-  await page.route("**/src/pages/Kepler/thumbnail/background-thumbnail-job.ts*", (route: any) => route.fulfill({ contentType: "application/javascript", body: 'export const enqueueProjectThumbnailJob = async () => "READY";' }));
+  await page.route("**/src/pages/Kepler/thumbnail/background-thumbnail-job.ts*", (route: any) => route.fulfill({ contentType: "application/javascript", body: 'export const enqueueProjectThumbnailJob = async () => "READY"; export const prepareProjectThumbnailCapture = () => ({ promise: Promise.resolve(null), cancel() {} });' }));
   await page.goto("/tests/browser/fixtures/durable-save-button.html");
   await expect(page.getByRole("button", { name: "Salvar na Maõno", exact: true })).toBeVisible();
 }

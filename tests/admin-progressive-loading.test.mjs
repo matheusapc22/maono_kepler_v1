@@ -1,3 +1,4 @@
+import { restoreApprovedPreviewPipeline } from "./helpers/project-thumbnail-preservation.mjs";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -179,7 +180,7 @@ test('thumbnail loading is scoped to preview, with decode/error guards and ready
 
 test('strict inverses preserve all prior Admin user controls, project selectors and shell business code', () => {
   for (const [path, hash] of Object.entries(progressiveBaselines)) {
-    const source = read(path), restored = restoreAdminProjectsProgressiveLoading(path, source);
+    const source = read(path), restored = restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, source));
     assert.equal(createHash('sha256').update(restored).digest('hex'), hash, path);
   }
   const path = 'src/pages/Admin/components/AdminUserManagerLegacy.tsx', source = read(path);

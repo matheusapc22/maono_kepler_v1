@@ -1,5 +1,7 @@
 // @ts-nocheck
 
+import { recordPointClusterLayerProduction, pointClusterNeedsMaterialization, recordPointClusterMaterialization } from "./point-cluster-render-provenance.ts";
+
 import { TextLayer } from "@deck.gl/layers";
 import { DeckGLClusterLayer } from "@kepler.gl/deckgl-layers";
 import { LayerClasses } from "@kepler.gl/layers";
@@ -194,6 +196,7 @@ function clusterDeckProps({
   const defaultLayerProps = layer.getDefaultDeckLayerProps(opts);
   const mapState = opts?.mapState ?? {};
   const { _filterData: _nativeFilterData, ...formattedData } = opts?.data ?? {};
+  void _nativeFilterData;
   const filterData = buildNativePointClusterFilter({
     dataProps: opts?.data,
     gpuFilter: opts?.gpuFilter,
@@ -237,7 +240,22 @@ function clusterDeckProps({
   };
 }
 
-export class MaonoCountedDeckClusterLayer extends DeckGLClusterLayer {
+export class MaonoMaterializedDeckClusterLayer extends DeckGLClusterLayer {
+  static layerName = "MaonoMaterializedDeckClusterLayer";
+
+  updateState(args) {
+    // Deck transfers old aggregation state to replacement layer instances.
+    // Rebuild all native stages for a newly produced policy/data/filter tuple,
+    // including the radius-keyed Supercluster cache, before acknowledging it.
+    const freshGeneration = pointClusterNeedsMaterialization(this);
+    const result = super.updateState(freshGeneration ? {
+      ...args, changeFlags: { ...args.changeFlags, dataChanged: true },
+    } : args);
+    if (!result || typeof result.then !== "function") recordPointClusterMaterialization(this);
+  }
+}
+
+export class MaonoCountedDeckClusterLayer extends MaonoMaterializedDeckClusterLayer {
   static layerName = "MaonoCountedDeckClusterLayer";
 
   renderLayers() {
@@ -285,26 +303,27 @@ export class MaonoCountedDeckClusterLayer extends DeckGLClusterLayer {
 function renderClusters(args) {
   const ClusterLayerClass = args.policy.showCount
     ? MaonoCountedDeckClusterLayer
-    : DeckGLClusterLayer;
+    : MaonoMaterializedDeckClusterLayer;
 
-  return [
+  return recordPointClusterLayerProduction([
     new ClusterLayerClass(clusterDeckProps(args)),
-  ];
+  ], args.layer, args.opts, args.policy, "cluster");
 }
 
 export class MaonoAdaptivePointLayer extends LayerClasses.point {
   renderLayer(opts) {
-    const policy = POINT_CLUSTERING_FEATURE_ENABLED
-      ? getPointClusterPolicy(this.id)
-      : null;
+    // Read once while constructing the layer. Keep the saved policy even when
+    // the feature is off, so callbacks cannot relabel a prior representation.
+    const policy = getPointClusterPolicy(this.id);
 
     if (
+      !POINT_CLUSTERING_FEATURE_ENABLED ||
       !policy?.enabled ||
       !layerAllowsAdaptiveClustering(this) ||
       runtimeMode(this, opts?.mapState, policy) !== "cluster"
     ) {
       this.__maonoPointClusterMode = "points";
-      return super.renderLayer(opts);
+      return recordPointClusterLayerProduction(super.renderLayer(opts), this, opts, policy, "points");
     }
 
     const rawData = pointLayerData(opts?.data);
@@ -312,7 +331,7 @@ export class MaonoAdaptivePointLayer extends LayerClasses.point {
     const data = clusterablePointData(rawData, getPosition);
     if (!data) {
       this.__maonoPointClusterMode = "points";
-      return super.renderLayer(opts);
+      return recordPointClusterLayerProduction(super.renderLayer(opts), this, opts, policy, "points", Array.isArray(opts?.data?.data));
     }
 
     return renderClusters({
@@ -334,23 +353,24 @@ export class MaonoAdaptivePointLayer extends LayerClasses.point {
 
 export class MaonoAdaptiveGeoJsonLayer extends LayerClasses.geojson {
   renderLayer(opts) {
-    const policy = POINT_CLUSTERING_FEATURE_ENABLED
-      ? getPointClusterPolicy(this.id)
-      : null;
+    // Read once while constructing the layer. Keep the saved policy even when
+    // the feature is off, so callbacks cannot relabel a prior representation.
+    const policy = getPointClusterPolicy(this.id);
 
     if (
+      !POINT_CLUSTERING_FEATURE_ENABLED ||
       !policy?.enabled ||
       !layerAllowsAdaptiveClustering(this) ||
       runtimeMode(this, opts?.mapState, policy) !== "cluster"
     ) {
       this.__maonoPointClusterMode = "points";
-      return super.renderLayer(opts);
+      return recordPointClusterLayerProduction(super.renderLayer(opts), this, opts, policy, "points");
     }
 
     const data = pointFeatureData(opts?.data?.data);
     if (!data) {
       this.__maonoPointClusterMode = "points";
-      return super.renderLayer(opts);
+      return recordPointClusterLayerProduction(super.renderLayer(opts), this, opts, policy, "points", Array.isArray(opts?.data?.data));
     }
 
     return renderClusters({

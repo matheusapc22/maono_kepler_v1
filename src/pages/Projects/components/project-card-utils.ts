@@ -162,7 +162,7 @@ export function projectThumbnailUrl(project: ProjectListItem) {
     return null;
   }
 
-  if (project.thumbnailUrl) {
+  if (project.thumbnailUrl && !project.artifactId) {
     return project.thumbnailUrl;
   }
 
@@ -180,7 +180,7 @@ export function projectThumbnailUrl(project: ProjectListItem) {
 
   return `/api/projects/${encodeURIComponent(
     project.slug,
-  )}/thumbnail?v=${encodeURIComponent(String(revision ?? 0))}`;
+  )}/thumbnail?v=${encodeURIComponent(String(revision ?? 0))}${project.artifactId ? `&artifactId=${encodeURIComponent(project.artifactId)}` : ""}`;
 }
 
 export function projectThumbnailRevision(project: ProjectListItem) {
@@ -218,14 +218,14 @@ export function projectPreviousReadyThumbnailUrl(
   if (
     normalizeProjectThumbnailStatus(project.thumbnailStatus) ===
       "FAILED" &&
-    project.thumbnailUrl
+    project.thumbnailUrl && !project.artifactId
   ) {
     return project.thumbnailUrl;
   }
 
   return `/api/projects/${encodeURIComponent(
     project.slug,
-  )}/thumbnail?v=${encodeURIComponent(String(revision))}`;
+  )}/thumbnail?v=${encodeURIComponent(String(revision))}${project.artifactId ? `&artifactId=${encodeURIComponent(project.artifactId)}` : ""}`;
 }
 
 export function projectOrganizationCacheKey(

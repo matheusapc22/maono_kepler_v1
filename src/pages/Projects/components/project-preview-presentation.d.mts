@@ -10,6 +10,7 @@ export type PreviewPresentation =
 
 export type PreviewPresentationInput = {
   status: ProjectThumbnailStatus;
+  jobState?: string | null;
   currentUrl: string | null;
   currentRevision: number | null;
   generationRevision: number | null;

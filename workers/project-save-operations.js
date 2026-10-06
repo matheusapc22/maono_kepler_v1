@@ -1,3 +1,4 @@
+import { runProjectPreviewRecovery } from "./project-preview-operations.js";
 import { reconcileProjectSaveOperations } from "../functions/_lib/project-save-operations.js";
 
 export async function runProjectSaveRecovery(env) {
@@ -16,9 +17,19 @@ export async function runProjectSaveRecovery(env) {
   return result;
 }
 
+// Both domains share the scheduled invocation, never each other's journal/flag.
+export async function runProjectRecoveryDomains(env, { saveRecovery = runProjectSaveRecovery, previewRecovery = runProjectPreviewRecovery } = {}) {
+  const results = await Promise.allSettled([Promise.resolve().then(() => saveRecovery(env)), Promise.resolve().then(() => previewRecovery(env))]);
+  for (const [index, result] of results.entries()) if (result.status === "rejected") {
+    const raw = String(result.reason?.code || "RECOVERY_DOMAIN_FAILED");
+    console.error("[Maono recovery] domain failed", { domain: index === 0 ? "save" : "preview", code: /^[A-Z0-9_]{1,120}$/.test(raw) ? raw : "RECOVERY_DOMAIN_FAILED" });
+  }
+  return results;
+}
+
 export default {
   async scheduled(_event,env,context) {
-    context.waitUntil(runProjectSaveRecovery(env));
+    context.waitUntil(runProjectRecoveryDomains(env));
   },
   async fetch() { return new Response("Not Found",{status:404}); },
 };

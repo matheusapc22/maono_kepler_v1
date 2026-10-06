@@ -4,7 +4,9 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { persistenceFixture } from "./helpers/project-persistence-fixture.mjs";
 import { config as mapConfig, create as createDurable, update as updateDurable, status as operationStatus } from "./helpers/durable-project-http.mjs";
-import { markProjectPreviewFailed, markProjectPreviewReady } from "../functions/_lib/project-preview.js";
+import { fixture as previewFixture, png as previewPng } from "./helpers/project-preview-fixture.mjs";
+import { registerPreviewOperation, failWaitingPreview, processPreviewOperation } from "../functions/_lib/project-preview-operations.js";
+import { previewSha256 } from "../functions/_lib/project-preview-png.js";
 
 const urls = {
   migration: new URL(
@@ -90,32 +92,6 @@ function createPreviewDatabase() {
   return database;
 }
 
-function d1Environment(database) {
-  return {
-    DB: {
-      prepare(sql) {
-        const statement = database.prepare(sql);
-        let parameters = [];
-
-        return {
-          bind(...values) {
-            parameters = values;
-            return this;
-          },
-          first() {
-            return statement.get(...parameters) ?? null;
-          },
-          run() {
-            return statement.run(...parameters);
-          },
-          all() {
-            return { results: statement.all(...parameters) };
-          },
-        };
-      },
-    },
-  };
-}
 
 test("migration 0015 adiciona ciclo completo, defaults e índices", () => {
   const database = createPreviewDatabase();
@@ -164,90 +140,23 @@ test("migration 0015 adiciona ciclo completo, defaults e índices", () => {
   );
 });
 
-test("revisão obsoleta nunca altera o estado da revisão atual", async () => {
-  const database = createPreviewDatabase();
-  database
-    .prepare(
-      `UPDATE projects
-       SET config_revision = 2, preview_status = 'PENDING'
-       WHERE id = 1`,
-    )
-    .run();
-  const env = d1Environment(database);
-  const {
-    markProjectPreviewAttempt,
-    markProjectPreviewFailed,
-    markProjectPreviewReady,
-  } = await import(urls.previewHelper);
-
-  assert.equal(
-    await markProjectPreviewAttempt(env, {
-      projectId: 1,
-      organizationId: 7,
-      revision: 1,
-      captureMethod: "canvas",
-    }),
-    null,
-  );
-
-  const accepted = await markProjectPreviewAttempt(env, {
-    projectId: 1,
-    organizationId: 7,
-    revision: 2,
-    captureMethod: "canvas",
-  });
-  assert.equal(accepted.preview_attempts, 1);
-
-  assert.equal(
-    await markProjectPreviewReady(env, {
-      projectId: 1,
-      organizationId: 7,
-      revision: 1,
-      captureMethod: "canvas",
-    }),
-    null,
-  );
-
-  const ready = await markProjectPreviewReady(env, {
-    projectId: 1,
-    organizationId: 7,
-    revision: 2,
-    captureMethod: "canvas",
-  });
-  assert.equal(ready.preview_status, "READY");
-  assert.equal(ready.preview_revision, 2);
-
-  database
-    .prepare(
-      `UPDATE projects
-       SET config_revision = 3, preview_status = 'PENDING'
-       WHERE id = 1`,
-    )
-    .run();
-  assert.equal(
-    await markProjectPreviewFailed(env, {
-      projectId: 1,
-      organizationId: 7,
-      revision: 2,
-      captureMethod: "canvas",
-      errorCode: "OLD_JOB",
-    }),
-    null,
-  );
-  assert.equal(
-    database
-      .prepare("SELECT preview_status FROM projects WHERE id = 1")
-      .get().preview_status,
-    "PENDING",
-  );
+test("revisão obsoleta nunca altera o estado da revisão atual", async t => {
+  const f = await previewFixture(t);
+  const stored = await f.upload(await f.register());
+  f.sqlite.exec("UPDATE projects SET config_revision=2,preview_status='PENDING'");
+  const old = await processPreviewOperation(f.env, { operation: stored });
+  assert.equal(old.state, "SUPERSEDED");
+  assert.equal(f.project().preview_status, "PENDING");
+  assert.equal(f.project().preview_revision, null);
 });
 
 test("durable publication responds PENDING without waiting for PNG and retains a previously saved thumbnail", async t => {
   const f=persistenceFixture(t),created=await createDurable(f);
   assert.equal(created.data.operation.state,"PUBLISHED");
   assert.equal(f.project().preview_status,"PENDING");
-  await markProjectPreviewReady(f.env,{projectId:1,organizationId:1,revision:1,captureMethod:"canvas"});
-  const png=new Uint8Array([137,80,78,71,13,10,26,10]);
+  // Seed an already-published legacy PNG; current writes are tested through the operation endpoint.
+  f.db.exec("UPDATE projects SET preview_status='READY',preview_revision=1 WHERE id=1");
+  const png=previewPng();
   const path=`${f.project().dropbox_root_path}/config.kepler.r1.png`;
   await f.store(path,png);
   const saved=await updateDurable(f,mapConfig("new revision"));
@@ -260,7 +169,15 @@ test("durable publication responds PENDING without waiting for PNG and retains a
 
 test("PNG failure after initial activation cannot downgrade config, receipt or committed quota", async t => {
   const f=persistenceFixture(t),created=await createDurable(f);
-  await markProjectPreviewFailed(f.env,{projectId:1,organizationId:1,revision:1,captureMethod:"canvas",errorCode:"PNG_UNAVAILABLE"});
+  if (!f.db.prepare("SELECT name FROM sqlite_master WHERE name='project_preview_operations'").get()) f.db.exec(await readFile(new URL("../migrations/0040_project_preview_operations.sql", import.meta.url), "utf8"));
+  f.env.PROJECT_PREVIEW_OPERATIONS_V1 = "true";
+  const png = previewPng(), receipt = created.data.operation.receipt;
+  const operation = await registerPreviewOperation(f.env, { actor: { id: 1 }, project: f.project(), manifest: {
+    operationId: "preview-activation-failure", saveOperationId: receipt.operationId, organizationId: "1", projectId: "1", revision: 1,
+    configChecksum: receipt.checksum, editorSessionId: "editor-session-activation", editGeneration: 1, rendererVersion: "v2",
+    imageChecksum: await previewSha256(png), sizeBytes: png.length, captureMethod: "canvas",
+  }});
+  await failWaitingPreview(f.env, { operation, errorCode: "PNG_UNAVAILABLE" });
   assert.equal(f.project().preview_status,"FAILED");
   assert.equal(f.project().active,1);assert.equal(f.project().lifecycle_state,"ACTIVE");
   assert.equal(f.db.prepare("SELECT status FROM organization_resource_reservations").get().status,"COMMITTED");
@@ -269,25 +186,22 @@ test("PNG failure after initial activation cannot downgrade config, receipt or c
   assert.deepEqual(recovered.data.operation.receipt,created.data.operation.receipt);
 });
 
-test("endpoint binário valida permissão, revisão, tipo, tamanho e assinatura", () => {
-  assert.match(thumbnail, /"project\.save"/);
-  assert.match(thumbnail, /"project\.view"/);
-  assert.match(thumbnail, /MAX_THUMBNAIL_BYTES = 4 \* 1024 \* 1024/);
-  assert.match(thumbnail, /contentType !== "image\/png"/);
-  assert.match(thumbnail, /PNG_SIGNATURE/);
-  assert.match(thumbnail, /STALE_THUMBNAIL_REVISION/);
-  assert.match(thumbnail, /context\.waitUntil\(task\)/);
-  assert.match(thumbnail, /status:\s*202/);
+test("binary endpoint validates the scoped operation and waits for persistence", () => {
+  assert.match(thumbnail, /'project.save'/);
+  assert.match(thumbnail, /'project.view'/);
+  assert.match(thumbnail, /MAX_PREVIEW_BYTES/);
+  assert.match(thumbnail, /image\/png/);
+  assert.match(thumbnail, /validatePreviewPng/);
+  assert.match(thumbnail, /await markPreviewPayloadStored/);
+  assert.doesNotMatch(thumbnail, /waitUntil/);
+  assert.match(thumbnail, /payload_stored_at/);
 });
 
-test("arquivo versionado e atualização condicional impedem overwrite antigo", () => {
-  assert.match(thumbnail, /getRevisionedPreviewFileNameFromConfigFile/);
-  assert.match(
-    thumbnail,
-    /Number\(current\?\.config_revision\) !== Number\(revision\)/,
-  );
-  assert.match(thumbnail, /deleteDropboxPathIfExists/);
-  assert.match(previewHelper, /AND config_revision = \?/);
+test("immutable operation artifact replaces revision overwrite and immediate deletes", () => {
+  assert.match(thumbnail, /previewArtifactFileName/);
+  assert.match(thumbnail, /verifyReadyPreviewReceipt/);
+  assert.doesNotMatch(thumbnail, /deleteDropboxPathIfExists/);
+  assert.doesNotMatch(previewHelper, /UPDATE projects|markProjectPreviewReady|markProjectPreviewFailed/);
 });
 
 test("rota de thumbnail aceita status separado sem conflito de Pages Functions", async () => {
@@ -309,27 +223,26 @@ test("frontend queues thumbnail only after the durable receipt and guards later 
   assert.match(saveButton,/ASYNC_THUMBNAIL_ENABLED/);
 });
 
-test("job possui cancelamento, retry limitado e storage só de metadados", () => {
-  assert.match(job, /const RETRY_DELAYS_MS = \[800, 1800, 3600\]/);
-  assert.match(job, /existing\.controller\.abort\(\)/);
-  assert.match(job, /ProjectThumbnailRequestError/);
-  assert.match(job, /error\.stale/);
-  assert.match(job, /window\.sessionStorage\.setItem/);
-
-  const persistence = job.match(
-    /function persistJobMetadata\([\s\S]*?\n\}/,
-  )?.[0];
-  assert.ok(persistence);
-  assert.doesNotMatch(persistence, /mapState|savedConfig|blob|dataUrl/);
+test("preview stages immutable PNG bytes before receipt binding and removes the metadata-only queue", async () => {
+  const spool = await readFile(new URL("../src/pages/Kepler/thumbnail/preview-spool.ts", import.meta.url), "utf8");
+  const recovery = await readFile(new URL("../src/pages/Kepler/thumbnail/preview-recovery.ts", import.meta.url), "utf8");
+  assert.match(job, /prepareProjectThumbnailCapture/);
+  assert.match(job, /defaultPreviewSpool.stage/);
+  assert.match(job, /bindCapturedPreview/);
+  assert.match(recovery, /const MAX_ATTEMPTS = 12/);
+  assert.match(recovery, /controller.abort/);
+  assert.match(recovery, /fetchPreviewOperation/);
+  assert.match(spool, /indexedDb.open/);
+  assert.match(spool, /blob.arrayBuffer/);
+  assert.doesNotMatch(job, /sessionStorage|persistJobMetadata/);
+  assert.doesNotMatch(spool, /savedConfig|mapState|GeoJSON|Authorization|Cookie/);
 });
 
-test("provider Dropbox não executa uma segunda captura na rota Maono", () => {
+test("provider Dropbox uses the shared pipeline on map and edit routes without a second generator", () => {
   assert.match(provider, /isMaonoManagedProjectRoute/);
-  assert.match(provider, /ASYNC_PROJECT_THUMBNAIL_ENABLED/);
-  assert.match(
-    provider,
-    /ASYNC_PROJECT_THUMBNAIL_ENABLED && isMaonoManagedProjectRoute\(\)\s*\?\s*null/,
-  );
+  assert.match(provider, /map\|edit/);
+  assert.match(provider, /isMaonoManagedProjectRoute\(\)\s*\?\s*null/);
+  assert.doesNotMatch(provider, /ASYNC_PROJECT_THUMBNAIL_ENABLED/);
 });
 
 test("listagem pública expõe somente metadados operacionais do preview", () => {
@@ -339,13 +252,12 @@ test("listagem pública expõe somente metadados operacionais do preview", () =>
   assert.doesNotMatch(list, /preview_last_error|preview_capture_method/);
 });
 
-test("reconciliador legado de preview segue em lote, por organização e Super Admin", () => {
-  assert.match(reconcile, /request\.method !== "POST"/);
+test("legacy preview inventory is bounded, organization scoped, Super Admin and strictly dry run", () => {
+  assert.match(reconcile, /request.method!=="POST"/);
   assert.match(reconcile, /user\?\.role[\s\S]*super_admin/);
   assert.match(reconcile, /Math\.min\(25/);
-  assert.match(reconcile, /preview_status = 'UNKNOWN'/);
-  assert.match(reconcile, /organization_id = \?/);
-  assert.match(reconcile, /getDropboxMetadata/);
-  assert.match(reconcile, /markProjectPreviewMissing/);
-  assert.match(reconcile, /markProjectPreviewReady/);
+  assert.match(reconcile, /'MISSING'/);
+  assert.match(reconcile, /organization_id=\?/);
+  assert.match(reconcile, /validatePreviewPng/);
+  assert.doesNotMatch(reconcile, /markProjectPreviewMissing|markProjectPreviewReady|recordAuditLog/);
 });

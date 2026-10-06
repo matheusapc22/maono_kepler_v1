@@ -1,4 +1,6 @@
 import React from "react";
+import { inspectPreviewImageFailure, type PreviewImageErrorCause } from "./preview-image-error";
+import { recordPreviewMetric } from "../../Kepler/thumbnail/preview-metrics";
 import { LoadingStatus, Skeleton } from "../../../components/loading/Skeleton";
 import { useHref, useNavigate } from "react-router";
 
@@ -6,6 +8,7 @@ import "./project-card-interactions.css";
 
 import type { ProjectListItem } from "../projects-api";
 import ProjectActionsMenu from "./ProjectActionsMenu";
+import { isPreviewGenerationActive } from "./preview-status-polling";
 import ProjectMapPlaceholder from "./ProjectMapPlaceholder";
 import {
   formatProjectRelativeDate,
@@ -42,6 +45,7 @@ type PreviewTransitionState = {
   previousReadyUrl: string | null;
   imageError: boolean;
   imageErrorUrl: string | null;
+  imageErrorCause?: PreviewImageErrorCause;
 };
 
 const PROJECT_PREVIEW_TRANSITION_V2_ENABLED =
@@ -222,6 +226,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     previousReadyCandidate,
   );
   const displayedSourceRef = React.useRef<string | null>(null);
+  const imageProbe = React.useRef<AbortController | null>(null);
+  React.useEffect(() => () => imageProbe.current?.abort(), []);
   const [previewState, setPreviewState] =
     React.useState<PreviewTransitionState>(() => {
       const initialDecodedUrl = thumbnailDecodedInSession
@@ -397,6 +403,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     previewState.imageErrorUrl === thumbnailUrl;
   const resolvedPresentation = resolvePreviewPresentation({
     status: thumbnailStatus,
+    jobState: project.jobState,
     currentUrl: thumbnailUrl,
     currentRevision: thumbnailRevision,
     generationRevision: previewState.generationRevision,
@@ -448,13 +455,13 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         ? "loading-neutral"
         : null;
   const previewBusy =
-    thumbnailStatus === "PENDING" ||
+    (thumbnailStatus === "PENDING" && isPreviewGenerationActive(project.jobState)) ||
     (PROJECT_PREVIEW_TRANSITION_V2_ENABLED &&
       thumbnailStatus === "READY" &&
       showGenerationSvg) || neutralPresentation === "loading-neutral";
 
   const markDisplayedImageFailed = React.useCallback(
-    (failedUrl: string) => {
+    (failedUrl: string, cause: PreviewImageErrorCause = "unverified") => {
       if (displayedSourceRef.current !== failedUrl) return;
       logPreviewTransition(
         "image-error",
@@ -479,6 +486,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             : current.previousReadyUrl,
         imageError: true,
         imageErrorUrl: failedUrl,
+        imageErrorCause: cause,
       }));
     },
     [project.slug, thumbnailRevision],
@@ -493,11 +501,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         return;
       }
 
+      const decodeStarted = performance.now();
       if (typeof image.decode === "function") {
         try {
-          await image.decode();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try { await Promise.race([image.decode(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("PREVIEW_DECODE_TIMEOUT")), 15_000); })]); }
+          finally { clearTimeout(timer); }
         } catch {
-          markDisplayedImageFailed(expectedSource);
+          markDisplayedImageFailed(expectedSource, "decode");
           return;
         }
       }
@@ -509,6 +520,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         return;
       }
 
+      recordPreviewMetric("decode", performance.now() - decodeStarted);
       rememberProjectThumbnailDecoded(project, expectedSource);
       const decodedCurrentImage =
         expectedSource === thumbnailUrl;
@@ -569,6 +581,12 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       }
 
       markDisplayedImageFailed(failedSource);
+      imageProbe.current?.abort();
+      const controller = new AbortController(); imageProbe.current = controller;
+      void inspectPreviewImageFailure(failedSource, controller.signal).then(cause => {
+        if (controller.signal.aborted) return;
+        setPreviewState(current => current.imageErrorUrl === failedSource ? { ...current, imageErrorCause: cause } : current);
+      });
     },
     [displayImageUrl, markDisplayedImageFailed],
   );
@@ -661,6 +679,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       <div
         className="mm-project-card__preview"
         aria-busy={previewBusy}
+        data-preview-error={previewState.imageError ? previewState.imageErrorCause : undefined}
         data-preview-presentation={previewPresentation}
       >
         {showGenerationSvg ? (
