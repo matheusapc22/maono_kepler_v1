@@ -127,6 +127,18 @@ jobs:
           node --check scripts/acceptance/production-acceptance-lib.mjs
           node --check scripts/acceptance/registry.mjs
           node --check scripts/acceptance/operator.mjs
+          # Refuse an old product operator before protected credentials: the
+          # enlarged job limit is safe only with reviewed phase/closure budgets.
+          node --input-type=module - <<'NODE'
+          import assert from 'node:assert/strict';
+          import { totalBudgetMs, PHASE_BUDGET_MS, WORKFLOW_TIMEOUT_MINUTES } from './scripts/acceptance/execution-budget.mjs';
+          assert.equal(totalBudgetMs(), 190 * 60_000);
+          assert.equal(WORKFLOW_TIMEOUT_MINUTES, 210);
+          assert.deepEqual(PHASE_BUDGET_MS, {
+            preflight: 10 * 60_000, activation: 60 * 60_000, suite: 45 * 60_000,
+            cleanup: 10 * 60_000, restoration: 60 * 60_000, report: 5 * 60_000,
+          });
+          NODE
           description="$(node scripts/acceptance/operator.mjs --mode describe --suite "$SUITE")"
           browser_required="$(node -e 'const fs=require("node:fs"); const d=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(String(d.requiresBrowser===true));' <<<"$description")"
           echo "browser_required=$browser_required" >> "$GITHUB_OUTPUT"
@@ -136,7 +148,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Bounded steps: setup11 + operator192 + summary/artifacts3 =206 minutes.
+    # Four more minutes remain below the job limit for Actions overhead.
+    timeout-minutes: 210
     environment: production-acceptance
     env:
       MODE: ${{ inputs.mode }}
@@ -146,12 +160,14 @@ jobs:
       VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
     steps:
       - name: Checkout exactly the validated product SHA
+        timeout-minutes: 3
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.validate.outputs.release_sha }}
           fetch-depth: 0
 
       - name: Refuse product-branch drift before protected access
+        timeout-minutes: 1
         shell: bash
         run: |
           set -euo pipefail
@@ -159,12 +175,14 @@ jobs:
           test -n "$current"
           test "$current" = "$VALIDATED_RELEASE_SHA"
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - timeout-minutes: 2
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           package-manager-cache: false
 
       - name: Install isolated browser runtime before any Production secret is exposed
+        timeout-minutes: 5
         if: needs.validate.outputs.browser_required == 'true' && inputs.mode == 'run'
         shell: bash
         run: |
@@ -177,6 +195,8 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=no)"
 
       - name: Execute protected Production acceptance operation
+        # Internal 190-minute budget leaves two minutes before this step limit.
+        timeout-minutes: 192
         shell: bash
         env:
           MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: ${{ secrets.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN }}
@@ -197,6 +217,7 @@ jobs:
           node scripts/acceptance/operator.mjs "${args[@]}"
 
       - name: Summarize sanitized acceptance result
+        timeout-minutes: 1
         if: always()
         shell: bash
         run: |
@@ -224,10 +245,11 @@ jobs:
           NODE
 
       - name: Retain sanitized acceptance evidence
+        timeout-minutes: 2
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: production-acceptance-${{ inputs.mode }}-${{ inputs.suite }}-${{ github.run_id }}
-          path: .tmp/production-acceptance/report.json
+          path: .tmp/production-acceptance/report*.json
           if-no-files-found: ignore
           retention-days: 14

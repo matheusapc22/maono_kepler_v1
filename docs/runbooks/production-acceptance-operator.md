@@ -188,3 +188,31 @@ O artifact contém somente informação sanitizada:
 - erro público, quando houver.
 
 Senhas, cookies e tokens nunca são gravados no artifact ou Job Summary.
+
+## Bootstrap da janela limitada de salvamento e PNG
+
+Esta alteração em `main` contém somente o workflow, seu contrato estático e
+esta documentação. O código do produto e das suites continua vindo de um SHA
+exato de `mano_kepler_v1`, fixado no job sem secrets e revalidado antes do job
+protegido. Não copiar frontend, migrations ou runtime da PR de produto para `main`.
+
+O job admite no máximo 210 minutos. Os passos protegidos somam 206 minutos:
+checkout 3, drift 1, Node 2, instalação isolada do navegador 5, operador 192,
+resumo 1 e artifact 2. O código de produto deve comprovar o orçamento interno
+de 190 minutos: preflight 10, ativação 60, suite até 45, cleanup 10, restauração
+60 e relatório 5. Se esse contrato não existir no SHA de produto, a validação
+falha antes de credenciais ou mudanças remotas. Isso também bloqueia suites
+antigas até que o produto receba o operador com orçamento revisado.
+
+Dependências: revisar e mesclar separadamente a PR de produto com o framework
+limitado e as suites desejadas; publicar o mesmo SHA pelos procedimentos já
+aprovados; só então solicitar o preflight e a janela exata de acceptance.
+O bootstrap não executa deploy, não instala Worker, não configura secrets,
+não aplica migrations e não autoriza `run` ou ativação permanente.
+
+Falhas normais usam cleanup e restauração com reserva de tempo. Cancelamento
+forçado ou perda do runner pode impedir `finally`; nesse caso, não repetir
+a janela. Executar `closure` somente com confirmação separada, conferir o
+checkpoint do run e reconciliar recursos sintéticos antes de declarar fechamento.
+PNG só é comprovado pela futura suite de navegador real no SHA de produto;
+a suite JSON e os contratos locais não são evidência PNG de Produção.
