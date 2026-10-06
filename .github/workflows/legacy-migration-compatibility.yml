@@ -1,0 +1,41 @@
+name: Legacy migration compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'migrations/**'
+      - 'tests/migration-compatibility/**'
+      - '.github/workflows/legacy-migration-compatibility.yml'
+  push:
+    branches:
+      - mano_kepler_v1
+    paths:
+      - 'migrations/**'
+      - 'tests/migration-compatibility/**'
+      - '.github/workflows/legacy-migration-compatibility.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-migration-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate existing production migration gates
+        run: node --test tests/production-migration-gate.test.mjs tests/production-migration-actions-workflow.test.mjs
+      - name: Validate unchanged pre-cutover runtime with additive migrations
+        run: node tests/migration-compatibility/run.mjs
+      - name: Preserve compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-migration-compatibility
+          path: test-results/migration-compatibility/
+          if-no-files-found: error
