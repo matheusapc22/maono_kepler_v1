@@ -1,0 +1,205 @@
+name: Project save Worker operator
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/project-save-worker-operator.yml'
+      - 'scripts/project-save-worker/**'
+      - 'tests/project-save-worker-operator.test.mjs'
+      - 'docs/ops/project-save-worker-operator.md'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'preflight (read only) | deploy_disabled (initial creation only)'
+        required: true
+        type: choice
+        options:
+          - preflight
+          - deploy_disabled
+      confirmation:
+        description: 'PREPARE_PROJECT_SAVE_WORKER or DEPLOY_DISABLED_PROJECT_SAVE_WORKER'
+        required: true
+        type: string
+      preflight_run_id:
+        description: 'deploy_disabled only: GitHub run ID of the successful protected preflight'
+        required: false
+        default: ''
+        type: string
+      approval_hash:
+        description: 'deploy_disabled only: exact 64-hex hash from successful protected preflight'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: maono-project-save-worker-operator
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      artifact_hash: ${{ steps.audit.outputs.hash }}
+    steps:
+      - name: Checkout reviewed operator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Check dispatch authorization without production credentials
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          APPROVAL_HASH: ${{ inputs.approval_hash }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+        run: node scripts/project-save-worker/operator.mjs validate-dispatch
+      - name: Verify owner-review environment and main-only branch policy before admission
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_READ_TOKEN: ${{ github.token }}
+        run: node scripts/project-save-worker/operator.mjs check-environment
+      - name: Operator safety contracts
+        run: |
+          node --check scripts/project-save-worker/operator.mjs
+          node --check scripts/project-save-worker/operator-lib.mjs
+          node --test tests/project-save-worker-operator.test.mjs
+      - name: Checkout immutable reviewed Worker source (bootstrap before product merge)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: matheusapc22/maono_kepler_v1
+          ref: fff7e4c1efdf4f3665e829a79be8a22a69c622e9
+          path: .tmp/project-save-worker-source
+          persist-credentials: false
+      - name: Install isolated locked Wrangler without lifecycle scripts
+        run: npm ci --prefix scripts/project-save-worker --ignore-scripts --no-audit --no-fund
+      - name: Prepare allowlisted source and prove bundle safe-off without credentials
+        run: |
+          node scripts/project-save-worker/operator.mjs prepare
+          node scripts/project-save-worker/operator.mjs bundle
+      - name: Record immutable artifact digest (not production authorization)
+        id: audit
+        run: echo "hash=$(node scripts/project-save-worker/operator.mjs artifact-hash)" >> "$GITHUB_OUTPUT"
+      - name: Download prior protected preflight evidence from this repository
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy_disabled'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: project-save-worker-preflight-${{ inputs.preflight_run_id }}
+          path: .tmp/prior-project-save-worker
+          repository: matheusapc22/maono_kepler_v1
+          run-id: ${{ inputs.preflight_run_id }}
+          github-token: ${{ github.token }}
+      - name: Require successful owner main preflight with matching immutable artifact
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy_disabled'
+        env:
+          GITHUB_READ_TOKEN: ${{ github.token }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+        run: node scripts/project-save-worker/operator.mjs verify-prior-preflight
+      - name: Retain credential-free release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: project-save-worker-build-${{ github.run_id }}
+          path: |
+            .tmp/project-save-worker/artifact-audit.json
+            .tmp/project-save-worker/wrangler.deploy.json
+            .tmp/project-save-worker/bundle/project-save-operations.js
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  protected:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-project-save-worker
+    steps:
+      - name: Checkout exact validated operator SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Checkout same immutable source SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: matheusapc22/maono_kepler_v1
+          ref: fff7e4c1efdf4f3665e829a79be8a22a69c622e9
+          path: .tmp/project-save-worker-source
+          persist-credentials: false
+      - name: Rebuild and retest before exposing any production credential
+        run: |
+          npm ci --prefix scripts/project-save-worker --ignore-scripts --no-audit --no-fund
+          node --test tests/project-save-worker-operator.test.mjs
+          node scripts/project-save-worker/operator.mjs prepare
+          node scripts/project-save-worker/operator.mjs bundle
+      - name: Download prior protected preflight evidence from this repository
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy_disabled'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: project-save-worker-preflight-${{ inputs.preflight_run_id }}
+          path: .tmp/prior-project-save-worker
+          repository: matheusapc22/maono_kepler_v1
+          run-id: ${{ inputs.preflight_run_id }}
+          github-token: ${{ github.token }}
+      - name: Require successful owner main preflight with matching immutable artifact
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy_disabled'
+        env:
+          GITHUB_READ_TOKEN: ${{ github.token }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+        run: node scripts/project-save-worker/operator.mjs verify-prior-preflight
+      - name: Protected preflight or explicitly authorized disabled bootstrap
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          APPROVAL_HASH: ${{ inputs.approval_hash }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+          VALIDATED_ARTIFACT_HASH: ${{ needs.validate.outputs.artifact_hash }}
+          GITHUB_READ_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MAONO_PROJECT_SAVE_WORKER_DEPLOY_API_TOKEN }}
+        run: node scripts/project-save-worker/operator.mjs protected
+      - name: Summarize only sanitized evidence
+        if: always()
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = '.tmp/project-save-worker/report.json';
+          if (!fs.existsSync(file)) {
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, 'No protected report. Do not assume deployment succeeded.\n');
+          } else {
+            const r = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const lines = [
+              '### Project save Worker operator',
+              `- Mode: ${r.mode}`,
+              `- Preflight run ID: ${r.mode === "preflight" ? r.runId : r.priorPreflight?.runId}`,
+              `- Operator SHA: ${r.artifact.operatorSha}`,
+              `- Reviewed source SHA: ${r.artifact.sourceSha}`,
+              `- Approval hash: ${r.complete ? r.approvalHash : 'INVALID: operation incomplete'}`,
+              `- Write attempted: ${r.writeAttempted}`,
+              `- Deployment verified: ${r.deploymentVerified}`,
+              `- Complete: ${r.complete}`,
+              r.deployment ? `- Worker version: ${r.deployment.versionId}; both processors OFF` : '',
+              r.error ? `- Stop: ${r.error}. Inspect read-only before retrying.` : '',
+              '- No Dropbox secrets configured. No processor or Pages flags activated.',
+            ];
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.filter(Boolean).join('\n') + '\n');
+          }
+          NODE
+      - name: Retain sanitized protected evidence only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: project-save-worker-${{ inputs.mode }}-${{ github.run_id }}
+          path: .tmp/project-save-worker/report.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14

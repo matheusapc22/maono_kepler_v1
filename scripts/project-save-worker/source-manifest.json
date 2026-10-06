@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "repository": "matheusapc22/maono_kepler_v1",
+  "sourceSha": "fff7e4c1efdf4f3665e829a79be8a22a69c622e9",
+  "entryPoint": "workers/project-save-operations.js",
+  "files": {
+    "functions/_lib/auth.js": "ae9e00d4b7e48968e331a298347802dd101db0e2666d88a1c7d61deca1e70865",
+    "functions/_lib/dropbox-client.js": "556d23e401a3b919b6fcef76f7635a27dab4d0f2e1ae372caf892c0e21ea9966",
+    "functions/_lib/dropbox-content-hash.js": "80e275eca34413c0cfcf68f047429690da8e56f7bd722e713ba73646467938fd",
+    "functions/_lib/dropbox-large-upload.js": "4808f25f6d517a792e3c0c720461de17cecea345a34783e446303afe846a0def",
+    "functions/_lib/dropbox.js": "d5cb3c56ced483386516b84d673efdf83d4bed451e626c10a43c16f9c35ff932",
+    "functions/_lib/error-catalog.js": "40c38732efce89ab53eea128334ea6bd3eb792a223146ae09f528eae5b789e30",
+    "functions/_lib/error-categories.js": "e937bc422362761c27bce5601d96896de40dedbd63a891e1f72a1ee4031a4cee",
+    "functions/_lib/http.js": "c9ad876567bb0b38568a5ba9038a20b376fb021e6b02c773856b94694be42c87",
+    "functions/_lib/local-storage.js": "8d2fa3d874ebd756dd8e6fcf7a6084243b47665783643bc49c8339b83aeee1ac",
+    "functions/_lib/maono-error.js": "d4e2346185d9dd39318b74a519e8ad9ca092b36cccab6923c3b75a973a4fc9f7",
+    "functions/_lib/map-config-storage-ref.js": "c84b5a53aa2246f659d1319aecc7634591e3fced99d91a2fa934050bc390e8ce",
+    "functions/_lib/permissions.js": "83ac8a219c3d591c0796c3537b869156563b77d7b109823c0465c1e97a7f97a8",
+    "functions/_lib/project-config-stream-validator.js": "bd84419871ea7f0e24cc1067a1671ee1369857d64753ac3c44b4bfb912b37d36",
+    "functions/_lib/project-map-route-policy.js": "5cd5d1512194557f44cb8cd79fef68dc720f32c89183c7eb3dd3e50bc9532042",
+    "functions/_lib/project-preview-metrics.js": "6afdb459becce8a8b0beb4d9411d60edb1ce7d7f9e52354be5bad6554c7df100",
+    "functions/_lib/project-preview-operations.js": "82dccb34dbfa543fc349d9a70b7542d6cef4724b661ac434d2edc93393ee6dca",
+    "functions/_lib/project-preview-payload.js": "91cc043d6ba8809d800b09f8c3ef00efa83f7904374ca8f20180545ef83aba0f",
+    "functions/_lib/project-preview-png.js": "d6d61014822e9fcebba6012a3aafbd53b6e39589b784269df0c445ee409f26a4",
+    "functions/_lib/project-save-operation-payload.js": "288f5bfa178fb4ef90ca11f9618a8ab67acffa02a68d382befbf9e764d731eb3",
+    "functions/_lib/project-save-operations.js": "9489682924a721f75c6d8372828a8f34145f67c7e4140ae034e3052278a68565",
+    "workers/project-preview-operations.js": "c9fbc7ccf1c00b2d93edd6a90221a238aeb1fecac59095e0fb8fca9071d26761",
+    "workers/project-save-operations.js": "8635792f0f14b0f25eb3206ad403f3f373f5cb4670960c0db4be99061505eb73"
+  }
+}
