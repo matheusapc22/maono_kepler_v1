@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Locator } from "@playwright/test";
+import { fulfillProjectPreviewMetrics } from './fixtures/project-preview-metrics';
 
 // Synthetic HTTP responses exercise the compiled React route and user events.
 // This is deliberately NOT backend integration or production acceptance.
@@ -58,6 +59,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
   await page.route("**/api/**", async route => {
     const request = route.request(); const url = new URL(request.url()); const path = url.pathname;
     requests.push({ method: request.method(), path, query: url.search, body: request.postData(), organizationId });
+    if (await fulfillProjectPreviewMetrics(route)) return;
     if (path === "/api/session") return route.fulfill({ json: session() });
     if (path === "/api/auth/logout" && request.method() === "POST") {
       // Fully local logout: exercise the existing callback without a real account.
@@ -343,6 +345,7 @@ test("viewer permission boundary preserves readonly cards and hides creation/edi
 });
 
 test("existing thumbnail, menu keyboard dismissal and metadata editing flow remain intact", async ({ page }) => {
+  const telemetry = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/observability/project-preview');
   await setup(page, { dataset: [{ ...projects[0], thumbnailStatus: "READY", thumbnailUrl: "/api/fixture-preview", configRevision: 1, thumbnailRevision: 1 }] });
   await expectCount(page, 1, 1);
   await expect(cards(page).getByRole("img", { name: `Prévia do projeto ${projects[0].name}` })).toHaveClass("is-loaded");
@@ -353,6 +356,7 @@ test("existing thumbnail, menu keyboard dismissal and metadata editing flow rema
   await expect(page.getByRole("dialog", { name: "Editar projeto" })).toBeVisible();
   await page.getByRole("button", { name: "Fechar edição do projeto" }).click();
   await expectCount(page, 1, 1);
+  expect((await telemetry).status()).toBe(200);
 });
 
 for (const width of [320, 390, 768, 1024, 1440, 1920]) {

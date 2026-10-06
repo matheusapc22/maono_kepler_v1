@@ -22,6 +22,7 @@ on:
       - 'src/auth/session.tsx'
       - 'functions/_lib/project-list.js'
       - 'functions/_lib/project-preview.js'
+      - 'functions/_lib/project-preview-metrics.js'
       - 'functions/api/projects/**'
       - 'functions/api/admin/project-previews/**'
       - 'tests/platform-density.test.mjs'
@@ -48,6 +49,7 @@ on:
       - 'tests/helpers/project-thumbnail-preservation.mjs'
       - 'tests/projects-scrollbars.test.mjs'
       - 'tests/browser/project-pages.spec.ts'
+      - 'tests/browser/fixtures/project-preview-metrics.ts'
       - 'playwright.project-pages.config.ts'
       - '.github/workflows/project-pages.yml'
   workflow_dispatch:
