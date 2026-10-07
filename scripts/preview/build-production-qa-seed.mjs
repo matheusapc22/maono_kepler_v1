@@ -1,4 +1,5 @@
 import process from "node:process";
+import { organizationStoragePathPolicy } from "../../functions/_lib/organization-storage-policy.js";
 
 function argument(name, fallback = null) {
   const prefix = `--${name}=`;
@@ -13,10 +14,6 @@ function sqlString(value) {
 const userEmail = argument("user-email");
 const organizationName = argument("org-name", "Maõno Preview QA");
 const organizationSlug = argument("org-slug", "maono-preview-qa");
-const dropboxRoot = argument(
-  "dropbox-root",
-  "/Apps/MaonoKepler/preview/qa",
-);
 
 if (!userEmail || !/^\S+@\S+\.\S+$/.test(userEmail)) {
   console.error(
@@ -25,9 +22,28 @@ if (!userEmail || !/^\S+@\S+\.\S+$/.test(userEmail)) {
   process.exit(1);
 }
 
+if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(organizationSlug)) {
+  console.error("--org-slug deve usar letras minúsculas, números e hífens entre segmentos.");
+  process.exit(1);
+}
+
+const storagePath = organizationStoragePathPolicy({
+  slug: organizationSlug,
+  dropbox_root_path: argument(
+    "dropbox-root",
+    organizationStoragePathPolicy({ slug: organizationSlug }).expectedPath,
+  ),
+});
+if (!storagePath.valid) {
+  console.error("--dropbox-root deve ser uma raiz válida sob /projects/.");
+  process.exit(1);
+}
+
 const sql = `-- GERADO PARA HOMOLOGAÇÃO PREVIEW SOBRE O D1 DE PRODUÇÃO.
 -- Não cria migration e não altera organizações fora do slug QA.
--- Revise o SQL antes de executar manualmente no D1 remoto.
+-- Somente gera SQL: execução em produção requer o fluxo e a autorização de AGENTS.md.
+-- Organizações existentes são preservadas; o seed não corrige storage legado.
+-- Nova organização fica PENDING até provisionamento/verificação real pelo provider.
 PRAGMA foreign_keys = ON;
 BEGIN TRANSACTION;
 
@@ -46,21 +62,16 @@ INSERT INTO organizations (
 VALUES (
   ${sqlString(organizationName)},
   ${sqlString(organizationSlug)},
-  ${sqlString(dropboxRoot)},
+  ${sqlString(storagePath.configuredPath)},
   'Organização isolada para homologação de deployments Preview usando o D1 de produção.',
   1,
-  'READY',
+  'PENDING',
   NULL,
-  CURRENT_TIMESTAMP,
+  NULL,
   CURRENT_TIMESTAMP,
   CURRENT_TIMESTAMP
 )
-ON CONFLICT(slug) DO UPDATE SET
-  name = excluded.name,
-  dropbox_root_path = excluded.dropbox_root_path,
-  description = excluded.description,
-  active = 1,
-  updated_at = CURRENT_TIMESTAMP;
+ON CONFLICT(slug) DO NOTHING;
 
 INSERT INTO organization_users (
   organization_id,
