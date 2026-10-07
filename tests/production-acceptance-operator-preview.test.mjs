@@ -7,6 +7,9 @@ import { makeManifest } from '../scripts/acceptance/suites/durable-project-save.
 import { validateManifest, safeFlags, activeFlags, suiteContext } from '../scripts/acceptance/production-acceptance-lib.mjs';
 import { publicManifest } from '../scripts/acceptance/registry.mjs';
 import { createExecutionBudget, totalBudgetMs } from '../scripts/acceptance/execution-budget.mjs';
+import { onRequest as mapNavigation } from '../functions/api/projects/[slug]/map-navigation.js';
+import { persistenceFixture } from './helpers/project-persistence-fixture.mjs';
+import { config, create, request } from './helpers/durable-project-http.mjs';
 
 const prerequisiteNames = ['VITE_MAONO_MAP_SHELL_V1', 'VITE_MAONO_LAYER_MANAGER_V1', 'VITE_MAONO_MAP_OVERLAY_V1', 'VITE_ASYNC_PROJECT_THUMBNAIL'];
 const prerequisites = () => Object.fromEntries(prerequisiteNames.map(name => [name, { type: 'plain_text', value: 'true' }]));
@@ -47,12 +50,16 @@ test('preflight refuses missing frontend prerequisites, quota uncertainty and ex
   assert.throws(() => verifyPreflight(projectConfig({ ...prerequisites(), PROJECT_QUOTA_RESERVATION_V1: { type: 'plain_text', value: 'true' } }), options), { code: 'QUOTA_CLEANUP_UNSUPPORTED' });
 });
 
-test('PNG capability check uses the owned project editor context rather than global map permissions', () => {
+test('PNG capability check requires the top-level owned project editor response and preserves scope denials', () => {
   const project = { id: 101, slug: 'qa-durable-12345678-1234-4234-8234-123456789abc-small' };
-  const context = { allowed: true, mode: 'editor', project, organization: { id: 9 }, capabilities: { viewMap: true, saveMap: true } };
-  assert.doesNotThrow(() => verifyOwnedProjectEditorAccess({ context }, project, 9));
+  const context = { ok: true, allowed: true, mode: 'editor', project, organization: { id: 9 }, capabilities: { viewMap: true, saveMap: true } };
+  assert.doesNotThrow(() => verifyOwnedProjectEditorAccess(context, project, 9));
   for (const wrong of [
     null,
+    { context },
+    { ok: true, context },
+    { ...context, ok: false },
+    { ...context, ok: undefined },
     { ...context, allowed: false },
     { ...context, mode: 'viewer' },
     { ...context, mode: 'admin' },
@@ -63,7 +70,54 @@ test('PNG capability check uses the owned project editor context rather than glo
     { ...context, capabilities: { viewMap: true, saveMap: false } },
     { ...context, capabilities: { viewMap: true } },
     { ...context, capabilities: null },
-  ]) assert.throws(() => verifyOwnedProjectEditorAccess({ context: wrong }, project, 9), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
+  ]) assert.throws(() => verifyOwnedProjectEditorAccess(wrong, project, 9), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
+});
+
+test('PNG verifier consumes the real navigation handler with SQLite editor ownership and live scoped grants', async t => {
+  const f = persistenceFixture(t);
+  f.db.exec(`UPDATE users SET role='editor' WHERE id=1;
+    UPDATE organization_users SET access_level='editor' WHERE user_id=1 AND organization_id=1;
+    INSERT INTO user_permissions(user_id,permission,organization_id) VALUES
+      (1,'project.create',1),(1,'project.save',1);`);
+  f.env.PROJECT_MAP_EDIT_PERMISSION_V1 = 'true';
+  const saved = await create(f, config('navigation-contract'));
+  assert.equal(saved.status, 200);
+  const project = f.project();
+  assert.equal(f.db.prepare('SELECT access_level FROM user_projects WHERE user_id=1 AND project_id=?').get(project.id).access_level, 'owner');
+  assert.deepEqual(f.db.prepare('SELECT permission FROM user_permissions WHERE user_id=1 ORDER BY permission').all().map(row => row.permission),
+    ['project.create', 'project.save']);
+  const navigate = (mode = 'editor') => mapNavigation({ env: f.env, params: { slug: project.slug },
+    request: request(f, `/api/projects/${encodeURIComponent(project.slug)}/map-navigation?mode=${mode}`) });
+  const response = await navigate();
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.requestedMode, 'editor');
+  assert.equal(body.allowed, true);
+  assert.equal(body.mode, 'editor');
+  assert.equal(body.capabilities.viewMap, true);
+  assert.equal(body.capabilities.saveMap, true);
+  assert.equal(Object.hasOwn(body, 'context'), false);
+  assert.doesNotThrow(() => verifyOwnedProjectEditorAccess(body, project, 1));
+  assert.throws(() => verifyOwnedProjectEditorAccess({ ok: true, context: body }, project, 1), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
+  assert.throws(() => verifyOwnedProjectEditorAccess(body, project, 2), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
+  assert.throws(() => verifyOwnedProjectEditorAccess(body, { ...project, id: project.id + 1 }, 1), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
+
+  f.db.exec(`UPDATE user_permissions SET active=0 WHERE user_id=1;
+    UPDATE users SET role='viewer' WHERE id=1;
+    UPDATE organization_users SET access_level='viewer' WHERE user_id=1 AND organization_id=1;
+    UPDATE user_projects SET access_level='viewer' WHERE user_id=1 AND project_id=${Number(project.id)};`);
+  const deniedResponse = await navigate();
+  assert.equal(deniedResponse.status, 403);
+  const denied = await deniedResponse.json();
+  assert.equal(denied.ok, false);
+  assert.throws(() => verifyOwnedProjectEditorAccess(denied, project, 1), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
+  const viewerResponse = await navigate('viewer');
+  assert.equal(viewerResponse.status, 200);
+  const viewer = await viewerResponse.json();
+  assert.equal(viewer.allowed, true);
+  assert.equal(viewer.mode, 'viewer');
+  assert.equal(viewer.capabilities.saveMap, false);
+  assert.throws(() => verifyOwnedProjectEditorAccess(viewer, project, 1), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
 });
 
 test('browser mutation admission is restricted to its synthetic project and known numerical telemetry', () => {

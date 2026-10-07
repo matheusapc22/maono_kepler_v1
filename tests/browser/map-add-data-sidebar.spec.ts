@@ -56,7 +56,7 @@ async function openMap(page: Page, options: FixtureOptions = {}) {
       user: { id: 1, name: 'Operador sintético QA', email: 'add-data@example.test', role: 'super_admin', activeOrganizationId: 1 },
       organizations: [organization], activeOrganization: organization, projects: [],
     } });
-    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true, context: {
+    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true,
       policyVersion: 1, requestedMode: 'create', mode: 'create', assignedMode: 'create', defaultPanel: 'create', allowed: true,
       project: null, organization, availablePanels: { viewer: false, editor: false, create: true },
       capabilities: {
@@ -67,7 +67,7 @@ async function openMap(page: Page, options: FixtureOptions = {}) {
         addData: options.importData ?? true, importData: options.importData ?? true,
       },
       features: { mapPanelModes: true, mapCreateRoute: true, maonoMapShell: true, maonoLayerManager: true, maonoMapOverlay: true },
-    } } });
+    } });
     // Same-origin URL fixtures exercise the real fetch -> File -> loadFiles path.
     if (url.pathname === '/__qa/add-data/remote.csv') {
       if (options.remoteGate) await options.remoteGate;
