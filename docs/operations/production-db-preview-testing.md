@@ -30,8 +30,8 @@ O isolamento é de **dados de domínio**, não uma promessa de D1 fisicamente re
 node scripts/preview/build-production-qa-seed.mjs --user-email=qa@example.com > /tmp/maono-preview-qa.sql
 ```
 
-4. Revisar o SQL e executar manualmente no D1 de produção.
-5. Consultar o ID da organização `maono-preview-qa`.
+4. Revisar o SQL. Qualquer aplicação no D1 de produção exige o fluxo protegido e a autorização específica definidos em [AGENTS.md](../../AGENTS.md); gerar o arquivo não autoriza sua execução.
+5. Consultar o ID da organização `maono-preview-qa`. Antes de testar escrita, concluir o provisionamento/verificação real do storage pelo fluxo administrativo autorizado e conferir a prontidão. O seed insere `PENDING`, sem `storage_checked_at`; não cria pastas nem comprova `READY`.
 6. No ambiente **Preview** do Cloudflare Pages, configurar:
 
 ```text
@@ -56,8 +56,12 @@ Padrão sugerido:
 ```text
 Nome: Maõno Preview QA
 Slug: maono-preview-qa
-Dropbox root: /Apps/MaonoKepler/preview/qa
+Dropbox root: /projects/maono-preview-qa
 ```
+
+A raiz padrão é derivada do `--org-slug` (`/projects/<slug>`). O slug deve conter letras minúsculas, números e hífens entre segmentos. `--dropbox-root` aceita apenas caminhos válidos sob `/projects/`; uma raiz diferente da canônica continua sujeita à decisão explícita de storage da aplicação.
+
+Ao repetir o seed, a organização existente é preservada integralmente: raiz, ativação, metadados, status, erro e datas de verificação não são alterados. Somente o vínculo QA mantém o contrato idempotente de acesso `owner`. Isso não corrige organizações históricas com raiz `/Apps/MaonoKepler/preview/qa`, mesmo que estejam marcadas `READY`: elas exigem diagnóstico e correção separados pelo fluxo administrativo autorizado, sem sobrescrever o caminho ou afirmar prontidão por SQL.
 
 Projetos:
 
