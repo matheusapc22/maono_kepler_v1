@@ -36,6 +36,12 @@ on:
       - 'tests/browser/map-panel-minimal.spec.ts'
       - 'tests/browser/map-sidebar-visual.spec.ts'
       - 'tests/browser/map-numeric-controls.spec.ts'
+      - 'tests/browser/map-histogram-interactions.spec.ts'
+      - 'tests/browser/map-layer-reorder.spec.ts'
+      - 'tests/browser/map-interactions-integration.spec.ts'
+      - 'tests/browser/fixtures/map-pixel-difference.ts'
+      - 'tests/histogram-range-interactions.test.mjs'
+      - 'tests/maono-layer-drop-order.test.mjs'
       - 'playwright.numeric-controls.config.ts'
       - 'tests/map-sidebar-visual.test.mjs'
       - 'tests/layer-sidebar-accents.test.mjs'
@@ -65,10 +71,10 @@ permissions:
 jobs:
   project-pages:
     runs-on: ubuntu-latest
-    # Includes native map import, localization and nested-scroll checks in three engines.
-    # The serial three-engine suite takes ~53 minutes, plus build/install and
-    # evidence upload. Preserve every case and per-test timeout with job headroom.
-    timeout-minutes: 75
+    # Preserve the complete three-engine suite plus focused gesture feedback.
+    # Browser dependency downloads can be slow; no individual test timeout or
+    # assertion is relaxed to fit the combined build/evidence job.
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,7 +88,7 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --experimental-strip-types --test tests/map-error-notice.test.mjs tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/layer-sidebar-accents.test.mjs tests/maono-numeric-controls.test.mjs tests/map-sidebar-inspector-redesign.test.mjs tests/map-sidebar-visual.test.mjs tests/map-panel-hints.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
+          node --experimental-strip-types --test tests/map-error-notice.test.mjs tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/layer-sidebar-accents.test.mjs tests/maono-numeric-controls.test.mjs tests/histogram-range-interactions.test.mjs tests/maono-layer-drop-order.test.mjs tests/map-sidebar-inspector-redesign.test.mjs tests/map-sidebar-visual.test.mjs tests/map-panel-hints.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-thumbnail-serving.test.mjs tests/project-metadata-api.test.mjs
@@ -107,7 +113,28 @@ jobs:
       - name: Install browser engines
         id: browsers
         run: npx playwright install --with-deps chromium firefox webkit
+      - name: Focused Visual Maõno interactions (three engines)
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: map-interactions-results.json
+        run: >-
+          xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24"
+          npx playwright test --config=playwright.project-pages.config.ts
+          map-sidebar-visual.spec.ts map-numeric-controls.spec.ts
+          map-histogram-interactions.spec.ts map-layer-reorder.spec.ts
+          map-interactions-integration.spec.ts
+          --output=test-results-map-interactions --reporter=list,json
+      - name: Focused map interaction evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-maono-interactions-${{ github.sha }}
+          path: |
+            test-results-map-interactions/
+            map-interactions-results.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Early panel help and disclosure diagnostics (three engines)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.browsers.outcome == 'success' }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: panel-help-results.json
         run: >-
@@ -140,6 +167,9 @@ jobs:
           path: |
             test-results/map-sidebar-visual-*/
             test-results/map-numeric-controls-*/
+            test-results/map-histogram-interactions-*/
+            test-results/map-layer-reorder-*/
+            test-results/map-interactions-integration-*/
           if-no-files-found: warn
           retention-days: 14
       - name: Evidence and inspectable local build (no credentials)
@@ -161,6 +191,10 @@ jobs:
             tests/browser/map-panel-minimal.spec.ts
             tests/browser/map-sidebar-visual.spec.ts
             tests/browser/map-numeric-controls.spec.ts
+            tests/browser/map-histogram-interactions.spec.ts
+            tests/browser/map-layer-reorder.spec.ts
+            tests/browser/map-interactions-integration.spec.ts
+            tests/browser/fixtures/map-pixel-difference.ts
             tests/browser/map-panel-hint-compatibility.spec.ts
             tests/browser/fixtures/map-panel-minimal.ts
             tests/map-panel-minimal.test.mjs

@@ -130,9 +130,6 @@
 .maono-map-runtime .maono-layer-panel .maono-layer-row:hover { background: var(--maono-panel-hover); }
 .maono-map-runtime .maono-layer-panel .maono-layer-row.is-selected { background: transparent; }
 .maono-map-runtime .maono-layer-panel .maono-layer-row.is-hidden { opacity: 1; }
-.maono-map-runtime .maono-layer-panel .maono-layer-row.is-drag-target {
-  border-top: 2px solid var(--maono-layer-gold);
-}
 .maono-map-runtime .maono-layer-panel .maono-layer-row.is-dragging,
 .maono-map-runtime .maono-layer-panel .maono-layer-row.is-dragging .maono-layer-row__grip { cursor: grabbing; }
 .maono-map-runtime .maono-layer-panel .maono-layer-row__grip { grid-column: 1; width: 18px; }

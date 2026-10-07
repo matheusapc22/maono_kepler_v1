@@ -308,7 +308,7 @@ test("fase básica cobre criação, renomeação, duplicação, exclusão e orde
   assert.match(source.layerListItem, /Mover .* para baixo/);
   assert.match(source.layerListItem, /onDuplicate\(layer\)/);
   assert.match(source.layerListItem, /onRemove\(layer\)/);
-  assert.match(source.layerList, /onReorder\(sourceLayerId, targetLayerId\)/);
+  assert.match(source.layerList, /onReorder\(sourceLayerId, targetLayerId, position\)/);
   assert.match(source.panel, /window\.confirm/);
   assert.match(source.engineCommands, /uniqueLayerLabel/);
 });

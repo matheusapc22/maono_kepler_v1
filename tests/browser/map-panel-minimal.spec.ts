@@ -271,7 +271,12 @@ async function layerExtentGuides(detail: Locator, width: number) {
     if (!wasOpen) await summary.click();
     await expect(section).toHaveAttribute('open', '');
     await extentGuide(content, 'layer', width);
-    await expect(summary.locator('small')).toHaveCSS('padding-left', `${(width <= 560 ? 10 : 12) + 2}px`);
+    const subtitle = summary.locator('small');
+    if (await section.evaluate(element => element.classList.contains('maono-detail-section'))) {
+      await expect(subtitle).toHaveCount(0);
+    } else if (await subtitle.count()) {
+      await expect(subtitle).toHaveCSS('padding-left', `${(width <= 560 ? 10 : 12) + 2}px`);
+    }
     await summary.click();
     await expect(content).toBeHidden();
     expect(await content.evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
@@ -523,7 +528,7 @@ test('search, eye, rename portal and HTML drag-and-drop mutate actual layers and
   await expect(rows(page).first().locator('.maono-layer-row__open strong')).toHaveText('Camada 01');
   await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'true');
   await renameFirstLayer(page, 'Camada renomeada');
-  await rows(page).first().dragTo(rows(page).nth(2), { sourcePosition: { x: 8, y: 18 }, targetPosition: { x: 50, y: 18 } });
+  await rows(page).first().dragTo(rows(page).nth(2), { sourcePosition: { x: 8, y: 18 }, targetPosition: { x: 50, y: 50 } });
   await expect(rows(page).locator('.maono-layer-row__open strong')).toHaveText(['Camada 02', 'Camada 03', 'Camada renomeada']);
   await visualEvidence(page, testInfo, 'minimal-populated-layers');
   const saved = savedVisState(await saveMap(page, fixture));

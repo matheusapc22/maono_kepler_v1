@@ -2,6 +2,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -30,6 +31,15 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function useStableRange(range: [number, number] | null) {
+  const minimum = range?.[0] ?? null;
+  const maximum = range?.[1] ?? null;
+  return useMemo<[number, number] | null>(
+    () => minimum === null || maximum === null ? null : [minimum, maximum],
+    [minimum, maximum],
+  );
+}
+
 function NumericRangeEditor({
   filter,
   onChange,
@@ -38,13 +48,15 @@ function NumericRangeEditor({
   onChange: (value: [number, number]) => void;
 }) {
   const histogram = useSmartFilterHistogram(filter);
-  const domain = numberPair(filter.domain, filter.domain);
-  const value = numberPair(filter.value, filter.domain) ?? domain;
+  const domain = useStableRange(numberPair(filter.domain, filter.domain));
+  const value = useStableRange(numberPair(filter.value, filter.domain) ?? domain);
   const [draft, setDraft] = useState<[number, number] | null>(value);
+  const appliedRangeRef = useRef(value);
 
   useEffect(() => {
     setDraft(value);
-  }, [value?.[0], value?.[1]]);
+    appliedRangeRef.current = value;
+  }, [value]);
 
   if (!domain || !draft) {
     return (
@@ -61,7 +73,16 @@ function NumericRangeEditor({
   const brushStep = filter.step ?? Math.max(span / 1000, 0.0001);
 
   function commit(next: [number, number] = currentDraft) {
-    if (!sameFilterValue(next, value)) onChange(next);
+    if (!sameFilterValue(next, appliedRangeRef.current)) {
+      appliedRangeRef.current = next;
+      onChange(next);
+    }
+  }
+
+  function updateBrush(next: [number, number]) {
+    setDraft(next);
+    // This updates the working filter on every move, without saving the map.
+    commit(next);
   }
 
   return (
@@ -69,9 +90,9 @@ function NumericRangeEditor({
       <FilterHistogram
         histogram={histogram}
         selectedRange={currentDraft}
-        editable
+        editable={currentDomain[1] > currentDomain[0]}
         step={brushStep}
-        onRangeChange={setDraft}
+        onRangeChange={updateBrush}
         onRangeCommit={commit}
       />
 
@@ -107,8 +128,7 @@ function NumericRangeEditor({
         className="maono-filter-editor__reset"
         disabled={sameFilterValue(value, currentDomain)}
         onClick={() => {
-          setDraft(currentDomain);
-          onChange(currentDomain);
+          updateBrush(currentDomain);
         }}
       >
         Restaurar domínio completo
@@ -125,8 +145,12 @@ function TimeRangeEditor({
   onChange: (value: [number, number]) => void;
 }) {
   const histogram = useSmartFilterHistogram(filter);
-  const domain = numberPair(filter.domain, filter.domain);
-  const value = numberPair(filter.value, filter.domain) ?? domain;
+  const domain = useStableRange(numberPair(filter.domain, filter.domain));
+  const value = useStableRange(numberPair(filter.value, filter.domain) ?? domain);
+  // Keep exact timestamps separate from minute-formatted date inputs. Otherwise
+  // a live pointer update would round the band and change its visual width.
+  const [draft, setDraft] = useState<[number, number] | null>(value);
+  const appliedRangeRef = useRef(value);
   const [minimum, setMinimum] = useState(
     value ? timestampToInputValue(value[0]) : "",
   );
@@ -135,11 +159,13 @@ function TimeRangeEditor({
   );
 
   useEffect(() => {
+    setDraft(value);
+    appliedRangeRef.current = value;
     setMinimum(value ? timestampToInputValue(value[0]) : "");
     setMaximum(value ? timestampToInputValue(value[1]) : "");
-  }, [value?.[0], value?.[1]]);
+  }, [value]);
 
-  if (!domain || !value) {
+  if (!domain || !value || !draft) {
     return (
       <p className="maono-filter-editor__empty">
         Não foi possível calcular um período válido para este campo.
@@ -149,57 +175,67 @@ function TimeRangeEditor({
 
   const currentDomain = domain;
   const currentValue = value;
+  const currentDraft = draft;
   const minimumDomain = timestampToInputValue(currentDomain[0]);
   const maximumDomain = timestampToInputValue(currentDomain[1]);
-  const parsedMinimum = inputValueToTimestamp(minimum);
-  const parsedMaximum = inputValueToTimestamp(maximum);
-  const brushRange: [number, number] = [
-    parsedMinimum ?? currentValue[0],
-    parsedMaximum ?? currentValue[1],
-  ];
   const brushStep = Math.max((currentDomain[1] - currentDomain[0]) / 1000, 1);
+
+  function updateBrush(next: [number, number]) {
+    setDraft(next);
+    setMinimum(timestampToInputValue(next[0]));
+    setMaximum(timestampToInputValue(next[1]));
+    if (!sameFilterValue(next, appliedRangeRef.current)) {
+      appliedRangeRef.current = next;
+      onChange(next);
+    }
+  }
 
   function commit() {
     const nextMinimum = inputValueToTimestamp(minimum);
     const nextMaximum = inputValueToTimestamp(maximum);
-
-    if (
-      nextMinimum === null ||
-      nextMaximum === null ||
-      nextMinimum > nextMaximum
-    ) {
+    if (nextMinimum === null || nextMaximum === null || nextMinimum > nextMaximum) {
+      setDraft(currentValue);
       setMinimum(timestampToInputValue(currentValue[0]));
       setMaximum(timestampToInputValue(currentValue[1]));
       return;
     }
-
+    // An untouched input must not truncate seconds/milliseconds from a brush.
     const next: [number, number] = [
-      clamp(nextMinimum, currentDomain[0], currentDomain[1]),
-      clamp(nextMaximum, currentDomain[0], currentDomain[1]),
+      minimum === timestampToInputValue(currentDraft[0]) ? currentDraft[0]
+        : clamp(nextMinimum, currentDomain[0], currentDomain[1]),
+      maximum === timestampToInputValue(currentDraft[1]) ? currentDraft[1]
+        : clamp(nextMaximum, currentDomain[0], currentDomain[1]),
     ];
-
-    if (!sameFilterValue(next, currentValue)) onChange(next);
+    // Rounded input strings can appear ordered while an untouched endpoint
+    // still has seconds. Validate the actual tuple before applying it.
+    if (next[0] > next[1]) {
+      setDraft(currentValue);
+      setMinimum(timestampToInputValue(currentValue[0]));
+      setMaximum(timestampToInputValue(currentValue[1]));
+      return;
+    }
+    updateBrush(next);
   }
 
-  function previewBrush(next: [number, number]) {
-    setMinimum(timestampToInputValue(next[0]));
-    setMaximum(timestampToInputValue(next[1]));
-  }
-
-  function commitBrush(next: [number, number]) {
-    previewBrush(next);
-    if (!sameFilterValue(next, currentValue)) onChange(next);
+  function previewInput(text: string, index: 0 | 1) {
+    if (index === 0) setMinimum(text);
+    else setMaximum(text);
+    const parsed = inputValueToTimestamp(text);
+    if (parsed === null) return;
+    const next: [number, number] = [...currentDraft];
+    next[index] = clamp(parsed, currentDomain[0], currentDomain[1]);
+    if (next[0] <= next[1]) setDraft(next);
   }
 
   return (
     <div className="maono-filter-editor is-time">
       <FilterHistogram
         histogram={histogram}
-        selectedRange={brushRange}
-        editable
+        selectedRange={currentDraft}
+        editable={currentDomain[1] > currentDomain[0]}
         step={brushStep}
-        onRangeChange={previewBrush}
-        onRangeCommit={commitBrush}
+        onRangeChange={updateBrush}
+        onRangeCommit={updateBrush}
       />
 
       <div className="maono-filter-time__inputs">
@@ -210,10 +246,14 @@ function TimeRangeEditor({
             min={minimumDomain}
             max={maximum || maximumDomain}
             value={minimum}
-            onChange={(event) => setMinimum(event.target.value)}
+            onChange={(event) => previewInput(event.target.value, 0)}
             onBlur={commit}
             onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.blur();
+              }
             }}
           />
         </label>
@@ -224,10 +264,14 @@ function TimeRangeEditor({
             min={minimum || minimumDomain}
             max={maximumDomain}
             value={maximum}
-            onChange={(event) => setMaximum(event.target.value)}
+            onChange={(event) => previewInput(event.target.value, 1)}
             onBlur={commit}
             onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.blur();
+              }
             }}
           />
         </label>
@@ -237,11 +281,7 @@ function TimeRangeEditor({
         type="button"
         className="maono-filter-editor__reset"
         disabled={sameFilterValue(currentValue, currentDomain)}
-        onClick={() => {
-          setMinimum(minimumDomain);
-          setMaximum(maximumDomain);
-          onChange(currentDomain);
-        }}
+        onClick={() => updateBrush(currentDomain)}
       >
         Restaurar período completo
       </button>

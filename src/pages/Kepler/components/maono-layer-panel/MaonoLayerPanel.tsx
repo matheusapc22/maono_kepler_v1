@@ -19,6 +19,7 @@ import AddLayerMenu from "./AddLayerMenu";
 import FilterPanel from "./FilterPanel";
 import LayerDetailView from "./LayerDetailView";
 import LayerList from "./LayerList";
+import { reorderLayerIdsAtTarget, type LayerDropPosition } from "./layer-drop-order";
 import LayerPanelIcon from "./LayerPanelIcon";
 import { useLayerSidebarAccents } from "./useLayerSidebarAccents";
 import PanelSaveAction from "./PanelSaveAction";
@@ -187,14 +188,9 @@ export default function MaonoLayerPanel() {
     applyCommand(controller.reorderLayers(order), "Ordem das camadas atualizada.");
   }
 
-  function reorderLayer(draggedLayerId: string, targetLayerId: string) {
-    const order = layers.map((layer) => layer.id);
-    const draggedIndex = order.indexOf(draggedLayerId);
-    const targetIndex = order.indexOf(targetLayerId);
-    if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) return;
-
-    const [movedLayerId] = order.splice(draggedIndex, 1);
-    order.splice(targetIndex, 0, movedLayerId);
+  function reorderLayer(draggedLayerId: string, targetLayerId: string, position: LayerDropPosition) {
+    const order = reorderLayerIdsAtTarget(layers.map((layer) => layer.id), draggedLayerId, targetLayerId, position);
+    if (!order) return;
     applyCommand(controller.reorderLayers(order), "Ordem das camadas atualizada.");
   }
 

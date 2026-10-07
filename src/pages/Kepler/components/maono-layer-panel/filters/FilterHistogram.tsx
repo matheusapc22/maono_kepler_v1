@@ -1,12 +1,17 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import {
-  histogramRatioToValue,
   histogramValueToRatio,
 } from "../../../engine-adapter/histogram-strategies.ts";
-import type { MapSmartHistogram } from "../../../engine-adapter/histogram-types.ts";
+import type { MapHistogramAxisScale, MapSmartHistogram } from "../../../engine-adapter/histogram-types.ts";
 
-type Range = [number, number];
+import {
+  clampHistogramRange,
+  dragHistogramRange,
+  keyboardHistogramRange,
+  type HistogramDragMode,
+  type HistogramRange as Range,
+} from "./histogram-range.ts";
 
 type Props = {
   histogram: MapSmartHistogram;
@@ -17,18 +22,16 @@ type Props = {
   onRangeCommit: (range: Range) => void;
 };
 
-type DragMode = "minimum" | "maximum" | "window";
-
 type DragState = {
-  mode: DragMode;
+  mode: HistogramDragMode;
   pointerId: number;
   startRange: Range;
-  startPointerValue: number;
+  startClientX: number;
+  plotWidth: number;
+  domain: Range;
+  scale: MapHistogramAxisScale;
+  step: number;
 };
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
 
 function strategyLabel(histogram: MapSmartHistogram) {
   switch (histogram.strategy) {
@@ -71,13 +74,35 @@ export default function FilterHistogram({
   const plotRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const currentRangeRef = useRef<Range | null>(selectedRange);
+  const [dragging, setDragging] = useState<HistogramDragMode | null>(null);
   const domain = histogram.displayDomain ?? histogram.originalDomain;
   const maximum = Math.max(1, ...histogram.bins.map((bin) => bin.count));
   const temporal = histogram.axisScale === "time";
 
   useEffect(() => {
-    currentRangeRef.current = selectedRange;
-  }, [selectedRange?.[0], selectedRange?.[1]]);
+    if (!dragRef.current) currentRangeRef.current = selectedRange;
+  }, [selectedRange]);
+
+  useEffect(() => {
+    const plot = plotRef.current;
+    return () => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      if (drag && plot?.hasPointerCapture(drag.pointerId)) {
+        plot.releasePointerCapture(drag.pointerId);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const drag = dragRef.current;
+    if (!drag || (editable && selectedRange && domain?.[0] === drag.domain[0] && domain?.[1] === drag.domain[1] && histogram.axisScale === drag.scale)) return;
+    dragRef.current = null;
+    setDragging(null);
+    if (plotRef.current?.hasPointerCapture(drag.pointerId)) {
+      plotRef.current.releasePointerCapture(drag.pointerId);
+    }
+  }, [editable, selectedRange, domain, histogram.axisScale]);
 
   if (!domain || !selectedRange) {
     return (
@@ -88,10 +113,7 @@ export default function FilterHistogram({
   }
 
   const activeDomain: Range = domain;
-  const safeRange: Range = [
-    clamp(selectedRange[0], activeDomain[0], activeDomain[1]),
-    clamp(selectedRange[1], activeDomain[0], activeDomain[1]),
-  ];
+  const safeRange = clampHistogramRange(selectedRange, activeDomain);
   const minimumRatio = histogramValueToRatio(
     safeRange[0],
     activeDomain,
@@ -105,124 +127,73 @@ export default function FilterHistogram({
   const selectionLeft = Math.min(minimumRatio, maximumRatio) * 100;
   const selectionWidth = Math.max(0, maximumRatio - minimumRatio) * 100;
 
-  function ratioAt(clientX: number) {
-    const rect = plotRef.current?.getBoundingClientRect();
-    if (!rect || rect.width <= 0) return 0;
-    return clamp((clientX - rect.left) / rect.width, 0, 1);
-  }
-
-  function valueAt(clientX: number) {
-    return histogramRatioToValue(
-      ratioAt(clientX),
-      activeDomain,
-      histogram.axisScale,
-    );
-  }
-
-  function snapped(value: number) {
-    const safeStep =
-      Number.isFinite(step) && step > 0
-        ? step
-        : (activeDomain[1] - activeDomain[0]) / 1000;
-    const steps = Math.round((value - activeDomain[0]) / safeStep);
-    return clamp(
-      activeDomain[0] + steps * safeStep,
-      activeDomain[0],
-      activeDomain[1],
-    );
-  }
-
-  function beginDrag(
-    mode: DragMode,
-    event: ReactPointerEvent<HTMLElement>,
-  ) {
-    if (!editable) return;
+  function beginDrag(mode: HistogramDragMode, event: ReactPointerEvent<HTMLElement>) {
+    const plot = plotRef.current;
+    const rect = plot?.getBoundingClientRect();
+    if (!editable || event.button !== 0 || event.isPrimary === false || dragRef.current || !plot || !rect || rect.width <= 0) return;
     event.preventDefault();
     event.stopPropagation();
-
-    const range = currentRangeRef.current ?? safeRange;
+    event.currentTarget.focus({ preventScroll: true });
+    plot.setPointerCapture(event.pointerId);
+    const range = clampHistogramRange(currentRangeRef.current ?? safeRange, activeDomain);
+    currentRangeRef.current = range;
     dragRef.current = {
       mode,
       pointerId: event.pointerId,
-      startRange: [...range] as Range,
-      startPointerValue: valueAt(event.clientX),
+      startRange: range,
+      startClientX: event.clientX,
+      plotWidth: rect.width,
+      domain: activeDomain,
+      scale: histogram.axisScale,
+      step,
     };
-    plotRef.current?.setPointerCapture(event.pointerId);
+    setDragging(mode);
+  }
+
+  function publishRange(next: Range) {
+    const previous = currentRangeRef.current;
+    currentRangeRef.current = next;
+    if (!previous || next[0] !== previous[0] || next[1] !== previous[1]) onRangeChange(next);
   }
 
   function updateDrag(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-
-    const pointerValue = valueAt(event.clientX);
-    let next: Range;
-
-    if (drag.mode === "minimum") {
-      const minimum = Math.min(snapped(pointerValue), drag.startRange[1]);
-      next = [minimum, drag.startRange[1]];
-    } else if (drag.mode === "maximum") {
-      const maximumValue = Math.max(snapped(pointerValue), drag.startRange[0]);
-      next = [drag.startRange[0], maximumValue];
-    } else {
-      const amplitude = drag.startRange[1] - drag.startRange[0];
-      const delta = pointerValue - drag.startPointerValue;
-      let minimum = drag.startRange[0] + delta;
-      let maximumValue = drag.startRange[1] + delta;
-
-      if (minimum < activeDomain[0]) {
-        minimum = activeDomain[0];
-        maximumValue = minimum + amplitude;
-      }
-      if (maximumValue > activeDomain[1]) {
-        maximumValue = activeDomain[1];
-        minimum = maximumValue - amplitude;
-      }
-      next = [minimum, maximumValue];
-    }
-
-    currentRangeRef.current = next;
-    onRangeChange(next);
+    event.preventDefault();
+    event.stopPropagation();
+    publishRange(dragHistogramRange(
+      drag.startRange,
+      drag.mode,
+      (event.clientX - drag.startClientX) / drag.plotWidth,
+      drag.domain,
+      drag.scale,
+      drag.step,
+    ));
   }
 
   function finishDrag(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-
+    // Cancellation/lost capture have no reliable coordinates. Keep the latest
+    // live value; pointerup also includes its final position without a move event.
+    if (event.type === "pointerup") updateDrag(event);
+    event.stopPropagation();
     const next = currentRangeRef.current ?? drag.startRange;
     dragRef.current = null;
+    setDragging(null);
     if (plotRef.current?.hasPointerCapture(event.pointerId)) {
       plotRef.current.releasePointerCapture(event.pointerId);
     }
     onRangeCommit(next);
   }
 
-  function keyboardHandle(mode: "minimum" | "maximum", delta: number) {
-    if (!editable) return;
-    const range = currentRangeRef.current ?? safeRange;
-    const safeStep =
-      Number.isFinite(step) && step > 0
-        ? step
-        : (activeDomain[1] - activeDomain[0]) / 1000;
-    const next: Range =
-      mode === "minimum"
-        ? [
-            clamp(
-              range[0] + delta * safeStep,
-              activeDomain[0],
-              range[1],
-            ),
-            range[1],
-          ]
-        : [
-            range[0],
-            clamp(
-              range[1] + delta * safeStep,
-              range[0],
-              activeDomain[1],
-            ),
-          ];
-    currentRangeRef.current = next;
-    onRangeChange(next);
+  function keyboardHandle(mode: HistogramDragMode, event: ReactKeyboardEvent<HTMLElement>) {
+    if (!editable || dragRef.current) return;
+    const next = keyboardHistogramRange(currentRangeRef.current ?? safeRange, mode, event.key, activeDomain, histogram.axisScale, step);
+    if (!next) return;
+    event.preventDefault();
+    event.stopPropagation();
+    publishRange(next);
     onRangeCommit(next);
   }
 
@@ -243,9 +214,11 @@ export default function FilterHistogram({
       <div
         ref={plotRef}
         className="maono-filter-histogram__plot"
+        data-dragging={dragging ?? undefined}
         onPointerMove={updateDrag}
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
+        onLostPointerCapture={finishDrag}
       >
         <div
           className="maono-filter-histogram__bars"
@@ -279,8 +252,16 @@ export default function FilterHistogram({
           className="maono-filter-histogram__selection"
           style={{ left: `${selectionLeft}%`, width: `${selectionWidth}%` }}
           onPointerDown={(event) => beginDrag("window", event)}
-          title="Arraste para mover o intervalo sem alterar sua amplitude"
-          aria-hidden="true"
+          title="Arraste para mover o intervalo sem alterar sua largura visual"
+          role="slider"
+          tabIndex={editable ? 0 : -1}
+          aria-disabled={!editable}
+          aria-label="Intervalo selecionado do filtro"
+          aria-valuemin={activeDomain[0]}
+          aria-valuemax={activeDomain[1]}
+          aria-valuenow={safeRange[0]}
+          aria-valuetext={`${valueLabel(safeRange[0], temporal)} a ${valueLabel(safeRange[1], temporal)}`}
+          onKeyDown={(event) => keyboardHandle("window", event)}
         />
 
         <button
@@ -294,10 +275,7 @@ export default function FilterHistogram({
           aria-valuemax={safeRange[1]}
           aria-valuenow={safeRange[0]}
           onPointerDown={(event) => beginDrag("minimum", event)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft") keyboardHandle("minimum", -1);
-            if (event.key === "ArrowRight") keyboardHandle("minimum", 1);
-          }}
+          onKeyDown={(event) => keyboardHandle("minimum", event)}
         />
         <button
           type="button"
@@ -310,10 +288,7 @@ export default function FilterHistogram({
           aria-valuemax={activeDomain[1]}
           aria-valuenow={safeRange[1]}
           onPointerDown={(event) => beginDrag("maximum", event)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft") keyboardHandle("maximum", -1);
-            if (event.key === "ArrowRight") keyboardHandle("maximum", 1);
-          }}
+          onKeyDown={(event) => keyboardHandle("maximum", event)}
         />
       </div>
 

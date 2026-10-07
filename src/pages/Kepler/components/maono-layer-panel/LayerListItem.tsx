@@ -10,6 +10,7 @@ import {
 
 import type { MaonoLayerSnapshot } from "../../integration/keplerBridge";
 import LayerPanelIcon from "./LayerPanelIcon";
+import type { LayerDropPosition } from "./layer-drop-order";
 import PanelActionMenu, {
   type PanelActionMenuItem,
 } from "./PanelActionMenu";
@@ -27,7 +28,7 @@ type Props = {
   canRemove: boolean;
   canReorder: boolean;
   dragging: boolean;
-  dragTarget: boolean;
+  dropPosition: LayerDropPosition | null;
   onOpen: (layer: MaonoLayerSnapshot) => void;
   onToggle: (layer: MaonoLayerSnapshot, visible: boolean) => void;
   onRename: (layer: MaonoLayerSnapshot, label: string) => boolean;
@@ -36,7 +37,8 @@ type Props = {
   onMove: (layerId: string, direction: -1 | 1) => void;
   onMoveTo: (layerId: string, position: "start" | "end") => void;
   onDragStart: (layerId: string, event: DragEvent<HTMLLIElement>) => void;
-  onDragEnter: (layerId: string) => void;
+  onDragOver: (layerId: string, event: DragEvent<HTMLLIElement>) => void;
+  onDragLeave: (layerId: string) => void;
   onDrop: (layerId: string, event: DragEvent<HTMLLIElement>) => void;
   onDragEnd: () => void;
 };
@@ -58,7 +60,7 @@ export default function LayerListItem({
   canRemove,
   canReorder,
   dragging,
-  dragTarget,
+  dropPosition,
   onOpen,
   onToggle,
   onRename,
@@ -67,7 +69,8 @@ export default function LayerListItem({
   onMove,
   onMoveTo,
   onDragStart,
-  onDragEnter,
+  onDragOver,
+  onDragLeave,
   onDrop,
   onDragEnd,
 }: Props) {
@@ -199,17 +202,18 @@ export default function LayerListItem({
         selected ? "is-selected" : "",
         layer.isVisible ? "is-visible" : "is-hidden",
         dragging ? "is-dragging" : "",
-        dragTarget ? "is-drag-target" : "",
+        dropPosition ? `is-drag-target is-drop-${dropPosition}` : "",
       ]
         .filter(Boolean)
         .join(" ")}
+      data-layer-id={layer.id}
+      data-drop-position={dropPosition ?? undefined}
       draggable={canReorder && !editing}
       onDragStart={(event) => onDragStart(layer.id, event)}
-      onDragEnter={() => onDragEnter(layer.id)}
-      onDragOver={(event) => {
-        if (canReorder) {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
+      onDragOver={(event) => onDragOver(layer.id, event)}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          onDragLeave(layer.id);
         }
       }}
       onDrop={(event) => onDrop(layer.id, event)}

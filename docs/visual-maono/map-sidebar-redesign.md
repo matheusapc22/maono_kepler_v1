@@ -46,3 +46,20 @@ As duas suítes foram incluídas no gate Project Pages em Chromium, Firefox e We
 - Nenhuma aceitação em Preview remoto/produção foi executada por esta frente. Não reutilizar os testes sintéticos como prova de persistência remota.
 
 O estado corrente de cada gate, os links dos artefatos e a revisão independente ficam na descrição da PR. Não considerar CI pendente ou um build interrompido como sucesso.
+
+## Correções de interação adicionadas em 7 de outubro
+
+Solicitação complementar na mesma PR:
+
+- A faixa dourada do histograma move o intervalo em coordenadas visuais. A largura em tela permanece constante também em escala logarítmica; os dois handles continuam redimensionando independentemente.
+- Pointer capture mantém o gesto fora do plot. Cancelamento, perda de captura, desmontagem, botão secundário e ponteiros adicionais não deixam gestos presos. Mouse, touch e teclado têm regressões específicas.
+- Campos numéricos, intervalos temporais e filtro ativo se atualizam durante o movimento. Timestamp exato é preservado sem converter cada frame para minutos. A tupla final é validada após essa preservação, e domínios constantes não permitem arraste fora dos valores existentes.
+- DnD usa explicitamente a metade superior/inferior da linha para inserir antes/depois. O indicador é sobreposto, sem alterar a área de hit; o mesmo destino comanda a ordem nativa. Há cobertura de todas as combinações, posições adjacentes, começo/fim, no-op, cancelamento e permissões.
+
+Novos arquivos centrais: `filters/histogram-range.ts` e `layer-drop-order.ts`. A lógica permanece na UI existente; nenhum save automático ou alteração de backend foi adicionado.
+
+Validação pré-publicação: 9 casos Chromium de histograma/touch e 3 casos Chromium de DnD passaram com componentes reais montados e callbacks sintéticos. A etapa focada de CI inclui também a aplicação compilada: baseline de pixels estável/não vazio, redução de pontos durante o arraste antes do pointerup, troca dourado→azul→dourado ao inverter camadas sobrepostas, e a serialização/reabertura correspondente. Essa prova integrada ainda depende do novo build/CI.
+
+O gate completo anterior no head `4a0c3ef` executou 601 casos com sucesso, incluindo digitação, precisão numérica e 37% com save/reload nos três browsers. Sete falhas eram expectativas residuais: seis ainda procuravam subtítulos removidos e uma amostrava uma transição de cor no WebKit antes do estado final. Essas expectativas foram corrigidas sem remover a validação de geometria, cor, hover ou scroll.
+
+A PR234 mantém prioridade de integração por corrigir o DTO dos mocks de navegação. Depois de sua integração autorizada, esta branch deve preservar respostas top-level `{ok: true, ...navigation}` ao atualizar a base, e repetir os gates no novo head. Esta PR continua sem autorização de merge ou produção.

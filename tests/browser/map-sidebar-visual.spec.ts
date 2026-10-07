@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mapPixelDifference as pixelDifference } from './fixtures/map-pixel-difference';
 import {
   capture, filterEditor, openFilters, openLayers, openMap, panel, rail, ready, rows,
   savedVisState, saveMap, seedConfig,
@@ -17,24 +18,6 @@ async function openFirst(page: Page) {
 async function commitOpacity(page: Page, value: string) {
   await opacityInput(page).fill(value);
   await opacityInput(page).press('Enter');
-}
-async function pixelDifference(page: Page, before: Buffer, after: Buffer) {
-  return page.evaluate(async ([first, second]) => {
-    const decode = async (src: string) => {
-      const image = new Image();
-      image.src = `data:image/png;base64,${src}`;
-      await image.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = image.width; canvas.height = image.height;
-      const context = canvas.getContext('2d')!;
-      context.drawImage(image, 0, 0);
-      return context.getImageData(0, 0, image.width, image.height).data;
-    };
-    const [a, b] = await Promise.all([decode(first), decode(second)]);
-    let changed = 0;
-    for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 12) changed += 1;
-    return changed;
-  }, [before.toString('base64'), after.toString('base64')]);
 }
 
 test('Visual Maõno: rail order, disabled research folder, repeated tools and keyboard collapse', async ({ page }, testInfo) => {
@@ -61,6 +44,10 @@ test('Visual Maõno: rail order, disabled research folder, repeated tools and ke
   await expect(base).toHaveAttribute('aria-expanded', 'true');
   await expect(rail(page).locator('.is-active')).toHaveCount(1);
   await page.mouse.move(0, 0);
+  // Assert the settled active state before sampling it; WebKit can return the
+  // first transition frame even after React has set aria-expanded.
+  await expect(base).toHaveCSS('color', 'rgb(197, 160, 89)');
+  await expect(base).toHaveCSS('background-color', 'rgb(10, 15, 24)');
   const activeAppearance = await base.evaluate(element => {
     const style = getComputedStyle(element);
     return { color: style.color, background: style.backgroundColor };
@@ -145,7 +132,7 @@ test('Visual Maõno: identities survive reorder, hide, duplicate and reload; fil
   const before = await colors();
   expect(new Set(Object.values(before)).size).toBe(3);
   await rows(page).first().getByRole('button', { name: /^Ocultar / }).click();
-  await rows(page).first().dragTo(rows(page).nth(2), { sourcePosition: { x: 8, y: 18 }, targetPosition: { x: 50, y: 18 } });
+  await rows(page).first().dragTo(rows(page).nth(2), { sourcePosition: { x: 8, y: 18 }, targetPosition: { x: 50, y: 55 } });
   expect(await colors()).toEqual(before);
   await openFilters(page);
   const groups = panel(page).locator('.maono-filter-group');
