@@ -1171,7 +1171,7 @@ test('save support opens the actual organization ticket center and new-ticket fo
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET') throw new Error(`Unexpected support write: ${route.request().method()} ${url.pathname}`);
     if (url.pathname === '/api/session') return route.fulfill({ json: {
-      authenticated: true, user: { id: 1, name: 'Operador sintético QA', role: 'super_admin', activeOrganizationId: 1 },
+      authenticated: true, user: { id: 1, name: 'Operador sintético QA', email: 'panel@example.test', role: 'super_admin', activeOrganizationId: 1 },
       organizations: [{ id: 1, name: 'Organização sintética QA', slug: 'qa-panel', active: true }],
       activeOrganization: { id: 1, name: 'Organização sintética QA', slug: 'qa-panel', active: true }, projects: [],
     } });
@@ -1181,6 +1181,8 @@ test('save support opens the actual organization ticket center and new-ticket fo
       pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1, hasMore: false },
       attachmentLimits: { maxFiles: 5, maxFileBytes: 83886080, maxTicketBytes: 157286400, chunkBytes: 8388608 },
     } });
+    if (url.pathname === '/api/organizations/1/tickets/exports') return route.fulfill({ json: { ok: true, enabled: false, jobs: [], nextCursor: null } });
+    if (/\/ticket-(notifications|feedback|knowledge|cases)$|\/tickets\/metrics$/.test(url.pathname)) return route.fulfill({ json: { ok: true, enabled: false, items: [], unread: 0, nextCursor: null } });
     return route.fulfill({ json: { ok: true, items: [], projects: [], users: [] } });
   });
   const popupPromise = page.waitForEvent('popup');
