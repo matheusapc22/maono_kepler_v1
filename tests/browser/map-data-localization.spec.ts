@@ -52,7 +52,7 @@ async function openMap(page: Page, options: { remoteStatus?: number; remoteGate?
       user: { id: 1, name: 'English User Name - QA', email: 'localization@example.test', role: 'super_admin', activeOrganizationId: 1 },
       organizations: [organization], activeOrganization: organization, projects: [],
     } });
-    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true, context: {
+    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true,
       policyVersion: 1, requestedMode: 'create', mode: 'create', assignedMode: 'create', defaultPanel: 'create', allowed: true,
       project: null, organization, availablePanels: { viewer: false, editor: false, create: true },
       capabilities: {
@@ -62,7 +62,7 @@ async function openMap(page: Page, options: { remoteStatus?: number; remoteGate?
         placeAnalysisMarker: true, toggleLegend: true, configureTooltips: true, addData: true, importData: true,
       },
       features: { mapPanelModes: true, mapCreateRoute: true, maonoMapShell: !options.legacyShell, maonoLayerManager: !options.legacyShell, maonoMapOverlay: !options.legacyShell },
-    } } });
+    } });
     if (url.pathname === '/__qa/localization/English-Roads.csv') {
       if (options.remoteGate) await options.remoteGate;
       return route.fulfill({ status: options.remoteStatus ?? 200, contentType: 'text/csv', body: options.remoteStatus ? 'Synthetic service unavailable' : csv });
