@@ -17,6 +17,13 @@ import {
 
 function httpError(message,status,code) { return Object.assign(new Error(message),{status,code}); }
 
+function decodeRouteParameter(value,code) {
+  // Cloudflare Pages leaves percent escapes in path params. Decode exactly once
+  // at the HTTP boundary; JSON/header/query identifiers have their own parsers.
+  try { return decodeURIComponent(String(value || "")); }
+  catch { throw httpError("Identificador de rota inválido.",400,code); }
+}
+
 
 async function authorizedContext(env,request,slug,{write=false}={}) {
   const user=await requireSession(env,request);
@@ -72,7 +79,8 @@ export async function handleProjectSaveOperation(context,action) {
     if (action!=="status") assertSameSaveOrigin(request);
     // Status remains readable to compatible rollback builds while new admissions pause.
     const deployment={...await trace.stage("VALIDATE",()=>assertSaveDeployCompatibility(env,request)),trace};
-    const {user,project,creation}=await authorizedContext(env,request,String(params?.slug || ""),{write:action!=="status"});
+    const slug=decodeRouteParameter(params?.slug,"PROJECT_SLUG_INVALID");
+    const {user,project,creation}=await authorizedContext(env,request,slug,{write:action!=="status"});
     const requestedProjectId=Number(request.headers.get("X-Maono-Project-Id"));
     if(!Number.isSafeInteger(requestedProjectId) || requestedProjectId<1)throw httpError("A identidade do projeto não foi informada. Preserve o mapa e confira o projeto aberto.",409,"PROJECT_IDENTITY_REQUIRED");
     if(requestedProjectId!==Number(project.id))throw httpError("Este endereço agora pertence a outro projeto. A tentativa original foi preservada.",409,"PROJECT_IDENTITY_CHANGED");
@@ -95,7 +103,11 @@ export async function handleProjectSaveOperation(context,action) {
       });
       return responseFor(env,operation,project,deployment,201);
     }
-    operation=await getProjectSaveOperation(env,{...scope,operationId:String(params?.operationId || "")});
+    const operationId=decodeRouteParameter(params?.operationId,"PROJECT_SAVE_OPERATION_ID_INVALID");
+    // Match registration's identifier grammar, including its length bound.
+    // A remaining '%' (double encoding), slash or control character is invalid.
+    if (!/^[A-Za-z0-9:_-]{12,128}$/.test(operationId)) throw httpError("Identificador da tentativa inválido.",400,"PROJECT_SAVE_OPERATION_ID_INVALID");
+    operation=await getProjectSaveOperation(env,{...scope,operationId});
     if (!operation) throw httpError("Operação não encontrada.",404,"SAVE_OPERATION_NOT_FOUND");
     if (action==="status") return responseFor(env,operation,project,deployment);
     if (["PUBLISHED","CONFLICT","FAILED_FINAL"].includes(operation.state)) return responseFor(env,operation,project,deployment);

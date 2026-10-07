@@ -29,3 +29,25 @@ test('durable202 with a later worker publication completes the same browser oper
  const now=Date.now(),record={key:previewSpoolKey('1',f.manifest),accountKey:previewAccountKey('1','1'),actorId:'1',organizationId:'1',slug:'map',manifest:f.manifest,blob:new Blob([f.bytes],{type:'image/png'}),createdAt:now,expiresAt:now+86400000,attempts:0,nextAttemptAt:0,lastError:null,state:'LOCAL_READY'};
  assert.equal(await publishPreviewRecord(record,{fetchImpl,wait:async()=>{},spool:{put:async()=>{},remove:async()=>{}}}),'READY');assert.equal(accepted,true);
 });
+
+test('PNG query identifiers and Pages slug params decode once without aliasing malformed or double-encoded IDs',async t=>{
+ const f=await fixture(t);f.manifest.operationId='qa-preview:local-routing:small:create';
+ const handlers={index:requestHandler(f,{getAuthorizedProject:async(_env,_user,slug)=>slug==='map'?f.project():null}),
+  status:requestHandler(f,{getAuthorizedProject:async(_env,_user,slug)=>slug==='map'?f.project():null},'status')};
+ const send=async(method,query='',body=null)=>{
+  const path=`/api/projects/%6dap/thumbnail${method==='GET'?'/status':''}${query}`;
+  return handlers[method==='GET'?'status':'index']({env:f.env,params:{slug:new URL(path,'https://preview.invalid').pathname.split('/')[3]},
+   request:new Request(new URL(path,'https://preview.invalid'),{method,headers:{'Content-Type':body instanceof Uint8Array?'image/png':'application/json'},
+    ...(body?{body:body instanceof Uint8Array?body:JSON.stringify(body)}:{})})});
+ };
+ assert.equal((await send('POST','',f.manifest)).status,201);
+ const query=`?operationId=${encodeURIComponent(f.manifest.operationId)}`;
+ assert.equal((await send('PUT',query,f.bytes)).status,200);
+ const state=await (await send('GET',query)).json();assert.equal(state.operation.state,'READY');assert.equal(state.operation.operationId,f.manifest.operationId);
+ const writes=f.row('SELECT total_changes() AS n').n;
+ for(const id of [encodeURIComponent(encodeURIComponent(f.manifest.operationId)),'%','%GG','%E0%A4%A','preview%2Foutside']) {
+  for(const method of ['GET','PUT']) assert.equal((await send(method,`?operationId=${id}`,method==='PUT'?f.bytes:null)).status,404);
+ }
+ assert.equal(f.row('SELECT total_changes() AS n').n,writes);
+ assert.equal(f.row("SELECT COUNT(*) AS n FROM local_storage_objects WHERE path LIKE '%.png'").n,1);
+});

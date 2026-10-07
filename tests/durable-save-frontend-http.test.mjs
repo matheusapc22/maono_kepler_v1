@@ -7,7 +7,7 @@ import { executeProjectCreateFlow } from "../src/pages/Kepler/project-create-flo
 import { beginClientSaveAttempt } from "../src/pages/Kepler/save-observability.ts";
 import { executePreparedProjectUpdate, prepareProjectUpdateSnapshot } from "../src/pages/Kepler/durable-save-controller.ts";
 import { onRequest as projectEndpoint } from "../functions/api/projects/index.js";
-import { handleProjectSaveOperation } from "../functions/_lib/project-save-operation-http.js";
+import { routeProjectSaveRequest } from "./helpers/project-save-pages-router.mjs";
 
 // Real frontend controller -> production Request handlers -> SQLite + simulated external Dropbox HTTP.
 // Only the browser's durable storage is replaced here; its real IndexedDB is covered by Playwright.
@@ -19,7 +19,7 @@ function serverFetch(f, calls, { losePublishedOnce = false } = {}) {
     const match = url.match(/^\/api\/projects\/([^/]+)\/save-operations(?:\/([^/]+))?(\/payload)?$/);
     assert.ok(match, url);
     const action = match[3] ? "payload" : match[2] ? "status" : "register";
-    const response = await handleProjectSaveOperation({ env: f.env, request, params: { slug: decodeURIComponent(match[1]), operationId: match[2] && decodeURIComponent(match[2]) } }, action);
+    const response = await routeProjectSaveRequest({ env: f.env, request });
     if (losePublishedOnce && action === "payload" && response.ok) { losePublishedOnce = false; throw new TypeError("Lost HTTP response after server commit"); }
     return response;
   };
