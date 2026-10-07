@@ -87,7 +87,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }, testInfo) => {
-  if (testInfo.status !== testInfo.expectedStatus || testInfo.title.startsWith('secondary buttons')) {
+  if (testInfo.status !== testInfo.expectedStatus || testInfo.title.startsWith('native secondary clicks') || testInfo.title.startsWith('unrelated pointers')) {
     const events = await page.evaluate(() => (window as Window & { __histogramNativeEvents?: unknown[] }).__histogramNativeEvents ?? []).catch(() => []);
     await testInfo.attach('native-histogram-pointer-events', { body: JSON.stringify(events, null, 2), contentType: 'application/json' });
   }
@@ -259,20 +259,24 @@ test("native touchscreen uses capture and live synchronization without scrolling
 });
 
 
-test("secondary buttons and unrelated pointers cannot hijack a drag; no-motion clicks preserve precision", async ({ page }) => {
+test("native secondary clicks do not change the range or start a drag", async ({ page }) => {
   const editor = page.getByTestId("numeric");
   const band = editor.locator(".maono-filter-histogram__selection");
   const initial = await range(editor);
   await band.click({ button:"right" });
   await expect(editor.locator(".maono-filter-histogram__plot")).not.toHaveAttribute("data-dragging");
   expect(await range(editor)).toEqual(initial);
-  // Dismiss the browser's native context menu before the independent gesture.
-  // A WebKit port may consume the next native click even after Escape, so use
-  // an empty viewport location, never the selection or a control, to dismiss it.
-  await page.keyboard.press("Escape");
-  await page.mouse.click(1060, 800);
-  expect(await range(editor)).toEqual(initial);
   await expect(editor.locator(".updates")).toHaveText("0");
+  // Keep the real context menu intact. WebKit 2203 suppresses later native
+  // mouse events while this OS popup is open; page-level Escape/click commands
+  // do not dismiss it in this runner. Playwright closes this fresh context
+  // before the independent pointer test, without changing app event behavior.
+  // Upstream: https://github.com/WebKit/WebKit/commit/a19b08297f53de5702b7aa7878843c40bfc08e9e
+});
+
+test("unrelated pointers cannot hijack a native drag; no-motion clicks preserve precision", async ({ page }) => {
+  const editor = page.getByTestId("numeric");
+  const initial = await range(editor);
   const { plot, start } = await beginBandDrag(page, editor);
   await plot.dispatchEvent("pointermove", {pointerId:999,clientX:0,clientY:0});
   await plot.dispatchEvent("pointerup", {pointerId:999,clientX:0,clientY:0});
