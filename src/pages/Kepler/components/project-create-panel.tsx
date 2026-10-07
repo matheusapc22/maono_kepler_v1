@@ -418,7 +418,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
             onClick={busy && stalled ? onCancelWait : requestClose}
             className="min-h-12 rounded-xl border border-white/20 bg-slate-900 px-5 py-3 text-sm font-extrabold text-white transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy && stalled ? "Cancelar espera" : "Cancelar"}
+            {busy && stalled ? "Parar de esperar" : "Cancelar"}
           </button>
 
           <button

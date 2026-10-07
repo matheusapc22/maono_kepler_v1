@@ -20,7 +20,7 @@
     "src/pages/Kepler/change-requests/viewer-working-copy.ts::raw-error-message": 1,
     "src/pages/Kepler/cloud-providers/carto/carto-provider.ts::raw-error-message": 6,
     "src/pages/Kepler/components/load-data-modal/data-import-messages.ts::raw-error-message": 1,
-    "src/pages/Kepler/components/maono-save-button.tsx::diagnostic-id": 18,
+    "src/pages/Kepler/components/maono-save-button.tsx::diagnostic-id": 8,
     "src/pages/Kepler/engine-adapter/analysis-layer-commands.ts::raw-error-message": 2,
     "src/pages/Kepler/engine-adapter/commands.ts::raw-error-message": 1,
     "src/pages/Kepler/engine-adapter/dataset-csv-export.ts::raw-error-message": 1,
@@ -40,8 +40,9 @@
     "src/pages/Kepler/reducers/index.ts::raw-error-message": 1,
     "src/pages/Kepler/save-observability.ts::diagnostic-id": 6,
     "src/pages/Kepler/save-observability.ts::raw-error-message": 1,
-    "src/pages/Kepler/thumbnail/capture-thumbnail.ts::raw-error-message": 1,
-    "src/pages/Kepler/thumbnail/thumbnail-api.ts::raw-response-text": 1,
+    "src/pages/Kepler/thumbnail/background-thumbnail-job.ts::diagnostic-id": 1,
+    "src/pages/Kepler/thumbnail/preview-metrics.ts::diagnostic-id": 3,
+    "src/pages/Kepler/thumbnail/preview-spool.ts::diagnostic-id": 2,
     "src/pages/Projects/components/TicketMetricsPanel.tsx::diagnostic-id": 1,
     "src/pages/Projects/components/TicketSlaPanel.tsx::diagnostic-id": 3
   }

@@ -19,10 +19,10 @@ function envWithSchema(schemaVersion, build = "api-build-b") {
     MAONO_API_BUILD_ID: build,
     DB: {
       prepare(sql) {
-        assert.match(sql, /app_schema_metadata/);
+        assert.match(sql, /app_schema_metadata|project_save_operation_schema/);
         return {
           async first() {
-            return { schema_version: schemaVersion };
+            return sql.includes("project_save_operation_schema") ? {version:1} : { schema_version: schemaVersion };
           },
         };
       },
@@ -30,20 +30,15 @@ function envWithSchema(schemaVersion, build = "api-build-b") {
   };
 }
 
-test("cliente legacy sem header permanece aceito durante rollout", async () => {
-  const result = await assertSaveDeployCompatibility(
-    envWithSchema(SAVE_EXPECTED_DB_SCHEMA_VERSION),
-    request(),
-  );
-  assert.equal(result.legacy, true);
-  assert.equal(result.clientContract, null);
+test("cliente legacy sem header é recusado antes de tocar D1", async () => {
+  await assert.rejects(assertSaveDeployCompatibility({DB:{prepare(){throw new Error("D1 must remain untouched");}}},request()),{code:"SAVE_CLIENT_CONTRACT_UNSUPPORTED",status:412});
 });
 
 test("builds diferentes não bloqueiam quando o contrato é compatível", async () => {
   const result = await assertSaveDeployCompatibility(
     envWithSchema(SAVE_EXPECTED_DB_SCHEMA_VERSION, "api-build-b"),
     request({
-      "X-Maono-Client-Contract": "1",
+      "X-Maono-Client-Contract": "2",
       "X-Maono-Client-Build": "frontend-build-a",
     }),
   );
@@ -82,7 +77,7 @@ test("schema D1 incompatível é detectado antes da persistência do projeto", a
   await assert.rejects(
     () => assertSaveDeployCompatibility(
       envWithSchema(SAVE_EXPECTED_DB_SCHEMA_VERSION - 1),
-      request({ "X-Maono-Client-Contract": "1" }),
+      request({ "X-Maono-Client-Contract": "2" }),
     ),
     (error) => {
       assert.equal(error.code, "SAVE_DB_SCHEMA_MISMATCH");
@@ -98,7 +93,7 @@ test("schema D1 incompatível é detectado antes da persistência do projeto", a
 test("metadados e headers expõem contrato/schema, não exigem SHA igual", () => {
   const deployment = getSaveDeploymentMetadata({ MAONO_API_BUILD_ID: "api-123" });
   const client = getSaveClientMetadata(request({
-    "X-Maono-Client-Contract": "1",
+    "X-Maono-Client-Contract": "2",
     "X-Maono-Client-Build": "client-456",
   }));
   const headers = saveDeployResponseHeaders({

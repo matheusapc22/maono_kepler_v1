@@ -1,0 +1,82 @@
+name: Project preview pipeline validation
+on:
+  pull_request:
+    paths:
+      - 'functions/_lib/project-preview*.js'
+      - 'functions/_lib/project-list.js'
+      - 'functions/_lib/projects.js'
+      - 'functions/api/projects/**'
+      - 'functions/api/admin/project-previews/**'
+      - 'functions/api/observability/project-preview.js'
+      - 'migrations/0040_project_preview_operations.sql'
+      - 'schema.sql'
+      - 'src/auth/session.tsx'
+      - 'src/pages/Kepler/**'
+      - 'src/pages/Projects/**'
+      - 'workers/project-*operations.js'
+      - 'tests/*preview*.test.mjs'
+      - 'tests/*thumbnail*.test.mjs'
+      - 'tests/point-cluster-capture-provenance.test.mjs'
+      - 'tests/helpers/point-cluster-render-harness.mjs'
+      - 'tests/browser/project-preview-pipeline.spec.ts'
+      - 'tests/browser/preview-spool-epochs.spec.ts'
+      - 'tests/browser/project-thumbnail-capture.spec.ts'
+      - 'tests/browser/point-cluster-capture.spec.ts'
+      - 'tests/browser/project-save-preview-integration.spec.ts'
+      - 'tests/browser/fixtures/map-panel-minimal.ts'
+      - 'tests/browser/fixtures/map-panel-preview.ts'
+      - 'tests/browser/fixtures/local-http-route.ts'
+      - 'tests/browser/fixtures/project-preview-pipeline.tsx'
+      - 'tests/browser/fixtures/preview-spool-epochs.ts'
+      - 'tests/browser/fixtures/project-thumbnail-capture.ts'
+      - 'tests/browser/fixtures/project-thumbnail-maplibre.ts'
+      - 'tests/browser/fixtures/point-cluster-capture.ts'
+      - 'tests/browser/fixtures/map-fidelity-style.json'
+      - 'tests/helpers/local-browser-url.mjs'
+      - 'tests/fixtures/maps/golden/**'
+      - 'playwright.preview-pipeline.config.ts'
+      - 'playwright.thumbnail-capture.config.ts'
+      - 'playwright.preview-save-integration.config.ts'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/project-preview-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: npm run test:project-preview && npm run test:project-cards
+      - run: node --test tests/project-pages-contract.test.mjs tests/project-card-actions.test.mjs
+        env:
+          PROJECT_PAGES_REQUIRE_BASELINE: '1'
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: xvfb-run -a npm run test:project-preview-browser
+      - name: Build the map and preview pipeline together
+        env:
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+          VITE_PROJECT_PREVIEW_OPERATIONS_V1: 'true'
+          VITE_ASYNC_PROJECT_THUMBNAIL: 'true'
+          VITE_POINT_CLUSTERING_V1: 'true'
+        run: npm run build
+      - name: Verify mounted map saving and preview publication in all engines
+        run: xvfb-run -a npx playwright test --config=playwright.preview-save-integration.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-project-preview-evidence
+          path: |
+            test-results/
+            /tmp/maono-thumbnail-capture-results/
+          if-no-files-found: ignore

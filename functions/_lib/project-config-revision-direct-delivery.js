@@ -2,7 +2,7 @@ import { getDropboxClient } from "./dropbox-client.js";
 import { joinDropboxPath } from "./dropbox.js";
 import {
   assertMapConfigStorageRef,
-  getMapConfigRevisionFileName,
+  resolveMapConfigStorageFileName,
 } from "./map-config-storage-ref.js";
 
 const DROPBOX_TEMPORARY_LINK_URL =
@@ -50,7 +50,7 @@ function assertLedger(project, ledger, revision) {
       "PROJECT_CONFIG_DIRECT_PROVIDER_UNSUPPORTED",
     );
   }
-  assertMapConfigStorageRef(ledger.storage_ref, projectId, expectedRevision);
+  assertMapConfigStorageRef(ledger.storage_ref, projectId, expectedRevision, project.organization_id);
   return { projectId, revision: expectedRevision };
 }
 
@@ -68,10 +68,7 @@ export async function createProjectConfigRevisionDirectDescriptor(
     );
   }
 
-  const fileName = getMapConfigRevisionFileName(
-    project?.default_config_file || "config.kepler.json",
-    identity.revision,
-  );
+  const fileName = resolveMapConfigStorageFileName({ project, revision: identity.revision, storageRef: ledger.storage_ref });
   const path = joinDropboxPath(rootPath, fileName);
   const client = getDropboxClient(env);
   const response = await client.request({
@@ -131,7 +128,6 @@ export async function createProjectConfigRevisionDirectDescriptor(
   const actualSizeBytes = positiveInteger(metadata?.size);
   if (
     expectedSizeBytes &&
-    actualSizeBytes &&
     expectedSizeBytes !== actualSizeBytes
   ) {
     throw deliveryError(
@@ -152,7 +148,6 @@ export async function createProjectConfigRevisionDirectDescriptor(
   );
   if (
     expectedProviderHash &&
-    actualProviderHash &&
     expectedProviderHash !== actualProviderHash
   ) {
     throw deliveryError(

@@ -12,7 +12,6 @@ const SAVE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const SAFE_CODE_PATTERN = /^[A-Z0-9_:-]{2,120}$/;
 const SAFE_CATEGORY_PATTERN = /^[A-Z0-9_:-]{2,80}$/;
 const MAX_DURATION_MS = 3_600_000;
-const CONFIG_TRACE_REGISTRY = new WeakMap();
 
 function nowMs() {
   return Date.now();
@@ -92,34 +91,6 @@ export function getOrCreateSaveId(request) {
 
 export function measureUtf8Bytes(value) {
   return new TextEncoder().encode(String(value ?? "")).byteLength;
-}
-
-export async function readSaveJsonBody(request, trace = null) {
-  const text = await request.text();
-  trace?.updateContext({ payloadBytes: measureUtf8Bytes(text) });
-  if (!text.trim()) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-export function bindSaveTraceToConfig(config, trace) {
-  if (
-    trace &&
-    config &&
-    typeof config === "object" &&
-    !Array.isArray(config)
-  ) {
-    CONFIG_TRACE_REGISTRY.set(config, trace);
-  }
-  return config;
-}
-
-export function getSaveTraceForConfig(config) {
-  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
-  return CONFIG_TRACE_REGISTRY.get(config) || null;
 }
 
 export function sanitizeSaveDiagnostic(value = {}) {

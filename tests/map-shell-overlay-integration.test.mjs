@@ -200,7 +200,7 @@ test("Manter prévia promove a análise sem acionar o salvamento global", () => 
   assert.match(source.previewHook, /commands\.addGeoJsonLayer/);
   assert.match(source.previewHook, /commandsRef\.current\.removeTransientLayer/);
   assert.match(source.overlay, /isochrone\.keep/);
-  assert.match(source.save, /transientDatasetIdsRef\.current\.size > 0/);
+  assert.match(source.save, /transientIdsRef\.current\.length > 0/);
   assert.match(source.save, /serializeProjectConfig/);
   assert.doesNotMatch(
     source.overlay,

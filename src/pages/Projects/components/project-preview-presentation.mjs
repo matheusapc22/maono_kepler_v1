@@ -30,6 +30,7 @@ function sameRevision(left, right) {
  */
 export function resolvePreviewPresentation({
   status,
+  jobState,
   currentUrl,
   currentRevision,
   generationRevision,
@@ -45,6 +46,9 @@ export function resolvePreviewPresentation({
     Boolean(previousReadyUrl) && previousReadyUrl !== currentUrl;
 
   if (normalizedStatus === "PENDING") {
+    if (["WAITING_CAPTURE", "FAILED_FINAL", "SUPERSEDED"].includes(jobState)) {
+      return previousReadyUrl ? "failed-previous-image" : jobState === "WAITING_CAPTURE" ? "missing-neutral" : "failed-neutral";
+    }
     return "generation-svg";
   }
 

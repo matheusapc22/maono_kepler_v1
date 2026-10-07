@@ -1,81 +1,45 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { persistenceFixture } from "./helpers/project-persistence-fixture.mjs";
+import { DropboxMapConfigRepository } from "../functions/_lib/dropbox-map-config-repository.js";
+import { uploadProjectSaveOperationPayload } from "../functions/_lib/project-save-operation-payload.js";
 
-const middlewarePath = new URL(
-  "../functions/api/projects/[slug]/_middleware.js",
-  import.meta.url,
-);
-const legacyLargeSavePath = new URL(
-  "../functions/_lib/project-large-legacy-config-save.js",
-  import.meta.url,
-);
+for (const paddingBytes of [0, 9 * 1024 * 1024]) {
+  test(`legacy ${paddingBytes ? "large" : "small"} reader promotes through the same immutable operation transport`, async t => {
+    const f = persistenceFixture(t);
+    const project = { id: 9, organization_id: 1, dropbox_root_path: "/offline/a/legacy", default_config_file: "config.kepler.json", lifecycle_state: null };
+    const bytes = new TextEncoder().encode(JSON.stringify({ version: "v1", config: {}, datasets: [], padding: "x".repeat(paddingBytes) }));
+    const legacyPath = `${project.dropbox_root_path}/${project.default_config_file}`;
+    await f.store(legacyPath, bytes);
+    const repository = new DropboxMapConfigRepository(f.env);
+    const source = await repository.loadLegacyStream({ project });
+    assert.equal(source.sizeBytes, bytes.byteLength);
+    assert.equal(source.serializationVersion, 1);
+    const operation = { id: "server-legacy-promotion", operation_id: "legacy-promotion", project_id: 9, organization_id: 1, upload_epoch: 1,
+      size_bytes: source.sizeBytes, checksum: source.checksum, checksum_algorithm: source.checksumAlgorithm, serialization_version: source.serializationVersion };
+    const artifact = await uploadProjectSaveOperationPayload(f.env, { project, operation, body: source.body });
+    assert.equal(artifact.contentVerified, true);
+    assert.equal(artifact.checksum, source.checksum);
+    assert.deepEqual(f.objects.get(legacyPath).bytes, bytes, "legacy source is never overwritten");
+    assert.equal(f.objects.size, 2);
+    const reads = f.calls.filter(call => call.op === "download");
+    assert.equal(reads.length, 1, "source is streamed once, without an application read-buffer pass");
+    assert.ok(f.calls.filter(call => call.op.startsWith("upload_session/")).every(call => call.size <= 4 * 1024 * 1024));
+  });
+}
 
-test("middleware envia projeto legado para promoção streaming e preserva ACTIVE no fluxo normal", async () => {
-  const middleware = await readFile(middlewarePath, "utf8");
-
-  assert.match(middleware, /isLifecycleManagedProject/);
-  assert.match(
-    middleware,
-    /if \(!isLifecycleManagedProject\(project\)\)[\s\S]*saveLargeLegacyProjectConfigStream/,
-  );
-  assert.match(
-    middleware,
-    /project\.lifecycle_state !== PROJECT_LIFECYCLE_STATES\.ACTIVE/,
-  );
-  assert.match(
-    middleware,
-    /error\.code = "PROJECT_CONFIG_LIFECYCLE_BLOCKED"/,
-  );
-  assert.match(
-    middleware,
-    /saveLargeProjectConfigStream\(env,[\s\S]*request,[\s\S]*project/,
-  );
-});
-
-test("promoção legado -> ACTIVE é CAS e publica somente após READY", async () => {
-  const service = await readFile(legacyLargeSavePath, "utf8");
-
-  const reserve = service.indexOf("reserveProjectConfigRevision(env");
-  const finish = service.indexOf("finishSessionWithReconciliation(env");
-  const ready = service.indexOf("markProjectConfigRevisionReady(env");
-  const publish = service.indexOf("publishLegacyPromotion(env");
-
-  assert.ok(reserve > 0);
-  assert.ok(finish > reserve);
-  assert.ok(ready > finish);
-  assert.ok(publish > ready);
-
-  assert.match(service, /lifecycle_state = 'ACTIVE'/);
-  assert.match(
-    service,
-    /AND config_revision = \?[\s\S]*AND lifecycle_state IS NULL[\s\S]*AND active = 1/,
-  );
-  assert.match(service, /config_checksum_algorithm = \?/);
-  assert.match(service, /config_storage_ref = \?/);
-  assert.match(service, /config_size_bytes = \?/);
-  assert.match(service, /preview_status = 'PENDING'/);
-});
-
-test("promoção não relê o MapConfig legado nem materializa o request grande", async () => {
-  const service = await readFile(legacyLargeSavePath, "utf8");
-
-  assert.match(service, /request\.body\.getReader\(\)/);
-  assert.doesNotMatch(service, /request\.text\s*\(/);
-  assert.doesNotMatch(service, /request\.json\s*\(/);
-  assert.doesNotMatch(service, /reconcileLegacyProjectLifecycle/);
-  assert.doesNotMatch(service, /publishProjectConfigRevision/);
-  assert.match(service, /getMapConfigRevisionFileName/);
-  assert.match(service, /writeMode:\s*"create"/);
-  assert.match(service, /allowedLifecycleStates:\s*\[\]/);
-});
-
-test("tentativa anterior com objeto imutável pode ser reconciliada por metadata", async () => {
-  const service = await readFile(legacyLargeSavePath, "utf8");
-
-  assert.match(service, /findCommittedMetadata/);
-  assert.match(service, /getDropboxMetadata/);
-  assert.match(service, /metadata\.sizeBytes === expectedSize/);
-  assert.match(service, /metadata\.providerHash/);
-  assert.match(service, /DROPBOX_PATH_NOT_FOUND/);
+test("legacy source changing after metadata cannot publish mismatched bytes", async t => {
+  const f = persistenceFixture(t);
+  const project = { id: 9, organization_id: 1, dropbox_root_path: "/offline/a/legacy", default_config_file: "config.kepler.json" };
+  const path = `${project.dropbox_root_path}/${project.default_config_file}`;
+  const bytes = new TextEncoder().encode('{"version":"v1","config":{},"datasets":[],"value":1}');
+  await f.store(path, bytes);
+  const repository = new DropboxMapConfigRepository(f.env);
+  const source = await repository.loadLegacyStream({ project });
+  const different = new TextEncoder().encode('{"version":"v1","config":{},"datasets":[],"value":2}');
+  const operation = { id: "server-legacy-promotion", project_id: 9, organization_id: 1, upload_epoch: 1,
+    size_bytes: source.sizeBytes, checksum: source.checksum, checksum_algorithm: source.checksumAlgorithm, serialization_version: 1 };
+  await source.body.cancel();
+  await assert.rejects(uploadProjectSaveOperationPayload(f.env, { project, operation, body: new Response(different).body }), { code: "PROJECT_CONFIG_INTEGRITY_MISMATCH" });
+  assert.equal(f.objects.size, 1);
 });

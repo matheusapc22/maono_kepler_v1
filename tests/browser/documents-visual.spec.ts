@@ -1,3 +1,4 @@
+import { isLocalBrowserBlob } from '../helpers/local-browser-url.mjs';
 import { expect, test, type Page, type Locator } from "@playwright/test";
 
 const organization = { id: 1, name: "Organização de demonstração", slug: "demo", active: true };
@@ -155,7 +156,7 @@ async function setup(page: Page, options: FixtureOptions = {}) {
     }
     return route.fulfill({ json: { ok: true, projects: [], tickets: [], users: [], items: [], organizations: [organization], pagination: { total: 0, hasMore: false, nextCursor: null } } });
   });
-  await page.route(url => !["127.0.0.1", "localhost"].includes(url.hostname), route => route.abort());
+  await page.route(url => !["127.0.0.1", "localhost"].includes(url.hostname) && !isLocalBrowserBlob(url, page.url()), route => route.abort());
   await page.goto("/projects");
   return requests;
 }

@@ -1,249 +1,104 @@
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
-import test from "node:test";
-import { saveVersionedProjectConfig, readPublishedProjectConfig } from "../functions/_lib/project-config-service.js";
-import {
-  reserveProjectConfigRevision,
-  markProjectConfigRevisionFailed,
-  markProjectConfigRevisionReady,
-  publishProjectConfigRevision,
-} from "../functions/_lib/project-config-revisions.js";
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import { acquireProjectSaveUpload, failProjectSaveUpload, markProjectSavePayloadStored, processProjectSaveOperation } from '../functions/_lib/project-save-operations.js';
+import { readPublishedProjectConfig } from '../functions/_lib/project-config-service.js';
+import { fixture, register, stored, artifact, process, count, localStorage, storeConfig } from './helpers/project-save-operation-fixture.mjs';
 
-// Real schema, SQL and storage adapter. Hooks only schedule interleavings.
-function fixture(t, hooks = {}) {
-  const db = new DatabaseSync(":memory:");
-  db.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
-  db.exec(`CREATE TABLE local_storage_objects (path TEXT PRIMARY KEY, content BLOB,
-    content_type TEXT, size_bytes INTEGER, created_at TEXT, updated_at TEXT);
-    INSERT INTO organizations (id,name,slug,dropbox_root_path) VALUES (1,'Org','org','/projects/org');
-    INSERT INTO projects (id,name,slug,organization_id,dropbox_root_path,lifecycle_state)
-      VALUES (1,'Map','map',1,'/projects/org/map','ACTIVE');
-    INSERT INTO project_config_revisions
-      (project_id,revision,status,checksum_algorithm,checksum,storage_provider,storage_ref,
-       schema_name,schema_version,size_bytes,content_type,transition_id,updated_at)
-      VALUES (1,1,'FAILED','sha256','old','dropbox','maono:project:1:revision:1',
-       'legacy-kepler',1,10,'application/json','old-attempt','2000-01-01 00:00:00');
-    INSERT INTO local_storage_objects (path,content,size_bytes)
-      VALUES ('/projects/org/map/config.kepler.r000001.json',X'01',1);`);
-  t.after(() => db.close());
-  const env = { APP_ENV: "local", STORAGE_DRIVER: "local-d1", DB: {
-    prepare(sql) {
-      let args = [];
-      return {
-        bind(...values) { args = values.map(value => value instanceof ArrayBuffer ? new Uint8Array(value) : value); return this; },
-        async first() {
-          await hooks.beforeFirst?.(sql, db);
-          const row = db.prepare(sql).get(...args) ?? null;
-          await hooks.afterFirst?.(sql, row, db);
-          return row;
-        },
-        async run() {
-          await hooks.beforeRun?.(sql, db);
-          return db.prepare(sql).run(...args);
-        },
-        async all() { return { results: db.prepare(sql).all(...args) }; },
-      };
-    },
-  } };
-  return { db, env, row: () => db.prepare("SELECT * FROM project_config_revisions").get() };
+function seedOldCandidate(f, status = 'FAILED') {
+  f.sqlite.prepare(`INSERT INTO project_config_revisions(project_id,revision,status,checksum_algorithm,checksum,storage_provider,storage_ref,
+    schema_name,schema_version,size_bytes,content_type,transition_id,updated_at)
+    VALUES(1,1,?,'sha256','old','dropbox','maono:project:1:revision:1','legacy-kepler',1,10,'application/json','old-attempt','2000-01-01 00:00:00')`).run(status);
 }
+function barrier() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 
-function reserve(env, checksum = "new") {
-  return reserveProjectConfigRevision(env, {
-    projectId: 1, organizationId: 1, expectedCurrentRevision: 0,
-    checksumAlgorithm: "sha256", checksum, storageProvider: "dropbox",
-    storageRef: "maono:project:1:revision:1", schemaName: "legacy-kepler",
-    schemaVersion: 1, sizeBytes: 10, contentType: "application/json",
-    transitionId: `attempt-${checksum}`,
-  });
-}
-
-const publish = (env, checksum = "old", attempts = 1) => publishProjectConfigRevision(env, {
-  projectId: 1, organizationId: 1, expectedCurrentRevision: 0, revision: 1,
-  checksum, attempts,
-  actor: { name: "Editor" },
+test('a failed legacy candidate can be replaced atomically without deleting its external object', async t => {
+  const f = fixture(t); seedOldCandidate(f);
+  const result = await process(f, await stored(f));
+  assert.equal(result.state, 'PUBLISHED');
+  const row = f.row('SELECT * FROM project_config_revisions');
+  assert.equal(row.save_operation_id, result.id);
+  assert.equal(row.storage_ref, result.storage_ref);
+  assert.notEqual(row.storage_ref, 'maono:project:1:revision:1');
+  assert.equal(count(f, 'project_config_revisions'), 1);
 });
-
-test("recycle reports a concurrent HEAD as a typed 409, without ReferenceError", async (t) => {
-  let reads = 0;
-  const { env, db } = fixture(t, { beforeFirst(sql, db) {
-    if (/SELECT \* FROM projects/.test(sql) && ++reads === 2) {
-      db.exec("UPDATE projects SET config_revision = 1");
-    }
-  } });
-  await assert.rejects(reserve(env), (error) => {
-    assert.equal(error.code, "PROJECT_CONFIG_REVISION_CONFLICT");
-    assert.equal(error.status, 409);
-    assert.equal(error.details.currentConfigRevision, 1);
-    return true;
-  });
-  assert.equal(db.prepare("SELECT count(*) AS n FROM local_storage_objects").get().n, 1);
+test('an old READY candidate is never reclaimed by timeout or blindly deleted', async t => {
+  const f = fixture(t); seedOldCandidate(f, 'READY');
+  const result = await process(f, await stored(f));
+  assert.equal(result.state, 'FAILED_FINAL');
+  assert.equal(result.error_code, 'PROJECT_SAVE_LEGACY_CANDIDATE_RECONCILIATION_REQUIRED');
+  assert.equal(result.attempts, 1);
+  assert.equal(f.project().config_revision, 0);
+  assert.equal(f.row('SELECT storage_ref FROM project_config_revisions').storage_ref, 'maono:project:1:revision:1');
 });
-
-test("only one recycler can delete the candidate while storage is delayed", async (t) => {
-  let releaseDelete;
-  let reachedDelete;
-  const reached = new Promise((resolve) => { reachedDelete = resolve; });
-  const released = new Promise((resolve) => { releaseDelete = resolve; });
-  let deletions = 0;
-  const { env, row } = fixture(t, { async beforeRun(sql) {
-    if (/DELETE FROM local_storage_objects/.test(sql)) {
-      deletions++;
-      if (deletions === 1) { reachedDelete(); await released; }
-    }
-  } });
-  const first = reserve(env, "A");
-  // Handle both outcomes immediately even when a regression makes the loser win.
-  const firstResult = first.then((value) => ({ value }), (error) => ({ error }));
-  await reached;
-  try {
-    await assert.rejects(reserve(env, "B"), { code: "PROJECT_CONFIG_REVISION_CONFLICT" });
-    assert.equal(deletions, 1);
-  } finally { releaseDelete(); }
-  const result = await firstResult;
-  assert.equal(result.error, undefined);
-  assert.equal(row().checksum, "a");
-  assert.equal(row().status, "WRITING");
+test('concurrent HEAD publication wins CAS without reclaiming its READY lineage', async t => {
+  const f = fixture(t), operation = await stored(f);
+  f.beforeBatch(db => db.exec("UPDATE projects SET config_revision=1,config_checksum='other' WHERE id=1"));
+  const result = await process(f, operation);
+  assert.equal(result.state, 'CONFLICT');
+  assert.equal(result.error_code, 'PROJECT_CONFIG_REVISION_CONFLICT');
+  assert.equal(result.receipt_json, null);
+  assert.equal(f.project().config_checksum, 'other');
 });
-
-test("a READY ledger read before recycling cannot publish stale storage metadata", async (t) => {
-  let raced = false;
-  let env;
-  const f = fixture(t, { async beforeFirst(sql) {
-    if (!raced && /UPDATE projects\s+SET config_revision/.test(sql)) {
-      raced = true;
-      const replacement = await reserve(env, "replacement");
-      await markProjectConfigRevisionReady(env, { projectId: 1, revision: 1, checksum: "replacement", attempts: replacement.revision.attempts });
-    }
-  } });
-  env = f.env;
-  f.db.exec("UPDATE project_config_revisions SET status = 'READY'");
-  await assert.rejects(publish(env), { code: "PROJECT_CONFIG_REVISION_CONFLICT" });
-  assert.equal(f.db.prepare("SELECT config_revision FROM projects").get().config_revision, 0);
-  assert.equal(f.row().checksum, "replacement");
+test('only one upload lease receives bytes when simultaneous callers use the same ID', async t => {
+  const f = fixture(t), operation = await register(f);
+  const results = await Promise.allSettled([acquireProjectSaveUpload(f.env, { operation }), acquireProjectSaveUpload(f.env, { operation })]);
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter(result => result.status === 'rejected')[0].reason.code, 'PROJECT_SAVE_UPLOAD_BUSY');
+  assert.equal(f.row('SELECT upload_epoch FROM project_save_operations').upload_epoch, 1);
 });
-
-test("published HEAD protects READY lineage even if its auxiliary stamp was lost", async (t) => {
-  let raced = false;
-  const { env, db, row } = fixture(t, { afterFirst(sql, result, db) {
-    if (!raced && /SELECT \*/.test(sql) && /FROM project_config_revisions/.test(sql)) {
-      raced = true;
-      db.exec("UPDATE projects SET config_revision = 1, config_checksum = 'old'");
-    }
-  } });
-  db.exec("UPDATE project_config_revisions SET status = 'READY'");
-  await assert.rejects(reserve(env), { code: "PROJECT_CONFIG_REVISION_CONFLICT" });
-  assert.equal(row().status, "READY");
-  assert.equal(db.prepare("SELECT count(*) AS n FROM local_storage_objects").get().n, 1);
+test('a stale worker resuming after lease takeover cannot publish or roll back the new owner', async t => {
+  const f = fixture(t), operation = await stored(f), entered = barrier(), release = barrier();
+  const slow = process(f, operation, { verifyPayload: async (_env, { operation }) => { entered.resolve(); await release.promise; return { ...artifact(operation), storageRef: operation.storage_ref }; } });
+  await entered.promise;
+  f.sqlite.exec('UPDATE project_save_operations SET lease_until=0');
+  const replacement = await process(f, operation);
+  assert.equal(replacement.state, 'PUBLISHED');
+  release.resolve();
+  const late = await slow;
+  assert.equal(late.state, 'PUBLISHED');
+  assert.equal(late.receipt_json, replacement.receipt_json);
+  assert.equal(count(f, 'project_config_revisions'), 1);
 });
-
-test("publication between HEAD read and abandoned-READY claim cannot be reclaimed", async (t) => {
-  let raced = false;
-  const { env, db, row } = fixture(t, { beforeFirst(sql, db) {
-    if (!raced && /UPDATE project_config_revisions/.test(sql) && /PROJECT_CONFIG_READY_ABANDONED/.test(sql)) {
-      raced = true;
-      db.exec("UPDATE projects SET config_revision = 1, config_checksum = 'old'");
-    }
-  } });
-  db.exec("UPDATE project_config_revisions SET status = 'READY'");
-  await assert.rejects(reserve(env), { code: "PROJECT_CONFIG_REVISION_CONFLICT" });
-  assert.equal(raced, true);
-  assert.equal(row().status, "READY");
-  assert.equal(db.prepare("SELECT count(*) AS n FROM local_storage_objects").get().n, 1);
+test('a delayed uploader failure cannot finalize or release a newer upload lease', async t => {
+  const f = fixture(t), old = await acquireProjectSaveUpload(f.env, { operation: await register(f) });
+  await failProjectSaveUpload(f.env, { operation: old, error: new Error('interruption') });
+  const fresh = await acquireProjectSaveUpload(f.env, { operation: old, recoverPayload: async () => null });
+  await failProjectSaveUpload(f.env, { operation: old, error: Object.assign(new Error('old checksum'), { status: 422, code: 'PROJECT_SAVE_PAYLOAD_INTEGRITY_FAILED' }) });
+  const row = f.row('SELECT * FROM project_save_operations');
+  assert.equal(row.state, 'RECEIVING');
+  assert.equal(row.lease_epoch, fresh.lease_epoch);
+  await assert.rejects(markProjectSavePayloadStored(f.env, { operation: old, artifact: artifact(old) }), /CHECK constraint/);
 });
-
-test("a delayed failure cannot mark a different reservation attempt FAILED", async (t) => {
-  const { env, row } = fixture(t);
-  await reserve(env, "replacement");
-  await markProjectConfigRevisionFailed(env, {
-    projectId: 1, revision: 1, checksum: "old", attempts: 1,
-    errorCode: "OLD_TIMEOUT", errorStage: "WRITE",
-  });
-  assert.equal(row().status, "WRITING");
-  assert.equal(row().checksum, "replacement");
+test('same bytes with distinct operation IDs do not silently rebase onto a later revision', async t => {
+  const f = fixture(t), first = await stored(f), second = await stored(f, 'same-content-new-id');
+  assert.equal((await process(f, first)).state, 'PUBLISHED');
+  assert.equal((await process(f, second)).state, 'CONFLICT');
+  assert.equal(f.project().config_revision, 1);
 });
-
-test("successful recycle, verify, publish and response-loss retry preserve one HEAD", async (t) => {
-  const { env, db, row } = fixture(t);
-  const reserved = await reserve(env, "replacement");
-  assert.equal(row().attempts, 2);
-  assert.equal(row().error_stage, null);
-  await markProjectConfigRevisionReady(env, {
-    projectId: 1, revision: 1, checksum: "replacement", attempts: reserved.revision.attempts,
-  });
-  const result = await publish(env, "replacement", reserved.revision.attempts);
-  assert.equal(result.config_checksum, "replacement");
-  assert.equal(row().status, "READY");
-  const recovered = await reserve(env, "replacement");
-  assert.equal(recovered.alreadyPublished, true);
-  assert.equal(db.prepare("SELECT count(*) AS n FROM project_config_revisions").get().n, 1);
+test('old READY and failure callbacks cannot change a durable published revision', async t => {
+  const f = fixture(t), operation = await process(f, await stored(f));
+  assert.throws(() => f.sqlite.exec("UPDATE project_config_revisions SET storage_provider_version='late-old-version'"), /REVISION_IMMUTABLE/);
+  assert.throws(() => f.sqlite.exec("UPDATE project_config_revisions SET status='FAILED'"), /REVISION_IMMUTABLE/);
+  assert.throws(() => f.sqlite.exec('DELETE FROM project_config_revisions'), /REVISION_IMMUTABLE/);
+  assert.equal(f.row('SELECT save_operation_id FROM project_config_revisions').save_operation_id, operation.id);
 });
-
-test("ambiguous cleanup failure remains fenced and cannot trigger another deletion", async (t) => {
-  let deletions = 0;
-  const { env, row } = fixture(t, { beforeRun(sql) {
-    if (/DELETE FROM local_storage_objects/.test(sql)) {
-      deletions++;
-      throw Object.assign(new Error("controlled storage interruption"), { code: "STORAGE_INTERRUPTED" });
-    }
-  } });
-  await assert.rejects(reserve(env), { code: "STORAGE_INTERRUPTED" });
-  assert.equal(row().error_stage, "RECYCLE");
-  for (const checksum of ["new", "old", "other"]) {
-    await assert.rejects(reserve(env, checksum), { code: "PROJECT_CONFIG_REVISION_CONFLICT" });
-  }
-  assert.equal(deletions, 1);
+test('published result is permanently terminal even after later failures or a newer save', async t => {
+  const f = fixture(t), upload = await acquireProjectSaveUpload(f.env, { operation: await register(f) });
+  const operation = await markProjectSavePayloadStored(f.env, { operation: upload, artifact: artifact(upload) });
+  const published = await process(f, operation);
+  await failProjectSaveUpload(f.env, { operation: upload, error: Object.assign(new Error('late'), { status: 422 }) });
+  assert.equal(f.row('SELECT receipt_json FROM project_save_operations').receipt_json, published.receipt_json);
+  assert.throws(() => f.sqlite.exec("UPDATE project_save_operations SET state='FAILED_FINAL'"), /TERMINAL_IMMUTABLE/);
 });
-
-test("late ready and failure callbacks cannot release an in-progress cleanup", async (t) => {
-  const { env, db, row } = fixture(t);
-  db.exec("UPDATE project_config_revisions SET error_stage = 'RECYCLE'");
-  await assert.rejects(markProjectConfigRevisionReady(env, {
-    projectId: 1, revision: 1, checksum: "old", attempts: 1,
-  }), { code: "PROJECT_CONFIG_REVISION_READY_CONFLICT" });
-  await markProjectConfigRevisionFailed(env, {
-    projectId: 1, revision: 1, checksum: "old", attempts: 1,
-    errorStage: "WRITE", errorCode: "OLD_TIMEOUT",
-  });
-  assert.equal(row().error_stage, "RECYCLE");
-});
-
-test("a stale caller cannot publish a replacement already READY before publication starts", async (t) => {
-  const { env } = fixture(t);
-  const reserved = await reserve(env, "replacement");
-  await markProjectConfigRevisionReady(env, {
-    projectId: 1, revision: 1, checksum: "replacement", attempts: reserved.revision.attempts,
-  });
-  await assert.rejects(publish(env), { code: "PROJECT_CONFIG_REVISION_CONFLICT" });
-});
-
-test("same-content retry still fences callbacks from the previous attempt", async (t) => {
-  const { env, row } = fixture(t);
-  const retried = await reserve(env, "old");
-  assert.equal(retried.revision.attempts, 2);
-  await assert.rejects(markProjectConfigRevisionReady(env, {
-    projectId: 1, revision: 1, checksum: "old", attempts: 1,
-  }), { code: "PROJECT_CONFIG_REVISION_READY_CONFLICT" });
-  await markProjectConfigRevisionFailed(env, {
-    projectId: 1, revision: 1, checksum: "old", attempts: 1,
-    errorStage: "WRITE", errorCode: "OLD_TIMEOUT",
-  });
-  assert.equal(row().status, "WRITING");
-});
-
-test("golden maps survive recycle, sequential saves and verified reads without content loss", async (t) => {
-  const { env, db } = fixture(t);
-  let expected = 0;
-  for (const name of ["map-point-basic", "map-geojson-polygon", "map-filters-smart-histogram", "map-isochrone-persisted", "map-point-cluster-v2-current", "map-empty"]) {
-    const config = JSON.parse(readFileSync(new URL(`./fixtures/maps/golden/${name}.kepler.json`, import.meta.url), "utf8"));
-    const project = db.prepare("SELECT * FROM projects WHERE id = 1").get();
-    const saved = await saveVersionedProjectConfig(env, {
-      project, config, expectedConfigRevision: expected, actor: { name: "Editor" },
-    });
-    assert.equal(saved.revision, ++expected, name);
-    const reopened = await readPublishedProjectConfig(env, saved.project);
-    assert.deepEqual(reopened.config, config, name);
-    assert.equal(db.prepare("SELECT count(*) AS n FROM project_config_revisions WHERE status = 'READY'").get().n, expected);
+test('golden maps survive operation saves, sequential revisions and verified reopening', async t => {
+  const f = localStorage(fixture(t)); let revision = 0;
+  for (const name of ['map-point-basic','map-geojson-polygon','map-filters-smart-histogram','map-isochrone-persisted','map-point-cluster-v2-current','map-empty']) {
+    const config = JSON.parse(readFileSync(new URL(`./fixtures/maps/golden/${name}.kepler.json`, import.meta.url), 'utf8'));
+    const operation = await storeConfig(f, config, `golden-map-save-${++revision}`);
+    const result = await processProjectSaveOperation(f.env, { operation });
+    assert.equal(result.state, 'PUBLISHED', name);
+    assert.deepEqual((await readPublishedProjectConfig(f.env, f.project())).config, config, name);
+    assert.equal(count(f, 'project_config_revisions'), revision);
   }
 });

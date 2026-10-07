@@ -1,0 +1,18 @@
+# CODE SAMPLE ONLY. Provision/configure only after separate operator approval.
+# Pages and this Worker must share the verified D1 and Dropbox account/namespace.
+name = "maono-project-save-operations"
+main = "workers/project-save-operations.js"
+compatibility_date = "2026-09-01"
+[triggers]
+crons = ["* * * * *"]
+[vars]
+MAONO_RUNTIME_ENV = "production"
+PROJECT_DURABLE_SAVE_WORKER_ENABLED = "false"
+PROJECT_DURABLE_SAVE_V1 = "false"
+PROJECT_DURABLE_SAVE_BATCH_SIZE = "10"
+STORAGE_DRIVER = "dropbox"
+# Dropbox secrets belong in the protected platform secret store, never this file.
+[[d1_databases]]
+binding = "DB"
+database_name = "REPLACE_WITH_VERIFIED_DATABASE_NAME"
+database_id = "REPLACE_WITH_VERIFIED_DATABASE_ID"

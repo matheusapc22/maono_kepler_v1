@@ -1,0 +1,7 @@
+{
+  "measuredAt": "2026-10-06T01:44:49.684Z",
+  "mismatches": 0,
+  "deckPixels": 169,
+  "interpretation": "mismatches and deckPixels count differing RGBA channel values; all data synthetic",
+  "framing": "Legacy independent X/Y normalization from1216x720 to960x540; not an assertion of cross-ratio geometric fidelity"
+}

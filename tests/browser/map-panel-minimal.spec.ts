@@ -476,7 +476,7 @@ test('empty create panel has persistent search, project-layer count and only Sav
   await expect(panel(page).getByRole('button', { name: 'Adicionar camada', exact: true })).toBeVisible();
   const footer = panel(page).locator('.maono-layer-panel__save-footer');
   await expect(footer.getByRole('button')).toHaveCount(1);
-  await expect(footer.getByRole('button')).toHaveText('Salvar mapa');
+  await expect(footer.getByRole('button')).toHaveText('Salvar como projeto');
   await visualEvidence(page, testInfo, 'minimal-empty-layers');
   await openFilters(page);
   await expect(panel(page).locator('.maono-layer-panel__header')).toContainText('0 camadas');
@@ -630,8 +630,8 @@ test('inline category filter changes native CSV population, toggles, saves once 
   const expectedRevision = fixture.saves.at(-1)!.expectedConfigRevision + 1;
   const release = fixture.holdNextSave();
   const save = panel(page).locator('.maono-layer-panel__save-button');
-  const committed = page.waitForResponse(response => response.request().method() === 'PUT' && response.url().endsWith('/config'));
-  const rehydrated = page.waitForResponse(response => response.url().includes('/config-stream?'));
+  const loadsBefore = fixture.configLoads;
+  const committed = page.waitForResponse(response => response.request().method() === 'PUT' && /\/save-operations\/[^/]+\/payload$/.test(new URL(response.url()).pathname));
   await save.click();
   try {
     await expect.poll(() => fixture.saves.length).toBe(beforeSaveCount + 1);
@@ -644,8 +644,8 @@ test('inline category filter changes native CSV population, toggles, saves once 
     expect(fixture.saves).toHaveLength(beforeSaveCount + 1);
   } finally { release(); }
   expect((await committed).status()).toBe(200);
-  await rehydrated;
-  await ready(page);
+  await expect(save).toBeEnabled();
+  expect(fixture.configLoads).toBe(loadsBefore);
   expect(fixture.saves.at(-1)!.expectedConfigRevision).toBe(expectedRevision);
   expect(savedVisState(fixture.saves.at(-1)!).filters).toEqual(expect.arrayContaining([expect.objectContaining({ id: originalFilterId, name: ['category'], type: 'multiSelect', value: ['B'] })]));
   await page.reload();
@@ -1033,20 +1033,92 @@ for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 
   });
 }
 
-test('409 preserves edited layer state and feedback while allowing a later authorized retry', async ({ page }) => {
+for (const conflictStatus of [202, 409]) test(`${conflictStatus} conflict preserves edited layer state and requires explicit review before a new save`, async ({ page }, testInfo) => {
+  if (conflictStatus === 202) await page.setViewportSize({ width: 1280, height: 480 });
   const fixture = await openMap(page, { layerCount: 1 });
   await openLayers(page);
   await renameFirstLayer(page, 'Edição preservada');
-  fixture.rejectSaves();
+  fixture.rejectSaves(conflictStatus);
   const save = panel(page).locator('.maono-layer-panel__save-button');
   await save.click();
   await expect.poll(() => fixture.saves.length).toBe(1);
   await expect(panel(page).locator('.maono-layer-panel__save-message[role=alert]')).toBeVisible();
   await expect(save).toBeEnabled();
   await expect(rows(page).first().locator('.maono-layer-row__open strong')).toHaveText('Edição preservada');
+  await expect(panel(page)).toContainText('por até 7 dias');
+  if (conflictStatus === 202) {
+    const message = await panel(page).locator('.maono-layer-panel__save-message').boundingBox();
+    const footer = await panel(page).locator('.maono-layer-panel__save-footer').boundingBox();
+    expect(message!.height).toBeGreaterThan(30);
+    expect(footer!.height).toBeLessThanOrEqual(241);
+    await visualEvidence(page, testInfo, 'durable-save-terminal-actions');
+  }
+  const exported = page.waitForEvent('download');
+  await panel(page).getByRole('button', { name: 'Exportar tentativa', exact: true }).click();
+  const download = await exported;
+  expect(JSON.parse(await readFile((await download.path())!, 'utf8'))).toEqual(fixture.saves[0].config);
+  const failedId = fixture.saves[0].operationId;
+  const checksBefore = fixture.checks.length;
+  await save.click();
+  await expect.poll(() => fixture.checks.length).toBe(checksBefore + 1);
+  await expect(save).toBeEnabled();
+  expect(fixture.saves).toHaveLength(1);
+  expect(fixture.checks.at(-1)).toBe(failedId);
+  // A terminal operation is never silently retried or rebased. The user reviews
+  // the preserved attempt before admitting a fresh explicit-click snapshot.
+  await page.getByRole('button', { name: 'Arquivar tentativa revisada e liberar novos salvamentos', exact: true }).click();
+  await expect(save).toHaveText('Salvar mapa');
   fixture.rejectSaves(200);
   const retry = await saveMap(page, fixture);
+  expect(retry.operationId).not.toBe(failedId);
+  expect(retry.expectedConfigRevision).toBe(fixture.saves[0].expectedConfigRevision);
   expect(savedVisState(retry).layers[0].config.label).toBe('Edição preservada');
+  expect(fixture.unexpectedWrites).toEqual([]);
+});
+
+test('stopping the wait preserves the received operation and later edits while panel recovery consults its receipt', async ({ page }) => {
+  const fixture = await openMap(page, { layerCount: 1 });
+  await openLayers(page);
+  await renameFirstLayer(page, 'Snapshot do clique');
+  const before = await canvasGeometry(page, true);
+  const loadsBefore = fixture.configLoads;
+  const release = fixture.holdNextSave();
+  const save = panel(page).locator('.maono-layer-panel__save-button');
+  await save.click();
+  await expect.poll(() => fixture.saves.length).toBe(1);
+  await expect(save).toBeDisabled();
+  await renameFirstLayer(page, 'Edição posterior mantida');
+  await expect(panel(page).getByRole('button', { name: 'Parar de esperar', exact: true })).toBeVisible({ timeout: 20_000 });
+  await panel(page).getByRole('button', { name: 'Parar de esperar', exact: true }).click();
+  await expect(save).toBeEnabled();
+  await expect(save).toHaveText('Verificar tentativa anterior');
+  await expect(panel(page)).toContainText('isso não cancela');
+  release();
+  await expect.poll(() => fixture.revision).toBe(2);
+  const checksBefore = fixture.checks.length;
+  await save.click();
+  await expect.poll(() => fixture.checks.length).toBe(checksBefore + 1);
+  await expect(save).toBeEnabled();
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText('Há alterações locais');
+  expect(fixture.manifests).toHaveLength(1);
+  expect(fixture.saves).toHaveLength(1);
+  expect(savedVisState(fixture.saves[0]).layers[0].config.label).toBe('Snapshot do clique');
+  await expect(rows(page).first().locator('.maono-layer-row__open strong')).toHaveText('Edição posterior mantida');
+  expect((await capture(page)).snapshot.hasUnsavedChanges).toBe(true);
+  expect(fixture.configLoads).toBe(loadsBefore);
+  await expectStableCanvas(page, before);
+  const exported = page.waitForEvent('download');
+  await panel(page).getByRole('button', { name: 'Exportar rascunho atual', exact: true }).click();
+  const download = await exported;
+  expect(savedVisState({ config: JSON.parse(await readFile((await download.path())!, 'utf8')), expectedConfigRevision: 1 }).layers[0].config.label).toBe('Edição posterior mantida');
+  // Receipt recovery must not silently rebase these newer edits.
+  await save.click();
+  await expect.poll(() => fixture.saves.length).toBe(2);
+  await expect(panel(page).getByRole('button', { name: 'Arquivar tentativa revisada e liberar novos salvamentos', exact: true })).toBeVisible();
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText(/mudou|precisa de revisão/);
+  expect(fixture.operationState(fixture.manifests[1].operationId)).toBe('CONFLICT');
+  expect(fixture.manifests[1].expectedConfigRevision).toBe(1);
+  expect(fixture.revision).toBe(2);
   expect(fixture.unexpectedWrites).toEqual([]);
 });
 

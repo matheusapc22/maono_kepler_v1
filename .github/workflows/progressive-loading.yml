@@ -8,10 +8,13 @@ on:
       - 'src/pages/Admin/**'
       - 'src/pages/Projects.tsx'
       - 'src/pages/Projects/**'
+      - 'src/pages/Kepler/thumbnail/preview-metrics.ts'
+      - 'functions/_lib/project-preview-metrics.js'
       - 'tests/*progressive*.test.mjs'
       - 'tests/initial-loading-presentation.test.mjs'
       - 'tests/helpers/*progressive*.mjs'
       - 'tests/browser/*progressive-loading.spec.ts'
+      - 'tests/browser/fixtures/project-preview-metrics.ts'
       - 'playwright.progressive-loading.config.ts'
       - '.github/workflows/progressive-loading.yml'
   workflow_dispatch:

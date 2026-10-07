@@ -342,7 +342,7 @@ test("document.manage é nativo de owner/admin e explícito para editor", async 
   assert.equal((await can(env, editor, "document.manage", context)).allowed, false);
 
   db.exec(`
-    CREATE TABLE user_permissions (
+    CREATE TABLE IF NOT EXISTS user_permissions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       permission TEXT NOT NULL,

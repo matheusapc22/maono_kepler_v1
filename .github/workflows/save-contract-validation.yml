@@ -5,14 +5,23 @@ on:
     paths:
       - "functions/api/projects/**"
       - "functions/_lib/save-*.js"
+      - "functions/_lib/project-save-*.js"
+      - "functions/_lib/project-creation-reservation.js"
+      - "functions/_lib/project-config-stream-validator.js"
+      - "functions/_lib/map-config*.js"
+      - "src/pages/Kepler/durable-save*.ts"
+      - "src/pages/Kepler/save-edit-generation.ts"
+      - "src/pages/Kepler/change-requests/durable-review-apply.ts"
+      - "workers/project-save-operations.js"
+      - "tests/project-save-*.test.mjs"
+      - "tests/project-durable-*.test.mjs"
+      - "tests/durable-save-*.test.mjs"
+      - "tests/browser/durable-save*.spec.ts"
+      - "playwright.durable-save.config.ts"
       - "functions/_lib/dropbox*.js"
       - "functions/_lib/project-config-revisions.js"
       - "functions/_lib/project-config-service.js"
-      - "functions/_lib/project-creation-lifecycle-service.js"
       - "functions/_lib/organization-limit-service.js"
-      - "functions/_lib/project-large-config-save.js"
-      - "functions/_lib/project-large-legacy-config-save.js"
-      - "functions/_lib/project-large-creation.js"
       - "functions/_lib/error-catalog.js"
       - "src/pages/Kepler/save-observability.ts"
       - "src/pages/Kepler/project-create-transport.ts"
@@ -57,6 +66,15 @@ jobs:
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Durable operation SQL, HTTP, storage and browser-controller gates
+        run: npm run test:durable-save
+
+      - name: Install browser engines for isolated recovery QA
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Real IndexedDB and mounted save-button recovery QA
+        run: npm run test:durable-save-browser
 
       - name: Validate save observability and deploy contract
         run: npm run test:save-observability

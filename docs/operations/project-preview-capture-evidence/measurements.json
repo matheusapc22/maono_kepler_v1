@@ -1,0 +1,835 @@
+{
+  "measuredAt": "2026-10-06T03:11:24.391Z",
+  "environment": {
+    "platform": "linux",
+    "architecture": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpus": 9,
+    "playwright": "1.55.0",
+    "headless": true,
+    "realMobileHardware": false,
+    "browserVersions": {
+      "chromium": "140.0.7339.16",
+      "webkit": "26.0"
+    }
+  },
+  "stats": {
+    "startTime": "2026-10-06T03:11:24.391Z",
+    "duration": 48165.709,
+    "expected": 16,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "metrics": [
+    {
+      "project": "chromium",
+      "name": "capture-benchmark.json",
+      "samples": 20,
+      "p50Ms": 33.20000000298023,
+      "p95Ms": 34.100000001490116,
+      "p99Ms": 34.79999999701977,
+      "bytes": [
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188
+      ],
+      "longTasksMs": [],
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.16 Safari/537.36"
+    },
+    {
+      "project": "chromium",
+      "name": "capture-baseline-benchmark.json",
+      "baselineCommit": "af652fe47b9f56ed8910b50aab0f1367645bd770",
+      "fixture": "simple light multi-canvas, no manual overlay, same browser, interleaved runs",
+      "old": {
+        "count": 20,
+        "p50Ms": 41.79999999701977,
+        "p95Ms": 54.899999998509884,
+        "p99Ms": 60.19999999552965,
+        "encodes": 60
+      },
+      "current": {
+        "count": 20,
+        "p50Ms": 24.5,
+        "p95Ms": 25.5,
+        "p99Ms": 42,
+        "encodes": 20
+      },
+      "pixelDifferences": 0,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.16 Safari/537.36"
+    },
+    {
+      "project": "webkit",
+      "name": "capture-benchmark.json",
+      "samples": 20,
+      "p50Ms": 51.000000000000114,
+      "p95Ms": 95,
+      "p99Ms": 117,
+      "bytes": [
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721
+      ],
+      "longTasksMs": [],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+    },
+    {
+      "project": "webkit",
+      "name": "capture-baseline-benchmark.json",
+      "baselineCommit": "af652fe47b9f56ed8910b50aab0f1367645bd770",
+      "fixture": "simple light multi-canvas, no manual overlay, same browser, interleaved runs",
+      "old": {
+        "count": 20,
+        "p50Ms": 98,
+        "p95Ms": 124,
+        "p99Ms": 149,
+        "encodes": 60
+      },
+      "current": {
+        "count": 20,
+        "p50Ms": 39,
+        "p95Ms": 54,
+        "p99Ms": 58.000000000000114,
+        "encodes": 20
+      },
+      "pixelDifferences": 0,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+    },
+    {
+      "project": "mobile-chromium",
+      "name": "capture-benchmark.json",
+      "samples": 20,
+      "p50Ms": 33.29999999701977,
+      "p95Ms": 36,
+      "p99Ms": 38,
+      "bytes": [
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188,
+        89188
+      ],
+      "longTasksMs": [],
+      "userAgent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.16 Mobile Safari/537.36"
+    },
+    {
+      "project": "mobile-chromium",
+      "name": "capture-baseline-benchmark.json",
+      "baselineCommit": "af652fe47b9f56ed8910b50aab0f1367645bd770",
+      "fixture": "simple light multi-canvas, no manual overlay, same browser, interleaved runs",
+      "old": {
+        "count": 20,
+        "p50Ms": 42,
+        "p95Ms": 45,
+        "p99Ms": 51.600000001490116,
+        "encodes": 60
+      },
+      "current": {
+        "count": 20,
+        "p50Ms": 23.899999998509884,
+        "p95Ms": 26.899999998509884,
+        "p99Ms": 30.099999994039536,
+        "encodes": 20
+      },
+      "pixelDifferences": 0,
+      "userAgent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.16 Mobile Safari/537.36"
+    },
+    {
+      "project": "mobile-webkit",
+      "name": "capture-benchmark.json",
+      "samples": 20,
+      "p50Ms": 48,
+      "p95Ms": 53.99999999999997,
+      "p99Ms": 104.00000000000003,
+      "bytes": [
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721,
+        51721
+      ],
+      "longTasksMs": [],
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+    },
+    {
+      "project": "mobile-webkit",
+      "name": "capture-baseline-benchmark.json",
+      "baselineCommit": "af652fe47b9f56ed8910b50aab0f1367645bd770",
+      "fixture": "simple light multi-canvas, no manual overlay, same browser, interleaved runs",
+      "old": {
+        "count": 20,
+        "p50Ms": 91,
+        "p95Ms": 92.99999999999955,
+        "p99Ms": 169.00000000000006,
+        "encodes": 60
+      },
+      "current": {
+        "count": 20,
+        "p50Ms": 39,
+        "p95Ms": 43,
+        "p99Ms": 43.99999999999994,
+        "encodes": 20
+      },
+      "pixelDifferences": 0,
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+    }
+  ],
+  "coverage": [
+    {
+      "project": "chromium",
+      "test": "point: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "geojson: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "faithful complex-layer pixels are copied exactly; dark=false",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "faithful complex-layer pixels are copied exactly; dark=true",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "frozen frame survives immediate edit and root unmount before encoding callback",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "generation changes before freeze reject instead of capturing current live map",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "in-flight duplicate shares work; newer generation cancels older and releases listeners",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "degraded overlay honors filters and rejects unsupported layer approximations",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "array scans stop at relevant visible-point limit while preserving later visible rows",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "overlay scanning is cancellable in chunks without a new global row cap",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "html2canvas fallback clones pixels immediately and disposes its DOM",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "actual WebGL source and PNG encode work at the render boundary",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "capture timings and long tasks are measured on the actual test browser",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "tainted canvas fails closed as degraded and never retries another live frame",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "cancelled html2canvas releases frozen DOM and settles without a live retry",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "crop uses editor bounds and excludes hidden, clipped-out and foreign canvases",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "lost WebGL context never produces a faithful preview of a partial map",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "same-fixture pre-refactor baseline reports measured percentiles without claiming a hardware SLO",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "same-camera delayed renderer commit cannot freeze old color/filter pixels",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "actual MapLibre applies a changed style token and preserves token for equivalent replacement",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "split views prove both renderer generations and preserve their separate pixel regions",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "an unregistered visible canvas fails before capture fallbacks",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "mounted Kepler stacking paints a later negative-z basemap below Deck pixels",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "removing the final layer still waits for Deck to acknowledge and clear its old pixels",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "legacy nonuniform framing is explicit for 1216x720 source pixels",
+      "status": "expected"
+    },
+    {
+      "project": "chromium",
+      "test": "legacy nonuniform framing is explicit for 390x844 source pixels",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "point: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "geojson: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "faithful complex-layer pixels are copied exactly; dark=false",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "faithful complex-layer pixels are copied exactly; dark=true",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "frozen frame survives immediate edit and root unmount before encoding callback",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "generation changes before freeze reject instead of capturing current live map",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "in-flight duplicate shares work; newer generation cancels older and releases listeners",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "degraded overlay honors filters and rejects unsupported layer approximations",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "array scans stop at relevant visible-point limit while preserving later visible rows",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "overlay scanning is cancellable in chunks without a new global row cap",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "html2canvas fallback clones pixels immediately and disposes its DOM",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "actual WebGL source and PNG encode work at the render boundary",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "capture timings and long tasks are measured on the actual test browser",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "tainted canvas fails closed as degraded and never retries another live frame",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "cancelled html2canvas releases frozen DOM and settles without a live retry",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "crop uses editor bounds and excludes hidden, clipped-out and foreign canvases",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "lost WebGL context never produces a faithful preview of a partial map",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "same-fixture pre-refactor baseline reports measured percentiles without claiming a hardware SLO",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "same-camera delayed renderer commit cannot freeze old color/filter pixels",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "actual MapLibre applies a changed style token and preserves token for equivalent replacement",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "split views prove both renderer generations and preserve their separate pixel regions",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "an unregistered visible canvas fails before capture fallbacks",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "mounted Kepler stacking paints a later negative-z basemap below Deck pixels",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "removing the final layer still waits for Deck to acknowledge and clear its old pixels",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "legacy nonuniform framing is explicit for 1216x720 source pixels",
+      "status": "expected"
+    },
+    {
+      "project": "webkit",
+      "test": "legacy nonuniform framing is explicit for 390x844 source pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "point: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "geojson: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "faithful complex-layer pixels are copied exactly; dark=false",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "faithful complex-layer pixels are copied exactly; dark=true",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "frozen frame survives immediate edit and root unmount before encoding callback",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "generation changes before freeze reject instead of capturing current live map",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "in-flight duplicate shares work; newer generation cancels older and releases listeners",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "degraded overlay honors filters and rejects unsupported layer approximations",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "array scans stop at relevant visible-point limit while preserving later visible rows",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "overlay scanning is cancellable in chunks without a new global row cap",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "html2canvas fallback clones pixels immediately and disposes its DOM",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "actual WebGL source and PNG encode work at the render boundary",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "capture timings and long tasks are measured on the actual test browser",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "tainted canvas fails closed as degraded and never retries another live frame",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "cancelled html2canvas releases frozen DOM and settles without a live retry",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "crop uses editor bounds and excludes hidden, clipped-out and foreign canvases",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "lost WebGL context never produces a faithful preview of a partial map",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "same-fixture pre-refactor baseline reports measured percentiles without claiming a hardware SLO",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "same-camera delayed renderer commit cannot freeze old color/filter pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "actual MapLibre applies a changed style token and preserves token for equivalent replacement",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "split views prove both renderer generations and preserve their separate pixel regions",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "an unregistered visible canvas fails before capture fallbacks",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "mounted Kepler stacking paints a later negative-z basemap below Deck pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "removing the final layer still waits for Deck to acknowledge and clear its old pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "legacy nonuniform framing is explicit for 1216x720 source pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-chromium",
+      "test": "legacy nonuniform framing is explicit for 390x844 source pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "point: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "geojson: real Deck holds a new-policy capture until construction, aggregation and drawing",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "faithful complex-layer pixels are copied exactly; dark=false",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "faithful complex-layer pixels are copied exactly; dark=true",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "frozen frame survives immediate edit and root unmount before encoding callback",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "generation changes before freeze reject instead of capturing current live map",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "in-flight duplicate shares work; newer generation cancels older and releases listeners",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "degraded overlay honors filters and rejects unsupported layer approximations",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "array scans stop at relevant visible-point limit while preserving later visible rows",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "overlay scanning is cancellable in chunks without a new global row cap",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "html2canvas fallback clones pixels immediately and disposes its DOM",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "actual WebGL source and PNG encode work at the render boundary",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "capture timings and long tasks are measured on the actual test browser",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "tainted canvas fails closed as degraded and never retries another live frame",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "cancelled html2canvas releases frozen DOM and settles without a live retry",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "crop uses editor bounds and excludes hidden, clipped-out and foreign canvases",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "lost WebGL context never produces a faithful preview of a partial map",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "same-fixture pre-refactor baseline reports measured percentiles without claiming a hardware SLO",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "same-camera delayed renderer commit cannot freeze old color/filter pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "actual MapLibre applies a changed style token and preserves token for equivalent replacement",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "split views prove both renderer generations and preserve their separate pixel regions",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "an unregistered visible canvas fails before capture fallbacks",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "mounted Kepler stacking paints a later negative-z basemap below Deck pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "removing the final layer still waits for Deck to acknowledge and clear its old pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "legacy nonuniform framing is explicit for 1216x720 source pixels",
+      "status": "expected"
+    },
+    {
+      "project": "mobile-webkit",
+      "test": "legacy nonuniform framing is explicit for 390x844 source pixels",
+      "status": "expected"
+    }
+  ],
+  "limitations": [
+    "Synthetic local pixel fixtures plus actual Deck Point/GeoJSON consumption/materialization and MapLibre tests; the complete mounted Kepler acceptance matrix is a separate compiled gate.",
+    "Actual raw WebGL and actual MapLibre style-diff cases ran in Chromium and WebKit.",
+    "Pixel 7 and iPhone 13 are desktop engine emulations, not real devices or device-GPU benchmarks.",
+    "Firefox launch attempted after dependency restore but timed out with RenderCompositorSWGL framebuffer failure; no Firefox capture results.",
+    "WebKit does not expose the longtask observer; its empty list is not proof of zero long tasks.",
+    "No production, authenticated, remote tile/font/network, or physical GPU matrix was exercised.",
+    "No hardware SLO achievement is claimed. Baseline comparison is only for a pixel-equivalent simple synthetic scene and the exact historical source commit."
+  ],
+  "sourceDescription": "Frozen consumed-clustering correction: immutable Point/GeoJSON policy and native-source receipts, synchronous materialization, drawn-frame identity, mandatory saved extension, positive saved-empty dataset proof, and existing capture fidelity guards",
+  "mountedFollowUp": {
+    "document": "mounted-kepler-validation.md",
+    "compiledCasesPassed": 8,
+    "engines": [
+      "Chromium",
+      "WebKit"
+    ],
+    "pixelComparison": "mounted-pixel-comparison.json",
+    "uploadedPng": "mounted-project-preview.png",
+    "viewportScreenshot": "mounted-editor-viewport.png",
+    "note": "Mounted run preceded final missing-envelope and high-zoom tightening; combined final build gate owns the frozen-state rerun."
+  },
+  "sourceFilesSha256": {
+    "src/pages/Kepler/thumbnail/capture-overlay.ts": "9db40410a4c47204888a09783b73a3efbe7ba96ba4a95efaf07fca9115c58616",
+    "src/pages/Kepler/thumbnail/capture-pixels.ts": "1fef0463ea6fc68c8e7dce827bba4cc96d3a9d271d57777004741005cd9ce53c",
+    "src/pages/Kepler/thumbnail/capture-render-generation.ts": "365c13432ca9de13520ead9031200b8476eca4e54c2eee4a64dd89ed906c4795",
+    "src/pages/Kepler/thumbnail/capture-snapshot.ts": "0e580c1ebe74bfdf2da4a556762c092ab7737043bc85ef91f6cc3b27f0b58c1c",
+    "src/pages/Kepler/thumbnail/capture-thumbnail.ts": "e127596be51db44ee5febe70381290a0222a2b7dfef1f680d1df400cc196f0eb",
+    "src/pages/Kepler/thumbnail/capture-waits.ts": "82b27de6bce2b4cd14b35eae007f09fd124f8231aee7ab183b0f04c7d06375a0",
+    "src/pages/Kepler/map-url-loader/map-visual-readiness.ts": "304eb5aaba019885f7752d46965563129528a9c7cf7cc91107d310d23340398a",
+    "src/pages/Kepler/factories/capture-render-generation.tsx": "6a39dfe94a01bb090267ff64d12c6df6c646151d1a31713974f21591b8fae1c3",
+    "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts": "4bd7575838b50b39df69b051238c6856c37372b0d6f423ffee496bb07685365e",
+    "src/pages/Kepler/clustering/point-cluster-render-provenance.ts": "f4767ce69b801d3a0352464ff5dda9a54bd263d6e56da2d2cd1d9c212befdcd4",
+    "src/pages/Kepler/clustering/point-cluster-native-data-adapter.ts": "2aef1f61ae4ef0036cb42b73319b57cea072e06183eb722ab3a06ebd268473e0",
+    "src/pages/Kepler/clustering/point-cluster-policy.ts": "af079d80464f5f8b797d4344cd3c0ab36f3f7f1385172de8657c3364f0d06cdc",
+    "src/pages/Kepler/clustering/point-cluster-store.ts": "57af0a10dd2e8f48c5ddfcbb0a291b66f8d125e1d078ea7016bd63111c1587ed"
+  },
+  "framingCharacterization": {
+    "report": "framing-characterization.json",
+    "casesPassed": 8,
+    "sourcePixelDimensions": [
+      [
+        1216,
+        720
+      ],
+      [
+        390,
+        844
+      ]
+    ],
+    "policy": "Nonuniform legacy X/Y normalization to960x540; zero RGBA differences compare after normalization, not geometry across aspect ratios"
+  },
+  "measurementRunPurpose": "16-case evidence-only rerun (8 real-Deck provenance cases and 8 measured timing/baseline cases), immediately after the separate complete 104/104 matrix",
+  "fullMatrix": {
+    "expected": 104,
+    "unexpected": 0,
+    "skipped": 0,
+    "flaky": 0,
+    "durationReported": "1.5m",
+    "log": "cluster-capture-matrix.txt",
+    "command": "playwright test --config=playwright.thumbnail-capture.config.ts --project=chromium --project=webkit --project=mobile-chromium --project=mobile-webkit"
+  },
+  "consumedClusterEvidence": "cluster-consumed-render-results.json",
+  "postMeasurementCommentOnlyChange": {
+    "file": "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts",
+    "change": "Remove newly added lint suppression; preserve the existing @ts-nocheck warning",
+    "emittedJavaScriptIdentical": true,
+    "emittedSha256": "875c3706f2e57b418c46dbd2009668e05256b202cf77a2c99e11dce5f1778628",
+    "beforeSourceSha256": "9c33af8131102fe28c61dfa91510e20504a336df2ec13ad60f9bf9636a35a109",
+    "afterSourceSha256": "4bd7575838b50b39df69b051238c6856c37372b0d6f423ffee496bb07685365e"
+  }
+}

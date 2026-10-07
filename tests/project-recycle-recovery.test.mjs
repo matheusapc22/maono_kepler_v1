@@ -1,183 +1,90 @@
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import test from "node:test";
-import { saveVersionedProjectConfig, readPublishedProjectConfig } from "../functions/_lib/project-config-service.js";
-import { markProjectConfigRevisionFailed, markProjectConfigRevisionReady } from "../functions/_lib/project-config-revisions.js";
-import { getDropboxMetadata } from "../functions/_lib/dropbox.js";
-import { getMapConfigRevisionFileName } from "../functions/_lib/map-config-storage-ref.js";
-import { persistenceFixture, interruption, deferred, waitForPause } from "./helpers/project-persistence-fixture.mjs";
-const repairSql = readFileSync(new URL("../scripts/project-revisions/recover-verified-absent.sql", import.meta.url), "utf8");
-const config = value => ({
-  version: "v1",
-  config: {
-    visState: {
-      layers: []
-    },
-    value
-  },
-  datasets: []
-});
-function setup(t, hooks = {}) {
-  const f = persistenceFixture(t, hooks);
-  f.db.exec(`INSERT INTO projects (id,name,slug,organization_id,dropbox_root_path,lifecycle_state)
-    VALUES (1,'Map','map',1,'/offline/a/map','ACTIVE')`);
-  f.save = value => saveVersionedProjectConfig(f.env, {
-    project: f.project(),
-    config: config(value),
-    expectedConfigRevision: Number(f.project().config_revision),
-    actor: f.user
-  });
-  f.repairArgs = () => {
-    const p = f.project(),
-      r = f.ledger(1, 2);
-    return [p.organization_id, p.id, r.revision, p.config_revision, r.checksum, r.attempts, r.transition_id, r.storage_ref, p.dropbox_root_path, p.default_config_file, "offline-incident-02", p.lifecycle_state];
-  };
-  return f;
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import { dropboxContentHashHex } from '../functions/_lib/dropbox-content-hash.js';
+import {
+  acquireProjectSaveUpload, failProjectSaveUpload, recoverProjectSaveUpload,
+  markProjectSavePayloadStored, processProjectSaveOperation, reconcileProjectSaveOperations,
+} from '../functions/_lib/project-save-operations.js';
+import { uploadProjectSaveOperationPayload } from '../functions/_lib/project-save-operation-payload.js';
+import { readPublishedProjectConfig } from '../functions/_lib/project-config-service.js';
+import { fixture, localStorage, register, count } from './helpers/project-save-operation-fixture.mjs';
+const config = value => ({ version: 'v1', config: { visState: { layers: [] }, value }, datasets: [] });
+async function preparing(f, value = 'candidate', id = 'recover-operation-0001') {
+  const bytes = new TextEncoder().encode(JSON.stringify(config(value)));
+  const operation = await register(f, id, { manifest: { serializationVersion: 1, checksumAlgorithm: 'dropbox-content-hash',
+    checksum: await dropboxContentHashHex(bytes), sizeBytes: bytes.byteLength, configVersion: 'v1', datasetCount: 0 } });
+  const upload = await acquireProjectSaveUpload(f.env, { operation });
+  return { operation: upload, bytes };
 }
-async function interruptedRecycle(t, when = "after") {
-  let failReady = false,
-    failDelete = false;
-  const hooks = {
-    beforeSql({
-      sql
-    }) {
-      if (failReady && /SET status = 'READY'/.test(sql)) throw interruption();
-    },
-    beforeProvider({
-      op
-    }) {
-      if (failDelete && when === "before" && op === "delete_v2") throw interruption();
-    },
-    afterProvider({
-      op
-    }) {
-      if (failDelete && when === "after" && op === "delete_v2") throw interruption();
-    }
-  };
-  const f = setup(t, hooks);
-  await f.save("published");
-  failReady = true;
-  await assert.rejects(f.save("old-candidate"), {
-    code: "OFFLINE_INTERRUPTION"
-  });
-  failReady = false;
-  failDelete = true;
-  await assert.rejects(f.save("replacement"), {
-    code: "OFFLINE_INTERRUPTION"
-  });
-  failDelete = false;
-  assert.equal(f.ledger(1, 2).error_stage, "RECYCLE");
-  return f;
-}
-test("interrupted recycle before deletion preserves the object and blocks all retries", async t => {
-  const f = await interruptedRecycle(t, "before");
-  const p = f.project();
-  const metadata = await getDropboxMetadata(f.env, p.dropbox_root_path, getMapConfigRevisionFileName(p.default_config_file, 2));
-  assert.ok(metadata.id);
-  const deletes = f.calls.filter(c => c.op === "delete_v2").length;
-  for (const candidate of ["old-candidate", "replacement", "other"]) {
-    await assert.rejects(f.save(candidate), {
-      code: "PROJECT_CONFIG_REVISION_CONFLICT"
-    });
-  }
-  assert.equal(f.calls.filter(c => c.op === "delete_v2").length, deletes);
-  assert.equal(f.project().config_revision, 1);
-  assert.deepEqual((await readPublishedProjectConfig(f.env, f.project())).config, config("published"));
+const providerUpload = (f, value) => uploadProjectSaveOperationPayload(f.env, { project: f.project(), ...value, body: value.bytes });
+
+test('storage completion followed by lost D1 response is recovered without deleting or reuploading', async t => {
+  const f = localStorage(fixture(t)), pending = await preparing(f);
+  const artifact = await providerUpload(f, pending);
+  f.failAt(2);
+  await assert.rejects(markProjectSavePayloadStored(f.env, { operation: pending.operation, artifact }), /INJECTED/);
+  await failProjectSaveUpload(f.env, { operation: pending.operation, error: new Error('lost DB result') });
+  const before = f.sqlite.prepare('SELECT path,hex(content) AS hex FROM local_storage_objects').all();
+  const result = await reconcileProjectSaveOperations(f.env);
+  assert.equal(result.published, 1);
+  assert.deepEqual(f.sqlite.prepare('SELECT path,hex(content) AS hex FROM local_storage_objects').all(), before);
+  assert.deepEqual((await readPublishedProjectConfig(f.env, f.project())).config, config('candidate'));
+  assert.equal(count(f, 'project_config_revisions'), 1);
 });
-for (const next of ["old-candidate", "replacement"]) test(`verified absent recovery resumes ${next} through the normal save pipeline`, async t => {
-  const f = await interruptedRecycle(t);
-  const args = f.repairArgs(),
-    old = f.ledger(1, 2),
-    p = f.project();
-  await assert.rejects(getDropboxMetadata(f.env, p.dropbox_root_path, getMapConfigRevisionFileName(p.default_config_file, 2)), {
-    code: "DROPBOX_PATH_NOT_FOUND"
-  });
-  // In this isolated rehearsal the rejected producer has terminated; no other
-  // provider calls or writers exist. A remote not_found alone is insufficient.
-  const repaired = f.db.prepare(repairSql).all(...args);
-  assert.equal(repaired.length, 1);
-  assert.equal(repaired[0].status, "FAILED");
-  assert.equal(repaired[0].attempts, old.attempts + 1);
-  assert.equal(f.project().config_revision, 1);
-  await markProjectConfigRevisionFailed(f.env, {
-    projectId: 1,
-    revision: 2,
-    checksum: old.checksum,
-    attempts: old.attempts,
-    errorCode: "LATE",
-    errorStage: "WRITE"
-  });
-  await assert.rejects(markProjectConfigRevisionReady(f.env, {
-    projectId: 1,
-    revision: 2,
-    checksum: old.checksum,
-    attempts: old.attempts
-  }), {
-    code: "PROJECT_CONFIG_REVISION_READY_CONFLICT"
-  });
-  assert.equal(f.ledger(1, 2).error_stage, "RECOVERY");
-  const saved = await f.save(next);
-  assert.equal(saved.revision, 2);
-  assert.deepEqual((await readPublishedProjectConfig(f.env, f.project())).config, config(next));
-  assert.equal(f.ledger(1, 2).status, "READY");
-  assert.equal(f.db.prepare(repairSql).all(...args).length, 0, "old repair snapshot cannot be replayed");
+test('verified absent upload permits same operation retry using a new private epoch', async t => {
+  const f = localStorage(fixture(t)), pending = await preparing(f);
+  await failProjectSaveUpload(f.env, { operation: pending.operation, error: new Error('upload never completed') });
+  const upload = await acquireProjectSaveUpload(f.env, { operation: pending.operation });
+  assert.equal(upload.upload_epoch, pending.operation.upload_epoch + 1);
+  const artifact = await providerUpload(f, { ...pending, operation: upload });
+  const ready = await markProjectSavePayloadStored(f.env, { operation: upload, artifact });
+  assert.equal((await processProjectSaveOperation(f.env, { operation: ready })).state, 'PUBLISHED');
+  assert.equal(count(f, 'local_storage_objects'), 1);
+  await assert.rejects(markProjectSavePayloadStored(f.env, { operation: pending.operation, artifact: { ...artifact, checksum: '0'.repeat(64) } }), { code: 'PROJECT_SAVE_PAYLOAD_INTEGRITY_FAILED' });
 });
-test("recovery CAS refuses drift in tenant, token, attempt, path, lifecycle or published HEAD", async t => {
-  const f = await interruptedRecycle(t),
-    args = f.repairArgs();
-  for (const [index, value] of [[0, 2], [2, 3], [4, "wrong-checksum"], [5, 99], [6, "other-token"], [7, "other-ref"], [8, "/offline/b/map"], [9, "other.json"], [10, args[6]], [11, "DELETED"]]) {
-    const stale = args.slice();
-    stale[index] = value;
-    assert.equal(f.db.prepare(repairSql).all(...stale).length, 0, `guard ${index + 1}`);
-    assert.equal(f.ledger(1, 2).error_stage, "RECYCLE");
-  }
-  f.db.prepare("UPDATE projects SET config_revision=2, config_storage_ref=? WHERE id=1").run(args[7]);
-  assert.equal(f.db.prepare(repairSql).all(...args).length, 0);
-  assert.equal(f.ledger(1, 2).error_stage, "RECYCLE");
+test('late older upload can create only its orphan object and cannot replace the newer published artifact', async t => {
+  const f = localStorage(fixture(t)), old = await preparing(f);
+  await failProjectSaveUpload(f.env, { operation: old.operation, error: new Error('uncertain old upload') });
+  const newer = await acquireProjectSaveUpload(f.env, { operation: old.operation });
+  const currentArtifact = await providerUpload(f, { ...old, operation: newer });
+  const ready = await markProjectSavePayloadStored(f.env, { operation: newer, artifact: currentArtifact });
+  const published = await processProjectSaveOperation(f.env, { operation: ready });
+  const olderArtifact = await providerUpload(f, old);
+  assert.notEqual(olderArtifact.storageRef, currentArtifact.storageRef);
+  const late = await markProjectSavePayloadStored(f.env, { operation: old.operation, artifact: olderArtifact });
+  assert.equal(late.storage_ref, currentArtifact.storageRef);
+  assert.equal(late.receipt_json, published.receipt_json);
+  assert.equal(count(f, 'local_storage_objects'), 2, 'no blind orphan deletion during active recovery');
 });
-test("late deletion stays fenced until its producer terminates; timeout age never unlocks it", async t => {
-  const started = deferred(),
-    finish = deferred();
-  let pause = false,
-    failReady = false;
-  const f = setup(t, {
-    beforeSql({
-      sql
-    }) {
-      if (failReady && /SET status = 'READY'/.test(sql)) throw interruption();
-    },
-    async beforeProvider({
-      op
-    }) {
-      if (pause && op === "delete_v2") {
-        started.resolve();
-        await finish.promise;
-        throw interruption();
-      }
-    }
-  });
-  await f.save("published");
-  failReady = true;
-  await assert.rejects(f.save("candidate"), {
-    code: "OFFLINE_INTERRUPTION"
-  });
-  failReady = false;
-  pause = true;
-  const producer = f.save("replacement").then(value => ({
-    value
-  }), error => ({
-    error
-  }));
-  await waitForPause(started, producer);
-  try {
-    f.db.exec("UPDATE project_config_revisions SET updated_at='2000-01-01 00:00:00' WHERE revision=2");
-    await assert.rejects(f.save("replacement"), {
-      code: "PROJECT_CONFIG_REVISION_CONFLICT"
-    });
-    assert.equal(f.ledger(1, 2).error_stage, "RECYCLE");
-  } finally {
-    finish.resolve();
-  }
-  assert.equal((await producer).error.code, "OFFLINE_INTERRUPTION");
-  assert.equal(f.ledger(1, 2).error_stage, "RECYCLE");
+test('uncertain provider inspection keeps the old epoch fenced and retries before new upload', async t => {
+  const f = localStorage(fixture(t)), pending = await preparing(f);
+  await providerUpload(f, pending);
+  await failProjectSaveUpload(f.env, { operation: pending.operation, error: new Error('lost response') });
+  const failed = await recoverProjectSaveUpload(f.env, { operation: pending.operation, recoverPayload: async () => { throw Object.assign(new Error('provider unavailable'), { status: 503, code: 'DROPBOX_UNAVAILABLE' }); } });
+  assert.equal(failed.state, 'RECEIVING');
+  assert.equal(failed.upload_epoch, pending.operation.upload_epoch);
+  assert.ok(failed.lease_until > Date.now());
+  await assert.rejects(acquireProjectSaveUpload(f.env, { operation: failed }), { code: 'PROJECT_SAVE_UPLOAD_BUSY' });
+  f.sqlite.exec('UPDATE project_save_operations SET lease_until=0');
+  const recovered = await recoverProjectSaveUpload(f.env, { operation: failed });
+  assert.equal(recovered.state, 'PAYLOAD_STORED');
+  assert.equal(count(f, 'local_storage_objects'), 1);
+});
+test('tampered orphan never becomes received or published during recovery', async t => {
+  const f = localStorage(fixture(t)), pending = await preparing(f);
+  await providerUpload(f, pending);
+  f.sqlite.prepare('UPDATE local_storage_objects SET content = ?').run(new TextEncoder().encode(JSON.stringify(config('tampered!'))));
+  await failProjectSaveUpload(f.env, { operation: pending.operation, error: new Error('lost confirmation') });
+  const result = await recoverProjectSaveUpload(f.env, { operation: pending.operation });
+  assert.equal(result.state, 'FAILED_FINAL');
+  assert.equal(result.payload_stored_at, null);
+  assert.equal(f.project().config_revision, 0);
+  assert.equal(count(f, 'local_storage_objects'), 1);
+});
+test('recovery code never runs the retired 30-second recycler or deletes operation objects', () => {
+  const source = readFileSync(new URL('../functions/_lib/project-save-operations.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /ABANDONED_READY|deleteDropbox|DELETE FROM local_storage_objects|recover-verified-absent/);
+  assert.match(source, /recoverStoredProjectSaveOperation/);
+  assert.match(source, /PROJECT_SAVE_RECOVERY_EXHAUSTED/);
 });

@@ -1,12 +1,11 @@
+import { dropboxContentHashHex } from "../functions/_lib/dropbox-content-hash.js";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { DropboxMapConfigRepository } from "../functions/_lib/dropbox-map-config-repository.js";
 import {
   MAP_CONFIG_REPOSITORY_METHODS,
-  MAP_CONFIG_SAVE_MODES,
   assertMapConfigRepository,
 } from "../functions/_lib/map-config-repository.js";
 import {
@@ -21,35 +20,16 @@ import {
   readPublishedProjectConfig,
 } from "../functions/_lib/project-config-service.js";
 
-const [serviceSource, reconcilerSource, adapterSource, compatibilitySource] =
-  await Promise.all([
-    readFile(
-      new URL("../functions/_lib/project-config-service.js", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../functions/_lib/project-lifecycle-reconciler.js", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../functions/_lib/dropbox-map-config-repository.js", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../functions/_lib/project-config-repository.js", import.meta.url),
-      "utf8",
-    ),
-  ]);
-
 function fakeRepository(overrides = {}) {
   return {
     provider: "fake",
     async load() {
       throw new Error("load não configurado");
     },
-    async saveRevision() {
-      throw new Error("saveRevision não configurado");
-    },
+    async loadLegacyStream() {},
+    async uploadOperationPayload() {},
+    async verifyOperationPayload() {},
+    async recoverOperationPayload() {},
     async getRevision() {
       throw new Error("getRevision não configurado");
     },
@@ -104,10 +84,13 @@ function localEnv() {
   };
 }
 
-test("porta S04 exige load saveRevision getRevision e getMetadata", () => {
+test("porta durável exige operações imutáveis e leitores compatíveis", () => {
   assert.deepEqual(MAP_CONFIG_REPOSITORY_METHODS, [
     "load",
-    "saveRevision",
+    "loadLegacyStream",
+    "uploadOperationPayload",
+    "verifyOperationPayload",
+    "recoverOperationPayload",
     "getRevision",
     "getMetadata",
   ]);
@@ -116,7 +99,7 @@ test("porta S04 exige load saveRevision getRevision e getMetadata", () => {
     () => assertMapConfigRepository({ provider: "fake", load() {} }),
     (error) =>
       error?.code === "MAP_CONFIG_REPOSITORY_INVALID" &&
-      error?.details?.missing?.includes("saveRevision"),
+      error?.details?.missing?.includes("uploadOperationPayload"),
   );
 });
 
@@ -132,16 +115,6 @@ test("storage_ref continua opaca e independente do Dropbox", () => {
     "config.kepler.r000018.json",
   );
   assert.doesNotMatch(storageRef, /dropbox/i);
-});
-
-test("Application de MapConfig não importa primitivas Dropbox", () => {
-  assert.doesNotMatch(serviceSource, /from ["']\.\/dropbox\.js["']/);
-  assert.doesNotMatch(reconcilerSource, /from ["']\.\/dropbox\.js["']/);
-  assert.doesNotMatch(compatibilitySource, /from ["']\.\/dropbox\.js["']/);
-  assert.match(adapterSource, /from ["']\.\/dropbox\.js["']/);
-  assert.match(serviceSource, /repository\.saveRevision\(/);
-  assert.match(serviceSource, /repository\.getRevision\(/);
-  assert.match(reconcilerSource, /repository\.load\(/);
 });
 
 test("Application pode carregar legado usando FakeMapConfigRepository sem Dropbox", async () => {
@@ -219,23 +192,22 @@ test("DropboxMapConfigRepository preserva adapter local-d1 e revisões imutávei
 
   const project = {
     id: 84,
+    organization_id: 1,
     dropbox_root_path: "/project-84",
     default_config_file: "config.kepler.json",
   };
   const bytes = new TextEncoder().encode(
     JSON.stringify({ version: "v1", config: {}, datasets: [] }),
   );
-  const storageRef = createMapConfigStorageRef(84, 1);
-
-  const saved = await repository.saveRevision({
-    project,
-    revision: 1,
-    storageRef,
-    bytes,
-    contentType: "application/json; charset=utf-8",
-    mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-  });
-  assert.equal(saved.storageRef, storageRef);
+  const operation = {
+    id: "server-local-test", operation_id: "client-local-test", project_id: 84, organization_id: 1, upload_epoch: 1,
+    checksum: await dropboxContentHashHex(bytes), size_bytes: bytes.byteLength, checksum_algorithm: "dropbox-content-hash",
+    serialization_version: 1, schema_name: "legacy-kepler", schema_version: 1,
+  };
+  const saved = await repository.uploadOperationPayload({ project, operation, body: bytes });
+  const storageRef = saved.storageRef;
+  assert.equal(saved.contentVerified, true);
+  assert.equal(repository.saveRevision, undefined);
   assert.equal(saved.sizeBytes, bytes.byteLength);
 
   const loaded = await repository.getRevision({

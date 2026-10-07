@@ -1,47 +1,31 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import {readFile} from "node:fs/promises";
 import test from "node:test";
-
-async function source(relativePath) {
-  return readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
-}
-
-test("frontend envia contrato e build em toda tentativa de save", async () => {
-  const client = await source("src/pages/Kepler/save-observability.ts");
-  assert.match(client, /X-Maono-Client-Contract/);
-  assert.match(client, /X-Maono-Client-Build/);
-  assert.match(client, /MAONO_SAVE_CLIENT_CONTRACT\s*=\s*1/);
+import {onRequest as oldSave} from "../functions/api/projects/[slug]/save.js";
+import {onRequest as oldConfig} from "../functions/api/projects/[slug]/config.js";
+const source=p=>readFile(new URL(`../${p}`,import.meta.url),"utf8");
+test("client/API 2 retain schema19 plus additive capability",async()=>{
+  assert.match(await source("src/pages/Kepler/save-observability.ts"),/MAONO_SAVE_CLIENT_CONTRACT\s*=\s*2/);
+  const server=await source("functions/_lib/save-deploy-contract.js");
+  assert.match(server,/SAVE_EXPECTED_DB_SCHEMA_VERSION = 19/);
+  assert.match(server,/project_save_operation_schema/);
 });
-
-test("save moderno valida drift antes da primeira persistência", async () => {
-  const endpoint = await source("functions/api/projects/[slug]/config.js");
-  const guard = endpoint.indexOf("assertSaveDeployCompatibility(env, request)");
-  const persistence = endpoint.indexOf("const saved = await saveProjectConfig(env");
-  assert.ok(guard >= 0, "guard ausente no PUT /config");
-  assert.ok(persistence >= 0, "persistência moderna não localizada");
-  assert.ok(guard < persistence, "guard deve executar antes de saveProjectConfig");
+test("registration and creation validate deployment before any admission",async()=>{
+  for(const [file,write] of [["functions/_lib/project-save-operation-http.js","operation=await registerProjectSaveOperation"],["functions/api/projects/index.js","const reserved = await reserveProjectCreation"]]){
+    const code=await source(file);const check=code.indexOf("assertSaveDeployCompatibility(env,request)");
+    assert.ok(check>=0 && code.indexOf(write)>check,file);
+  }
 });
-
-test("criação valida drift antes de criar registros do projeto", async () => {
-  const endpoint = await source("functions/api/projects/index.js");
-  const guard = endpoint.indexOf("assertSaveDeployCompatibility(env, request)");
-  const persistence = endpoint.indexOf("const result = await createProjectFromKepler(");
-  assert.ok(guard >= 0, "guard ausente no POST /projects");
-  assert.ok(persistence >= 0, "criação persistente não localizada");
-  assert.ok(guard < persistence, "guard deve executar antes de createProjectFromKepler");
+test("retired writers reject old tabs before consuming request bytes or touching infrastructure",async()=>{
+  for(const [handler,method] of [[oldSave,"POST"],[oldConfig,"PUT"]]){
+    let read=false;
+    const request={method,json(){read=true;throw new Error("must not read")},headers:new Headers()};
+    const response=await handler({request,env:new Proxy({}, {get(){throw new Error("must not touch env")}})});
+    assert.equal(response.status,412);assert.equal(read,false);
+    assert.equal((await response.json()).error.code,"SAVE_CLIENT_CONTRACT_UNSUPPORTED");
+  }
 });
-
-test("endpoint legado valida drift antes do upload persistente", async () => {
-  const endpoint = await source("functions/api/projects/[slug]/save.js");
-  const guard = endpoint.indexOf("assertSaveDeployCompatibility(env, request)");
-  const persistence = endpoint.indexOf("const dropboxResult = await uploadDropboxTextFile(");
-  assert.ok(guard >= 0, "guard ausente no POST /save legado");
-  assert.ok(persistence >= 0, "upload persistente não localizado");
-  assert.ok(guard < persistence, "guard deve executar antes do upload legado");
-});
-
-test("migration 0019 estabelece schema de aplicação versão 19", async () => {
-  const migration = await source("migrations/0019_save_deploy_contract.sql");
-  assert.match(migration, /CREATE TABLE IF NOT EXISTS app_schema_metadata/);
-  assert.match(migration, /VALUES \(1, 19, CURRENT_TIMESTAMP\)/);
+test("migration keeps historical schema19 contract intact",async()=>{
+  assert.match(await source("migrations/0019_save_deploy_contract.sql"),/VALUES \(1, 19, CURRENT_TIMESTAMP\)/);
+  assert.doesNotMatch(await source("migrations/0039_project_save_operations.sql"),/UPDATE app_schema_metadata/);
 });

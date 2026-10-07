@@ -30,6 +30,8 @@ export type ProjectListItem = MaonoProject & {
   thumbnailRevision?: number | null;
   thumbnailUpdatedAt?: string | null;
   thumbnailAttempts?: number;
+  artifactId?: string | null;
+  jobState?: string | null;
 };
 
 export type ProjectMetadata = ProjectListItem & {
@@ -67,6 +69,8 @@ type ProjectThumbnailStatusResponse = {
   thumbnailRevision?: number | null;
   thumbnailUpdatedAt?: string | null;
   thumbnailAttempts?: number;
+  artifactId?: string | null;
+  jobState?: string | null;
 };
 
 export class ProjectMetadataApiError extends ApiError {
@@ -196,6 +200,8 @@ export async function fetchProjectThumbnailStatus(
         ? null
         : Math.max(0, Number(data.thumbnailRevision || 0)),
     thumbnailUpdatedAt: data.thumbnailUpdatedAt ?? null,
+    artifactId: data.artifactId ?? null,
+    jobState: data.jobState ?? null,
     thumbnailAttempts: Math.max(
       0,
       Number(data.thumbnailAttempts || 0),

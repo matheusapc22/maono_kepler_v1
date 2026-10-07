@@ -3,7 +3,7 @@ import {
   PROJECT_PUBLICATION_SQL,
   publicProject,
 } from "./projects.js";
-import { publicProjectPreview } from "./project-preview.js";
+import { publicProjectPreview, previewProjectSelect } from "./project-preview.js";
 
 const ACCESS_LEVELS = new Set(["owner", "editor", "viewer"]);
 
@@ -179,6 +179,7 @@ export async function listProjectsForActiveOrganization(env, user) {
     const { results } = await env.DB.prepare(
       `SELECT
         ${PUBLIC_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
         'owner' AS access_level
        FROM projects
        INNER JOIN organizations
@@ -200,6 +201,7 @@ export async function listProjectsForActiveOrganization(env, user) {
   const { results } = await env.DB.prepare(
     `SELECT
       ${PUBLIC_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
       user_projects.access_level
      FROM user_projects
      INNER JOIN projects ON projects.id = user_projects.project_id
@@ -257,6 +259,7 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
     const project = await env.DB.prepare(
       `SELECT
         ${PUBLIC_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
         'owner' AS access_level
        FROM projects
        INNER JOIN organizations
@@ -277,6 +280,7 @@ export async function getAccessibleProjectBySlug(env, user, slug) {
   const project = await env.DB.prepare(
     `SELECT
       ${PUBLIC_PROJECT_COLUMNS},
+        ${await previewProjectSelect(env)},
       user_projects.access_level
      FROM user_projects
      INNER JOIN projects ON projects.id = user_projects.project_id

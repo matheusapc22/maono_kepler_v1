@@ -55,11 +55,11 @@ const urls = {
     import.meta.url,
   ),
   largeCreate: new URL(
-    "../functions/_lib/project-large-creation.js",
+    "../functions/_lib/project-save-operations.js",
     import.meta.url,
   ),
   inlineCreate: new URL(
-    "../functions/_lib/project-creation-lifecycle-service.js",
+    "../functions/_lib/project-save-operations.js",
     import.meta.url,
   ),
 };
@@ -291,11 +291,11 @@ test("owner de projeto criado também é nível persistente válido para role Ed
   );
   assert.match(
     sources.largeCreate,
-    /VALUES \(\?, \?, 'owner'\)[\s\S]*ON CONFLICT\(user_id, project_id\)/,
+    /user_projects[\s\S]*'owner'[\s\S]*ON CONFLICT\(user_id,\s*project_id\)/,
   );
   assert.match(
     sources.inlineCreate,
-    /VALUES \(\?, \?, 'owner'\)[\s\S]*ON CONFLICT\(user_id, project_id\)/,
+    /user_projects[\s\S]*'owner'[\s\S]*ON CONFLICT\(user_id,\s*project_id\)/,
   );
 });
 
@@ -358,13 +358,13 @@ test("modo Viewer bloqueia persistência direta antes dos endpoints de escrita",
     /PROJECT_MAP_VIEWER_PERSISTENCE_FORBIDDEN/,
   );
   assert.match(sources.projectMiddleware, /assertProjectPersistenceRoute/);
-  assert.match(sources.projectMiddleware, /targetsViewerRestrictedMutation/);
+  assert.match(sources.projectMiddleware, /restricted/);
   assert.match(sources.projectMiddleware, /\/save\\\/\?\$/);
   assert.match(sources.projectMiddleware, /\/metadata\\\/\?\$/);
   assert.match(sources.projectMiddleware, /\/thumbnail/);
   assert.match(
     sources.projectMiddleware,
-    /await loadPersistenceContext\(env, request, params\)[\s\S]*return context\.next\(\)/,
+    /assertProjectPersistenceRoute\(user,\s*project\)[\s\S]*return context\.next\(\)/,
   );
 });
 

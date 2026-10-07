@@ -22,7 +22,7 @@ const [saveButton, saveResilience, provider, analysisAdapter, bufferHook] = awai
   ),
   readFile(
     new URL(
-      "../src/pages/Kepler/save-operation-resilience.ts",
+      "../src/pages/Kepler/durable-save-controller.ts",
       import.meta.url,
     ),
     "utf8",
@@ -205,7 +205,7 @@ test("viewer consegue gerar e descartar Buffer sem ganhar persistência", () => 
   assert.equal(capabilities.saveMap, false);
 });
 
-test("contrato legado de save aceita isócrona e Buffer e preserva tipo da análise", () => {
+test("contrato de eventos de análise sem reverter operação ambígua aceita isócrona e Buffer e preserva tipo da análise", () => {
   const bufferRequest = mapSaveRequestFromEvent({
     detail: {
       requestId: "map-save:buffer-1",
@@ -251,17 +251,17 @@ test("save event legado falha fechado para source desconhecido", () => {
   );
 });
 
-test("MaonoSaveButton mantém compatibilidade com o contrato legado de save", () => {
+test("MaonoSaveButton mantém compatibilidade com o contrato de eventos de análise sem reverter operação ambígua", () => {
   assert.match(saveButton, /mapSaveSourceAnalysisKind\(request\.source\)/);
   assert.match(
     saveButton,
-    /markLayerPersistent\(\s*request\.dataId,\s*analysisKind/,
+    /markLayerPersistent\(\s*request\.dataId,\s*mapSaveSourceAnalysisKind\(request\.source\)/,
   );
   assert.match(
     saveButton,
-    /markLayerTransient\(\s*request\.dataId,\s*analysisKind/,
+    /markLayerTransient\(\s*request\.dataId,\s*mapSaveSourceAnalysisKind\(request\.source\)/,
   );
-  assert.match(saveButton, /finishPendingMapSave\("success"\)/);
+  assert.match(saveButton, /finishPendingMapSave\("success", null, matches\)/);
 });
 
 test("provider roteia transient para adapter de análise sem alterar camada normal", () => {
@@ -301,7 +301,7 @@ test("Manter Buffer promove a camada sem acionar o save global", () => {
   assert.match(saveButton, /serializeProjectConfig/);
   assert.match(
     saveResilience,
-    /\/api\/projects\/\$\{encodeURIComponent\(snapshot\.projectSlug\)\}\/config/,
+    /\/api\/projects\/\$\{encodeURIComponent\(snapshot\.projectSlug\)\}\/save-operations/,
   );
 });
 

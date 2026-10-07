@@ -1,181 +1,51 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { getAuthorizedProject } from "../functions/_lib/projects.js";
+import { persistenceFixture, interruption } from "./helpers/project-persistence-fixture.mjs";
+import { config,largeConfig,reserve,create,register,upload,update,assertReopened } from "./helpers/durable-project-http.mjs";
 
-import {
-  beginClientSaveAttempt,
-  buildSaveRequestHeaders,
-  serializeSaveRequest,
-} from "../src/pages/Kepler/save-observability.ts";
-import { prepareProjectCreateTransport } from "../src/pages/Kepler/project-create-transport.ts";
-import { executeProjectCreateFlow } from "../src/pages/Kepler/project-create-flow.ts";
-
-const largeCreationSource = await readFile(
-  new URL("../functions/_lib/project-large-creation.js", import.meta.url),
-  "utf8",
-);
-const projectsSource = await readFile(
-  new URL("../functions/_lib/projects.js", import.meta.url),
-  "utf8",
-);
-
-function activeResponse(slug) {
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      status: "active",
-      project: {
-        id: 12,
-        slug,
-        active: true,
-        lifecycle: { state: "ACTIVE" },
-        configRevision: 1,
-      },
-      lifecycle: { state: "ACTIVE" },
-      configRevision: 1,
-    }),
-    { status: 201, headers: { "Content-Type": "application/json" } },
-  );
-}
-
-test("CREATE pequeno permanece inline e usa apenas POST", async () => {
-  const config = {
-    version: "v1",
-    config: { visState: { layers: [] } },
-    datasets: [],
-  };
-  const idempotencyKey = "small-create-regression-0001";
-  const attempt = beginClientSaveAttempt("create");
-  const prepared = prepareProjectCreateTransport(attempt, {
-    name: "Small create regression",
-    description: "small",
-    organizationId: 9,
-    idempotencyKey,
-    config,
-    legacy: null,
-  });
-
-  assert.equal(prepared.large, false);
-  const envelope = JSON.parse(prepared.requestBody);
-  assert.deepEqual(envelope.config, config);
-  assert.equal(envelope.largeConfig, undefined);
-
-  const calls = [];
-  const result = await executeProjectCreateFlow({
-    attempt: beginClientSaveAttempt("create"),
-    name: "Small create regression",
-    description: "small",
-    organizationId: 9,
-    idempotencyKey,
-    config,
-    legacy: null,
-    fetchImpl: async (url, init) => {
-      calls.push({ url, init });
-      assert.equal(url, "/api/projects");
-      return activeResponse("small-create-regression");
-    },
-  });
-
-  assert.equal(result.transport, "inline");
-  assert.equal(result.revision, 1);
-  assert.equal(calls.length, 1);
+for(const [label,map] of [["small",config("small")],["large",largeConfig("large")]]) test(`${label} creation shares the durable protocol and cannot be listed before activation`,async t=>{
+  const f=persistenceFixture(t),reserved=await reserve(f,map);
+  assert.equal(reserved.status,202);assert.equal(reserved.data.creation.transport,"durable-operation");
+  assert.equal(await getAuthorizedProject(f.env,f.user,f.project().slug),null);
+  const registered=await register(f,map,{key:"offline-create-0001"});
+  assert.equal(registered.data.operation.payloadStored,false);
+  assert.equal(await getAuthorizedProject(f.env,f.user,f.project().slug),null);
+  const saved=await upload(f,registered,{key:"offline-create-0001"});
+  assert.equal(saved.data.operation.state,"PUBLISHED");
+  assert.ok(await getAuthorizedProject(f.env,f.user,f.project().slug));
+  await assertReopened(f,map,1);
 });
 
-test("SAVE pequeno existente mantém envelope JSON e optimistic concurrency", () => {
-  const attempt = beginClientSaveAttempt("update");
-  const config = {
-    version: "v1",
-    config: { visState: { layers: [] } },
-    datasets: [],
-  };
-  const serialized = serializeSaveRequest(attempt, {
-    config,
-    expectedConfigRevision: 7,
-  });
-  const headers = buildSaveRequestHeaders(attempt);
-
-  assert.equal(headers["Content-Type"], "application/json");
-  assert.equal(headers["X-Maono-Large-Config"], undefined);
-  assert.deepEqual(JSON.parse(serialized.body), {
-    config,
-    expectedConfigRevision: 7,
-  });
+test("small and large updates advance expected revision through the same operation receipt",async t=>{
+  const f=persistenceFixture(t);await create(f);
+  const small=await update(f,config("edited-small"));assert.equal(small.data.operation.receipt.publishedRevision,2);
+  const large=await update(f,largeConfig("edited-large"),{operationId:"offline-update-large"});
+  assert.equal(large.data.operation.receipt.publishedRevision,3);
+  await assertReopened(f,largeConfig("edited-large"),3);
 });
 
-test("SAVE grande existente continua N -> N+1 e usa headers streaming", () => {
-  const attempt = beginClientSaveAttempt("update");
-  const config = {
-    version: "v1",
-    config: { visState: { layers: [] } },
-    datasets: [],
-    largeFixture: "x".repeat(8 * 1024 * 1024 + 1024),
-  };
-  const serialized = serializeSaveRequest(attempt, {
-    config,
-    expectedConfigRevision: 12,
-  });
-  const headers = buildSaveRequestHeaders(attempt);
-
-  assert.ok(serialized.payloadBytes > 8 * 1024 * 1024);
-  assert.equal(headers["X-Maono-Large-Config"], "1");
-  assert.equal(headers["X-Maono-Expected-Revision"], "12");
-  assert.equal(headers["X-Maono-Config-Size"], String(serialized.payloadBytes));
-  assert.equal(JSON.parse(serialized.body).expectedConfigRevision, undefined);
+for(const failure of ["project-record","draft-initialized"]) test(`reservation interruption at ${failure} resumes the same project and slug`,async t=>{
+  let armed=true;
+  const f=persistenceFixture(t,{afterSql({sql}){
+    if(!armed)return;
+    if((failure==="project-record"&&/INSERT INTO projects/.test(sql))||(failure==="draft-initialized"&&/SET lifecycle_state = 'DRAFT'/.test(sql))){armed=false;throw interruption();}
+  }});
+  const failed=await reserve(f);assert.equal(armed,false,"injected a real SQL interruption");assert.ok(failed.status>=400 || failed.status===202);
+  const first=f.project();assert.ok(first);
+  const recovered=await reserve(f);assert.equal(recovered.status,202,JSON.stringify(recovered.data));
+  assert.equal(recovered.data.project.id,first.id);assert.equal(recovered.data.project.slug,first.slug);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM projects").get().n,1);
+  assert.equal(f.db.prepare("SELECT project_id FROM organization_files").get().project_id,first.id);
+  const saved=await create(f);assert.equal(saved.data.operation.state,"PUBLISHED");
 });
 
-test("lifecycle Large CREATE preserva reserva -> storage -> CONFIG_READY -> ACTIVE -> quota commit", () => {
-  const reserve = largeCreationSource.indexOf("reserveProjectQuota(env");
-  const processing = largeCreationSource.indexOf("markProjectQuotaProcessing(env", reserve);
-  const pending = largeCreationSource.indexOf("createPendingProject(env", processing);
-  const preparing = largeCreationSource.indexOf("ensurePreparingStorage(", pending);
-  const finalizeStart = largeCreationSource.indexOf("export async function finalizeLargeProjectCreation");
-  const published = largeCreationSource.indexOf("ensurePublishedInitialRevision", finalizeStart);
-  const configReady = largeCreationSource.indexOf("toState: PROJECT_LIFECYCLE_STATES.CONFIG_READY", published);
-  const owner = largeCreationSource.indexOf("linkOwner(env", configReady);
-  const file = largeCreationSource.indexOf("activateOrganizationFile(env", owner);
-  const active = largeCreationSource.indexOf("toState: PROJECT_LIFECYCLE_STATES.ACTIVE", file);
-  const quotaCommit = largeCreationSource.indexOf("commitProjectQuota(env", active);
-
-  assert.ok(reserve >= 0);
-  assert.ok(processing > reserve);
-  assert.ok(pending > processing);
-  assert.ok(preparing > pending);
-  assert.ok(finalizeStart > preparing);
-  assert.ok(published > finalizeStart);
-  assert.ok(configReady > published);
-  assert.ok(owner > configReady);
-  assert.ok(file > owner);
-  assert.ok(active > file);
-  assert.ok(quotaCommit > active);
-});
-
-test("projeto lifecycle-managed não é publicável antes de ACTIVE", () => {
-  assert.match(projectsSource, /projects\.lifecycle_state = 'ACTIVE'/);
-  assert.match(
-    projectsSource,
-    /projects\.lifecycle_state IS NULL AND projects\.active = 1/,
-  );
-  assert.doesNotMatch(
-    projectsSource,
-    /projects\.lifecycle_state = 'PREPARING_STORAGE'[\s\S]*OR/,
-  );
-  assert.doesNotMatch(
-    projectsSource,
-    /projects\.lifecycle_state = 'CONFIG_READY'[\s\S]*OR/,
-  );
-});
-
-test("arquivo da organização só vira ACTIVE pela rotina de finalização, após revisão publicada", () => {
-  const helperStart = largeCreationSource.indexOf("async function activateOrganizationFile");
-  const helperEnd = largeCreationSource.indexOf("export async function finalizeLargeProjectCreation", helperStart);
-  const helper = largeCreationSource.slice(helperStart, helperEnd);
-  const finalize = largeCreationSource.slice(helperEnd);
-  const published = finalize.indexOf("ensurePublishedInitialRevision");
-  const file = finalize.indexOf("activateOrganizationFile(env");
-
-  assert.ok(helperStart >= 0);
-  assert.match(helper, /status = 'ACTIVE'/);
-  assert.match(helper, /active = 1/);
-  assert.ok(published >= 0);
-  assert.ok(file > published);
+test("concurrent reservation requests with one key converge on one project, slug and quota",async t=>{
+  const f=persistenceFixture(t),results=await Promise.all([reserve(f),reserve(f)]);
+  for(const result of results)assert.equal(result.status,202,JSON.stringify(result.data));
+  assert.equal(results[0].data.project.id,results[1].data.project.id);
+  assert.equal(results[0].data.project.slug,results[1].data.project.slug);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM projects").get().n,1);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM organization_files").get().n,1);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM organization_resource_reservations").get().n,1);
 });

@@ -1,3 +1,4 @@
+import { subscribePreviewStatus } from "./preview-status-polling";
 import React, {
   useEffect,
   useMemo,
@@ -9,7 +10,6 @@ import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { usePreparedNavigate } from "../../../hooks/usePreparedNavigate";
 import { prepareProjectMapDestination } from "../../Kepler/map-panel/prepare-project-map-destination";
 import {
-  fetchProjectThumbnailStatus,
   type ProjectListItem,
   type ProjectSectionKey,
 } from "../projects-api";
@@ -145,86 +145,15 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({
   }, [thumbnailOrganizationKey]);
 
   useEffect(() => {
-    const pendingProjects = projects.filter(
-      (project) =>
-        normalizeProjectThumbnailStatus(
-          project.thumbnailStatus,
-        ) === "PENDING",
-    );
-
-    if (pendingProjects.length === 0) {
-      return undefined;
-    }
-
-    const controller = new AbortController();
-    const delays = [2000, 4000, 8000, 15000];
-    let attempt = 0;
-    let timer = 0;
-
-    const schedule = () => {
-      const delay = delays[Math.min(attempt, delays.length - 1)];
-      timer = window.setTimeout(() => {
-        void poll();
-      }, delay);
-    };
-
-    const poll = async () => {
-      const results = await Promise.allSettled(
-        pendingProjects.map(async (project) => ({
-          project,
-          state: await fetchProjectThumbnailStatus(project.slug, {
-            signal: controller.signal,
-          }),
-        })),
-      );
-
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      let stillPending = false;
-
-      results.forEach((result) => {
-        if (result.status !== "fulfilled") {
-          stillPending = true;
-          return;
-        }
-
-        const { project, state } = result.value;
-
-        if (state.thumbnailStatus === "PENDING") {
-          stillPending = true;
-        }
-
-        const changed =
-          state.thumbnailStatus !== project.thumbnailStatus ||
-          state.configRevision !== Number(project.configRevision || 0) ||
-          state.thumbnailRevision !==
-            (project.thumbnailRevision ?? null) ||
-          state.thumbnailAttempts !==
-            Number(project.thumbnailAttempts || 0);
-
-        if (changed) {
-          onProjectUpdated({
-            ...project,
-            ...state,
-          });
-        }
-      });
-
-      attempt += 1;
-
-      if (stillPending) {
-        schedule();
-      }
-    };
-
-    schedule();
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
+    const releases = projects
+      .filter(project => normalizeProjectThumbnailStatus(project.thumbnailStatus) === "PENDING" && !["FAILED_FINAL", "SUPERSEDED"].includes(project.jobState || ""))
+      .map(project => subscribePreviewStatus(`${projectOrganizationCacheKey(project)}:${project.id ?? project.slug}`, project.slug, state => {
+        const changed = state.thumbnailStatus !== project.thumbnailStatus || state.configRevision !== Number(project.configRevision || 0) ||
+          state.thumbnailRevision !== (project.thumbnailRevision ?? null) || state.thumbnailAttempts !== Number(project.thumbnailAttempts || 0) ||
+          state.artifactId !== (project.artifactId ?? null) || state.jobState !== (project.jobState ?? null);
+        if (changed) onProjectUpdated({ ...project, ...state });
+      }, project.jobState));
+    return () => { for (const release of releases) release(); };
   }, [onProjectUpdated, projects]);
 
   const copy = PROJECT_PAGE_COPY[section];

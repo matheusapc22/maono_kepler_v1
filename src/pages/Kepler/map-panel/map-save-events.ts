@@ -17,6 +17,7 @@ export type MapSaveRequestDetail = {
 export type MapSaveResultDetail = MapSaveRequestDetail & {
   status: MapSaveResultStatus;
   message: string | null;
+  snapshotMatchesCurrent?: boolean;
 };
 
 function normalizedText(value: unknown, maximumLength = 200) {
@@ -96,6 +97,7 @@ export function emitMapSaveResult(
   request: MapSaveRequestDetail,
   status: MapSaveResultStatus,
   message: string | null = null,
+  snapshotMatchesCurrent?: boolean,
 ) {
   window.dispatchEvent(
     new CustomEvent<MapSaveResultDetail>(
@@ -104,6 +106,7 @@ export function emitMapSaveResult(
         detail: {
           ...request,
           status,
+          snapshotMatchesCurrent,
           message: normalizedText(message, 500),
         },
       },
@@ -138,6 +141,7 @@ export function mapSaveResultFromEvent(
     source,
     dataId,
     status,
+    snapshotMatchesCurrent: result.snapshotMatchesCurrent,
     message: normalizedText(result.message, 500),
   };
 }

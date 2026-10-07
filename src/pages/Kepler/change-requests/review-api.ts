@@ -294,29 +294,21 @@ export async function applyProjectChangeReview(
 ) {
   const key = cacheKey(projectSlug, changeRequestId);
   const current=await getProjectChangeReview(projectSlug,changeRequestId);
-  const prepared=current.changesEnabled && current.changeRequest.status!=='applied' ? await (await import('./review-apply-artifact')).prepareReviewApplyArtifact(projectSlug,changeRequestId) : null;
-  const response = await fetch(`${itemUrl(projectSlug, changeRequestId)}/apply`, {
-    method: "POST",
-    credentials: "include",
-    cache: "no-store",
-    headers: prepared?.headers,
-    body: prepared?.body,
-  });
-  const payload = await parseResponse(response);
-  if (!payload.review || !Number.isInteger(Number(payload.appliedRevision))) {
-    throw new ProjectChangeRequestApiError(
-      "A API não confirmou a revisão aplicada.",
-      { code: "CHANGE_REQUEST_APPLY_PAYLOAD_MISSING" },
-    );
+  const payload = await (await import("./durable-review-apply")).submitDurableReviewApply(projectSlug,changeRequestId,current);
+  const loadedReview = payload.review || await getProjectChangeReview(projectSlug,changeRequestId,{force:true});
+  if (!payload.pending && !Number.isInteger(Number(payload.appliedRevision))) {
+    throw new ProjectChangeRequestApiError("A API não confirmou a revisão aplicada.", {code:"CHANGE_REQUEST_APPLY_PAYLOAD_MISSING"});
   }
   const review = attachCachedProjection(
     key,
-    assertSupportedContract(payload.review),
+    assertSupportedContract(loadedReview),
   );
   reviewCache.set(key, Promise.resolve(review));
   return {
     review,
-    appliedRevision: Number(payload.appliedRevision),
+    appliedRevision: payload.pending ? null : Number(payload.appliedRevision),
+    pending: Boolean(payload.pending),
+    payloadStored: Boolean(payload.payloadStored),
     idempotent: Boolean(payload.idempotent),
     projectIdentity: payload.projectIdentity || null,
   };

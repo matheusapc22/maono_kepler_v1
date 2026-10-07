@@ -460,17 +460,6 @@ export function getProjectConfig(projectSlug: string) {
   );
 }
 
-/** Mantido por compatibilidade com chamadas existentes. */
-export function saveProjectConfig(projectSlug: string, config: unknown) {
-  return requestJson<{ ok: boolean; saved: boolean }>(
-    `/api/projects/${pathSegment(projectSlug)}/save`,
-    {
-      method: "POST",
-      body: JSON.stringify({ config }),
-    },
-  );
-}
-
 export function listOrganizationFiles(
   organizationId: number | string,
   query: OrganizationFileListQuery = {},

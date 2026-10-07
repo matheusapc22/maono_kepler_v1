@@ -238,7 +238,7 @@ test("POST/PATCH reais aceitam editor somente com concessão explícita", async 
   const f = fixture(t);
   f.insertFile();
   f.db.exec(`UPDATE users SET role = 'editor' WHERE id = 1;
-    CREATE TABLE user_permissions (id INTEGER PRIMARY KEY, user_id INTEGER, permission TEXT,
+    CREATE TABLE IF NOT EXISTS user_permissions (id INTEGER PRIMARY KEY, user_id INTEGER, permission TEXT,
       organization_id INTEGER, project_id INTEGER, expires_at TEXT, active INTEGER);
     INSERT INTO user_permissions VALUES (1, 1, 'document.manage', 1, NULL, NULL, 1);`);
   const source = await f.create("Origem");

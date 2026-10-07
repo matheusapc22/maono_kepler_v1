@@ -1,3 +1,4 @@
+import { getPreviewOperation, publicPreviewOperation, previewDatabase } from "../../../../_lib/project-preview-operations.js";
 import {
   errorResponse,
   jsonResponse,
@@ -24,7 +25,8 @@ function getProjectOrganizationId(project) {
 }
 
 export async function onRequest(context) {
-  const { request, env, params } = context;
+  const { request, params } = context;
+  const env = { ...context.env, DB: context.env.DB?.withSession ? context.env.DB.withSession("first-primary") : context.env.DB };
 
   if (request.method !== "GET") {
     return methodNotAllowed(["GET"]);
@@ -84,10 +86,17 @@ export async function onRequest(context) {
       );
     }
 
-    return jsonResponse({
-      ok: true,
-      ...publicProjectPreview(state),
-    });
+    const operationId = new URL(request.url).searchParams.get("operationId");
+    if (operationId) {
+      const operation = await getPreviewOperation(env, { organizationId: getProjectOrganizationId(project), projectId: project.id, actorUserId: user.id, operationId });
+      if (!operation) return errorResponse("Operação não encontrada.", 404, "PROJECT_PREVIEW_OPERATION_NOT_FOUND");
+      return jsonResponse({ ok: true, operation: publicPreviewOperation(operation) }, { headers: { "Cache-Control": "no-store" } });
+    }
+    let job = null;
+    if (state.preview_operation_id) job = await previewDatabase(env).prepare("SELECT state, revision FROM project_preview_operations WHERE id = ? AND organization_id = ? AND project_id = ?")
+      .bind(state.preview_operation_id, getProjectOrganizationId(project), project.id).first();
+    const jobState = job && job.revision === state.config_revision ? job.state : state.preview_status === "PENDING" ? "WAITING_CAPTURE" : null;
+    return jsonResponse({ ok: true, ...publicProjectPreview(state), jobState }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const status = Number(error?.status || 500);
     const code = error?.code || "PROJECT_THUMBNAIL_STATUS_ERROR";

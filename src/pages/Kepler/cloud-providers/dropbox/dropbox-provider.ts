@@ -56,10 +56,7 @@ const IMAGE_URL_PREFIX = "data:image/png;base64,";
 const THUMBNAIL_WIDTH = 960;
 const THUMBNAIL_HEIGHT = 540;
 const MAP_RENDER_CAPTURE_DELAY_MS = 700;
-const ASYNC_PROJECT_THUMBNAIL_ENABLED =
-  String(
-    import.meta.env.VITE_ASYNC_PROJECT_THUMBNAIL ?? "true"
-  ).toLowerCase() !== "false";
+
 
 function unwrapDropboxResponse(response: any) {
   return response?.result ?? response;
@@ -91,7 +88,7 @@ function getThumbnailPathFromMapPath(path: string) {
 function isMaonoManagedProjectRoute() {
   const pathname = String(Window.location?.pathname || "");
 
-  return /^\/projects\/[^/]+\/map\/?$/i.test(pathname);
+  return /^\/projects\/[^/]+\/(?:map|edit|create)\/?$/i.test(pathname);
 }
 
 export default class DropboxProvider extends Provider {
@@ -200,11 +197,10 @@ export default class DropboxProvider extends Provider {
     const fileName = `${name}.json`;
     const path = `${this._path}/${fileName}`;
 
-    // Nos projetos Maono, o endpoint versionado faz a captura depois que o
-    // JSON foi confirmado. O provider mantém o comportamento nativo fora
-    // dessa rota e durante um rollback explícito da feature flag.
+    // Managed projects have exactly one receipt-bound preview pipeline.
+    // Native cloud export remains unchanged outside managed project routes.
     const thumbnailToSave =
-      ASYNC_PROJECT_THUMBNAIL_ENABLED && isMaonoManagedProjectRoute()
+      isMaonoManagedProjectRoute()
         ? null
         : thumbnail || (await this._safeCaptureCurrentMapThumbnail());
 

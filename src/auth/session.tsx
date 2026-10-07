@@ -8,6 +8,10 @@ import React, {
   useState,
 } from "react";
 
+import { normalizeThumbnailState, type ProjectThumbnailState } from "../pages/Kepler/thumbnail/thumbnail-api";
+import { clearPreviewStatusSubscriptions } from "../pages/Projects/components/preview-status-polling";
+import { activatePreviewRecovery } from "../pages/Kepler/thumbnail/preview-recovery";
+import { activateProjectThumbnailCacheContext } from "../pages/Projects/components/project-card-utils";
 import { normalizeRole } from "../access-control/roles";
 import {
   normalizePermissions,
@@ -97,7 +101,7 @@ type MaonoUser = {
   limits?: MaonoLimits;
 };
 
-type MaonoProject = {
+type MaonoProject = Partial<ProjectThumbnailState> & {
   id: MaonoId;
   name: string;
   slug: string;
@@ -429,6 +433,7 @@ function normalizeProject(value: unknown): MaonoProject | null {
       value.deniedPermissions ?? value.denied_permissions,
     ),
     active: typeof value.active === "boolean" ? value.active : undefined,
+    ...normalizeThumbnailState(value),
     thumbnailUrl:
       toStringValue(value.thumbnailUrl) ?? toStringValue(value.thumbnail_url),
     thumbnail_url:
@@ -571,11 +576,17 @@ function normalizeSessionPayload(value: unknown): PublicSession {
   };
 }
 
-function publishSessionToWindow(session: PublicSession) {
+function publishSessionToWindow(session: PublicSession, reason: "session" | "logout" = "session") {
   if (typeof window === "undefined") {
     return;
   }
 
+  const previous = window.__MAONO_SESSION__;
+  if (String(previous?.user?.id ?? "") !== String(session.user?.id ?? "") || String(previous?.activeOrganization?.id ?? "") !== String(session.activeOrganization?.id ?? "") || !session.authenticated) {
+    activateProjectThumbnailCacheContext(null);
+    clearPreviewStatusSubscriptions();
+  }
+  activatePreviewRecovery(session.authenticated ? String(session.user?.id ?? "") : null, session.authenticated ? String(session.activeOrganization?.id ?? "") : null, reason);
   window.__MAONO_SESSION__ = {
     authenticated: session.authenticated,
     user: session.user,
@@ -612,7 +623,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   const requestControllerRef = useRef<AbortController | null>(null);
   const authenticatedRef = useRef(false);
 
-  const applySession = useCallback((rawData: unknown) => {
+  const applySession = useCallback((rawData: unknown, reason: "session" | "logout" = "session") => {
     const nextSession = normalizeSessionPayload(rawData);
 
     authenticatedRef.current = nextSession.authenticated;
@@ -622,7 +633,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     setActiveOrganization(nextSession.activeOrganization ?? null);
     setOrganizations(nextSession.organizations ?? []);
 
-    publishSessionToWindow(nextSession);
+    publishSessionToWindow(nextSession, reason);
     return nextSession;
   }, []);
 
@@ -860,7 +871,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         requestFailure,
       );
     } finally {
-      applySession(EMPTY_SESSION);
+      applySession(EMPTY_SESSION, "logout");
       setHealth("unauthenticated");
     }
   }, [applySession]);

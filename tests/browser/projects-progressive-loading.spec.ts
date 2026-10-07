@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { fulfillProjectPreviewMetrics } from './fixtures/project-preview-metrics';
 
 // Local compiled application with synthetic HTTP. This is behavioral evidence,
 // not a claim that deployed APIs, real sessions or external images were tested.
@@ -18,6 +19,7 @@ async function setup(page: Page, options: {
   errors.set(page, []); writes.set(page, []); page.on('pageerror', error => errors.get(page)!.push(error.message));
   await page.route('**/api/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
+    if (await fulfillProjectPreviewMetrics(route)) return;
     if (request.method() !== 'GET') { writes.get(page)!.push(`${request.method()} ${path}`); return route.fulfill({ status: 403, json: { ok: false } }); }
     if (path === '/api/session') return route.fulfill({ json: { authenticated: true, user: { id: 1, name: 'Operador sintético', email: 'qa@example.test', role: 'super_admin', activeOrganizationId: 1 }, projects: sessionProjects, organizations: [organization], activeOrganization: organization } });
     const attempt = (attempts.get(path) ?? 0) + 1; attempts.set(path, attempt);
@@ -208,6 +210,7 @@ test('Failed generation with no previous revision does not invent a legacy image
 });
 
 test('Failed generation preserves a real legacy revision zero in every Projects tab', async ({ page }) => {
+  const telemetry = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/observability/project-preview');
   const fixture = await setup(page, { count: 1, favorite: true, imageState: 'FAILED', imageRevision: 0 });
   for (const section of ['Todos os Projetos', 'Recentes', 'Favoritos']) {
     if (section !== 'Todos os Projetos') await page.locator('.mm-sidebar-nav').getByRole('button', { name: section, exact: true }).click();
@@ -217,6 +220,7 @@ test('Failed generation preserves a real legacy revision zero in every Projects 
   }
   expect(fixture.thumbnailQueries.length).toBeGreaterThan(0);
   expect(fixture.thumbnailQueries.every(query => query === '?v=0')).toBe(true);
+  expect((await telemetry).status()).toBe(200);
 });
 
 test('prolonged thumbnail status never shifts already revealed card text', async ({ page }, testInfo) => {

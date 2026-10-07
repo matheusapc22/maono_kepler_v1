@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { DropboxClient } from "../functions/_lib/dropbox-client.js";
@@ -8,14 +7,8 @@ import {
   verifyProjectConfigBytes,
 } from "../functions/_lib/project-config-integrity.js";
 
-const largeCreationSource = await readFile(
-  new URL("../functions/_lib/project-large-creation.js", import.meta.url),
-  "utf8",
-);
-const dropboxLargeSource = await readFile(
-  new URL("../functions/_lib/dropbox-large-upload.js", import.meta.url),
-  "utf8",
-);
+import { persistenceFixture } from "./helpers/project-persistence-fixture.mjs";
+import { config, create, status } from "./helpers/durable-project-http.mjs";
 
 function primedDropboxClient(fetchFn) {
   const client = new DropboxClient(
@@ -119,28 +112,17 @@ test("hash incorreto impede aceitar revisão persistida", async () => {
   );
 });
 
-test("append e finish do upload session nunca fazem retry cego", () => {
-  assert.match(
-    dropboxLargeSource,
-    /appendLargeDropboxUploadSession[\s\S]*?maxRetries:\s*0/,
-  );
-  assert.match(
-    dropboxLargeSource,
-    /finishLargeDropboxUploadSession[\s\S]*?maxRetries:\s*0/,
-  );
-  assert.match(dropboxLargeSource, /DROPBOX_UPLOAD_SESSION_OFFSET_CONFLICT/);
-  assert.match(dropboxLargeSource, /strict_conflict:\s*createOnly/);
-});
-
-test("falha Large CREATE mantém arquivo inativo e só libera quota em erro não-retryable", () => {
-  const failureStart = largeCreationSource.indexOf("export async function markLargeProjectCreationFailed");
-  assert.ok(failureStart >= 0);
-  const failure = largeCreationSource.slice(failureStart);
-
-  assert.match(failure, /markProjectLifecycleFailed/);
-  assert.match(failure, /status = 'ERROR', active = 0/);
-  assert.match(failure, /if \(retryable\)[\s\S]*touchQuotaReservation/);
-  assert.match(failure, /else \{[\s\S]*releaseProjectQuota/);
-  assert.match(failure, /action:\s*"project_create_failed"/);
-  assert.match(failure, /transport:\s*"stream"/);
+test("provider checksum disagreement never activates creation or commits quota", async t => {
+  const f=persistenceFixture(t,{async afterProvider({op,response,objects,args}) {
+    if(op === "upload_session/finish") { objects.get(args.commit.path).metadata.content_hash="0".repeat(64); return Response.json({...await response.json(),content_hash:"0".repeat(64)}); }
+  }});
+  const result=await create(f,config("provider-mismatch"));
+  assert.ok(result.status>=400);
+  assert.equal(f.project().active,0);
+  assert.equal(f.project().config_revision,0);
+  assert.equal(f.db.prepare("SELECT active FROM organization_files").get().active,0);
+  assert.notEqual(f.db.prepare("SELECT status FROM organization_resource_reservations").get().status,"COMMITTED");
+  const receipt=await status(f,result.registered.input.operationId,{key:result.key});
+  assert.equal(receipt.data.operation.state,"FAILED_FINAL");
+  assert.equal(receipt.data.operation.receipt,null);
 });

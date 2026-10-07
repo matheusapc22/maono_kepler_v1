@@ -1,60 +1,21 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { main } from "../scripts/large-create/preview-acceptance.mjs";
 
-const workflow = await readFile(
-  new URL("../.github/workflows/large-create-preview-acceptance.yml", import.meta.url),
-  "utf8",
-);
-const runner = await readFile(
-  new URL("../scripts/large-create/preview-acceptance.mjs", import.meta.url),
-  "utf8",
-);
-
-test("operator de acceptance é manual-only e exige confirmação explícita", () => {
-  assert.match(workflow, /^on:\s*\n\s*workflow_dispatch:/m);
-  assert.doesNotMatch(workflow, /^\s*pull_request:/m);
-  assert.doesNotMatch(workflow, /^\s*push:/m);
-  assert.match(workflow, /RUN_LARGE_CREATE_PREVIEW_ACCEPTANCE/);
-  assert.match(workflow, /large-create-preview-acceptance/);
-  assert.match(workflow, /cancel-in-progress:\s*false/);
+const runner = await readFile(new URL("../scripts/large-create/preview-acceptance.mjs", import.meta.url), "utf8");
+test("unaudited Preview runner is retired before any request or credential read", () => {
+  assert.throws(main, { code: "PREVIEW_ACCEPTANCE_RETIRED" });
+  assert.doesNotMatch(runner, /\bfetch\s*\(|process\.env|SESSION_COOKIE|prepareProjectCreateTransport|\/config`/);
+  assert.match(runner, /bindings may share Production/);
+  assert.match(runner, /durable-project-save/);
+  assert.match(runner, /production-acceptance-operator\.yml/);
+  assert.match(runner, /separate Worker deployment approval/);
 });
-
-test("operator fixa SHA, recusa drift e só aceita Preview pages.dev", () => {
-  assert.match(workflow, /git rev-parse HEAD/);
-  assert.match(workflow, /git ls-remote origin/);
-  assert.match(workflow, /VALIDATED_RELEASE_SHA/);
-  assert.match(workflow, /\.pages\\\.dev/);
-  assert.match(workflow, /target_mib/);
-  assert.match(workflow, /n < 90 \|\| n > 100/);
-});
-
-test("cookie QA entra apenas por GitHub Secret e não é impresso", () => {
-  assert.match(
-    workflow,
-    /MAONO_PREVIEW_CREATOR_SESSION_COOKIE:\s*\$\{\{ secrets\.MAONO_PREVIEW_CREATOR_SESSION_COOKIE \}\}/,
-  );
-  assert.doesNotMatch(workflow, /echo\s+.*MAONO_PREVIEW_CREATOR_SESSION_COOKIE/);
-  assert.doesNotMatch(workflow, /printenv/);
-  assert.doesNotMatch(runner, /console\.(?:log|info|error)\([^\n]*sessionCookie/);
-});
-
-test("runner exige runtime Preview, QA org, feature flag e mutations abertas", () => {
-  assert.match(runner, /runtime\?\.runtime,\s*"preview"/);
-  assert.match(runner, /previewMutationsEnabled,\s*true/);
-  assert.match(runner, /largeCreateStreamEnabled,\s*true/);
-  assert.match(runner, /EXPECTED_QA_ORG_ID/);
-  assert.match(runner, /EXPECTED_QA_ORG_SLUG/);
-  assert.match(runner, /permissions\.has\("project\.create"\)/);
-});
-
-test("runner valida a revisão publicada pelo mesmo delivery direct usado pelo frontend", () => {
-  assert.match(runner, /config-stream\?delivery=direct/);
-  assert.match(runner, /X-Maono-Expected-Config-Revision/);
-  assert.match(runner, /X-Maono-Config-Transport"\),\s*"direct"/);
-  assert.match(runner, /credentials:\s*"omit"/);
-  assert.match(runner, /referrerPolicy:\s*"no-referrer"/);
-  assert.match(runner, /downloaded\.byteLength,\s*fixture\.sizeBytes/);
-  assert.match(runner, /downloadedSha256,\s*localSha256/);
-  assert.match(runner, /readTransport:\s*"direct"/);
+test("retired CLI fails visibly rather than claiming synthetic acceptance passed", () => {
+  const output = spawnSync(process.execPath, ["scripts/large-create/preview-acceptance.mjs"], { encoding: "utf8" });
+  assert.equal(output.status, 1);
+  assert.equal(output.stdout, "");
+  assert.match(output.stderr, /PREVIEW_ACCEPTANCE_RETIRED/);
 });

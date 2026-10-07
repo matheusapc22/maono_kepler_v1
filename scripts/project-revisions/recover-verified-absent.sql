@@ -1,6 +1,7 @@
 -- MANUAL REPAIR TEMPLATE, NEVER a migration/startup task/operator.
 -- Runbook: docs/runbooks/project-revision-recycle-recovery.md
 -- Only after authorized, verified provider absence AND proven quiescence.
+-- After migration 0039: operation-owned revisions are never candidates.
 -- Bind a freshly inspected tuple; zero returned rows means STOP, not retry.
 -- ?1 organization, ?2 project, ?3 candidate revision, ?4 canonical HEAD,
 -- ?5 checksum, ?6 attempts, ?7 RECYCLE token, ?8 storage ref,
@@ -18,6 +19,7 @@ UPDATE project_config_revisions
    AND status = 'FAILED'
    AND error_stage = 'RECYCLE'
    AND published_at IS NULL
+   AND save_operation_id IS NULL
    AND checksum = ?5
    AND attempts = ?6
    AND transition_id = ?7

@@ -1,3 +1,4 @@
+import { restoreApprovedPreviewPipeline } from "./helpers/project-thumbnail-preservation.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,7 +18,7 @@ const hasOriginal = spawnSync('git', ['cat-file', '-e', `${projectHeaderBaseline
 
 for (const [path, expected] of Object.entries(projectHeaderBaselines)) {
   test(`approved header inverse preserves every other byte of ${path}`, () => {
-    const restored = restoreApprovedProjectsHeader(path, read(path));
+    const restored = restoreApprovedProjectsHeader(path, restoreApprovedPreviewPipeline(path, read(path)));
     assert.equal(hash(restored), expected);
     // The pinned full-file hashes enforce the contract even in shallow CI.
     // Available Git history supplies an additional independent byte comparison.
@@ -31,7 +32,7 @@ for (const [path, expected] of Object.entries(projectHeaderBaselines)) {
 
 test('header normalization precedes the old loading inverse without changing its pinned baseline', () => {
   assert.equal(hash(restoreAdminProjectsProgressiveLoading(ui, read(ui))), progressiveBaselines[ui]);
-  assert.equal(hash(restoreAdminProjectsProgressiveLoading(section, read(section))), progressiveBaselines[section]);
+  assert.equal(hash(restoreAdminProjectsProgressiveLoading(section, restoreApprovedPreviewPipeline(section, read(section)))), progressiveBaselines[section]);
 });
 
 const mutations = [
@@ -65,7 +66,7 @@ for (const [path, before, after] of mutations) {
     const original = read(path), mutated = original.replace(before, after);
     assert.notEqual(mutated, original, 'mutation must change actual source');
     assert.throws(() => {
-      assert.equal(hash(restoreApprovedProjectsHeader(path, mutated)), projectHeaderBaselines[path]);
+      assert.equal(hash(restoreApprovedProjectsHeader(path, restoreApprovedPreviewPipeline(path, mutated))), projectHeaderBaselines[path]);
     }, assert.AssertionError);
   });
 }

@@ -1,6 +1,6 @@
 export type SaveOperation = "create" | "update";
 
-export const MAONO_SAVE_CLIENT_CONTRACT = 1;
+export const MAONO_SAVE_CLIENT_CONTRACT = 2;
 export const MAONO_LARGE_SAVE_THRESHOLD_BYTES = 8 * 1024 * 1024;
 
 export type ClientSaveAttempt = {
@@ -20,6 +20,7 @@ export type SerializedSaveRequest = {
 export type SerializedMapConfigTransport = SerializedSaveRequest & {
   large: boolean;
   expectedConfigRevision: number;
+  headers: Record<string, string>;
 };
 
 export type SaveResponseDiagnostics = {
@@ -31,19 +32,9 @@ export type SaveResponseDiagnostics = {
   dbSchema: string | null;
 };
 
-type LargeSaveMetadata = {
-  expectedConfigRevision: number;
-  payloadBytes: number;
-  configVersion: string;
-  datasetCount: number;
-};
-
-const LARGE_SAVE_REGISTRY = new WeakMap<ClientSaveAttempt, LargeSaveMetadata>();
-
 function nowMs() {
-  return typeof performance !== "undefined" && typeof performance.now === "function"
-    ? performance.now()
-    : Date.now();
+  // Wall-clock timestamps survive reload when an attempt is reconstructed.
+  return Date.now();
 }
 
 function randomId(prefix: "save" | "corr") {
@@ -128,7 +119,6 @@ export function serializeMapConfigTransport(
   expectedConfigRevision: number,
   serializeStartedAt = attempt.startedAt,
 ): SerializedMapConfigTransport {
-  LARGE_SAVE_REGISTRY.delete(attempt);
 
   const body = JSON.stringify(config);
   if (typeof body !== "string") {
@@ -142,12 +132,7 @@ export function serializeMapConfigTransport(
       throw new Error("A revisão esperada do projeto é inválida para o transporte do MapConfig.");
     }
     assertLargeConfigShape(config);
-    LARGE_SAVE_REGISTRY.set(attempt, {
-      expectedConfigRevision,
-      payloadBytes,
-      configVersion: String((config as any).version).slice(0, 80),
-      datasetCount: (config as any).datasets.length,
-    });
+
   }
 
   const completedAt = nowMs();
@@ -156,47 +141,17 @@ export function serializeMapConfigTransport(
     payloadBytes,
     large,
     expectedConfigRevision,
-    serializeDurationMs: Math.max(0, Math.round(completedAt - serializeStartedAt)),
-    totalDurationMs: Math.max(0, Math.round(completedAt - attempt.startedAt)),
-  };
-}
-
-function prepareLargeUpdateBody(
-  attempt: ClientSaveAttempt,
-  payload: unknown,
-): { body: string; payloadBytes: number } | null {
-  if (attempt.operation !== "update" || !isRecord(payload) || !("config" in payload)) {
-    return null;
-  }
-
-  const expectedConfigRevision = Number(payload.expectedConfigRevision);
-  const serialized = serializeMapConfigTransport(
-    attempt,
-    payload.config,
-    expectedConfigRevision,
-  );
-
-  return serialized.large
-    ? { body: serialized.body, payloadBytes: serialized.payloadBytes }
-    : null;
-}
-
-export function serializeSaveRequest(
-  attempt: ClientSaveAttempt,
-  payload: unknown,
-  serializeStartedAt = attempt.startedAt,
-): SerializedSaveRequest {
-  LARGE_SAVE_REGISTRY.delete(attempt);
-
-  const large = prepareLargeUpdateBody(attempt, payload);
-  const body = large?.body ?? JSON.stringify(payload);
-  if (typeof body !== "string") {
-    throw new Error("Não foi possível serializar a tentativa de salvamento.");
-  }
-  const completedAt = nowMs();
-  return {
-    body,
-    payloadBytes: large?.payloadBytes ?? measureUtf8PayloadBytes(body),
+    headers: {
+      ...buildSaveRequestHeaders(attempt),
+      "Content-Type": "application/vnd.maono.map-config+json",
+      "X-Maono-Expected-Revision": String(expectedConfigRevision),
+      "X-Maono-Config-Size": String(payloadBytes),
+      "X-Maono-Config-Schema": "legacy-kepler",
+      "X-Maono-Config-Schema-Version": "1",
+      "X-Maono-Config-Version": String((config as any)?.version || "").slice(0, 80),
+      "X-Maono-Dataset-Count": String(Array.isArray((config as any)?.datasets) ? (config as any).datasets.length : 0),
+      ...(large ? { "X-Maono-Large-Config": "1" } : {}),
+    },
     serializeDurationMs: Math.max(0, Math.round(completedAt - serializeStartedAt)),
     totalDurationMs: Math.max(0, Math.round(completedAt - attempt.startedAt)),
   };
@@ -204,29 +159,15 @@ export function serializeSaveRequest(
 
 export function buildSaveRequestHeaders(
   attempt: ClientSaveAttempt,
-  options: { forceJson?: boolean } = {},
 ) {
-  const large = options.forceJson ? undefined : LARGE_SAVE_REGISTRY.get(attempt);
+  // Transport metadata is explicit and serializable; no object-identity registry.
   return {
-    "Content-Type": large
-      ? "application/vnd.maono.map-config+json"
-      : "application/json",
+    "Content-Type": "application/json",
     Accept: "application/json",
     "X-Maono-Save-Id": attempt.saveId,
     "X-Correlation-Id": attempt.correlationId,
     "X-Maono-Client-Contract": String(MAONO_SAVE_CLIENT_CONTRACT),
     "X-Maono-Client-Build": clientBuildId(),
-    ...(large
-      ? {
-          "X-Maono-Large-Config": "1",
-          "X-Maono-Expected-Revision": String(large.expectedConfigRevision),
-          "X-Maono-Config-Size": String(large.payloadBytes),
-          "X-Maono-Config-Schema": "legacy-kepler",
-          "X-Maono-Config-Schema-Version": "1",
-          "X-Maono-Config-Version": large.configVersion,
-          "X-Maono-Dataset-Count": String(large.datasetCount),
-        }
-      : {}),
   };
 }
 

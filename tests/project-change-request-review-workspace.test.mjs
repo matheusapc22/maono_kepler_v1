@@ -210,30 +210,27 @@ test("PR4: Reviewer boundary é separado do GET requester-only e endpoints têm 
   assert.match(reviewService, /PROJECT_MAP_ROUTE_MODES\.EDITOR/);
   assert.match(reviewService, /"project\.save"/);
   assert.match(reviewEndpoint, /Allow:\s*"GET, POST"/);
-  assert.match(applyEndpoint, /request\.method !== "POST"/);
-  assert.match(applyEndpoint, /Allow:\s*"POST"/);
+  assert.match(applyEndpoint, /\["GET","POST"\]\.includes\(request\.method\)/);
+  assert.match(applyEndpoint, /Allow:\s*"GET, POST"/);
 });
 
-test("PR4: Apply continua autoritativo e publica base+1 pelo save versionado", () => {
+test("durable Apply prepares the approved proposal and delegates to the single publication core", () => {
   assert.match(reviewService, /readVerifiedBaseRevisionForApply/);
   assert.match(reviewService, /buildProjectChangeProposal/);
-  assert.match(reviewService, /saveVersionedProjectConfig\(env/);
+  assert.match(reviewService, /savePreparedDomainOperation\(env/);
   assert.match(reviewService, /expectedConfigRevision:\s*baseRevision/);
-  assert.doesNotMatch(reviewService, /createProjectRecord/);
-  assert.doesNotMatch(reviewService, /createProjectLifecycle/);
-  assert.match(
-    reviewService,
-    /projectIdentity:\s*\{[\s\S]*id:\s*context\.project\.id,[\s\S]*slug:\s*context\.project\.slug/,
-  );
+  assert.match(reviewService, /kind:\s*"change-request"/);
+  assert.match(reviewService, /changeRequestVersion:\s*Number\(context\.row\.lifecycle_version\)/);
+  assert.doesNotMatch(reviewService, /saveVersionedProjectConfig|createProjectRecord|createProjectLifecycle/);
+  assert.match(reviewService,/projectIdentity:\s*\{id:context\.project\.id,slug:context\.project\.slug\}/);
 });
 
-test("PR4: conflito e retry idempotente protegem o HEAD", () => {
+test("durable Apply status is scoped to reviewer context and returns the historical receipt", () => {
   assert.match(reviewService, /CHANGE_REQUEST_REVIEW_CONFLICT/);
-  assert.match(
-    reviewService,
-    /context\.row\.status === "applying" && currentRevision === baseRevision \+ 1/,
-  );
-  assert.match(reviewService, /Mantém `applying`/);
-  assert.match(reviewService, /CHANGE_REQUEST_APPLY_COMMIT_NOT_CONFIRMED/);
-  assert.match(reviewService, /if \(row\.status === "applied"\) return null/);
+  assert.match(reviewService, /canonicalAppliedRevision/);
+  assert.match(reviewService, /context\.row\.applied_revision/);
+  assert.match(reviewService, /getProjectChangeRequestApplyStatus/);
+  assert.match(reviewService, /getProjectSaveOperation\(env/);
+  assert.match(reviewService, /actorUserId:context\.user\.id/);
+  assert.match(reviewService, /SAVE_OPERATION_NOT_FOUND/);
 });

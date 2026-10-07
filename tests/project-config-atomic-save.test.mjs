@@ -1,376 +1,74 @@
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { DatabaseSync } from "node:sqlite";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import { processProjectSaveOperation, markProjectSavePayloadStored, acquireProjectSaveUpload } from '../functions/_lib/project-save-operations.js';
+import { uploadProjectSaveOperationPayload } from '../functions/_lib/project-save-operation-payload.js';
+import { readPublishedProjectConfig } from '../functions/_lib/project-config-service.js';
+import { fixture, localStorage, storeConfig, stored, process, register, artifact, count } from './helpers/project-save-operation-fixture.mjs';
+const config = label => ({ version: 'v1', config: { visState: { layers: [] }, label }, datasets: [] });
 
-import { DropboxMapConfigRepository } from "../functions/_lib/dropbox-map-config-repository.js";
-import { MAP_CONFIG_SAVE_MODES } from "../functions/_lib/map-config-repository.js";
-import { createMapConfigStorageRef } from "../functions/_lib/map-config-storage-ref.js";
-import {
-  buildProjectConfigArtifact,
-  sha256Hex,
-} from "../functions/_lib/project-config-integrity.js";
-import { saveVersionedProjectConfig } from "../functions/_lib/project-config-service.js";
-
-const migration = await readFile(
-  new URL("../migrations/0018_project_lifecycle.sql", import.meta.url),
-  "utf8",
-);
-
-function normalizeSqliteValue(value) {
-  if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  return value;
-}
-
-function fixture() {
-  const database = new DatabaseSync(":memory:");
-  database.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE users (
-      id INTEGER PRIMARY KEY,
-      name TEXT
-    );
-    CREATE TABLE projects (
-      id INTEGER PRIMARY KEY,
-      organization_id INTEGER NOT NULL,
-      organization_file_id INTEGER,
-      dropbox_root_path TEXT NOT NULL,
-      default_config_file TEXT NOT NULL DEFAULT 'config.kepler.json',
-      active INTEGER NOT NULL DEFAULT 1,
-      config_revision INTEGER NOT NULL DEFAULT 0,
-      preview_status TEXT NOT NULL DEFAULT 'UNKNOWN',
-      preview_revision INTEGER,
-      preview_updated_at TEXT,
-      preview_attempts INTEGER NOT NULL DEFAULT 0,
-      preview_last_error TEXT,
-      preview_capture_method TEXT,
-      updated_by INTEGER,
-      updated_by_name_snapshot TEXT,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE local_storage_objects (
-      path TEXT PRIMARY KEY,
-      content BLOB NOT NULL,
-      content_type TEXT,
-      size_bytes INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    INSERT INTO users (id, name) VALUES (10, 'Editor');
-  `);
-  database.exec(migration);
-  return database;
-}
-
-function envFor(database) {
-  return {
-    APP_ENV: "local",
-    STORAGE_DRIVER: "local-d1",
-    DB: {
-      prepare(sql) {
-        const statement = database.prepare(sql);
-        let parameters = [];
-        return {
-          bind(...values) {
-            parameters = values.map(normalizeSqliteValue);
-            return this;
-          },
-          first() {
-            return statement.get(...parameters) ?? null;
-          },
-          run() {
-            return statement.run(...parameters);
-          },
-          all() {
-            return { results: statement.all(...parameters) };
-          },
-        };
-      },
-    },
-  };
-}
-
-function config(label) {
-  return {
-    version: "v1",
-    config: { visState: { label } },
-    datasets: [],
-  };
-}
-
-async function insertActiveProject(database, projectId = 84) {
-  const initial = await buildProjectConfigArtifact(config("revision-1"));
-  database
-    .prepare(
-      `INSERT INTO projects (
-         id, organization_id, dropbox_root_path, default_config_file,
-         active, config_revision, lifecycle_state, lifecycle_version,
-         config_checksum, config_checksum_algorithm,
-         config_storage_provider, config_storage_ref,
-         config_schema, config_schema_version, config_size_bytes,
-         config_content_type
-       ) VALUES (?, 7, ?, 'config.kepler.json', 1, 1, 'ACTIVE', 4,
-         ?, ?, 'local-d1', ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      projectId,
-      `/project-${projectId}`,
-      initial.checksum,
-      initial.checksumAlgorithm,
-      createMapConfigStorageRef(projectId, 1),
-      initial.schemaName,
-      initial.schemaVersion,
-      initial.sizeBytes,
-      initial.contentType,
-    );
-  return initial;
-}
-
-function readProject(database, projectId = 84) {
-  return database
-    .prepare("SELECT * FROM projects WHERE id = ? LIMIT 1")
-    .get(projectId);
-}
-
-test("S05: mesma revisão aceita retry idempotente e rejeita conteúdo diferente", async () => {
-  const database = fixture();
-  await insertActiveProject(database);
-  const env = envFor(database);
-  const repository = new DropboxMapConfigRepository(env);
-  const project = readProject(database);
-  const ref = createMapConfigStorageRef(84, 2);
-  const first = await buildProjectConfigArtifact(config("A"));
-  const other = await buildProjectConfigArtifact(config("B"));
-
-  const created = await repository.saveRevision({
-    project,
-    revision: 2,
-    storageRef: ref,
-    bytes: first.bytes,
-    contentType: first.contentType,
-    mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-  });
-  assert.equal(created.createdNew, true);
-  assert.equal(created.idempotent, false);
-
-  const retried = await repository.saveRevision({
-    project,
-    revision: 2,
-    storageRef: ref,
-    bytes: first.bytes,
-    contentType: first.contentType,
-    mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-  });
-  assert.equal(retried.createdNew, false);
+test('operation object is immutable and an idempotent upload preserves the exact verified bytes', async t => {
+  const f = localStorage(fixture(t));
+  const saved = await storeConfig(f, config('A'), 'atomic-operation-one');
+  const retried = await uploadProjectSaveOperationPayload(f.env, { project: f.project(), operation: saved, body: new TextEncoder().encode(JSON.stringify(config('A'))) });
   assert.equal(retried.idempotent, true);
   assert.equal(retried.contentVerified, true);
-
-  await assert.rejects(
-    repository.saveRevision({
-      project,
-      revision: 2,
-      storageRef: ref,
-      bytes: other.bytes,
-      contentType: other.contentType,
-      mode: MAP_CONFIG_SAVE_MODES.IMMUTABLE,
-    }),
-    (error) => error?.code === "MAP_CONFIG_REVISION_IMMUTABILITY_VIOLATION",
-  );
-
-  const stored = await repository.getRevision({
-    project,
-    revision: 2,
-    storageRef: ref,
-  });
-  assert.equal(await sha256Hex(stored.bytes), first.checksum);
+  await assert.rejects(register(f, saved.operation_id, { manifest: { checksumAlgorithm: saved.checksum_algorithm,
+    checksum: 'b'.repeat(64), sizeBytes: saved.size_bytes, serializationVersion: 1 } }), { code: 'OPERATION_PAYLOAD_MISMATCH' });
+  assert.equal(count(f, 'local_storage_objects'), 1);
 });
-
-test("S05: cada save publica N+1 sem apagar revisões anteriores", async () => {
-  const database = fixture();
-  await insertActiveProject(database);
-  const env = envFor(database);
-  const repository = new DropboxMapConfigRepository(env);
-
-  const save2 = await saveVersionedProjectConfig(env, {
-    project: readProject(database),
-    config: config("revision-2"),
-    expectedConfigRevision: 1,
-    actor: { id: 10, name: "Editor" },
-    mapConfigRepository: repository,
-  });
-  assert.equal(save2.revision, 2);
-  assert.equal(save2.revisionHead.previousRevision, 1);
-  assert.equal(save2.revisionHead.currentRevision, 2);
-  assert.equal(readProject(database).config_revision, 2);
-
-  const save3 = await saveVersionedProjectConfig(env, {
-    project: readProject(database),
-    config: config("revision-3"),
-    expectedConfigRevision: 2,
-    actor: { id: 10, name: "Editor" },
-    mapConfigRepository: repository,
-  });
-  assert.equal(save3.revision, 3);
-  assert.equal(save3.revisionHead.currentRevision, 3);
-
-  const head = readProject(database);
-  assert.equal(head.config_revision, 3);
-  assert.equal(head.config_checksum, save3.artifact.checksum);
-  assert.equal(head.config_size_bytes, save3.artifact.sizeBytes);
-  assert.equal(head.config_schema_version, save3.artifact.schemaVersion);
-
-  const ledger = database
-    .prepare(
-      `SELECT revision, status, checksum, published_at
-         FROM project_config_revisions
-        WHERE project_id = 84
-        ORDER BY revision`,
-    )
-    .all();
-  assert.deepEqual(
-    ledger.map((row) => [row.revision, row.status]),
-    [[2, "READY"], [3, "READY"]],
-  );
-  assert.ok(ledger.every((row) => row.published_at));
-
-  const revision2 = await repository.getRevision({
-    project: head,
-    revision: 2,
-    storageRef: createMapConfigStorageRef(84, 2),
-  });
-  const revision3 = await repository.getRevision({
-    project: head,
-    revision: 3,
-    storageRef: createMapConfigStorageRef(84, 3),
-  });
-  assert.notEqual(await sha256Hex(revision2.bytes), await sha256Hex(revision3.bytes));
+test('sequential durable saves publish N+1, retain each immutable revision, and reopen exact configs', async t => {
+  const f = localStorage(fixture(t));
+  for (let revision = 1; revision <= 3; revision += 1) {
+    const expected = config(`revision-${revision}`);
+    const saved = await storeConfig(f, expected, `atomic-operation-${revision}`);
+    const result = await processProjectSaveOperation(f.env, { operation: saved });
+    assert.equal(result.state, 'PUBLISHED');
+    assert.equal(f.project().config_revision, revision);
+    assert.equal(count(f, 'project_config_revisions'), revision);
+    assert.equal(count(f, 'local_storage_objects'), revision);
+    const reopened = await readPublishedProjectConfig(f.env, f.project());
+    assert.deepEqual(reopened.config, expected);
+  }
+  const rows = f.sqlite.prepare('SELECT * FROM project_config_revisions ORDER BY revision').all();
+  assert.ok(rows.every(row => row.status === 'READY' && row.published_at && row.save_operation_id));
+  assert.equal(new Set(rows.map(row => row.storage_ref)).size, 3);
 });
-
-test("S05: checksum pós-write divergente marca FAILED e preserva o HEAD", async () => {
-  const database = fixture();
-  await insertActiveProject(database);
-  const env = envFor(database);
-  const tampered = await buildProjectConfigArtifact(config("candidate-B"));
-  const repository = {
-    provider: "fake",
-    async load() {
-      throw new Error("não usado");
-    },
-    async saveRevision() {
-      return {
-        provider: "fake",
-        providerVersion: "fake-v2",
-        providerHash: "provider-hash",
-        sizeBytes: tampered.sizeBytes,
-      };
-    },
-    async getRevision() {
-      return {
-        bytes: tampered.bytes,
-        sizeBytes: tampered.sizeBytes,
-        contentType: tampered.contentType,
-      };
-    },
-    async getMetadata() {
-      return {};
-    },
-  };
-
-  await assert.rejects(
-    saveVersionedProjectConfig(env, {
-      project: readProject(database),
-      config: config("candidate-A"),
-      expectedConfigRevision: 1,
-      actor: { id: 10, name: "Editor" },
-      mapConfigRepository: repository,
-    }),
-    (error) =>
-      error?.code === "PROJECT_CONFIG_INTEGRITY_MISMATCH" &&
-      error?.details?.stage === "VERIFY",
-  );
-
-  assert.equal(readProject(database).config_revision, 1);
-  const failed = database
-    .prepare(
-      `SELECT status, error_stage, error_code
-         FROM project_config_revisions
-        WHERE project_id = 84 AND revision = 2`,
-    )
-    .get();
-  assert.equal(failed.status, "FAILED");
-  assert.equal(failed.error_stage, "VERIFY");
-  assert.equal(failed.error_code, "PROJECT_CONFIG_INTEGRITY_MISMATCH");
+test('corrupt stored bytes become terminal integrity failure and preserve the prior HEAD', async t => {
+  const f = localStorage(fixture(t));
+  const first = await storeConfig(f, config('published'), 'atomic-initial-save');
+  assert.equal((await processProjectSaveOperation(f.env, { operation: first })).state, 'PUBLISHED');
+  const next = await storeConfig(f, config('candidate'), 'atomic-corrupt-save');
+  f.sqlite.prepare('UPDATE local_storage_objects SET content = ? WHERE path <> (SELECT path FROM local_storage_objects ORDER BY rowid LIMIT 1)')
+    .run(new TextEncoder().encode(JSON.stringify(config('tampered!'))));
+  const failed = await processProjectSaveOperation(f.env, { operation: next });
+  assert.equal(failed.state, 'FAILED_FINAL');
+  assert.equal(f.project().config_revision, 1);
+  assert.deepEqual((await readPublishedProjectConfig(f.env, f.project())).config, config('published'));
 });
-
-test("S05: atestação do repository confirma save sem segundo download", async () => {
-  const database = fixture();
-  await insertActiveProject(database);
-  const env = envFor(database);
-  let readbacks = 0;
-  const repository = {
-    provider: "dropbox",
-    async load() {
-      throw new Error("não usado");
-    },
-    async saveRevision({ bytes }) {
-      return {
-        provider: "dropbox",
-        providerVersion: "provider-rev-2",
-        providerHash: "provider-content-hash",
-        sizeBytes: bytes.byteLength,
-        contentVerified: true,
-        verificationMethod: "provider-content-hash",
-        idempotent: false,
-      };
-    },
-    async getRevision() {
-      readbacks += 1;
-      throw new Error("readback não deveria ser necessário");
-    },
-    async getMetadata() {
-      return {};
-    },
-  };
-
-  const saved = await saveVersionedProjectConfig(env, {
-    project: readProject(database),
-    config: config("provider-attested"),
-    expectedConfigRevision: 1,
-    actor: { id: 10, name: "Editor" },
-    mapConfigRepository: repository,
-  });
-
-  assert.equal(saved.revision, 2);
-  assert.equal(saved.revisionHead.currentRevision, 2);
-  assert.equal(readProject(database).config_revision, 2);
-  assert.equal(readbacks, 0);
+test('an unverified uploader attestation never enters the durable outbox', async t => {
+  const f = fixture(t), operation = await acquireProjectSaveUpload(f.env, { operation: await register(f) });
+  await assert.rejects(markProjectSavePayloadStored(f.env, { operation, artifact: { ...artifact(operation), contentVerified: false } }), { code: 'PROJECT_SAVE_PAYLOAD_INTEGRITY_FAILED' });
+  assert.equal(count(f, 'project_save_outbox'), 0);
+  assert.equal(f.project().config_revision, 0);
 });
-
-test("S05: pipeline mantém write/verify antes do publish CAS e create-only no Dropbox", async () => {
-  const [source, dropboxSource, adapterSource] = await Promise.all([
-    readFile(
-      new URL("../functions/_lib/project-config-service.js", import.meta.url),
-      "utf8",
-    ),
-    readFile(new URL("../functions/_lib/dropbox.js", import.meta.url), "utf8"),
-    readFile(
-      new URL("../functions/_lib/dropbox-map-config-repository.js", import.meta.url),
-      "utf8",
-    ),
-  ]);
-  const serialize = source.indexOf("serializeProjectConfigBytes(config)");
-  const validate = source.indexOf("validateProjectConfig(config");
-  const write = source.indexOf("repository.saveRevision({", validate);
-  const verify = source.indexOf("verifyPersistedRevision(repository", write);
-  const publish = source.indexOf("publishProjectConfigRevision(env", verify);
-  assert.ok(serialize >= 0 && validate > serialize);
-  assert.ok(write > validate);
-  assert.ok(verify > write);
-  assert.ok(publish > verify);
-  assert.match(dropboxSource, /mode:\s*createOnly \? "add" : "overwrite"/);
-  assert.match(dropboxSource, /strict_conflict:\s*createOnly/);
-  assert.match(
-    adapterSource,
-    /mode === MAP_CONFIG_SAVE_MODES\.IMMUTABLE \? "create" : "overwrite"/,
-  );
+test('all atomic batch failure points roll back pointer, lineage and receipt', async t => {
+  for (let index = 0; index < 8; index += 1) {
+    const f = fixture(t), operation = await stored(f);
+    f.failAt(index);
+    const result = await process(f, operation);
+    assert.equal(result.state, 'RETRY_WAIT', `statement ${index}`);
+    assert.equal(f.project().config_revision, 0, `statement ${index}`);
+    assert.equal(count(f, 'project_config_revisions'), 0, `statement ${index}`);
+    assert.equal(result.receipt_json, null, `statement ${index}`);
+  }
+});
+test('new publication path contains guarded D1 batches and no old writer orchestration', () => {
+  const source = readFileSync(new URL('../functions/_lib/project-save-operations.js', import.meta.url), 'utf8');
+  const upload = readFileSync(new URL('../functions/_lib/project-save-operation-payload.js', import.meta.url), 'utf8');
+  assert.match(source, /await db\.batch\(statements\)/);
+  assert.match(source, /CASE WHEN changes\(\) = 1 THEN 1 ELSE 0 END/);
+  assert.doesNotMatch(source, /saveVersionedProjectConfig|reserveProjectConfigRevision|publishProjectConfigRevision/);
+  assert.match(upload, /writeMode: "create"/);
+  assert.doesNotMatch(upload, /writeMode: "overwrite"|deleteDropbox/);
 });

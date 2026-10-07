@@ -1,741 +1,123 @@
-import {
-  errorResponse,
-  jsonResponse,
-  methodNotAllowed,
-  readJsonBody,
-} from "../../../../_lib/http.js";
+import { errorResponse,jsonResponse,methodNotAllowed } from "../../../../_lib/http.js";
 import { requireSession } from "../../../../_lib/auth.js";
 import { getAuthorizedProject } from "../../../../_lib/projects.js";
-import {
-  recordAuditLog,
-  requireProjectPermission,
-} from "../../../../_lib/permissions.js";
-import {
-  deleteDropboxPathIfExists,
-  downloadDropboxBinaryFile,
-  getPreviewFileNameFromConfigFile,
-  getRevisionedPreviewFileNameFromConfigFile,
-  joinDropboxPath,
-  uploadDropboxBinaryFile,
-} from "../../../../_lib/dropbox.js";
-import {
-  getProjectPreviewState,
-  markProjectPreviewAttempt,
-  markProjectPreviewFailed,
-  markProjectPreviewMissing,
-  markProjectPreviewReady,
-  normalizePreviewRevision,
-  normalizePreviewStatus,
-  publicProjectPreview,
-  sanitizeCaptureMethod,
-  sanitizePreviewCode,
-} from "../../../../_lib/project-preview.js";
+import { requireProjectPermission } from "../../../../_lib/permissions.js";
+import { downloadDropboxBinaryFile,getPreviewFileNameFromConfigFile,getRevisionedPreviewFileNameFromConfigFile } from "../../../../_lib/dropbox.js";
+import { getProjectPreviewState,normalizePreviewRevision,normalizePreviewStatus,publicProjectPreview } from "../../../../_lib/project-preview.js";
+import { readBoundedPreview,validatePreviewPng,previewError,MAX_PREVIEW_BYTES } from "../../../../_lib/project-preview-png.js";
+import { readPreviewJsonBody,previewArtifactFileName,previewStorageNotFound,uploadPreviewPayload } from "../../../../_lib/project-preview-payload.js";
+import { registerPreviewOperation,getPreviewOperation,publicPreviewOperation,acquirePreviewUpload,markPreviewPayloadStored,processPreviewOperation,
+  failPreviewUpload,failWaitingPreview,previewDatabase,verifyReadyPreviewReceipt } from "../../../../_lib/project-preview-operations.js";
 
-const MAX_THUMBNAIL_BYTES = 4 * 1024 * 1024;
-const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-
-function decodeProjectSlug(value) {
-  try {
-    return decodeURIComponent(String(value || "")).trim();
-  } catch {
-    return String(value || "").trim();
+function organization(project) { return project.organization_id ?? project.organizationId; }
+async function permission(env,request,user,project,action) {
+  await requireProjectPermission(env,request,action,{project,projectId:project.id,projectSlug:project.slug,organizationId:organization(project)},
+    {user,auditOnSuccess:false,auditAction:'projects.thumbnail',resourceType:'project',resourceId:project.slug});
+}
+function snapshot(state) { return JSON.stringify([state?.organization_id,state?.config_revision,state?.config_checksum,state?.dropbox_root_path,
+  state?.default_config_file,state?.preview_artifact_id,state?.preview_revision,state?.preview_status]); }
+async function handleGet({env,request},user,project) {
+  await permission(env,request,user,project,'project.view');
+  const state=await getProjectPreviewState(env,{projectId:project.id,organizationId:organization(project)});
+  if (!state) throw previewError('PROJECT_NOT_FOUND',404);
+  const url=new URL(request.url), requestedArtifact=url.searchParams.get('artifactId');
+  const rawRevision=url.searchParams.get('v'), revision=normalizePreviewRevision(rawRevision);
+  if (rawRevision!==null && revision===null) throw previewError('THUMBNAIL_REVISION_INVALID',400);
+  const status=normalizePreviewStatus(state.preview_status), known=normalizePreviewRevision(state.preview_revision);
+  const artifactId=requestedArtifact || state.preview_artifact_id;
+  let fileName,root=state.dropbox_root_path,imageRevision,artifact=null;
+  if (artifactId) {
+    artifact=await previewDatabase(env).prepare("SELECT * FROM project_preview_operations WHERE id=? AND organization_id=? AND project_id=? AND state='READY'")
+      .bind(artifactId,organization(project),project.id).first();
+    if (!artifact || (revision!==null && artifact.revision!==revision)) throw previewError('PROJECT_THUMBNAIL_REVISION_NOT_FOUND',404);
+    imageRevision=artifact.revision; fileName=previewArtifactFileName(artifact); root=artifact.storage_root;
+    if (root!==state.dropbox_root_path) throw previewError('PROJECT_THUMBNAIL_REVISION_NOT_FOUND',404);
+  } else {
+    const fallback=known!==null && revision!==null && ['FAILED','PENDING'].includes(status);
+    if (!['READY','UNKNOWN'].includes(status) && !fallback) throw previewError('PROJECT_THUMBNAIL_NOT_READY',404);
+    imageRevision=status==='UNKNOWN' ? 0 : known;
+    if (imageRevision===null) throw previewError('PROJECT_THUMBNAIL_NOT_READY',404);
+    if (revision!==null && revision!==imageRevision) return errorResponse('A revisão solicitada não está disponível.',404,'PROJECT_THUMBNAIL_REVISION_NOT_FOUND',
+      {...publicProjectPreview(state),thumbnailRevision:imageRevision});
+    fileName=imageRevision>0 ? getRevisionedPreviewFileNameFromConfigFile(state.default_config_file || 'config.kepler.json',imageRevision)
+      : getPreviewFileNameFromConfigFile(state.default_config_file || 'config.kepler.json');
   }
+  const downloaded=await downloadDropboxBinaryFile(env,root,fileName);
+  const bytes=await readBoundedPreview(downloaded.body,{expectedBytes:artifact?.size_bytes ?? null});
+  const checked=await validatePreviewPng(bytes);
+  if (artifact && checked.imageChecksum!==artifact.image_checksum) throw previewError('THUMBNAIL_CHECKSUM_MISMATCH');
+  // Revalidate both identity and permission after the provider read, before 200/304.
+  const current=await getProjectPreviewState(env,{projectId:project.id,organizationId:organization(project)});
+  const sameStorage = current && current.id === state.id && current.organization_id === state.organization_id &&
+    current.dropbox_root_path === state.dropbox_root_path && current.default_config_file === state.default_config_file &&
+    (current.organization_file_id ?? null) === (state.organization_file_id ?? null);
+  if (!sameStorage || (!requestedArtifact && snapshot(current)!==snapshot(state))) throw previewError('PROJECT_THUMBNAIL_REVISION_NOT_FOUND',404);
+  const freshUser=await requireSession(env,request), freshProject=await getAuthorizedProject(env,freshUser,project.slug);
+  if (!freshProject || freshProject.id!==project.id || organization(freshProject)!==organization(project)) throw previewError('PROJECT_NOT_FOUND',404);
+  await permission(env,request,freshUser,freshProject,'project.view');
+  const etag=`"png-${checked.imageChecksum}"`;
+  const headers={'Content-Type':'image/png','Cache-Control':'private, no-cache','ETag':etag,'Vary':'Cookie, Authorization',
+    'X-Content-Type-Options':'nosniff','X-Maono-Thumbnail-Revision':String(imageRevision)};
+  if (artifact) headers['X-Maono-Thumbnail-Artifact']=artifact.id;
+  const matches=(request.headers.get('If-None-Match') || '').split(',').map(s=>s.trim()).includes(etag);
+  return new Response(matches ? null : bytes,{status:matches ? 304 : 200,headers});
 }
-
-function getProjectOrganizationId(project) {
-  return project?.organization_id ?? project?.organizationId ?? null;
+function envelope(operation,status=200) {
+  return jsonResponse({ok:true,operation:publicPreviewOperation(operation)}, {status,headers:{'Cache-Control':'no-store',...(status===202 ? {'Retry-After':'2'} : {})}});
 }
-
-function getProjectPermissionContext(project, slug) {
-  return {
-    project,
-    projectId: project?.id ?? null,
-    projectSlug: project?.slug ?? slug ?? null,
-    organizationId: getProjectOrganizationId(project),
-  };
+async function findOperation(env,user,project,operationId) {
+  if (!operationId) throw previewError('PROJECT_PREVIEW_OPERATION_ID_REQUIRED',400);
+  const op=await getPreviewOperation(env,{organizationId:organization(project),projectId:project.id,actorUserId:user.id,operationId});
+  if (!op) throw previewError('PROJECT_PREVIEW_OPERATION_NOT_FOUND',404); return op;
 }
-
-function thumbnailRevisionFromRequest(request, body = null) {
-  const url = new URL(request.url);
-  const value = url.searchParams.get("revision") ?? body?.revision;
-
-  return normalizePreviewRevision(value, { allowZero: false });
-}
-
-function requestedImageRevision(request) {
-  const value = new URL(request.url).searchParams.get("v");
-
-  if (value === null || value === "") {
-    return null;
+async function handlePut({env,request},user,project) {
+  const operationId=new URL(request.url).searchParams.get('operationId');
+  let op=await findOperation(env,user,project,operationId);
+  if (op.state==='READY') {
+    op=await verifyReadyPreviewReceipt(env,{operation:op});
+    const freshUser=await requireSession(env,request), freshProject=await getAuthorizedProject(env,freshUser,project.slug);
+    if (!freshProject || freshUser.id!==user.id || freshProject.id!==project.id || organization(freshProject)!==organization(project)) throw previewError('PROJECT_NOT_FOUND',404);
+    await permission(env,request,freshUser,freshProject,'project.save');
+    return envelope(op);
   }
-
-  return normalizePreviewRevision(value);
-}
-
-function isPng(bytes) {
-  if (!(bytes instanceof Uint8Array) || bytes.byteLength < PNG_SIGNATURE.length) {
-    return false;
-  }
-
-  return PNG_SIGNATURE.every((value, index) => bytes[index] === value);
-}
-
-function isDropboxNotFound(error) {
-  return (
-    error?.code === "DROPBOX_PATH_NOT_FOUND" &&
-    [404, 409].includes(Number(error?.status))
-  );
-}
-
-function safeDuration(startedAt) {
-  return Math.max(0, Date.now() - Number(startedAt || Date.now()));
-}
-
-async function auditThumbnail(
-  env,
-  request,
-  user,
-  project,
-  action,
-  result,
-  metadata = {},
-) {
-  await recordAuditLog(env, {
-    actorUserId: user?.id,
-    organizationId: getProjectOrganizationId(project),
-    projectId: project?.id ?? null,
-    action,
-    resourceType: "project",
-    resourceId: project?.slug ?? project?.id ?? metadata.slug ?? null,
-    result,
-    metadata,
-    request,
-  });
-}
-
-async function requireThumbnailPermission(
-  env,
-  request,
-  user,
-  project,
-  slug,
-  permission,
-  auditAction,
-) {
-  await requireProjectPermission(
-    env,
-    request,
-    permission,
-    getProjectPermissionContext(project, slug),
-    {
-      user,
-      auditAction,
-      auditOnSuccess: false,
-      resourceType: "project",
-      resourceId: project?.slug ?? slug,
-    },
-  );
-}
-
-async function cleanupPreviousPreview(env, project, previousRevision, revision) {
-  const configFileName = project.default_config_file || "config.kepler.json";
-  let fileName = null;
-
-  if (
-    previousRevision !== null &&
-    previousRevision !== undefined &&
-    Number(previousRevision) > 0 &&
-    Number(previousRevision) !== Number(revision)
-  ) {
-    fileName = getRevisionedPreviewFileNameFromConfigFile(
-      configFileName,
-      previousRevision,
-    );
-  } else if (
-    previousRevision === null ||
-    previousRevision === undefined ||
-    Number(previousRevision) === 0
-  ) {
-    fileName = getPreviewFileNameFromConfigFile(configFileName);
-  }
-
-  if (!fileName) {
-    return;
-  }
-
-  try {
-    await deleteDropboxPathIfExists(
-      env,
-      joinDropboxPath(project.dropbox_root_path, fileName),
-    );
-  } catch (error) {
-    console.warn(
-      "[Maono preview] Não foi possível limpar preview anterior:",
-      sanitizePreviewCode(error?.code || "PREVIEW_CLEANUP_FAILED"),
-    );
-  }
-}
-
-async function processThumbnailUpload({
-  env,
-  request,
-  user,
-  project,
-  revision,
-  bytes,
-  captureMethod,
-  previousRevision,
-}) {
-  const startedAt = Date.now();
-  const organizationId = getProjectOrganizationId(project);
-  const configFileName = project.default_config_file || "config.kepler.json";
-  const previewFileName = getRevisionedPreviewFileNameFromConfigFile(
-    configFileName,
-    revision,
-  );
-
-  try {
-    await uploadDropboxBinaryFile(
-      env,
-      project.dropbox_root_path,
-      previewFileName,
-      bytes,
-      "image/png",
-    );
-
-    const current = await getProjectPreviewState(env, {
-      projectId: project.id,
-      organizationId,
-    });
-
-    if (Number(current?.config_revision) !== Number(revision)) {
-      await deleteDropboxPathIfExists(
-        env,
-        joinDropboxPath(project.dropbox_root_path, previewFileName),
-      );
-
-      await auditThumbnail(
-        env,
-        request,
-        user,
-        project,
-        "projects.thumbnail.complete",
-        "stale",
-        {
-          revision,
-          currentRevision: current?.config_revision ?? null,
-          durationMs: safeDuration(startedAt),
-        },
-      );
-      return;
+  if (['FAILED_FINAL','SUPERSEDED'].includes(op.state)) return envelope(op,409);
+  if (!op.payload_stored_at) {
+    if ((request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase()!=='image/png') throw previewError('INVALID_THUMBNAIL_CONTENT_TYPE',400);
+    if (Number(request.headers.get('Content-Length') || 0)>MAX_PREVIEW_BYTES) throw previewError('THUMBNAIL_TOO_LARGE',413);
+    op=await acquirePreviewUpload(env,{operation:op});
+    if (['FAILED_FINAL','SUPERSEDED'].includes(op.state)) return envelope(op,409);
+    if (!op.payload_stored_at) {
+      try {
+        const artifact=await uploadPreviewPayload(env,{operation:op,project,body:request.body});
+        op=await markPreviewPayloadStored(env,{operation:op,artifact});
+      } catch(error) { await failPreviewUpload(env,{operation:op,error}); throw error; }
     }
-
-    const ready = await markProjectPreviewReady(env, {
-      projectId: project.id,
-      organizationId,
-      revision,
-      captureMethod,
-    });
-
-    if (!ready) {
-      await deleteDropboxPathIfExists(
-        env,
-        joinDropboxPath(project.dropbox_root_path, previewFileName),
-      );
-      return;
-    }
-
-    await cleanupPreviousPreview(
-      env,
-      project,
-      previousRevision,
-      revision,
-    );
-
-    await auditThumbnail(
-      env,
-      request,
-      user,
-      project,
-      "projects.thumbnail.complete",
-      "success",
-      {
-        revision,
-        captureMethod,
-        sizeBytes: bytes.byteLength,
-        durationMs: safeDuration(startedAt),
-      },
-    );
-  } catch (error) {
-    const errorCode = sanitizePreviewCode(
-      error?.code || "THUMBNAIL_UPLOAD_FAILED",
-    );
-
-    await markProjectPreviewFailed(env, {
-      projectId: project.id,
-      organizationId,
-      revision,
-      errorCode,
-      captureMethod,
-    });
-
-    await auditThumbnail(
-      env,
-      request,
-      user,
-      project,
-      "projects.thumbnail.complete",
-      "error",
-      {
-        revision,
-        captureMethod,
-        sizeBytes: bytes.byteLength,
-        errorCode,
-        durationMs: safeDuration(startedAt),
-      },
-    );
   }
+  op=await processPreviewOperation(env,{operation:op});
+  if (['FAILED_FINAL','SUPERSEDED'].includes(op.state)) return envelope(op,409);
+  if (!op.payload_stored_at) throw previewError('PROJECT_PREVIEW_UPLOAD_BUSY',409);
+  // 202 is legal only after immutable bytes AND the journal/outbox transaction.
+  return envelope(op,op.state==='READY' ? 200 : 202);
 }
-
-async function handleThumbnailGet(context, user, project, slug) {
-  const { request, env } = context;
-  await requireThumbnailPermission(
-    env,
-    request,
-    user,
-    project,
-    slug,
-    "project.view",
-    "projects.thumbnail.read",
-  );
-
-  const state = await getProjectPreviewState(env, {
-    projectId: project.id,
-    organizationId: getProjectOrganizationId(project),
-  });
-  const status = normalizePreviewStatus(state?.preview_status);
-  const requestedRevision = requestedImageRevision(request);
-  const readyRevision = normalizePreviewRevision(state?.preview_revision);
-  const configFileName = project.default_config_file || "config.kepler.json";
-  const previousFailedPreview =
-    status === "FAILED" &&
-    readyRevision !== null &&
-    requestedRevision !== null;
-
-  if (
-    (status === "READY" || previousFailedPreview) &&
-    requestedRevision !== null &&
-    requestedRevision !== readyRevision
-  ) {
-    return errorResponse(
-      "A revisão solicitada não é mais a visualização atual.",
-      404,
-      "PROJECT_THUMBNAIL_REVISION_NOT_FOUND",
-    );
-  }
-
-  if (
-    !state ||
-    (!["READY", "UNKNOWN"].includes(status) && !previousFailedPreview) ||
-    (status === "READY" && readyRevision === null)
-  ) {
-    return errorResponse(
-      "A visualização real deste projeto ainda não está disponível.",
-      404,
-      "PROJECT_THUMBNAIL_NOT_READY",
-    );
-  }
-
-  const previewFileName =
-    status !== "UNKNOWN" &&
-    readyRevision !== null &&
-    readyRevision > 0
-      ? getRevisionedPreviewFileNameFromConfigFile(
-          configFileName,
-          readyRevision,
-        )
-      : getPreviewFileNameFromConfigFile(configFileName);
-
-  try {
-    const dropboxResponse = await downloadDropboxBinaryFile(
-      env,
-      project.dropbox_root_path,
-      previewFileName,
-    );
-    const body = await dropboxResponse.arrayBuffer();
-
-    let imageRevision = readyRevision;
-    if (status === "UNKNOWN") {
-      // A canonical legacy PNG has its own identity (revision zero). The
-      // lifecycle backfill may have advanced the config without creating PNGs.
-      const ready = await markProjectPreviewReady(env, {
-        projectId: project.id,
-        organizationId: getProjectOrganizationId(project),
-        revision: 0,
-        captureMethod: "legacy-reconcile",
-        expectedState: state,
-      });
-      imageRevision = 0;
-
-      // Another reader may have reconciled the same PNG. A newer config or
-      // preview, however, must never be replaced by this delayed legacy read.
-      const current = ready || await getProjectPreviewState(env, {
-        projectId: project.id,
-        organizationId: getProjectOrganizationId(project),
-      });
-      if (
-        normalizePreviewStatus(current?.preview_status) !== "READY" ||
-        normalizePreviewRevision(current?.preview_revision) !== 0 ||
-        Number(current?.config_revision) !== Number(state.config_revision) ||
-        (requestedRevision !== null && requestedRevision !== 0)
-      ) {
-        return errorResponse(
-          "A revisão solicitada não é mais a visualização atual.",
-          404,
-          "PROJECT_THUMBNAIL_REVISION_NOT_FOUND",
-          current ? publicProjectPreview(current) : null,
-        );
-      }
-    }
-
-    return new Response(body, {
-      status: 200,
-      headers: {
-        "Content-Type": "image/png",
-        "Cache-Control": requestedRevision === null
-          ? "no-store"
-          : "private, max-age=31536000, immutable",
-        "X-Maono-Thumbnail-Revision": String(imageRevision),
-      },
-    });
-  } catch (error) {
-    if (isDropboxNotFound(error)) {
-      // Failure to load an older preview must not replace the current failed
-      // generation state. Only the exact READY/UNKNOWN snapshot may be changed.
-      if (status !== "FAILED") {
-        await markProjectPreviewMissing(env, {
-          projectId: project.id,
-          organizationId: getProjectOrganizationId(project),
-          expectedState: state,
-        });
-      }
-
-      return errorResponse(
-        "Preview PNG não encontrado para este projeto.",
-        404,
-        "PROJECT_THUMBNAIL_NOT_FOUND",
-      );
-    }
-
-    throw error;
-  }
-}
-
-async function handleThumbnailPut(context, user, project, slug) {
-  const { request, env } = context;
-  await requireThumbnailPermission(
-    env,
-    request,
-    user,
-    project,
-    slug,
-    "project.save",
-    "projects.thumbnail.request",
-  );
-
-  const revision = thumbnailRevisionFromRequest(request);
-
-  if (!revision) {
-    return errorResponse(
-      "Informe uma revisão positiva para a visualização.",
-      400,
-      "THUMBNAIL_REVISION_INVALID",
-    );
-  }
-
-  const state = await getProjectPreviewState(env, {
-    projectId: project.id,
-    organizationId: getProjectOrganizationId(project),
-  });
-
-  if (Number(state?.config_revision) !== revision) {
-    return errorResponse(
-      "Esta captura pertence a uma revisão anterior do projeto.",
-      409,
-      "STALE_THUMBNAIL_REVISION",
-      {
-        revision,
-        currentRevision: state?.config_revision ?? null,
-      },
-    );
-  }
-
-  if (
-    normalizePreviewStatus(state?.preview_status) === "READY" &&
-    Number(state?.preview_revision) === revision
-  ) {
-    return jsonResponse({
-      ok: true,
-      status: "READY",
-      revision,
-      idempotent: true,
-    });
-  }
-
-  const contentType = String(
-    request.headers.get("Content-Type") || "",
-  )
-    .split(";")[0]
-    .trim()
-    .toLowerCase();
-  const declaredLength = Number(request.headers.get("Content-Length") || 0);
-
-  if (contentType !== "image/png") {
-    return errorResponse(
-      "A visualização deve ser enviada como image/png.",
-      400,
-      "INVALID_THUMBNAIL_CONTENT_TYPE",
-    );
-  }
-
-  if (declaredLength > MAX_THUMBNAIL_BYTES) {
-    return errorResponse(
-      "A visualização excede o limite de 4 MiB.",
-      413,
-      "THUMBNAIL_TOO_LARGE",
-    );
-  }
-
-  const bytes = new Uint8Array(await request.arrayBuffer());
-
-  if (!bytes.byteLength || bytes.byteLength > MAX_THUMBNAIL_BYTES) {
-    return errorResponse(
-      "A visualização está vazia ou excede o limite de 4 MiB.",
-      bytes.byteLength ? 413 : 400,
-      bytes.byteLength ? "THUMBNAIL_TOO_LARGE" : "THUMBNAIL_EMPTY",
-    );
-  }
-
-  if (!isPng(bytes)) {
-    return errorResponse(
-      "O corpo não contém uma assinatura PNG válida.",
-      400,
-      "INVALID_THUMBNAIL_SIGNATURE",
-    );
-  }
-
-  const captureMethod = sanitizeCaptureMethod(
-    request.headers.get("X-Maono-Capture-Method"),
-  );
-  const accepted = await markProjectPreviewAttempt(env, {
-    projectId: project.id,
-    organizationId: getProjectOrganizationId(project),
-    revision,
-    captureMethod,
-  });
-
-  if (!accepted) {
-    return errorResponse(
-      "Esta captura pertence a uma revisão anterior do projeto.",
-      409,
-      "STALE_THUMBNAIL_REVISION",
-    );
-  }
-
-  await auditThumbnail(
-    env,
-    request,
-    user,
-    project,
-    "projects.thumbnail.request",
-    "accepted",
-    {
-      revision,
-      captureMethod,
-      sizeBytes: bytes.byteLength,
-    },
-  );
-
-  const task = processThumbnailUpload({
-    env,
-    request,
-    user,
-    project,
-    revision,
-    bytes,
-    captureMethod,
-    previousRevision: state?.preview_revision ?? null,
-  });
-
-  if (typeof context.waitUntil === "function") {
-    context.waitUntil(task);
-
-    return jsonResponse(
-      {
-        ok: true,
-        status: "PENDING",
-        revision,
-      },
-      {
-        status: 202,
-        headers: {
-          "Retry-After": "2",
-        },
-      },
-    );
-  }
-
-  await task;
-  const completed = await getProjectPreviewState(env, {
-    projectId: project.id,
-    organizationId: getProjectOrganizationId(project),
-  });
-
-  return jsonResponse({
-    ok: true,
-    status: normalizePreviewStatus(completed?.preview_status),
-    revision,
-  });
-}
-
-async function handleThumbnailPatch(context, user, project, slug) {
-  const { request, env } = context;
-  await requireThumbnailPermission(
-    env,
-    request,
-    user,
-    project,
-    slug,
-    "project.save",
-    "projects.thumbnail.fail",
-  );
-
-  const body = await readJsonBody(request);
-  const revision = thumbnailRevisionFromRequest(request, body);
-
-  if (!revision) {
-    return errorResponse(
-      "Informe uma revisão positiva para registrar a falha.",
-      400,
-      "THUMBNAIL_REVISION_INVALID",
-    );
-  }
-
-  const failed = await markProjectPreviewFailed(env, {
-    projectId: project.id,
-    organizationId: getProjectOrganizationId(project),
-    revision,
-    errorCode: body?.errorCode || "CLIENT_CAPTURE_FAILED",
-    captureMethod:
-      body?.captureMethod ||
-      request.headers.get("X-Maono-Capture-Method"),
-  });
-
-  if (!failed) {
-    return errorResponse(
-      "Esta captura pertence a uma revisão anterior do projeto.",
-      409,
-      "STALE_THUMBNAIL_REVISION",
-    );
-  }
-
-  await auditThumbnail(
-    env,
-    request,
-    user,
-    project,
-    "projects.thumbnail.complete",
-    "error",
-    {
-      revision,
-      errorCode: sanitizePreviewCode(
-        body?.errorCode || "CLIENT_CAPTURE_FAILED",
-      ),
-      captureMethod: sanitizeCaptureMethod(body?.captureMethod),
-    },
-  );
-
-  return jsonResponse({
-    ok: true,
-    ...publicProjectPreview(failed),
-  });
-}
-
 export async function onRequest(context) {
-  const { request, env, params } = context;
-
-  if (!["GET", "PUT", "PATCH"].includes(request.method)) {
-    return methodNotAllowed(["GET", "PUT", "PATCH"]);
-  }
-
+  const {request,params}=context;
+  const env={...context.env,DB:context.env.DB?.withSession ? context.env.DB.withSession('first-primary') : context.env.DB};
+  if (!['GET','POST','PUT','PATCH'].includes(request.method)) return methodNotAllowed(['GET','POST','PUT','PATCH']);
   try {
-    const user = await requireSession(env, request);
-    const slug = decodeProjectSlug(params?.slug);
-
-    if (!slug) {
-      return errorResponse(
-        "Slug do projeto não informado.",
-        400,
-        "PROJECT_SLUG_REQUIRED",
-      );
-    }
-
-    const project = await getAuthorizedProject(env, user, slug);
-
-    if (!project) {
-      return errorResponse(
-        "Projeto não encontrado ou sem permissão de acesso.",
-        404,
-        "PROJECT_NOT_FOUND",
-      );
-    }
-
-    if (request.method === "GET") {
-      return await handleThumbnailGet(context, user, project, slug);
-    }
-
-    if (request.method === "PUT") {
-      return await handleThumbnailPut(context, user, project, slug);
-    }
-
-    return await handleThumbnailPatch(context, user, project, slug);
-  } catch (error) {
-    const status = Number(error?.status || 500);
-    const code = error?.code || "PROJECT_THUMBNAIL_ERROR";
-
-    if (status === 401) {
-      return errorResponse(
-        "Sessão inválida ou expirada.",
-        401,
-        code,
-      );
-    }
-
-    if (status === 403) {
-      return errorResponse(
-        "Você não tem permissão para acessar esta visualização.",
-        403,
-        code,
-      );
-    }
-
-    if (status === 404 || isDropboxNotFound(error)) {
-      return errorResponse(
-        "Projeto ou visualização não encontrados.",
-        404,
-        "PROJECT_THUMBNAIL_NOT_FOUND",
-      );
-    }
-
-    console.error("[Maono preview] Falha no endpoint de thumbnail:", {
-      code: sanitizePreviewCode(code),
-      status,
-    });
-
-    return errorResponse(
-      "Não foi possível processar a visualização deste projeto.",
-      status,
-      code,
-    );
+    const user=await requireSession(env,request);
+    let slug; try { slug=decodeURIComponent(String(params?.slug || '')).trim(); } catch { throw previewError('PROJECT_SLUG_REQUIRED',400); }
+    if (!slug) throw previewError('PROJECT_SLUG_REQUIRED',400);
+    const project=await getAuthorizedProject(env,user,slug);
+    if (!project) throw previewError('PROJECT_NOT_FOUND',404);
+    if (request.method==='GET') return await handleGet({...context,env},user,project);
+    await permission(env,request,user,project,'project.save');
+    if (request.method==='PUT') return await handlePut({...context,env},user,project);
+    const body=await readPreviewJsonBody(request);
+    if (request.method==='POST') return envelope(await registerPreviewOperation(env,{actor:user,project,manifest:body?.manifest || body}),201);
+    const operation=await findOperation(env,user,project,body?.operationId);
+    return envelope(await failWaitingPreview(env,{operation,errorCode:body?.errorCode}));
+  } catch(error) {
+    return errorResponse('Não foi possível processar a visualização deste projeto.',previewStorageNotFound(error) ? 404 : Number(error.status || 500),
+      previewStorageNotFound(error) ? 'PROJECT_THUMBNAIL_NOT_FOUND' : error.code || 'PROJECT_THUMBNAIL_ERROR');
   }
 }

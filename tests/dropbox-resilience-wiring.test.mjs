@@ -35,9 +35,11 @@ test("upload imutável continua create-only e conflito é reconciliado no reposi
 
   assert.match(dropbox, /strict_conflict:\s*createOnly/);
   assert.match(dropbox, /mode:\s*createOnly \? "add" : "overwrite"/);
-  assert.match(repository, /isWriteConflict\(error\)/);
-  assert.match(repository, /existingRevisionResult/);
-  assert.match(repository, /idempotent:\s*true/);
+  assert.match(repository, /uploadProjectSaveOperationPayload/);
+  const payload=await readFile(new URL("../functions/_lib/project-save-operation-payload.js",import.meta.url),"utf8");
+  assert.match(payload,/writeMode: "create"/);
+  assert.match(payload,/reconcileFinishMetadata/);
+  assert.match(payload,/recoverStoredProjectSaveOperation/);
 });
 
 test("repository preserva auth não recuperável e diagnósticos do provider", async () => {

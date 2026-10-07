@@ -1,236 +1,143 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isProjectCreationAdmissionEnabled } from "../functions/_lib/project-creation-reservation.js";
+import { reconcileProjectSaveOperations } from "../functions/_lib/project-save-operations.js";
+import { persistenceFixture, interruption } from "./helpers/project-persistence-fixture.mjs";
+import {config,reserve,create,register,upload,status,readyForRetry} from "./helpers/durable-project-http.mjs";
 
-import {
-  isLargeProjectCreationEnabled,
-  isRetryableLargeCreationError,
-} from "../functions/_lib/project-large-creation.js";
-import { buildLargeCreateFixture } from "../scripts/large-create/build-large-create-fixture.mjs";
-import {
-  beginClientSaveAttempt,
-} from "../src/pages/Kepler/save-observability.ts";
-import {
-  executeProjectCreateFlow,
-  ProjectCreateFlowError,
-} from "../src/pages/Kepler/project-create-flow.ts";
+test("durable create admission is fail-closed and accepts only explicit true",()=>{
+  for(const value of [undefined,null,"","false","FALSE","0","yes","on"]) assert.equal(isProjectCreationAdmissionEnabled({PROJECT_DURABLE_SAVE_V1:value}),false);
+  for(const value of [true,"true","TRUE"," true "]) assert.equal(isProjectCreationAdmissionEnabled({PROJECT_DURABLE_SAVE_V1:value}),true);
+});
 
-function response(status, payload, headers = {}) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
-  });
-}
-
-function pendingProject(slug = "qa-smoke-large-client") {
-  return {
-    ok: true,
-    status: "pending",
-    project: {
-      id: 991,
-      slug,
-      active: false,
-      lifecycle: { state: "PREPARING_STORAGE" },
-      configRevision: 0,
-    },
-    configRevision: 0,
-  };
-}
-
-function activeProject(slug = "qa-smoke-large-client", idempotent = false) {
-  return {
-    ok: true,
-    status: "active",
-    idempotent,
-    project: {
-      id: 991,
-      slug,
-      active: true,
-      lifecycle: { state: "ACTIVE" },
-      configRevision: 1,
-    },
-    lifecycle: { state: "ACTIVE" },
-    configRevision: 1,
-    sizeBytes: 9 * 1024 * 1024,
-    transport: "stream",
-    operation: "create",
-  };
-}
-
-function createOptions({ idempotencyKey, fetchImpl, onStage = () => {} }) {
-  const fixture = buildLargeCreateFixture({ targetMiB: 9 });
-  return {
-    attempt: beginClientSaveAttempt("create"),
-    name: "QA Smoke Large Client",
-    description: "Hardening do fluxo Large CREATE",
-    organizationId: 9,
-    idempotencyKey,
-    config: fixture.config,
-    legacy: null,
-    fetchImpl,
-    onStage,
-  };
-}
-
-test("feature flag Large CREATE é fail-closed e só aceita true explícito", () => {
-  for (const value of [undefined, null, "", "false", "FALSE", "0", "yes", "on"]) {
-    assert.equal(
-      isLargeProjectCreationEnabled({ PROJECT_CREATE_LARGE_STREAM_V1: value }),
-      false,
-      `valor ${String(value)} deveria manter Large CREATE desabilitado`,
-    );
+test("reservation replay reuses the same project and rejects different title, description or organization",async t=>{
+  const f=persistenceFixture(t);
+  assert.equal((await reserve(f)).status,202);
+  const retry=await reserve(f);assert.equal(retry.status,202);assert.equal(retry.data.idempotent,true);
+  for(const body of [{name:"Different name"},{description:"Different description"}]){
+    const mismatch=await reserve(f,config("initial"),{body});assert.equal(mismatch.status,409);assert.equal(mismatch.data.error.code,"PROJECT_CREATION_REQUEST_MISMATCH");
   }
+  const crossOrg=await reserve(f,config("initial"),{body:{organizationId:2}});
+  assert.equal(crossOrg.status,403);assert.equal(crossOrg.data.error.code,"ORGANIZATION_CONTEXT_MISMATCH");
+  assert.equal(f.db.prepare("SELECT count(*) n FROM projects").get().n,1);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM organization_resource_reservations").get().n,1);
+});
 
-  for (const value of [true, "true", "TRUE", " true "]) {
-    assert.equal(
-      isLargeProjectCreationEnabled({ PROJECT_CREATE_LARGE_STREAM_V1: value }),
-      true,
-    );
+test("operation ID cannot be rebound to different bytes or expected revision",async t=>{
+  const f=persistenceFixture(t);await reserve(f);
+  assert.equal((await register(f,config("initial"),{key:"offline-create-0001"})).status,201);
+  for(const [map,input] of [[config("tampered"),{}],[config("initial"),{expectedConfigRevision:1}]]) {
+    const mismatch=await register(f,map,{key:"offline-create-0001",input});
+    if(input.expectedConfigRevision === 1) { assert.equal(mismatch.status,400); assert.equal(mismatch.data.error.code,"PROJECT_CREATION_REVISION_INVALID"); }
+    else { assert.equal(mismatch.status,409);assert.equal(mismatch.data.error.code,"OPERATION_PAYLOAD_MISMATCH"); }
   }
+  assert.equal(f.db.prepare("SELECT count(*) n FROM project_save_operations").get().n,1);
+  assert.equal(f.objects.size,0);
 });
 
-test("CREATE grande executa POST metadata-first, PUT streaming e só conclui após ACTIVE", async () => {
-  const calls = [];
-  const stages = [];
-  const idempotencyKey = "large-create-flow-0001";
-  const fetchImpl = async (url, init) => {
-    calls.push({ url, init });
-    if (url === "/api/projects") {
-      const metadata = JSON.parse(String(init.body));
-      assert.equal(init.method, "POST");
-      assert.equal(metadata.largeConfig, true);
-      assert.equal(metadata.idempotencyKey, idempotencyKey);
-      assert.equal("config" in metadata, false);
-      assert.ok(Number(metadata.configMetadata.sizeBytes) > 8 * 1024 * 1024);
-      return response(202, pendingProject());
-    }
-
-    assert.equal(url, "/api/projects/qa-smoke-large-client/config");
-    assert.equal(init.method, "PUT");
-    assert.equal(init.headers["X-Maono-Creation-Key"], idempotencyKey);
-    assert.equal(init.headers["X-Maono-Expected-Revision"], "0");
-    assert.ok(Buffer.byteLength(String(init.body), "utf8") > 8 * 1024 * 1024);
-    return response(201, activeProject());
-  };
-
-  const result = await executeProjectCreateFlow(
-    createOptions({
-      idempotencyKey,
-      fetchImpl,
-      onStage: (stage) => stages.push(stage),
-    }),
-  );
-
-  assert.equal(result.transport, "stream");
-  assert.equal(result.createdSlug, "qa-smoke-large-client");
-  assert.equal(result.revision, 1);
-  assert.equal(calls.length, 2);
-  assert.deepEqual(stages, ["creating_record", "preparing_files", "finalizing"]);
+test("creation key ownership, foreign account and viewer boundaries prevent upload and receipt disclosure",async t=>{
+  const f=persistenceFixture(t),created=await create(f);
+  const wrongKey=await upload(f,created.registered,{key:"wrong-creation-0001"});
+  assert.equal(wrongKey.status,403);
+  const other=await status(f,created.registered.input.operationId,{userId:2});
+  assert.ok([403,404].includes(other.status));
+  assert.equal(other.data.operation,undefined);
+  f.db.prepare("UPDATE users SET role='viewer' WHERE id=1").run();
+  const viewer=await reserve(f,config("viewer"),{key:"viewer-creation-0001"});
+  assert.equal(viewer.status,403);assert.equal(viewer.data.error.code,"VIEWER_PROJECT_CREATE_FORBIDDEN");
+  const write=await register(f,config("viewer"),{kind:"update",expected:1,operationId:"viewer-operation-0001"});
+  assert.equal(write.status,403);
+  assert.equal(f.project().config_revision,1);
 });
 
-test("resposta perdida após commit é reconciliada pelo POST idempotente sem reupload", async () => {
-  const calls = [];
-  const idempotencyKey = "large-create-flow-0002";
-  const fetchImpl = async (url, init) => {
-    calls.push({ url, init });
-    assert.equal(url, "/api/projects");
-    return response(200, activeProject("qa-smoke-large-client", true));
-  };
-
-  const result = await executeProjectCreateFlow(
-    createOptions({ idempotencyKey, fetchImpl }),
-  );
-
-  assert.equal(result.transport, "stream");
-  assert.equal(result.revision, 1);
-  assert.equal(result.data.idempotent, true);
-  assert.equal(calls.length, 1, "retry pós-commit não deve reenviar o MapConfig");
+test("paused admission denies new reservations but resumes accepted creation and serves its receipt",async t=>{
+  const f=persistenceFixture(t);await reserve(f);
+  const operation=await register(f,config("initial"),{key:"offline-create-0001"});
+  f.env.PROJECT_DURABLE_SAVE_V1="false";
+  const denied=await reserve(f,config("another"),{key:"another-create-0001",name:"Another map"});
+  assert.equal(denied.status,503);assert.equal(denied.data.error.code,"PROJECT_DURABLE_SAVE_ADMISSION_PAUSED");
+  const retry=await reserve(f);assert.equal(retry.status,202);
+  const saved=await upload(f,operation,{key:"offline-create-0001"});assert.equal(saved.data.operation.state,"PUBLISHED");
+  assert.equal((await status(f,operation.input.operationId)).data.operation.state,"PUBLISHED");
 });
 
-test("interrupção durante PUT mantém erro no estágio de arquivos e permite retry com a mesma chave", async () => {
-  const idempotencyKey = "large-create-flow-0003";
-  const firstBodies = [];
-  const firstFetch = async (url, init) => {
-    firstBodies.push({ url, body: String(init.body) });
-    if (url === "/api/projects") return response(202, pendingProject());
-    return response(503, {
-      ok: false,
-      error: {
-        code: "DROPBOX_TIMEOUT",
-        message: "Storage temporariamente indisponível.",
-        retryable: true,
-        details: { stage: "WRITE", provider: "dropbox", providerStatus: 504 },
-      },
-    });
-  };
-
-  await assert.rejects(
-    executeProjectCreateFlow(createOptions({ idempotencyKey, fetchImpl: firstFetch })),
-    (error) => {
-      assert.ok(error instanceof ProjectCreateFlowError);
-      assert.equal(error.stage, "preparing_files");
-      assert.equal(error.data.error.code, "DROPBOX_TIMEOUT");
-      assert.equal(error.data.error.retryable, true);
-      return true;
-    },
-  );
-
-  const retryCalls = [];
-  const retryFetch = async (url, init) => {
-    retryCalls.push({ url, body: String(init.body) });
-    if (url === "/api/projects") {
-      const body = JSON.parse(String(init.body));
-      assert.equal(body.idempotencyKey, idempotencyKey);
-      return response(202, { ...pendingProject(), idempotent: true });
-    }
-    assert.equal(init.headers["X-Maono-Creation-Key"], idempotencyKey);
-    return response(201, activeProject("qa-smoke-large-client", true));
-  };
-
-  const retried = await executeProjectCreateFlow(
-    createOptions({ idempotencyKey, fetchImpl: retryFetch }),
-  );
-  assert.equal(retried.revision, 1);
-  assert.equal(retried.createdSlug, "qa-smoke-large-client");
-  assert.equal(retryCalls.length, 2);
+for(const mutation of ["DELETE FROM organization_users WHERE user_id=1", "UPDATE organizations SET active=0 WHERE id=1"]) test(`permission revocation blocks worker publication after bytes are durable: ${mutation}`,async t=>{
+  let fail=true;
+  const f=persistenceFixture(t,{beforeSql({sql,kind}){if(fail&&kind==="batch"&&sql.includes("UPDATE projects SET config_revision"))throw interruption();}});
+  const saved=await create(f);assert.equal(saved.data.operation.state,"RETRY_WAIT");
+  fail=false;f.db.exec(mutation);readyForRetry(f);await reconcileProjectSaveOperations(f.env);
+  const row=f.db.prepare("SELECT * FROM project_save_operations").get();
+  assert.equal(row.state,"FAILED_FINAL");assert.equal(row.receipt_json,null);
+  assert.equal(f.project().active,0);assert.equal(f.project().config_revision,0);
 });
 
-test("duas tentativas concorrentes com a mesma chave convergem para o mesmo slug/revision", async () => {
-  const idempotencyKey = "large-create-flow-0004";
-  let putCount = 0;
-  const fetchImpl = async (url) => {
-    if (url === "/api/projects") {
-      return response(202, { ...pendingProject("qa-smoke-concurrent"), idempotent: true });
-    }
-    putCount += 1;
-    return response(
-      putCount === 1 ? 201 : 200,
-      activeProject("qa-smoke-concurrent", putCount > 1),
-    );
-  };
-
-  const [left, right] = await Promise.all([
-    executeProjectCreateFlow(createOptions({ idempotencyKey, fetchImpl })),
-    executeProjectCreateFlow(createOptions({ idempotencyKey, fetchImpl })),
-  ]);
-
-  assert.equal(left.createdSlug, right.createdSlug);
-  assert.equal(left.revision, 1);
-  assert.equal(right.revision, 1);
-  assert.equal(putCount, 2);
+test("expired browser session prevents HTTP reads but does not block authorized worker completion",async t=>{
+  let fail=true;
+  const f=persistenceFixture(t,{beforeSql({sql,kind}){if(fail&&kind==="batch"&&sql.includes("UPDATE projects SET config_revision"))throw interruption();}});
+  const saved=await create(f);assert.equal(saved.data.operation.state,"RETRY_WAIT");
+  f.db.exec("UPDATE sessions SET expires_at='2000-01-01T00:00:00.000Z'");
+  assert.equal((await status(f,saved.registered.input.operationId,{key:saved.key})).status,401);
+  fail=false;readyForRetry(f);await reconcileProjectSaveOperations(f.env);
+  assert.equal(f.db.prepare("SELECT state FROM project_save_operations").get().state,"PUBLISHED");assert.equal(f.project().active,1);
 });
 
-test("classificação de erros recuperáveis cobre timeout, indisponibilidade e conflitos transitórios", () => {
-  assert.equal(isRetryableLargeCreationError({ status: 504, code: "DROPBOX_TIMEOUT" }), true);
-  assert.equal(isRetryableLargeCreationError({ status: 503, code: "DROPBOX_UNAVAILABLE" }), true);
-  assert.equal(
-    isRetryableLargeCreationError({ status: 409, code: "PROJECT_CREATION_REVISION_NOT_READY" }),
-    true,
-  );
-  assert.equal(
-    isRetryableLargeCreationError({ status: 409, code: "PROJECT_CREATION_REQUEST_MISMATCH" }),
-    false,
-  );
+test("reserved capacity denies another key before storage and replay consumes no extra quota",async t=>{
+  const f=persistenceFixture(t);f.env.PROJECT_LIMIT_FREE="1";
+  const first=await reserve(f);assert.equal(first.status,202);
+  const retry=await reserve(f);assert.equal(retry.status,202);assert.equal(retry.data.project.id,first.data.project.id);
+  const denied=await reserve(f,config("another"),{key:"quota-second-key-0001",name:"Another project"});
+  assert.equal(denied.status,409);assert.equal(denied.data.error.code,"ORGANIZATION_PROJECT_LIMIT_REACHED");
+  assert.equal(f.objects.size,0);assert.equal(f.db.prepare("SELECT count(*) n FROM projects").get().n,1);
+  const published=await create(f);assert.equal(published.data.operation.state,"PUBLISHED");
+  const deniedAfterCommit=await reserve(f,config("another"),{key:"quota-third-key-0001",name:"Third project"});
+  assert.equal(deniedAfterCommit.status,409);assert.equal(deniedAfterCommit.data.error.code,"ORGANIZATION_PROJECT_LIMIT_REACHED");
+  assert.equal(f.db.prepare("SELECT count(*) n FROM organization_resource_reservations").get().n,1);
+});
+
+for(const revoke of ["DELETE FROM organization_users WHERE organization_id=1 AND user_id=1","DELETE FROM user_projects WHERE project_id=1 AND user_id=1"]) test(`completed creation key cannot recover a receipt after current access is revoked: ${revoke}`,async t=>{
+  const f=persistenceFixture(t),created=await create(f);
+  f.db.exec(revoke);
+  const denied=await status(f,created.registered.input.operationId,{key:created.key});
+  assert.ok([403,404].includes(denied.status),JSON.stringify(denied.data));
+  assert.equal(denied.data.operation,undefined);assert.equal(denied.data.project,undefined);
+  const replayRegistration=await register(f,config("initial"),{key:created.key});
+  assert.ok([403,404].includes(replayRegistration.status),JSON.stringify(replayRegistration.data));
+  const replayPayload=await upload(f,created.registered,{key:created.key});
+  assert.ok([403,404].includes(replayPayload.status),JSON.stringify(replayPayload.data));
+  assert.equal(replayRegistration.data.operation,undefined);assert.equal(replayPayload.data.operation,undefined);
+  assert.equal(f.db.prepare("SELECT state FROM project_save_operations").get().state,"PUBLISHED","revocation must not erase historical durability");
+});
+
+test("operation routes require a stable project ID before registering, reading or receiving bytes",async t=>{
+  const f=persistenceFixture(t),created=await create(f);
+  const headers={"X-Maono-Project-Id":null};
+  const responses=[
+    await register(f,config("missing identity"),{kind:"update",expected:1,operationId:"missing-project-id-0001",headers}),
+    await status(f,created.registered.input.operationId,{headers}),
+    await upload(f,created.registered,{headers}),
+  ];
+  for(const result of responses){assert.equal(result.status,409);assert.equal(result.data.error.code,"PROJECT_IDENTITY_REQUIRED");}
+  assert.equal(f.db.prepare("SELECT count(*) n FROM project_save_operations").get().n,1);
+  assert.equal(f.project().config_revision,1);
+});
+
+test("same slug reused by project ID2 cannot receive a stale project ID1 snapshot or disclose its receipt",async t=>{
+  const f=persistenceFixture(t);await create(f);
+  const slug=f.project().slug;
+  const registered=await register(f,config("pending original"),{kind:"update",expected:1,operationId:"stale-project-id-0001"});
+  assert.equal(registered.status,201);
+  f.db.prepare("UPDATE projects SET slug='original-map-renamed' WHERE id=1").run();
+  f.db.prepare("INSERT INTO projects(id,name,slug,organization_id,dropbox_root_path,active) VALUES(2,'Replacement',?,1,'/offline/a/replacement',1)").run(slug);
+  f.db.exec("INSERT INTO user_projects(user_id,project_id,access_level) VALUES(1,2,'owner')");
+  const count=f.calls.length,headers={"X-Maono-Project-Id":"1"};
+  const responses=[
+    await register(f,config("new stale attempt"),{slug,kind:"update",expected:0,operationId:"stale-project-new-0001",headers}),
+    await status(f,registered.input.operationId,{slug,headers}),
+    await upload(f,registered,{slug,headers}),
+  ];
+  for(const result of responses){assert.equal(result.status,409,JSON.stringify(result.data));assert.equal(result.data.error.code,"PROJECT_IDENTITY_CHANGED");assert.equal(result.data.operation,undefined);}
+  assert.equal(f.calls.length,count,"identity mismatch must stop before provider upload or verification");
+  assert.equal(f.project(2).config_revision,0);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM project_save_operations WHERE project_id=2").get().n,0);
+  assert.equal(f.db.prepare("SELECT state FROM project_save_operations WHERE operation_id='stale-project-id-0001'").get().state,"AWAITING_UPLOAD");
 });

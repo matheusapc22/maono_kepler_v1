@@ -16,15 +16,11 @@ import {
   verifyProjectConfigBytes,
 } from "../functions/_lib/project-config-integrity.js";
 import {
-  createProjectConfigStorageRef,
-  getProjectConfigRevisionFileName,
-  parseProjectConfigStorageRef,
-} from "../functions/_lib/project-config-repository.js";
-import {
-  markProjectConfigRevisionReady,
-  publishProjectConfigRevision,
-  reserveProjectConfigRevision,
-} from "../functions/_lib/project-config-revisions.js";
+  createMapConfigStorageRef as createProjectConfigStorageRef,
+  getMapConfigRevisionFileName as getProjectConfigRevisionFileName,
+  parseMapConfigStorageRef as parseProjectConfigStorageRef,
+} from "../functions/_lib/map-config-storage-ref.js";
+
 
 const [migration, schema, projectsSource, projectListSource, configServiceSource] =
   await Promise.all([
@@ -313,80 +309,4 @@ test("storage_ref é opaca e revisionada sem caminho Dropbox público", () => {
   assert.doesNotMatch(ref, /dropbox/i);
 });
 
-test("ledger impede conteúdo concorrente, publica por CAS e recupera retry idempotente", async () => {
-  const database = fixture();
-  database.prepare(`
-    INSERT INTO projects (
-      id, organization_id, active, config_revision,
-      lifecycle_state, lifecycle_version
-    ) VALUES (84, 7, 1, 14, 'ACTIVE', 4)
-  `).run();
-  const env = envFor(database);
-  const base = {
-    projectId: 84,
-    organizationId: 7,
-    expectedCurrentRevision: 14,
-    checksumAlgorithm: "sha256",
-    checksum: "a".repeat(64),
-    storageProvider: "dropbox",
-    storageRef: "project-config://84/revisions/15",
-    schemaName: "legacy-kepler",
-    schemaVersion: 1,
-    sizeBytes: 120,
-    contentType: "application/json; charset=utf-8",
-    actorUserId: 10,
-    transitionId: "transition-a",
-  };
-
-  const reserved = await reserveProjectConfigRevision(env, base);
-  assert.equal(reserved.revision.revision, 15);
-  assert.equal(reserved.revision.status, "WRITING");
-
-  await assert.rejects(
-    reserveProjectConfigRevision(env, {
-      ...base,
-      checksum: "b".repeat(64),
-      transitionId: "transition-b",
-    }),
-    (error) => error?.code === "PROJECT_CONFIG_REVISION_CONFLICT",
-  );
-
-  await markProjectConfigRevisionReady(env, {
-    projectId: 84,
-    revision: 15,
-    checksum: base.checksum,
-    attempts: reserved.revision.attempts,
-    storageProviderVersion: "rev-provider-15",
-    storageProviderHash: "provider-hash",
-  });
-  const published = await publishProjectConfigRevision(env, {
-    projectId: 84,
-    organizationId: 7,
-    expectedCurrentRevision: 14,
-    revision: 15,
-    checksum: base.checksum,
-    attempts: reserved.revision.attempts,
-    actor: { id: 10, name: "Editor" },
-    expectedLifecycleState: "ACTIVE",
-  });
-
-  assert.equal(published.config_revision, 15);
-  assert.equal(published.lifecycle_state, "ACTIVE");
-  assert.equal(published.config_checksum, base.checksum);
-  assert.equal(published.config_storage_ref, base.storageRef);
-
-  const recovered = await reserveProjectConfigRevision(env, base);
-  assert.equal(recovered.alreadyPublished, true);
-  assert.equal(recovered.idempotent, true);
-  assert.equal(recovered.project.config_revision, 15);
-
-  await assert.rejects(
-    reserveProjectConfigRevision(env, {
-      ...base,
-      checksum: "c".repeat(64),
-    }),
-    (error) =>
-      error?.code === "PROJECT_CONFIG_REVISION_CONFLICT" &&
-      error?.details?.currentConfigRevision === 15,
-  );
-});
+// Publication/CAS/fault coverage moved to project-save-operations and revision-concurrency tests.

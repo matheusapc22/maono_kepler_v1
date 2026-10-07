@@ -1,0 +1,159 @@
+{
+  "measuredAt": "2026-10-06T01:50:18.944Z",
+  "stats": {
+    "startTime": "2026-10-06T01:50:18.944Z",
+    "duration": 8339.581,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "baselineCommit": "af652fe47b9f56ed8910b50aab0f1367645bd770",
+  "policy": "Preserve legacy nonuniform canvas composition. html2canvas retains its prior centered crop. This characterizes existing behavior; it does not assert cross-ratio geometric fidelity.",
+  "measurements": [
+    {
+      "project": "chromium",
+      "sourcePixels": [
+        1216,
+        720
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 94,
+      "outputCircleHeight": 90,
+      "expectedWidth": 94.73684210526316,
+      "expectedHeight": 90,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    },
+    {
+      "project": "chromium",
+      "sourcePixels": [
+        390,
+        844
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 294,
+      "outputCircleHeight": 76,
+      "expectedWidth": 295.38461538461536,
+      "expectedHeight": 76.77725118483413,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    },
+    {
+      "project": "webkit",
+      "sourcePixels": [
+        1216,
+        720
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 94,
+      "outputCircleHeight": 90,
+      "expectedWidth": 94.73684210526316,
+      "expectedHeight": 90,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    },
+    {
+      "project": "webkit",
+      "sourcePixels": [
+        390,
+        844
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 294,
+      "outputCircleHeight": 76,
+      "expectedWidth": 295.38461538461536,
+      "expectedHeight": 76.77725118483413,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    },
+    {
+      "project": "mobile-chromium",
+      "sourcePixels": [
+        1216,
+        720
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 94,
+      "outputCircleHeight": 90,
+      "expectedWidth": 94.73684210526316,
+      "expectedHeight": 90,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    },
+    {
+      "project": "mobile-chromium",
+      "sourcePixels": [
+        390,
+        844
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 294,
+      "outputCircleHeight": 76,
+      "expectedWidth": 295.38461538461536,
+      "expectedHeight": 76.77725118483413,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    },
+    {
+      "project": "mobile-webkit",
+      "sourcePixels": [
+        1216,
+        720
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 94,
+      "outputCircleHeight": 90,
+      "expectedWidth": 94.73684210526316,
+      "expectedHeight": 90,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    },
+    {
+      "project": "mobile-webkit",
+      "sourcePixels": [
+        390,
+        844
+      ],
+      "outputPixels": [
+        960,
+        540
+      ],
+      "sourceCircleDiameter": 120,
+      "outputCircleWidth": 294,
+      "outputCircleHeight": 76,
+      "expectedWidth": 295.38461538461536,
+      "expectedHeight": 76.77725118483413,
+      "baselineDifferences": 0,
+      "policy": "legacy independent X/Y scaling; no aspect-ratio geometry preservation"
+    }
+  ]
+}

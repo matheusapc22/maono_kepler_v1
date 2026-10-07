@@ -1,0 +1,532 @@
+{
+  "measuredAt": "2026-10-06T03:11:24.391Z",
+  "headless": true,
+  "realMobileHardware": false,
+  "engines": {
+    "chromium": "140.0.7339.16",
+    "webkit": "26.0"
+  },
+  "scope": "Actual installed Deck, adaptive Point/GeoJSON, native aggregation and onAfterRender; synthetic local basemap and explicit withheld renderer commit; no remote data.",
+  "results": [
+    {
+      "project": "chromium",
+      "name": "point-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=211",
+            "overlayMs=0",
+            "encodeMs=6",
+            "bytes=14667"
+          ],
+          "changed": 15408,
+          "frames": 6
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=236",
+            "overlayMs=0",
+            "encodeMs=6",
+            "bytes=15602"
+          ],
+          "changed": 15407,
+          "frames": 11
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=126",
+            "overlayMs=0",
+            "encodeMs=13",
+            "bytes=15602"
+          ],
+          "changed": 15407,
+          "frames": 15
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=1012",
+            "overlayMs=0",
+            "encodeMs=4",
+            "bytes=12386"
+          ],
+          "changed": 0,
+          "frames": 19
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    },
+    {
+      "project": "chromium",
+      "name": "geojson-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=225",
+            "overlayMs=0",
+            "encodeMs=5",
+            "bytes=14667"
+          ],
+          "changed": 15408,
+          "frames": 6
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=297",
+            "overlayMs=0",
+            "encodeMs=5",
+            "bytes=15602"
+          ],
+          "changed": 15407,
+          "frames": 10
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=70",
+            "overlayMs=0",
+            "encodeMs=5",
+            "bytes=15602"
+          ],
+          "changed": 15407,
+          "frames": 15
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=290",
+            "overlayMs=0",
+            "encodeMs=6",
+            "bytes=12386"
+          ],
+          "changed": 0,
+          "frames": 19
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    },
+    {
+      "project": "webkit",
+      "name": "point-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=109",
+            "overlayMs=0",
+            "encodeMs=17",
+            "bytes=5374"
+          ],
+          "changed": 15406,
+          "frames": 6
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=146",
+            "overlayMs=0",
+            "encodeMs=18",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 10
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=89",
+            "overlayMs=0",
+            "encodeMs=21",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 14
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=95",
+            "overlayMs=0",
+            "encodeMs=20",
+            "bytes=3336"
+          ],
+          "changed": 0,
+          "frames": 18
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    },
+    {
+      "project": "webkit",
+      "name": "geojson-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=108",
+            "overlayMs=0",
+            "encodeMs=16",
+            "bytes=5374"
+          ],
+          "changed": 15406,
+          "frames": 6
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=116",
+            "overlayMs=0",
+            "encodeMs=17",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 10
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=75",
+            "overlayMs=0",
+            "encodeMs=17",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 14
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=67",
+            "overlayMs=0",
+            "encodeMs=16",
+            "bytes=3336"
+          ],
+          "changed": 0,
+          "frames": 18
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    },
+    {
+      "project": "mobile-chromium",
+      "name": "point-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=261",
+            "overlayMs=0",
+            "encodeMs=6",
+            "bytes=14667"
+          ],
+          "changed": 15408,
+          "frames": 6
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=272",
+            "overlayMs=0",
+            "encodeMs=4",
+            "bytes=15597"
+          ],
+          "changed": 15408,
+          "frames": 11
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=72",
+            "overlayMs=0",
+            "encodeMs=4",
+            "bytes=15597"
+          ],
+          "changed": 15408,
+          "frames": 16
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=1313",
+            "overlayMs=0",
+            "encodeMs=6",
+            "bytes=12386"
+          ],
+          "changed": 0,
+          "frames": 21
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    },
+    {
+      "project": "mobile-chromium",
+      "name": "geojson-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=234",
+            "overlayMs=0",
+            "encodeMs=6",
+            "bytes=14667"
+          ],
+          "changed": 15408,
+          "frames": 6
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=237",
+            "overlayMs=0",
+            "encodeMs=5",
+            "bytes=15597"
+          ],
+          "changed": 15408,
+          "frames": 11
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=73",
+            "overlayMs=0",
+            "encodeMs=4",
+            "bytes=15597"
+          ],
+          "changed": 15408,
+          "frames": 16
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=216",
+            "overlayMs=0",
+            "encodeMs=5",
+            "bytes=12386"
+          ],
+          "changed": 0,
+          "frames": 21
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    },
+    {
+      "project": "mobile-webkit",
+      "name": "point-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=80",
+            "overlayMs=0",
+            "encodeMs=20",
+            "bytes=5374"
+          ],
+          "changed": 15406,
+          "frames": 6
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=111",
+            "overlayMs=0",
+            "encodeMs=16",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 10
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=55",
+            "overlayMs=0",
+            "encodeMs=17",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 14
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=80",
+            "overlayMs=0",
+            "encodeMs=17",
+            "bytes=3336"
+          ],
+          "changed": 0,
+          "frames": 18
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    },
+    {
+      "project": "mobile-webkit",
+      "name": "geojson-consumed-policy.json",
+      "stages": [
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=99",
+            "overlayMs=0",
+            "encodeMs=17",
+            "bytes=5374"
+          ],
+          "changed": 15406,
+          "frames": 7
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=110",
+            "overlayMs=0",
+            "encodeMs=17",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 11
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=75",
+            "overlayMs=0",
+            "encodeMs=18",
+            "bytes=6156"
+          ],
+          "changed": 15405,
+          "frames": 16
+        },
+        {
+          "staleAccepted": false,
+          "quality": "faithful",
+          "diagnostics": [
+            "canvases=2",
+            "stateOverlay=already-rendered",
+            "freezeMs=71",
+            "overlayMs=0",
+            "encodeMs=15",
+            "bytes=3336"
+          ],
+          "changed": 0,
+          "frames": 20
+        }
+      ],
+      "nativeRefsUnchanged": true,
+      "cleared": "faithful",
+      "errors": []
+    }
+  ]
+}
