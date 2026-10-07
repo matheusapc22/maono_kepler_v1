@@ -242,6 +242,10 @@ test("secondary buttons and unrelated pointers cannot hijack a drag; no-motion c
   const initial = await range(editor);
   await band.click({ button:"right" });
   await expect(editor.locator(".maono-filter-histogram__plot")).not.toHaveAttribute("data-dragging");
+  expect(await range(editor)).toEqual(initial);
+  // WebKit keeps its native context menu open after a real secondary click.
+  // Dismiss it as a user would before starting the next independent gesture.
+  await page.keyboard.press("Escape");
   const { plot, start } = await beginBandDrag(page, editor);
   await plot.dispatchEvent("pointermove", {pointerId:999,clientX:0,clientY:0});
   await plot.dispatchEvent("pointerup", {pointerId:999,clientX:0,clientY:0});

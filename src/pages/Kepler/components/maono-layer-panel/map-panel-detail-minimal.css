@@ -125,6 +125,7 @@
 
 .maono-layer-panel .maono-detail-view :is(
   .maono-detail-card > header strong,
+  .maono-filter-essential > header strong,
   .maono-detail-section > summary strong,
   .maono-progressive-section > summary strong,
   .maono-filter-value-section > header strong
@@ -137,7 +138,6 @@
 
 .maono-layer-panel .maono-detail-view :is(
   .maono-layer-essential > header strong,
-  .maono-filter-essential > header strong,
   .maono-style-subsection > header strong,
   .maono-point-spatial-grouping > header strong
 ) {
@@ -643,8 +643,4 @@
 .maono-layer-panel .maono-detail-view .maono-detail-card--essential {
   border-top: 0;
   padding-top: 0;
-}
-.maono-layer-panel .maono-detail-view .maono-filter-essential-title strong {
-  color: var(--maono-layer-gold);
-  font-size: var(--maono-panel-font-11, 13.75px);
 }

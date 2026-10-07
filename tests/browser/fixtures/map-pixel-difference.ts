@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /** Compare compositor output from the real map, away from sidebar controls. */
 export async function mapPixelDifference(page: Page, before: Buffer, after: Buffer) {
@@ -36,4 +36,20 @@ export async function mapColorPixelCounts(page: Page, png: Buffer, colors: reado
       return count;
     });
   }, { encoded: png.toString('base64'), colors });
+}
+
+/** Require painted, stable map pixels before comparing a later interaction. */
+export async function settledMapColor(page: Page, clip: { x: number; y: number; width: number; height: number }, color: readonly number[]) {
+  let previous: Buffer | null = null;
+  let snapshot = Buffer.alloc(0);
+  let stable = 0;
+  await expect.poll(async () => {
+    snapshot = await page.screenshot({ clip });
+    const [count] = await mapColorPixelCounts(page, snapshot, [color]);
+    const unchanged = previous && await mapPixelDifference(page, previous, snapshot) === 0;
+    stable = count > 30 && unchanged ? stable + 1 : 0;
+    previous = snapshot;
+    return stable;
+  }, { timeout: 20_000, intervals: [150, 250, 400] }).toBeGreaterThanOrEqual(2);
+  return snapshot;
 }

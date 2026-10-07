@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mapPixelDifference as pixelDifference } from './fixtures/map-pixel-difference';
+import { mapPixelDifference as pixelDifference, settledMapColor } from './fixtures/map-pixel-difference';
 import {
   capture, filterEditor, openFilters, openLayers, openMap, panel, rail, ready, rows,
   savedVisState, saveMap, seedConfig,
@@ -84,10 +84,18 @@ test('Visual Maõno: compact inspector, exact 37% real-render change and synthet
   await expect(eye).toHaveAttribute('aria-pressed', 'true');
   await eye.click();
   await expect(eye).toHaveAttribute('aria-pressed', 'false');
+  await expect(eye).toHaveCSS('color', 'rgb(157, 169, 186)');
   await eye.click();
+  await page.mouse.move(0, 0);
+  await expect(eye).toHaveCSS('color', 'rgb(242, 199, 102)');
+  await expect(eye).toHaveCSS('border-width', '0px');
+  await expect(eye).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  const headings = detail(page).locator('.maono-detail-card > header strong, .maono-detail-section > summary strong');
+  await expect(headings).toHaveText(['Essencial', 'Aparência', 'Dimensão e agrupamento', 'Avançado']);
+  for (const heading of await headings.all()) await expect(heading).toHaveCSS('color', 'rgb(242, 199, 102)');
   await commitOpacity(page, '100');
   const clip = { x: 610, y: 80, width: 650, height: 700 };
-  const opaque = await page.screenshot({ clip });
+  const opaque = await settledMapColor(page, clip, [197, 160, 89]);
   await commitOpacity(page, '37');
   await expect(detail(page).getByRole('slider', { name: 'Opacidade', exact: true })).toHaveValue('37');
   await expect.poll(async () => pixelDifference(page, opaque, await page.screenshot({ clip }))).toBeGreaterThan(30);
@@ -146,7 +154,15 @@ test('Visual Maõno: identities survive reorder, hide, duplicate and reload; fil
   const filterEye = filterEditor(page).locator('.maono-detail-view__visibility');
   await expect(filterEye).toHaveAttribute('aria-pressed', 'true');
   await filterEye.click(); await expect(filterEye).toHaveAttribute('aria-pressed', 'false');
+  await expect(filterEye).toHaveCSS('color', 'rgb(157, 169, 186)');
   await filterEye.click();
+  await page.mouse.move(0, 0);
+  await expect(filterEye).toHaveCSS('color', 'rgb(242, 199, 102)');
+  await expect(filterEye).toHaveCSS('border-width', '0px');
+  await expect(filterEye).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  const filterHeadings = filterEditor(page).locator('.maono-filter-essential > header strong, .maono-filter-value-section > header strong');
+  await expect(filterHeadings).toHaveText(['Essencial', 'Valor do filtro']);
+  for (const heading of await filterHeadings.all()) await expect(heading).toHaveCSS('color', 'rgb(242, 199, 102)');
   await expect(filterEditor(page).locator('.maono-detail-view__identity small')).not.toContainText(' · ');
   await page.screenshot({ path: testInfo.outputPath('visual-filter-inspector.png') });
   await openLayers(page);

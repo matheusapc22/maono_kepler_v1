@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { mapPixelDifference, mapColorPixelCounts } from './fixtures/map-pixel-difference';
+import { expect, test } from '@playwright/test';
+import { mapPixelDifference, mapColorPixelCounts, settledMapColor } from './fixtures/map-pixel-difference';
 import { capture, filterEditor, openFilters, openLayers, openMap, panel, ready, rows, savedVisState, saveMap, seedConfig } from './fixtures/map-panel-minimal';
 
 // Actual compiled map/reducer/filter/serializer. Only account/HTTP storage are
@@ -8,20 +8,6 @@ test.use({ viewport: { width: 1440, height: 900 }, contextOptions: { reducedMoti
 test.setTimeout(90_000);
 const mapClip = { x: 600, y: 80, width: 700, height: 700 };
 const GOLD = [197, 160, 89], BLUE = [50, 140, 200];
-async function settledMap(page: Page, color: number[]) {
-  let previous: Buffer | null = null;
-  let snapshot = Buffer.alloc(0);
-  let stable = 0;
-  await expect.poll(async () => {
-    snapshot = await page.screenshot({ clip: mapClip });
-    const [count] = await mapColorPixelCounts(page, snapshot, [color]);
-    const unchanged = previous && await mapPixelDifference(page, previous, snapshot) === 0;
-    stable = count > 30 && unchanged ? stable + 1 : 0;
-    previous = snapshot;
-    return stable;
-  }, { timeout: 20_000, intervals: [150, 250, 400] }).toBeGreaterThanOrEqual(2);
-  return snapshot;
-}
 
 test('Visual Maõno interactions: a log band preserves display width and filters the native map before pointerup', async ({ page }, testInfo) => {
   const seed = seedConfig(1);
@@ -41,7 +27,7 @@ test('Visual Maõno interactions: a log band preserves display width and filters
   const plot = editor.locator('.maono-filter-histogram__plot');
   const initial = (await band.boundingBox())!;
   const plotBox = (await plot.boundingBox())!;
-  const before = await settledMap(page, GOLD);
+  const before = await settledMapColor(page, mapClip, GOLD);
   const [goldBefore] = await mapColorPixelCounts(page, before, [GOLD]);
   await expect.poll(async () => (await capture(page)).snapshot.hasUnsavedChanges).toBe(false);
   const startX = initial.x + initial.width / 2;
@@ -59,14 +45,24 @@ test('Visual Maõno interactions: a log band preserves display width and filters
     return goldBefore - goldNow;
   }).toBeGreaterThan(30);
   await page.mouse.up();
-  const values = await Promise.all(['Mínimo', 'Máximo'].map(name => editor.getByRole('spinbutton', { name, exact: true }).inputValue().then(Number)));
+  const inputs = ['Mínimo', 'Máximo'].map(name => editor.getByRole('spinbutton', { name, exact: true }));
+  const displayedValues = await Promise.all(inputs.map(input => input.inputValue()));
+  // Firefox's native number-input property rounds a long decimal to 15
+  // significant digits, while the controlled value attribute and range handles
+  // retain the full IEEE number. Verify exact state/persistence separately from
+  // the native display, and require both to survive reopening unchanged.
+  const values = await Promise.all(inputs.map(input => input.getAttribute('value').then(value => Number(value))));
+  expect(await editor.locator('.maono-filter-histogram__handle').evaluateAll(handles => handles.map(handle => Number(handle.getAttribute('aria-valuenow'))))).toEqual(values);
   expect(fixture.saves).toHaveLength(0);
   await page.screenshot({ path: testInfo.outputPath('visual-filter-log-band.png') });
   expect(savedVisState(await saveMap(page, fixture)).filters[0].value).toEqual(values);
   await page.reload(); await ready(page); await openFilters(page);
   await panel(page).locator('.maono-filter-group__toggle').click();
   await panel(page).locator('.maono-filter-row__open').click();
-  expect(await Promise.all(['Mínimo', 'Máximo'].map(name => filterEditor(page).getByRole('spinbutton', { name, exact: true }).inputValue().then(Number)))).toEqual(values);
+  const restoredInputs = ['Mínimo', 'Máximo'].map(name => filterEditor(page).getByRole('spinbutton', { name, exact: true }));
+  expect(await Promise.all(restoredInputs.map(input => input.getAttribute('value').then(value => Number(value))))).toEqual(values);
+  expect(await Promise.all(restoredInputs.map(input => input.inputValue()))).toEqual(displayedValues);
+  expect(await filterEditor(page).locator('.maono-filter-histogram__handle').evaluateAll(handles => handles.map(handle => Number(handle.getAttribute('aria-valuenow'))))).toEqual(values);
   expect(fixture.unexpectedWrites).toEqual([]);
 });
 
@@ -75,7 +71,7 @@ test('Visual Maõno interactions: penultimate-to-last insertion changes the real
   for (const layer of seed.config.visState.layers) Object.assign(layer.config.visConfig, { radius: 50, opacity: 1, outline: false });
   const fixture = await openMap(page, { seed });
   await openLayers(page);
-  const before = await settledMap(page, GOLD);
+  const before = await settledMapColor(page, mapClip, GOLD);
   const [goldBefore, blueBefore] = await mapColorPixelCounts(page, before, [GOLD, BLUE]);
   expect(goldBefore).toBeGreaterThan(30);
   expect(blueBefore).toBeLessThan(goldBefore * .1);
@@ -91,7 +87,7 @@ test('Visual Maõno interactions: penultimate-to-last insertion changes the real
   await page.screenshot({ path: testInfo.outputPath('visual-layer-drop-after-last.png') });
   await page.mouse.up();
   await expect(rows(page).locator('.maono-layer-row__open strong')).toHaveText(['Camada 02', 'Camada 01']);
-  const after = await settledMap(page, BLUE);
+  const after = await settledMapColor(page, mapClip, BLUE);
   const [goldAfter, blueAfter] = await mapColorPixelCounts(page, after, [GOLD, BLUE]);
   expect(blueAfter).toBeGreaterThan(30);
   expect(goldAfter).toBeLessThan(blueAfter * .1);
@@ -101,7 +97,7 @@ test('Visual Maõno interactions: penultimate-to-last insertion changes the real
   const restored = rows(page).first();
   await rows(page).last().locator('.maono-layer-row__grip').dragTo(restored, { targetPosition: { x: 50, y: 10 } });
   await expect(rows(page).locator('.maono-layer-row__open strong')).toHaveText(['Camada 01', 'Camada 02']);
-  const restoredPixels = await settledMap(page, GOLD);
+  const restoredPixels = await settledMapColor(page, mapClip, GOLD);
   const [goldRestored, blueRestored] = await mapColorPixelCounts(page, restoredPixels, [GOLD, BLUE]);
   expect(goldRestored).toBeGreaterThan(30);
   expect(blueRestored).toBeLessThan(goldRestored * .1);
