@@ -49,9 +49,12 @@ test('Visual Maõno interactions: a log band preserves display width and filters
   const displayedValues = await Promise.all(inputs.map(input => input.inputValue()));
   // Firefox's native number-input property rounds a long decimal to 15
   // significant digits, while the controlled value attribute and range handles
-  // retain the full IEEE number. Verify exact state/persistence separately from
-  // the native display, and require both to survive reopening unchanged.
+  // retain the full IEEE number. A fresh Firefox mount can show all digits.
+  // Accept only those two exact native representations; state, handles and
+  // persistence must retain every digit, without a numeric tolerance.
   const values = await Promise.all(inputs.map(input => input.getAttribute('value').then(value => Number(value))));
+  const nativeRepresentations = (value: number) => [String(value), String(Number(value.toPrecision(15)))];
+  displayedValues.forEach((text, index) => expect(nativeRepresentations(values[index])).toContain(text));
   expect(await editor.locator('.maono-filter-histogram__handle').evaluateAll(handles => handles.map(handle => Number(handle.getAttribute('aria-valuenow'))))).toEqual(values);
   expect(fixture.saves).toHaveLength(0);
   await page.screenshot({ path: testInfo.outputPath('visual-filter-log-band.png') });
@@ -61,7 +64,8 @@ test('Visual Maõno interactions: a log band preserves display width and filters
   await panel(page).locator('.maono-filter-row__open').click();
   const restoredInputs = ['Mínimo', 'Máximo'].map(name => filterEditor(page).getByRole('spinbutton', { name, exact: true }));
   expect(await Promise.all(restoredInputs.map(input => input.getAttribute('value').then(value => Number(value))))).toEqual(values);
-  expect(await Promise.all(restoredInputs.map(input => input.inputValue()))).toEqual(displayedValues);
+  const restoredDisplays = await Promise.all(restoredInputs.map(input => input.inputValue()));
+  restoredDisplays.forEach((text, index) => expect(nativeRepresentations(values[index])).toContain(text));
   expect(await filterEditor(page).locator('.maono-filter-histogram__handle').evaluateAll(handles => handles.map(handle => Number(handle.getAttribute('aria-valuenow'))))).toEqual(values);
   expect(fixture.unexpectedWrites).toEqual([]);
 });

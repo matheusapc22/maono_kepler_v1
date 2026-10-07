@@ -67,12 +67,30 @@ test.beforeEach(async ({ page }) => {
   await page.setContent(`<style>${stylesheet}body{margin:40px;background:#101217;color:#eee}.fixtures{display:grid;grid-template-columns:400px 400px;gap:40px 60px}section{width:400px}input{max-width:180px}output{display:block}.maono-filter-histogram__plot{margin:20px 12px}</style><div id="root"></div>`);
   await page.addScriptTag({ content: javascript });
   await page.evaluate(() => {
+    const nativeEvents: Record<string, unknown>[] = [];
+    Object.assign(window, { __histogramNativeEvents: nativeEvents });
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture', 'mousedown', 'mouseup', 'contextmenu', 'keydown']) {
+      document.addEventListener(type, event => {
+        const pointer = event as PointerEvent;
+        const target = event.target instanceof Element ? event.target : null;
+        nativeEvents.push({ type, trusted: event.isTrusted, button: pointer.button, buttons: pointer.buttons, primary: pointer.isPrimary,
+          pointerId: pointer.pointerId, key: (event as KeyboardEvent).key, x: pointer.clientX, y: pointer.clientY,
+          tag: target?.tagName, className: target?.getAttribute('class'), focused: document.hasFocus(), time: performance.now() });
+      }, true);
+    }
     document.addEventListener("pointerdown", event => {
       const plot = (event.target as Element).closest(".maono-filter-histogram__plot");
       if (plot) plot.setAttribute("data-native-pointer-id", String(event.pointerId));
     }, true);
   });
   await expect(page.getByTestId("numeric").locator(".maono-filter-histogram__meta")).toContainText("escala log");
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus || testInfo.title.startsWith('secondary buttons')) {
+    const events = await page.evaluate(() => (window as Window & { __histogramNativeEvents?: unknown[] }).__histogramNativeEvents ?? []).catch(() => []);
+    await testInfo.attach('native-histogram-pointer-events', { body: JSON.stringify(events, null, 2), contentType: 'application/json' });
+  }
 });
 
 async function range(editor: Locator): Promise<[number, number]> {
@@ -89,6 +107,11 @@ async function beginBandDrag(page: Page, editor: Locator) {
   const plotBox = await box(plot);
   const start = { x: selection.x + selection.width / 2, y: selection.y + selection.height / 2 };
   await page.mouse.move(start.x, start.y);
+  await page.evaluate(point => {
+    const events = (window as Window & { __histogramNativeEvents?: unknown[] }).__histogramNativeEvents;
+    const hit = document.elementFromPoint(point.x, point.y);
+    events?.push({ type: 'before-primary-down', ...point, tag: hit?.tagName, className: hit?.getAttribute('class'), focused: document.hasFocus() });
+  }, start);
   await page.mouse.down();
   await expect(plot).toHaveAttribute("data-dragging", "window");
   return { plot, plotBox, selection, start };
@@ -243,9 +266,13 @@ test("secondary buttons and unrelated pointers cannot hijack a drag; no-motion c
   await band.click({ button:"right" });
   await expect(editor.locator(".maono-filter-histogram__plot")).not.toHaveAttribute("data-dragging");
   expect(await range(editor)).toEqual(initial);
-  // WebKit keeps its native context menu open after a real secondary click.
-  // Dismiss it as a user would before starting the next independent gesture.
+  // Dismiss the browser's native context menu before the independent gesture.
+  // A WebKit port may consume the next native click even after Escape, so use
+  // an empty viewport location, never the selection or a control, to dismiss it.
   await page.keyboard.press("Escape");
+  await page.mouse.click(1060, 800);
+  expect(await range(editor)).toEqual(initial);
+  await expect(editor.locator(".updates")).toHaveText("0");
   const { plot, start } = await beginBandDrag(page, editor);
   await plot.dispatchEvent("pointermove", {pointerId:999,clientX:0,clientY:0});
   await plot.dispatchEvent("pointerup", {pointerId:999,clientX:0,clientY:0});
