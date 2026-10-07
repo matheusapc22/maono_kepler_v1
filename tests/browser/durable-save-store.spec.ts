@@ -253,7 +253,14 @@ test("same-size byte corruption never reaches upload or becomes confirmed", asyn
     try { await state.executePreparedProjectUpdate({ snapshot: state.value, store: state.store, fetchImpl: async (_url: string, init: RequestInit) => {
       state.network.push(init.method); return new Response(JSON.stringify({ ok: true, operation: { state: "AWAITING_UPLOAD" } }), { headers: { "Content-Type": "application/json" } });
     } }); } catch (error: any) { code = error.code; }
-    return { code, network: state.network, state: (await state.store.get(state.value.key)).localState };
+    const retained = await state.store.get(state.value.key);
+    const retainedBytes = new Uint8Array(await retained.serialized.body.arrayBuffer());
+    const corruptedBytes = new Uint8Array(raw.serialized.body);
+    return { code, network: state.network, state: retained.localState,
+      bytesPreserved: retainedBytes.length === corruptedBytes.length && retainedBytes.every((byte, index) => byte === corruptedBytes[index]),
+      basePreserved: retained.expectedConfigRevision === state.value.expectedConfigRevision,
+      manifestPreserved: JSON.stringify(retained.manifest) === JSON.stringify(state.value.manifest),
+      hasReceipt: Boolean(retained.receipt) };
   });
-  expect(result).toEqual({ code: "LOCAL_SAVE_PAYLOAD_INTEGRITY_FAILED", network: ["GET"], state: "pending" });
+  expect(result).toEqual({ code: "LOCAL_SAVE_PAYLOAD_INTEGRITY_FAILED", network: ["GET"], state: "failed", bytesPreserved: true, basePreserved: true, manifestPreserved: true, hasReceipt: false });
 });
