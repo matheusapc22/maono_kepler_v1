@@ -56,8 +56,8 @@ export function seedConfig(layerCount = 0, groups = false): SavedConfig {
   return saved;
 }
 
-export async function installPanelFixture(page: Page, options: { layerCount?: number; groups?: boolean; create?: boolean; viewer?: boolean } = {}) {
-  let saved = seedConfig(options.layerCount, options.groups);
+export async function installPanelFixture(page: Page, options: { layerCount?: number; groups?: boolean; create?: boolean; viewer?: boolean; seed?: SavedConfig } = {}) {
+  let saved = options.seed ? structuredClone(options.seed) : seedConfig(options.layerCount, options.groups);
   let revision = 1;
   let saveStatus = 200;
   let nextSaveGate: Promise<void> | undefined;

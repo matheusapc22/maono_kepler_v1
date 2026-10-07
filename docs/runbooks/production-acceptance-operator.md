@@ -232,3 +232,15 @@ o checkpoint/log identifica o run, mas não comprova fechamento. Usar closure co
 aprovação separada e verificar recursos. Uma reserva sem resposta confirmada
 continua incerta mesmo com inventário vazio, pois a requisição original pode
 concluir depois. Recursos sintéticos de runs anteriores bloqueiam nova janela.
+
+## PNG real vinculado ao recibo JSON
+
+A suite `durable-project-preview` exige navegador real, organização QA9, slug
+vazio e cinco flags explícitas com restauração segura. Usa um projeto novo com
+três pontos sintéticos, Save do editor publicado, GET/decode/hash do PNG,
+reabertura, ordenação histórica e falha PNG sem perder JSON confirmado.
+
+Consulte [o contrato e os pré-requisitos de PNG](../ops/production-png-acceptance.md).
+CI local não é aceite integrado: accounts/storage de CI são fixtures e nenhum
+`run` real acontece em pull requests. Migration, Worker, secrets, janela real,
+merge, deploy e ativação permanente continuam com autorizações separadas.

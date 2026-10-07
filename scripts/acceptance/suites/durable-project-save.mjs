@@ -137,10 +137,11 @@ function identity(project, resource, ctx) {
   if (resource.id) check(Number(project.id) === resource.id, "Projeto sintético mudou de identidade.", "QA_CLEANUP_SCOPE_MISMATCH");
 }
 
-function registerCleanup(ctx, resources) {
+function registerCleanup(ctx, resources, beforeCleanup = async () => {}) {
   // Register before reservation POST: inventory also finds a reservation whose
   // acknowledgement disappeared before project/file IDs reached this process.
   ctx.registerCleanup(async () => {
+    await beforeCleanup();
     const before = await inventory(ctx);
     const errors = [];
     for (const resource of resources) {
@@ -229,11 +230,12 @@ function receipt(result, input, project, revision) {
     value.checksum === input.contentHash && value.sizeBytes === input.payloadBytes && typeof value.committedAt === "string", "Recibo não corresponde aos bytes/identidade registrados.");
   return value;
 }
-async function reserve(ctx, resource, body) {
+async function reserve(ctx, resource, body, datasetCount = 0) {
   const input = makeManifest(body, `qa-durable:${ctx.runId}:${resource.kind}:create`, 0, "create");
+  input.datasetCount = datasetCount;
   const creationKey = `qa-durable:${ctx.runId}:${resource.kind}`;
   const request = { durableSave: true, name: resource.name, description: "Synthetic durable acceptance; immutable objects and receipts retained by policy.", organizationId: QA.id, idempotencyKey: creationKey,
-    configMetadata: { sizeBytes: input.payloadBytes, datasetCount: 0, schemaName: "legacy-kepler", schemaVersion: 1, configVersion: "v1" } };
+    configMetadata: { sizeBytes: input.payloadBytes, datasetCount, schemaName: "legacy-kepler", schemaVersion: 1, configVersion: "v1" } };
   resource.reservationUncertain = true;
   const created = status(await ctx.api("creator", "/api/projects", { method: "POST", headers: headers(), json: request }), 202, "reservar criação");
   const project = { ...created.project, id: id(created.project?.id) };
@@ -314,4 +316,17 @@ export async function run(ctx) {
   check(descriptor.transport === "direct" && descriptor.revision === 1 && descriptor.sizeBytes === LARGE_BYTES, "Leitura grande não aponta para a revisão publicada.");
   ctx.record("DS-LARGE", "PASS", { sizeBytes: LARGE_BYTES, revision: 1, readTransport: "direct-descriptor", payloadIntegrityEvidence: "server-verified receipt" });
   return { runId: ctx.runId, organizationId: QA.id, projects: resources.map(({ id: projectId, kind }) => ({ projectId, kind })), retention: manifest.cleanup.retention };
+}
+
+// Shared reviewed reservation/cleanup boundary for the registered PNG suite.
+// A caller cannot select an existing project, organization, name or cleanup ID.
+export async function createSyntheticProjectForPreview(ctx, body, { beforeCleanup } = {}) {
+  assertContext(ctx);
+  const parsed = JSON.parse(body);
+  check(Array.isArray(parsed.datasets) && parsed.datasets.length === 1 && Buffer.byteLength(body) < 64 * 1024,
+    "A fixture PNG deve ser pequena e ter exatamente um dataset sintético.", "QA_PREVIEW_FIXTURE_INVALID");
+  const resources = [{ kind: "small", name: `QA Durable ${ctx.runId.toLowerCase()} small` }];
+  assertNoPriorSyntheticResources(await inventory(ctx));
+  registerCleanup(ctx, resources, beforeCleanup);
+  return reserve(ctx, resources[0], body, 1);
 }

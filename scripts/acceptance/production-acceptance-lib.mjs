@@ -12,6 +12,7 @@ export const PRODUCTION_D1_ID = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db";
 const SHA40 = /^[0-9a-f]{40}$/i;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
 const DURABLE_SAVE_FLAGS = new Set(["PROJECT_DURABLE_SAVE_V1", "PROJECT_DURABLE_SAVE_INLINE_ENABLED"]);
+const PREVIEW_FLAGS = new Set(["PROJECT_PREVIEW_OPERATIONS_V1", "PROJECT_PREVIEW_PROCESSOR_ENABLED", "VITE_PROJECT_PREVIEW_OPERATIONS_V1"]);
 const TERMINAL = new Set(["success", "failure", "canceled"]);
 
 export class AcceptanceError extends Error {
@@ -88,7 +89,7 @@ export function validateManifest(manifest) {
   if (!manifest.managedFlags || typeof manifest.managedFlags !== "object" || Array.isArray(manifest.managedFlags)) fail("MANIFEST_INVALID", "managedFlags inválido.");
   if (manifest.mutationMode === "read_only" && Object.keys(manifest.managedFlags).length) fail("MANIFEST_INVALID", "Suite read_only não pode alterar flags.");
   for (const [name, cfg] of Object.entries(manifest.managedFlags)) {
-    if (!/^MAONO_[A-Z0-9_]+$/.test(name) && !DURABLE_SAVE_FLAGS.has(name)) fail("MANIFEST_INVALID", `Flag inválida: ${name}.`);
+    if (!/^MAONO_[A-Z0-9_]+$/.test(name) && !DURABLE_SAVE_FLAGS.has(name) && !(manifest.id === "durable-project-preview" && PREVIEW_FLAGS.has(name))) fail("MANIFEST_INVALID", `Flag inválida: ${name}.`);
     for (const key of ["requiredBefore", "activeValue", "safeValue"]) {
       if (typeof cfg?.[key] !== "boolean") fail("MANIFEST_INVALID", `${name}.${key} deve ser boolean.`);
     }
@@ -480,6 +481,9 @@ export function suiteContext({
   return {
     runId, baseUrl, organizationId, projectSlug, profiles, cases, record,
     registerCleanup(fn) { cleanup.push(fn); },
+    // Browser suites must share the same phase admission/deadline as HTTP calls.
+    assertAdmission() { deps.budget?.assertAdmission(); },
+    requestTimeoutMs(ms = 30_000) { return deps.budget ? deps.budget.requestTimeoutMs(ms) : ms; },
     async pause(ms) {
       if (deps.budget) await deps.budget.pause(ms, deps.sleep);
       else await (deps.sleep || ((duration) => new Promise((resolve) => setTimeout(resolve, duration))))(ms);

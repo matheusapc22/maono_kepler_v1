@@ -1,3 +1,4 @@
+import * as durablePreview from "./suites/durable-project-preview.mjs";
 import * as durableSave from "./suites/durable-project-save.mjs";
 import * as cc04 from "./suites/cc04-selective-access.mjs";
 import { fail, validateManifest } from "./production-acceptance-lib.mjs";
@@ -5,6 +6,7 @@ import { fail, validateManifest } from "./production-acceptance-lib.mjs";
 const suites = new Map([
   [cc04.manifest.id, cc04],
   [durableSave.manifest.id, durableSave],
+  [durablePreview.manifest.id, durablePreview],
 ]);
 
 export function listSuites() {

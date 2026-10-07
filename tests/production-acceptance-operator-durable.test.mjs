@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { manifest, prepare, run, verifyPreflight, makeManifest } from "../scripts/acceptance/suites/durable-project-save.mjs";
+import { manifest, prepare, run, verifyPreflight, makeManifest, createSyntheticProjectForPreview } from "../scripts/acceptance/suites/durable-project-save.mjs";
 import { buildProfiles, validateManifest, activeFlags, safeFlags, transitionFlags, PRODUCTION_D1_ID } from "../scripts/acceptance/production-acceptance-lib.mjs";
 import { publicManifest } from "../scripts/acceptance/registry.mjs";
 
@@ -317,4 +317,26 @@ test("prior synthetic resources block a new window while inactive file tombstone
   await prepare(h.ctx);
   h.files.get(78).isProject = true;
   await assert.rejects(() => prepare(h.ctx), { code: "QA_PRIOR_CLEANUP_UNVERIFIED" });
+});
+
+
+test("PNG suite reuses the exact one-project reservation and cleanup scope with accurate dataset count", async () => {
+  const { ctx, events, projects, files } = harness();
+  const body = JSON.stringify({ version: "v1", config: {}, datasets: [{ data: { id: "synthetic" } }] });
+  const saved = await createSyntheticProjectForPreview(ctx, body);
+  assert.equal(saved.input.datasetCount, 1);
+  assert.equal(saved.request.configMetadata.datasetCount, 1);
+  assert.equal(projects.size, 1);
+  await ctx.cleanup();
+  assert.equal(projects.size, 0);
+  assert.ok([...files.values()].every(file => file.active === false && file.isProject === false));
+  assert.ok(events.find(e => e.cleanupRegistered));
+});
+
+test("unknown browser closure blocks PNG fixture deletion and leaves cleanup unverified", async () => {
+  const { ctx, projects, events } = harness();
+  await createSyntheticProjectForPreview(ctx, JSON.stringify({ version: "v1", config: {}, datasets: [{}] }), { beforeCleanup: async () => { throw new Error("browser closure unknown"); } });
+  await assert.rejects(() => ctx.cleanup(), /browser closure unknown/);
+  assert.equal(projects.size, 1);
+  assert.equal(events.some(event => event.method === "DELETE"), false);
 });
