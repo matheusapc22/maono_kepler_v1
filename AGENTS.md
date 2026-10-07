@@ -140,6 +140,8 @@ The protected environment may expose only the secrets required by the registered
 
 Never request these secret values in chat.
 
+For the durable JSON/PNG suites, the QA bundle contains only the dedicated editor profile and the fresh, sanitized `manualInventory` export. Never add a personal or Super Admin credential to CI. Administrative inventory and cleanup use the human’s existing session, fixed same-origin read-only evidence helpers, and separately approved exact synthetic IDs. CI retains an incomplete result until the immutable run report and observed after-cleanup artifact pass the offline verifier; a human checkbox cannot substitute for that evidence. Flag restoration remains mandatory even while manual cleanup is pending.
+
 ## Registered-suite rule
 
 Only acceptance suites versioned under `scripts/acceptance/suites/` and registered in `scripts/acceptance/registry.mjs` may execute in Production.

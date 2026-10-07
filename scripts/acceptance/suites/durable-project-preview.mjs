@@ -3,12 +3,13 @@ import { manifest as durable, prepare as prepareDurable, verifyPreflight as veri
 import { check, installBrowserWriteGuard, saveAndCapture, readPngEvidence, verifyNegativePreviewCases, revocableBrowserScope } from '../preview-browser.mjs';
 
 export const manifest = Object.freeze({
-  id: 'durable-project-preview', version: 1,
+  id: 'durable-project-preview', version: 2,
+  manualAdministration: true,
   description: 'Actual editor capture and authenticated private PNG publication bound to durable JSON receipts',
   mutationMode: 'controlled_mutation', mutationBudgetMs: 45 * 60_000, requiresBrowser: true,
   requiredProfiles: [...durable.requiredProfiles], requiredRoles: durable.requiredRoles,
   requiredOrganization: durable.requiredOrganization,
-  requiredPermissions: { creator: ['project.create', 'project.view', 'project.save', 'project.map.edit'], administrator: ['admin.panel.access'] },
+  requiredPermissions: { creator: ['project.create'] },
   managedFlags: {
     ...durable.managedFlags,
     PROJECT_PREVIEW_OPERATIONS_V1: { requiredBefore: false, activeValue: true, safeValue: false },
@@ -38,6 +39,14 @@ export function verifyPreflight(project, options) {
   }
 }
 export const prepare = prepareDurable;
+
+export function verifyOwnedProjectEditorAccess(value, project, organizationId = 9) {
+  const context = value?.context;
+  check(context?.allowed === true && context.mode === 'editor' && Number(context.project?.id) === Number(project.id) &&
+    context.project?.slug === project.slug && Number(context.organization?.id) === organizationId &&
+    context.capabilities?.viewMap === true && context.capabilities?.saveMap === true,
+    'O contexto do projeto criado não confirmou acesso real de editor.', 'QA_PROJECT_CAPABILITY_MISMATCH');
+}
 
 export function boundedBrowserOwner(browser, closeTimeoutMs = 10_000) {
   let closing = null, closed = false;
@@ -81,6 +90,9 @@ export async function run(ctx) {
     if (owner) await owner.close();
     check(!owner || owner.closed, 'Cleanup bloqueado: navegador ainda pode escrever.', 'PNG_BROWSER_CLOSURE_UNVERIFIED');
   } });
+  const navigation = await ctx.api('creator', `/api/projects/${encodeURIComponent(seeded.project.slug)}/map-navigation`);
+  check(navigation.status === 200, 'Contexto do projeto criado não disponível.', 'QA_PROJECT_CAPABILITY_MISMATCH');
+  verifyOwnedProjectEditorAccess(navigation.body, seeded.project, ctx.organizationId);
   const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch({ headless: true, timeout: ctx.requestTimeoutMs(30_000), args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const scoped = revocableBrowserScope(ctx);

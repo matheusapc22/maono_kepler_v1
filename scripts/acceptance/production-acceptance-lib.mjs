@@ -467,6 +467,9 @@ export function suiteContext({
   profiles,
   mutationMode = "controlled_mutation",
   runId = randomUUID(),
+  expectedCommit = null,
+  manualInventory = null,
+  manualAdministration = null,
   deps = {},
 }) {
   const cases = [];
@@ -479,7 +482,13 @@ export function suiteContext({
     return row;
   };
   return {
-    runId, baseUrl, organizationId, projectSlug, profiles, cases, record,
+    runId, baseUrl, organizationId, projectSlug, profiles, cases, record, expectedCommit, manualInventory, manualAdministration,
+    async publishManualJournal(resources) {
+      if (!manualAdministration || !Array.isArray(resources) || resources.length > 2) fail("MANUAL_CONTEXT_REQUIRED", "Contexto administrativo manual não confirmado.");
+      manualAdministration.resources = resources.map(row => ({ kind: row.kind, name: row.name, projectId: row.id ?? null, slug: row.slug ?? null,
+        organizationFileId: row.organizationFileId ?? null, reservationStarted: row.reservationStarted === true, reservationUncertain: row.reservationUncertain === true }));
+      await deps.onManualJournal?.(structuredClone(manualAdministration));
+    },
     registerCleanup(fn) { cleanup.push(fn); },
     // Browser suites must share the same phase admission/deadline as HTTP calls.
     assertAdmission() { deps.budget?.assertAdmission(); },
@@ -492,6 +501,9 @@ export function suiteContext({
       const profile = profiles[profileName];
       if (!profile) fail("QA_PROFILE_UNKNOWN", `Perfil QA desconhecido: ${profileName}.`);
       const method = String(options.method || "GET").toUpperCase();
+      if (manualAdministration && (profileName !== "creator" || method === "DELETE" || new URL(path, baseUrl).pathname.startsWith("/api/admin/"))) {
+        fail("MANUAL_ADMIN_AUTOMATION_FORBIDDEN", "O runner só pode usar o editor; operações administrativas ficam com o usuário.");
+      }
       if (mutationMode === "read_only" && !["GET", "HEAD", "OPTIONS"].includes(method)) {
         fail("READ_ONLY_SUITE_MUTATION_BLOCKED", `Suite read_only não pode executar ${method}.`);
       }
@@ -522,6 +534,8 @@ export function initialReport(options) {
     acceptanceExecuted: false,
     configurationRestored: null,
     cleanupComplete: null,
+    operationalTestsPassed: null,
+    acceptanceIncomplete: true,
     cases: [],
     ok: false,
     complete: false,

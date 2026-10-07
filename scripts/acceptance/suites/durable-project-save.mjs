@@ -1,3 +1,4 @@
+import { validateBeforeEvidence, RUN_MAX_AGE_MS } from "../manual-evidence.mjs";
 import { createHash } from "node:crypto";
 import { fail } from "../production-acceptance-lib.mjs";
 import { buildLargeCreateFixture } from "../../large-create/build-large-create-fixture.mjs";
@@ -9,15 +10,16 @@ const POLL_TIMEOUT_MS = 8 * 60_000;
 
 export const manifest = Object.freeze({
   id: "durable-project-save",
-  version: 1,
+  version: 2,
   description: "Synthetic durable creation, historical receipts and independent outbox recovery",
   mutationMode: "controlled_mutation",
   mutationBudgetMs: 45 * 60_000,
   requiresBrowser: false,
-  requiredProfiles: ["creator", "administrator"],
-  requiredRoles: { creator: "editor", administrator: "super_admin" },
+  manualAdministration: true,
+  requiredProfiles: ["creator"],
+  requiredRoles: { creator: "editor" },
   requiredOrganization: QA,
-  requiredPermissions: { creator: ["project.create"], administrator: ["admin.panel.access"] },
+  requiredPermissions: { creator: ["project.create"] },
   managedFlags: {
     PROJECT_DURABLE_SAVE_V1: { requiredBefore: false, activeValue: true, safeValue: false },
     PROJECT_DURABLE_SAVE_INLINE_ENABLED: { requiredBefore: true, activeValue: false, safeValue: true },
@@ -25,14 +27,15 @@ export const manifest = Object.freeze({
   prerequisites: [
     "Migration 0039 separately audited, authorized, applied and post-validated",
     "Pages and independent scheduled Worker bindings audited; Worker provisioning/deployment separately approved",
-    "Dedicated QA organization 9 / maono-preview-qa and distinct dedicated QA credentials only",
+    "Dedicated QA9 editor credential only; human Super Admin supplies checked inventory/cleanup exports without credentials in CI",
+    "Fresh before-inventory export bound to suite, production SHA and run UUID in the QA bundle; no concurrent human QA changes during the bounded window",
     "PROJECT_QUOTA_RESERVATION_V1 absent or false in configured and canonical Pages environment; active quota cleanup has no public API",
   ],
   cleanup: {
     resources: "At most two new run-ID-scoped projects and their generated organization-file records",
-    method: "Verify identity, DELETE synthetic project records, PATCH generated files active:false/isProject:false, then read back",
+    method: "CI never deletes. Human separately approves exact synthetic IDs, uses existing admin APIs and exports observed cleanup for offline verification",
     retention: "Immutable operation-owned storage objects, historical receipts and operation tombstones retained; no storage deletion or garbage collection",
-    interruption: "Unknown/failed cleanup blocks closure and another window; separate closure restores flags only",
+    interruption: "Manual cleanup remains incomplete; uncertain reservation/closure blocks certification. Separate closure restores flags only",
   },
   cases: ["DS-SMALL", "DS-LARGE", "DS-IDEMPOTENT", "DS-LOST-ACK", "DS-HISTORICAL", "DS-STALE-CAS", "DS-OLD-CLIENT", "DS-CLEANUP"],
 });
@@ -62,7 +65,7 @@ function assertContext(ctx) {
     check(Number(profile.organization?.id) === QA.id && profile.organization?.slug === QA.slug, "Organização autenticada divergente.", "QA_ORGANIZATION_MISMATCH");
     id(profile.user.id);
   }
-  check(ctx.profiles.creator.user.id !== ctx.profiles.administrator.user.id, "Perfis QA devem ser distintos.", "QA_IDENTITIES_NOT_DISTINCT");
+  check(ctx.manualInventory && ctx.profiles.creator.user.id !== ctx.manualInventory.administratorUserId, "Editor e operador humano devem ser distintos.", "QA_IDENTITIES_NOT_DISTINCT");
 }
 
 // No new input or secret: inspect only known, read-only configuration from the
@@ -78,24 +81,24 @@ export function verifyPreflight(project, options) {
 }
 
 async function inventory(ctx) {
-  const projects = status(await ctx.api("administrator", `/api/admin/projects?organizationId=${QA.id}`), 200, "inventário de projetos QA");
-  const files = status(await ctx.api("administrator", `/api/admin/organizations/${QA.id}/files`), 200, "inventário de arquivos QA");
-  check(Array.isArray(projects.projects) && Array.isArray(files.files), "Inventário QA incompleto.", "QA_INVENTORY_INVALID");
-  return { projects: projects.projects, files: files.files };
+  const before = validateBeforeEvidence(ctx.manualInventory, { suite: ctx.manualInventory?.suite, expectedCommit: ctx.expectedCommit,
+    organizationId: ctx.organizationId, baseUrl: ctx.baseUrl, runId: ctx.runId, maxAgeMs: RUN_MAX_AGE_MS });
+  const current = status(await ctx.api("creator", "/api/projects"), 200, "inventário visível do editor QA");
+  check(Array.isArray(current.projects) && current.projects.every(project => Number(project.organizationId) === QA.id), "Inventário visível diverge do QA.", "QA_INVENTORY_INVALID");
+  return { projects: current.projects, files: before.inventory.files };
 }
 
 function assertNoPriorSyntheticResources(values) {
   const projectPattern = /^qa-durable-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(small|large)(?:-[0-9]+)?$/i;
   const filePattern = /^QA Durable [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (small|large)$/i;
-  check(!values.projects.some((project) => projectPattern.test(project.slug || "")) &&
+  check(!values.projects.some((project) => projectPattern.test(project.slug || "") || String(project.name || "").startsWith("QA Durable") || String(project.slug || "").startsWith("qa-durable-")) &&
     !values.files.some((file) => filePattern.test(file.name || "") && (file.active !== false || file.isProject !== false || file.linkedProject)),
     "Recursos de acceptance anterior ainda existem; reconciliar o run antes de abrir outra janela.", "QA_PRIOR_CLEANUP_UNVERIFIED");
 }
 export async function prepare(ctx) {
   assertContext(ctx);
-  const organization = status(await ctx.api("administrator", `/api/admin/organizations/${QA.id}`), 200, "organização QA").organization;
-  check(Number(organization?.id) === QA.id && organization?.slug === QA.slug && organization?.active === true,
-    "Identidade/estado da organização QA divergente.", "QA_ORGANIZATION_MISMATCH");
+  validateBeforeEvidence(ctx.manualInventory, { suite: ctx.manualInventory?.suite, expectedCommit: ctx.expectedCommit,
+    organizationId: ctx.organizationId, baseUrl: ctx.baseUrl, runId: ctx.runId });
   assertNoPriorSyntheticResources(await inventory(ctx));
 }
 
@@ -138,53 +141,15 @@ function identity(project, resource, ctx) {
 }
 
 function registerCleanup(ctx, resources, beforeCleanup = async () => {}) {
-  // Register before reservation POST: inventory also finds a reservation whose
-  // acknowledgement disappeared before project/file IDs reached this process.
+  // Record intentions before POST; even a lost acknowledgement has a scoped
+  // run/name journal. No administrative session or mutation exists in CI.
   ctx.registerCleanup(async () => {
     await beforeCleanup();
-    const before = await inventory(ctx);
-    const errors = [];
-    for (const resource of resources) {
-      try {
-        const projects = before.projects.filter((p) => matchesProject(p, resource, ctx));
-        const files = before.files.filter((f) => f.name === resource.name || projects.some((p) => Number(f.linkedProject?.id) === Number(p.id)));
-        check(projects.length <= 1 && files.length <= 1, "Cleanup ambíguo; preservar recursos para revisão.", "QA_CLEANUP_SCOPE_MISMATCH");
-        for (const project of projects) {
-          identity(project, resource, ctx);
-          const detail = status(await ctx.api("administrator", `/api/admin/projects/${id(project.id)}`), 200, "identidade para cleanup").project;
-          identity(detail, resource, ctx);
-          check(files.some((file) => Number(file.id) === Number(detail.organizationFileId)), "Arquivo da reserva ausente do inventário.", "QA_CLEANUP_SCOPE_MISMATCH");
-        }
-        for (const file of files) {
-          check(Number(file.organizationId) === QA.id && file.name === resource.name, "Arquivo fora do QA ou renomeado.", "QA_CLEANUP_SCOPE_MISMATCH");
-          check(!file.linkedProject || projects.some((p) => Number(p.id) === Number(file.linkedProject.id)), "Arquivo aponta para projeto não pertencente ao run.", "QA_CLEANUP_SCOPE_MISMATCH");
-          id(file.id);
-        }
-        for (const project of projects) {
-          await ctx.cleanupApi("administrator", `/api/admin/projects/${id(project.id)}`, { method: "DELETE" });
-          const gone = await ctx.api("administrator", `/api/admin/projects/${id(project.id)}`);
-          check(gone.status === 404, "Exclusão do projeto sintético não comprovada.", "QA_CLEANUP_UNVERIFIED");
-        }
-        for (const file of files) {
-          await ctx.cleanupApi("administrator", `/api/admin/organization-files/${id(file.id)}`, { method: "PATCH", json: { active: false, isProject: false } });
-          const observed = status(await ctx.api("administrator", `/api/admin/organization-files/${id(file.id)}`), 200, "verificar arquivo desativado").file;
-          check(Number(observed?.id) === Number(file.id) && Number(observed.organizationId) === QA.id && observed.name === resource.name && observed.active === false && observed.isProject === false,
-            "Arquivo sintético ainda ativo ou identidade divergente.", "QA_CLEANUP_UNVERIFIED");
-        }
-      } catch (error) {
-        // A failure for one synthetic resource must not skip the other.
-        errors.push(error);
-      }
-    }
-    if (errors.length) throw errors[0];
-    check(!resources.some((resource) => resource.reservationUncertain),
-      "Resposta da reserva não confirmada: a requisição original pode criar metadata depois do inventário. Cleanup observado não comprova fechamento; investigar o run antes de outra janela.",
-      "QA_RESERVATION_OUTCOME_UNCERTAIN");
-    const after = await inventory(ctx);
-    check(!after.projects.some((p) => resources.some((r) => matchesProject(p, r, ctx))) &&
-      !after.files.some((f) => resources.some((r) => r.name === f.name) && (f.active !== false || f.isProject !== false || f.linkedProject)),
-      "Ainda existem recursos sintéticos ativos.", "QA_CLEANUP_UNVERIFIED");
-    ctx.record("DS-CLEANUP", "PASS", { activeProjects: 0, activeFiles: 0, retained: "immutable objects, receipts and operation tombstones" });
+    await ctx.publishManualJournal(resources);
+    ctx.record("DS-CLEANUP", "PENDING_MANUAL", { knownProjects: resources.filter(row => row.id).length,
+      retention: "immutable objects, receipts and operation tombstones" });
+    check(!resources.some(row => row.reservationUncertain), "Reserva sem ACK exige investigação humana; inventário vazio não prova conclusão.", "QA_RESERVATION_OUTCOME_UNCERTAIN");
+    fail("MANUAL_CLEANUP_REQUIRED", "Limpeza administrativa permanece pendente de aprovação dos IDs exatos e exports verificados.");
   });
 }
 
@@ -230,18 +195,24 @@ function receipt(result, input, project, revision) {
     value.checksum === input.contentHash && value.sizeBytes === input.payloadBytes && typeof value.committedAt === "string", "Recibo não corresponde aos bytes/identidade registrados.");
   return value;
 }
-async function reserve(ctx, resource, body, datasetCount = 0) {
+async function reserve(ctx, resource, body, datasetCount = 0, resources = [resource]) {
   const input = makeManifest(body, `qa-durable:${ctx.runId}:${resource.kind}:create`, 0, "create");
   input.datasetCount = datasetCount;
   const creationKey = `qa-durable:${ctx.runId}:${resource.kind}`;
   const request = { durableSave: true, name: resource.name, description: "Synthetic durable acceptance; immutable objects and receipts retained by policy.", organizationId: QA.id, idempotencyKey: creationKey,
     configMetadata: { sizeBytes: input.payloadBytes, datasetCount, schemaName: "legacy-kepler", schemaVersion: 1, configVersion: "v1" } };
+  resource.reservationStarted = true;
   resource.reservationUncertain = true;
+  await ctx.publishManualJournal(resources);
   const created = status(await ctx.api("creator", "/api/projects", { method: "POST", headers: headers(), json: request }), 202, "reservar criação");
   const project = { ...created.project, id: id(created.project?.id) };
   resource.id = project.id;
+  resource.slug = project.slug;
+  resource.organizationFileId = project.organizationFileId ?? null;
+  await ctx.publishManualJournal(resources);
   identity(project, resource, ctx);
   resource.reservationUncertain = false;
+  await ctx.publishManualJournal(resources);
   check(created.status === "pending" && created.creation?.transport === "durable-operation" && created.creation.expectedRevision === 0, "Reserva não segue protocolo durável.");
   await register(ctx, project, input, creationKey);
   const acceptance = await upload(ctx, project, input, body, creationKey);
@@ -258,8 +229,9 @@ export async function run(ctx) {
   check(!before.projects.some((p) => resources.some((r) => matchesProject(p, r, ctx))) && !before.files.some((f) => resources.some((r) => r.name === f.name)), "runId já possui recursos; não reutilizar janela.", "QA_RUN_ID_COLLISION");
   assertNoPriorSyntheticResources(before);
   registerCleanup(ctx, resources);
+  await ctx.publishManualJournal(resources);
   const smallBody = smallFixture(ctx.runId, "initial");
-  const small = await reserve(ctx, resources[0], smallBody);
+  const small = await reserve(ctx, resources[0], smallBody, 0, resources);
   ctx.record("DS-SMALL", "PASS", { sizeBytes: small.input.payloadBytes, revision: 1 });
   ctx.record("DS-LOST-ACK", "PASS", { modeled: true, ...small.acceptance, evidence: "Durable acknowledgement ignored; GET-only recovery returned receipt with inline disabled" });
 
@@ -270,9 +242,11 @@ export async function run(ctx) {
   }), 200, "replay do payload publicado");
   same(payloadReplay.operation?.receipt, small.saved, "Replay publicou outra revisão.");
   resources[0].reservationUncertain = true;
+  await ctx.publishManualJournal(resources);
   const creationReplay = status(await ctx.api("creator", "/api/projects", { method: "POST", headers: headers(), json: small.request }), 200, "replay da reserva");
   check(creationReplay.idempotent === true && Number(creationReplay.project?.id) === small.project.id && creationReplay.configRevision === 1, "Replay da reserva duplicou projeto.");
   resources[0].reservationUncertain = false;
+  await ctx.publishManualJournal(resources);
   const changed = await ctx.api("creator", `${root(small.project)}/save-operations`, { method: "POST", headers: headers(small.project, small.creationKey), json: { ...small.input, contentHash: "f".repeat(64) } });
   check(changed.status === 409 && changed.body?.error?.code === "OPERATION_PAYLOAD_MISMATCH", "ID reutilizado com outros bytes não foi recusado.");
   ctx.record("DS-IDEMPOTENT", "PASS", { registration: true, payload: true, reservation: true, mismatchedManifestRejected: true });
@@ -309,7 +283,7 @@ export async function run(ctx) {
 
   const largeBody = buildLargeCreateFixture({ targetMiB: 94 }).body;
   check(Buffer.byteLength(largeBody) === LARGE_BYTES, "Fixture grande fora do limite registrado.");
-  const large = await reserve(ctx, resources[1], largeBody);
+  const large = await reserve(ctx, resources[1], largeBody, 0, resources);
   // Versioned read descriptor is read-only and same-origin. Never send cookies
   // to its external signed URL or expose that URL in the acceptance report.
   const descriptor = status(await ctx.api("creator", `${root(large.project)}/config-stream?delivery=direct`, { headers: { ...headers(large.project), "X-Maono-Expected-Config-Revision": "1" } }), 200, "descriptor da revisão grande");
@@ -328,5 +302,6 @@ export async function createSyntheticProjectForPreview(ctx, body, { beforeCleanu
   const resources = [{ kind: "small", name: `QA Durable ${ctx.runId.toLowerCase()} small` }];
   assertNoPriorSyntheticResources(await inventory(ctx));
   registerCleanup(ctx, resources, beforeCleanup);
-  return reserve(ctx, resources[0], body, 1);
+  await ctx.publishManualJournal(resources);
+  return reserve(ctx, resources[0], body, 1, resources);
 }

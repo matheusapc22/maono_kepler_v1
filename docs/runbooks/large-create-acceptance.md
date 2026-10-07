@@ -32,19 +32,47 @@ O contrato completo, a cobertura e o cleanup estão em
 [Durable project saving](../ops/durable-project-saving.md#registered-synthetic-acceptance-code-prepared-execution-separately-gated).
 Em resumo:
 
-- organização fixa 9 / `maono-preview-qa`, contas QA distintas editor/super_admin;
+- organização fixa 9 / `maono-preview-qa`; somente editor QA com `project.create`
+  no runner, inventário administrativo por humano distinto em sessão existente;
 - até dois projetos sintéticos por UUID, incluindo fixture exata de 94 MiB;
 - admission temporariamente true; inline temporariamente false para observar o
   Worker independente publicar após `202 / PAYLOAD_STORED`;
 - duplicação, resposta perdida modelada, recibo histórico, CAS obsoleto e cliente
   antigo cobertos sem dados reais;
-- cleanup registrado antes da reserva, remoção dos projetos sintéticos e
-  desativação dos arquivos gerados, com verificação por leitura;
+- journal de run UUID/IDs e barreira de fechamento registrados antes da reserva;
+  remoção manual dos projetos e desativação dos arquivos apenas após aprovação
+  dos IDs exatos, seguidas de exports administrativos read-only e validação offline;
 - objetos imutáveis, recibos e tombstones retidos; nenhum delete no Dropbox;
 - restauração das flags para admission false / inline true;
 - quota reservation habilitada ou não verificável bloqueia a janela, pois a API
   atual não comprova cleanup de reservas de quota incompletas. A suite não muda
   essa flag.
+
+O secret QA existente recebe exatamente `creator` e `manualInventory` (export
+`before` recente, vinculado ao SHA/suite/run/org9 e ao `workflowRunId` string com
+`workflowRunAttempt:1`), nunca credenciais de
+`administrator`. Mesmo com testes funcionais PASS e flags restauradas, o run
+termina `MANUAL_CLEANUP_REQUIRED`, incompleto/exit 1. Não repetir a janela para
+ficar verde; preservar relatório e gerar o certificado separado após a limpeza
+humana comprovada. O helper só admite todos os casos funcionais PASS,
+`operationalTestsPassed=true`, `PENDING_MANUAL_CLEANUP` e nenhuma falha de
+budget/restauração. Run falho, cancelado ou interrompido preserva IDs/journals para
+reconciliação humana read-only e não recebe certificado de cleanup deste helper.
+ACK recebido, flags restauradas ou inventário vazio não comprovam término do
+Worker. Não excluir recursos antes da prova de terminalidade remota e aprovação
+separada dos IDs exatos. Ver [o procedimento de inventário e limpeza](production-acceptance-operator.md#inventário-e-cleanup-humanos-para-jsonpng).
+
+Sequência: autorizar a janela, fazer dispatch, aguardar validação concluída e
+aprovação do Environment pendente; só então capturar `before` com o ID da URL do
+run e salvar o bundle no secret do Environment `production-acceptance` antes de
+aprovar. Não usar fallback de secret do repositório. O job protegido não compila o
+app e tem setup limitado a 11 minutos; a validade de 15 minutos é conferida
+novamente imediatamente antes da primeira flag, após aguardar fila quiescente.
+Vínculo ausente/expirado ou tentativa falha requer novo dispatch/export/UUID após
+verificar o estado e ausência de mutações/recursos pendentes ou concluir a
+reconciliação separada, mesmo se o preflight interno falhou. Não rerodar nem reutilizar
+bundle/UUID ou alterar o secret de job já aprovado/em execução. A vinculação à
+primeira tentativa mais a regra humana não são um registro server-side de uso único.
 
 A fixture é gerada em runtime e nunca é commitada no Git. Os testes locais de
 SQLite/HTTP/browser são evidência separada da execução real protegida.

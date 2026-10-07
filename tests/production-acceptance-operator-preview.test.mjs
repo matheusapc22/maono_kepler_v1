@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { manifest, verifyPreflight, boundedBrowserOwner, withBrowserDeadline } from '../scripts/acceptance/suites/durable-project-preview.mjs';
+import { manifest, verifyPreflight, boundedBrowserOwner, withBrowserDeadline, verifyOwnedProjectEditorAccess } from '../scripts/acceptance/suites/durable-project-preview.mjs';
 import { allowedBrowserMutation, verifySaveReceipt, verifyPreviewReceipt, revocableBrowserScope } from '../scripts/acceptance/preview-browser.mjs';
 import { makeManifest } from '../scripts/acceptance/suites/durable-project-save.mjs';
 import { validateManifest, safeFlags, activeFlags, suiteContext } from '../scripts/acceptance/production-acceptance-lib.mjs';
@@ -17,6 +17,9 @@ const projectConfig = (configured = prerequisites(), canonical = prerequisites()
 test('real PNG suite is browser-required, QA9-scoped and declares every temporary flag with safe OFF', () => {
   assert.doesNotThrow(() => validateManifest(manifest));
   assert.equal(publicManifest('durable-project-preview').requiresBrowser, true);
+  assert.deepEqual(manifest.requiredProfiles, ['creator']);
+  assert.deepEqual(manifest.requiredRoles, { creator: 'editor' });
+  assert.deepEqual(manifest.requiredPermissions, { creator: ['project.create'] });
   assert.deepEqual(manifest.requiredOrganization, { id: 9, slug: 'maono-preview-qa' });
   assert.deepEqual(activeFlags(manifest), { PROJECT_DURABLE_SAVE_V1: true, PROJECT_DURABLE_SAVE_INLINE_ENABLED: false,
     PROJECT_PREVIEW_OPERATIONS_V1: true, PROJECT_PREVIEW_PROCESSOR_ENABLED: true, VITE_PROJECT_PREVIEW_OPERATIONS_V1: true });
@@ -42,6 +45,25 @@ test('preflight refuses missing frontend prerequisites, quota uncertainty and ex
   assert.throws(() => verifyPreflight(projectConfig(), { ...options, projectSlug: 'real-project' }), { code: 'QA_ORGANIZATION_MISMATCH' });
   assert.throws(() => verifyPreflight(projectConfig(), { organizationId: 8 }), { code: 'QA_ORGANIZATION_MISMATCH' });
   assert.throws(() => verifyPreflight(projectConfig({ ...prerequisites(), PROJECT_QUOTA_RESERVATION_V1: { type: 'plain_text', value: 'true' } }), options), { code: 'QUOTA_CLEANUP_UNSUPPORTED' });
+});
+
+test('PNG capability check uses the owned project editor context rather than global map permissions', () => {
+  const project = { id: 101, slug: 'qa-durable-12345678-1234-4234-8234-123456789abc-small' };
+  const context = { allowed: true, mode: 'editor', project, organization: { id: 9 }, capabilities: { viewMap: true, saveMap: true } };
+  assert.doesNotThrow(() => verifyOwnedProjectEditorAccess({ context }, project, 9));
+  for (const wrong of [
+    null,
+    { ...context, allowed: false },
+    { ...context, mode: 'viewer' },
+    { ...context, mode: 'admin' },
+    { ...context, project: { ...project, id: 102 } },
+    { ...context, project: { ...project, slug: 'other-project' } },
+    { ...context, organization: { id: 10 } },
+    { ...context, capabilities: { viewMap: false, saveMap: true } },
+    { ...context, capabilities: { viewMap: true, saveMap: false } },
+    { ...context, capabilities: { viewMap: true } },
+    { ...context, capabilities: null },
+  ]) assert.throws(() => verifyOwnedProjectEditorAccess({ context: wrong }, project, 9), { code: 'QA_PROJECT_CAPABILITY_MISMATCH' });
 });
 
 test('browser mutation admission is restricted to its synthetic project and known numerical telemetry', () => {

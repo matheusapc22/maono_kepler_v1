@@ -172,13 +172,44 @@ are retired: a Preview hostname cannot establish isolated database/storage
 bindings. Neither entrypoint performs remote requests now. Do not dispatch the
 protected suite as part of preparing, reviewing or publishing this code.
 
-The suite is fixed to organization **9 / maono-preview-qa**, two distinct dedicated
-QA identities (`creator`: editor with `project.create`; `administrator`:
-super_admin with `admin.panel.access`), and at most two new run-UUID-scoped
-projects. It verifies the authenticated organization and administrator's read-only
-organization/inventory access before changing flags. No existing project slug is
-accepted. Credentials remain solely in the protected environment's existing QA
-credential bundle; no new secret values are introduced.
+The suite is fixed to organization **9 / maono-preview-qa** and at most two
+new run-UUID-scoped projects. The runner authenticates only `creator`, a dedicated
+QA editor with global `project.create`. Real owned-project API responses establish
+its project rights; no artificial global view/save/map-edit permissions are added.
+A different human `super_admin` captures the read-only administrative inventory
+in their existing canonical-origin browser session. Their credentials never enter
+CI. No existing project slug is accepted.
+
+The existing protected QA secret has exactly
+`{creator:{email,password},manualInventory:<before export>}`; additional credential
+profiles, including `administrator`, are rejected. No new workflow, input or
+secret is needed. `manualInventory` binds the registered suite, exact release SHA,
+new UUID, active organization 9, canonical origin, human administrator and complete
+sanitized synthetic inventory, plus `workflowRunId` (decimal string) and
+`workflowRunAttempt:1`. The operator requires matching `GITHUB_RUN_ID` and
+`GITHUB_RUN_ATTEMPT` exactly `1`; the final report carries both. The export must
+be no older than 15 minutes before activation and is rechecked immediately before
+the first flag write, after queue quiescence. A post-deployment recheck permits
+up to 75 minutes from capture, allowing the separately bounded 60-minute activation. Existing
+synthetic projects or active/linked files block a new run. Historical inactive,
+unlinked tombstones are retained.
+
+After window authorization, dispatch the registered `run` and wait for validation
+to finish and the protected Environment approval to become pending. Only then
+capture `before({suite,expectedCommit,workflowRunId})`, using the actual ID from
+that Actions run URL, and save the fresh bundle in the existing
+`production-acceptance` **Environment-level** QA secret. Do not approve until it
+is saved; repository/organization secret fallback does not support this timing.
+GitHub reads Environment secrets at job start and gates access on approval; see
+[GitHub's reference](https://docs.github.com/en/actions/reference/security/secrets#when-github-actions-reads-secrets).
+The protected job has no application build; setup step caps total 11 minutes.
+
+Missing/expired binding or any failed attempt requires a new dispatch, new export
+and new UUID after preserving/checking prior state and proving no mutations or
+pending resources remain (or completing separate reconciliation), even if the internal preflight
+failed before mutations. Never rerun the job, reuse the bundle/UUID, or try to
+change a running/approved job's secret. First-attempt/run binding and the human
+rule prevent ordinary replay; this is not a server-side single-use ledger.
 
 Its managed flag window is explicit:
 
@@ -196,7 +227,8 @@ response arrives. This race is valid with inline processing disabled. Subsequent
 GET-only polling observes publication within an eight-minute observation window;
 this is evidence of asynchronous processing with the inline path disabled, not a
 promise that cron will finish within one minute. Failure to observe a terminal
-state fails acceptance and still runs cleanup/restoration.
+state fails acceptance and still runs the closure barrier, preserves the resource
+journal and attempts flag restoration; it does not make resource deletion safe.
 
 Coverage uses the real reservation (`durableSave:true`), manifest registration,
 raw payload and status routes with stable `X-Maono-Project-Id`. It includes a small
@@ -209,18 +241,54 @@ injection. Large read coverage verifies the revisioned direct-download descripto
 byte integrity is evidenced by the server-verified receipt, not an independent
 client download. Local HTTP/SQLite and browser tests remain distinct evidence.
 
-Cleanup is registered before the first reservation, and discovers exact run-owned
-resources even when the reservation acknowledgement is lost. An unacknowledged
-reservation remains explicitly uncertain even if current inventories are empty
-or observed rows were cleaned: the original request might create metadata later.
-That run cannot pass cleanup or authorize another window without reconciliation. It verifies creator,
-organization, name, slug and linked file; deletes only synthetic project records;
-deactivates their generated organization-file records; and reads back to prove
-there are no active synthetic projects/files. Operation-owned immutable objects,
-historical receipts and operation tombstones are retained under the declared
-policy. No Dropbox delete or garbage collection is performed. Any ambiguity,
-failed deletion or unverifiable state fails closure; an interrupted process's
-standalone `closure` mode restores flags but cannot certify resource cleanup.
+A closure barrier and a sanitized resource journal are armed before the first
+reservation. The before-export UUID becomes the report/checkpoint run ID; journal
+artifacts record intended names and known project/file IDs at reservation
+boundaries. The runner never calls administrative APIs or DELETEs resources.
+A lost reservation ACK stays uncertain even if an immediate inventory is empty:
+the original request may still create metadata. Do not infer closure or broaden
+the cleanup scope from a prefix search.
+
+Even when all functional cases pass and flags are restored, the original run
+ends with `operationalTestsPassed:true`, `DS-CLEANUP=PENDING_MANUAL`,
+`cleanupComplete:false`, `MANUAL_CLEANUP_REQUIRED`, `complete:false` and exit 1.
+Do not rerun acceptance to turn this expected pending-manual result green.
+
+Only an otherwise successful functional run is eligible for the normal manual
+cleanup flow: all required cases PASS, `operationalTestsPassed:true`,
+`acceptanceStatus:PENDING_MANUAL_CLEANUP`, `MANUAL_CLEANUP_REQUIRED`, verified safe
+restoration and no budget/restore failure. Failed, cancelled or interrupted runs
+retain IDs/journals for separate human read-only reconciliation. An acknowledged
+reservation, closed browser, restored flags or empty inventory cannot prove that
+accepted remote Worker operations are terminal. Do not delete resources until
+terminality is established and the exact IDs receive separate approval. This
+procedure adds no D1 repair/write or new operator.
+
+The read-only browser helper `scripts/acceptance/manual-admin-evidence.js`
+provides `before`, `inspect` and `after` against fixed same-origin GET routes,
+using the human's existing session without reading cookies/storage. `inspect`
+binds exact creator, organization, name, slug, project and linked file to the
+unchanged report. The ordinary Admin UI has no matching cleanup controls;
+`/admin/files` redirects to the organization screen. After explicit approval of
+the exact IDs and effects, the human performs irreversible
+`DELETE /api/admin/projects/{projectId}` (HTTP 200, `deleted:true`; then GET 404)
+and reversible `PATCH /api/admin/organization-files/{organizationFileId}` with
+`{"active":false,"isProject":false}` (HTTP 200, matching file and flags false).
+The file PATCH cannot restore the deleted project. No bulk sweep, file DELETE,
+Dropbox deletion, ACL change or storage garbage collection is authorized.
+Immutable JSON/PNG objects, historical receipts and tombstones remain retained.
+
+`after` confirms project absence and exact inactive/unlinked files against a new
+inventory. The offline `scripts/acceptance/verify-manual-cleanup.mjs` validates
+that export with the immutable final report and writes a separate certificate.
+It does not rewrite the pending original run. `inspect` and certificate validation
+reject functional failures, cancellation, interruption or budget/restore errors;
+they cannot issue a cleanup certificate for those runs. Content hashes bind
+evidence but do not authenticate the human export,
+so artifact/session provenance must be reviewed. Follow the exact procedure in
+[the operator runbook](../runbooks/production-acceptance-operator.md#inventário-e-cleanup-humanos-para-jsonpng).
+An interrupted run's separate `closure` restores flags only; uncertain resource
+outcomes require investigation, not another acceptance window.
 
 A separate fail-closed prerequisite checks `PROJECT_QUOTA_RESERVATION_V1` in both
 configured and canonical Pages environments before opening the window, including

@@ -96,7 +96,7 @@ async function routingFailure() {
   return guard.run(() => new Promise(resolve => setTimeout(resolve, 30)));
 }
 
-for (const fault of ['observation', 'routing']) test(`registered PNG operator cleans its reservation and restores five flags after ${fault} callback failure`, async t => {
+for (const fault of ['observation', 'routing']) test(`registered PNG operator retains manual cleanup and restores five flags after ${fault} callback failure`, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'png-callback-cleanup-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const sha = 'a'.repeat(40), events = [], patches = [];
@@ -106,6 +106,7 @@ for (const fault of ['observation', 'routing']) test(`registered PNG operator cl
   const entries = values => Object.fromEntries(Object.entries(values).map(([name, value]) => [name, { type: 'plain_text', value: String(value) }]));
   let configured = { ...prerequisites, ...entries(safeFlags(manifest)) }, canonicalFlags = structuredClone(configured), canonicalId = 'original';
   let actor = null, project = null, file = null;
+  const appCalls = [];
   const deployment = () => ({ id: canonicalId, environment: 'production', url: 'https://maono-kepler-v1.pages.dev',
     deployment_trigger: { metadata: { commit_hash: sha, commit_dirty: false } }, latest_stage: { name: 'deploy', status: 'success' }, env_vars: canonicalFlags });
   const reply = (value, status = 200) => Response.json({ ok: true, ...value }, { status });
@@ -125,15 +126,17 @@ for (const fault of ['observation', 'routing']) test(`registered PNG operator cl
       return Response.json({ success: true, result: { name: 'maono-kepler-v1', production_branch: 'mano_kepler_v1', subdomain: 'maono-kepler-v1.pages.dev',
         canonical_deployment: deployment(), deployment_configs: { production: { d1_databases: { DB: { id: PRODUCTION_D1_ID } }, env_vars: configured } } } });
     }
+    appCalls.push({ path, method });
+    assert.ok(!path.startsWith('/api/admin/'), 'CI has no administrator API access');
+    assert.ok(!['DELETE', 'PATCH'].includes(method), 'CI cannot perform resource cleanup');
     if (path === '/api/auth/login') {
-      actor = JSON.parse(options.body).email.startsWith('creator') ? { id: 11, role: 'editor' } : { id: 12, role: 'super_admin' };
+      assert.equal(JSON.parse(options.body).email, 'creator@example.test');
+      actor = { id: 11, role: 'editor' };
       return Response.json({ ok: true }, { headers: { 'set-cookie': 'maono_session=synthetic; Secure; HttpOnly' } });
     }
     if (path === '/api/session') return reply({ authenticated: true, activeOrganization: organization, user: actor,
-      permissions: ['project.create', 'project.view', 'project.save', 'project.map.edit', 'admin.panel.access'] });
-    if (path === '/api/admin/organizations/9') return reply({ organization });
-    if (path === '/api/admin/projects') return reply({ projects: project ? [project] : [] });
-    if (path === '/api/admin/organizations/9/files') return reply({ files: file ? [{ ...file, linkedProject: project ? { id: project.id } : null }] : [] });
+      permissions: ['project.create'] });
+    if (path === '/api/projects' && method === 'GET') return reply({ projects: project ? [project] : [] });
     if (path === '/api/projects' && method === 'POST') {
       const body = JSON.parse(options.body);
       project = { id: 101, name: body.name, slug: body.name.toLowerCase().replaceAll(' ', '-'), organizationId: 9, createdBy: { id: 11 }, organizationFileId: 102 };
@@ -147,32 +150,34 @@ for (const fault of ['observation', 'routing']) test(`registered PNG operator cl
       events.push('callback-fault');
       return fault === 'observation' ? observedFailure() : routingFailure();
     }
-    if (path === '/api/admin/projects/101') {
-      if (!project) return reply({}, 404);
-      if (method === 'DELETE') { events.push('delete-fixture'); project = null; return reply({ deleted: true }); }
-      return reply({ project });
-    }
-    if (path === '/api/admin/organization-files/102') {
-      if (method === 'PATCH') { Object.assign(file, JSON.parse(options.body)); events.push('deactivate-file'); }
-      return reply({ file });
-    }
     throw new Error(`Unexpected synthetic route: ${method} ${path}`);
   };
   t.mock.method(process.stdout, 'write', () => true);
-  const credentials = Object.fromEntries(['creator', 'administrator'].map(name => [name, { email: `${name}@example.test`, password: 'synthetic' }]));
+  const runId = '12345678-1234-4234-8234-123456789abc';
+  const credentials = { creator: { email: 'creator@example.test', password: 'synthetic' },
+    manualInventory: { schemaVersion: 1, kind: 'qa-before-inventory', suite: manifest.id, expectedCommit: sha, runId, workflowRunId: '123456789', workflowRunAttempt: 1, administratorUserId: 12,
+      organization, capturedAt: new Date().toISOString(), origin: 'https://maono-kepler-v1.pages.dev', inventory: { projects: [], files: [] } } };
   const reportPath = join(directory, 'report.json');
   const code = await main(['--mode', 'run', '--suite', manifest.id, '--organization-id', '9', '--expected-commit', sha, '--report', reportPath],
-    { MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: 'synthetic', MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: JSON.stringify(credentials) }, { fetchImpl, sleep: async () => {} });
+    { GITHUB_RUN_ID: '123456789', GITHUB_RUN_ATTEMPT: '1', MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: 'synthetic', MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: JSON.stringify(credentials) }, { fetchImpl, sleep: async () => {} });
   const report = JSON.parse(await readFile(reportPath, 'utf8'));
   assert.equal(code, 1);
   assert.equal(report.error.code, fault === 'observation' ? 'PNG_BROWSER_REQUEST_UNVERIFIED' : 'PNG_BROWSER_ROUTE_FAILED');
-  assert.equal(report.cleanupComplete, true);
+  assert.equal(report.cleanupComplete, false);
+  assert.equal(report.operationalTestsPassed, false);
   assert.equal(report.configurationRestored, true);
   assert.equal(report.ok, false); assert.equal(report.complete, false);
   assert.deepEqual(patches, [activeFlags(manifest), safeFlags(manifest)]);
-  assert.deepEqual(events, ['activate', 'reserve', 'callback-fault', 'delete-fixture', 'deactivate-file', 'restore']);
-  assert.equal(project, null); assert.equal(file.active, false); assert.equal(file.isProject, false);
-  assert.ok(report.cases.some(value => value.id === 'DS-CLEANUP' && value.status === 'PASS'));
+  assert.deepEqual(events, ['activate', 'reserve', 'callback-fault', 'restore']);
+  assert.equal(project.id, 101); assert.equal(file.active, false); assert.equal(file.isProject, true);
+  assert.ok(report.cases.some(value => value.id === 'DS-CLEANUP' && value.status === 'PENDING_MANUAL'));
+  assert.ok(report.cleanupErrors.some(value => value.code === 'MANUAL_CLEANUP_REQUIRED'));
+  assert.equal(report.runId, runId);
+  assert.equal(report.workflowRunId, '123456789'); assert.equal(report.workflowRunAttempt, 1);
+  assert.equal(report.manualAdministration.resources[0].projectId, 101);
+  assert.equal(report.manualAdministration.resources[0].organizationFileId, 102);
+  assert.equal(appCalls.filter(call => call.path === '/api/auth/login').length, 1);
+  assert.ok(!appCalls.some(call => call.path.startsWith('/api/admin/') || ['DELETE', 'PATCH'].includes(call.method)));
   assert.doesNotMatch(JSON.stringify(report), /SYNTHETIC_PRIVATE|password|maono_session=synthetic/);
 });
 

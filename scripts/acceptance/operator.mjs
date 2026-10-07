@@ -1,3 +1,4 @@
+import { parseManualBundle, createManualAdministration, manualFunctionalCases, validateBeforeEvidence } from "./manual-evidence.mjs";
 import { createExecutionBudget } from "./execution-budget.mjs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -132,6 +133,12 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
 
     assertProduction(initialProject, options.expectedCommit, manifest, { requireBaseline: true });
     if (suite.verifyPreflight) suite.verifyPreflight(initialProject, options);
+    const manualInventory = manifest.manualAdministration === true ? parseManualBundle(env.MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON, {
+      suite: manifest.id, expectedCommit: options.expectedCommit, organizationId: options.organizationId, baseUrl: initialProject.baseUrl,
+      workflowRunId: env.GITHUB_RUN_ID, workflowRunAttempt: env.GITHUB_RUN_ATTEMPT === '1' ? 1 : null,
+      now: (runtime.now || Date.now)(),
+    }) : null;
+    if (manualInventory) { report.workflowRunId = manualInventory.workflowRunId; report.workflowRunAttempt = 1; }
     const credentialProfiles = parseCredentials(
       env.MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON,
       manifest.requiredProfiles,
@@ -152,17 +159,29 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       },
     ]));
 
+    const manualAdministration = manualInventory ? createManualAdministration(manualInventory, profiles.creator.user.id) : null;
+    let journalSequence = 0;
+    const contextDeps = manualAdministration ? { ...deps, onManualJournal: async value => {
+      report.manualAdministration = value;
+      await writeReport(`${options.reportPath}.journal-${String(++journalSequence).padStart(3, "0")}.json`, {
+        event: "ACCEPTANCE_MANUAL_RESOURCE_JOURNAL", expectedCommit: options.expectedCommit, suite: manifest.id,
+        runId: value.runId, organizationId: options.organizationId, manualAdministration: value, generatedAt: new Date().toISOString(),
+      }, deps);
+    } } : deps;
     context = suiteContext({
       baseUrl: initialProject.baseUrl,
       organizationId: options.organizationId,
       projectSlug: options.projectSlug,
       profiles,
       mutationMode: manifest.mutationMode,
-      deps,
+      expectedCommit: options.expectedCommit,
+      ...(manualInventory ? { runId: manualInventory.runId, manualInventory, manualAdministration } : {}),
+      deps: contextDeps,
     });
 
     // Keep the run identity in the terminal report and a pre-mutation checkpoint.
     report.runId = context.runId;
+    if (manualAdministration) report.manualAdministration = manualAdministration;
 
     // Registered read-only preparation must finish before a flag window opens.
     if (suite.prepare) await suite.prepare(context);
@@ -171,6 +190,7 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       suite: manifest.id, organizationId: options.organizationId,
       expectedCommit: options.expectedCommit, safeFlags: safeFlags(manifest),
       cleanupContract: manifest.cleanup || null,
+      ...(manualAdministration ? { manualAdministration } : {}),
       executionDeadline: new Date(budget.endAt).toISOString(),
       message: "Prepared only; interrupted runs require independent closure and resource verification.",
     };
@@ -189,7 +209,15 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
           manifest,
           deps,
           values: activeFlags(manifest),
-          validateCurrent: (current) => { if (suite.verifyPreflight) suite.verifyPreflight(current, options); },
+          validateCurrent: (current) => {
+            if (suite.verifyPreflight) suite.verifyPreflight(current, options);
+            // A queue wait must not turn a fresh preflight into stale admission.
+            if (manualInventory) validateBeforeEvidence(manualInventory, {
+              suite: manifest.id, expectedCommit: options.expectedCommit, organizationId: options.organizationId,
+              baseUrl: current.baseUrl, runId: context.runId, workflowRunId: env.GITHUB_RUN_ID,
+              now: (runtime.now || Date.now)(),
+            });
+          },
           onMutationStart: () => {
             budget.assertAdmission();
             restorationRequired = true;
@@ -210,8 +238,11 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       if (manifest.mutationMode === "controlled_mutation") report.writesPerformed = true;
       report.resources = await suite.run(context);
       report.cases = context.cases;
+      if (manifest.manualAdministration) report.operationalTestsPassed = manualFunctionalCases(manifest.id)
+        .every(id => context.cases.some(row => row.id === id && row.status === "PASS"));
     } catch (error) {
       operationError = error;
+      if (manifest.manualAdministration) report.operationalTestsPassed = false;
       report.cases = context.cases;
     } finally {
       try {
@@ -221,7 +252,8 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
         cleanupErrors = [safeError(cleanupError)];
       }
       report.cleanupErrors = cleanupErrors;
-      report.cleanupComplete = cleanupErrors.length === 0;
+      report.cleanupComplete = cleanupErrors.length === 0 && !manifest.manualAdministration;
+      if (manifest.manualAdministration) report.manualAdministration = context.manualAdministration;
 
       if (restorationRequired) {
         try {
@@ -251,12 +283,18 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
     const passed = new Set(report.cases.filter((item) => item.status === "PASS").map((item) => item.id));
     const allCasesPassed = [...requiredCases].every((id) => passed.has(id));
     if (operationError) throw operationError;
+    if (manifest.manualAdministration && cleanupErrors.every(error => error.code === "MANUAL_CLEANUP_REQUIRED")) {
+      report.acceptanceStatus = "PENDING_MANUAL_CLEANUP";
+      throw Object.assign(new Error("Testes concluídos; inventário e limpeza humanos ainda exigem artifacts verificados. Não repetir a janela para tentar torná-la verde."),
+        { name: "AcceptanceBudgetError", code: "MANUAL_CLEANUP_REQUIRED" });
+    }
     if (cleanupErrors.length) throw new Error("Cleanup da suite ficou incompleto.");
     if (!allCasesPassed) throw new Error("Nem todos os casos obrigatórios terminaram em PASS.");
     if (report.configurationRestored !== true) throw new Error("Configuração de Produção não foi restaurada.");
 
     report.ok = true;
     report.complete = true;
+    report.acceptanceIncomplete = false;
     return 0;
   } catch (error) {
     report.error = safeError(error);
@@ -272,6 +310,7 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       report.budgetError = safeError(error);
       report.ok = false; report.complete = false; reportFailed = true;
     }
+    report.acceptanceIncomplete = report.complete !== true;
     report.finishedAt = new Date().toISOString();
     try {
       await writeReport(options.reportPath, report, deps);
@@ -288,6 +327,9 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       acceptanceExecuted: report.acceptanceExecuted,
       configurationRestored: report.configurationRestored,
       cleanupComplete: report.cleanupComplete,
+      operationalTestsPassed: report.operationalTestsPassed,
+      acceptanceIncomplete: report.complete !== true,
+      acceptanceStatus: report.acceptanceStatus || null,
       cases: report.cases,
       error: report.error || null,
     };
