@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { assertHttpResponse } from '../production-acceptance-lib.mjs';
 import { manifest as durable, prepare as prepareDurable, verifyPreflight as verifyDurablePreflight, createSyntheticProjectForPreview } from './durable-project-save.mjs';
 import { check, installBrowserWriteGuard, saveAndCapture, readPngEvidence, verifyNegativePreviewCases, revocableBrowserScope } from '../preview-browser.mjs';
 
@@ -91,7 +92,7 @@ export async function run(ctx) {
     check(!owner || owner.closed, 'Cleanup bloqueado: navegador ainda pode escrever.', 'PNG_BROWSER_CLOSURE_UNVERIFIED');
   } });
   const navigation = await ctx.api('creator', `/api/projects/${encodeURIComponent(seeded.project.slug)}/map-navigation`);
-  check(navigation.status === 200, 'Contexto do projeto criado não disponível.', 'QA_PROJECT_CAPABILITY_MISMATCH');
+  assertHttpResponse(navigation, navigation.status === 200, 'Contexto do projeto criado não disponível.', 'QA_PROJECT_CAPABILITY_MISMATCH');
   verifyOwnedProjectEditorAccess(navigation.body, seeded.project, ctx.organizationId);
   const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch({ headless: true, timeout: ctx.requestTimeoutMs(30_000), args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });

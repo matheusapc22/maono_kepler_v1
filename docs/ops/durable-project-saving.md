@@ -312,6 +312,15 @@ observable in configured and canonical deployment variables.
 
 ### Bounded acceptance and interruption evidence
 
+Failed HTTP assertions retain only validated diagnostic fields in the report and
+stdout: HTTP status, backend error code, body/header correlation IDs, response
+format and Cloudflare Ray ID. For non-JSON error responses, a bounded scan may
+also record an observed Cloudflare code from the allowlist 1027/1101/1102. No
+response text, HTML, backend message, arbitrary headers or credentials are copied.
+An observed 1102 is a resource-limit signal; it does not distinguish CPU from
+memory. Missing diagnostic fields do not identify the cause. These fields never
+change expected-status assertions, retry behavior, cleanup or flag restoration.
+
 The reviewed operator phases have separate limits: preflight 10 minutes,
 activation 60, suite mutation 45, cleanup 10, restoration 60, and report 5. Their
 combined maximum is 190 minutes. The protected job limit is 210 minutes. Its

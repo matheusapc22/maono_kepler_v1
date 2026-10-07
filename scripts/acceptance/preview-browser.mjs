@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { AcceptanceError, fail } from './production-acceptance-lib.mjs';
+import { AcceptanceError, assertHttpResponse, fail } from './production-acceptance-lib.mjs';
 import { validatePreviewPng } from '../../functions/_lib/project-preview-png.js';
 import { makeManifest } from './suites/durable-project-save.mjs';
 
@@ -9,7 +9,7 @@ export function check(value, message, code = 'PNG_ACCEPTANCE_ASSERTION_FAILED') 
   if (!value) fail(code, message);
 }
 function ok(response, expected = 200) {
-  check(response.status === expected && response.body?.ok !== false, `Resposta de acceptance divergente: HTTP ${response.status}.`);
+  assertHttpResponse(response, response.status === expected && response.body?.ok !== false, `Resposta de acceptance divergente: HTTP ${response.status}.`, 'PNG_ACCEPTANCE_ASSERTION_FAILED');
   return response.body;
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -262,7 +262,7 @@ export async function verifyNegativePreviewCases(page, ctx, project, first, late
   check(baseline.configRevision === latest.saved.publishedRevision && baseline.artifactId === latest.receipt.artifactId && baseline.thumbnailStatus === 'READY', 'Ponteiro inicial PNG divergente.');
   const beforeSave = ok(await ctx.api('creator', `${root}/save-operations/${encodeURIComponent(latest.saved.operationId)}`, { headers: saveHeaders(project) })).operation.receipt;
   const stale = await ctx.api('creator', thumbnail, { method: 'POST', json: { ...first.preview, operationId: `qa-preview:${randomUUID()}` } });
-  check(stale.status === 409 && stale.body?.error?.code === 'PROJECT_PREVIEW_SUPERSEDED', 'Revisão antiga não foi recusada.');
+  assertHttpResponse(stale, stale.status === 409 && stale.body?.error?.code === 'PROJECT_PREVIEW_SUPERSEDED', 'Revisão antiga não foi recusada.', 'PNG_ACCEPTANCE_ASSERTION_FAILED');
   const replay = ok(await ctx.api('creator', `${thumbnail}?operationId=${encodeURIComponent(first.preview.operationId)}`, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: first.bytes }));
   check(same(replay.operation?.receipt, first.receipt), 'Replay histórico alterou recibo.');
   const historical = await readPngEvidence(page, ctx, project, first.receipt);
@@ -273,9 +273,9 @@ export async function verifyNegativePreviewCases(page, ctx, project, first, late
   ok(await ctx.api('creator', thumbnail, { method: 'POST', json: older }), 201);
   ok(await ctx.api('creator', thumbnail, { method: 'POST', json: newer }), 201);
   const late = await ctx.api('creator', `${thumbnail}?operationId=${encodeURIComponent(older.operationId)}`, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: latest.bytes });
-  check(late.status === 409 && late.body?.operation?.state === 'SUPERSEDED', 'Upload fora de ordem não foi recusado.');
+  assertHttpResponse(late, late.status === 409 && late.body?.operation?.state === 'SUPERSEDED', 'Upload fora de ordem não foi recusado.', 'PNG_ACCEPTANCE_ASSERTION_FAILED');
   const accepted = await ctx.api('creator', `${thumbnail}?operationId=${encodeURIComponent(newer.operationId)}`, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: latest.bytes });
-  check([200, 202].includes(accepted.status) && accepted.body?.ok === true, 'Substituição PNG não foi aceita.');
+  assertHttpResponse(accepted, [200, 202].includes(accepted.status) && accepted.body?.ok === true, 'Substituição PNG não foi aceita.', 'PNG_ACCEPTANCE_ASSERTION_FAILED');
   const replacement = await waitUntil(ctx, async () => {
     const value = ok(await ctx.api('creator', `${thumbnail}/status?operationId=${encodeURIComponent(newer.operationId)}`)).operation;
     if (value?.state === 'READY') return value.receipt;
@@ -294,7 +294,7 @@ export async function verifyNegativePreviewCases(page, ctx, project, first, late
   const bad = { ...latest.preview, operationId: `qa-preview:${randomUUID()}`, imageChecksum: sha256(invalid), sizeBytes: invalid.length };
   ok(await ctx.api('creator', thumbnail, { method: 'POST', json: bad }), 201);
   const rejected = await ctx.api('creator', `${thumbnail}?operationId=${encodeURIComponent(bad.operationId)}`, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: invalid });
-  check(rejected.status === 422 && rejected.body?.error?.code === 'INVALID_THUMBNAIL_PNG', 'PNG inválido não foi recusado.');
+  assertHttpResponse(rejected, rejected.status === 422 && rejected.body?.error?.code === 'INVALID_THUMBNAIL_PNG', 'PNG inválido não foi recusado.', 'PNG_ACCEPTANCE_ASSERTION_FAILED');
   const failed = ok(await ctx.api('creator', `${thumbnail}/status?operationId=${encodeURIComponent(bad.operationId)}`)).operation;
   check(failed?.state === 'FAILED_FINAL' && !failed.receipt, 'PNG inválido fabricou recibo ou ficou pendente.');
   const after = await status();
