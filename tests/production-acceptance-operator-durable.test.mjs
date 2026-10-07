@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { manifest, prepare, run, verifyPreflight, makeManifest, createSyntheticProjectForPreview } from "../scripts/acceptance/suites/durable-project-save.mjs";
-import { buildProfiles, validateManifest, activeFlags, safeFlags, transitionFlags, suiteContext, PRODUCTION_D1_ID } from "../scripts/acceptance/production-acceptance-lib.mjs";
+import { buildProfiles, validateManifest, activeFlags, safeFlags, transitionFlags, suiteContext, PRODUCTION_D1_ID, safeError } from "../scripts/acceptance/production-acceptance-lib.mjs";
 import { createManualAdministration } from "../scripts/acceptance/manual-evidence.mjs";
 import { main } from "../scripts/acceptance/operator.mjs";
 import { publicManifest } from "../scripts/acceptance/registry.mjs";
@@ -21,7 +21,7 @@ function beforeInventory(suite = manifest.id, inventory = { projects: [], files:
 function profiles() {
   return { creator: { organization, user: { id: 11, role: "editor", permissions: ["project.create"] } } };
 }
-function harness({ lostReservation = false, foreignProject = false, failJournal = false, fastWorker = false, delayedReservation = false, verifyCleanupRegistration = true, inventory = { projects: [], files: [] } } = {}) {
+function harness({ payloadFailure = null, lostReservation = false, foreignProject = false, failJournal = false, fastWorker = false, delayedReservation = false, verifyCleanupRegistration = true, inventory = { projects: [], files: [] } } = {}) {
   const events = [], projects = new Map(), files = new Map(), operations = new Map(), cleanups = [], journals = [];
   let sequence = 100;
   let lateCommit = null;
@@ -90,6 +90,7 @@ function harness({ lostReservation = false, foreignProject = false, failJournal 
         assert.equal(method, "PUT");
         assert.equal(typeof options.body, "string");
         assert.equal(Buffer.byteLength(options.body), op.input.payloadBytes);
+        if (payloadFailure && op.input.operationId.endsWith(`:${payloadFailure.kind}:create`)) return payloadFailure.response;
         if (op.public.state === "PUBLISHED") return reply(result(op));
         op.public.state = "PAYLOAD_STORED";
         op.public.payloadStored = true;
@@ -390,13 +391,11 @@ test("unknown browser closure blocks manual-cleanup handoff and leaves closure u
 });
 
 
-test("successful JSON protocol returns incomplete pending manual cleanup after safe flag restoration", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "durable-manual-operator-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+function operatorHarness({ payloadFailure = null, beforeControlRead = () => {} } = {}) {
   // Main owns cleanup registration here; standalone harness tests above verify
   // registration before each mutation. This adapter only models HTTP protocol.
-  const h = harness({ verifyCleanupRegistration: false }), patches = [], appRequests = [];
-  let controlWrites = 0, expireOnActivationRead = false, fakeNow = Date.now();
+  const h = harness({ verifyCleanupRegistration: false, payloadFailure }), patches = [], appRequests = [];
+  let controlWrites = 0;
   const entries = values => Object.fromEntries(Object.entries(values).map(([name, value]) => [name, { type: "plain_text", value: String(value) }]));
   let configured = entries(safeFlags(manifest)), canonicalFlags = structuredClone(configured), canonicalId = "original";
   const deployment = () => ({ id: canonicalId, environment: "production", url: "https://maono-kepler-v1.pages.dev",
@@ -405,10 +404,7 @@ test("successful JSON protocol returns incomplete pending manual cleanup after s
   const fetchImpl = async (url, options) => {
     const parsed = new URL(url), path = parsed.pathname, method = options.method;
     if (parsed.hostname === "api.cloudflare.com") {
-      if (expireOnActivationRead && method === "GET" && appRequests.some(call => call.path === "/api/projects")) {
-        fakeNow += 16 * 60_000;
-        expireOnActivationRead = false;
-      }
+      beforeControlRead({ method, appRequests });
       if (["PATCH", "POST"].includes(method)) controlWrites++;
       if (method === "PATCH") {
         const changed = JSON.parse(options.body).deployment_configs.production.env_vars;
@@ -435,8 +431,24 @@ test("successful JSON protocol returns incomplete pending manual cleanup after s
     const request = { ...options };
     if (method === "POST" && options.headers["X-Maono-Client-Contract"] === "2") request.json = JSON.parse(options.body);
     const response = await h.ctx.api("creator", path + parsed.search, request);
-    return Response.json(response.body, { status: response.status });
+    return typeof response.body === "string"
+      ? new Response(response.body, { status: response.status, headers: response.headers })
+      : Response.json(response.body, { status: response.status, headers: response.headers });
   };
+  return { h, patches, appRequests, fetchImpl, get controlWrites() { return controlWrites; } };
+}
+
+test("successful JSON protocol returns incomplete pending manual cleanup after safe flag restoration", async t => {
+  const directory = await mkdtemp(join(tmpdir(), "durable-manual-operator-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  let expireOnActivationRead = false, fakeNow = Date.now();
+  const state = operatorHarness({ beforeControlRead({ method, appRequests }) {
+    if (expireOnActivationRead && method === "GET" && appRequests.some(call => call.path === "/api/projects")) {
+      fakeNow += 16 * 60_000;
+      expireOnActivationRead = false;
+    }
+  } });
+  const { h, patches, appRequests, fetchImpl } = state;
   t.mock.method(process.stdout, "write", () => true);
   const credentials = { creator: { email: "creator@example.test", password: "synthetic" }, manualInventory: beforeInventory() };
   const reportPath = join(directory, "report.json");
@@ -458,7 +470,7 @@ test("successful JSON protocol returns incomplete pending manual cleanup after s
     assert.equal(rejectedReport.error.code, expectedError);
     assert.equal(rejectedReport.writesPerformed, false);
     assert.equal(rejectedReport.acceptanceExecuted, false);
-    assert.equal(controlWrites, 0, "missing/mismatched/rerun binding cannot mutate the control plane");
+    assert.equal(state.controlWrites, 0, "missing/mismatched/rerun binding cannot mutate the control plane");
     assert.equal(appRequests.length, 0, "binding is verified before login or application requests");
     assert.equal(h.projects.size, 0);
   }
@@ -472,7 +484,7 @@ test("successful JSON protocol returns incomplete pending manual cleanup after s
   assert.equal(staleReport.error.code, "MANUAL_EVIDENCE_STALE");
   assert.equal(staleReport.writesPerformed, false);
   assert.equal(staleReport.acceptanceExecuted, false);
-  assert.equal(controlWrites, 0, "evidence that ages during queue/control-plane checks cannot reach flag PATCH or retry");
+  assert.equal(state.controlWrites, 0, "evidence that ages during queue/control-plane checks cannot reach flag PATCH or retry");
   assert.equal(h.projects.size, 0);
   assert.ok(!appRequests.some(call => call.path === "/api/projects" && call.method === "POST"));
 
@@ -512,4 +524,86 @@ test("unrelated visible QA9 project is retained and cannot break scoped collisio
   assert.ok(h.journals.every(journal => journal.resources.every(row => row.projectId !== 77)));
   await assert.rejects(() => h.ctx.cleanup(), { code: "MANUAL_CLEANUP_REQUIRED" });
   assert.deepEqual(h.projects.get(77), real);
+});
+
+function unavailablePayload() {
+  return { status: 503, responseFormat: "json",
+    headers: new Headers({ "X-Correlation-Id": "header-save-12345678", "Set-Cookie": "maono_session=private-response-cookie",
+      "X-Private": "private-response-header" }),
+    body: { ok: false, error: { code: "STORAGE_UNAVAILABLE", correlationId: "body-save-12345678",
+      message: "private-backend-message", details: { provider: "private-provider-details",
+        url: "https://private.example.test/object?token=private-signed-token" } },
+      password: "private-response-password", body: "private-response-body" } };
+}
+
+test("failed large JSON payload preserves safe report/stdout diagnostics and restores flags without retry or automated cleanup", async t => {
+  const directory = await mkdtemp(join(tmpdir(), "durable-http-failure-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const variants = [
+    { name: "json", response: unavailablePayload(), expected: { backendCode: "STORAGE_UNAVAILABLE", correlationId: "body-save-12345678",
+      headerCorrelationId: "header-save-12345678", responseFormat: "json" } },
+    { name: "cloudflare-html", response: { status: 503,
+      headers: new Headers({ "Content-Type": "text/html", "CF-Ray": "1234567890abcdef-GRU", "Set-Cookie": "maono_session=private-response-cookie" }),
+      body: '<html><span class="cf-error-code">1102</span><div>private-response-body https://private.example.test/object?token=private-signed-token</div></html>' },
+      expected: { responseFormat: "non-json", cfRay: "1234567890abcdef-GRU", cloudflareErrorCode: "1102" } },
+  ];
+  const stdout = [], stderr = [];
+  t.mock.method(process.stdout, "write", chunk => { stdout.push(String(chunk)); return true; });
+  t.mock.method(process.stderr, "write", chunk => { stderr.push(String(chunk)); return true; });
+  for (const variant of variants) {
+    stdout.length = 0;
+    stderr.length = 0;
+    const { h, patches, appRequests, fetchImpl } = operatorHarness({ payloadFailure: { kind: "large", response: variant.response } });
+    const reportPath = join(directory, `${variant.name}.json`);
+    const result = await main(["--mode", "run", "--suite", manifest.id, "--organization-id", "9", "--expected-commit", expectedCommit, "--report", reportPath],
+      { GITHUB_RUN_ID: workflowRunId, GITHUB_RUN_ATTEMPT: "1", MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: "private-control-token",
+        MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: JSON.stringify({ creator: { email: "creator@example.test", password: "private-login-password" }, manualInventory: beforeInventory() }) },
+      { fetchImpl, sleep: async () => {} });
+    const reportText = await readFile(reportPath, "utf8"), report = JSON.parse(reportText);
+    const summary = JSON.parse(stdout.at(-1));
+    const expected = { code: "ACCEPTANCE_ASSERTION_FAILED", message: "recebimento durável independente: HTTP 503, esperado 200/202.",
+      httpStatus: 503, ...variant.expected };
+    assert.equal(result, 1);
+    assert.deepEqual(report.error, expected);
+    assert.deepEqual(summary.error, expected);
+    for (const output of [report, summary]) {
+      assert.equal(output.acceptanceExecuted, true);
+      assert.equal(output.configurationRestored, true);
+      assert.equal(output.cleanupComplete, false);
+      assert.equal(output.operationalTestsPassed, false);
+      assert.equal(output.complete, false);
+      assert.equal(output.ok, false);
+      assert.equal(output.acceptanceIncomplete, true);
+      assert.ok(output.cases.some(row => row.id === "DS-SMALL" && row.status === "PASS"));
+      assert.ok(!output.cases.some(row => row.id === "DS-LARGE" && row.status === "PASS"));
+      assert.ok(output.cases.some(row => row.id === "DS-CLEANUP" && row.status === "PENDING_MANUAL"));
+    }
+    assert.deepEqual(patches, [activeFlags(manifest), safeFlags(manifest)]);
+    const uploads = appRequests.filter(call => call.method === "PUT" && decodeURIComponent(call.path).endsWith(":large:create/payload"));
+    assert.equal(uploads.length, 1, "a 503 must not start another payload attempt or acceptance window");
+    assert.equal(appRequests.some(call => call.method === "DELETE" || call.path.startsWith("/api/admin/")), false);
+    assert.equal(h.projects.size, 2);
+    assert.equal(h.files.size, 2);
+    assert.equal(report.manualAdministration.resources.filter(row => row.projectId && row.organizationFileId).length, 2);
+    assert.deepEqual(report.cleanupErrors.map(error => error.code), ["MANUAL_CLEANUP_REQUIRED"]);
+    assert.doesNotMatch([reportText, ...stdout, ...stderr].join(""),
+      /private-|maono_session=|creator@example\.test|password|https:\/\/private\.example\.test/);
+    assert.equal(stderr.length, 0);
+  }
+});
+
+test("PNG bootstrap reports the same safe payload failure and preserves its one-project manual cleanup scope", async () => {
+  const h = harness({ payloadFailure: { kind: "small", response: unavailablePayload() } });
+  await assert.rejects(() => createSyntheticProjectForPreview(h.ctx, JSON.stringify({ version: "v1", config: {}, datasets: [{}] })), error => {
+    assert.deepEqual(safeError(error), { code: "ACCEPTANCE_ASSERTION_FAILED", message: "recebimento durável independente: HTTP 503, esperado 200/202.",
+      httpStatus: 503, backendCode: "STORAGE_UNAVAILABLE", correlationId: "body-save-12345678", headerCorrelationId: "header-save-12345678", responseFormat: "json" });
+    return true;
+  });
+  assert.equal(h.events.filter(event => event.method === "PUT" && event.path.endsWith("/payload")).length, 1);
+  assert.equal(h.projects.size, 1);
+  await assert.rejects(() => h.ctx.cleanup(), { code: "MANUAL_CLEANUP_REQUIRED" });
+  assert.equal(h.journals.at(-1).resources.length, 1);
+  assert.equal(h.journals.at(-1).resources[0].reservationUncertain, false);
+  assert.ok(h.ctx.cases.some(row => row.id === "DS-CLEANUP" && row.status === "PENDING_MANUAL"));
+  assert.equal(h.events.some(event => event.method === "DELETE"), false);
 });
