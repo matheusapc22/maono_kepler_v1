@@ -8,6 +8,7 @@ import {
 import type { MapFilterDomainValue } from "../../../engine-adapter/types.ts";
 import { useSmartFilterHistogram } from "../../../engine-adapter/useSmartFilterHistogram.ts";
 import type { MaonoFilterSnapshot } from "../../../integration/keplerBridge.ts";
+import NumericInput from "../NumericInput";
 import FilterHistogram from "./FilterHistogram.tsx";
 import {
   filterDomainValueLabel,
@@ -63,23 +64,6 @@ function NumericRangeEditor({
     if (!sameFilterValue(next, value)) onChange(next);
   }
 
-  function updateMinimum(next: number) {
-    setDraft([
-      Math.min(clamp(next, currentDomain[0], currentDomain[1]), currentDraft[1]),
-      currentDraft[1],
-    ]);
-  }
-
-  function updateMaximum(next: number) {
-    setDraft([
-      currentDraft[0],
-      Math.max(
-        clamp(next, currentDomain[0], currentDomain[1]),
-        currentDraft[0],
-      ),
-    ]);
-  }
-
   return (
     <div className="maono-filter-editor is-range">
       <FilterHistogram
@@ -94,32 +78,26 @@ function NumericRangeEditor({
       <div className="maono-filter-range__numbers">
         <label>
           <span>Mínimo</span>
-          <input
-            type="number"
-            min={currentDomain[0]}
-            max={currentDraft[1]}
+          <NumericInput
+            label="Mínimo"
+            minimum={currentDomain[0]}
+            maximum={currentDraft[1]}
             step={inputStep}
             value={currentDraft[0]}
-            onChange={(event) => updateMinimum(Number(event.target.value))}
-            onBlur={() => commit()}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
+            onPreview={(next) => setDraft([next, currentDraft[1]])}
+            onCommit={(next) => commit([next, currentDraft[1]])}
           />
         </label>
         <label>
           <span>Máximo</span>
-          <input
-            type="number"
-            min={currentDraft[0]}
-            max={currentDomain[1]}
+          <NumericInput
+            label="Máximo"
+            minimum={currentDraft[0]}
+            maximum={currentDomain[1]}
             step={inputStep}
             value={currentDraft[1]}
-            onChange={(event) => updateMaximum(Number(event.target.value))}
-            onBlur={() => commit()}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
+            onPreview={(next) => setDraft([currentDraft[0], next])}
+            onCommit={(next) => commit([currentDraft[0], next])}
           />
         </label>
       </div>
@@ -412,7 +390,7 @@ export default function FilterValueEditor({
   }
 
   if (filter.type === "range") {
-    return <NumericRangeEditor filter={filter} onChange={onChange} />;
+    return <NumericRangeEditor key={filter.id} filter={filter} onChange={onChange} />;
   }
   if (filter.type === "timeRange") {
     return <TimeRangeEditor filter={filter} onChange={onChange} />;

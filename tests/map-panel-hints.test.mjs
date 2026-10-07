@@ -73,12 +73,12 @@ test("only the two selected long explanations move into local hint components", 
   assert.equal((style.match(/<PanelHint /g) ?? []).length, 1);
 });
 
-test("validation, compatibility, read-only notices and short filter instruction remain visible", () => {
+test("validation, compatibility and read-only notices remain; redundant filter subtitle is removed", () => {
   assert.match(grouping, /<p className="maono-point-spatial-grouping__notice">\s*Modo de visualização/);
   assert.match(grouping, /className="maono-point-spatial-grouping__notice is-warning"\s*role="status"/);
   assert.match(inspector, /<p className="maono-layer-structure__error" role="alert">/);
   assert.match(filter, /<p className="maono-filter-compatibility" role="status">/);
-  assert.match(filter, /<small>O mapa responde à alteração após a confirmação\.<\/small>/);
+  assert.doesNotMatch(filter, /<small>O mapa responde à alteração após a confirmação\.<\/small>/);
   assert.match(valueEditor, /<p className="maono-filter-editor__warning">\s*A lista de valores desta propriedade está incompleta/);
   assert.doesNotMatch(filter + valueEditor + inspector, /<PanelHint/);
 });

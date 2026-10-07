@@ -11,11 +11,13 @@ import FilterRow from "./FilterRow.tsx";
 import LayerPanelIcon from "./LayerPanelIcon.tsx";
 import { filterableDatasetFields } from "./filters/filter-utils.ts";
 import { buildFilterGroups } from "./filters/filter-groups.ts";
+import type { LayerSidebarAccents } from "./layer-sidebar-accents.ts";
 import "./filters/advanced-filters.css";
 
 type Props = {
   filters: MaonoFilterSnapshot[];
   datasets: MaonoDatasetSnapshot[];
+  sidebarAccents: LayerSidebarAccents;
   editable: boolean;
   onAdd: (dataId: string, fieldName: string) => number | null;
   onBindField: (
@@ -39,6 +41,7 @@ function firstFilterableField(dataset: MaonoDatasetSnapshot | undefined) {
 export default function FilterPanel({
   filters,
   datasets,
+  sidebarAccents,
   editable,
   onAdd,
   onBindField,
@@ -82,8 +85,8 @@ export default function FilterPanel({
   }, [filters, selectedFilterId]);
 
   const groups = useMemo(
-    () => buildFilterGroups(filters, datasets, layers),
-    [datasets, filters, layers],
+    () => buildFilterGroups(filters, datasets, layers, sidebarAccents),
+    [datasets, filters, layers, sidebarAccents],
   );
 
   // Keep the newly-created condition inside its dataset's expanded group.

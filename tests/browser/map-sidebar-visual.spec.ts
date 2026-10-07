@@ -1,0 +1,201 @@
+import { expect, test, type Page } from '@playwright/test';
+import {
+  capture, filterEditor, openFilters, openLayers, openMap, panel, rail, ready, rows,
+  savedVisState, saveMap, seedConfig,
+} from './fixtures/map-panel-minimal';
+
+// Built application, native renderer and reducer. Only synthetic HTTP/storage
+// fixtures are substituted; this is not remote persistence acceptance.
+test.use({ contextOptions: { reducedMotion: 'reduce' } });
+test.setTimeout(90_000);
+const detail = (page: Page) => panel(page).locator('.maono-detail-view').filter({ has: page.locator('.maono-layer-style-editor') });
+const opacityInput = (page: Page) => detail(page).getByRole('spinbutton', { name: 'Opacidade em porcentagem', exact: true });
+async function openFirst(page: Page) {
+  await openLayers(page);
+  await rows(page).first().locator('.maono-layer-row__open').click();
+}
+async function commitOpacity(page: Page, value: string) {
+  await opacityInput(page).fill(value);
+  await opacityInput(page).press('Enter');
+}
+async function pixelDifference(page: Page, before: Buffer, after: Buffer) {
+  return page.evaluate(async ([first, second]) => {
+    const decode = async (src: string) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${src}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width; canvas.height = image.height;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(image, 0, 0);
+      return context.getImageData(0, 0, image.width, image.height).data;
+    };
+    const [a, b] = await Promise.all([decode(first), decode(second)]);
+    let changed = 0;
+    for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 12) changed += 1;
+    return changed;
+  }, [before.toString('base64'), after.toString('base64')]);
+}
+
+test('Visual Maõno: rail order, disabled research folder, repeated tools and keyboard collapse', async ({ page }, testInfo) => {
+  await openMap(page, { layerCount: 3 });
+  await openLayers(page);
+  const tools = rail(page).locator('nav > button, nav > a');
+  expect(await tools.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual([
+    'Camadas', 'Mapa base', 'Pesquisas salvas', 'Adicionar dados', 'Voltar ao início',
+  ]);
+  await expect(rail(page).getByRole('button', { name: 'Pesquisas salvas', exact: true })).toBeDisabled();
+  const layerButton = rail(page).getByRole('button', { name: 'Camadas', exact: true });
+  const initial = await layerButton.boundingBox();
+  await layerButton.click();
+  await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'false');
+  await expect(rail(page).locator('.is-active')).toHaveCount(0);
+  await layerButton.focus();
+  await layerButton.press('Enter');
+  await expect(layerButton).toHaveAttribute('aria-expanded', 'true');
+  expect(await layerButton.boundingBox()).toEqual(initial);
+  const base = rail(page).getByRole('button', { name: 'Mapa base', exact: true });
+  await base.click();
+  await expect(base).toHaveAttribute('aria-expanded', 'true');
+  await expect(rail(page).locator('.is-active')).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath('visual-rail-basemap.png') });
+  await rail(page).getByRole('button', { name: 'Adicionar dados', exact: true }).click();
+  await expect(rail(page).locator('.is-active')).toHaveCount(1);
+  await expect(page.locator('#map-add-data-sidebar')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'false');
+  await openLayers(page);
+  await page.screenshot({ path: testInfo.outputPath('visual-rail-layers.png') });
+});
+
+test('Visual Maõno: compact inspector, exact 37% real-render change and synthetic save/reload', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const seed = seedConfig(1);
+  seed.config.visState.layers[0].config.visConfig.radius = 50;
+  const fixture = await openMap(page, { seed });
+  await openFirst(page);
+  await expect(panel(page).locator('.maono-layer-panel__header > div > span')).toHaveCount(0);
+  await expect(panel(page).getByRole('tab', { name: /^Camadas/ }).locator('span')).toHaveText('1');
+  await expect(detail(page).locator('.maono-detail-view__identity small')).toHaveText('point');
+  await expect(detail(page).locator('.maono-layer-essential')).toHaveCount(0);
+  await expect(detail(page)).not.toContainText(/Formato, opacidade e cor principal|Paletas, escalas e contorno|Tamanho dos símbolos e comportamento por zoom|Composição global do mapa|Colorir por coluna/);
+  const eye = detail(page).locator('.maono-detail-view__visibility');
+  await expect(eye).toHaveText('');
+  await expect(eye).toHaveAttribute('aria-pressed', 'true');
+  await eye.click();
+  await expect(eye).toHaveAttribute('aria-pressed', 'false');
+  await eye.click();
+  await commitOpacity(page, '100');
+  const clip = { x: 610, y: 80, width: 650, height: 700 };
+  const opaque = await page.screenshot({ clip });
+  await commitOpacity(page, '37');
+  await expect(detail(page).getByRole('slider', { name: 'Opacidade', exact: true })).toHaveValue('37');
+  await expect.poll(async () => pixelDifference(page, opaque, await page.screenshot({ clip }))).toBeGreaterThan(30);
+  const translucent = await page.screenshot({ clip });
+  await testInfo.attach('actual-render-opacity-100', { body: opaque, contentType: 'image/png' });
+  await testInfo.attach('actual-render-opacity-37', { body: translucent, contentType: 'image/png' });
+  expect(fixture.saves).toHaveLength(0);
+  await opacityInput(page).fill('');
+  await expect(opacityInput(page)).toHaveValue('');
+  await opacityInput(page).press('Tab');
+  await expect(opacityInput(page)).toHaveValue('37');
+  await commitOpacity(page, '150');
+  await expect(opacityInput(page)).toHaveValue('100');
+  await commitOpacity(page, '-5');
+  await expect(opacityInput(page)).toHaveValue('0');
+  await commitOpacity(page, '37');
+  await opacityInput(page).focus();
+  await opacityInput(page).press('ArrowUp');
+  await opacityInput(page).press('ArrowDown');
+  await opacityInput(page).press('Enter');
+  await expect(opacityInput(page)).toHaveValue('37');
+  await detail(page).locator('summary').filter({ hasText: 'Dimensão e agrupamento' }).click();
+  const radius = detail(page).getByRole('spinbutton', { name: 'Raio do ponto em px', exact: true });
+  await radius.fill('23.7'); await radius.press('Enter');
+  await expect(detail(page).getByRole('slider', { name: 'Raio do ponto', exact: true })).toHaveValue('23.7');
+  expect(fixture.saves).toHaveLength(0);
+  const saved = savedVisState(await saveMap(page, fixture));
+  expect(saved.layers[0].config.visConfig).toMatchObject({ opacity: 0.37, radius: 23.7 });
+  await page.screenshot({ path: testInfo.outputPath('visual-layer-inspector.png') });
+  await page.reload(); await ready(page); await openFirst(page);
+  await expect(opacityInput(page)).toHaveValue('37');
+  expect(fixture.unexpectedWrites).toEqual([]);
+});
+
+test('Visual Maõno: identities survive reorder, hide, duplicate and reload; filters reuse only unique identity', async ({ page }, testInfo) => {
+  const fixture = await openMap(page, { layerCount: 3, groups: true });
+  await openLayers(page);
+  const colors = async () => rows(page).evaluateAll(elements => Object.fromEntries(elements.map(element => [
+    element.querySelector('.maono-layer-row__open strong')!.textContent!,
+    getComputedStyle(element.querySelector('.maono-layer-row__swatch')!).backgroundColor,
+  ])));
+  const before = await colors();
+  expect(new Set(Object.values(before)).size).toBe(3);
+  await rows(page).first().getByRole('button', { name: /^Ocultar / }).click();
+  await rows(page).first().dragTo(rows(page).nth(2), { sourcePosition: { x: 8, y: 18 }, targetPosition: { x: 50, y: 18 } });
+  expect(await colors()).toEqual(before);
+  await openFilters(page);
+  const groups = panel(page).locator('.maono-filter-group');
+  const filterColors = await groups.evaluateAll(elements => Object.fromEntries(elements.map(element => [
+    element.querySelector('.maono-filter-group__toggle strong')!.textContent!,
+    getComputedStyle(element.querySelector('.maono-filter-group__accent')!).backgroundColor,
+  ])));
+  expect(filterColors).toEqual(before);
+  await groups.first().locator('.maono-filter-group__toggle').click();
+  await groups.first().locator('.maono-filter-row__open').click();
+  const filterEye = filterEditor(page).locator('.maono-detail-view__visibility');
+  await expect(filterEye).toHaveAttribute('aria-pressed', 'true');
+  await filterEye.click(); await expect(filterEye).toHaveAttribute('aria-pressed', 'false');
+  await filterEye.click();
+  await expect(filterEditor(page).locator('.maono-detail-view__identity small')).not.toContainText(' · ');
+  await page.screenshot({ path: testInfo.outputPath('visual-filter-inspector.png') });
+  await openLayers(page);
+  await rows(page).first().getByRole('button', { name: /^Ações de / }).click();
+  await page.getByRole('menuitem', { name: 'Duplicar', exact: true }).click();
+  await detail(page).getByRole('button', { name: 'Voltar para a lista de camadas', exact: true }).click();
+  await expect(rows(page)).toHaveCount(4);
+  const after = await colors();
+  for (const [name, color] of Object.entries(before)) expect(after[name]).toBe(color);
+  expect(new Set(Object.values(after)).size).toBe(4);
+  await openFilters(page);
+  const shared = groups.filter({ has: page.locator('.maono-filter-group__toggle strong', { hasText: /^Dados 2$/ }) });
+  await expect(shared).toHaveCount(1);
+  await expect(shared).not.toHaveAttribute('data-layer-id', /.+/);
+  await saveMap(page, fixture);
+  await page.reload(); await ready(page); await openLayers(page);
+  expect(await colors()).toEqual(after);
+  expect(fixture.unexpectedWrites).toEqual([]);
+});
+
+test('Visual Maõno: Home preserves dirty map on cancel and goes to canonical Projects on confirm', async ({ page }) => {
+  const fixture = await openMap(page, { layerCount: 1 });
+  await openFirst(page);
+  await commitOpacity(page, '37');
+  await expect.poll(async () => (await capture(page)).snapshot.hasUnsavedChanges).toBe(true);
+  const url = page.url();
+  page.once('dialog', dialog => dialog.dismiss());
+  await rail(page).getByRole('link', { name: 'Voltar ao início', exact: true }).click();
+  expect(page.url()).toBe(url);
+  await expect(opacityInput(page)).toHaveValue('37');
+  page.once('dialog', dialog => dialog.dismiss());
+  await rail(page).getByRole('link', { name: 'Maõno Maps — Projetos', exact: true }).click();
+  expect(page.url()).toBe(url);
+  await expect(opacityInput(page)).toHaveValue('37');
+  page.once('dialog', dialog => dialog.accept());
+  await rail(page).getByRole('link', { name: 'Voltar ao início', exact: true }).click();
+  await expect(page).toHaveURL(/\/projects$/);
+  expect(fixture.saves).toHaveLength(0);
+});
+
+
+test('Visual Maõno: clean Home exits without unnecessary confirmation', async ({ page }) => {
+  await openMap(page, { layerCount: 1 });
+  const dialogs: string[] = [];
+  page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.dismiss(); });
+  await expect.poll(async () => (await capture(page)).snapshot.hasUnsavedChanges).toBe(false);
+  await rail(page).getByRole('link', { name: 'Voltar ao início', exact: true }).click();
+  await expect(page).toHaveURL(/\/projects$/);
+  expect(dialogs).toEqual([]);
+});

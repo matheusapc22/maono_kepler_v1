@@ -7,9 +7,11 @@ import {
 import type { MaonoLayerSnapshot } from "../../integration/keplerBridge";
 import LayerListItem from "./LayerListItem";
 import LayerPanelIcon from "./LayerPanelIcon";
+import { resolveLayerSidebarAccent, type LayerSidebarAccents } from "./layer-sidebar-accents";
 
 type Props = {
   layers: MaonoLayerSnapshot[];
+  sidebarAccents: LayerSidebarAccents;
   selectedLayerId: string | null;
   search: string;
   canInspect: boolean;
@@ -38,6 +40,7 @@ function normalizeSearch(value: string) {
 
 export default function LayerList({
   layers,
+  sidebarAccents,
   selectedLayerId,
   search,
   canInspect,
@@ -141,6 +144,7 @@ export default function LayerList({
             <LayerListItem
               key={layer.id}
               layer={layer}
+              sidebarAccent={resolveLayerSidebarAccent(layer.id, sidebarAccents)}
               index={originalIndex}
               total={layers.length}
               selected={layer.id === selectedLayerId}

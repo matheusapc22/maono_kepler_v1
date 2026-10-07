@@ -11,6 +11,8 @@
   --maono-map-panel: #0a0f18;
   --maono-map-panel-raised: #131c2a;
   --maono-map-border: #1f2b3e;
+  /* Existing rail divider, shared unchanged with its active-tool contour. */
+  --maono-map-rail-border: #161f30;
   --maono-map-text: #f7f2e8;
   --maono-map-text-soft: #c8d1df;
   --maono-map-muted: #758196;

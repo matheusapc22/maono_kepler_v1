@@ -72,15 +72,12 @@
   background: var(--maono-accent-surface);
 }
 
-/* Sidebar e botões de ferramenta. */
-.maono-map-runtime .maono-map-sidebar__nav a:hover,
-.maono-map-runtime .maono-map-sidebar__nav button:hover,
+/* Only the active glyph carries the brand accent. The connected contour
+ * deliberately uses the unchanged neutral rail divider token. */
 .maono-map-runtime .maono-map-sidebar__nav .is-active {
   color: var(--maono-accent);
-  border-color: var(--maono-accent-border);
-  box-shadow:
-    inset 0 1px var(--maono-accent-surface),
-    0 0 18px var(--maono-accent-glow);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .maono-map-runtime .maono-map-overlay__buttons > button:hover:not(:disabled),

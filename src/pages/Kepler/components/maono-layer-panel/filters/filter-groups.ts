@@ -3,6 +3,10 @@ import type {
   MaonoFilterSnapshot,
   MaonoLayerSnapshot,
 } from "../../../integration/keplerBridge.ts";
+import {
+  resolveLayerSidebarAccent,
+  type LayerSidebarAccents,
+} from "../layer-sidebar-accents.ts";
 
 export type FilterGroup = {
   key: string;
@@ -15,11 +19,6 @@ export type FilterGroup = {
 
 export const NEUTRAL_FILTER_ACCENT = "var(--maono-layer-muted)";
 
-function layerAccent(layer: MaonoLayerSnapshot | undefined) {
-  if (!layer || layer.color.length !== 3) return NEUTRAL_FILTER_ACCENT;
-  return `rgb(${layer.color.join(",")})`;
-}
-
 /** Filters belong to datasets in Kepler. A layer identity is truthful only
  * when exactly one layer uses that dataset. Shared, detached and synchronized
  * filters retain their native grouping and use neutral presentation. */
@@ -27,6 +26,7 @@ export function buildFilterGroups(
   filters: MaonoFilterSnapshot[],
   datasets: MaonoDatasetSnapshot[],
   layers: MaonoLayerSnapshot[],
+  sidebarAccents?: LayerSidebarAccents,
 ): FilterGroup[] {
   const byDatasetId = new Map<string, MaonoFilterSnapshot[]>();
   for (const filter of filters) {
@@ -46,13 +46,17 @@ export function buildFilterGroups(
     if (!groupFilters?.length) continue;
     const dataset = datasets.find((item) => item.id === datasetId) ?? null;
     const associatedLayers = layers.filter((layer) => layer.dataIds.includes(datasetId));
-    const uniqueLayer = associatedLayers.length === 1 ? associatedLayers[0] : undefined;
+    const uniqueLayer = dataset && associatedLayers.length === 1 && associatedLayers[0].dataIds.length === 1
+      ? associatedLayers[0]
+      : undefined;
     ordered.push({
       key: datasetId,
       label: uniqueLayer?.label ?? dataset?.label ?? "Dados sem camada",
       dataset,
       filters: groupFilters,
-      accent: layerAccent(uniqueLayer),
+      accent: uniqueLayer
+        ? resolveLayerSidebarAccent(uniqueLayer.id, sidebarAccents)
+        : NEUTRAL_FILTER_ACCENT,
       layerId: uniqueLayer?.id ?? null,
     });
     byDatasetId.delete(datasetId);

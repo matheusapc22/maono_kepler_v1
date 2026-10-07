@@ -101,8 +101,19 @@ export default function FilterDetailView({
         </button>
         <div className="maono-detail-view__identity">
           <strong>{title}</strong>
-          <small>{filterTypeLabel(filter.type)} · {filterValueLabel(filter)}</small>
+          <small>{filterTypeLabel(filter.type)}</small>
         </div>
+        <button
+          type="button"
+          className="maono-detail-view__visibility"
+          aria-label={filter.enabled ? `Desativar filtro ${title}` : `Ativar filtro ${title}`}
+          aria-pressed={filter.enabled}
+          title={filter.enabled ? "Desativar filtro" : "Ativar filtro"}
+          disabled={!canEdit}
+          onClick={() => onToggle(filter.index, !filter.enabled)}
+        >
+          <LayerPanelIcon name={filter.enabled ? "eye" : "eye-off"} />
+        </button>
         {menuItems.length ? (
           <PanelActionMenu label={`Ações de ${title}`} items={menuItems} />
         ) : null}
@@ -110,24 +121,7 @@ export default function FilterDetailView({
 
       <div className="maono-detail-view__scroll">
         <section className="maono-filter-essential">
-          <header>
-            <div>
-              <span>Filtro</span>
-              <strong>{filter.enabled ? "Ativo" : "Inativo"}</strong>
-            </div>
-            <button
-              type="button"
-              className="maono-style-toggle"
-              role="switch"
-              aria-label={`Filtro ${title}`}
-              aria-checked={filter.enabled}
-              disabled={!canEdit}
-              onClick={() => onToggle(filter.index, !filter.enabled)}
-            >
-              <span aria-hidden="true" />
-            </button>
-          </header>
-
+          <header className="maono-filter-essential-title"><strong>Essencial</strong></header>
           {canEdit ? (
             <div className="maono-filter-binding">
               <label className="maono-style-field">
@@ -183,7 +177,6 @@ export default function FilterDetailView({
         <section className="maono-filter-value-section">
           <header>
             <strong>Valor do filtro</strong>
-            <small>O mapa responde à alteração após a confirmação.</small>
           </header>
           <FilterValueEditor
             filter={filter}

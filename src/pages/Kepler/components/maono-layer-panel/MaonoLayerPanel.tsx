@@ -20,6 +20,7 @@ import FilterPanel from "./FilterPanel";
 import LayerDetailView from "./LayerDetailView";
 import LayerList from "./LayerList";
 import LayerPanelIcon from "./LayerPanelIcon";
+import { useLayerSidebarAccents } from "./useLayerSidebarAccents";
 import PanelSaveAction from "./PanelSaveAction";
 import type { LayerStyleChange } from "./LayerStyleEditor";
 import "./maono-layer-panel.css";
@@ -46,6 +47,10 @@ export default function MaonoLayerPanel() {
     layers,
     selectedLayerId,
   } = useKeplerState();
+  const { sidebarAccents, registerLayer } = useLayerSidebarAccents(
+    JSON.stringify([String(context?.organization?.id ?? ""), String(context?.project?.id ?? "")]),
+    layers,
+  );
   const controller = useKeplerController();
   const exportDatasetCsv = useDatasetCsvExport();
   const [tab, setTab] = useState<MaonoMapPanelTab>("layers");
@@ -206,6 +211,7 @@ export default function MaonoLayerPanel() {
       "Camada duplicada.",
       (value) => {
         if (value?.layerId) {
+          registerLayer(value.layerId);
           setView({ kind: "layer", layerId: value.layerId });
         }
       },
@@ -237,6 +243,7 @@ export default function MaonoLayerPanel() {
       "Camada adicionada.",
       (value) => {
         if (value?.layerId) {
+          registerLayer(value.layerId);
           applyCommand(controller.inspectLayer(value.layerId));
           setView({ kind: "layer", layerId: value.layerId });
         }
@@ -373,7 +380,6 @@ export default function MaonoLayerPanel() {
       : projectName ||
         organizationName ||
         (tab === "layers" ? "Camadas" : "Filtros");
-  const count = layers.length;
 
   return (
     <aside
@@ -398,7 +404,6 @@ export default function MaonoLayerPanel() {
           >
             {title}
           </strong>
-          <span>{count} {count === 1 ? "camada" : "camadas"}</span>
         </div>
       </header>
 
@@ -535,6 +540,7 @@ export default function MaonoLayerPanel() {
 
               <LayerList
                 layers={layers}
+                sidebarAccents={sidebarAccents}
                 selectedLayerId={selectedLayerId}
                 search={search}
                 canInspect={canInspect}
@@ -566,6 +572,7 @@ export default function MaonoLayerPanel() {
         >
           <FilterPanel
             filters={filters}
+            sidebarAccents={sidebarAccents}
             datasets={datasets}
             editable={Boolean(capabilities?.editFilters)}
             onAdd={addFilter}

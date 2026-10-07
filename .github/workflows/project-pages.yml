@@ -34,6 +34,13 @@ on:
       - 'tests/tileset-localization-contract.test.mjs'
       - 'tests/browser/map-sidebar-scrollbars.spec.ts'
       - 'tests/browser/map-panel-minimal.spec.ts'
+      - 'tests/browser/map-sidebar-visual.spec.ts'
+      - 'tests/browser/map-numeric-controls.spec.ts'
+      - 'playwright.numeric-controls.config.ts'
+      - 'tests/map-sidebar-visual.test.mjs'
+      - 'tests/layer-sidebar-accents.test.mjs'
+      - 'tests/maono-numeric-controls.test.mjs'
+      - 'tests/map-sidebar-inspector-redesign.test.mjs'
       - 'tests/browser/map-panel-hint-compatibility.spec.ts'
       - 'tests/browser/fixtures/map-panel-minimal.ts'
       - 'tests/map-error-notice.test.mjs'
@@ -75,7 +82,7 @@ jobs:
         env:
           PROJECT_PAGES_REQUIRE_BASELINE: "1"
         run: >-
-          node --experimental-strip-types --test tests/map-error-notice.test.mjs tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/map-panel-hints.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
+          node --experimental-strip-types --test tests/map-error-notice.test.mjs tests/data-import-localization.test.mjs tests/tileset-localization-contract.test.mjs tests/map-sidebar-scrollbars.test.mjs tests/map-panel-minimal.test.mjs tests/layer-sidebar-accents.test.mjs tests/maono-numeric-controls.test.mjs tests/map-sidebar-inspector-redesign.test.mjs tests/map-sidebar-visual.test.mjs tests/map-panel-hints.test.mjs tests/map-filter-enabled-native.test.mjs tests/map-save-conflict-preservation.test.mjs tests/map-add-data-sidebar.test.mjs tests/platform-density.test.mjs tests/project-pages-contract.test.mjs tests/projects-scrollbars.test.mjs tests/organization-switcher-redesign.test.mjs
           tests/project-card-redesign.test.mjs tests/project-card-actions.test.mjs
           tests/project-thumbnail-gate.test.mjs tests/project-preview-presentation.test.mjs
           tests/project-preview-lifecycle.test.mjs tests/project-thumbnail-serving.test.mjs tests/project-metadata-api.test.mjs
@@ -125,6 +132,16 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: project-pages-results.json
         run: xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24" npx playwright test --config=playwright.project-pages.config.ts --reporter=list,json
+      - name: Visual Maõno sidebar evidence (small independent artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-maono-sidebar-${{ github.sha }}
+          path: |
+            test-results/map-sidebar-visual-*/
+            test-results/map-numeric-controls-*/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Evidence and inspectable local build (no credentials)
         if: always()
         uses: actions/upload-artifact@v4
@@ -142,6 +159,8 @@ jobs:
             tests/browser/map-error-notice.spec.ts
             tests/map-error-notice.test.mjs
             tests/browser/map-panel-minimal.spec.ts
+            tests/browser/map-sidebar-visual.spec.ts
+            tests/browser/map-numeric-controls.spec.ts
             tests/browser/map-panel-hint-compatibility.spec.ts
             tests/browser/fixtures/map-panel-minimal.ts
             tests/map-panel-minimal.test.mjs

@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
@@ -15,6 +16,7 @@ import PanelActionMenu, {
 
 type Props = {
   layer: MaonoLayerSnapshot;
+  sidebarAccent: string;
   index: number;
   total: number;
   selected: boolean;
@@ -45,6 +47,7 @@ function stopPropagation(event: MouseEvent | KeyboardEvent) {
 
 export default function LayerListItem({
   layer,
+  sidebarAccent,
   index,
   total,
   selected,
@@ -251,7 +254,7 @@ export default function LayerListItem({
 
       <span
         className="maono-layer-row__swatch"
-        style={{ background: `rgb(${layer.color.join(",")})` }}
+        style={{ "--layer-accent-color": sidebarAccent } as CSSProperties}
         aria-hidden="true"
       />
 

@@ -3,7 +3,6 @@ import { useState } from "react";
 
 import {
   fieldSupportsLayerColumn,
-  layerTypeLabel,
   type MapLayerColumnKey,
   type MapLayerColumns,
 } from "../../engine-adapter";
@@ -20,12 +19,10 @@ import PointSpatialGroupingSection from "./PointSpatialGroupingSection";
 type Props = {
   layer: MaonoLayerSnapshot | null;
   datasets: MaonoDatasetSnapshot[];
-  canToggle: boolean;
   canEditStructure: boolean;
   canEditStyle: boolean;
   layerBlending: string | null;
   overlayBlending: string | null;
-  onToggle: (layer: MaonoLayerSnapshot, visible: boolean) => void;
   onDatasetChange: (layer: MaonoLayerSnapshot, datasetId: string) => boolean;
   onColumnsChange: (
     layer: MaonoLayerSnapshot,
@@ -47,12 +44,10 @@ const COLUMN_LABELS: Record<MapLayerColumnKey, string> = {
 export default function LayerInspector({
   layer,
   datasets,
-  canToggle,
   canEditStructure,
   canEditStyle,
   layerBlending,
   overlayBlending,
-  onToggle,
   onDatasetChange,
   onColumnsChange,
   onStyleChange,
@@ -112,38 +107,9 @@ export default function LayerInspector({
 
   return (
     <section className="maono-layer-inspector">
-      <section className="maono-layer-essential" aria-label="Configurações essenciais">
-        <header>
-          <div>
-            <span>Camada</span>
-            <strong>{layerTypeLabel(activeLayer.type)}</strong>
-          </div>
-          <button
-            type="button"
-            className="maono-layer-visibility-switch"
-            role="switch"
-            aria-checked={activeLayer.isVisible}
-            disabled={!canToggle}
-            onClick={() => onToggle(activeLayer, !activeLayer.isVisible)}
-          >
-            <LayerPanelIcon name={activeLayer.isVisible ? "eye" : "eye-off"} />
-            <span>{activeLayer.isVisible ? "Visível" : "Oculta"}</span>
-          </button>
-        </header>
-        <dl>
-          <div>
-            <dt>Dataset</dt>
-            <dd>{dataset?.label ?? datasetId ?? "Não informado"}</dd>
-          </div>
-          <div>
-            <dt>Registros</dt>
-            <dd>{dataset?.filteredRowCount ?? dataset?.rowCount ?? "—"}</dd>
-          </div>
-        </dl>
-      </section>
-
       {canEditStyle ? (
         <LayerStyleEditor
+          key={activeLayer.id}
           layer={activeLayer}
           dataset={dataset}
           layerBlending={layerBlending}
@@ -160,7 +126,6 @@ export default function LayerInspector({
             <summary>
               <span>
                 <strong>Dimensão e agrupamento</strong>
-                <small>Configuração de pontos por zoom</small>
               </span>
               <LayerPanelIcon name="chevron-down" />
             </summary>
