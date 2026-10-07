@@ -60,6 +60,17 @@ test('Visual Maõno: rail order, disabled research folder, repeated tools and ke
   await base.click();
   await expect(base).toHaveAttribute('aria-expanded', 'true');
   await expect(rail(page).locator('.is-active')).toHaveCount(1);
+  await page.mouse.move(0, 0);
+  const activeAppearance = await base.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { color: style.color, background: style.backgroundColor };
+  });
+  expect(activeAppearance.color).toBe('rgb(197, 160, 89)');
+  expect(activeAppearance.background).toBe('rgb(10, 15, 24)');
+  await base.hover();
+  await expect(base).toHaveCSS('color', activeAppearance.color);
+  await expect(base).toHaveCSS('background-color', activeAppearance.background);
+  await expect(base.locator('.maono-map-sidebar__connector-edge')).toHaveCSS('stroke', 'rgb(22, 31, 48)');
   await page.screenshot({ path: testInfo.outputPath('visual-rail-basemap.png') });
   await rail(page).getByRole('button', { name: 'Adicionar dados', exact: true }).click();
   await expect(rail(page).locator('.is-active')).toHaveCount(1);

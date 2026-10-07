@@ -110,8 +110,8 @@
   height: 22px;
 }
 
-.maono-map-sidebar__nav a:hover,
-.maono-map-sidebar__nav button:hover:not(:disabled):not([aria-disabled="true"]) {
+.maono-map-sidebar__nav a:hover:not(.is-active),
+.maono-map-sidebar__nav button:hover:not(:disabled):not([aria-disabled="true"]):not(.is-active) {
   color: var(--maono-map-text);
   background: rgba(255, 255, 255, 0.035);
 }

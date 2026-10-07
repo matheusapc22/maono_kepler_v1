@@ -109,3 +109,14 @@ test('neutral connector reuses the exact old divider with a single non-interacti
   assert.match(read('maono-map-shell.css'), /@media \(min-width: 821px\) and \(max-height: 540px\)[\s\S]*overflow-y: auto/);
   assert.match(read('maono-map-shell.css'), /\.maono-map-sidebar::before,\s*\.maono-map-sidebar__connector\s*\{\s*display: none;/);
 });
+
+
+test('inactive hover cannot override the connected active icon color or surface', () => {
+  const hoverRule = css.nodes.find(node => node.type === 'rule' && node.selector.includes('a:hover:not(.is-active)'));
+  assert.ok(hoverRule);
+  for (const selector of hoverRule.selectors) assert.match(selector, /:not\(\.is-active\)/);
+  const active = css.nodes.find(node => node.type === 'rule' && node.selector === '.maono-map-sidebar__nav .is-active');
+  const properties = Object.fromEntries(active.nodes.map(node => [node.prop, node.value]));
+  assert.equal(properties.color, 'var(--maono-map-gold)');
+  assert.equal(properties.background, 'var(--maono-map-panel)');
+});
