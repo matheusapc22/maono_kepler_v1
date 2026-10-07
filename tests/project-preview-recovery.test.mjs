@@ -93,11 +93,11 @@ test('session cancellation settles even if a transport ignores AbortSignal',asyn
  await assert.rejects(pending,{name:'AbortError'});
 });
 
-test('prepared frame memory is released on archive, unmount, stale receipt and pre-persistence failure',()=>{
+test('prepared frame memory is released on terminal failure, unmount, stale receipt and pre-persistence failure',()=>{
  const source=readFileSync(new URL('../src/pages/Kepler/components/maono-save-button.tsx',import.meta.url),'utf8');
  assert.match(source,/for \(const capture of previewCaptures.current.values\(\)\) capture.cancel\(\)/);
  assert.match(source,/previewCaptures.current.clear\(\)/);
- assert.match(source,/releasePreparedPreview\(pending.manifest.operationId\)/);
+ assert.match(source,/releasePreparedPreview\(snapshot.manifest.operationId\)/);
  assert.match(source,/clickedOperationId && !snapshotPersisted/);
  assert.match(source,/currentRevision !== revision\) capture\?\.cancel\(\)/);
  assert.doesNotMatch(source,/removeStaged|clearAccount/,'dropping in-memory references never deletes a recoverable PNG');

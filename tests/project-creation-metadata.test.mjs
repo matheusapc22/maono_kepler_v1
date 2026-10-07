@@ -148,7 +148,7 @@ test("mapa existente mantém optimistic concurrency e nunca remonta o rascunho a
   assert.match(saveButton, /expectedConfigRevision/);
   assert.match(saveButton, /context\?\.version/);
   assert.doesNotMatch(saveButton, /\brefresh\(/);
-  assert.match(saveButton, /if \(matches\) expectedRevisionRef\.current/);
+  assert.match(saveButton, /canAdvanceOwnSaveBase\(snapshot, editorSessionId\.current, expectedRevisionRef\.current.revision, result.data\)/);
 });
 
 test("criação serializa o clique uma vez; thumbnail independente usa snapshot salvo", () => {
@@ -179,7 +179,7 @@ test("sucesso só redireciona após ACTIVE e se não houve edição posterior", 
   assert.match(createFlow, /if \(!isProjectCreationActive\(result\.data\)\)/);
   assert.ok(create.indexOf("executeProjectCreateFlow") < create.indexOf("navigate("));
   assert.match(create, /if \(confirmationMatchesEditor\(result\.snapshot, editorSessionId\.current, editGeneration\.current\)\) navigate/);
-  assert.match(saveButton, /Exporte as edições posteriores/);
+  assert.match(saveButton, /Há alterações ainda não salvas/);
 });
 
 test("retry reutiliza metadata, idempotency key e bytes persistidos antes da reserva", () => {
@@ -199,12 +199,12 @@ test("painel valida título e descrição sem campo de slug", () => {
   assert.doesNotMatch(createPanel, /name="slug"/);
 });
 
-test("painel mostra organização, progresso e bloqueia fechamento crítico", () => {
+test("painel mostra organização, salvamento simples e bloqueia fechamento crítico", () => {
   assert.match(createPanel, /Organização ativa/);
-  assert.match(createPanel, /Criando registro/);
-  assert.match(createPanel, /Preparando arquivos/);
-  assert.match(createPanel, /Vinculando usuário/);
-  assert.match(createPanel, /Finalizando/);
+  assert.doesNotMatch(createPanel, /Criando registro/);
+  assert.doesNotMatch(createPanel, /Preparando arquivos/);
+  assert.doesNotMatch(createPanel, /Vinculando usuário/);
+  assert.doesNotMatch(createPanel, /Finalizando/);
   assert.match(createPanel, /if \(busy\) \{\s*return;/);
   assert.match(createPanel, /aria-modal="true"/);
   assert.match(createPanel, /event\.key !== "Tab"/);

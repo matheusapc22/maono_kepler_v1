@@ -249,7 +249,7 @@ export async function saveAndCapture(page, ctx, project, expectedRevision) {
       const checked = await validatePreviewPng(bytes);
       check(checked.sizeBytes === preview.sizeBytes && checked.imageChecksum === preview.imageChecksum, 'PNG enviado diverge do manifesto.');
       const image = await readPngEvidence(page, ctx, project, receipt);
-      await page.locator('#maono-map-engine-panel .maono-layer-panel__save-message').filter({ hasText: `Projeto salvo na revisão ${saved.publishedRevision}. A visualização PNG já foi atualizada.` }).waitFor({ timeout: ctx.requestTimeoutMs(30_000) });
+      await page.locator('#maono-map-engine-panel .maono-layer-panel__save-footer[data-save-state="saved"][data-preview-state="READY"]').waitFor({ timeout: ctx.requestTimeoutMs(30_000) });
       return { saved, preview, receipt, bytes, image };
     });
   } finally { page.off('request', listener); }

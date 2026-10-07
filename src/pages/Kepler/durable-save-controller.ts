@@ -3,6 +3,7 @@ import { beginClientSaveAttempt, buildSaveRequestHeaders, readSaveResponseDiagno
 import { createIndexedDbSaveStore, LOCAL_SAVE_RETENTION_MS, saveAccountKey, saveScopeKey, saveSnapshotKey, validateLocalSnapshot, type DurableSaveSnapshot, type DurableSaveStore, type SaveScope } from "./durable-save-store.ts";
 
 export const SAVE_STALL_NOTICE_MS = 12_000;
+export const SAVE_REQUEST_TIMEOUT_MS = 30_000;
 export type SavePhase = "PREPARING" | "LOCAL_READY" | "SENDING" | "CHECKING" | "CONFIRMED" | "NEEDS_ACTION";
 export type ProjectUpdateFlowResult = { response: Response; data: any; diagnostics: SaveResponseDiagnostics; snapshot: DurableSaveSnapshot };
 export const defaultDurableSaveStore = createIndexedDbSaveStore();
@@ -51,6 +52,13 @@ export function receiptRevision(data: any) {
   const receipt = data?.operation?.receipt ?? data?.receipt;
   return Math.max(0, Number(receipt?.publishedRevision ?? receipt?.configRevision ?? receipt?.revision ?? data?.configRevision ?? 0) || 0);
 }
+/** A newer local edit may build on our own verified commit, never on somebody else's head. */
+export function canAdvanceOwnSaveBase(snapshot: DurableSaveSnapshot, editorSessionId: string, currentBase: number, data: any) {
+  const revision = receiptRevision(data);
+  const currentRevision = Number(data?.operation?.currentRevision ?? data?.currentRevision ?? revision);
+  return snapshot.editorSessionId === editorSessionId && currentBase === snapshot.expectedConfigRevision &&
+    revision === snapshot.expectedConfigRevision + 1 && currentRevision === revision;
+}
 export function operationState(data: any) { return String(data?.operation?.state ?? data?.state ?? ""); }
 export type DurableSavePublicCode =
   | "SAVE_RECEIPT_UNVERIFIED"
@@ -75,9 +83,26 @@ async function waitForPoll(ms: number, signal?: AbortSignal) {
     signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
-export async function executePreparedProjectUpdate({ snapshot, scope = snapshot.scope, signal, store = defaultDurableSaveStore, fetchImpl = globalThis.fetch.bind(globalThis), onStall, stallAfterMs, onPhase = () => {}, pollIntervalMs = 1500, isScopeCurrent = () => true }: {
+/** Bound short status checks; payload transfers keep their original unbounded budget. */
+export async function readSaveResponse(fetchImpl: typeof fetch, url: string, init: RequestInit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS) {
+  const requestController = new AbortController();
+  const abort = () => requestController.abort(init.signal?.reason);
+  if (init.signal?.aborted) abort();
+  else init.signal?.addEventListener("abort", abort, { once: true });
+  const timer = init.method === "GET" ? setTimeout(() => requestController.abort(new DOMException("Save response timed out.", "TimeoutError")), timeoutMs) : undefined;
+  try {
+    const response = await fetchImpl(url, { ...init, signal: requestController.signal });
+    const parsed = await parseResponseJson(response);
+    if (requestController.signal.aborted) throw requestController.signal.reason;
+    return { response, parsed };
+  } catch (error) {
+    if (requestController.signal.aborted) throw requestController.signal.reason;
+    throw error;
+  } finally { clearTimeout(timer); init.signal?.removeEventListener("abort", abort); }
+}
+export async function executePreparedProjectUpdate({ snapshot, scope = snapshot.scope, signal, store = defaultDurableSaveStore, fetchImpl = globalThis.fetch.bind(globalThis), onStall, stallAfterMs, onPhase = () => {}, pollIntervalMs = 1500, requestTimeoutMs = SAVE_REQUEST_TIMEOUT_MS, isScopeCurrent = () => true }: {
   snapshot: DurableSaveSnapshot; scope?: SaveScope; signal?: AbortSignal; store?: DurableSaveStore; fetchImpl?: typeof fetch;
-  onStall?: () => void; stallAfterMs?: number; onPhase?: (phase: SavePhase, data?: any) => void; pollIntervalMs?: number; isScopeCurrent?: () => boolean;
+  onStall?: () => void; stallAfterMs?: number; onPhase?: (phase: SavePhase, data?: any) => void; pollIntervalMs?: number; requestTimeoutMs?: number; isScopeCurrent?: () => boolean;
 }): Promise<ProjectUpdateFlowResult> {
   // A fresh authenticated scope must be supplied by the UI after login; never recover another account.
   if (saveScopeKey(scope) !== snapshot.scopeKey || scope.projectId !== snapshot.scope.projectId) throw new Error("A tentativa pertence a outra conta, organização ou projeto.");
@@ -99,18 +124,25 @@ export async function executePreparedProjectUpdate({ snapshot, scope = snapshot.
       ensureCurrent();
       const requestAttempt = { ...snapshot.attempt, ...beginClientSaveAttempt(snapshot.attempt.operation), saveId: snapshot.attempt.saveId };
       const headers = { ...buildSaveRequestHeaders(requestAttempt), ...snapshot.headers, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) };
-      const response = await fetchImpl(url, { method, body, headers, credentials: "include", cache: "no-store", signal });
-      const parsed = await parseResponseJson(response);
+      const { response, parsed } = await readSaveResponse(fetchImpl, url, { method, body, headers, credentials: "include", cache: "no-store", signal }, requestTimeoutMs);
       ensureCurrent();
       const data: any = parsed.valid ? parsed.data : { ok: false, error: { message: "A resposta do servidor não pôde ser confirmada. Verifique esta mesma tentativa novamente." } };
       return { response, data, diagnostics: readSaveResponseDiagnostics(response, requestAttempt) };
+    }
+    function hasOperation(result: Awaited<ReturnType<typeof send>>) {
+      return result.response.ok && result.data?.ok !== false && ["AWAITING_UPLOAD", "RECEIVING", "PAYLOAD_STORED", "PROCESSING", "RETRY_WAIT", "PUBLISHED", "CONFLICT", "FAILED_FINAL"].includes(operationState(result.data));
     }
     async function mutate(url: string, method: string, body: BodyInit) {
       try {
         const result = await send(url, method, body);
         if (result.response.status >= 500) {
           onPhase("CHECKING");
-          try { return await send(path); } catch { return result; }
+          try {
+            const checked = await send(path);
+            // A missing/failed status lookup is not evidence about the mutation.
+            // In particular, admission 503 followed by status 404 must remain 503.
+            return hasOperation(checked) ? checked : result;
+          } catch { return result; }
         }
         return result;
       }
@@ -118,7 +150,11 @@ export async function executePreparedProjectUpdate({ snapshot, scope = snapshot.
         ensureCurrent();
         // A lost mutation response is ambiguous: ask for its receipt before any further send.
         onPhase("CHECKING");
-        try { return await send(path); } catch { throw error; }
+        try {
+          const checked = await send(path);
+          if (hasOperation(checked)) return checked;
+        } catch { /* Preserve the original lost-response cause. */ }
+        throw error;
       }
     }
     onPhase("CHECKING");
@@ -168,6 +204,7 @@ export async function executePreparedProjectUpdate({ snapshot, scope = snapshot.
           throw new DurableSaveError("A cópia local desta tentativa expirou após 7 dias ou foi removida. O servidor ainda não recebeu todo o mapa. Preserve o rascunho atual antes de recarregar.", result.response, result.data, snapshot, "LOCAL_SAVE_PAYLOAD_EXPIRED");
         }
         if (!integrityChecked && await hashSavePayload(snapshot.serialized.body) !== snapshot.manifest.contentHash) {
+          await store.put({ ...snapshot, localState: "failed" });
           throw new DurableSaveError("A cópia local não passou na verificação de integridade. Exporte o rascunho atual; esta tentativa não será reenviada.", result.response, result.data, snapshot, "LOCAL_SAVE_PAYLOAD_INTEGRITY_FAILED");
         }
         integrityChecked = true;
