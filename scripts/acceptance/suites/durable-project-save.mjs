@@ -1,6 +1,6 @@
 import { validateBeforeEvidence, RUN_MAX_AGE_MS } from "../manual-evidence.mjs";
 import { createHash } from "node:crypto";
-import { fail } from "../production-acceptance-lib.mjs";
+import { assertHttpResponse, fail } from "../production-acceptance-lib.mjs";
 import { buildLargeCreateFixture } from "../../large-create/build-large-create-fixture.mjs";
 
 const QA = Object.freeze({ id: 9, slug: "maono-preview-qa" });
@@ -45,7 +45,7 @@ function check(condition, message, code = "ACCEPTANCE_ASSERTION_FAILED") {
 }
 function status(response, expected, label) {
   const allowed = Array.isArray(expected) ? expected : [expected];
-  check(allowed.includes(response.status) && response.body?.ok !== false, `${label}: HTTP ${response.status}, esperado ${allowed.join("/")}.`);
+  assertHttpResponse(response, allowed.includes(response.status) && response.body?.ok !== false, `${label}: HTTP ${response.status}, esperado ${allowed.join("/")}.`);
   return response.body;
 }
 function same(left, right, label) {
@@ -248,7 +248,7 @@ export async function run(ctx) {
   resources[0].reservationUncertain = false;
   await ctx.publishManualJournal(resources);
   const changed = await ctx.api("creator", `${root(small.project)}/save-operations`, { method: "POST", headers: headers(small.project, small.creationKey), json: { ...small.input, contentHash: "f".repeat(64) } });
-  check(changed.status === 409 && changed.body?.error?.code === "OPERATION_PAYLOAD_MISMATCH", "ID reutilizado com outros bytes não foi recusado.");
+  assertHttpResponse(changed, changed.status === 409 && changed.body?.error?.code === "OPERATION_PAYLOAD_MISMATCH", "ID reutilizado com outros bytes não foi recusado.");
   ctx.record("DS-IDEMPOTENT", "PASS", { registration: true, payload: true, reservation: true, mismatchedManifestRejected: true });
 
   const nextBody = smallFixture(ctx.runId, "later-revision");
@@ -276,7 +276,7 @@ export async function run(ctx) {
   for (const contract of [null, "1"]) {
     for (const [path, method] of [[`${root(small.project)}/config`, "PUT"], [`${root(small.project)}/save`, "POST"], [`${root(small.project)}/save-operations`, "POST"], ["/api/projects", "POST"]]) {
       const rejected = await ctx.api("creator", path, { method, body: "{synthetic-old-client-invalid-json", headers: { "Content-Type": "application/json", ...(contract ? { "X-Maono-Client-Contract": contract } : {}) } });
-      check(rejected.status === 412 && rejected.body?.error?.code === "SAVE_CLIENT_CONTRACT_UNSUPPORTED", "Cliente antigo não foi recusado antes do payload.");
+      assertHttpResponse(rejected, rejected.status === 412 && rejected.body?.error?.code === "SAVE_CLIENT_CONTRACT_UNSUPPORTED", "Cliente antigo não foi recusado antes do payload.");
     }
   }
   ctx.record("DS-OLD-CLIENT", "PASS", { headerless: true, contract1: true, malformedBodyRejectedBeforeParse: true });

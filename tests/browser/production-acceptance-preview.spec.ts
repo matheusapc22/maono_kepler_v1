@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { installPanelFixture, openLayers } from './fixtures/map-panel-minimal';
 import { saveAndCapture, readPngEvidence, verifyNegativePreviewCases, installBrowserWriteGuard } from '../../scripts/acceptance/preview-browser.mjs';
+import { verifyOwnedProjectEditorAccess } from '../../scripts/acceptance/suites/durable-project-preview.mjs';
 
 // Exercise the exact production acceptance browser assertions with built
 // React/Kepler and real browser PNG bytes. Accounts, backend and storage below
@@ -32,6 +33,10 @@ async function localScenario(page: Page) {
 test('registered PNG acceptance assertions observe capture, refresh, ordering and isolated failure', async ({ page }) => {
   const { fixture, records, ctx, project, open, checkGuard } = await localScenario(page);
   await open();
+  const navigation = await ctx.api('creator', `/api/projects/${encodeURIComponent(project.slug)}/map-navigation?mode=editor`);
+  expect(navigation.status).toBe(200);
+  expect(navigation.body).not.toHaveProperty('context');
+  verifyOwnedProjectEditorAccess(navigation.body, project, ctx.organizationId);
   const first = await saveAndCapture(page, ctx, project, 1);
   expect(first.image.fixtureColorPixels).toBeGreaterThanOrEqual(10);
   await open();

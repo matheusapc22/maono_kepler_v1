@@ -99,11 +99,11 @@ async function setup(page: Page, options: FixtureOptions = {}) {
       await options.beforeMapNavigation?.();
       const project = state.find(item => item.slug === path.split("/")[3]);
       const requestedMode = url.searchParams.get("mode");
-      return route.fulfill({ json: { ok: true, context: {
+      return route.fulfill({ json: { ok: true,
         project, organization: organizations[0], requestedMode, mode: "viewer", policyVersion: 1,
         assignedMode: "viewer", defaultPanel: "viewer", allowed: true,
         availablePanels: { viewer: true, editor: false, create: false }, capabilities: {}, features: {},
-      } } });
+      } });
     }
     if (request.method() !== "GET") return route.fulfill({ status: 403, json: { ok: false } });
     return route.fulfill({ json: { ok: true, projects: [], files: [], folders: [], items: [], tickets: [], users: [], facets: { types: [], projects: [], folderCounts: [] }, pagination: { total: 0, hasMore: false } } });

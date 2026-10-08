@@ -2,7 +2,7 @@
 
 ## Escopo
 
-PR independente sobre `mano_kepler_v1`, base `d3c9377cdc18aa94b4e561d82b2351c8766db4a5`. Não inclui merge, deploy, migrations, backend, alterações do motor de salvamento ou ativação de flags. A aceitação remota de salvamento continua separada.
+PR independente sobre `mano_kepler_v1`; base atualizada para `3d12a89385dd7af34afc348be609d432d453da06` após a integração autorizada da PR234. Não inclui merge, deploy, migrations, backend, alterações do motor de salvamento ou ativação de flags. A aceitação remota de salvamento continua separada.
 
 ### Inventário de componentes
 
@@ -62,7 +62,7 @@ Validação pré-publicação: 9 casos Chromium de histograma/touch e 3 casos Ch
 
 O gate completo anterior no head `4a0c3ef` executou 601 casos com sucesso, incluindo digitação, precisão numérica e 37% com save/reload nos três browsers. Sete falhas eram expectativas residuais: seis ainda procuravam subtítulos removidos e uma amostrava uma transição de cor no WebKit antes do estado final. Essas expectativas foram corrigidas sem remover a validação de geometria, cor, hover ou scroll.
 
-A PR234 mantém prioridade de integração por corrigir o DTO dos mocks de navegação. Depois de sua integração autorizada, esta branch deve preservar respostas top-level `{ok: true, ...navigation}` ao atualizar a base, e repetir os gates no novo head. Esta PR continua sem autorização de merge ou produção.
+A atualização de base preserva exatamente os 16 blobs de operador/testes herdados do produto `3d12a893`, sem conflitos ou sobreposição com os arquivos alterados por esta PR. Os mocks mantêm respostas top-level `{ok: true, ...navigation}` da PR234. Nenhum arquivo de runtime muda nessa atualização; os gates serão repetidos no novo head. A PR235 ainda deve ser integrada separadamente quando autorizada, preservando seu feedback de salvamento e teste de suporte. Esta PR continua sem autorização de merge ou produção.
 
 A inspeção das screenshots reais do CI identificou também uma regra de maior especificidade que mantinha “Essencial” de filtros em branco. O título foi movido para o mesmo grupo CSS dourado dos títulos de camada. As regressões calculam cor dos títulos e estados do olho, além de conferir ausência de fundo/borda permanentes. O teste de opacidade agora compartilha a exigência de baseline cartográfico estável/não vazio usada nos dois novos testes de interação.
 

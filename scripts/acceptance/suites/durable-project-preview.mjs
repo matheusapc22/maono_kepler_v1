@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { assertHttpResponse } from '../production-acceptance-lib.mjs';
 import { manifest as durable, prepare as prepareDurable, verifyPreflight as verifyDurablePreflight, createSyntheticProjectForPreview } from './durable-project-save.mjs';
 import { check, installBrowserWriteGuard, saveAndCapture, readPngEvidence, verifyNegativePreviewCases, revocableBrowserScope } from '../preview-browser.mjs';
 
@@ -41,10 +42,10 @@ export function verifyPreflight(project, options) {
 export const prepare = prepareDurable;
 
 export function verifyOwnedProjectEditorAccess(value, project, organizationId = 9) {
-  const context = value?.context;
-  check(context?.allowed === true && context.mode === 'editor' && Number(context.project?.id) === Number(project.id) &&
-    context.project?.slug === project.slug && Number(context.organization?.id) === organizationId &&
-    context.capabilities?.viewMap === true && context.capabilities?.saveMap === true,
+  // The map-navigation HTTP response exposes the navigation fields at its root.
+  check(value?.ok === true && value.allowed === true && value.mode === 'editor' && Number(value.project?.id) === Number(project.id) &&
+    value.project?.slug === project.slug && Number(value.organization?.id) === organizationId &&
+    value.capabilities?.viewMap === true && value.capabilities?.saveMap === true,
     'O contexto do projeto criado não confirmou acesso real de editor.', 'QA_PROJECT_CAPABILITY_MISMATCH');
 }
 
@@ -90,8 +91,8 @@ export async function run(ctx) {
     if (owner) await owner.close();
     check(!owner || owner.closed, 'Cleanup bloqueado: navegador ainda pode escrever.', 'PNG_BROWSER_CLOSURE_UNVERIFIED');
   } });
-  const navigation = await ctx.api('creator', `/api/projects/${encodeURIComponent(seeded.project.slug)}/map-navigation`);
-  check(navigation.status === 200, 'Contexto do projeto criado não disponível.', 'QA_PROJECT_CAPABILITY_MISMATCH');
+  const navigation = await ctx.api('creator', `/api/projects/${encodeURIComponent(seeded.project.slug)}/map-navigation?mode=editor`);
+  assertHttpResponse(navigation, navigation.status === 200, 'Contexto do projeto criado não disponível.', 'QA_PROJECT_CAPABILITY_MISMATCH');
   verifyOwnedProjectEditorAccess(navigation.body, seeded.project, ctx.organizationId);
   const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch({ headless: true, timeout: ctx.requestTimeoutMs(30_000), args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });

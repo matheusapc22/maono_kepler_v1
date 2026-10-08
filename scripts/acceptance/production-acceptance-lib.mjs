@@ -14,22 +14,75 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
 const DURABLE_SAVE_FLAGS = new Set(["PROJECT_DURABLE_SAVE_V1", "PROJECT_DURABLE_SAVE_INLINE_ENABLED"]);
 const PREVIEW_FLAGS = new Set(["PROJECT_PREVIEW_OPERATIONS_V1", "PROJECT_PREVIEW_PROCESSOR_ENABLED", "VITE_PROJECT_PREVIEW_OPERATIONS_V1"]);
 const TERMINAL = new Set(["success", "failure", "canceled"]);
+const BACKEND_CODE = /^[A-Z0-9_]{1,120}$/;
+const CORRELATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$/;
+const CF_RAY = /^[0-9a-f]{16}(?:-[A-Z]{3})?$/;
+const CLOUDFLARE_ERROR_CODES = new Set(["1027", "1101", "1102"]);
+const RESPONSE_FORMATS = new Set(["json", "non-json", "invalid-json"]);
+
+function matchesWholeString(value, pattern) {
+  // JavaScript's $ also matches before a final newline; identifiers must match
+  // the entire original value, without trimming or accepting control characters.
+  return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+
+// Acceptance reports retain only bounded identifiers, never backend messages,
+// response bodies, arbitrary headers, provider details or request credentials.
+function safeHttpEvidence(value = {}) {
+  const evidence = {};
+  if (Number.isInteger(value?.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599) evidence.httpStatus = value.httpStatus;
+  if (matchesWholeString(value?.backendCode, BACKEND_CODE)) evidence.backendCode = value.backendCode;
+  for (const field of ["correlationId", "headerCorrelationId"]) {
+    if (matchesWholeString(value?.[field], CORRELATION_ID)) evidence[field] = value[field];
+  }
+  if (evidence.headerCorrelationId === evidence.correlationId) delete evidence.headerCorrelationId;
+  if (RESPONSE_FORMATS.has(value?.responseFormat)) evidence.responseFormat = value.responseFormat;
+  if (matchesWholeString(value?.cfRay, CF_RAY)) evidence.cfRay = value.cfRay;
+  if (evidence.responseFormat === "non-json" && evidence.httpStatus >= 400 && evidence.cfRay && CLOUDFLARE_ERROR_CODES.has(value?.cloudflareErrorCode)) evidence.cloudflareErrorCode = value.cloudflareErrorCode;
+  return evidence;
+}
+
+function cloudflareErrorCode(response, cfRay) {
+  if (response?.responseFormat !== "non-json" || typeof response?.body !== "string" || !matchesWholeString(cfRay, CF_RAY) || response?.status < 400) return undefined;
+  // Match only a known error marker within a bounded prefix already read by
+  // appRequest. A resource-limit code is evidence, not a CPU/memory diagnosis.
+  const prefix = response.body.slice(0, 16 * 1024);
+  const html = prefix.match(/<span\s+class=["']cf-error-code["']\s*>\s*(1027|1101|1102)\s*<\/span>/i);
+  const heading = prefix.match(/<(?:title|h1)\b[^>]{0,200}>\s*Error\s+(1027|1101|1102)(?=[\s:<])/i);
+  const text = prefix.match(/(?:^|\n)[ \t]*error(?:[ \t]+code)?[ \t]*:[ \t]*(1027|1101|1102)(?=\s|$)/i);
+  return html?.[1] || heading?.[1] || text?.[1];
+}
+
+export function assertHttpResponse(response, condition, message, code = "ACCEPTANCE_ASSERTION_FAILED") {
+  if (condition) return;
+  const cfRay = response?.headers?.get?.("CF-Ray");
+  fail(code, message, {
+    httpStatus: response?.status,
+    backendCode: response?.body?.error?.code,
+    correlationId: response?.body?.error?.correlationId,
+    headerCorrelationId: response?.headers?.get?.("X-Correlation-Id"),
+    responseFormat: response?.responseFormat,
+    cfRay,
+    cloudflareErrorCode: cloudflareErrorCode(response, cfRay),
+  });
+}
 
 export class AcceptanceError extends Error {
-  constructor(code, message) {
+  constructor(code, message, httpEvidence = {}) {
     super(message);
     this.name = "AcceptanceError";
     this.code = code;
+    this.httpEvidence = safeHttpEvidence(httpEvidence);
   }
 }
 
-export function fail(code, message) {
-  throw new AcceptanceError(code, message);
+export function fail(code, message, httpEvidence) {
+  throw new AcceptanceError(code, message, httpEvidence);
 }
 
 export function safeError(error) {
   return error instanceof AcceptanceError || error?.name === "AcceptanceBudgetError"
-    ? { code: error.code, message: error.message }
+    ? { code: error.code, message: error.message, ...safeHttpEvidence(error instanceof AcceptanceError ? error.httpEvidence : null) }
     : { code: "ACCEPTANCE_UNEXPECTED", message: "Falha inesperada no operador; revise o relatório antes de repetir." };
 }
 
@@ -395,30 +448,33 @@ export async function appRequest(baseUrl, path, {
     if (["AbortError", "TimeoutError"].includes(error?.name)) throw error;
     return fallback;
   };
-  const payload = type.includes("application/json")
-    ? await response.json().catch((error) => readFailure(error, null))
-    : await response.text().catch((error) => readFailure(error, ""));
+  let payload, responseFormat;
+  if (type.includes("application/json")) {
+    try { payload = await response.json(); responseFormat = "json"; }
+    catch (error) { payload = readFailure(error, null); responseFormat = "invalid-json"; }
+  } else {
+    payload = await response.text().catch((error) => readFailure(error, ""));
+    responseFormat = "non-json";
+  }
   budget?.assertActive();
-  return { status: response.status, ok: response.ok, headers: response.headers, body: payload };
+  return { status: response.status, ok: response.ok, headers: response.headers, body: payload, responseFormat };
 }
 
 export async function loginProfile(baseUrl, credentials, organizationId, deps = {}) {
   const login = await appRequest(baseUrl, "/api/auth/login", {
     ...deps, method: "POST", json: { email: credentials.email, password: credentials.password },
   });
-  if (login.status !== 200) fail("QA_LOGIN_FAILED", `Login QA recusado (HTTP ${login.status}).`);
+  assertHttpResponse(login, login.status === 200, `Login QA recusado (HTTP ${login.status}).`, "QA_LOGIN_FAILED");
   const cookie = cookieFromHeader(login.headers.get("set-cookie"));
   let session = await appRequest(baseUrl, "/api/session", { ...deps, cookie });
-  if (session.status !== 200 || session.body?.authenticated !== true || !session.body?.user?.id) fail("QA_SESSION_FAILED", "Sessão QA não confirmada.");
+  assertHttpResponse(session, session.status === 200 && session.body?.authenticated === true && Boolean(session.body?.user?.id), "Sessão QA não confirmada.", "QA_SESSION_FAILED");
   if (String(session.body.activeOrganization?.id || "") !== String(organizationId)) {
     session = await appRequest(baseUrl, "/api/session/active-organization", {
       ...deps, method: "PUT", cookie, json: { organizationId },
     });
   }
-  if (session.status !== 200 || session.body?.authenticated !== true ||
-      String(session.body.activeOrganization?.id || "") !== String(organizationId)) {
-    fail("QA_ORGANIZATION_MISMATCH", "Sessão QA não está na organização solicitada.");
-  }
+  assertHttpResponse(session, session.status === 200 && session.body?.authenticated === true &&
+    String(session.body.activeOrganization?.id || "") === String(organizationId), "Sessão QA não está na organização solicitada.", "QA_ORGANIZATION_MISMATCH");
   return {
     cookie,
     organization: { id: session.body.activeOrganization.id, slug: session.body.activeOrganization.slug },
@@ -512,7 +568,7 @@ export function suiteContext({
     },
     async cleanupApi(profileName, path, options = {}, expectedStatuses = [200, 204]) {
       const response = await this.api(profileName, path, options);
-      if (!expectedStatuses.includes(response.status)) fail("CLEANUP_HTTP_FAILED", `Cleanup recusado (HTTP ${response.status}).`);
+      assertHttpResponse(response, expectedStatuses.includes(response.status), `Cleanup recusado (HTTP ${response.status}).`, "CLEANUP_HTTP_FAILED");
       return response;
     },
     async cleanup() {

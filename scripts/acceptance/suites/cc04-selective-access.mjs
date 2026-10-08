@@ -1,4 +1,4 @@
-import { fail } from "../production-acceptance-lib.mjs";
+import { assertHttpResponse, fail } from "../production-acceptance-lib.mjs";
 
 export const manifest = Object.freeze({
   id: "cc04-selective-access",
@@ -24,9 +24,7 @@ export const manifest = Object.freeze({
 
 function expectStatus(response, expected, label) {
   const values = Array.isArray(expected) ? expected : [expected];
-  if (!values.includes(response.status)) {
-    fail("ACCEPTANCE_ASSERTION_FAILED", `${label}: HTTP ${response.status}, esperado ${values.join("/")}.`);
-  }
+  assertHttpResponse(response, values.includes(response.status), `${label}: HTTP ${response.status}, esperado ${values.join("/")}.`);
   return response;
 }
 
