@@ -87,6 +87,24 @@ export function allowedBrowserMutation(url, method, baseUrl, project) {
     (method === 'POST' && ['/api/observability/map-load', '/api/observability/project-preview'].includes(target.pathname));
 }
 
+// Diagnostic labels never contain request input: no URL, query, header, body,
+// credentials or project name is copied into the protected run report.
+function browserMutationTarget(url, baseUrl, project) {
+  const target = new URL(url), base = new URL(baseUrl);
+  if (target.origin !== base.origin) {
+    return ['https://events.mapbox.com', 'https://events.mapbox.cn'].includes(target.origin) && target.pathname === '/events/v2'
+      ? 'MAPBOX_TELEMETRY' : 'EXTERNAL_OTHER';
+  }
+  if (target.pathname === '/cdn-cgi/rum') return 'CLOUDFLARE_TELEMETRY';
+  if (target.pathname === '/api/session/active-organization') return 'SESSION_ORGANIZATION';
+  if (['/api/auth/login', '/api/auth/logout'].includes(target.pathname)) return 'SESSION_AUTH';
+  const root = `/api/projects/${encodeURIComponent(project.slug)}`;
+  if (target.pathname === `${root}/thumbnail`) return 'FIXTURE_PREVIEW';
+  if (target.pathname === `${root}/save-operations` || target.pathname.startsWith(`${root}/save-operations/`)) return 'FIXTURE_SAVE';
+  if (['/api/observability/map-load', '/api/observability/project-preview'].includes(target.pathname)) return 'APP_TELEMETRY';
+  return target.pathname.startsWith('/api/projects/') ? 'PROJECT_OTHER' : 'SAME_ORIGIN_OTHER';
+}
+
 // The guard never supplies fake data or successful responses. It only blocks
 // writes outside the already-created synthetic project and closure budget.
 export async function installBrowserWriteGuard(page, ctx, project) {
@@ -107,11 +125,18 @@ export async function installBrowserWriteGuard(page, ctx, project) {
     try {
       const request = route.request(), method = request.method();
       if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+        let target = 'UNVERIFIED', reason = 'ADMISSION_DENIED';
         try {
           ctx.assertAdmission();
-          check(allowedBrowserMutation(request.url(), method, ctx.baseUrl, project), 'Mutação de navegador fora da fixture registrada.', 'PNG_BROWSER_WRITE_OUT_OF_SCOPE');
+          reason = 'REQUEST_UNVERIFIED';
+          const url = request.url();
+          target = browserMutationTarget(url, ctx.baseUrl, project);
+          reason = 'OUT_OF_SCOPE';
+          check(allowedBrowserMutation(url, method, ctx.baseUrl, project), 'Mutação de navegador fora da fixture registrada.', 'PNG_BROWSER_WRITE_OUT_OF_SCOPE');
         } catch {
-          if (!closing()) failures.record('PNG_BROWSER_WRITE_OUT_OF_SCOPE', 'O navegador tentou mutação fora do escopo ou prazo.');
+          const safeMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? method : 'OTHER';
+          if (!closing()) failures.record('PNG_BROWSER_WRITE_OUT_OF_SCOPE',
+            `O navegador tentou mutação fora do escopo ou prazo. method=${safeMethod}; target=${target}; reason=${reason}.`);
           await abort(route);
           return;
         }

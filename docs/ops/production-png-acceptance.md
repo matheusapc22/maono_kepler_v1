@@ -21,6 +21,10 @@ O operador de implantação do Worker é uma PR independente; Pages não o cria.
 2. Um projeto novo `QA Durable <runId> small`, com três pontos sintéticos
    versionados em `scripts/acceptance/fixtures/preview-points.kepler.json`.
    Não há dataset externo nem arquivo do usuário. `project_slug` deve ficar vazio.
+   A fixture usa o basemap oficial `dark-matter` (CARTO/MapLibre), já presente
+   no catálogo do produto. A captura real cobre esse basemap, não os estilos
+   Mapbox nem todos os provedores. Permanecem inalteradas as coordenadas, a camada
+   e as asserções de geometria, pixels, bytes e checksums.
 3. Criação JSON durável com inline desativado. A recuperação depende do Worker
    JSON já autorizado/configurado separadamente. A suite não o liga.
 4. GET `/api/projects/{slug}/map-navigation` confirma o projeto próprio,
@@ -147,6 +151,16 @@ fechamento são tratadas sem rejeição não supervisionada. Os testes de proces
 Node isolado verificam que catch/finally continuam executando, e o teste do
 operador verifica journal/limpeza pendente e restauração das cinco flags após a
 falha, sem DELETE ou chamadas administrativas.
+
+Negativas do guard incluem somente método em allowlist e categorias fixas do
+destino/motivo, distinguindo telemetria Mapbox, sessão, projeto e prazo sem
+registrar URL, query, token, corpo ou cabeçalhos. Nenhuma categoria libera uma
+requisição antes bloqueada. O SDK Mapbox gera POST de inicialização com fontes
+de tiles; a fixture `dark` anterior exercitava essa dependência não declarada.
+O teste local de startup carrega os SDKs reais, confirma o seletor oficial do
+Kepler e mantém esse POST bloqueado, com toda a rede interceptada localmente.
+O relatório histórico sem essas categorias não permite atribuir com certeza
+a requisição que causou a falha de uma execução anterior.
 
 A evidência de cache exige tokens exatos `private`, `no-cache`, `Cookie` e
 `Authorization`, e rejeita `public` conflitante ou nomes que apenas contêm esses
