@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { saveAndCapture, verifyPrivateImageCache, installBrowserWriteGuard } from '../scripts/acceptance/preview-browser.mjs';
 import { manifest } from '../scripts/acceptance/suites/durable-project-preview.mjs';
-import { safeFlags, activeFlags, PRODUCTION_D1_ID } from '../scripts/acceptance/production-acceptance-lib.mjs';
+import { safeFlags, activeFlags, PRODUCTION_D1_ID, safeError } from '../scripts/acceptance/production-acceptance-lib.mjs';
 import { main } from '../scripts/acceptance/operator.mjs';
 
 const helperUrl = new URL('../scripts/acceptance/preview-browser.mjs', import.meta.url).href;
@@ -95,6 +95,38 @@ async function routingFailure() {
   }); }, 0);
   return guard.run(() => new Promise(resolve => setTimeout(resolve, 30)));
 }
+
+test('browser write denials preserve scope and report only fixed diagnostic categories', async () => {
+  const base = 'https://maono.test', project = { slug: 'qa-small' };
+  for (const entry of [
+    { url: 'https://events.mapbox.com/events/v2?access_token=SYNTHETIC_PRIVATE', method: 'POST', target: 'MAPBOX_TELEMETRY' },
+    { url: 'https://events.mapbox.com.evil.test/events/v2?token=SYNTHETIC_PRIVATE', method: 'POST', target: 'EXTERNAL_OTHER' },
+    { url: `${base}/cdn-cgi/rum?SYNTHETIC_PRIVATE`, method: 'POST', target: 'CLOUDFLARE_TELEMETRY' },
+    { url: `${base}/api/session/active-organization`, method: 'PUT', target: 'SESSION_ORGANIZATION' },
+    { url: `${base}/api/auth/login`, method: 'POST', target: 'SESSION_AUTH' },
+    { url: `${base}/api/projects/SYNTHETIC_PRIVATE/thumbnail`, method: 'POST', target: 'PROJECT_OTHER' },
+    { url: `${base}/api/projects/qa-small/thumbnail`, method: 'DELETE', target: 'FIXTURE_PREVIEW' },
+    { url: `${base}/api/projects/qa-small/save-operations`, method: 'PATCH', target: 'FIXTURE_SAVE' },
+    { url: `${base}/api/observability/map-load`, method: 'DELETE', target: 'APP_TELEMETRY' },
+    { url: `${base}/SYNTHETIC_PRIVATE`, method: 'SYNTHETIC_PRIVATE', target: 'SAME_ORIGIN_OTHER', safeMethod: 'OTHER' },
+    { url: 'SYNTHETIC_PRIVATE', method: 'POST', target: 'UNVERIFIED', reason: 'REQUEST_UNVERIFIED' },
+    { url: `${base}/api/projects/qa-small/thumbnail`, method: 'POST', target: 'UNVERIFIED', reason: 'ADMISSION_DENIED', expired: true },
+  ]) {
+    let handler, aborted = 0, forwarded = 0, bodyReads = 0;
+    const guard = await installBrowserWriteGuard({ route: async (_pattern, callback) => { handler = callback; }, isClosed: () => false },
+      { baseUrl: base, assertAdmission() { if (entry.expired) throw new Error('SYNTHETIC_PRIVATE'); } }, project);
+    await handler({ request: () => ({ method: () => entry.method, url: () => entry.url, postData() { bodyReads++; return 'SYNTHETIC_PRIVATE'; } }),
+      abort: async () => { aborted++; }, fallback: async () => { forwarded++; } });
+    assert.equal(aborted, 1); assert.equal(forwarded, 0); assert.equal(bodyReads, 0);
+    assert.throws(guard, error => {
+      const report = safeError(error);
+      assert.equal(report.code, 'PNG_BROWSER_WRITE_OUT_OF_SCOPE');
+      assert.match(report.message, new RegExp(`method=${entry.safeMethod || entry.method}; target=${entry.target}; reason=${entry.reason || 'OUT_OF_SCOPE'}\\.`));
+      assert.doesNotMatch(JSON.stringify(report), /SYNTHETIC_PRIVATE|https?:|access_token|qa-small/);
+      return true;
+    });
+  }
+});
 
 for (const fault of ['observation', 'routing']) test(`registered PNG operator retains manual cleanup and restores five flags after ${fault} callback failure`, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'png-callback-cleanup-'));

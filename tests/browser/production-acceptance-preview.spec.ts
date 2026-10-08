@@ -1,8 +1,89 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { DEFAULT_MAP_STYLES } from '@kepler.gl/constants';
+import { getBaseMapLibrary } from '@kepler.gl/utils/dist/map-style-utils/mapbox-utils.js';
 import { installPanelFixture, openLayers } from './fixtures/map-panel-minimal';
 import { saveAndCapture, readPngEvidence, verifyNegativePreviewCases, installBrowserWriteGuard } from '../../scripts/acceptance/preview-browser.mjs';
 import { verifyOwnedProjectEditorAccess } from '../../scripts/acceptance/suites/durable-project-preview.mjs';
+
+const require = createRequire(import.meta.url);
+
+// Exercise the selected real SDKs with a source-bearing offline style. Every
+// request is fulfilled locally or aborted; no provider receives data or a token.
+// The integrated fixture below still covers React/Kepler and actual PNG capture.
+test('registered basemap selects MapLibre and Mapbox startup remains blocked by the write guard', async ({ browser }) => {
+  const seed = JSON.parse(readFileSync(new URL('../../scripts/acceptance/fixtures/preview-points.kepler.json', import.meta.url), 'utf8'));
+  const registeredStyle = DEFAULT_MAP_STYLES.find(style => style.id === seed.config.mapStyle.styleType)!;
+  expect(registeredStyle.id).toBe('dark-matter');
+  expect(getBaseMapLibrary(registeredStyle)).toBe('maplibre');
+  for (const styleType of ['dark', registeredStyle.id]) {
+    const library = getBaseMapLibrary(DEFAULT_MAP_STYLES.find(style => style.id === styleType)!);
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+      const page = await context.newPage();
+      const unexpectedFallback: string[] = [], writes: string[] = [];
+      const base = 'http://127.0.0.1:4187';
+      await page.route('**/*', async route => {
+        const url = new URL(route.request().url());
+        if (url.origin === base && url.pathname === '/__sdk_startup__') return route.fulfill({ contentType: 'text/html',
+          body: '<html><body><div id="map" style="height:540px;width:960px"></div></body></html>' });
+        if (url.origin === base && url.pathname.endsWith('.pbf') && route.request().method() === 'GET') {
+          return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+        }
+        unexpectedFallback.push(`${route.request().method()} ${url.origin}${url.pathname}`);
+        return route.abort();
+      });
+      page.on('request', request => {
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+          const url = new URL(request.url());
+          writes.push(`${request.method()} ${url.origin}${url.pathname}`);
+        }
+      });
+      const guard = await installBrowserWriteGuard(page, { baseUrl: base, assertAdmission() {} }, { slug: 'sdk-synthetic' });
+      await page.goto(`${base}/__sdk_startup__`);
+      await page.addScriptTag({ path: require.resolve(`${library}-gl/dist/${library}-gl.js`) });
+      const start = () => page.evaluate(async ({ library, seed, base }) => {
+        const sdk = (window as any)[library === 'mapbox' ? 'mapboxgl' : 'maplibregl'];
+        const points = seed.datasets[0].data.allData.map((row: any[]) => ({ type: 'Feature', properties: {},
+          geometry: { type: 'Point', coordinates: row.slice(0, 2) } }));
+        await new Promise<void>((resolve, reject) => {
+          const map = new sdk.Map({ container: 'map', accessToken: 'pk.synthetic-local-only',
+            center: [seed.config.mapState.longitude, seed.config.mapState.latitude], zoom: seed.config.mapState.zoom,
+            style: { version: 8, sources: {
+              basemap: { type: 'vector', tiles: [`${base}/tiles/{z}/{x}/{y}.pbf`], minzoom: 0, maxzoom: 0 },
+              points: { type: 'geojson', data: { type: 'FeatureCollection', features: points } },
+            }, layers: [
+              { id: 'background', type: 'background', paint: { 'background-color': '#182029' } },
+              { id: 'basemap', type: 'fill', source: 'basemap', 'source-layer': 'land', paint: { 'fill-color': '#182029' } },
+              { id: 'points', type: 'circle', source: 'points', paint: { 'circle-color': '#ee22bb', 'circle-radius': 10 } },
+            ] },
+          });
+          map.on('load', () => { (window as any).__SDK_STARTUP_MAP__ = map; resolve(); });
+          map.on('error', (event: any) => reject(new Error(event.error?.message || 'Local SDK startup failed')));
+        });
+      }, { library, seed, base });
+      if (library === 'mapbox') {
+        await expect(guard.run(async () => {
+          const telemetry = page.waitForRequest(request => request.method() === 'POST' && new URL(request.url()).hostname === 'events.mapbox.com');
+          await Promise.all([start(), telemetry]);
+          // Request events precede route dispatch; wait for the actual denial.
+          await expect.poll(() => { try { guard(); return false; } catch { return true; } }).toBe(true);
+          guard();
+        })).rejects.toMatchObject({ code: 'PNG_BROWSER_WRITE_OUT_OF_SCOPE',
+          message: expect.stringContaining('method=POST; target=MAPBOX_TELEMETRY; reason=OUT_OF_SCOPE') });
+        expect(writes).toContain('POST https://events.mapbox.com/events/v2');
+      } else {
+        await guard.run(start);
+        expect(await page.evaluate(() => (window as any).__SDK_STARTUP_MAP__.getSource('points').serialize().data.features.length)).toBe(3);
+        await expect.poll(() => page.evaluate(() => (window as any).__SDK_STARTUP_MAP__.queryRenderedFeatures({ layers: ['points'] }).length)).toBe(3);
+        guard();
+        expect(writes).toEqual([]);
+      }
+      expect(unexpectedFallback).toEqual([]);
+    } finally { await context.close(); }
+  }
+});
 
 // Exercise the exact production acceptance browser assertions with built
 // React/Kepler and real browser PNG bytes. Accounts, backend and storage below
