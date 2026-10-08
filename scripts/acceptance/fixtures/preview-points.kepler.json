@@ -111,7 +111,7 @@
       "zoom": 3.5
     },
     "mapStyle": {
-      "styleType": "dark",
+      "styleType": "dark-matter",
       "topLayerGroups": {},
       "visibleLayerGroups": {
         "label": true,

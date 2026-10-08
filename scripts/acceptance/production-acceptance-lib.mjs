@@ -8,6 +8,8 @@ export const CF_ACCOUNT_ID = "09d455fa1cf988b0d9db89987b73eaff";
 export const CF_PROJECT_NAME = "maono-kepler-v1";
 export const PRODUCT_BRANCH = "mano_kepler_v1";
 export const PRODUCTION_D1_ID = "5bc4dc32-f3bd-4c92-bbd1-cbda63e467db";
+export const PRODUCTION_APP_ORIGIN = "https://maono-kepler-v1.pages.dev";
+export const RUNTIME_READINESS_LIMITS = Object.freeze({ attempts: 12, timeoutMs: 180_000, requestMs: 10_000, intervalMs: 5_000, responseBytes: 16 * 1024 });
 
 const SHA40 = /^[0-9a-f]{40}$/i;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
@@ -364,11 +366,14 @@ export async function transitionFlags({
   deps = {},
   onMutationStart = () => {},
   validateCurrent = () => {},
+  expectedOrigin = PRODUCTION_APP_ORIGIN,
+  onRuntimeObservation = () => {},
 }) {
   const current = await waitProductionQuiescent(token, manifest, deps);
   // A queued deployment may have changed the canonical product since preflight.
   // Never patch configuration or retry an old SHA across that drift.
   assertProduction(current, commit, manifest, { requireBaseline: false });
+  assertRuntimeOrigin(current.baseUrl, expectedOrigin, manifest);
   validateCurrent(current);
   onMutationStart();
   await patchFlags(token, values, deps);
@@ -382,7 +387,107 @@ export async function transitionFlags({
     fail("PRODUCTION_RETRY_COMMIT_MISMATCH", "Deployment recriado não corresponde ao SHA esperado.");
   }
   const project = await waitCanonical(token, retried.id, commit, manifest, values, deps);
-  return { project, deployment };
+  assertRuntimeOrigin(project.baseUrl, expectedOrigin, manifest);
+  const runtimeReadiness = await waitRuntimeReadiness(project.baseUrl, manifest, values, { ...deps, onRuntimeObservation });
+  return { project, deployment, runtimeReadiness };
+}
+
+function durableRuntimeFlags(manifest) {
+  return [...DURABLE_SAVE_FLAGS].filter(name => Object.hasOwn(manifest.managedFlags, name));
+}
+
+function assertRuntimeOrigin(baseUrl, expectedOrigin, manifest) {
+  if (durableRuntimeFlags(manifest).length && (baseUrl !== PRODUCTION_APP_ORIGIN || baseUrl !== expectedOrigin)) {
+    fail("PRODUCTION_RUNTIME_ORIGIN_MISMATCH", "A origem pública do runtime divergiu da origem canônica fixada.");
+  }
+}
+
+async function readRuntimeHealth(baseUrl, { fetchImpl, budget, signal, requestMs }) {
+  if (signal?.aborted) return { state: "aborted" };
+  const timeoutMs = budget ? budget.requestTimeoutMs(requestMs) : requestMs;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  const timer = setTimeout(abort, timeoutMs);
+  let reader;
+  let onAbort;
+  const stopped = new Promise((_, reject) => {
+    onAbort = () => reject(new DOMException("Runtime health request stopped", "AbortError"));
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+    if (controller.signal.aborted) onAbort();
+  });
+  const bounded = promise => Promise.race([promise, stopped]);
+  try {
+    controller.signal.throwIfAborted();
+    const url = new URL("/api/health", baseUrl);
+    // This public read deliberately has no Cloudflare token or QA session.
+    const response = await bounded(fetchImpl(url, { method: "GET", redirect: "error", credentials: "omit",
+      cache: "no-store", referrerPolicy: "no-referrer", headers: { Accept: "application/json" }, signal: controller.signal }));
+    if (response.redirected || (response.url && response.url !== url.href)) return { state: "invalid_response" };
+    if (response.status !== 200) return { state: "http_error" };
+    if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get("content-type") || "") ||
+        !/(?:^|,)\s*no-store\s*(?:,|$)/i.test(response.headers.get("cache-control") || "")) return { state: "invalid_response" };
+    if (Number(response.headers.get("content-length")) > RUNTIME_READINESS_LIMITS.responseBytes) return { state: "response_too_large" };
+    reader = response.body?.getReader();
+    if (!reader) return { state: "invalid_response" };
+    const chunks = [];
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await bounded(reader.read());
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > RUNTIME_READINESS_LIMITS.responseBytes) return { state: "response_too_large" };
+      chunks.push(value);
+    }
+    let body;
+    try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { return { state: "invalid_response" }; }
+    const runtime = body?.runtime;
+    if (body?.service !== CF_PROJECT_NAME || typeof runtime?.durableProjectSaveEnabled !== "boolean" ||
+        typeof runtime?.durableProjectSaveInlineEnabled !== "boolean") return { state: "invalid_response" };
+    const flags = { durableProjectSaveEnabled: runtime.durableProjectSaveEnabled, durableProjectSaveInlineEnabled: runtime.durableProjectSaveInlineEnabled };
+    if (runtime.runtime !== "production") return { state: "runtime_mismatch", ...flags };
+    if (body.ok !== true || body.checks?.dbBinding !== true || body.checks?.databaseReachable !== true) return { state: "unhealthy", ...flags };
+    return { state: "observed", ...flags };
+  } catch {
+    return { state: signal?.aborted ? "aborted" : controller.signal.aborted ? "request_timeout" : "transport_error" };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", onAbort);
+    if (reader) void reader.cancel().catch(() => {});
+    controller.abort();
+  }
+}
+
+export async function waitRuntimeReadiness(baseUrl, manifest, desired, {
+  fetchImpl = fetch, budget = null, signal, now = Date.now,
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), onRuntimeObservation = () => {},
+} = {}) {
+  const managed = durableRuntimeFlags(manifest);
+  if (!managed.length) return { state: "not_applicable" };
+  assertRuntimeOrigin(baseUrl, PRODUCTION_APP_ORIGIN, manifest);
+  const fields = { PROJECT_DURABLE_SAVE_V1: "durableProjectSaveEnabled", PROJECT_DURABLE_SAVE_INLINE_ENABLED: "durableProjectSaveInlineEnabled" };
+  if (managed.some(name => typeof desired[name] !== "boolean")) fail("PRODUCTION_RUNTIME_FLAGS_INVALID", "Estado esperado do runtime inválido.");
+  const deadline = now() + RUNTIME_READINESS_LIMITS.timeoutMs;
+  for (let attempt = 1; attempt <= RUNTIME_READINESS_LIMITS.attempts && now() < deadline; attempt++) {
+    budget?.assertActive();
+    const observed = await readRuntimeHealth(baseUrl, { fetchImpl, budget, signal,
+      requestMs: Math.max(1, Math.min(RUNTIME_READINESS_LIMITS.requestMs, deadline - now())) });
+    if (observed.state === "observed") observed.state = managed.every(name => observed[fields[name]] === desired[name]) ? "matched" : "flags_mismatch";
+    const evidence = { ...observed, attempts: attempt, scope: "durable_save_flags_only", deploymentIdentityVerified: false, previewFlagsVerified: false };
+    onRuntimeObservation(evidence);
+    budget?.assertActive();
+    if (signal?.aborted) fail("PRODUCTION_RUNTIME_READINESS_ABORTED", "Leitura de runtime interrompida; restauração continua independente.");
+    if (now() >= deadline) break;
+    if (observed.state === "matched") return evidence;
+    if (attempt < RUNTIME_READINESS_LIMITS.attempts) {
+      const pause = Math.min(RUNTIME_READINESS_LIMITS.intervalMs, deadline - now());
+      if (budget) await budget.pause(pause, sleep);
+      else await sleep(pause);
+    }
+  }
+  fail("PRODUCTION_RUNTIME_READINESS_FAILED", "O runtime público não confirmou as flags duráveis dentro dos limites de leitura.");
 }
 
 export function activeFlags(manifest) {

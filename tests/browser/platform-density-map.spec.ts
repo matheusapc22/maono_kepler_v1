@@ -15,12 +15,12 @@ async function openMap(page: Page) {
       authenticated: true, user: { id: 1, name: 'Operador de demonstração', email: 'qa@example.test', role: 'super_admin', activeOrganizationId: 1 },
       organizations: [organization], activeOrganization: organization, projects: [],
     } });
-    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true, context: {
+    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true,
       policyVersion: 1, requestedMode: 'create', mode: 'create', assignedMode: 'create', defaultPanel: 'create', allowed: true,
       project: null, organization, availablePanels: { viewer: false, editor: false, create: true },
       capabilities: { openCreateWorkspace: true, createProject: true, initializeMap: true, saveMap: true, viewMap: true, openLayerPanel: true, viewLayers: true, viewFilters: true, editLayers: true, editStyle: true, manageFilters: true, placeAnalysisMarker: true, toggleLegend: true },
       features: { mapPanelModes: true, mapCreateRoute: true, maonoMapShell: true, maonoLayerManager: true, maonoMapOverlay: true },
-    } } });
+    } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { ok: true, items: [], projects: [] } });
     if (url.href.includes('svg-icons.json')) return route.fulfill({ json: { svgIcons: [] } });
     if ((url.hostname === 'basemaps.cartocdn.com' && /^\/gl\/[^/]+\/style\.json$/.test(url.pathname)) || (url.hostname === 'api.mapbox.com' && /^\/styles\/v1\//.test(url.pathname))) return route.fulfill({ json: style });

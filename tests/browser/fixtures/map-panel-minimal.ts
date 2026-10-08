@@ -148,7 +148,7 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
     } });
     if (url.pathname === `${projectPath}/map-navigation` || url.pathname === '/api/maps/new/context') {
       const mode = options.create ? 'create' : options.viewer ? 'viewer' : 'editor';
-      return route.fulfill({ json: { ok: true, context: {
+      return route.fulfill({ json: { ok: true,
         policyVersion: 1, requestedMode: mode, mode, assignedMode: options.create ? null : mode, defaultPanel: mode, allowed: true, version: revision,
         project: options.create ? null : { id: 1, slug: PROJECT_SLUG, name: PROJECT_NAME, configRevision: revision, accessLevel: 'owner' },
         organization, availablePanels: { viewer: true, editor: !options.viewer, create: !options.viewer },
@@ -163,7 +163,7 @@ export async function installPanelFixture(page: Page, options: { layerCount?: nu
         },
         limits: { projects: { used: 1, limit: 20, remaining: 19 }, storageMb: { used: 2, limit: 100, remaining: 98 } },
         features: { mapPanelModes: true, mapCreateRoute: true, maonoMapShell: true, maonoLayerManager: true, maonoMapOverlay: true },
-      } } });
+      } });
     }
     if (url.pathname === `${projectPath}/config-stream`) {
       configLoads += 1;

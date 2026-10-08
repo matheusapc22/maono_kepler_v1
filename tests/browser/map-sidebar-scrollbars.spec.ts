@@ -36,7 +36,7 @@ async function openMap(page: Page) {
       user: { id: 1, name: 'Operador sintético QA', email: 'scrollbars@example.test', role: 'super_admin', activeOrganizationId: 1 },
       organizations: [organization], activeOrganization: organization, projects: [],
     } });
-    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true, context: {
+    if (url.pathname === '/api/maps/new/context') return route.fulfill({ json: { ok: true,
       policyVersion: 1, requestedMode: 'create', mode: 'create', assignedMode: 'create', defaultPanel: 'create', allowed: true,
       project: null, organization, availablePanels: { viewer: false, editor: false, create: true },
       capabilities: {
@@ -47,7 +47,7 @@ async function openMap(page: Page) {
         addData: true, importData: true,
       },
       features: { mapPanelModes: true, mapCreateRoute: true, maonoMapShell: true, maonoLayerManager: true, maonoMapOverlay: true },
-    } } });
+    } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { ok: true, items: [], projects: [] } });
     if (url.href.includes('svg-icons.json')) return route.fulfill({ json: { svgIcons: [] } });
     if ((url.hostname === 'basemaps.cartocdn.com' && /^\/gl\/[^/]+\/style\.json$/.test(url.pathname)) ||
