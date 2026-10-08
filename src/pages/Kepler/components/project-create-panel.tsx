@@ -1,7 +1,6 @@
 import React, {
   useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -36,7 +35,9 @@ type ProjectCreatePanelProps = {
     "ready" | "success" | "error"
   > | null;
   error?: string | null;
+  canRetry?: boolean;
   onClose: () => void;
+  onSupport?: () => void;
   onCancelWait?: () => void;
   onSubmit: (input: ProjectCreateInput) => void | Promise<void>;
 };
@@ -48,44 +49,17 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-const STEPS = [
-  {
-    id: "creating_record",
-    label: "Criando registro",
-  },
-  {
-    id: "preparing_files",
-    label: "Preparando arquivos",
-  },
-  {
-    id: "linking_user",
-    label: "Vinculando usuário",
-  },
-  {
-    id: "finalizing",
-    label: "Finalizando",
-  },
-] as const;
-
-function effectivePhase(
-  phase: ProjectCreationStage,
-  failedStage: ProjectCreatePanelProps["failedStage"],
-) {
-  return phase === "error" ? failedStage || "creating_record" : phase;
-}
-
 const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
   open,
   organizationName,
   initialName = "",
   initialDescription = "",
   busy,
-  stalled = false,
   phase,
-  failedStage = null,
   error = null,
+  canRetry = true,
   onClose,
-  onCancelWait = () => {},
+  onSupport,
   onSubmit,
 }) => {
   const titleId = useId();
@@ -101,11 +75,6 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
 
   const normalizedName = name.trim().replace(/\s+/g, " ");
   const normalizedDescription = description.trim();
-  const activePhase = effectivePhase(phase, failedStage);
-  const activeIndex = useMemo(
-    () => STEPS.findIndex((step) => step.id === activePhase),
-    [activePhase],
-  );
 
   useEffect(() => {
     if (!open) {
@@ -282,8 +251,7 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
               id={descriptionId}
               className="mt-2 text-sm leading-6 text-slate-300"
             >
-              O slug será gerado pelo servidor. O projeto só aparecerá na
-              lista depois que arquivos, vínculo e ativação forem concluídos.
+              Dê um título ao mapa para encontrá-lo nos seus projetos.
             </p>
           </div>
 
@@ -365,63 +333,22 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
             ) : null}
           </form>
 
-          {phase === "error" ? (
-            <section
-              aria-label="Progresso da criação"
-              className="mt-6 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
-            >
-              <h3 className="text-sm font-black text-white">
-                Progresso
-              </h3>
 
-              <ol className="mt-4 grid gap-3">
-                {STEPS.map((step, index) => {
-                  const failed = index === activeIndex;
-
-                  return (
-                    <li
-                      key={step.id}
-                      className="flex items-center gap-3 text-sm"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={[
-                          "grid h-7 w-7 flex-none place-items-center rounded-full border text-xs font-black",
-                          failed
-                            ? "border-red-300 bg-red-900 text-red-100"
-                            : "border-white/20 bg-slate-950 text-slate-400",
-                        ].join(" ")}
-                      >
-                        {failed ? "!" : index + 1}
-                      </span>
-                      <span
-                        className={
-                          failed
-                            ? "font-bold text-red-100"
-                            : "text-slate-400"
-                        }
-                      >
-                        {step.label}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            </section>
-          ) : null}
         </div>
 
         <footer className="flex flex-col-reverse gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:justify-end sm:px-7">
           <button
             type="button"
-            disabled={busy && !stalled}
-            onClick={busy && stalled ? onCancelWait : requestClose}
+            disabled={busy}
+            onClick={requestClose}
             className="min-h-12 rounded-xl border border-white/20 bg-slate-900 px-5 py-3 text-sm font-extrabold text-white transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy && stalled ? "Parar de esperar" : "Cancelar"}
+            Cancelar
           </button>
 
-          <button
+          {error && onSupport && <button type="button" onClick={onSupport} className="min-h-12 rounded-xl border border-white/20 px-5 py-3 text-sm font-extrabold">Abrir central de chamados</button>}
+
+          {(phase !== "error" || canRetry) && <button
             type="submit"
             form="maono-project-create-form"
             disabled={busy}
@@ -435,12 +362,10 @@ const ProjectCreatePanel: React.FC<ProjectCreatePanelProps> = ({
                 />
               ) : null}
               <span>
-                {phase === "error"
-                  ? "Tentar novamente"
-                  : "Criar e salvar projeto"}
+                {busy ? "Salvando…" : phase === "error" ? "Tentar novamente" : "Salvar projeto"}
               </span>
             </span>
-          </button>
+          </button>}
         </footer>
       </section>
     </div>,

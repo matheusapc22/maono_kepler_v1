@@ -25,7 +25,8 @@ test('mounted save callback guards every PNG message by exact owner and later ed
   assert.match(callback,/ownsPreviewMessage\(previewMessageOwnerRef.current, previewMessageOwner\)/);
   assert.match(callback,/confirmationMatchesEditor/);
   assert.doesNotMatch(callback,/\bsnapshot\b|\bresult\b/,'long-lived callbacks use the payload-free preview snapshot only');
-  assert.ok(callback.indexOf('ownsPreviewMessage')<callback.indexOf('setMessageType'));
+  assert.ok(callback.indexOf('ownsPreviewMessage')<callback.indexOf('setPreviewState'));
+  assert.doesNotMatch(callback,/setMessage\(|setMessageType\(/, 'preview failures never replace durable save confirmation');
   assert.equal((source.match(/previewMessageOwnerRef.current = null/g)||[]).length,4,'unmount, retry, update and create revoke UI ownership');
   assert.match(source,/isCurrent: \(\) => isPreviewSessionCurrent\(previewSnapshot.scope.actorId, previewSnapshot.scope.organizationId\)/);
 });

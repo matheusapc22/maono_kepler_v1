@@ -82,7 +82,8 @@ test("salvamento visível fica no rodapé fixo do painel e reutiliza executor ex
   assert.match(source.saveStyles, /\.maono-layer-panel__save-footer/);
   assert.match(source.saveStyles, /flex: 0 0 auto/);
   assert.match(source.saveStyles, /\[data-maono-save-controller="true"\][\s\S]*display: none !important/);
-  for (const action of ["export-current", "export-attempt", "archive-reviewed", "open-created", "stop-wait"]) assert.ok(source.saveAction.includes(`"${action}"`));
+  for (const action of ["support", "open-created"]) assert.ok(source.saveAction.includes(`"${action}"`));
+  assert.doesNotMatch(source.saveAction, /export-current|export-attempt|archive-reviewed|stop-wait|retention/);
   assert.doesNotMatch(source.saveAction, /legacySaveButton|:scope > button/);
 });
 
