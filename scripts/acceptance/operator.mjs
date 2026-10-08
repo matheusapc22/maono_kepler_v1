@@ -14,6 +14,7 @@ import {
   safeFlags,
   suiteContext,
   transitionFlags,
+  waitRuntimeReadiness,
   writeReport,
 } from "./production-acceptance-lib.mjs";
 import { getSuite, publicManifest } from "./registry.mjs";
@@ -105,6 +106,7 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
         throw new Error("Estado canônico insuficiente para closure segura.");
       }
       budget.enter("restoration");
+      report.configurationRestored = false;
       const desired = safeFlags(manifest);
       if (!flagsMatch(initialProject, desired)) {
         const restored = await transitionFlags({
@@ -114,11 +116,16 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
           manifest,
           deps,
           values: desired,
+          expectedOrigin: initialProject.baseUrl,
+          onRuntimeObservation: value => { report.restorationRuntime = value; },
           onMutationStart: () => { report.writesPerformed = true; },
         });
         report.restoredDeployment = restored.deployment;
         report.final = publicProject(restored.project);
       } else {
+        await waitRuntimeReadiness(initialProject.baseUrl, manifest, desired, {
+          ...deps, onRuntimeObservation: value => { report.restorationRuntime = value; },
+        });
         report.final = publicProject(initialProject);
       }
       report.configurationRestored = true;
@@ -209,6 +216,8 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
           manifest,
           deps,
           values: activeFlags(manifest),
+          expectedOrigin: initialProject.baseUrl,
+          onRuntimeObservation: value => { report.activationRuntime = value; },
           validateCurrent: (current) => {
             if (suite.verifyPreflight) suite.verifyPreflight(current, options);
             // A queue wait must not turn a fresh preflight into stale admission.
@@ -265,6 +274,8 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
             manifest,
             deps,
             values: safeFlags(manifest),
+            expectedOrigin: initialProject.baseUrl,
+            onRuntimeObservation: value => { report.restorationRuntime = value; },
           });
           report.restoredDeployment = restored.deployment;
           report.final = publicProject(restored.project);
