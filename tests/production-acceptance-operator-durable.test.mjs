@@ -391,7 +391,7 @@ test("unknown browser closure blocks manual-cleanup handoff and leaves closure u
 });
 
 
-function operatorHarness({ payloadFailure = null, beforeControlRead = () => {} } = {}) {
+function operatorHarness({ payloadFailure = null, beforeControlRead = () => {}, runtimeFlags = flags => flags } = {}) {
   // Main owns cleanup registration here; standalone harness tests above verify
   // registration before each mutation. This adapter only models HTTP protocol.
   const h = harness({ verifyCleanupRegistration: false, payloadFailure }), patches = [], appRequests = [];
@@ -422,6 +422,15 @@ function operatorHarness({ payloadFailure = null, beforeControlRead = () => {} }
         canonical_deployment: deployment(), deployment_configs: { production: { d1_databases: { DB: { id: PRODUCTION_D1_ID } }, env_vars: configured } } } });
     }
     appRequests.push({ path, method });
+    if (path === "/api/health") {
+      assert.equal(method, "GET");
+      assert.equal(options.credentials, "omit");
+      assert.deepEqual(options.headers, { Accept: "application/json" });
+      const flags = runtimeFlags(Object.fromEntries(Object.entries(canonicalFlags).map(([name, value]) => [name, value.value === "true"])), patches.length);
+      return Response.json({ ok: true, service: "maono-kepler-v1", checks: { dbBinding: true, databaseReachable: true },
+        runtime: { runtime: "production", durableProjectSaveEnabled: flags.PROJECT_DURABLE_SAVE_V1,
+          durableProjectSaveInlineEnabled: flags.PROJECT_DURABLE_SAVE_INLINE_ENABLED } }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (path === "/api/auth/login") {
       assert.equal(JSON.parse(options.body).email, "creator@example.test");
       return Response.json({ ok: true }, { headers: { "set-cookie": "maono_session=synthetic; Secure; HttpOnly" } });
@@ -606,4 +615,42 @@ test("PNG bootstrap reports the same safe payload failure and preserves its one-
   assert.equal(h.journals.at(-1).resources[0].reservationUncertain, false);
   assert.ok(h.ctx.cases.some(row => row.id === "DS-CLEANUP" && row.status === "PENDING_MANUAL"));
   assert.equal(h.events.some(event => event.method === "DELETE"), false);
+});
+
+for (const failurePhase of ['activation', 'restoration']) test(`runtime mismatch during ${failurePhase} fails closed while restoration remains independent`, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'durable-runtime-gate-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  t.mock.method(process.stdout, 'write', () => true);
+  const state = operatorHarness({ runtimeFlags(flags, patchCount) {
+    return (failurePhase === 'activation' && patchCount === 1) || (failurePhase === 'restoration' && patchCount === 2)
+      ? { ...flags, PROJECT_DURABLE_SAVE_V1: !flags.PROJECT_DURABLE_SAVE_V1 } : flags;
+  } });
+  const reportPath = join(directory, 'report.json');
+  const credentials = { creator: { email: 'creator@example.test', password: 'private-password' }, manualInventory: beforeInventory() };
+  assert.equal(await main(['--mode', 'run', '--suite', manifest.id, '--organization-id', '9', '--expected-commit', expectedCommit, '--report', reportPath],
+    { GITHUB_RUN_ID: workflowRunId, GITHUB_RUN_ATTEMPT: '1', MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: 'private-control-token',
+      MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: JSON.stringify(credentials) }, { fetchImpl: state.fetchImpl, sleep: async () => {} }), 1);
+  const report = JSON.parse(await readFile(reportPath, 'utf8'));
+  assert.deepEqual(state.patches, [activeFlags(manifest), safeFlags(manifest)]);
+  assert.equal(state.controlWrites, 4, 'runtime polling never replays PATCH or retry POST');
+  assert.equal(report.error.code, 'PRODUCTION_RUNTIME_READINESS_FAILED');
+  assert.equal(report.configurationRestored, failurePhase === 'activation');
+  assert.equal(report.acceptanceExecuted, failurePhase === 'restoration');
+  assert.equal(report.complete, false);
+  assert.doesNotMatch(JSON.stringify(report), /private-password|private-control-token|maono_session=synthetic/);
+  const fixturePosts = state.appRequests.filter(row => row.path === '/api/projects' && row.method === 'POST');
+  if (failurePhase === 'activation') {
+    assert.equal(state.h.projects.size, 0);
+    assert.equal(fixturePosts.length, 0);
+    assert.ok(state.appRequests.some(row => row.path === '/api/auth/login' && row.method === 'POST'));
+    assert.equal(report.activationRuntime.state, 'flags_mismatch');
+    assert.equal(report.restorationRuntime.state, 'matched');
+    assert.ok(!report.manualAdministration.resources.some(row => row.reservationStarted));
+  } else {
+    assert.equal(state.h.projects.size, 2);
+    assert.equal(report.activationRuntime.state, 'matched');
+    assert.equal(report.restorationRuntime.state, 'flags_mismatch');
+    assert.equal(report.restoreError.code, 'PRODUCTION_RUNTIME_READINESS_FAILED');
+    assert.equal(report.cleanupComplete, false);
+  }
 });

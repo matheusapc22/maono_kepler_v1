@@ -26,7 +26,7 @@ test('explicit map save publishes a PNG bound to the exact JSON receipt without 
   expect(preview.bytes.length).toBe(preview.manifest.sizeBytes);
   await attachPng(testInfo, 'published-preview.png', preview.bytes);
   await attachPng(testInfo, 'mounted-map.png', await page.locator('.maono-kepler-viewport').screenshot());
-  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText('A visualização PNG já foi atualizada.');
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText('Projeto salvo.');
   expect(fixture.saves).toHaveLength(1);
   expect(fixture.unexpectedWrites).toEqual([]);
   expect(fixture.errors).toEqual([]);
@@ -48,7 +48,7 @@ test('a failed PNG upload preserves the confirmed map receipt and live editor', 
   expect(fixture.saves).toHaveLength(1);
   expect(fixture.previews.uploads).toEqual([]);
   await expect(panel(page).locator('.maono-layer-panel__save-button')).toBeEnabled();
-  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText('Projeto salvo na revisão 2.');
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText('Projeto salvo.');
   expect(fixture.unexpectedWrites).toEqual([]);
   expect(fixture.errors).toEqual([]);
   expect(fixture.configLoads).toBe(loads);
@@ -113,7 +113,8 @@ test('a clustering-only edit publishes the new policy and a changed PNG without 
   expect(changedPixels).toBeGreaterThan(0);
   await attachPng(testInfo, 'ungrouped-preview.png', before.bytes);
   await attachPng(testInfo, 'grouped-preview.png', after.bytes);
-  await expect(panel(page).locator('.maono-layer-panel__save-message')).toHaveText('Projeto salvo na revisão 3. A visualização PNG já foi atualizada.');
+  await expect(panel(page).locator('.maono-layer-panel__save-footer')).toHaveAttribute('data-preview-state', 'READY');
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toHaveText('Projeto salvo.');
   expect(fixture.configLoads).toBe(loads);
   await expectStableCanvas(page, canvas);
   expect(fixture.unexpectedWrites).toEqual([]);
@@ -186,7 +187,8 @@ test('a late historical PNG receipt cannot replace the newer save confirmation i
     await saveMap(page, fixture);
     await expect.poll(() => fixture.previews.uploads.length, { timeout: 20_000 }).toBe(2);
     expect(fixture.previews.uploads[0].manifest.editGeneration).toBe(fixture.previews.uploads[1].manifest.editGeneration);
-    await expect(panel(page).locator('.maono-layer-panel__save-message')).toHaveText('Projeto salvo na revisão 3. A visualização PNG já foi atualizada.');
+    await expect(panel(page).locator('.maono-layer-panel__save-footer')).toHaveAttribute('data-preview-state', 'READY');
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toHaveText('Projeto salvo.');
   } finally { release(); }
   // Wait until A's real status response has been processed and its local spool
   // removed, then let React paint its callback. Merely releasing HTTP is too early.
@@ -201,7 +203,8 @@ test('a late historical PNG receipt cannot replace the newer save confirmation i
     };
   }), firstPreviewId)).toBe(true);
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  await expect(panel(page).locator('.maono-layer-panel__save-message')).toHaveText('Projeto salvo na revisão 3. A visualização PNG já foi atualizada.');
+  await expect(panel(page).locator('.maono-layer-panel__save-footer')).toHaveAttribute('data-preview-state', 'READY');
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toHaveText('Projeto salvo.');
   expect(fixture.revision).toBe(3);
   expect(fixture.saves).toHaveLength(2);
   expect(fixture.unexpectedWrites).toEqual([]);

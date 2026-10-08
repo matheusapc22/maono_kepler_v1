@@ -22,10 +22,11 @@ test("conflict and forbidden responses keep bytes, base revision, and live draft
 });
 test("save UI cannot refresh/remount the map after success, conflict or permission failure", () => {
   assert.doesNotMatch(component, /\brefresh\s*\(/);
-  assert.match(component, /if \(matches\) expectedRevisionRef\.current/);
+  assert.match(component, /canAdvanceOwnSaveBase\(snapshot, editorSessionId\.current, expectedRevisionRef\.current.revision, result.data\)/);
   assert.match(component, /confirmationMatchesEditor\(snapshot, editorSessionId\.current, editGeneration\.current\)/);
   assert.match(component, /currentRevision === revision/);
-  assert.match(component, /Exportar rascunho atual/); assert.match(component, /Exportar tentativa/);
+  assert.match(component, /o projeto foi alterado/);
+  assert.doesNotMatch(component, /Exportar tentativa|Verificar tentativa anterior/);
 });
 test("engine clean status is generation guarded for both normal and analysis saves", () => {
   assert.match(adapter, /detail\?\.snapshotMatchesCurrent === true\) markClean\(\)/);
@@ -40,7 +41,7 @@ test("reviewed terminal snapshot may be archived without erasing bytes or rebasi
   const archived = await store.get(value.key); assert.equal(isPendingSaveSnapshot(archived), false); assert.ok(archived.serialized.body); assert.equal(archived.expectedConfigRevision, 7);
   const newSave = await snapshot({ expectedConfigRevision: 9, editorSessionId: "after-intentional-reload" });
   assert.notEqual(newSave.manifest.operationId, archived.manifest.operationId); assert.equal(newSave.expectedConfigRevision, 9); assert.equal(isPendingSaveSnapshot(newSave), true);
-  assert.match(component, /Arquivar tentativa revisada e liberar novos salvamentos/);
+  assert.doesNotMatch(component, /archiveReviewedSaveSnapshot/);
 });
 
 test("modal close, add-data/sidebar UI and map canvas size do not advance edit generation", async () => {
@@ -54,4 +55,17 @@ test("modal close, add-data/sidebar UI and map canvas size do not advance edit g
   assert.equal(observer.observe({ ...uiOnly, visState: { ...uiOnly.visState, layers: [{ color: "edited" }] } }), 1);
   assert.equal(confirmationMatchesEditor(value, "editor-one", observer.generation), false);
   assert.equal(observer.observeExtensionChange(), 2);
+});
+
+test("only the current editor's own contiguous receipt can advance the next base with newer edits", async () => {
+  const { canAdvanceOwnSaveBase } = await import("../src/pages/Kepler/durable-save-controller.ts");
+  const { receipt } = await import("./helpers/durable-save-browser-fixtures.mjs");
+  const value = await snapshot();
+  const data = { operation: { receipt: receipt(value), currentRevision: 8 } };
+  assert.equal(canAdvanceOwnSaveBase(value, "editor-one", 7, data), true);
+  assert.equal(confirmationMatchesEditor(value, "editor-one", 3), false, "later edits are not marked Saved");
+  assert.equal(canAdvanceOwnSaveBase(value, "another-editor", 7, data), false);
+  assert.equal(canAdvanceOwnSaveBase(value, "editor-one", 8, data), false, "late callback cannot lower or replace a newer base");
+  assert.equal(canAdvanceOwnSaveBase(value, "editor-one", 7, { operation: { ...data.operation, currentRevision: 9 } }), false, "never rebase on another writer");
+  assert.equal(canAdvanceOwnSaveBase(value, "editor-one", 7, { operation: { receipt: receipt(value, 9), currentRevision: 9 } }), false);
 });

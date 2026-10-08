@@ -4,11 +4,8 @@ import { useMapPanel } from "../../map-panel/MapPanelContext";
 import "./panel-save-action.css";
 
 const SECONDARY_ACTIONS = [
-  "export-current",
-  "export-attempt",
-  "archive-reviewed",
+  "support",
   "open-created",
-  "stop-wait",
 ] as const;
 type SaveActionId = "primary" | (typeof SECONDARY_ACTIONS)[number];
 type SaveActionState = {
@@ -22,7 +19,8 @@ type SaveBridgeState = {
   secondary: SaveActionState[];
   message: string;
   messageTone: "error" | "warning" | "success";
-  retention: string;
+  saveState: string;
+  previewState: string;
 };
 
 const INITIAL_STATE: SaveBridgeState = {
@@ -30,7 +28,8 @@ const INITIAL_STATE: SaveBridgeState = {
   secondary: [],
   message: "",
   messageTone: "success",
-  retention: "",
+  saveState: "idle",
+  previewState: "",
 };
 const CONTROLLER_SELECTOR = '[data-maono-save-controller="true"]';
 
@@ -67,7 +66,8 @@ function readBridgeState(controller: HTMLElement | null): SaveBridgeState {
     }),
     message: message?.textContent?.trim() ?? "",
     messageTone: tone === "error" || tone === "warning" ? tone : "success",
-    retention: controller?.querySelector('[data-maono-save-retention="true"]')?.textContent?.trim() ?? "",
+    saveState: controller?.dataset.maonoSaveState ?? "idle",
+    previewState: controller?.dataset.maonoPreviewState ?? "",
   };
 }
 
@@ -84,7 +84,7 @@ function sameState(left: SaveBridgeState, right: SaveBridgeState) {
     left.secondary.every((action, index) => sameAction(action, right.secondary[index])) &&
     left.message === right.message &&
     left.messageTone === right.messageTone &&
-    left.retention === right.retention
+    left.saveState === right.saveState && left.previewState === right.previewState
   );
 }
 
@@ -122,7 +122,7 @@ export default function PanelSaveAction() {
             attributes: true,
             attributeFilter: [
               "disabled", "aria-disabled", "aria-busy", "data-maono-save-action",
-              "data-maono-save-label", "data-maono-save-message", "data-maono-save-retention",
+              "data-maono-save-label", "data-maono-save-message", "data-maono-save-state", "data-maono-preview-state",
             ],
           });
         }
@@ -160,8 +160,8 @@ export default function PanelSaveAction() {
   const primaryLabel = state.primary?.label;
 
   return (
-    <footer className="maono-layer-panel__save-footer" data-panel-save-action="true">
-      {state.message || state.retention || state.secondary.length ? (
+    <footer className="maono-layer-panel__save-footer" data-panel-save-action="true" data-save-state={state.saveState} data-preview-state={state.previewState}>
+      {state.message || state.secondary.length ? (
         <div className="maono-layer-panel__save-details" role="region" aria-label="Detalhes do salvamento" tabIndex={0}>
           {state.message ? (
             <div
@@ -173,7 +173,6 @@ export default function PanelSaveAction() {
               {state.message}
             </div>
           ) : null}
-          {state.retention ? <p className="maono-layer-panel__save-retention">{state.retention}</p> : null}
           {state.secondary.length ? (
             <div className="maono-layer-panel__save-secondary" role="group" aria-label="Ações do salvamento">
               {state.secondary.map((action) => (
@@ -194,7 +193,7 @@ export default function PanelSaveAction() {
         </div>
       ) : null}
 
-      <button
+      {state.primary && <button
         type="button"
         data-panel-save-proxy="primary"
         className="maono-layer-panel__save-button"
@@ -202,8 +201,8 @@ export default function PanelSaveAction() {
         disabled={!state.primary || state.primary.disabled}
         aria-busy={state.primary?.busy ?? false}
       >
-        {!primaryLabel || (primaryLabel === "Salvar na Maõno" && !state.primary?.busy) ? "Salvar mapa" : primaryLabel}
-      </button>
+        {primaryLabel || "Salvar mapa"}
+      </button>}
     </footer>
   );
 }

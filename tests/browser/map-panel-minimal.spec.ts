@@ -1041,7 +1041,7 @@ for (const viewport of [{ width: 1280, height: 480 }, { width: 320, height: 480 
   });
 }
 
-for (const conflictStatus of [202, 409]) test(`${conflictStatus} conflict preserves edited layer state and requires explicit review before a new save`, async ({ page }, testInfo) => {
+for (const conflictStatus of [202, 409]) test(`${conflictStatus} conflict preserves edited layer state and offers support without an impossible retry`, async ({ page }, testInfo) => {
   if (conflictStatus === 202) await page.setViewportSize({ width: 1280, height: 480 });
   const fixture = await openMap(page, { layerCount: 1 });
   await openLayers(page);
@@ -1051,9 +1051,10 @@ for (const conflictStatus of [202, 409]) test(`${conflictStatus} conflict preser
   await save.click();
   await expect.poll(() => fixture.saves.length).toBe(1);
   await expect(panel(page).locator('.maono-layer-panel__save-message[role=alert]')).toBeVisible();
-  await expect(save).toBeEnabled();
+  await expect(save).toHaveCount(0);
   await expect(rows(page).first().locator('.maono-layer-row__open strong')).toHaveText('Edição preservada');
-  await expect(panel(page)).toContainText('por até 7 dias');
+  await expect(panel(page)).not.toContainText(/tentativa|7 dias|revisão|Referência:/);
+  await expect(panel(page).getByRole('button', { name: 'Abrir central de chamados' })).toBeVisible();
   if (conflictStatus === 202) {
     const message = await panel(page).locator('.maono-layer-panel__save-message').boundingBox();
     const footer = await panel(page).locator('.maono-layer-panel__save-footer').boundingBox();
@@ -1061,30 +1062,27 @@ for (const conflictStatus of [202, 409]) test(`${conflictStatus} conflict preser
     expect(footer!.height).toBeLessThanOrEqual(241);
     await visualEvidence(page, testInfo, 'durable-save-terminal-actions');
   }
-  const exported = page.waitForEvent('download');
-  await panel(page).getByRole('button', { name: 'Exportar tentativa', exact: true }).click();
-  const download = await exported;
-  expect(JSON.parse(await readFile((await download.path())!, 'utf8'))).toEqual(fixture.saves[0].config);
+  const retained = await page.evaluate(async () => new Promise<any[]>((resolve, reject) => {
+    const open = indexedDB.open('maono-explicit-save-operations');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result, tx = db.transaction('operations'), request = tx.objectStore('operations').getAll();
+      tx.oncomplete = () => { db.close(); resolve(request.result); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    };
+  }));
+  expect(retained).toHaveLength(1);
+  expect(retained[0].manifest.operationId).toBe(fixture.saves[0].operationId);
+  expect(retained[0].serialized.body).not.toBeNull();
+  expect(retained[0].expectedConfigRevision).toBe(fixture.saves[0].expectedConfigRevision);
   const failedId = fixture.saves[0].operationId;
-  const checksBefore = fixture.checks.length;
-  await save.click();
-  await expect.poll(() => fixture.checks.length).toBe(checksBefore + 1);
-  await expect(save).toBeEnabled();
-  expect(fixture.saves).toHaveLength(1);
-  expect(fixture.checks.at(-1)).toBe(failedId);
-  // A terminal operation is never silently retried or rebased. The user reviews
-  // the preserved attempt before admitting a fresh explicit-click snapshot.
-  await page.getByRole('button', { name: 'Arquivar tentativa revisada e liberar novos salvamentos', exact: true }).click();
-  await expect(save).toHaveText('Salvar mapa');
-  fixture.rejectSaves(200);
-  const retry = await saveMap(page, fixture);
-  expect(retry.operationId).not.toBe(failedId);
-  expect(retry.expectedConfigRevision).toBe(fixture.saves[0].expectedConfigRevision);
-  expect(savedVisState(retry).layers[0].config.label).toBe('Edição preservada');
+  // The UI never discards a conflict or silently starts a different save.
+  expect(fixture.manifests).toHaveLength(1);
+  expect(fixture.operationState(failedId)).toBe('CONFLICT');
   expect(fixture.unexpectedWrites).toEqual([]);
 });
 
-test('stopping the wait preserves the received operation and later edits while panel recovery consults its receipt', async ({ page }) => {
+test('delayed receipt preserves the received operation and newer edits without requiring recovery choices', async ({ page }) => {
   const fixture = await openMap(page, { layerCount: 1 });
   await openLayers(page);
   await renameFirstLayer(page, 'Snapshot do clique');
@@ -1096,18 +1094,12 @@ test('stopping the wait preserves the received operation and later edits while p
   await expect.poll(() => fixture.saves.length).toBe(1);
   await expect(save).toBeDisabled();
   await renameFirstLayer(page, 'Edição posterior mantida');
-  await expect(panel(page).getByRole('button', { name: 'Parar de esperar', exact: true })).toBeVisible({ timeout: 20_000 });
-  await panel(page).getByRole('button', { name: 'Parar de esperar', exact: true }).click();
-  await expect(save).toBeEnabled();
-  await expect(save).toHaveText('Verificar tentativa anterior');
-  await expect(panel(page)).toContainText('isso não cancela');
+  await expect(save).toHaveText('Salvando…');
+  await expect(panel(page)).not.toContainText(/tentativa|7 dias|revisão|Parar de esperar/);
   release();
   await expect.poll(() => fixture.revision).toBe(2);
-  const checksBefore = fixture.checks.length;
-  await save.click();
-  await expect.poll(() => fixture.checks.length).toBe(checksBefore + 1);
   await expect(save).toBeEnabled();
-  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText('Há alterações locais');
+  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText('Há alterações ainda não salvas');
   expect(fixture.manifests).toHaveLength(1);
   expect(fixture.saves).toHaveLength(1);
   expect(savedVisState(fixture.saves[0]).layers[0].config.label).toBe('Snapshot do clique');
@@ -1115,18 +1107,11 @@ test('stopping the wait preserves the received operation and later edits while p
   expect((await capture(page)).snapshot.hasUnsavedChanges).toBe(true);
   expect(fixture.configLoads).toBe(loadsBefore);
   await expectStableCanvas(page, before);
-  const exported = page.waitForEvent('download');
-  await panel(page).getByRole('button', { name: 'Exportar rascunho atual', exact: true }).click();
-  const download = await exported;
-  expect(savedVisState({ config: JSON.parse(await readFile((await download.path())!, 'utf8')), expectedConfigRevision: 1 }).layers[0].config.label).toBe('Edição posterior mantida');
-  // Receipt recovery must not silently rebase these newer edits.
-  await save.click();
-  await expect.poll(() => fixture.saves.length).toBe(2);
-  await expect(panel(page).getByRole('button', { name: 'Arquivar tentativa revisada e liberar novos salvamentos', exact: true })).toBeVisible();
-  await expect(panel(page).locator('.maono-layer-panel__save-message')).toContainText(/mudou|precisa de revisão/);
-  expect(fixture.operationState(fixture.manifests[1].operationId)).toBe('CONFLICT');
-  expect(fixture.manifests[1].expectedConfigRevision).toBe(1);
-  expect(fixture.revision).toBe(2);
+  // Newer edits can build on this editor's own confirmed commit, without marking them clean early.
+  const newerSave = await saveMap(page, fixture);
+  expect(newerSave.expectedConfigRevision).toBe(2);
+  expect(savedVisState(newerSave).layers[0].config.label).toBe('Edição posterior mantida');
+  expect(fixture.revision).toBe(3);
   expect(fixture.unexpectedWrites).toEqual([]);
 });
 
@@ -1181,3 +1166,41 @@ for (const keepSourcePopulated of [false, true]) {
     expect(fixture.unexpectedWrites).toEqual([]);
   });
 }
+
+test('save support opens the actual organization ticket center and new-ticket form without leaving the editor', async ({ page, context }) => {
+  const fixture = await openMap(page, { layerCount: 1 });
+  fixture.rejectSaves(409);
+  await openLayers(page);
+  await panel(page).locator('.maono-layer-panel__save-button').click();
+  await expect(panel(page).getByRole('button', { name: 'Abrir central de chamados' })).toBeVisible();
+  // Page-specific map routes remain authoritative in the editor. The new tab
+  // receives synthetic account/list data while running the real /projects app.
+  await context.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET') throw new Error(`Unexpected support write: ${route.request().method()} ${url.pathname}`);
+    if (url.pathname === '/api/session') return route.fulfill({ json: {
+      authenticated: true, user: { id: 1, name: 'Operador sintético QA', email: 'panel@example.test', role: 'super_admin', activeOrganizationId: 1 },
+      organizations: [{ id: 1, name: 'Organização sintética QA', slug: 'qa-panel', active: true }],
+      activeOrganization: { id: 1, name: 'Organização sintética QA', slug: 'qa-panel', active: true }, projects: [],
+    } });
+    if (url.pathname === '/api/organizations/1/tickets') return route.fulfill({ json: {
+      ok: true, tickets: [], assignees: [],
+      facets: { byStatus: { new: 0, open: 0, in_progress: 0, in_review: 0, closed: 0 }, overdue: 0 },
+      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1, hasMore: false },
+      attachmentLimits: { maxFiles: 5, maxFileBytes: 83886080, maxTicketBytes: 157286400, chunkBytes: 8388608 },
+    } });
+    if (url.pathname === '/api/organizations/1/tickets/exports') return route.fulfill({ json: { ok: true, enabled: false, jobs: [], nextCursor: null } });
+    if (/\/ticket-(notifications|feedback|knowledge|cases)$|\/tickets\/metrics$/.test(url.pathname)) return route.fulfill({ json: { ok: true, enabled: false, items: [], unread: 0, nextCursor: null } });
+    return route.fulfill({ json: { ok: true, items: [], projects: [], users: [] } });
+  });
+  const popupPromise = page.waitForEvent('popup');
+  await panel(page).getByRole('button', { name: 'Abrir central de chamados' }).click();
+  const support = await popupPromise;
+  await expect(support).toHaveURL(/\/projects\?cc_org=1/);
+  await expect(support.getByRole('heading', { name: 'Central de Chamados', exact: true })).toBeVisible();
+  await support.getByRole('button', { name: 'Novo chamado', exact: true }).first().click();
+  await expect(support.getByRole('dialog', { name: 'Novo chamado', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/projects\/panel-synthetic\/edit/);
+  expect(fixture.saves).toHaveLength(1);
+  expect(fixture.unexpectedWrites).toEqual([]);
+});

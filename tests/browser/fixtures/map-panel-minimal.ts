@@ -274,7 +274,9 @@ export async function saveMap(page: Page, fixture: Awaited<ReturnType<typeof ins
   const response = await committed;
   expect(response.status()).toBe(200);
   const receipt = (await response.json()).operation.receipt;
-  await expect(panel(page).locator('.maono-layer-panel__save-message[role=status]')).toHaveText(new RegExp(`^Projeto salvo na revisão ${receipt.publishedRevision}\\.`));
+  expect(receipt.publishedRevision).toBe(fixture.revision);
+  expect(receipt.operationId).toBe(fixture.saves[count].operationId);
+  await expect(panel(page).locator('.maono-layer-panel__save-message[role=status]')).toHaveText("Projeto salvo.");
   await expect(button).toBeEnabled();
   // The durable receipt preserves the live editor. Loading the saved map is an
   // explicit reopen below in the specs, never an automatic save-side remount.

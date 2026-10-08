@@ -190,14 +190,14 @@ test("durable save UI uses stable local codes and never displays local or remote
   for (const code of ["LOCAL_SAVE_STORAGE_UNAVAILABLE", "LOCAL_SAVE_QUOTA_EXCEEDED", "LOCAL_SAVE_CORRUPTED", "LOCAL_SAVE_CREATION_PAYLOAD_UNAVAILABLE"]) {
     const error = new LocalSaveStorageError(code); error.message = secret;
     const copy = present(error);
-    assert.match(copy, /Exporte/); assert.doesNotMatch(copy, /PRIVATE_SECRET|Dropbox|internal|provider/);
+    assert.match(copy, /Não foi possível concluir o salvamento/); assert.doesNotMatch(copy, /PRIVATE_SECRET|Dropbox|internal|provider/);
   }
   for (const code of ["SAVE_RECEIPT_UNVERIFIED", "SAVE_CREATION_ACTIVE_UNCONFIRMED", "SAVE_OPERATION_CONFLICT", "SAVE_OPERATION_FAILED_FINAL", "LOCAL_SAVE_PAYLOAD_EXPIRED", "LOCAL_SAVE_PAYLOAD_INTEGRITY_FAILED", "SAVE_OPERATION_STATE_UNRECOGNIZED"]) {
     const error = new DurableSaveError(secret, new Response(null, { status: 200 }), { error: { message: secret } }, {}, code);
     const copy = present(error);
-    assert.match(copy, /tentativa|rascunho|criação|alterações/i); assert.doesNotMatch(copy, /PRIVATE_SECRET|Dropbox|internal|provider/);
+    assert.match(copy, /Não foi possível/); assert.doesNotMatch(copy, /PRIVATE_SECRET|Dropbox|internal|provider/);
   }
   const remote = new DurableSaveError(secret, new Response(null, { status: 403 }), { error: { code: "PERMISSION_PROJECT_SAVE_DENIED", category: "PERMISSION", message: secret } }, {});
-  assert.match(present(remote), /permissão/); assert.doesNotMatch(present(remote), /PRIVATE_SECRET|Dropbox/);
+  assert.match(present(remote), /Não foi possível/); assert.doesNotMatch(present(remote), /PRIVATE_SECRET|Dropbox/);
   assert.doesNotMatch(present(new Error(secret)), /PRIVATE_SECRET|Dropbox/);
 });

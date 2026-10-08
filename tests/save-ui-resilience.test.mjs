@@ -127,3 +127,45 @@ test("stale cross-tab snapshot cannot restore purged confirmed creation metadata
   assert.equal(merged.creation.requestBody, null); assert.equal(merged.creation.idempotencyKey, "creation:key");
   assert.equal(merged.serialized.body, null); assert.equal(merged.localState, "confirmed");
 });
+
+test("accepted processing is polled automatically until its published receipt", async () => {
+  const value = await snapshot(); const store = memoryStore(); const calls = [];
+  await executePreparedProjectUpdate({ snapshot: value, store, pollIntervalMs: 2, fetchImpl: async (_url, init) => { calls.push(init.method); return calls.length < 4 ? status("PROCESSING") : published(value); } });
+  assert.deepEqual(calls, ["GET", "GET", "GET", "GET"]);
+  assert.equal((await store.get(value.key)).serialized.body, null);
+});
+
+test("a slow payload transfer is not aborted by the short status-check timeout", async () => {
+  const value = await snapshot(); const store = memoryStore(); const calls = [];
+  await executePreparedProjectUpdate({ snapshot: value, store, requestTimeoutMs: 2, fetchImpl: async (_url, init) => {
+    calls.push(init.method);
+    if (init.method === "GET") return status("AWAITING_UPLOAD");
+    await new Promise(resolve => setTimeout(resolve, 12));
+    assert.equal(init.signal.aborted, false);
+    return published(value);
+  } });
+  assert.deepEqual(calls, ["GET", "PUT"]);
+  assert.equal((await store.get(value.key)).serialized.body, null);
+});
+
+test("request timeout preserves exact bytes and a subsequent retry can reconcile the same receipt", async () => {
+  const value = await snapshot(); const store = memoryStore();
+  await assert.rejects(executePreparedProjectUpdate({ snapshot: value, store, requestTimeoutMs: 2, fetchImpl: hangingFetch }), { name: "TimeoutError" });
+  const retained = await store.get(value.key);
+  assert.equal(await retained.serialized.body.text(), await value.serialized.body.text());
+  const methods = [];
+  await executePreparedProjectUpdate({ snapshot: retained, store, fetchImpl: async (_url, init) => { methods.push(init.method); return published(value); } });
+  assert.deepEqual(methods, ["GET"]);
+});
+
+test("integrity failure is terminal for retry while its original bytes and base remain available", async () => {
+  const value = await snapshot();
+  value.serialized.body = new Blob(['x'.repeat(value.manifest.payloadBytes)]);
+  const store = memoryStore(); const calls = [];
+  await assert.rejects(executePreparedProjectUpdate({ snapshot: value, store, fetchImpl: async (_url, init) => { calls.push(init.method); return status("AWAITING_UPLOAD"); } }), error => error.code === "LOCAL_SAVE_PAYLOAD_INTEGRITY_FAILED");
+  const retained = await store.get(value.key);
+  assert.equal(retained.localState, "failed");
+  assert.equal(await retained.serialized.body.text(), await value.serialized.body.text());
+  assert.equal(retained.expectedConfigRevision, value.expectedConfigRevision);
+  assert.deepEqual(calls, ["GET"]);
+});

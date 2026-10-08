@@ -140,7 +140,7 @@ jobs:
         run: >-
           xvfb-run --auto-servernum --server-args="-screen 0 2560x2160x24"
           npx playwright test --config=playwright.project-pages.config.ts
-          --grep="contextual panel help|disclosure chevrons|mouse-only panel help"
+          --grep="contextual panel help|disclosure chevrons|mouse-only panel help|save support opens"
           --output=test-results-panel-help --reporter=list,json
       - name: Small panel evidence for independent inspection
         if: always()

@@ -133,11 +133,11 @@ test("hidratação mantém Universal Loader até visual readiness", () => {
 test("save e create usam feedback local sem overlay global de viewport", () => {
   assert.doesNotMatch(saveButton, /useLoadingActivity\(saving\)/);
   assert.match(saveButton, /<UniversalLoader/);
-  assert.match(saveButton, /Verificar tentativa anterior/);
-  assert.match(saveButton, /Parar de esperar/);
+  assert.match(saveButton, /Tentar novamente/);
+  assert.match(saveButton, /Salvando…/);
   assert.doesNotMatch(saveButton, /Salvando\.\.\./);
   assert.doesNotMatch(saveButton, /Criando\.\.\./);
-  assert.match(saveButton, /Salvar na Maõno/);
+  assert.match(saveButton, /Salvar mapa/);
   assert.match(saveButton, /Salvar como projeto/);
 
   assert.doesNotMatch(createPanel, /Criando projeto…/);
@@ -146,8 +146,8 @@ test("save e create usam feedback local sem overlay global de viewport", () => {
     /Preparando configuração e visualização do mapa…/,
   );
   assert.match(createPanel, /<UniversalLoader/);
-  assert.match(createPanel, /Parar de esperar/);
-  assert.match(createPanel, /phase === "error" \? \(/);
+  assert.match(createPanel, /Salvando…/);
+  assert.match(createPanel, /phase === "error"/);
   assert.match(createPanel, /Tentar novamente/);
 });
 
