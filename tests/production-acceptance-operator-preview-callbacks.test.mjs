@@ -127,6 +127,9 @@ for (const fault of ['observation', 'routing']) test(`registered PNG operator re
         canonical_deployment: deployment(), deployment_configs: { production: { d1_databases: { DB: { id: PRODUCTION_D1_ID } }, env_vars: configured } } } });
     }
     appCalls.push({ path, method });
+    if (path === '/api/health') return Response.json({ ok: true, service: 'maono-kepler-v1', checks: { dbBinding: true, databaseReachable: true },
+      runtime: { runtime: 'production', durableProjectSaveEnabled: canonicalFlags.PROJECT_DURABLE_SAVE_V1.value === 'true',
+        durableProjectSaveInlineEnabled: canonicalFlags.PROJECT_DURABLE_SAVE_INLINE_ENABLED.value === 'true' } }, { headers: { 'Cache-Control': 'no-store' } });
     assert.ok(!path.startsWith('/api/admin/'), 'CI has no administrator API access');
     assert.ok(!['DELETE', 'PATCH'].includes(method), 'CI cannot perform resource cleanup');
     if (path === '/api/auth/login') {

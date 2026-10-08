@@ -92,12 +92,12 @@ Ordem:
 5. altera somente as flags declaradas pela suite;
 6. reconfirma a fila antes do retry e espera terminalidade real;
 7. recria o mesmo deployment canônico via Cloudflare Pages Retry;
-8. espera terminalidade e confirma o novo snapshot;
+8. espera terminalidade, confirma o novo snapshot e, nas suites duráveis, aguarda as duas flags efetivas no runtime público antes de admitir fixtures;
 9. executa os casos registrados;
 10. executa a barreira de fechamento da suite; JSON/PNG deixam a limpeza pendente para o humano;
 11. restaura as flags para o safe state;
 12. recria novamente o mesmo SHA;
-13. confirma que a configuração ficou restaurada;
+13. confirma que a configuração ficou restaurada, incluindo a leitura efetiva das duas flags duráveis;
 14. grava artifact sanitizado.
 
 Se qualquer caso, cleanup ou restauração falhar, a execução não fica completa.
@@ -115,6 +115,43 @@ Confirmação:
 `RESTORE_PRODUCTION_ACCEPTANCE_SAFE_STATE`
 
 Não executa a suite. Restaura somente as flags gerenciadas pela suite para o safe state e publica novamente o deployment seguro.
+
+### Leitura efetiva das flags duráveis
+
+Para manifestos que gerenciam `PROJECT_DURABLE_SAVE_V1` ou
+`PROJECT_DURABLE_SAVE_INLINE_ENABLED`, o snapshot do control-plane é seguido por
+`GET https://maono-kepler-v1.pages.dev/api/health`, na mesma origem usada pelos
+fixtures. Nunca se troca para a URL do deployment com hash. O gate também se
+aplica à `closure` quando o control-plane já informa o estado seguro.
+
+A resposta deve ser HTTP 200, JSON `no-store`, serviço esperado, runtime
+`production`, health OK e D1 acessível; os dois valores de diagnóstico devem
+ser booleans. As flags gerenciadas precisam coincidir com o estado desejado:
+ativação JSON/PNG `true/false`; restauração `false/true`. O endpoint existente
+executa somente `SELECT 1` no banco e expõe presença dos bindings; nenhum
+fixture é criado para testar readiness.
+
+Há no máximo 12 GETs, 180 segundos no total, 10 segundos por requisição incluindo
+o corpo, intervalo de 5 segundos e 16 KiB de resposta. Esses limites consomem a
+fase atual dentro dos budgets existentes de 190 minutos do operador/210 do job.
+A leitura não recebe token Cloudflare, cookie ou credencial QA, não segue
+redirects e não repete POST, PATCH ou outra mutação. CC-04 e manifestos sem
+flags duráveis não passam por esse gate.
+
+Se o runtime não convergir após ativação, `acceptanceExecuted=false`, nenhum
+POST de fixture é iniciado e a restauração continua com seu próprio orçamento.
+Autenticação e inventário somente leitura podem ter ocorrido antes do gate.
+Falha na leitura de restauração mantém `configurationRestored=false`, inclusive
+na `closure` sem alteração de flags. O relatório registra `activationRuntime` e
+`restorationRuntime` com estado sanitizado, tentativa e os dois booleans quando
+válidos; não inclui payload, headers ou valores de secrets.
+
+Esta prova é limitada: `/api/health` não informa SHA/ID de deployment nem as três
+flags PNG. `deploymentIdentityVerified=false` e `previewFlagsVerified=false`
+deixam essa distinção explícita. SHA, deployment e as demais flags continuam
+sendo verificados apenas no control-plane; uma divergência não identifica por
+si só binding, alias ou propagação como causa. O preflight continua somente
+control-plane e não certifica readiness efetiva.
 
 Na CC17, `closure` exige o SHA esperado e não declara recursos limpos sem inventário do run interrompido. Para uma suite `controlled_mutation`, pode retornar `configurationRestored=true`, `cleanupComplete=false`, `RESOURCE_CLEANUP_UNVERIFIED` e exit 1. Isso exige reconciliar os recursos sintéticos e anexar a prova antes de outra janela; não significa que se deva repetir a ativação. Restaurar flags não comprova cleanup.
 
