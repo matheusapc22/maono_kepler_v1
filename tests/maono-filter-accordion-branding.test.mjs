@@ -33,7 +33,7 @@ const source = Object.fromEntries(
 test("grupos de filtros usam camadas como identificação e começam recolhidos", () => {
   assert.match(source.filterPanel, /useKeplerState/);
   assert.match(source.filterPanel, /const \{ layers \} = useKeplerState\(\)/);
-  assert.match(source.filterPanel, /buildFilterGroups\(filters, datasets, layers\)/);
+  assert.match(source.filterPanel, /buildFilterGroups\(filters, datasets, layers, sidebarAccents\)/);
   assert.match(source.filterGroups, /associatedLayers\.length === 1/);
   assert.match(source.filterPanel, /const \[expandedGroupKey, setExpandedGroupKey\] = useState<string \| null>\(null\)/);
   assert.match(source.filterPanel, /aria-expanded=\{expanded\}/);

@@ -1,8 +1,6 @@
 import { MaonoSelect } from "../../../../components/selection/MaonoSelect";
 import {
-  useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
 
@@ -34,6 +32,8 @@ import {
 } from "./palettes.ts";
 import PanelHint from "./PanelHint";
 import LayerPanelIcon from "./LayerPanelIcon";
+import RangeControl from "./SliderNumberControl";
+import { opacityToPercent, percentToOpacity } from "./numeric-control.ts";
 
 const COLOR_SCALE_LABELS: Record<MapColorScale, string> = {
   quantile: "Quantile (distribuição)",
@@ -143,63 +143,6 @@ function Toggle({
     >
       <span aria-hidden="true" />
     </button>
-  );
-}
-
-function RangeControl({
-  label,
-  value,
-  minimum,
-  maximum,
-  step,
-  suffix,
-  onCommit,
-}: {
-  label: string;
-  value: number;
-  minimum: number;
-  maximum: number;
-  step: number;
-  suffix?: string;
-  onCommit: (value: number) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-
-  const displayed =
-    suffix === "%"
-      ? Math.round(draft * 100)
-      : step < 1
-        ? Number(draft.toFixed(1))
-        : Math.round(draft);
-
-  function commit() {
-    if (!Object.is(draft, value)) onCommit(draft);
-  }
-
-  return (
-    <label className="maono-style-range">
-      <span>
-        {label}
-        <output>
-          {displayed}
-          {suffix}
-        </output>
-      </span>
-      <input
-        type="range"
-        aria-label={label}
-        min={minimum}
-        max={maximum}
-        step={step}
-        value={draft}
-        onChange={(event) => setDraft(Number(event.target.value))}
-        onPointerUp={commit}
-        onTouchEnd={commit}
-        onKeyUp={commit}
-        onBlur={commit}
-      />
-    </label>
   );
 }
 
@@ -395,7 +338,6 @@ export default function LayerStyleEditor({
         <header>
           <div>
             <strong>Essencial</strong>
-            <small>Formato, opacidade e cor principal</small>
           </div>
         </header>
 
@@ -422,12 +364,12 @@ export default function LayerStyleEditor({
         {compatibility.opacity ? (
           <RangeControl
             label="Opacidade"
-            value={style.opacity}
+            value={opacityToPercent(style.opacity)}
             minimum={0}
-            maximum={1}
-            step={0.05}
+            maximum={100}
+            step={1}
             suffix="%"
-            onCommit={(value) => onChange({ kind: "opacity", value })}
+            onCommit={(value) => onChange({ kind: "opacity", value: percentToOpacity(value) })}
           />
         ) : null}
 
@@ -462,7 +404,7 @@ export default function LayerStyleEditor({
 
                 {compatibility.colorField && fields.length ? (
                   <FieldSelect
-                    label="Colorir por coluna"
+                    label="Colorir por"
                     field={style.colorField}
                     fields={fields}
                     emptyLabel="Cor fixa"
@@ -479,7 +421,6 @@ export default function LayerStyleEditor({
         <summary>
           <span>
             <strong>Aparência</strong>
-            <small>Paletas, escalas e contorno</small>
           </span>
           <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
         </summary>
@@ -576,13 +517,13 @@ export default function LayerStyleEditor({
                   {layer.type === "geojson" ? (
                     <RangeControl
                       label="Opacidade do contorno"
-                      value={style.strokeOpacity}
+                      value={opacityToPercent(style.strokeOpacity)}
                       minimum={0}
-                      maximum={1}
-                      step={0.05}
+                      maximum={100}
+                      step={1}
                       suffix="%"
                       onCommit={(value) =>
-                        onChange({ kind: "strokeOpacity", value })
+                        onChange({ kind: "strokeOpacity", value: percentToOpacity(value) })
                       }
                     />
                   ) : null}
@@ -598,7 +539,6 @@ export default function LayerStyleEditor({
           <summary>
             <span>
               <strong>Dimensão e agrupamento</strong>
-              <small>Tamanho dos símbolos e comportamento por zoom</small>
             </span>
             <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
           </summary>
@@ -633,7 +573,7 @@ export default function LayerStyleEditor({
                       value={style.radiusRange?.[0] ?? 0}
                       minimum={0}
                       maximum={500}
-                      step={1}
+                      step={0.1}
                       suffix=" px"
                       onCommit={(minimum) =>
                         onChange({
@@ -650,7 +590,7 @@ export default function LayerStyleEditor({
                       value={style.radiusRange?.[1] ?? 50}
                       minimum={0}
                       maximum={500}
-                      step={1}
+                      step={0.1}
                       suffix=" px"
                       onCommit={(maximum) =>
                         onChange({
@@ -669,7 +609,7 @@ export default function LayerStyleEditor({
                     value={style.pointRadius ?? 10}
                     minimum={0}
                     maximum={100}
-                    step={0.5}
+                    step={0.1}
                     suffix=" px"
                     onCommit={(value) => onChange({ kind: "pointRadius", value })}
                   />
@@ -685,7 +625,7 @@ export default function LayerStyleEditor({
                   value={style.clusterRadius ?? 40}
                   minimum={1}
                   maximum={500}
-                  step={1}
+                  step={0.1}
                   suffix=" px"
                   onCommit={(value) => onChange({ kind: "clusterRadius", value })}
                 />
@@ -700,7 +640,7 @@ export default function LayerStyleEditor({
                   value={style.heatmapRadius ?? 20}
                   minimum={0}
                   maximum={100}
-                  step={1}
+                  step={0.1}
                   suffix=" px"
                   onCommit={(value) => onChange({ kind: "heatmapRadius", value })}
                 />
@@ -716,7 +656,6 @@ export default function LayerStyleEditor({
         <summary>
           <span>
             <strong>Avançado</strong>
-            <small>Composição global do mapa</small>
           </span>
           <LayerPanelIcon name="chevron-down" className="maono-detail-section__chevron" />
         </summary>

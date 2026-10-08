@@ -19,7 +19,9 @@ import AddLayerMenu from "./AddLayerMenu";
 import FilterPanel from "./FilterPanel";
 import LayerDetailView from "./LayerDetailView";
 import LayerList from "./LayerList";
+import { reorderLayerIdsAtTarget, type LayerDropPosition } from "./layer-drop-order";
 import LayerPanelIcon from "./LayerPanelIcon";
+import { useLayerSidebarAccents } from "./useLayerSidebarAccents";
 import PanelSaveAction from "./PanelSaveAction";
 import type { LayerStyleChange } from "./LayerStyleEditor";
 import "./maono-layer-panel.css";
@@ -46,6 +48,10 @@ export default function MaonoLayerPanel() {
     layers,
     selectedLayerId,
   } = useKeplerState();
+  const { sidebarAccents, registerLayer } = useLayerSidebarAccents(
+    JSON.stringify([String(context?.organization?.id ?? ""), String(context?.project?.id ?? "")]),
+    layers,
+  );
   const controller = useKeplerController();
   const exportDatasetCsv = useDatasetCsvExport();
   const [tab, setTab] = useState<MaonoMapPanelTab>("layers");
@@ -182,14 +188,9 @@ export default function MaonoLayerPanel() {
     applyCommand(controller.reorderLayers(order), "Ordem das camadas atualizada.");
   }
 
-  function reorderLayer(draggedLayerId: string, targetLayerId: string) {
-    const order = layers.map((layer) => layer.id);
-    const draggedIndex = order.indexOf(draggedLayerId);
-    const targetIndex = order.indexOf(targetLayerId);
-    if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) return;
-
-    const [movedLayerId] = order.splice(draggedIndex, 1);
-    order.splice(targetIndex, 0, movedLayerId);
+  function reorderLayer(draggedLayerId: string, targetLayerId: string, position: LayerDropPosition) {
+    const order = reorderLayerIdsAtTarget(layers.map((layer) => layer.id), draggedLayerId, targetLayerId, position);
+    if (!order) return;
     applyCommand(controller.reorderLayers(order), "Ordem das camadas atualizada.");
   }
 
@@ -206,6 +207,7 @@ export default function MaonoLayerPanel() {
       "Camada duplicada.",
       (value) => {
         if (value?.layerId) {
+          registerLayer(value.layerId);
           setView({ kind: "layer", layerId: value.layerId });
         }
       },
@@ -237,6 +239,7 @@ export default function MaonoLayerPanel() {
       "Camada adicionada.",
       (value) => {
         if (value?.layerId) {
+          registerLayer(value.layerId);
           applyCommand(controller.inspectLayer(value.layerId));
           setView({ kind: "layer", layerId: value.layerId });
         }
@@ -373,7 +376,6 @@ export default function MaonoLayerPanel() {
       : projectName ||
         organizationName ||
         (tab === "layers" ? "Camadas" : "Filtros");
-  const count = layers.length;
 
   return (
     <aside
@@ -398,7 +400,6 @@ export default function MaonoLayerPanel() {
           >
             {title}
           </strong>
-          <span>{count} {count === 1 ? "camada" : "camadas"}</span>
         </div>
       </header>
 
@@ -535,6 +536,7 @@ export default function MaonoLayerPanel() {
 
               <LayerList
                 layers={layers}
+                sidebarAccents={sidebarAccents}
                 selectedLayerId={selectedLayerId}
                 search={search}
                 canInspect={canInspect}
@@ -566,6 +568,7 @@ export default function MaonoLayerPanel() {
         >
           <FilterPanel
             filters={filters}
+            sidebarAccents={sidebarAccents}
             datasets={datasets}
             editable={Boolean(capabilities?.editFilters)}
             onAdd={addFilter}

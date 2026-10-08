@@ -39,7 +39,9 @@
 .maono-filter-histogram__bars > span.is-selected { background: linear-gradient(to top, #ad843d, var(--maono-filter-accent, var(--maono-layer-gold, #c5a059))); box-shadow: 0 0 7px rgb(197 160 89 / 18%); }
 .maono-filter-histogram__bars > em { align-self: center; width: 100%; color: #758399; font-size: 9px; font-style: normal; text-align: center; }
 .maono-filter-histogram__selection { position: absolute; z-index: 2; top: 2px; bottom: 0; min-width: 2px; border-top: 1px solid rgb(226 190 117 / 34%); border-bottom: 2px solid var(--maono-filter-accent, #c5a059); background: linear-gradient(to bottom, rgb(197 160 89 / 3%), rgb(197 160 89 / 10%)); cursor: grab; }
-.maono-filter-histogram__selection:active { cursor: grabbing; background: linear-gradient(to bottom, rgb(197 160 89 / 7%), rgb(197 160 89 / 17%)); }
+.maono-filter-histogram__selection:active, .maono-filter-histogram__plot[data-dragging="window"] .maono-filter-histogram__selection { cursor: grabbing; background: linear-gradient(to bottom, rgb(197 160 89 / 7%), rgb(197 160 89 / 17%)); }
+.maono-filter-histogram__selection:focus-visible { outline: 1px solid var(--maono-filter-accent, #c5a059); outline-offset: 2px; }
+.maono-filter-histogram__selection[aria-disabled="true"] { cursor: default; }
 .maono-filter-histogram__handle { position: absolute; z-index: 4; bottom: -7px; width: 15px; height: 15px; margin: 0; padding: 0; transform: translateX(-50%); border: 2px solid var(--maono-filter-accent, #c5a059); border-radius: 50%; background: #0b111c; box-shadow: 0 0 0 2px rgb(6 10 17 / 72%); cursor: ew-resize; touch-action: none; }
 .maono-filter-histogram__handle::before { position: absolute; bottom: 12px; left: 50%; width: 1px; height: 69px; background: linear-gradient(to top, rgb(197 160 89 / 74%), rgb(197 160 89 / 8%)); content: ""; transform: translateX(-50%); pointer-events: none; }
 .maono-filter-histogram__handle:hover, .maono-filter-histogram__handle:focus-visible { border-color: #efd088; box-shadow: 0 0 0 2px rgb(6 10 17 / 72%), 0 0 10px rgb(197 160 89 / 45%); outline: none; }

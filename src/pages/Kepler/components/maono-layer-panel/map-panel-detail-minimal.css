@@ -10,6 +10,7 @@
 }
 
 .maono-layer-panel .maono-detail-view__header {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   min-height: 56px;
   padding: 8px var(--maono-detail-space);
   border-color: var(--maono-detail-divider);
@@ -124,6 +125,7 @@
 
 .maono-layer-panel .maono-detail-view :is(
   .maono-detail-card > header strong,
+  .maono-filter-essential > header strong,
   .maono-detail-section > summary strong,
   .maono-progressive-section > summary strong,
   .maono-filter-value-section > header strong
@@ -136,7 +138,6 @@
 
 .maono-layer-panel .maono-detail-view :is(
   .maono-layer-essential > header strong,
-  .maono-filter-essential > header strong,
   .maono-style-subsection > header strong,
   .maono-point-spatial-grouping > header strong
 ) {
@@ -614,4 +615,32 @@
   height: 18px;
   margin: 0;
   transform: translateY(-50%);
+}
+
+/* Compact inspector actions mirror layer/filter visibility without badges. */
+.maono-layer-panel .maono-detail-view__visibility {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 32px;
+  padding: 6px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--maono-layer-gold);
+  background: transparent;
+  cursor: pointer;
+}
+.maono-layer-panel .maono-detail-view__visibility svg { width: 18px; height: 18px; }
+.maono-layer-panel .maono-detail-view__visibility[aria-pressed="false"] {
+  color: var(--maono-layer-muted);
+  opacity: .65;
+}
+.maono-layer-panel .maono-detail-view__visibility:disabled { cursor: default; }
+.maono-layer-panel .maono-detail-view__visibility:hover:not(:disabled) {
+  background: var(--maono-panel-hover);
+}
+.maono-layer-panel .maono-detail-view .maono-detail-card--essential {
+  border-top: 0;
+  padding-top: 0;
 }

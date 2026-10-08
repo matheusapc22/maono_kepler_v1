@@ -2,19 +2,21 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { buildFilterGroups, NEUTRAL_FILTER_ACCENT } from '../src/pages/Kepler/components/maono-layer-panel/filters/filter-groups.ts';
+import { deriveLayerSidebarAccent, getLayerSidebarAccent } from '../src/pages/Kepler/components/maono-layer-panel/layer-sidebar-accents.ts';
 
 const dataset = (id, label = id) => ({ id, label, fields: [] });
 const layer = (id, dataIds, color = [12, 120, 210]) => ({ id, label: `Camada ${id}`, dataIds, color });
 const filter = (id, dataIds) => ({ id, dataIds, index: Number(id), value: ['A'], enabled: true });
 
-test('single layer identity uses exactly its live color and keeps original filter objects', () => {
+test('single layer identity inherits its sidebar accent and keeps original filter objects', () => {
   const conditions = [filter('1', ['a']), filter('2', ['a'])];
   const layers = [layer('one', ['a'], [3, 90, 220])];
   const before = structuredClone({ conditions, layers });
-  const [group] = buildFilterGroups(conditions, [dataset('a')], layers);
+  const sidebarAccents = new Map([['one', getLayerSidebarAccent(0)]]);
+  const [group] = buildFilterGroups(conditions, [dataset('a')], layers, sidebarAccents);
   assert.equal(group.label, 'Camada one');
   assert.equal(group.layerId, 'one');
-  assert.equal(group.accent, 'rgb(3,90,220)');
+  assert.equal(group.accent, sidebarAccents.get('one'));
   assert.equal(group.filters[0], conditions[0]);
   assert.deepEqual({ conditions, layers }, before);
 });
@@ -36,12 +38,12 @@ test('detached, missing and synchronized groups retain native conditions without
   assert.equal(groups.find(group => group.key === '__orphan__').label, 'Dados sem camada');
 });
 
-test('group order follows live layer order and color changes rather than example content', () => {
+test('group order follows live layers while identity stays independent of map colors', () => {
   const conditions = [filter('1', ['a']), filter('2', ['b'])];
   const datasets = [dataset('a'), dataset('b')];
   const groups = buildFilterGroups(conditions, datasets, [layer('two', ['b']), layer('one', ['a'], [240, 100, 70])]);
   assert.deepEqual(groups.map(group => group.key), ['b', 'a']);
-  assert.equal(groups[1].accent, 'rgb(240,100,70)');
+  assert.equal(groups[1].accent, deriveLayerSidebarAccent('one'));
   assert.deepEqual(buildFilterGroups([], datasets, []), []);
 });
 
@@ -53,7 +55,9 @@ const [panel, filters, rows, minimal, save, detail] = await Promise.all([
 ]);
 test('header and toolbar remove redundant regions structurally without altering native commands', () => {
   assert.doesNotMatch(panel, /modeLabel|maono-layer-panel__mode|showSearch/);
-  assert.match(panel, /const count = layers.length/);
+  assert.doesNotMatch(panel, /const count = layers.length|<span>\{count\}/);
+  assert.match(panel, /Camadas <span>\{layers.length\}<\/span>/);
+  assert.match(panel, /Filtros <span>\{filters.length\}<\/span>/);
   assert.match(panel, /placeholder="Buscar camada\.\.\."/);
   assert.match(panel, /controller\.reorderLayers\(order\)/);
   assert.match(panel, /controller\.toggleLayerVisibility\(layer, visible\)/);
@@ -93,9 +97,9 @@ test('nested layer menus and detail rename consume Escape before the shell colla
   }
 });
 
-test('all layer range controls and the inline filter switch retain explicit accessible names', async () => {
-  assert.match(await read('LayerStyleEditor.tsx'), /type="range"\s*aria-label=\{label\}/);
-  assert.match(await read('FilterDetailView.tsx'), /role="switch"\s*aria-label=\{`Filtro \$\{title\}`\}/);
+test('all layer range controls and inline filter eye retain explicit accessible names', async () => {
+  assert.match(await read('SliderNumberControl.tsx'), /type="range"\s*aria-label=\{label\}/);
+  assert.match(await read('FilterDetailView.tsx'), /aria-label=\{filter.enabled \? `Desativar filtro \$\{title\}` : `Ativar filtro \$\{title\}`\}/);
 });
 
 test('hidden switch focus is contained by its label rather than scrolling fixed panel chrome', async () => {

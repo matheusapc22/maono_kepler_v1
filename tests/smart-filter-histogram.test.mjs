@@ -165,7 +165,7 @@ test("editor remove sliders externos e concentra seleção no brush", async () =
   assert.doesNotMatch(editor, /type="range"/);
   assert.match(editor, /useSmartFilterHistogram/);
   assert.match(histogram, /beginDrag\("window"/);
-  assert.match(histogram, /const amplitude = drag\.startRange\[1\] - drag\.startRange\[0\]/);
+  assert.match(histogram, /dragHistogramRange\(/);
   assert.match(histogram, /role="slider"/);
   assert.match(histogram, /onRangeCommit/);
 });

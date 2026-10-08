@@ -271,7 +271,12 @@ async function layerExtentGuides(detail: Locator, width: number) {
     if (!wasOpen) await summary.click();
     await expect(section).toHaveAttribute('open', '');
     await extentGuide(content, 'layer', width);
-    await expect(summary.locator('small')).toHaveCSS('padding-left', `${(width <= 560 ? 10 : 12) + 2}px`);
+    const subtitle = summary.locator('small');
+    if (await section.evaluate(element => element.classList.contains('maono-detail-section'))) {
+      await expect(subtitle).toHaveCount(0);
+    } else if (await subtitle.count()) {
+      await expect(subtitle).toHaveCSS('padding-left', `${(width <= 560 ? 10 : 12) + 2}px`);
+    }
     await summary.click();
     await expect(content).toBeHidden();
     expect(await content.evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
@@ -466,11 +471,11 @@ async function assertPinnedLayerChrome(page: Page, before: Array<Awaited<ReturnT
   })).toContain('maono-detail-view__scroll');
 }
 
-test('empty create panel has persistent search, project-layer count and only Save in the footer', async ({ page }, testInfo) => {
+test('empty create panel has persistent search, tab counts and only Save in the footer', async ({ page }, testInfo) => {
   const fixture = await openMap(page, { create: true });
   await openLayers(page);
   await expect(panel(page).getByRole('searchbox', { name: 'Buscar camada', exact: true })).toBeVisible();
-  await expect(panel(page).locator('.maono-layer-panel__header')).toContainText('0 camadas');
+  await expect(panel(page).locator('.maono-layer-panel__header')).not.toContainText(/\d+ camadas?/);
   await expect(panel(page).locator('.maono-layer-panel__mode')).toHaveCount(0);
   await expect(panel(page)).not.toContainText(/Novo mapa|\bQuota\b|\bCota\b|19 restantes|98 MB/i);
   await expect(panel(page).getByRole('button', { name: 'Adicionar camada', exact: true })).toBeVisible();
@@ -479,7 +484,7 @@ test('empty create panel has persistent search, project-layer count and only Sav
   await expect(footer.getByRole('button')).toHaveText('Salvar como projeto');
   await visualEvidence(page, testInfo, 'minimal-empty-layers');
   await openFilters(page);
-  await expect(panel(page).locator('.maono-layer-panel__header')).toContainText('0 camadas');
+  await expect(panel(page).locator('.maono-layer-panel__header')).not.toContainText(/\d+ camadas?/);
   await expect(panel(page).locator('.maono-filter-panel__toolbar')).toHaveText('Adicionar Filtro');
   await expect(panel(page).locator('.maono-collection-heading')).toHaveCount(0);
   await visualEvidence(page, testInfo, 'minimal-empty-filters');
@@ -492,11 +497,11 @@ test('search, eye, rename portal and HTML drag-and-drop mutate actual layers and
   await openLayers(page);
   const header = panel(page).locator('.maono-layer-panel__header');
   await expect(header).toContainText(`${PROJECT_NAME} - ${ORGANIZATION_NAME}`);
-  await expect(header).toContainText('3 camadas');
+  await expect(header).not.toContainText(/\d+ camadas?/);
   const search = panel(page).getByRole('searchbox', { name: 'Buscar camada', exact: true });
   await search.fill('Camada 02');
   await expect(rows(page)).toHaveCount(1);
-  await expect(header).toContainText('3 camadas');
+  await expect(header).not.toContainText(/\d+ camadas?/);
   await expect(rows(page).first()).toHaveAttribute('draggable', 'false');
   await search.fill('ausente');
   await expect(panel(page)).toContainText('Nenhuma camada encontrada');
@@ -508,7 +513,7 @@ test('search, eye, rename portal and HTML drag-and-drop mutate actual layers and
   expect(children.indexOf('maono-layer-row__visibility')).toBeLessThan(children.indexOf('maono-layer-row__swatch'));
   await rows(page).first().getByRole('button', { name: /^Ocultar / }).click();
   await expect(rows(page).first().getByRole('button', { name: /^Mostrar / })).toHaveAttribute('aria-pressed', 'false');
-  await expect(header).toContainText('3 camadas');
+  await expect(header).not.toContainText(/\d+ camadas?/);
   await rows(page).first().getByRole('button', { name: /^Ações de / }).click();
   const menu = page.getByRole('menu', { name: 'Ações de Camada 01', exact: true });
   await expect(menu).toBeVisible();
@@ -523,7 +528,7 @@ test('search, eye, rename portal and HTML drag-and-drop mutate actual layers and
   await expect(rows(page).first().locator('.maono-layer-row__open strong')).toHaveText('Camada 01');
   await expect(page.locator('.maono-map-panel-host')).toHaveAttribute('data-panel-open', 'true');
   await renameFirstLayer(page, 'Camada renomeada');
-  await rows(page).first().dragTo(rows(page).nth(2), { sourcePosition: { x: 8, y: 18 }, targetPosition: { x: 50, y: 18 } });
+  await rows(page).first().dragTo(rows(page).nth(2), { sourcePosition: { x: 8, y: 18 }, targetPosition: { x: 50, y: 50 } });
   await expect(rows(page).locator('.maono-layer-row__open strong')).toHaveText(['Camada 02', 'Camada 03', 'Camada renomeada']);
   await visualEvidence(page, testInfo, 'minimal-populated-layers');
   const saved = savedVisState(await saveMap(page, fixture));
@@ -544,6 +549,7 @@ test('native layer interiors preserve color, opacity, radius and numeric field e
   await importCsv(page);
   await openLayers(page);
   await expect(rows(page)).toHaveCount(1);
+  const originalAccent = await rows(page).first().locator('.maono-layer-row__swatch').evaluate(element => getComputedStyle(element).backgroundColor);
   await rows(page).first().locator('.maono-layer-row__open').click();
   const detail = panel(page).locator('.maono-detail-view').filter({ has: page.locator('.maono-layer-style-editor') });
   await expect(detail).toBeVisible();
@@ -571,7 +577,7 @@ test('native layer interiors preserve color, opacity, radius and numeric field e
   await visualEvidence(page, testInfo, 'minimal-native-layer-detail');
   let vis = savedVisState(await saveMap(page, fixture));
   expect(vis.layers[0].config.color).toEqual([38, 127, 164]);
-  expect(vis.layers[0].config.visConfig.opacity).toBeCloseTo(opacity);
+  expect(vis.layers[0].config.visConfig.opacity).toBeCloseTo(opacity / 100);
   expect(vis.layers[0].config.visConfig.radius).toBeCloseTo(radius);
   await detail.getByRole('combobox', { name: 'Raio orientado por campo', exact: true }).selectOption('value');
   await expect(detail.getByRole('slider', { name: 'Raio mínimo', exact: true })).toBeVisible();
@@ -580,7 +586,7 @@ test('native layer interiors preserve color, opacity, radius and numeric field e
   expect(vis.layers[0].visualChannels.sizeField).toMatchObject({ name: 'value' });
   expect(vis.layers[0].config.visConfig.radiusRange[0]).toBe(minimum);
   await detail.getByRole('button', { name: 'Voltar para a lista de camadas', exact: true }).click();
-  await expect(rows(page).first().locator('.maono-layer-row__swatch')).toHaveCSS('background-color', 'rgb(38, 127, 164)');
+  await expect(rows(page).first().locator('.maono-layer-row__swatch')).toHaveCSS('background-color', originalAccent);
   await panel(page).getByRole('button', { name: 'Adicionar camada', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('.maono-add-layer__menu')).toHaveCount(0);
@@ -599,18 +605,18 @@ test('inline category filter changes native CSV population, toggles, saves once 
   await openFilters(page);
   await addFilter(page, 'category');
   await extentGuide(filterEditor(page).locator(':scope > .maono-detail-view__scroll'), 'filter', page.viewportSize()!.width);
-  await expect(filterEditor(page).getByRole('switch', { name: 'Filtro category', exact: true })).toBeVisible();
+  await expect(filterEditor(page).getByRole('button', { name: 'Desativar filtro category', exact: true })).toBeVisible();
   const originalFilterId = (await capture(page)).snapshot.filterIds[0];
   await expect(filterEditor(page).locator('.maono-filter-category__options label')).toHaveCount(3);
   await filterEditor(page).getByRole('checkbox', { name: 'B', exact: true }).check();
   await visualEvidence(page, testInfo, 'minimal-native-category');
   expect((await exportRows(page)).map(row => row.name)).toEqual(['Linha 4', 'Linha 5']);
-  await filterEditor(page).getByRole('switch').click();
-  await expect(filterEditor(page).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
+  await expect(filterEditor(page).locator('.maono-detail-view__visibility')).toHaveAttribute('aria-pressed', 'false');
   expect(await exportRows(page)).toHaveLength(6);
   const disabledSaved = savedVisState(await saveMap(page, fixture));
   expect(disabledSaved.filters[0]).toMatchObject({ id: originalFilterId, enabled: false, value: ['B'] });
-  await expect(filterEditor(page).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(filterEditor(page).locator('.maono-detail-view__visibility')).toHaveAttribute('aria-pressed', 'false');
   await expect(filterEditor(page).getByRole('checkbox', { name: 'B', exact: true })).toBeChecked();
   expect(await exportRows(page)).toHaveLength(6);
   // Changing another CPU filter must not resurrect the disabled category.
@@ -621,10 +627,10 @@ test('inline category filter changes native CSV population, toggles, saves once 
   expect((await exportRows(page)).map(row => row.name)).toEqual(['Linha 2', 'Linha 4', 'Linha 6']);
   await removeFilter(page);
   await panel(page).locator('.maono-filter-row__open').filter({ has: page.locator('strong', { hasText: /^category$/ }) }).click();
-  await expect(filterEditor(page).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(filterEditor(page).locator('.maono-detail-view__visibility')).toHaveAttribute('aria-pressed', 'false');
   expect(await exportRows(page)).toHaveLength(6);
   expect((await capture(page)).snapshot.filterIds).toEqual([originalFilterId]);
-  await filterEditor(page).getByRole('switch').click();
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
   expect((await exportRows(page)).map(row => row.category)).toEqual(['B', 'B']);
   const beforeSaveCount = fixture.saves.length;
   const expectedRevision = fixture.saves.at(-1)!.expectedConfigRevision + 1;
@@ -674,13 +680,13 @@ test('inline numeric, temporal and boolean controls commit native values, reset 
   await filterEditor(page).getByRole('spinbutton', { name: 'Máximo', exact: true }).press('Tab');
   let vis = savedVisState(await saveMap(page, fixture));
   expect(vis.filters[0]).toMatchObject({ type: 'range', name: ['value'], value: [20, 50] });
-  await filterEditor(page).getByRole('switch').click();
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
   vis = savedVisState(await saveMap(page, fixture));
   expect(vis.filters[0]).toMatchObject({ type: 'range', enabled: false, value: [20, 50] });
-  await expect(filterEditor(page).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(filterEditor(page).locator('.maono-detail-view__visibility')).toHaveAttribute('aria-pressed', 'false');
   // GPU range/time behavior is separately verified by native table tests; CSV
   // row count is deliberately not used as a proxy for rendered GPU filtering.
-  await filterEditor(page).getByRole('switch').click();
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
   await filterEditor(page).getByRole('button', { name: 'Restaurar domínio completo', exact: true }).click();
   await expect(filterEditor(page).getByRole('spinbutton', { name: 'Mínimo', exact: true })).toHaveValue('10');
   await expect(filterEditor(page).getByRole('spinbutton', { name: 'Máximo', exact: true })).toHaveValue('60');
@@ -699,11 +705,11 @@ test('inline numeric, temporal and boolean controls commit native values, reset 
   expect(vis.filters[0].value[0]).toBe(expected);
   expect(vis.filters[0].value[1]).toBeGreaterThan(expected);
   const preservedTimeValue = vis.filters[0].value;
-  await filterEditor(page).getByRole('switch').click();
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
   vis = savedVisState(await saveMap(page, fixture));
   expect(vis.filters[0]).toMatchObject({ type: 'timeRange', enabled: false, value: preservedTimeValue });
-  await expect(filterEditor(page).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-  await filterEditor(page).getByRole('switch').click();
+  await expect(filterEditor(page).locator('.maono-detail-view__visibility')).toHaveAttribute('aria-pressed', 'false');
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
   await filterEditor(page).getByRole('button', { name: 'Restaurar período completo', exact: true }).click();
   await expect(from).toHaveValue(original);
   await expect(to).not.toHaveValue('');
@@ -715,27 +721,29 @@ test('inline numeric, temporal and boolean controls commit native values, reset 
   expect((await exportRows(page)).map(row => row.name)).toEqual(['Linha 1', 'Linha 3', 'Linha 5']);
   vis = savedVisState(await saveMap(page, fixture));
   expect(vis.filters[0]).toMatchObject({ type: 'select', name: ['eligible'], value: true });
-  await filterEditor(page).getByRole('switch').click();
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
   expect(await exportRows(page)).toHaveLength(6);
   vis = savedVisState(await saveMap(page, fixture));
   expect(vis.filters[0]).toMatchObject({ type: 'select', enabled: false, value: true });
-  await expect(filterEditor(page).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(filterEditor(page).locator('.maono-detail-view__visibility')).toHaveAttribute('aria-pressed', 'false');
   expect(await exportRows(page)).toHaveLength(6);
-  await filterEditor(page).getByRole('switch').click();
+  await filterEditor(page).locator('.maono-detail-view__visibility').click();
   expect(await exportRows(page)).toHaveLength(3);
   await filterEditor(page).getByRole('radio', { name: 'Não / falso', exact: true }).check();
   expect((await exportRows(page)).map(row => row.name)).toEqual(['Linha 2', 'Linha 4', 'Linha 6']);
   expect(fixture.unexpectedWrites).toEqual([]);
 });
 
-test('dataset groups are cardless with truthful layer colors and one rotating accordion chevron', async ({ page }, testInfo) => {
+test('dataset groups are cardless with stable sidebar identities and one rotating accordion chevron', async ({ page }, testInfo) => {
   const fixture = await openMap(page, { layerCount: 2, groups: true });
+  await openLayers(page);
+  const sidebarColors = await rows(page).locator('.maono-layer-row__swatch').evaluateAll(elements => elements.map(element => getComputedStyle(element).backgroundColor));
   await openFilters(page);
   const groups = panel(page).locator('.maono-filter-group');
   await expect(groups).toHaveCount(2);
   await cardless(groups.first());
-  await expect(groups.first().locator('.maono-filter-group__accent')).toHaveCSS('background-color', 'rgb(197, 160, 89)');
-  await expect(groups.nth(1).locator('.maono-filter-group__accent')).toHaveCSS('background-color', 'rgb(50, 140, 200)');
+  await expect(groups.first().locator('.maono-filter-group__accent')).toHaveCSS('background-color', sidebarColors[0]);
+  await expect(groups.nth(1).locator('.maono-filter-group__accent')).toHaveCSS('background-color', sidebarColors[1]);
   await visualEvidence(page, testInfo, 'minimal-grouped-filters');
   const firstToggle = groups.first().locator('.maono-filter-group__toggle');
   const chevron = await firstToggle.locator('.maono-filter-group__chevron').elementHandle();
@@ -1111,7 +1119,7 @@ test('viewer retains truthful counts and inspection without exposing mutation co
   const fixture = await openMap(page, { layerCount: 2, groups: true, viewer: true });
   await openLayers(page);
   await expect(panel(page).getByRole('searchbox', { name: 'Buscar camada', exact: true })).toBeVisible();
-  await expect(panel(page).locator('.maono-layer-panel__header')).toContainText('2 camadas');
+  await expect(panel(page).locator('.maono-layer-panel__header')).not.toContainText(/\d+ camadas?/);
   await expect(panel(page).locator('.maono-layer-panel__save-footer')).toHaveCount(0);
   await expect(panel(page).getByRole('button', { name: 'Adicionar camada', exact: true })).toHaveCount(0);
   await expect(rows(page).locator('.maono-layer-row__visibility')).toHaveCount(0);
@@ -1125,7 +1133,7 @@ test('viewer retains truthful counts and inspection without exposing mutation co
   await expect(panel(page).getByRole('button', { name: 'Adicionar Filtro', exact: true })).toHaveCount(0);
   await panel(page).locator('.maono-filter-group__toggle').first().click();
   await panel(page).locator('.maono-filter-row__open').first().click();
-  await expect(filterEditor(page).getByRole('switch')).toBeDisabled();
+  await expect(filterEditor(page).locator('.maono-detail-view__visibility')).toBeDisabled();
   await expect(filterEditor(page).getByRole('checkbox')).toHaveCount(0);
   expect(fixture.saves).toEqual([]);
   expect(fixture.unexpectedWrites).toEqual([]);

@@ -203,7 +203,8 @@ test("painel oferece busca, visibilidade, inspeção, estilo e filtros", () => {
   assert.match(source.panel, /type="search"/);
   assert.match(source.panel, /toggleLayerVisibility/);
   assert.match(source.panel, /controller\.inspectLayer\(layer\.id\)/);
-  assert.match(source.styleEditor, /type="range"/);
+  assert.match(source.styleEditor, /import RangeControl from "\.\/SliderNumberControl"/);
+  assert.equal((source.styleEditor.match(/<RangeControl/g) ?? []).length, 8);
   assert.match(source.styleEditor, /type="color"/);
   assert.match(source.styleEditor, /MAONO_LAYER_PALETTES/);
   assert.match(source.inspector, /Modo de visualização/);
@@ -307,7 +308,7 @@ test("fase básica cobre criação, renomeação, duplicação, exclusão e orde
   assert.match(source.layerListItem, /Mover .* para baixo/);
   assert.match(source.layerListItem, /onDuplicate\(layer\)/);
   assert.match(source.layerListItem, /onRemove\(layer\)/);
-  assert.match(source.layerList, /onReorder\(sourceLayerId, targetLayerId\)/);
+  assert.match(source.layerList, /onReorder\(sourceLayerId, targetLayerId, position\)/);
   assert.match(source.panel, /window\.confirm/);
   assert.match(source.engineCommands, /uniqueLayerLabel/);
 });

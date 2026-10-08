@@ -171,11 +171,21 @@ export default function LayerDetailView({
           ) : (
             <strong>{layer.label}</strong>
           )}
-          <small>
-            {layer.type} · {datasets.find((item) => item.id === layer.dataIds[0])?.label ?? "Dataset não informado"}
-          </small>
+          <small>{layer.type}</small>
           {error ? <em role="alert">{error}</em> : null}
         </div>
+
+        <button
+          type="button"
+          className="maono-detail-view__visibility"
+          aria-label={layer.isVisible ? `Ocultar ${layer.label}` : `Mostrar ${layer.label}`}
+          aria-pressed={layer.isVisible}
+          title={layer.isVisible ? "Ocultar camada" : "Mostrar camada"}
+          disabled={!canToggle}
+          onClick={() => onToggle(layer, !layer.isVisible)}
+        >
+          <LayerPanelIcon name={layer.isVisible ? "eye" : "eye-off"} />
+        </button>
 
         {menuItems.length ? (
           <PanelActionMenu label={`Ações de ${layer.label}`} items={menuItems} />
@@ -186,12 +196,10 @@ export default function LayerDetailView({
         <LayerInspector
           layer={layer}
           datasets={datasets}
-          canToggle={canToggle}
           canEditStructure={canEditStructure}
           canEditStyle={canEditStyle}
           layerBlending={layerBlending}
           overlayBlending={overlayBlending}
-          onToggle={onToggle}
           onDatasetChange={onDatasetChange}
           onColumnsChange={onColumnsChange}
           onStyleChange={onStyleChange}

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { restoreLimitsPlansLoading } from "./helpers/projects-loading-preservation.mjs";
-import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
+import { restoreMaonoSelect, maonoSelectDeclarations } from "./helpers/maono-select-preservation.mjs";
 import { assertUsersAccessPreserved } from "./helpers/users-access-preservation.mjs";
 const root = new URL("../", import.meta.url);
 const read = path => readFileSync(new URL(path, root), "utf8");
@@ -39,19 +39,27 @@ const consumers = {
     "controls": 1
   },
   "src/pages/Kepler/components/maono-layer-panel/LayerStyleEditor.tsx": {
-    "sha256": "6229bbeef00d19b5b6dc31f1d468a35ea21e132d846967e83476766db2042e29",
+    "sha256": "25584a5d1825effcc7974527838cbc4a8a500d6e2f2818d563d32917f2e105f2",
+    // Visual Maõno: refreshed approved presentation; selector subtrees stay pinned to d3c9377.
+    "selectorsSha256": "8fcdf5023ac94f16a5cda3ac55dabf42bb8e1020d02d7eacab754dd6e9d68590",
     "controls": 6
   },
   "src/pages/Kepler/components/maono-layer-panel/FilterDetailView.tsx": {
-    "sha256": "29c565e6be52d12e93576b38e5113a18476c1fe946b080a9330c0960ec405ee3",
+    "sha256": "6b7f755c2c41acba11c8e59698baff0b447a097a83d70d8fe07828e1f2f0890f",
+    // Visual Maõno: refreshed approved presentation; selector subtrees stay pinned to d3c9377.
+    "selectorsSha256": "79bc2e4f74993deb2cc976613e69e3e7cab759e50db091968eaadc7b5f822978",
     "controls": 2
   },
   "src/pages/Kepler/components/maono-layer-panel/FilterPanel.tsx": {
-    "sha256": "bcbf4cdf984f9371c73bccb74d2a29a9bcfa657c2b0184c32fae3ed7f87950ac",
+    "sha256": "515144b5ad886a9e26d0388a3ad8c0ab3a12790d0dc6f5b8452956e8dfbc54fd",
+    // Visual Maõno: refreshed approved presentation; selector subtrees stay pinned to d3c9377.
+    "selectorsSha256": "816a0ca12b00109b6ecc139ce8de3a4100157993a262eb3fcb19e3c0965ce816",
     "controls": 2
   },
   "src/pages/Kepler/components/maono-layer-panel/LayerInspector.tsx": {
-    "sha256": "d9f0e77c6a1da3033970a80a15c04e35a14709c5a7ac707c8b4a573faa4fd830",
+    "sha256": "2373e603649095e7734f7701f78618d65a86fab0fc283e1ff41022d42792adac",
+    // Visual Maõno: refreshed approved presentation; selector subtrees stay pinned to d3c9377.
+    "selectorsSha256": "ef02702919fe882155a8c9ad36b7b2eb7739831507a51c21e82561dbb9af7e09",
     "controls": 2
   },
   "src/pages/Admin/components/AdminUserManagerLegacy.tsx": {
@@ -130,6 +138,7 @@ for (const [path, contract] of Object.entries(consumers)) {
   test(`shared selector preserves all consumer logic: ${path}`, () => {
     const source = restoreAdminProjectsProgressiveLoading(path, restoreTicketDocumentsProgressiveLoading(path, restoreTicketOptionalProgressiveLoading(path, read(path))));
     assert.equal((source.match(/<MaonoSelect\b/g) || []).length, contract.controls);
+    if (contract.selectorsSha256) assert.equal(createHash("sha256").update(maonoSelectDeclarations(source)).digest("hex"), contract.selectorsSha256);
     if (contract.preserve) contract.preserve(source);
     else assert.equal(createHash("sha256").update(restoreMaonoSelect(contract.restore ? contract.restore(source) : source)).digest("hex"), contract.sha256);
   });

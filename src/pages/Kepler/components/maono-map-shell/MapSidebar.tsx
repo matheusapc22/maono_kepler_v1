@@ -1,3 +1,4 @@
+import type { MouseEventHandler } from "react";
 import { Link } from "react-router";
 
 import maonoSymbol from "../../../../assets/images/Logo_Simbolo.png";
@@ -18,7 +19,24 @@ type MapSidebarProps = {
   onOpenBasemap: () => void;
   onOpenData: () => void;
   onLogout: () => Promise<void>;
+  onNavigateHome: MouseEventHandler<HTMLAnchorElement>;
 };
+
+/** One neutral outline replaces the straight rail edge beside the open tool. */
+function SidebarConnector() {
+  return (
+    <svg
+      className="maono-map-sidebar__connector"
+      viewBox="0 0 80 72"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path className="maono-map-sidebar__connector-fill" d="M79.5 0Q79.5 12 67.5 12H18Q4 12 4 26V46Q4 60 18 60H67.5Q79.5 60 79.5 72H81V0Z" />
+      <path className="maono-map-sidebar__connector-edge" d="M79.5 0Q79.5 12 67.5 12H18Q4 12 4 26V46Q4 60 18 60H67.5Q79.5 60 79.5 72" />
+    </svg>
+  );
+}
 
 function SidebarLabel({ children }: { children: string }) {
   return (
@@ -40,6 +58,7 @@ export default function MapSidebar({
   onOpenBasemap,
   onOpenData,
   onLogout,
+  onNavigateHome,
 }: MapSidebarProps) {
   const capabilities = context.capabilities;
   const canOpenLayers = Boolean(
@@ -62,6 +81,7 @@ export default function MapSidebar({
       <Link
         className="maono-map-sidebar__brand"
         to="/projects"
+        onClick={onNavigateHome}
         title="Maõno Maps"
         aria-label="Maõno Maps — Projetos"
       >
@@ -81,10 +101,12 @@ export default function MapSidebar({
             onClick={() => onPanelTabSelect("layers")}
             disabled={mapLoading}
             aria-pressed={panelOpen && activePanel === "layers"}
+            aria-expanded={panelOpen && activePanel === "layers"}
             aria-controls="maono-map-engine-panel"
             aria-label="Camadas"
             title={mapLoading ? loadingTitle : "Camadas"}
           >
+            {panelOpen && activePanel === "layers" ? <SidebarConnector /> : null}
             <MapShellIcon name="layers" />
             <SidebarLabel>Camadas</SidebarLabel>
           </button>
@@ -99,26 +121,41 @@ export default function MapSidebar({
             onClick={onOpenBasemap}
             disabled={mapLoading}
             aria-pressed={panelOpen && activePanel === "basemap"}
+            aria-expanded={panelOpen && activePanel === "basemap"}
             aria-controls="maono-basemap-panel"
             aria-label="Mapa base"
             title={mapLoading ? loadingTitle : "Mapa base"}
           >
+            {panelOpen && activePanel === "basemap" ? <SidebarConnector /> : null}
             <MapShellIcon name="basemap" />
             <SidebarLabel>Mapa base</SidebarLabel>
           </button>
         ) : null}
+
+        <button
+          type="button"
+          className="maono-map-sidebar__saved-searches"
+          disabled
+          aria-label="Pesquisas salvas"
+          title="Pesquisas salvas — em breve"
+        >
+          <MapShellIcon name="projects" />
+          <SidebarLabel>Pesquisas salvas — em breve</SidebarLabel>
+        </button>
 
         {canImportData ? (
           <button
             type="button"
             className={panelOpen && activePanel === "data" ? "is-active" : ""}
             aria-expanded={panelOpen && activePanel === "data"}
+            aria-pressed={panelOpen && activePanel === "data"}
             aria-controls="map-add-data-sidebar"
             onClick={onOpenData}
             disabled={mapLoading}
             aria-label="Adicionar dados"
             title={mapLoading ? loadingTitle : "Adicionar dados"}
           >
+            {panelOpen && activePanel === "data" ? <SidebarConnector /> : null}
             <MapShellIcon name="data" />
             <SidebarLabel>Adicionar dados</SidebarLabel>
           </button>
@@ -126,11 +163,12 @@ export default function MapSidebar({
 
         <Link
           to="/projects"
-          aria-label="Voltar aos projetos"
-          title="Projetos"
+          onClick={onNavigateHome}
+          aria-label="Voltar ao início"
+          title="Início"
         >
-          <MapShellIcon name="projects" />
-          <SidebarLabel>Projetos</SidebarLabel>
+          <MapShellIcon name="home" />
+          <SidebarLabel>Início</SidebarLabel>
         </Link>
       </nav>
 

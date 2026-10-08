@@ -1,15 +1,20 @@
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
 } from "react";
 
 import type { MaonoLayerSnapshot } from "../../integration/keplerBridge";
 import LayerListItem from "./LayerListItem";
+import { layerDropPosition, type LayerDropPosition } from "./layer-drop-order";
 import LayerPanelIcon from "./LayerPanelIcon";
+import { resolveLayerSidebarAccent, type LayerSidebarAccents } from "./layer-sidebar-accents";
 
 type Props = {
   layers: MaonoLayerSnapshot[];
+  sidebarAccents: LayerSidebarAccents;
   selectedLayerId: string | null;
   search: string;
   canInspect: boolean;
@@ -25,7 +30,7 @@ type Props = {
   onRemove: (layer: MaonoLayerSnapshot) => void;
   onMove: (layerId: string, direction: -1 | 1) => void;
   onMoveTo: (layerId: string, position: "start" | "end") => void;
-  onReorder: (draggedLayerId: string, targetLayerId: string) => void;
+  onReorder: (draggedLayerId: string, targetLayerId: string, position: LayerDropPosition) => void;
 };
 
 function normalizeSearch(value: string) {
@@ -38,6 +43,7 @@ function normalizeSearch(value: string) {
 
 export default function LayerList({
   layers,
+  sidebarAccents,
   selectedLayerId,
   search,
   canInspect,
@@ -56,9 +62,8 @@ export default function LayerList({
   onReorder,
 }: Props) {
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
-  const [dragTargetLayerId, setDragTargetLayerId] = useState<string | null>(
-    null,
-  );
+  const draggedLayerIdRef = useRef<string | null>(null);
+  const [dragTarget, setDragTarget] = useState<{ layerId: string; position: LayerDropPosition } | null>(null);
   const normalizedSearch = normalizeSearch(search);
   const visibleLayers = useMemo(
     () =>
@@ -74,9 +79,14 @@ export default function LayerList({
   const reorderEnabled = canReorder && !normalizedSearch;
 
   function resetDrag() {
+    draggedLayerIdRef.current = null;
     setDraggedLayerId(null);
-    setDragTargetLayerId(null);
+    setDragTarget(null);
   }
+
+  useEffect(() => {
+    if (!reorderEnabled) resetDrag();
+  }, [reorderEnabled]);
 
   function handleDragStart(layerId: string, event: DragEvent<HTMLLIElement>) {
     if (!reorderEnabled) {
@@ -86,18 +96,40 @@ export default function LayerList({
 
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", layerId);
+    draggedLayerIdRef.current = layerId;
     setDraggedLayerId(layerId);
+    setDragTarget(null);
+  }
+
+  function handleDragOver(targetLayerId: string, event: DragEvent<HTMLLIElement>) {
+    const sourceLayerId = draggedLayerIdRef.current;
+    if (!reorderEnabled || !sourceLayerId) return;
+
+    event.preventDefault();
+    if (sourceLayerId === targetLayerId) {
+      event.dataTransfer.dropEffect = "none";
+      setDragTarget(null);
+      return;
+    }
+
+    event.dataTransfer.dropEffect = "move";
+    const position = layerDropPosition(event.clientY, event.currentTarget.getBoundingClientRect());
+    setDragTarget((current) => current?.layerId === targetLayerId && current.position === position
+      ? current
+      : { layerId: targetLayerId, position });
   }
 
   function handleDrop(targetLayerId: string, event: DragEvent<HTMLLIElement>) {
-    event.preventDefault();
-    const sourceLayerId =
-      draggedLayerId || event.dataTransfer.getData("text/plain");
-
-    if (reorderEnabled && sourceLayerId && sourceLayerId !== targetLayerId) {
-      onReorder(sourceLayerId, targetLayerId);
+    // Accept only a drag started by this list; external text/files are not layers.
+    const sourceLayerId = draggedLayerIdRef.current;
+    if (reorderEnabled && sourceLayerId) {
+      event.preventDefault();
+      if (sourceLayerId !== targetLayerId) {
+        // Read the final pointer position too, including drops without another dragover.
+        const position = layerDropPosition(event.clientY, event.currentTarget.getBoundingClientRect());
+        onReorder(sourceLayerId, targetLayerId, position);
+      }
     }
-
     resetDrag();
   }
 
@@ -141,6 +173,7 @@ export default function LayerList({
             <LayerListItem
               key={layer.id}
               layer={layer}
+              sidebarAccent={resolveLayerSidebarAccent(layer.id, sidebarAccents)}
               index={originalIndex}
               total={layers.length}
               selected={layer.id === selectedLayerId}
@@ -151,11 +184,7 @@ export default function LayerList({
               canRemove={canRemove}
               canReorder={reorderEnabled}
               dragging={layer.id === draggedLayerId}
-              dragTarget={
-                Boolean(draggedLayerId) &&
-                layer.id === dragTargetLayerId &&
-                layer.id !== draggedLayerId
-              }
+              dropPosition={dragTarget?.layerId === layer.id ? dragTarget.position : null}
               onOpen={onOpen}
               onToggle={onToggle}
               onRename={onRename}
@@ -164,10 +193,9 @@ export default function LayerList({
               onMove={onMove}
               onMoveTo={onMoveTo}
               onDragStart={handleDragStart}
-              onDragEnter={(layerId) => {
-                if (reorderEnabled && layerId !== draggedLayerId) {
-                  setDragTargetLayerId(layerId);
-                }
+              onDragOver={handleDragOver}
+              onDragLeave={(layerId) => {
+                setDragTarget((current) => current?.layerId === layerId ? null : current);
               }}
               onDrop={handleDrop}
               onDragEnd={resetDrag}

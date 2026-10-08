@@ -1,5 +1,6 @@
 import {
   type ReactNode,
+  type MouseEvent,
   useCallback,
   useEffect,
   useRef,
@@ -270,6 +271,20 @@ export default function MaonoMapRuntime({
     panelAvailable,
   ]);
 
+  // The engine adapter remains the sole source of dirty state. Both rail
+  // exits share this guard; cancelling never clears or marks the map clean.
+  const handleNavigateHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    if (
+      engineState.hasUnsavedChanges &&
+      !window.confirm("Há alterações não salvas no mapa. Deseja sair sem salvar?")
+    ) {
+      event.preventDefault();
+    }
+  }, [engineState.hasUnsavedChanges]);
+
   const handleLogout = useCallback(async () => {
     if (loggingOut) {
       return;
@@ -343,6 +358,7 @@ export default function MaonoMapRuntime({
           onOpenBasemap={openBasemapPanel}
           onOpenData={handleOpenData}
           onLogout={handleLogout}
+          onNavigateHome={handleNavigateHome}
         />
       }
       topbar={null}
