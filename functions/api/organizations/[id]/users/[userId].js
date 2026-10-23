@@ -1,4 +1,5 @@
 import { hashPassword, normalizeRole, requireSession } from "../../../../_lib/auth.js";
+import { validateNewPassword } from "../../../../_lib/password-policy.js";
 import { can, recordAuditLog } from "../../../../_lib/permissions.js";
 import {
   getRouteParam,
@@ -175,27 +176,12 @@ export async function onRequestPatch({ env, request, params }) {
 
     const user = await requireSession(env, request);
 
-    if (hasOwn(payload, "password")) {
+    const passwordChanged = hasOwn(payload, "password");
+    if (passwordChanged) {
       if (normalizeRole(user.role) !== "super_admin") {
         throw createForbiddenError("admin.users.update", "SUPER_ADMIN_REQUIRED");
       }
-      const password = String(payload.password || "");
-      if (password.length < 8) {
-        const error = new Error("A nova senha precisa ter pelo menos 8 caracteres.");
-        error.status = 400;
-        error.code = "USER_PASSWORD_INVALID";
-        throw error;
-      }
-      const passwordHash = await hashPassword(password);
-      await env.DB.batch([
-        env.DB.prepare("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(passwordHash, targetUserId),
-        env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(targetUserId),
-      ]);
-      await recordAuditLog(env, { actorUserId: user.id, organizationId, action: "admin.users.password_changed", resourceType: "user", resourceId: targetUserId, result: "success", metadata: { sessionsInvalidated: true }, request });
-      delete payload.password;
-      if (!hasSupportedPatch(payload)) {
-        return jsonResponse({ ok: true, passwordChanged: true });
-      }
+      validateNewPassword(payload.password);
     }
 
     if (hasNamePatch(payload)) {
@@ -260,12 +246,15 @@ export async function onRequestPatch({ env, request, params }) {
       roleManagementPermission = roleManagement.permission;
     }
 
+    const password = payload.password;
+    const passwordHash = passwordChanged ? await hashPassword(password) : null;
     const updatedUser = await updateOrganizationUser(
       env,
       organizationId,
       targetUserId,
       payload,
       user,
+      { passwordHash },
     );
 
     /**
@@ -293,6 +282,8 @@ export async function onRequestPatch({ env, request, params }) {
     return jsonResponse({
       ok: true,
       user: updatedUser,
+      passwordChanged,
+      sessionsInvalidated: passwordChanged,
     });
   } catch (error) {
     return handleApiError(error);

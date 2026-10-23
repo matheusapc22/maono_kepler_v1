@@ -4,6 +4,7 @@ import test from "node:test";
 
 const adminUser = await readFile(new URL("../functions/api/admin/users/[id].js", import.meta.url), "utf8");
 const organizationUser = await readFile(new URL("../functions/api/organizations/[id]/users/[userId].js", import.meta.url), "utf8");
+const organizationDomain = await readFile(new URL("../functions/_lib/organizations.js", import.meta.url), "utf8");
 const membership = await readFile(new URL("../functions/api/admin/users/[id]/organizations/[organizationId].js", import.meta.url), "utf8");
 const adminUiShell = await readFile(new URL("../src/pages/Admin/components/AdminUserManager.tsx", import.meta.url), "utf8");
 const adminUiLegacy = await readFile(new URL("../src/pages/Admin/components/AdminUserManagerLegacy.tsx", import.meta.url), "utf8");
@@ -11,7 +12,9 @@ const adminUiLegacy = await readFile(new URL("../src/pages/Admin/components/Admi
 test("alterações de senha usam hash e invalidam sessões", () => {
   assert.match(adminUser, /hashPassword\(password\)/);
   assert.match(organizationUser, /hashPassword\(password\)/);
-  assert.match(organizationUser, /DELETE FROM sessions WHERE user_id/);
+  assert.match(organizationUser, /updateOrganizationUser\([\s\S]*\{ passwordHash \}/);
+  assert.match(organizationDomain, /DELETE FROM sessions WHERE user_id/);
+  // Runtime atomicity/revocation is covered by password-management.test.mjs.
   assert.doesNotMatch(`${adminUser}\n${organizationUser}`, /password_hash\s*=\s*password/);
 });
 

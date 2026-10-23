@@ -5,8 +5,8 @@ import {
   readJsonBody,
 } from "../../../_lib/http.js";
 import { hashPassword, normalizeEmail } from "../../../_lib/auth.js";
+import { validateNewPassword } from "../../../_lib/password-policy.js";
 import { requirePermission } from "../../../_lib/permissions.js";
-import { logAudit } from "../../../_lib/projects.js";
 
 const ALLOWED_ROLES = new Set(["admin", "client", "viewer", "editor"]);
 
@@ -122,7 +122,7 @@ async function createUser(env, body, actingUser) {
   const name = normalizeText(body?.name);
   const role = normalizeRole(body?.role);
   const active = body?.active === false ? 0 : 1;
-  const password = String(body?.password || "");
+  const password = body?.password;
 
   if (!role) {
     return {
@@ -150,20 +150,11 @@ async function createUser(env, body, actingUser) {
     };
   }
 
-  if (!password || password.length < 8) {
-    return {
-      error: errorResponse(
-        "Informe uma senha inicial com pelo menos 8 caracteres.",
-        400,
-        "USER_PASSWORD_REQUIRED",
-      ),
-    };
-  }
-
+  validateNewPassword(password);
   const passwordHash = await hashPassword(password);
 
   try {
-    const user = await env.DB.prepare(
+    const insert = env.DB.prepare(
       `INSERT INTO users (
         email,
         name,
@@ -181,8 +172,17 @@ async function createUser(env, body, actingUser) {
         created_at,
         updated_at`,
     )
-      .bind(email, name || null, role, passwordHash, active)
-      .first();
+      .bind(email, name || null, role, passwordHash, active);
+    // The audit belongs to the same commit; a failed audit cannot leave a
+    // created account behind while the client receives an error.
+    const [result] = await env.DB.batch([
+      insert,
+      env.DB.prepare(`INSERT INTO audit_logs (user_id, action, details)
+        SELECT ?, 'admin.users.create', json_object(
+          'targetUserId', id, 'email', email, 'role', role, 'active', active)
+        FROM users WHERE email = ?`).bind(actingUser.id, email),
+    ]);
+    const user = result.results?.[0];
 
     return { user };
   } catch (error) {
@@ -241,17 +241,6 @@ export async function onRequest(context) {
       if (error) {
         return error;
       }
-
-      await logAudit(env, {
-        userId: user.id,
-        action: "admin.users.create",
-        details: {
-          targetUserId: createdUser.id,
-          email: createdUser.email,
-          role: createdUser.role,
-          active: Boolean(createdUser.active),
-        },
-      });
 
       return jsonResponse(
         {

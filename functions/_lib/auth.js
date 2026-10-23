@@ -169,7 +169,7 @@ export async function verifyPassword(password, storedHash) {
   }
 }
 
-export async function createSession(env, userId) {
+export async function createSession(env, userId, verifiedPasswordHash = null) {
   if (!userId) {
     const error = new Error("Usuário inválido para criação de sessão.");
     error.status = 400;
@@ -184,13 +184,21 @@ export async function createSession(env, userId) {
     Date.now() + SESSION_TTL_SECONDS * 1000,
   ).toISOString();
 
-  await db
+  const result = await db
     .prepare(
-      `INSERT INTO sessions (token_hash, user_id, expires_at)
-       VALUES (?, ?, ?)`,
+      verifiedPasswordHash === null
+        ? `INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)`
+        : `INSERT INTO sessions (token_hash, user_id, expires_at)
+           SELECT ?, id, ? FROM users WHERE id = ? AND password_hash = ? AND active = 1`,
     )
-    .bind(tokenHash, userId, expiresAt)
+    .bind(...(verifiedPasswordHash === null
+      ? [tokenHash, userId, expiresAt]
+      : [tokenHash, expiresAt, userId, verifiedPasswordHash]))
     .run();
+
+  // A concurrent reset must not be followed by a session authenticated with
+  // the old password. The guarded INSERT and reset batch serialize in D1.
+  if (verifiedPasswordHash !== null && result.meta?.changes !== 1) return null;
 
   return {
     token,

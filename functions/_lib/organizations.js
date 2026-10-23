@@ -4,6 +4,7 @@ import {
   isNativeAdminOrOwnerPermission,
   recordAuditLog,
 } from "./permissions.js";
+import { prepareAuditLog } from "./projects.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -554,7 +555,7 @@ export async function insertRow(env, tableName, data) {
   return { id: lastInsertId || null, ...data };
 }
 
-export async function updateRow(env, tableName, rowId, data) {
+async function prepareRowUpdate(env, tableName, rowId, data) {
   const columns = await getTableColumns(env, tableName);
   const entries = Object.entries(data).filter(
     ([column, value]) => value !== undefined && hasColumn(columns, column),
@@ -568,7 +569,7 @@ export async function updateRow(env, tableName, rowId, data) {
     .map(([column]) => `${quoteIdentifier(column)} = ?`)
     .join(", ");
 
-  await getDb(env)
+  return getDb(env)
     .prepare(
       `
       UPDATE ${quoteIdentifier(tableName)}
@@ -576,8 +577,13 @@ export async function updateRow(env, tableName, rowId, data) {
       WHERE id = ?
       `,
     )
-    .bind(...entries.map(([, value]) => value), rowId)
-    .run();
+    .bind(...entries.map(([, value]) => value), rowId);
+}
+
+export async function updateRow(env, tableName, rowId, data) {
+  const statement = await prepareRowUpdate(env, tableName, rowId, data);
+  if (!statement) return null;
+  await statement.run();
 
   return getDb(env)
     .prepare(`SELECT * FROM ${quoteIdentifier(tableName)} WHERE id = ? LIMIT 1`)
@@ -717,7 +723,7 @@ export function sanitizeOrganizationUser(
   };
 }
 
-async function getOrganizationUserRow(env, organizationId, userId) {
+async function getOrganizationUserRow(env, organizationId, userId, prepareOnly = false) {
   await requireTable(env, "users");
   await requireTable(env, "organization_users");
 
@@ -747,7 +753,7 @@ async function getOrganizationUserRow(env, organizationId, userId) {
     where.push("(ou.active = 1 OR ou.active IS NULL)");
   }
 
-  return getDb(env)
+  const statement = getDb(env)
     .prepare(
       `
       SELECT ${select.join(", ")}
@@ -757,8 +763,8 @@ async function getOrganizationUserRow(env, organizationId, userId) {
       LIMIT 1
       `,
     )
-    .bind(organizationId, userId)
-    .first();
+    .bind(organizationId, userId);
+  return prepareOnly ? statement : statement.first();
 }
 
 async function listOrganizationUserPermissions(env, organizationId, userIds) {
@@ -1218,7 +1224,7 @@ export async function createOrganizationUser(env, organizationId, payload, actor
   });
 }
 
-export async function updateOrganizationUser(env, organizationId, targetUserId, payload, actor) {
+export async function updateOrganizationUser(env, organizationId, targetUserId, payload, actor, { passwordHash = null } = {}) {
   const id = parsePositiveInteger(organizationId, "organizationId");
   const userId = parsePositiveInteger(targetUserId, "userId");
 
@@ -1269,6 +1275,42 @@ export async function updateOrganizationUser(env, organizationId, targetUserId, 
   });
 
   const now = nowIso();
+
+  if (passwordHash) {
+    if (getActorRole(actor) !== "super_admin") {
+      throw createApiError("Acesso negado.", 403, "FORBIDDEN");
+    }
+    const columns = await getTableColumns(env, "users");
+    if (!columns.has("password_hash")) {
+      throw createApiError("Estrutura de usuários indisponível.", 503, "USER_PASSWORD_SCHEMA_UNAVAILABLE");
+    }
+    patchUser.password_hash = passwordHash;
+    patchUser.updated_at = now;
+    const statements = [await prepareRowUpdate(env, "users", userId, patchUser)];
+    if (Object.keys(patchMembership).length > 0 && current.membership_id) {
+      patchMembership.updated_at = now;
+      statements.push(await prepareRowUpdate(env, "organization_users", current.membership_id, patchMembership));
+    }
+    statements.push(
+      getDb(env).prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId),
+      prepareAuditLog(env, {
+        userId: actor.id,
+        action: "admin.users.password_changed",
+        details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
+          metadata: { sessionsInvalidated: true } },
+      }),
+      prepareAuditLog(env, {
+        userId: actor.id,
+        action: active === false ? "users.disable" : "users.edit",
+        details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
+          metadata: { changedUserFields: Object.keys(patchUser), changedMembershipFields: Object.keys(patchMembership) } },
+      }),
+      // Read within the transaction so a read failure cannot disguise a commit.
+      await getOrganizationUserRow(env, id, userId, true),
+    );
+    const results = await getDb(env).batch(statements);
+    return sanitizeOrganizationUser(results.at(-1).results[0]);
+  }
 
   if (Object.keys(patchUser).length > 0) {
     patchUser.updated_at = now;

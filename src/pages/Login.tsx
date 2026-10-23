@@ -194,6 +194,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="maono-login-page__form" autoComplete="on">
+            {searchParams.get("passwordChanged") === "1" && <p role="status">Senha alterada e sessões anteriores encerradas. Entre com a nova senha.</p>}
             <div className="maono-login-page__fields">
               <div className="maono-login-page__field">
                 <label className="maono-login-page__field-label" htmlFor="maono-login-email">E-mail</label>
