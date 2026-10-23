@@ -50,6 +50,12 @@ const STORAGE_BLOCKED_PRESENTATION: UserErrorTemplate = {
 };
 
 const CODE_PRESENTATIONS: Record<string, UserErrorTemplate> = {
+  USER_PASSWORD_INVALID: { title: "Senha inválida", message: "Informe uma senha com pelo menos 8 caracteres.", severity: "warning", retryable: false },
+  USER_PASSWORD_REQUIRED: { title: "Senha inicial necessária", message: "Informe uma senha inicial com pelo menos 8 caracteres.", severity: "warning", retryable: false },
+  USER_ROLE_INVALID: { title: "Perfil inválido", message: "Selecione um perfil válido antes de salvar o usuário.", severity: "warning", retryable: false },
+  USER_EMAIL_REQUIRED: { title: "E-mail inválido", message: "Informe um e-mail válido antes de salvar o usuário.", severity: "warning", retryable: false },
+  USER_EMAIL_EXISTS: { title: "E-mail já cadastrado", message: "Já existe um usuário com este e-mail. Confira os dados antes de salvar.", severity: "warning", retryable: false },
+  USER_NOT_FOUND: { title: "Usuário indisponível", message: "Usuário não encontrado. Atualize a lista antes de continuar.", severity: "warning", retryable: false },
   AUTH_INVALID_CREDENTIALS: INVALID_CREDENTIALS_PRESENTATION,
 
   // Compatibilidade temporária com deploys anteriores à PRH-02A.

@@ -27,7 +27,7 @@ function adminHarness() {
   const set = key => next => { state[key] = typeof next === 'function' ? next(state[key]) : next; };
   const refresh = compileCallback(admin, 'const refreshAdminData = useCallback(', ', []);', {
     requestRef, controllerRef, AbortController, isRegionAccessDenied, isRegionAuthenticationError, setUsersAccessEpoch: set('usersAccessEpoch'),
-    setError: set('error'), setRegions: set('regions'), setProjects: set('projects'), setUsers: set('users'), setOrganizations: set('organizations'), setAccess: set('access'),
+    setError: set('error'), setSuccess: set('success'), setRegions: set('regions'), setProjects: set('projects'), setUsers: set('users'), setOrganizations: set('organizations'), setAccess: set('access'),
     readJson: response => response,
     normalizeUserError: error => ({ message: error.message || 'Falha simulada' }),
     fetch: (path, options) => { const gate = deferred(); requests.push({ path, options, ...gate }); return gate.promise; },

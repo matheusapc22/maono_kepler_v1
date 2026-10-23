@@ -204,11 +204,11 @@ export function publicProject(project) {
   };
 }
 
-export async function logAudit(
+export function prepareAuditLog(
   env,
   { userId, projectId = null, action, details = null },
 ) {
-  await env.DB.prepare(
+  return env.DB.prepare(
     `INSERT INTO audit_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)`,
   )
     .bind(
@@ -216,6 +216,9 @@ export async function logAudit(
       projectId,
       action,
       details ? JSON.stringify(details) : null,
-    )
-    .run();
+    );
+}
+
+export async function logAudit(env, event) {
+  await prepareAuditLog(env, event).run();
 }

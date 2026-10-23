@@ -5,8 +5,9 @@ import {
   readJsonBody,
 } from "../../../_lib/http.js";
 import { hashPassword, normalizeEmail } from "../../../_lib/auth.js";
+import { validateNewPassword } from "../../../_lib/password-policy.js";
 import { requirePermission } from "../../../_lib/permissions.js";
-import { logAudit } from "../../../_lib/projects.js";
+import { logAudit, prepareAuditLog } from "../../../_lib/projects.js";
 import { tableExists } from "../../../_lib/organizations.js";
 
 const ALLOWED_ROLES = new Set(["admin", "client", "viewer", "editor"]);
@@ -83,7 +84,7 @@ async function getUserById(env, userId) {
 }
 
 function resolveNextRole(body, currentUser) {
-  if (!hasOwnProperty(body, "role")) {
+  if (!hasOwnProperty(body, "role") || body.role === currentUser.role) {
     return {
       role: currentUser.role,
       changed: false,
@@ -242,8 +243,8 @@ async function updateUser(env, targetUserId, body, actingUser) {
       : body?.active === true
         ? 1
         : Number(current.active || 0);
-  const password = body?.password ? String(body.password) : "";
-  const passwordChanged = Boolean(password);
+  const passwordChanged = hasOwnProperty(body, "password") && body.password !== "";
+  const password = passwordChanged ? validateNewPassword(body.password) : "";
 
   if (!email || !email.includes("@")) {
     return {
@@ -255,16 +256,6 @@ async function updateUser(env, targetUserId, body, actingUser) {
     };
   }
 
-  if (password && password.length < 8) {
-    return {
-      error: errorResponse(
-        "A nova senha precisa ter pelo menos 8 caracteres.",
-        400,
-        "USER_PASSWORD_INVALID",
-      ),
-    };
-  }
-
   const policy = assertCanUpdateUser(actingUser, current, role, active);
 
   if (policy.error) {
@@ -272,12 +263,12 @@ async function updateUser(env, targetUserId, body, actingUser) {
   }
 
   try {
-    let updated = null;
+    let update;
 
     if (passwordChanged) {
       const passwordHash = await hashPassword(password);
 
-      updated = await env.DB.prepare(
+      update = env.DB.prepare(
         `UPDATE users
          SET
           email = ?,
@@ -296,10 +287,9 @@ async function updateUser(env, targetUserId, body, actingUser) {
           created_at,
           updated_at`,
       )
-        .bind(email, name || null, role, active, passwordHash, targetUserId)
-        .first();
+        .bind(email, name || null, role, active, passwordHash, targetUserId);
     } else {
-      updated = await env.DB.prepare(
+      update = env.DB.prepare(
         `UPDATE users
          SET
           email = ?,
@@ -317,8 +307,27 @@ async function updateUser(env, targetUserId, body, actingUser) {
           created_at,
           updated_at`,
       )
-        .bind(email, name || null, role, active, targetUserId)
-        .first();
+        .bind(email, name || null, role, active, targetUserId);
+    }
+
+    // A failure in revocation or audit must roll back the password too.
+    const statements = [update];
+    if (passwordChanged) {
+      statements.push(env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(targetUserId));
+    }
+    statements.push(prepareAuditLog(env, {
+      userId: actingUser.id,
+      action: "admin.users.update",
+      details: {
+        targetUserId, email, previousRole: current.role, role,
+        previousActive: Boolean(current.active), active: Boolean(active),
+        passwordChanged, sessionsInvalidated: passwordChanged,
+      },
+    }));
+    const [result] = await env.DB.batch(statements);
+    const updated = result.results?.[0];
+    if (!updated) {
+      return { error: errorResponse("Usuário não encontrado.", 404, "USER_NOT_FOUND") };
     }
 
     return {
@@ -466,7 +475,6 @@ export async function onRequest(context) {
       const body = await readJsonBody(request);
       const {
         user: updatedUser,
-        previousUser,
         passwordChanged,
         error,
       } = await updateUser(env, targetUserId, body || {}, user);
@@ -475,23 +483,11 @@ export async function onRequest(context) {
         return error;
       }
 
-      await logAudit(env, {
-        userId: user.id,
-        action: "admin.users.update",
-        details: {
-          targetUserId,
-          email: updatedUser.email,
-          previousRole: previousUser.role,
-          role: updatedUser.role,
-          previousActive: Boolean(previousUser.active),
-          active: Boolean(updatedUser.active),
-          passwordChanged,
-        },
-      });
-
       return jsonResponse({
         ok: true,
         user: publicAdminUser(updatedUser),
+        passwordChanged,
+        sessionsInvalidated: passwordChanged,
       });
     }
 

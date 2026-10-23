@@ -133,8 +133,8 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   const [regions, setRegions] = useState(initialRegions);
   const [usersAccessEpoch, setUsersAccessEpoch] = useState(0);
   const handleMessage = useCallback((kind: "error" | "success", text: string) => {
-    if (kind === "error") setError(text);
-    else setSuccess(text);
+    setError(kind === "error" ? text : "");
+    setSuccess(kind === "success" ? text : "");
   }, []);
   const requestRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
@@ -169,9 +169,10 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
     const loadRegion = async (key: AdminRegionKey, request: Promise<any>, commit: (data: any) => void) => {
       try {
         const data = await request;
-        if (!isCurrent()) return;
+        if (!isCurrent()) return false;
         commit(data);
         setRegions(current => ({ ...current, [key]: { pending: false, loaded: true, error: "" } }));
+        return true;
       } catch (err) {
         if (!isCurrent()) return;
         const denied = isRegionAccessDenied(err);
@@ -185,6 +186,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
           setProjects([]); setOrganizations([]); setUsers([]); setAccess([]);
           setUsersAccessEpoch(current => current + 1);
           setError(normalizeUserError(err).message);
+          setSuccess("");
           setRegions(current => Object.fromEntries(Object.keys(current).map(region => [region, { pending: false, loaded: false, error: "" }])) as Record<AdminRegionKey, AdminRegionState>);
           return;
         }
@@ -198,7 +200,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         setRegions(current => ({ ...current, [key]: { ...current[key], pending: false, loaded: denied ? false : current[key].loaded, error: normalizeUserError(err).message } }));
       }
     };
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       loadRegion("projects", projectsRead, data => setProjects(data.projects || [])),
       loadRegion("access", accessRead, data => setAccess(data.access || [])),
       // Preserve the existing users endpoint precedence, including [] being
@@ -207,6 +209,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
       loadRegion("organizations", organizationsRead, data => setOrganizations(data.organizations || [])),
     ]);
     if (isCurrent()) controllerRef.current = null;
+    return results.every(result => result.status === "fulfilled" && result.value === true);
   }, []);
 
   useEffect(() => {
@@ -310,6 +313,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         isSuperAdmin={isSuperAdmin}
         onRefresh={refreshAdminData}
         onMessage={handleMessage}
+        onSessionInvalidated={() => window.location.assign("/login?passwordChanged=1")}
       />
     );
   }

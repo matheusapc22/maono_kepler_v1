@@ -12,6 +12,24 @@ async function attachPng(testInfo: TestInfo, name: string, bytes: Buffer) {
   await testInfo.attach(name, { path, contentType: 'image/png' });
 }
 
+test('canvas preservation ignores frozen capture copies and rejects replacement of the live canvas', async ({ page }) => {
+  await page.setContent('<div id="root"><div class="maono-kepler-viewport"><canvas width="120" height="80"></canvas></div></div>');
+  const before = await canvasGeometry(page, true);
+  await page.evaluate(() => {
+    const holder = document.createElement('div');
+    holder.dataset.maonoNoPreview = 'true';
+    holder.style.cssText = 'position:fixed;left:-100000px;top:0';
+    holder.append(document.querySelector('#root .maono-kepler-viewport')!.cloneNode(true));
+    document.body.append(holder);
+  });
+  await expectStableCanvas(page, before);
+  await page.evaluate(() => {
+    const canvas = document.querySelector('#root .maono-kepler-viewport canvas')!;
+    canvas.replaceWith(canvas.cloneNode(true));
+  });
+  await expect(expectStableCanvas(page, before)).rejects.toThrow('the same live map canvases survive panel interactions');
+});
+
 test('explicit map save publishes a PNG bound to the exact JSON receipt without reloading the editor', async ({ page }, testInfo) => {
   const fixture = await openMap(page, { layerCount: 1 });
   await openLayers(page);

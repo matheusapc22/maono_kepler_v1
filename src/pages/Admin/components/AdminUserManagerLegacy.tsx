@@ -2,7 +2,8 @@ import { StaticLoadingText } from "../../../components/loading";
 import { Skeleton } from "../../../components/loading/Skeleton";
 import { useSkeletonCount } from "../../../components/loading/useSkeletonCount";
 import { MaonoSelect } from "../../../components/selection/MaonoSelect";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { submitUserMutation, userMutationErrorMessage } from "./user-mutation";
 
 import OrganizationPermissionManager from "../../../components/access/OrganizationPermissionManager";
 import { parseJsonResponse } from "../../../lib/api-transport";
@@ -120,6 +121,7 @@ export default function AdminUserManager({
   isSuperAdmin,
   onRefresh,
   onMessage,
+  onSessionInvalidated,
 }: {
   users: User[];
   organizations: Organization[];
@@ -132,8 +134,9 @@ export default function AdminUserManager({
   initialOrganizationId?: number | string | null;
   currentUserId?: number | string;
   isSuperAdmin: boolean;
-  onRefresh: () => Promise<void>;
+  onRefresh: () => Promise<void | boolean>;
   onMessage: (kind: "error" | "success", text: string) => void;
+  onSessionInvalidated?: () => void;
 }) {
   const skeletonRows = useSkeletonCount({ layout: "table", itemHeight: 54, reservedHeight: 320, maxCount: 10 });
   const [selected, setSelected] = useState<User | null>(null);
@@ -142,8 +145,12 @@ export default function AdminUserManager({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [busy, setBusy] = useState(false);
+  const mutationPending = useRef(false);
+  const [formError, setFormError] = useState("");
+  const [membershipsError, setMembershipsError] = useState("");
   const [membershipsLoading, setMembershipsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  useEffect(() => { if (creating) setFormError(""); }, [creating]);
   const [searchQuery, setSearchQuery] = useState("");
   const [organizationFilter, setOrganizationFilter] = useState(
     initialOrganizationId === null || initialOrganizationId === undefined
@@ -182,6 +189,8 @@ export default function AdminUserManager({
       active: selected.active !== false,
       password: "",
     });
+    setFormError("");
+    setMembershipsError("");
 
     if (!isSuperAdmin) return;
 
@@ -196,7 +205,7 @@ export default function AdminUserManager({
         if (!cancelled) setMemberships(data.organizations || []);
       })
       .catch((error) => {
-        if (!cancelled) onMessage("error", normalizeUserError(error).message);
+        if (!cancelled) setMembershipsError("Não foi possível carregar os vínculos organizacionais. " + normalizeUserError(error).message);
       })
       .finally(() => {
         if (!cancelled) setMembershipsLoading(false);
@@ -207,34 +216,57 @@ export default function AdminUserManager({
     };
   }, [selected, isSuperAdmin, onMessage]);
 
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (!selected || !draft) return;
+  async function refreshAfterSave(message: string) {
+    mutationPending.current = true;
     setBusy(true);
+    let refreshed = false;
+    try { refreshed = (await onRefresh()) !== false; } catch { /* The write already succeeded. */ }
+    finally { mutationPending.current = false; setBusy(false); }
+    onMessage("success", refreshed ? message : `${message} Não foi possível recarregar a lista. Atualize a página para consultar os dados.`);
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !draft || busy || mutationPending.current) return;
+    const password = String(new FormData(event.currentTarget).get("password") ?? "");
+    mutationPending.current = true;
+    setBusy(true);
+    setFormError("");
+    onMessage("error", "");
+    let message = "";
+    let sessionInvalidated = false;
     try {
-      await fetch(`/api/admin/users/${selected.id}`, {
+      const result = await submitUserMutation(`/api/admin/users/${selected.id}`, {
         method: "PATCH",
         credentials: "include",
         headers,
         body: JSON.stringify({
           ...draft,
-          password: draft.password || undefined,
+          role: draft.role === selected.role ? undefined : draft.role,
+          password: password || undefined,
         }),
-      }).then(json);
-      onMessage(
-        "success",
-        "Usuário atualizado. Sessões foram encerradas caso a senha tenha mudado.",
-      );
+      });
+      message = result.passwordChanged && result.sessionsInvalidated
+        ? "Senha alterada. As sessões anteriores foram encerradas."
+        : "Usuário atualizado.";
+      sessionInvalidated = result.sessionsInvalidated === true && String(selected.id) === String(currentUserId);
+      setDraft(null);
       setSelected(null);
-      await onRefresh();
     } catch (error) {
-      onMessage(
-        "error",
-        normalizeUserError(error).message,
-      );
+      const text = userMutationErrorMessage(error);
+      setFormError(text);
+      onMessage("error", text);
     } finally {
       setBusy(false);
+      mutationPending.current = false;
     }
+    if (!message) return;
+    onMessage("success", message);
+    if (sessionInvalidated) {
+      (onSessionInvalidated ?? (() => window.location.assign("/login?passwordChanged=1")))();
+      return;
+    }
+    await refreshAfterSave(message);
   }
 
   async function remove() {
@@ -268,10 +300,15 @@ export default function AdminUserManager({
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || mutationPending.current) return;
     const form = new FormData(event.currentTarget);
+    mutationPending.current = true;
     setBusy(true);
+    setFormError("");
+    onMessage("error", "");
+    let created = false;
     try {
-      await fetch("/api/admin/users", {
+      await submitUserMutation("/api/admin/users", {
         method: "POST",
         credentials: "include",
         headers,
@@ -282,18 +319,18 @@ export default function AdminUserManager({
           password: form.get("password"),
           active: true,
         }),
-      }).then(json);
-      onMessage("success", "Usuário criado com senha inicial protegida.");
+      });
+      created = true;
       setCreating(false);
-      await onRefresh();
     } catch (error) {
-      onMessage(
-        "error",
-        normalizeUserError(error).message,
-      );
+      const text = userMutationErrorMessage(error);
+      setFormError(text);
+      onMessage("error", text);
     } finally {
       setBusy(false);
+      mutationPending.current = false;
     }
+    if (created) await refreshAfterSave("Usuário criado com senha inicial protegida.");
   }
 
   async function updateMembership(
@@ -686,6 +723,7 @@ export default function AdminUserManager({
                     <button
                       className="mm-btn tiny"
                       type="button"
+                      disabled={busy}
                       onClick={() => openUser(user, "profile")}
                     >
                       Editar
@@ -693,6 +731,7 @@ export default function AdminUserManager({
                     <button
                       className="mm-btn tiny"
                       type="button"
+                      disabled={busy}
                       onClick={() => openUser(user, "features")}
                     >
                       Gerenciar acessos
@@ -725,7 +764,7 @@ export default function AdminUserManager({
                   {selected.active === false ? "Inativo" : "Ativo"}
                 </p>
               </div>
-              <button onClick={() => setSelected(null)} aria-label="Fechar">
+              <button disabled={busy} onClick={() => setSelected(null)} aria-label="Fechar">
                 ×
               </button>
             </header>
@@ -778,12 +817,15 @@ export default function AdminUserManager({
                 </button>
               </nav>
 
+              {selectedView !== "profile" && membershipsError && <p role="alert">{membershipsError}</p>}
+
               {selectedView === "profile" && (
                 <form
                   className="admin-user-profile-form"
                   onSubmit={save}
                   role="tabpanel"
                 >
+                  {formError && <p className="admin-notice error" role="alert">{formError}</p>}
                   <section className="admin-user-management-panel">
                     <header>
                       <div>
@@ -829,6 +871,7 @@ export default function AdminUserManager({
                           <option value="viewer">Viewer</option>
                           <option value="editor">Editor</option>
                           <option value="client">Owner</option>
+                          {draft.role === "owner" && <option value="owner">Owner</option>}
                           <option value="admin">Admin</option>
                         </MaonoSelect>
                       </label>
@@ -856,6 +899,8 @@ export default function AdminUserManager({
                         Nova senha
                         <input
                           type="password"
+                          name="password"
+                          disabled={busy}
                           minLength={8}
                           autoComplete="new-password"
                           value={draft.password}
@@ -880,6 +925,7 @@ export default function AdminUserManager({
                     <button
                       type="button"
                       className="mm-btn"
+                      disabled={busy}
                       onClick={() => setSelected(null)}
                     >
                       Cancelar
@@ -1133,7 +1179,7 @@ export default function AdminUserManager({
           initialTargetUserId={accessEditor.targetUserId}
           mode="admin"
           onClose={() => setAccessEditor(null)}
-          onSaved={onRefresh}
+          onSaved={async () => { await onRefresh(); }}
         />
       )}
 
@@ -1316,11 +1362,12 @@ export default function AdminUserManager({
           <div className="admin-user-dialog compact">
             <header>
               <h3>Novo usuário</h3>
-              <button onClick={() => setCreating(false)} aria-label="Fechar">
+              <button disabled={busy} onClick={() => setCreating(false)} aria-label="Fechar">
                 ×
               </button>
             </header>
             <form onSubmit={create}>
+              {formError && <p className="admin-notice error" role="alert">{formError}</p>}
               <div className="admin-user-form-grid">
                 <label>
                   Nome
@@ -1356,6 +1403,7 @@ export default function AdminUserManager({
                 <button
                   type="button"
                   className="mm-btn"
+                  disabled={busy}
                   onClick={() => setCreating(false)}
                 >
                   Cancelar

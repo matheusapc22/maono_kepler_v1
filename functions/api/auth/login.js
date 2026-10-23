@@ -141,7 +141,12 @@ export async function onRequest(context) {
       );
     }
 
-    const session = await createSession(env, user.id);
+    // Guard against the exact stored value; verification also supports legacy
+    // records with surrounding whitespace, so do not compare a trimmed value.
+    const session = await createSession(env, user.id, String(user.password_hash || ""));
+    if (!session) {
+      return errorResponse("Credenciais inválidas.", 401, "AUTH_INVALID_CREDENTIALS");
+    }
     const cookie = buildCookie(
       SESSION_COOKIE_NAME,
       session.token,

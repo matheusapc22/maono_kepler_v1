@@ -290,7 +290,9 @@ export async function saveMap(page: Page, fixture: Awaited<ReturnType<typeof ins
   return fixture.saves.at(-1)!;
 }
 export async function canvasGeometry(page: Page, remember = false) {
-  return page.locator('.maono-kepler-viewport').evaluate((element, shouldRemember) => {
+  // Frozen PNG capture temporarily appends a cloned viewport outside the React
+  // root. Preservation assertions belong to the live editor, not those copies.
+  return page.locator('#root .maono-kepler-viewport').evaluate((element, shouldRemember) => {
     const canvases = Array.from(element.querySelectorAll<HTMLCanvasElement>('canvas'));
     if (shouldRemember) (window as QAWindow).__PANEL_QA_CANVASES__ = canvases;
     const rect = element.getBoundingClientRect();
@@ -306,7 +308,7 @@ export async function expectStableCanvas(page: Page, before: Awaited<ReturnType<
   expect(after.canvases).toEqual(before.canvases);
   expect(await page.evaluate(() => {
     const before = (window as QAWindow).__PANEL_QA_CANVASES__ ?? [];
-    const after = Array.from(document.querySelectorAll('.maono-kepler-viewport canvas'));
+    const after = Array.from(document.querySelectorAll('#root .maono-kepler-viewport canvas'));
     return before.length > 0 && before.length === after.length && before.every((canvas, i) => canvas === after[i] && canvas.isConnected);
   }), 'the same live map canvases survive panel interactions').toBe(true);
 }
