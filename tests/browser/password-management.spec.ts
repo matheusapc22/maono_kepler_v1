@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+// Also applies when the repository-wide development gate discovers this suite.
+test.use({ screenshot: "off", trace: "off", video: "off" });
+
 const syntheticPassword = "synthetic-password-only";
 const runtimeErrors = new WeakMap<Page, string[]>();
 test.afterEach(({ page }) => { expect(runtimeErrors.get(page) ?? []).toEqual([]); });
@@ -12,7 +15,7 @@ async function setup(page: Page, options: {
   const writes: Array<{ method: string; passwordSent: boolean; roleSent: boolean }> = [];
   runtimeErrors.set(page, []);
   page.on("pageerror", error => runtimeErrors.get(page)!.push(error.message));
-  let reads = 0, loggedOut = false;
+  let writeConfirmed = false, loggedOut = false;
   const user = { id: options.self ? 1 : 2, name: "Synthetic target", email: "target@example.test", role: options.self ? "super_admin" : "viewer", active: true };
   await page.route(url => !["127.0.0.1", "localhost"].includes(url.hostname), route => route.abort());
   await page.route("**/api/**", async route => {
@@ -24,14 +27,16 @@ async function setup(page: Page, options: {
       await options.beforeWrite?.();
       const status = options.failures?.shift() ?? 200;
       if (status !== 200) return route.fulfill({ status, json: { ok: false, code: status === 400 ? "USER_PASSWORD_INVALID" : "UNKNOWN" } });
+      writeConfirmed = true;
       if (options.self && payload.password) loggedOut = true;
       return route.fulfill({ json: { ok: true, user, passwordChanged: Boolean(payload.password), sessionsInvalidated: Boolean(payload.password) } });
     }
     if (request.method() !== "GET") return route.fulfill({ status: 403, json: { ok: false } });
     if (/\/users\/\d+\/organizations$/.test(path) && options.membershipFailure) return route.fulfill({ status: 503, json: { ok: false } });
     if (path === "/api/admin/users") {
-      reads++;
-      if (reads > 1 && options.refreshFailure) return route.fulfill({ status: 503, json: { ok: false } });
+      // StrictMode can read twice on mount. Fail only the read after a
+      // confirmed mutation, which is the behavior these cases exercise.
+      if (writeConfirmed && options.refreshFailure) return route.fulfill({ status: 503, json: { ok: false } });
       return route.fulfill({ json: { ok: true, users: [user] } });
     }
     return route.fulfill({ json: { ok: true, users: [], organizations: [], access: [], projects: [], enabled: false, notifications: [], unreadCount: 0 } });
@@ -59,7 +64,9 @@ test("success clears old errors; membership read failure does not masquerade as 
 });
 
 test("confirmed update followed by failed refresh preserves an explicit success", async ({ page }) => {
-  const fixture = await setup(page, { refreshFailure: true }); await edit(page);
+  const fixture = await setup(page, { refreshFailure: true });
+  expect(await page.evaluate(async () => (await fetch("/api/admin/users")).status)).toBe(200);
+  await edit(page);
   await page.getByLabel("Nova senha", { exact: true }).fill(syntheticPassword);
   await page.getByRole("button", { name: "Salvar dados", exact: true }).click();
   await expect(page.locator(".admin-notice.success")).toContainText("Senha alterada");
@@ -119,6 +126,7 @@ test("self password reset goes directly to fresh login without refresh requests"
 
 test("creation followed by failed refresh reports created and does not resend", async ({ page }) => {
   const fixture = await setup(page, { refreshFailure: true });
+  expect(await page.evaluate(async () => (await fetch("/api/admin/users")).status)).toBe(200);
   await page.getByRole("button", { name: /Novo usuário$/ }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Nome", { exact: true }).fill("New synthetic user");
