@@ -89,14 +89,14 @@ Ordem:
 2. valida deployment/binding/baseline;
 3. autentica contas QA e confirma organização/permissões;
 4. confirma que a fila de Produção está quiescente;
-5. altera somente as flags declaradas pela suite;
+5. compara flags configuradas e publicadas; altera somente as declaradas que exigirem transição;
 6. reconfirma a fila antes do retry e espera terminalidade real;
-7. recria o mesmo deployment canônico via Cloudflare Pages Retry;
+7. quando houve mudança, recria o mesmo deployment canônico via Cloudflare Pages Retry;
 8. espera terminalidade, confirma o novo snapshot e, nas suites duráveis, aguarda as duas flags efetivas no runtime público antes de admitir fixtures;
 9. executa os casos registrados;
 10. executa a barreira de fechamento da suite; JSON/PNG deixam a limpeza pendente para o humano;
 11. restaura as flags para o safe state;
-12. recria novamente o mesmo SHA;
+12. quando necessário para restaurar flags, recria novamente o mesmo SHA;
 13. confirma que a configuração ficou restaurada, incluindo a leitura efetiva das duas flags duráveis;
 14. grava artifact sanitizado.
 
@@ -114,7 +114,7 @@ Confirmação:
 
 `RESTORE_PRODUCTION_ACCEPTANCE_SAFE_STATE`
 
-Não executa a suite. Restaura somente as flags gerenciadas pela suite para o safe state e publica novamente o deployment seguro.
+Não executa a suite. Restaura somente as flags gerenciadas pela suite para o safe state e publica novamente apenas quando necessário. Se os snapshots configurado e canônico já coincidirem, verifica runtime aplicável e relê o control-plane; não faz PATCH nem retry. Isso não prova o fechamento de recursos de uma execução interrompida.
 
 ### Leitura efetiva das flags duráveis
 
@@ -402,6 +402,61 @@ O operador não considera “flag OFF” um rollback de confidencialidade de dad
 - o modo `closure` existe para interrupções do runner.
 
 ## Uso
+
+### CC-04: acesso seletivo já habilitado
+
+O manifesto v2 exige SELECTIVE_ACCESS=true antes, durante e depois da janela.
+COMMANDS precisa estar explicitamente false nos snapshots configurado e canônico;
+o operador não o gerencia nem o habilita. `/state` deve responder 503 com
+`TICKET_COMMANDS_DISABLED`: o relatório registra essa cobertura de ACL como
+`NOT_EXERCISED`. Demais superfícies CT-11 continuam exigindo ocultação/404.
+Um eventual aceite de COMMANDS exige outro contrato e decisão sobre seu alcance global.
+
+Quando a flag já coincide, a entrada e o fechamento são verificações sem
+republicação, com releitura para detectar drift. Se a entrada não alterou flags,
+o fechamento não sobrescreve alterações concorrentes: falha e exige investigação.
+Os controles de SHA, D1, fila quiescente, runtime aplicável e orçamento continuam
+valendo. O fluxo normal de restauração permanece para suites que alteraram flags.
+
+Antes de autorizar `run`, escolher organização QA dedicada com storage READY e
+três identidades distintas sem papel admin/super_admin. Manager precisa de
+ticket.view/create/manage/access.manage; allowed/restricted precisam de ticket.view
+e não podem ter ticket.access.manage efetivo. Não inferir identidade dedicada de
+um papel editor, membership ou nome de secret. Não colocar credenciais no chat.
+O input não secreto `qa_user_ids` fixa os três IDs, na ordem
+`manager,allowed,restricted`, aprovados pelo humano. É obrigatório em `run` CC04;
+ausência impede qualquer chamada remota. O operador compara as sessões
+autenticadas com esses IDs antes de alterar flags ou criar recursos. Os IDs não
+criam usuários, não concedem permissões e não substituem a aprovação da janela.
+
+O contrato proposto `preserve-private-v1` exige aprovação junto da janela. Cria no
+máximo um chamado, um anexo texto, um grupo e uma etiqueta novos por UUID. Não
+aceita IDs existentes como entrada e não executa DELETE nem SQL de exclusão.
+O journal registra intenção antes de cada criação e o ID imediatamente após a
+resposta, em `report*.resources-*.json`. Falha ao persistir intenção bloqueia a
+criação. Resposta perdida permanece incerta, não é repetida nem substituída por
+busca/adopção por prefixo.
+
+O fechamento valida ID, organização, nome UUID e autor do chamado; preserva-o
+privado para manager, fecha seu status, remove seus vínculos de etiquetas e
+desativa/esvazia apenas o grupo recém-criado, depois verifica as respostas reais.
+Verifica também a negativa de acesso de allowed/restricted. Anexo, bytes, etiqueta
+desvinculada, chamado e histórico ficam preservados; não há prazo de retenção
+inventado. `CC04-CLEANUP=PASS` e `cleanupComplete=true` significam que essa
+preservação foi verificada, não que registros foram excluídos. O journal identifica
+explicitamente os resíduos retidos e falhas de fechamento. Anexo ainda PENDING,
+criação incerta, ownership divergente ou negativa de acesso não comprovada impedem
+conclusão. Não abrir outra janela para tentar tornar o relatório verde.
+
+A remoção futura exige autorização separada para IDs sintéticos exatos e provas
+de pertencimento/terminalidade. A rota atual não oferece DELETE de chamado;
+não improvisar exclusão SQL, apagar histórico ou varrer por prefixo. Usar somente
+uma janela por vez nessa organização, sem edição humana concorrente das fixtures.
+Os templates dos Workers de notificações e reconciliação também preservam
+SELECTIVE_ACCESS=true; suas operações continuam desabilitadas. Nenhum Worker
+novo é dependência deste lote de acesso seletivo.
+
+### Despacho
 
 GitHub → Actions → Production Acceptance Operator → Run workflow.
 

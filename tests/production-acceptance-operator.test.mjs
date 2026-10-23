@@ -29,6 +29,7 @@ const suiteSource = await readFile(
   new URL("../scripts/acceptance/suites/cc04-selective-access.mjs", import.meta.url),
   "utf8",
 );
+const resourceSource = await readFile(new URL("../scripts/acceptance/suites/cc04-resources.mjs", import.meta.url), "utf8");
 
 test("generic operator is manual-only for protected Production execution", () => {
   assert.match(workflow, /workflow_dispatch:/);
@@ -90,12 +91,13 @@ test("suite manifest is generic-contract compatible and exposes only registered 
   assert.equal(publicValue.id, "cc04-selective-access");
   assert.equal(publicValue.mutationMode, "controlled_mutation");
   assert.equal(publicValue.requiresBrowser, true);
-  assert.deepEqual(publicValue.cases, ["CT-11", "CT-12", "CT-13", "CT-50"]);
+  assert.deepEqual(publicValue.cases, ["CT-11", "CT-12", "CT-13", "CT-50", "CC04-CLEANUP"]);
 });
 
 test("feature flags have explicit baseline, active and safe states", () => {
+  assert.equal(cc04.managedFlags.MAONO_TICKET_SELECTIVE_ACCESS_ENABLED.requiredBefore, true);
   assert.deepEqual(activeFlags(cc04), { MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: true });
-  assert.deepEqual(safeFlags(cc04), { MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: false });
+  assert.deepEqual(safeFlags(cc04), { MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: true });
   assert.deepEqual(
     flagSnapshot(
       { MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: { type: "plain_text", value: "false" } },
@@ -168,8 +170,9 @@ test("CC-04 suite uses only synthetic data and covers HTTP, attachment and UI re
   assert.match(suiteSource, /attachments/);
   assert.match(suiteSource, /download/);
   assert.match(suiteSource, /O chamado não está mais disponível para seu acesso\./);
-  assert.match(suiteSource, /visibility: "organization"/);
-  assert.match(suiteSource, /active: false, members: \[\]/);
+  assert.match(resourceSource, /visibility: "private"/);
+  assert.match(resourceSource, /active: false, members: \[\]/);
+  assert.doesNotMatch(suiteSource + resourceSource, /method: "DELETE"/);
   assert.match(suiteSource, /triageEnabled/);
   assert.match(suiteSource, /\.\.\.\(triageEnabled \?/);
 });

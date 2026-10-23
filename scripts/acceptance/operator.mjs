@@ -6,6 +6,7 @@ import {
   activeFlags,
   assertProduction,
   buildProfiles,
+  fail,
   initialReport,
   parseArgs,
   parseCredentials,
@@ -14,19 +15,9 @@ import {
   safeFlags,
   suiteContext,
   transitionFlags,
-  waitRuntimeReadiness,
   writeReport,
 } from "./production-acceptance-lib.mjs";
 import { getSuite, publicManifest } from "./registry.mjs";
-
-function flagsMatch(project, values) {
-  return Object.entries(values).every(([name, value]) =>
-    project.configuredFlags[name]?.state === "observed" &&
-    project.canonical.flags[name]?.state === "observed" &&
-    project.configuredFlags[name].value === value &&
-    project.canonical.flags[name].value === value
-  );
-}
 
 function publicProject(project) {
   return {
@@ -77,6 +68,10 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
 
   try {
     budget.enter("preflight");
+    if (options.mode === "run" && manifest.requiresApprovedIdentities && !options.qaUserIds) {
+      fail("QA_IDENTITIES_REQUIRED", "Defina os IDs QA dedicados aprovados antes de executar a janela.");
+    }
+    if (options.qaUserIds) report.approvedQaUserIds = options.qaUserIds;
     const token = String(env.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN || "");
     initialProject = await readProduction(token, manifest, deps);
     report.preflight = publicProject(initialProject);
@@ -108,26 +103,20 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       budget.enter("restoration");
       report.configurationRestored = false;
       const desired = safeFlags(manifest);
-      if (!flagsMatch(initialProject, desired)) {
-        const restored = await transitionFlags({
-          token,
-          sourceDeploymentId: initialProject.canonical.id,
-          commit: initialProject.canonical.commit,
-          manifest,
-          deps,
-          values: desired,
-          expectedOrigin: initialProject.baseUrl,
-          onRuntimeObservation: value => { report.restorationRuntime = value; },
-          onMutationStart: () => { report.writesPerformed = true; },
-        });
-        report.restoredDeployment = restored.deployment;
-        report.final = publicProject(restored.project);
-      } else {
-        await waitRuntimeReadiness(initialProject.baseUrl, manifest, desired, {
-          ...deps, onRuntimeObservation: value => { report.restorationRuntime = value; },
-        });
-        report.final = publicProject(initialProject);
-      }
+      const restored = await transitionFlags({
+        token,
+        sourceDeploymentId: initialProject.canonical.id,
+        commit: initialProject.canonical.commit,
+        manifest,
+        deps,
+        values: desired,
+        expectedOrigin: initialProject.baseUrl,
+        onRuntimeObservation: value => { report.restorationRuntime = value; },
+        onMutationStart: () => { report.writesPerformed = true; },
+      });
+      report.restoredDeployment = restored.deployment;
+      report.restorationChanged = restored.changed;
+      report.final = publicProject(restored.project);
       report.configurationRestored = true;
       // A separate process has no resource inventory from an interrupted run.
       // Restoring flags cannot prove that synthetic resources were cleaned up.
@@ -157,6 +146,11 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       options.organizationId,
       deps,
     );
+    if (manifest.requiresApprovedIdentities) {
+      for (const [name, userId] of Object.entries(options.qaUserIds)) {
+        if (Number(profiles[name]?.user?.id) !== userId) fail("QA_IDENTITY_MISMATCH", "A identidade autenticada diverge do ID aprovado para o perfil QA.");
+      }
+    }
     report.qa = Object.fromEntries(Object.entries(profiles).map(([name, profile]) => [
       name,
       {
@@ -168,13 +162,20 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
 
     const manualAdministration = manualInventory ? createManualAdministration(manualInventory, profiles.creator.user.id) : null;
     let journalSequence = 0;
-    const contextDeps = manualAdministration ? { ...deps, onManualJournal: async value => {
+    const contextDeps = { ...deps, onResourceJournal: async value => {
+      report.resourceJournal = value;
+      await writeReport(`${options.reportPath}.resources-${String(++journalSequence).padStart(3, "0")}.json`, {
+        event: "ACCEPTANCE_SYNTHETIC_RESOURCE_JOURNAL", suite: manifest.id,
+        expectedCommit: options.expectedCommit, organizationId: options.organizationId,
+        runId: context.runId, resources: value, generatedAt: new Date().toISOString(),
+      }, deps);
+    }, ...(manualAdministration ? { onManualJournal: async value => {
       report.manualAdministration = value;
       await writeReport(`${options.reportPath}.journal-${String(++journalSequence).padStart(3, "0")}.json`, {
         event: "ACCEPTANCE_MANUAL_RESOURCE_JOURNAL", expectedCommit: options.expectedCommit, suite: manifest.id,
         runId: value.runId, organizationId: options.organizationId, manualAdministration: value, generatedAt: new Date().toISOString(),
       }, deps);
-    } } : deps;
+    } } : {}) };
     context = suiteContext({
       baseUrl: initialProject.baseUrl,
       organizationId: options.organizationId,
@@ -234,6 +235,7 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
           },
         });
         report.activation = {
+          changed: activated.changed,
           deployment: activated.deployment,
           flags: activated.project.canonical.flags,
         };
@@ -262,9 +264,13 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       }
       report.cleanupErrors = cleanupErrors;
       report.cleanupComplete = cleanupErrors.length === 0 && !manifest.manualAdministration;
+      if (report.resourceJournal) {
+        report.cleanupPolicy = report.resourceJournal.policy;
+        report.preservedResourceCount = report.resourceJournal.resources.filter(row => row.state.startsWith("preserved_")).length;
+      }
       if (manifest.manualAdministration) report.manualAdministration = context.manualAdministration;
 
-      if (restorationRequired) {
+      if (hasManagedFlags) {
         try {
           budget.enter("restoration");
           const restored = await transitionFlags({
@@ -274,10 +280,17 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
             manifest,
             deps,
             values: safeFlags(manifest),
+            // If activation was a no-op, verify closure but do not overwrite
+            // another operator's later change under a new mutation window.
+            allowMutation: restorationRequired,
+            validateCurrent: current => {
+              if (!restorationRequired && suite.verifyPreflight) suite.verifyPreflight(current, options);
+            },
             expectedOrigin: initialProject.baseUrl,
             onRuntimeObservation: value => { report.restorationRuntime = value; },
           });
           report.restoredDeployment = restored.deployment;
+          report.restorationChanged = restored.changed;
           report.final = publicProject(restored.project);
           report.configurationRestored = true;
         } catch (restoreError) {
@@ -338,6 +351,8 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
       acceptanceExecuted: report.acceptanceExecuted,
       configurationRestored: report.configurationRestored,
       cleanupComplete: report.cleanupComplete,
+      cleanupPolicy: report.cleanupPolicy || null,
+      preservedResourceCount: report.preservedResourceCount ?? null,
       operationalTestsPassed: report.operationalTestsPassed,
       acceptanceIncomplete: report.complete !== true,
       acceptanceStatus: report.acceptanceStatus || null,

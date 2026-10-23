@@ -27,6 +27,11 @@ on:
         description: "Dedicated QA organization id"
         required: true
         type: string
+      qa_user_ids:
+        description: "CC04 run: approved dedicated user IDs in order manager,allowed,restricted (no credentials)"
+        required: false
+        default: ""
+        type: string
       project_slug:
         description: "Optional project slug for suites that need one"
         required: false
@@ -84,11 +89,16 @@ jobs:
           MODE: ${{ inputs.mode }}
           CONFIRMATION: ${{ inputs.confirmation }}
           ORG_ID: ${{ inputs.organization_id }}
+          SUITE: ${{ inputs.suite }}
+          QA_USER_IDS: ${{ inputs.qa_user_ids }}
         run: |
           set -euo pipefail
           test "$ACTOR" = "$OWNER"
           test "$DISPATCH_REF" = "main"
           [[ "$ORG_ID" =~ ^[1-9][0-9]*$ ]]
+          if [[ "$MODE" = "run" && "$SUITE" = "cc04-selective-access" ]]; then
+            [[ "$QA_USER_IDS" =~ ^[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*$ ]]
+          fi
           case "$MODE" in
             preflight) test "$CONFIRMATION" = "PREPARE_PRODUCTION_ACCEPTANCE" ;;
             run) test "$CONFIRMATION" = "RUN_PRODUCTION_ACCEPTANCE" ;;
@@ -145,6 +155,7 @@ jobs:
       SUITE: ${{ inputs.suite }}
       ORG_ID: ${{ inputs.organization_id }}
       PROJECT_SLUG: ${{ inputs.project_slug }}
+      QA_USER_IDS: ${{ inputs.qa_user_ids }}
       VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
     steps:
       - name: Checkout exactly the validated product SHA
@@ -201,6 +212,9 @@ jobs:
           )
           if [[ -n "$PROJECT_SLUG" ]]; then
             args+=(--project-slug "$PROJECT_SLUG")
+          fi
+          if [[ -n "$QA_USER_IDS" ]]; then
+            args+=(--qa-user-ids "$QA_USER_IDS")
           fi
           node scripts/acceptance/operator.mjs "${args[@]}"
 

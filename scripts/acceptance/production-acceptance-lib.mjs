@@ -101,7 +101,7 @@ export function expectedCommit(value) {
 }
 
 export function parseArgs(argv) {
-  const allowed = new Set(["mode", "suite", "organization-id", "project-slug", "expected-commit", "report"]);
+  const allowed = new Set(["mode", "suite", "organization-id", "project-slug", "expected-commit", "report", "qa-user-ids"]);
   const raw = {};
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -117,9 +117,17 @@ export function parseArgs(argv) {
   const suite = String(raw.suite || "").trim();
   if (!SAFE_ID.test(suite)) fail("SUITE_INVALID", "Suite inválida.");
   if (mode === "describe") return { mode, suite };
+  let qaUserIds = null;
+  if (raw["qa-user-ids"] !== undefined) {
+    if (!/^[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*$/.test(raw["qa-user-ids"])) fail("QA_IDENTITIES_INVALID", "Informe três IDs numéricos: manager,allowed,restricted.");
+    const ids = raw["qa-user-ids"].split(",").map(value => positiveInt(value, "qa-user-ids"));
+    if (new Set(ids).size !== 3) fail("QA_IDENTITIES_NOT_DISTINCT", "IDs QA aprovados devem ser distintos.");
+    qaUserIds = Object.fromEntries(["manager", "allowed", "restricted"].map((name, index) => [name, ids[index]]));
+  }
   return {
     mode,
     suite,
+    qaUserIds,
     organizationId: positiveInt(raw["organization-id"], "organization-id"),
     projectSlug: raw["project-slug"] ? String(raw["project-slug"]).trim() : null,
     expectedCommit: expectedCommit(raw["expected-commit"]),
@@ -368,6 +376,7 @@ export async function transitionFlags({
   validateCurrent = () => {},
   expectedOrigin = PRODUCTION_APP_ORIGIN,
   onRuntimeObservation = () => {},
+  allowMutation = true,
 }) {
   const current = await waitProductionQuiescent(token, manifest, deps);
   // A queued deployment may have changed the canonical product since preflight.
@@ -375,6 +384,23 @@ export async function transitionFlags({
   assertProduction(current, commit, manifest, { requireBaseline: false });
   assertRuntimeOrigin(current.baseUrl, expectedOrigin, manifest);
   validateCurrent(current);
+  const matches = project => Object.entries(values).every(([name, value]) =>
+    project.configuredFlags[name]?.state === "observed" && project.canonical.flags[name]?.state === "observed" &&
+    project.configuredFlags[name].value === value && project.canonical.flags[name].value === value);
+  if (matches(current)) {
+    const runtimeReadiness = await waitRuntimeReadiness(current.baseUrl, manifest, values, { ...deps, onRuntimeObservation });
+    // Read again after runtime convergence. A matching initial snapshot cannot
+    // certify closure if a concurrent deployment or configuration change won.
+    const project = await readProduction(token, manifest, deps);
+    assertProduction(project, commit, manifest, { requireBaseline: false });
+    assertRuntimeOrigin(project.baseUrl, expectedOrigin, manifest);
+    validateCurrent(project);
+    if (project.canonical.id !== current.canonical.id || !matches(project)) {
+      fail("PRODUCTION_FLAG_DRIFT", "A configuração mudou durante a verificação sem mutação.");
+    }
+    return { project, deployment: project.canonical, runtimeReadiness, changed: false };
+  }
+  if (!allowMutation) fail("PRODUCTION_FLAG_DRIFT", "A configuração divergiu; fechamento somente leitura não altera mudanças concorrentes.");
   onMutationStart();
   await patchFlags(token, values, deps);
   // Re-check after the config change. If another Production deployment appeared
@@ -389,7 +415,7 @@ export async function transitionFlags({
   const project = await waitCanonical(token, retried.id, commit, manifest, values, deps);
   assertRuntimeOrigin(project.baseUrl, expectedOrigin, manifest);
   const runtimeReadiness = await waitRuntimeReadiness(project.baseUrl, manifest, values, { ...deps, onRuntimeObservation });
-  return { project, deployment, runtimeReadiness };
+  return { project, deployment, runtimeReadiness, changed: true };
 }
 
 function durableRuntimeFlags(manifest) {
@@ -644,6 +670,10 @@ export function suiteContext({
   };
   return {
     runId, baseUrl, organizationId, projectSlug, profiles, cases, record, expectedCommit, manualInventory, manualAdministration,
+    async publishResourceJournal(value) {
+      if (typeof deps.onResourceJournal !== "function") fail("RESOURCE_JOURNAL_REQUIRED", "Persistência do inventário sintético obrigatória.");
+      await deps.onResourceJournal(structuredClone(value));
+    },
     async publishManualJournal(resources) {
       if (!manualAdministration || !Array.isArray(resources) || resources.length > 2) fail("MANUAL_CONTEXT_REQUIRED", "Contexto administrativo manual não confirmado.");
       manualAdministration.resources = resources.map(row => ({ kind: row.kind, name: row.name, projectId: row.id ?? null, slug: row.slug ?? null,
