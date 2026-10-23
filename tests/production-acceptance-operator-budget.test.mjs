@@ -79,17 +79,17 @@ test("response body transport aborts are not swallowed as successful empty JSON"
   await assert.rejects(() => appRequest("https://maono.test", "/api/projects", { method: "POST", json: {}, fetchImpl }), { name: "TimeoutError" });
 });
 
-test("suite timeout after slow activation still runs cleanup then restores flags and persists checkpoint", async (t) => {
+test("suite timeout after quiescence verifies unchanged flags and persists checkpoint without a deployment", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "acceptance-budget-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   let now = Date.parse("2026-10-05T00:00:00Z"), profileId = 0, reads = 0, patchCount = 0;
   const start = now, events = [], sha = "a".repeat(40);
-  let configured = false, canonicalFlag = false, canonicalId = "original", pending = null;
+  let configured = true, canonicalFlag = true, canonicalId = "original", pending = null;
   const deployment = (id = canonicalId, flag = canonicalFlag, status = "success") => ({
     id, environment: "production", url: "https://maono-kepler-v1.pages.dev",
     deployment_trigger: { metadata: { commit_hash: sha, commit_dirty: false } },
     latest_stage: { name: "deploy", status },
-    env_vars: { MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: { type: "plain_text", value: String(flag) } },
+    env_vars: { MAONO_TICKET_COMMANDS_ENABLED: { type: "plain_text", value: "false" }, MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: { type: "plain_text", value: String(flag) } },
   });
   const fetchImpl = async (url, options) => {
     const path = new URL(url).pathname, method = options.method;
@@ -98,6 +98,7 @@ test("suite timeout after slow activation still runs cleanup then restores flags
         patchCount++;
         events.push(patchCount === 1 ? "activate" : "restore");
         configured = JSON.parse(options.body).deployment_configs.production.env_vars.MAONO_TICKET_SELECTIVE_ACCESS_ENABLED.value === "true";
+        assert.equal(configured, true, "CC04 activation and restoration must preserve confidentiality");
         return Response.json({ success: true, result: {} });
       }
       if (method === "POST") {
@@ -119,7 +120,7 @@ test("suite timeout after slow activation still runs cleanup then restores flags
       }
       return Response.json({ success: true, result: { name: "maono-kepler-v1", production_branch: "mano_kepler_v1", subdomain: "maono-kepler-v1.pages.dev",
         canonical_deployment: deployment(), deployment_configs: { production: { d1_databases: { DB: { id: PRODUCTION_D1_ID } },
-          env_vars: { MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: { type: "plain_text", value: String(configured) } } } },
+          env_vars: { MAONO_TICKET_COMMANDS_ENABLED: { type: "plain_text", value: "false" }, MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: { type: "plain_text", value: String(configured) } } } },
       } });
     }
     if (path === "/api/auth/login") {
@@ -127,7 +128,7 @@ test("suite timeout after slow activation still runs cleanup then restores flags
       return Response.json({ ok: true }, { headers: { "set-cookie": "maono_session=synthetic; HttpOnly; Secure" } });
     }
     if (path === "/api/session") return Response.json({ authenticated: true, activeOrganization: { id: 1 }, user: { id: profileId, role: "editor" },
-      permissions: ["ticket.view", "ticket.create", "ticket.manage", "ticket.access.manage"] });
+      permissions: profileId === 1 ? ["ticket.view", "ticket.create", "ticket.manage", "ticket.access.manage"] : ["ticket.view"] });
     assert.equal(path, "/api/organizations/1/tickets");
     events.push("suite-request");
     now += 45 * minute + 1;
@@ -139,7 +140,7 @@ test("suite timeout after slow activation still runs cleanup then restores flags
   });
   const credentials = Object.fromEntries(["manager", "allowed", "restricted"].map((name) => [name, { email: `${name}@example.test`, password: "synthetic" }]));
   const reportPath = join(dir, "report.json");
-  const code = await main(["--mode", "run", "--suite", "cc04-selective-access", "--organization-id", "1", "--expected-commit", sha, "--report", reportPath],
+  const code = await main(["--mode", "run", "--suite", "cc04-selective-access", "--organization-id", "1", "--qa-user-ids", "1,2,3", "--expected-commit", sha, "--report", reportPath],
     { MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: "synthetic", MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: JSON.stringify(credentials) },
     { now: () => now, sleep: async (ms) => { now += ms; }, fetchImpl });
   const report = JSON.parse(await readFile(reportPath, "utf8"));
@@ -151,8 +152,11 @@ test("suite timeout after slow activation still runs cleanup then restores flags
   assert.equal(report.ok, false);
   assert.equal(report.complete, false);
   assert.equal(checkpoint.runId, report.runId);
-  assert.deepEqual(events, ["checkpoint", "activate", "suite-request", "restore"]);
-  assert.equal(configured, false);
-  assert.ok(now - start > 100 * minute);
+  assert.deepEqual(events, ["checkpoint", "suite-request"]);
+  assert.equal(configured, true);
+  assert.equal(patchCount, 0);
+  assert.equal(report.activation.changed, false);
+  assert.equal(report.restorationChanged, false);
+  assert.ok(now - start > 60 * minute);
   assert.ok(now - start < totalBudgetMs(manifest));
 });

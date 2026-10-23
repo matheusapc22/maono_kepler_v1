@@ -30,6 +30,7 @@ export function publicManifest(id) {
     mutationMode: manifest.mutationMode,
     mutationBudgetMs: manifest.mutationBudgetMs,
     requiresBrowser: manifest.requiresBrowser === true,
+    requiresApprovedIdentities: manifest.requiresApprovedIdentities === true,
     manualAdministration: manifest.manualAdministration === true,
     requiredProfiles: [...manifest.requiredProfiles],
     requiredPermissions: manifest.requiredPermissions || {},

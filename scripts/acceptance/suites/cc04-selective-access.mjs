@@ -1,11 +1,13 @@
 import { assertHttpResponse, fail } from "../production-acceptance-lib.mjs";
+import { assertQaContext, syntheticResources } from "./cc04-resources.mjs";
 
 export const manifest = Object.freeze({
   id: "cc04-selective-access",
-  version: 1,
+  version: 2,
   description: "CC-04 selective ticket access authenticated Production acceptance",
   mutationMode: "controlled_mutation",
   requiresBrowser: true,
+  requiresApprovedIdentities: true,
   requiredProfiles: ["manager", "allowed", "restricted"],
   requiredPermissions: {
     manager: ["ticket.view", "ticket.create", "ticket.manage", "ticket.access.manage"],
@@ -14,13 +16,39 @@ export const manifest = Object.freeze({
   },
   managedFlags: {
     MAONO_TICKET_SELECTIVE_ACCESS_ENABLED: {
-      requiredBefore: false,
+      // Selective access is already enabled in Production. Disabling it is not
+      // a confidentiality rollback for existing private tickets.
+      requiredBefore: true,
       activeValue: true,
-      safeValue: false,
+      safeValue: true,
     },
   },
-  cases: ["CT-11", "CT-12", "CT-13", "CT-50"],
+  prerequisites: ["Dedicated QA organization and three distinct non-administrative identities approved for this window",
+    "COMMANDS remains false; /state ACL coverage is explicitly not exercised",
+    "Approve preserve-private-v1: retain synthetic ticket, attachment, group and label; no permanent deletion"],
+  cleanup: { policy: "preserve-private-v1", resources: "At most one new run-UUID ticket, attachment, group and label",
+    method: "Verify ownership, close and privatize ticket to manager only, detach label, deactivate empty group; verify negative access",
+    retention: "Preserve ticket, history, attachment bytes and detached label; no retention period or automatic deletion",
+    interruption: "Persist intent before create and IDs immediately after; uncertain creation blocks completion and automatic retry" },
+  cases: ["CT-11", "CT-12", "CT-13", "CT-50", "CC04-CLEANUP"],
 });
+
+export function verifyPreflight(project) {
+  for (const vars of [project.raw?.deployment_configs?.production?.env_vars, project.raw?.canonical_deployment?.env_vars]) {
+    const flag = vars?.MAONO_TICKET_COMMANDS_ENABLED;
+    if (flag?.type !== "plain_text" || String(flag.value).trim().toLowerCase() !== "false") {
+      fail("CC04_COMMANDS_BASELINE_MISMATCH", "Este aceite exige COMMANDS=false; sua ativação global é uma decisão separada.");
+    }
+  }
+}
+
+export async function prepare(ctx) { assertQaContext(ctx); }
+
+export function verifyDisabledState(response) {
+  assertHttpResponse(response, response.status === 503 && response.body?.code === "TICKET_COMMANDS_DISABLED",
+    "Estado de comandos inesperado; não habilitar COMMANDS para executar este aceite.");
+  return { status: "NOT_EXERCISED", reason: "TICKET_COMMANDS_DISABLED", httpStatus: 503 };
+}
 
 function expectStatus(response, expected, label) {
   const values = Array.isArray(expected) ? expected : [expected];
@@ -36,9 +64,10 @@ function listCount(facets) {
   return Object.values(facets?.byStatus || {}).reduce((sum, value) => sum + Number(value || 0), 0);
 }
 
-async function createAttachment(ctx, ticketId) {
+async function createAttachment(ctx, ticketId, resources) {
   const bytes = Buffer.from(`Maono QA acceptance ${ctx.runId}\n`, "utf8");
   const base = ticketPath(ctx.organizationId, ticketId, "/attachments");
+  await resources.begin("attachment");
   const started = expectStatus(await ctx.api("manager", base, {
     method: "POST",
     json: {
@@ -50,10 +79,8 @@ async function createAttachment(ctx, ticketId) {
   const attachmentId = started.body?.upload?.attachmentId;
   const offset = Number(started.body?.upload?.offset || 0);
   if (!attachmentId) fail("ACCEPTANCE_ASSERTION_FAILED", "Upload sintético não retornou attachmentId.");
-  // Register immediately: a failed append must still remove the reservation.
-  ctx.registerCleanup(async () => {
-    await ctx.cleanupApi("manager", `${base}/${attachmentId}`, { method: "DELETE" }, [200, 204, 404]);
-  });
+  if (String(started.body?.attachment?.id) !== String(attachmentId)) fail("SYNTHETIC_RESOURCE_SCOPE_MISMATCH", "Reserva do anexo não confirmada.");
+  await resources.observe("attachment", started.body.attachment);
   expectStatus(await ctx.api("manager", `${base}/${attachmentId}`, {
     method: "PATCH",
     body: bytes.subarray(offset),
@@ -119,6 +146,7 @@ async function browserRevocationCheck(ctx, subject, groupId) {
 }
 
 export async function run(ctx) {
+  const resources = syntheticResources(ctx);
   const org = ctx.organizationId;
   const managerId = Number(ctx.profiles.manager.user.id);
   const allowedId = Number(ctx.profiles.allowed.user.id);
@@ -131,6 +159,7 @@ export async function run(ctx) {
     "ler capabilities da Central",
   );
   const lifecycleEnabled = capability.body?.lifecycleEnabled === true;
+  if (lifecycleEnabled) fail("CC04_COMMANDS_BASELINE_MISMATCH", "Runtime de comandos divergiu do aceite autorizado.");
   const triageEnabled = capability.body?.triageEnabled === true;
 
   const ticketPayload = {
@@ -154,6 +183,7 @@ export async function run(ctx) {
     json: ticketPayload,
     ...(lifecycleEnabled ? { headers: { "Idempotency-Key": `qa-cc04-${ctx.runId}` } } : {}),
   };
+  await resources.begin("ticket");
   const created = expectStatus(
     await ctx.api("manager", `/api/organizations/${org}/tickets`, createOptions),
     201,
@@ -161,21 +191,8 @@ export async function run(ctx) {
   );
   const ticketId = created.body?.ticket?.id;
   if (!ticketId) fail("ACCEPTANCE_ASSERTION_FAILED", "Chamado sintético não retornou id.");
-
-  ctx.registerCleanup(async () => {
-    await ctx.cleanupApi("manager", ticketPath(org, ticketId, "/access"), {
-      method: "PUT",
-      json: { visibility: "organization", acl: [], policyIds: [] },
-    });
-  });
-  ctx.registerCleanup(async () => {
-    await ctx.cleanupApi("manager", ticketPath(org, ticketId, "/labels"), {
-      method: "PUT",
-      json: { labels: [] },
-    });
-  });
-
-  const attachmentId = await createAttachment(ctx, ticketId);
+  await resources.observe("ticket", created.body.ticket);
+  const attachmentId = await createAttachment(ctx, ticketId, resources);
 
   const managerAllow = {
     principalType: "user",
@@ -193,20 +210,27 @@ export async function run(ctx) {
     fail("ACCEPTANCE_ASSERTION_FAILED", "CT-11: lista, total ou facets revelaram o chamado privado.");
   }
   expectStatus(await ctx.api("restricted", ticketPath(org, ticketId)), 404, "CT-11 detalhe");
-  expectStatus(await ctx.api("restricted", ticketPath(org, ticketId, "/state")), 404, "CT-11 state");
+  const stateCoverage = verifyDisabledState(await ctx.api("restricted", ticketPath(org, ticketId, "/state")));
   expectStatus(await ctx.api("restricted", ticketPath(org, ticketId, "/attachments")), 404, "CT-11 anexos");
   expectStatus(await ctx.api("restricted", ticketPath(org, ticketId, `/attachments/${attachmentId}/download`)), 404, "CT-11 download");
-  ctx.record("CT-11", "PASS", { list: true, detail: true, state: true, attachments: true, download: true });
+  ctx.record("CT-11", "PASS", { list: true, detail: true, state: stateCoverage, attachments: true, download: true });
 
-  expectStatus(await ctx.api("manager", ticketPath(org, ticketId, "/labels"), {
+  const beforeLabels = expectStatus(await ctx.api("manager", ticketPath(org, ticketId, "/labels")), 200, "inventário de etiquetas");
+  if (!Array.isArray(beforeLabels.body?.available) || beforeLabels.body.available.some(row => row.name === resources.names.label)) {
+    fail("SYNTHETIC_RESOURCE_COLLISION", "Etiqueta da execução já existe ou inventário não verificável.");
+  }
+  await resources.begin("label");
+  const labelled = expectStatus(await ctx.api("manager", ticketPath(org, ticketId, "/labels"), {
     method: "PUT",
     json: { labels: [`QA-${ctx.runId}`] },
   }), 200, "CT-13 etiqueta");
+  await resources.observe("label", labelled.body?.labels?.find(row => row.name === resources.names.label));
   expectStatus(await ctx.api("restricted", ticketPath(org, ticketId)), 404, "CT-13 etiqueta não concede acesso");
   expectStatus(await ctx.api("restricted", `/api/organizations/${org}/ticket-access/groups`), 403, "CT-13 gestão sem permissão");
   expectStatus(await ctx.api("manager", `/api/organizations/${org}/ticket-access/groups`), 200, "CT-13 gestão com permissão");
   ctx.record("CT-13", "PASS", { labelsDoNotGrant: true, separateManagePermission: true });
 
+  await resources.begin("group");
   const group = expectStatus(await ctx.api("manager", `/api/organizations/${org}/ticket-access/groups`, {
     method: "POST",
     json: {
@@ -217,12 +241,7 @@ export async function run(ctx) {
   }), 201, "criar grupo sintético");
   const groupId = group.body?.group?.id;
   if (!groupId) fail("ACCEPTANCE_ASSERTION_FAILED", "Grupo sintético não retornou id.");
-  ctx.registerCleanup(async () => {
-    await ctx.cleanupApi("manager", `/api/organizations/${org}/ticket-access/groups/${encodeURIComponent(groupId)}`, {
-      method: "PATCH",
-      json: { active: false, members: [] },
-    });
-  });
+  await resources.observe("group", group.body.group);
 
   const groupAllow = {
     principalType: "group",

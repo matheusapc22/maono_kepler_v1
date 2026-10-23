@@ -7,7 +7,8 @@ crons = ["*/5 * * * *"]
 MAONO_RUNTIME_ENV = "production"
 MAONO_TICKET_CHANGES_ENABLED = "false"
 MAONO_CHANGE_RECONCILIATION_ENABLED = "false"
-MAONO_TICKET_SELECTIVE_ACCESS_ENABLED = "false"
+# Disabling reconciliation must never disable ticket confidentiality.
+MAONO_TICKET_SELECTIVE_ACCESS_ENABLED = "true"
 MAONO_CHANGE_RECONCILIATION_ORGANIZATION_IDS = ""
 MAONO_CHANGE_RECONCILIATION_ACTOR_ID = ""
 [[d1_databases]]
