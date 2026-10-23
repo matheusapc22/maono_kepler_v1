@@ -8,10 +8,18 @@ export type UserMutationResult = {
   sessionsInvalidated?: boolean;
 };
 
-export class UserMutationError extends Error {}
+export class UserMutationError extends Error {
+  readonly publicMessage: string;
+  constructor(publicMessage: string) {
+    super(publicMessage);
+    // Only locally authored or catalog-normalized copy enters this field.
+    // Keep presentation separate from mutable diagnostic Error.message.
+    this.publicMessage = publicMessage;
+  }
+}
 
 export function userMutationErrorMessage(error: unknown): string {
-  return error instanceof UserMutationError ? error.message : normalizeUserError(error).message;
+  return error instanceof UserMutationError ? error.publicMessage : normalizeUserError(error).message;
 }
 
 // Never retry a password write automatically: a lost response can follow a commit.

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { listOrganizationUsers } from '../functions/_lib/organizations.js';
 import { createStorageSqliteEnv } from './helpers/storage-sqlite.mjs';
+import { restorePasswordManagement } from './helpers/password-management-preservation.mjs';
 import { assertUsersAccessPreserved, canonical, declaration, digest, nodes, parse, preservedHelpers, preservedValues, usersAccessBaseline } from './helpers/users-access-preservation.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -38,8 +39,8 @@ test('redesigned overview preserves independently pinned helpers, gates, filters
   assertUsersAccessPreserved(source);
 });
 for (const [path, expected] of Object.entries(usersAccessBaseline.unchangedFiles)) {
-  test(`domain source is unchanged from 158e2b3: ${path}`, () => {
-    let value=read(path);
+  test(`domain source preserves 158e2b3 outside the reviewed password fix: ${path}`, () => {
+    let value=restorePasswordManagement(path, read(path));
     if(path === "src/lib/api.ts") {
       const marker="export function listOrganizationFiles(";
       assert.equal(value.split(marker).length,2);

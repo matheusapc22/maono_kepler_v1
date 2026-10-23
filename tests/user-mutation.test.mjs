@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { submitUserMutation } from "../src/pages/Admin/components/user-mutation.ts";
+import { submitUserMutation, UserMutationError, userMutationErrorMessage } from "../src/pages/Admin/components/user-mutation.ts";
+
+test("presentation uses approved copy independently of diagnostic Error.message", () => {
+  const failure = new UserMutationError("Mensagem pública controlada.");
+  failure.message = "private diagnostic";
+  assert.equal(userMutationErrorMessage(failure), "Mensagem pública controlada.");
+  assert.equal(userMutationErrorMessage(new Error("private diagnostic")).includes("private diagnostic"), false);
+});
 
 for (const status of [400, 401, 403, 409, 429, 500, 503]) test(`HTTP ${status} is actionable and never retried`, async t => {
   let calls = 0;

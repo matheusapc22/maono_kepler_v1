@@ -1,11 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { restorePasswordManagement } from "./helpers/password-management-preservation.mjs";
 import { hashPassword, verifyPassword, sha256Hex } from "../functions/_lib/auth.js";
 import { onRequest as adminUser } from "../functions/api/admin/users/[id].js";
 import { onRequest as adminUsers } from "../functions/api/admin/users/index.js";
 import { onRequestPatch as organizationUser } from "../functions/api/organizations/[id]/users/[userId].js";
 import { onRequest as login } from "../functions/api/auth/login.js";
+
+for (const [path, before, after] of [
+  ["functions/_lib/organizations.js", 'getActorRole(actor) !== "super_admin"', 'false'],
+  ["functions/api/organizations/[id]/users/[userId].js", 'normalizeRole(user.role) !== "super_admin"', 'false'],
+  ["src/pages/Admin/components/AdminUserManagerLegacy.tsx", 'if (!selected || !draft || busy || mutationPending.current) return;', 'if (!selected || !draft) return;'],
+]) test(`preservation inverse rejects unreviewed password changes: ${path}`, () => {
+  const source = readFileSync(new URL("../" + path, import.meta.url), "utf8");
+  assert.notEqual(restorePasswordManagement(path, source), source);
+  assert.ok(source.includes(before));
+  assert.throws(() => restorePasswordManagement(path, source.replace(before, after)), /exact reviewed password edit/);
+});
 
 // Entirely synthetic in-memory SQLite, with D1 batch transaction semantics.
 // Never log bind parameters, password hashes or session material.
