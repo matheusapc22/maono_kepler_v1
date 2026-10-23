@@ -1,5 +1,7 @@
 # Production Acceptance Operator
 
+Preparo do navegador: [instalação isolada, smoke offline e limites](acceptance-browser-setup.md).
+
 ## Objetivo
 
 Executar somente os testes que dependem de ambiente real, autenticação, configuração remota, feature flags, chamadas HTTP ou interface real, sem duplicar os testes unitários/SQLite/CI comuns.
