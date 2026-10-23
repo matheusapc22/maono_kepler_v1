@@ -19,11 +19,12 @@ on:
       - 'playwright.production-acceptance.config.ts'
       - 'playwright.config.ts'
       - '.github/workflows/acceptance-preview-validation.yml'
+      - '.github/scripts/acceptance-browser/**'
 permissions:
   contents: read
 jobs:
   synthetic-contracts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -35,7 +36,10 @@ jobs:
           package-manager-cache: false
       - run: node --test tests/production-acceptance-operator*.test.mjs
       - run: npm install --legacy-peer-deps --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
+      - name: Prepare and verify isolated Chromium
+        timeout-minutes: 5
+        shell: bash
+        run: bash .github/scripts/acceptance-browser/setup.sh
       - name: Build synthetic local browser target
         env:
           VITE_MAONO_MAP_SHELL_V1: 'true'

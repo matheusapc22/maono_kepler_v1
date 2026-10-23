@@ -77,10 +77,7 @@ test("browser runtime is isolated, exact-versioned and installed before producti
   const operatorIndex = workflow.indexOf("Execute protected Production acceptance operation");
   assert.ok(installIndex > 0 && operatorIndex > installIndex);
   assert.match(workflow, /needs\.validate\.outputs\.browser_required == 'true' && inputs\.mode == 'run'/);
-  assert.match(workflow, /npm install --prefix scripts\/acceptance/);
-  assert.match(workflow, /--ignore-scripts/);
-  assert.match(workflow, /@playwright\/test@1\.55\.0/);
-  assert.match(workflow, /scripts\/acceptance\/node_modules\/\.bin\/playwright install --with-deps chromium/);
+  assert.match(workflow, /bash \.github\/scripts\/acceptance-browser\/setup\.sh/);
   assert.match(workflow, /git diff --exit-code -- \./);
   assert.match(workflow, /git status --porcelain --untracked-files=no/);
 });
