@@ -47,6 +47,15 @@ for(const r of routes){
    if(method==='POST')delete op.requestBody;
   }
   if(r.path.endsWith('/state')&&method==='GET')op.responses['200'].headers={ETag:{description:'ETag forte da representação canônica state; o detalhe não valida o envelope enriquecido.',schema:str()}};
+  const stateTag=r.path.endsWith('/state')&&method==='GET';
+  const conversationTag=(r.path.endsWith('/drafts')&&method==='POST')||
+    (r.path.endsWith('/drafts/{draftId}')&&['GET','PATCH'].includes(method))||
+    (r.path.endsWith('/messages')&&method==='POST')||(r.path.endsWith('/messages/{messageId}')&&method==='PATCH');
+  if(stateTag||conversationTag)for(const code of ['200','201'])if(op.responses[code]){
+   op.responses[code].headers={...op.responses[code].headers,
+    ...(conversationTag?{ETag:{description:'ETag forte do rascunho/mensagem retornado, utilizado sem transformação no If-Match.',schema:str()}}:{}),
+    'Cache-Control':{description:'Preserva privacidade e impede transformação do payload/ETag por intermediários.',schema:{type:'string',enum:['private, no-store, no-transform']}}};
+  }
   if(r.path.endsWith('/tickets/metrics')&&method==='GET')op.parameters.push(...['from','to','asOf'].map(n=>parameter(n,'query','Instante ISO; from<to<=asOf, máximo366 dias.',true,{type:'string',format:'date-time'})));
   if(r.handler){const shared=await fs.readFile(ROOT+'/'+r.handler,'utf8');if(method==='GET')for(const [,q]of shared.matchAll(/q\.get\(["']([^"']+)["']\)/g))if(!op.parameters.some(x=>x.name===q))op.parameters.push(parameter(q,'query','Parâmetro do domínio; aplicabilidade depende do recurso.'));}
   item[key]=op;

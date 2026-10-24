@@ -28,6 +28,8 @@ O cliente congela chave e payload antes do primeiro envio. Falha de rede, cancel
 
 `/state` contém IDs e dados canônicos do Ticket, classificação, versão, ciclo, espera e conclusão. Seu ETag forte é o hash dessa representação. Nomes de usuários, anexos, eventos avulsos e links CR autorizados enriquecem outras representações e não integram esse recurso. O envelope de detalhe **não** recebe um ETag que pretenda validá-lo; fornece somente o token opaco de escrita e é `private, no-store`.
 
+A resposta `/state` usa `Cache-Control: private, no-store, no-transform` para preservar o ETag forte no transporte. As respostas JSON com ETag de rascunhos e mensagens usam a mesma proteção. Isso não permite normalizar ou aceitar um token fraco: `If-Match` continua exigindo o token forte do recurso correto.
+
 `If-Match` deve conter exatamente o token opaco recebido. Wildcard, lista, ETag fraco, token de outro Ticket ou versão antiga são recusados. A comparação é revalidada por CAS (`version`) no UPDATE do banco. Cada comando vencedor incrementa a versão; uma correção também é comando versionado e troca o token. Não derivar a contagem de eventos da versão: a criação publica a versão 2 após atribuir o código definitivo dentro da mesma transação.
 
 | Condição | HTTP | Comportamento |
