@@ -1,5 +1,6 @@
 import { parseManualBundle, createManualAdministration, manualFunctionalCases, validateBeforeEvidence } from "./manual-evidence.mjs";
 import { createExecutionBudget } from "./execution-budget.mjs";
+import { validateCc03Window } from './cc03-window.mjs';
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -79,6 +80,8 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
     if (options.mode === "preflight") {
       assertProduction(initialProject, options.expectedCommit, manifest, { requireBaseline: true });
       if (suite.verifyPreflight) suite.verifyPreflight(initialProject, options);
+      if (manifest.requiresGlobalWindow) report.pendingGates = ['EXPLICIT_GLOBAL_WINDOW_APPROVAL', 'FRESH_ALL_ORGANIZATIONS_SQL_EVIDENCE',
+        'WRITERS_PAUSED', 'QA_IDENTITIES_AUTHENTICATED', 'ENVIRONMENT_RUN_APPROVAL'];
       report.ok = true;
       report.complete = true;
       report.acceptanceExecuted = false;
@@ -129,6 +132,14 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
 
     assertProduction(initialProject, options.expectedCommit, manifest, { requireBaseline: true });
     if (suite.verifyPreflight) suite.verifyPreflight(initialProject, options);
+    const verifyWindow = () => validateCc03Window(env.MAONO_ACCEPTANCE_CC03_WINDOW_JSON, {
+      expectedCommit: options.expectedCommit, organizationId: options.organizationId, qaUserIds: options.qaUserIds,
+      now: (runtime.now || Date.now)(), actor: env.GITHUB_ACTOR, workflowAttempt: env.GITHUB_RUN_ATTEMPT,
+    });
+    if (manifest.requiresGlobalWindow) {
+      report.globalWindow = verifyWindow(); // Before any QA login or mutation.
+      budget.constrainDeadline(report.globalWindow.deadline);
+    }
     const manualInventory = manifest.manualAdministration === true ? parseManualBundle(env.MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON, {
       suite: manifest.id, expectedCommit: options.expectedCommit, organizationId: options.organizationId, baseUrl: initialProject.baseUrl,
       workflowRunId: env.GITHUB_RUN_ID, workflowRunAttempt: env.GITHUB_RUN_ATTEMPT === '1' ? 1 : null,
@@ -221,6 +232,7 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
           onRuntimeObservation: value => { report.activationRuntime = value; },
           validateCurrent: (current) => {
             if (suite.verifyPreflight) suite.verifyPreflight(current, options);
+            if (manifest.requiresGlobalWindow) verifyWindow();
             // A queue wait must not turn a fresh preflight into stale admission.
             if (manualInventory) validateBeforeEvidence(manualInventory, {
               suite: manifest.id, expectedCommit: options.expectedCommit, organizationId: options.organizationId,

@@ -1,9 +1,11 @@
 import * as durablePreview from "./suites/durable-project-preview.mjs";
 import * as durableSave from "./suites/durable-project-save.mjs";
 import * as cc04 from "./suites/cc04-selective-access.mjs";
+import * as cc03 from "./suites/cc03-command-lifecycle.mjs";
 import { fail, validateManifest } from "./production-acceptance-lib.mjs";
 
 const suites = new Map([
+  [cc03.manifest.id, cc03],
   [cc04.manifest.id, cc04],
   [durableSave.manifest.id, durableSave],
   [durablePreview.manifest.id, durablePreview],
@@ -31,6 +33,7 @@ export function publicManifest(id) {
     mutationBudgetMs: manifest.mutationBudgetMs,
     requiresBrowser: manifest.requiresBrowser === true,
     requiresApprovedIdentities: manifest.requiresApprovedIdentities === true,
+    requiresGlobalWindow: manifest.requiresGlobalWindow === true,
     manualAdministration: manifest.manualAdministration === true,
     requiredProfiles: [...manifest.requiredProfiles],
     requiredPermissions: manifest.requiredPermissions || {},

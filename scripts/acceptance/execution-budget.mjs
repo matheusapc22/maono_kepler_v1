@@ -27,7 +27,7 @@ export function createExecutionBudget(manifest = {}, { now = Date.now } = {}) {
     throw budgetError("ACCEPTANCE_BUDGET_INVALID", "Orçamento da suite fora do limite revisado.");
   }
   const startedAt = now();
-  const endAt = startedAt + totalBudgetMs(manifest);
+  let endAt = startedAt + totalBudgetMs(manifest);
   let phase = null, phaseDeadline = startedAt, ordinal = -1;
   const remainingMs = () => {
     const remaining = Math.floor(Math.min(phaseDeadline, endAt) - now());
@@ -35,7 +35,16 @@ export function createExecutionBudget(manifest = {}, { now = Date.now } = {}) {
     return remaining;
   };
   return {
-    startedAt, endAt, closureReserveMs: CLOSURE_RESERVE_MS,
+    startedAt, get endAt() { return endAt; }, closureReserveMs: CLOSURE_RESERVE_MS,
+    constrainDeadline(deadline) {
+      if (phase !== 'preflight' || !Number.isSafeInteger(deadline) || deadline <= now()) {
+        throw budgetError('ACCEPTANCE_BUDGET_INVALID', 'Prazo da janela inválido.');
+      }
+      // Only shorten, never extend the reviewed budget or spend closure reserves.
+      endAt = Math.min(endAt, deadline);
+      phaseDeadline = Math.min(phaseDeadline, endAt);
+      remainingMs();
+    },
     get phase() { return phase; },
     get phaseDeadline() { return phaseDeadline; },
     enter(next) {
