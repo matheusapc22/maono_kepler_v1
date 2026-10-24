@@ -782,7 +782,7 @@ function TicketsSectionContent({
           </button>
         </section>
 
-      <TicketNotifications key={`notifications:${organizationId}:${user?.id}`} organizationId={organizationId} operator={user?.role === "super_admin"} onOpen={(id) => {
+      <TicketNotifications key={`notifications:${organizationId}:${user?.id}`} organizationId={organizationId} userId={user?.id} operator={user?.role === "super_admin"} onOpen={(id) => {
         setSelectedTicketId(id); setSuggestedStatus(null); setDetail(null); void loadDetail(id);
       }} />
       <TicketFeedbackPanel structurePending={structurePending} stagePending={stagePending} key={`feedback:${organizationId}:${user?.id}`} organizationId={organizationId} canManage={canManage} onOpen={id=>{setSelectedTicketId(id);setSuggestedStatus(null);setDetail(null);void loadDetail(id);}} />

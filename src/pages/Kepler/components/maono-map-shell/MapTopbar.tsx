@@ -9,6 +9,7 @@ import { Link } from "react-router";
 import type { useSession } from "../../../../auth/session";
 import type { MapPanelContextValue } from "../../map-panel/types";
 import MapShellIcon from "./MapShellIcon";
+import NoticeBoard from "../../../../components/notices/NoticeBoard";
 import "./map-topbar-cleanup.css";
 
 type SessionValue = ReturnType<typeof useSession>;
@@ -83,6 +84,7 @@ function mapStatus({
 export default function MapTopbar({
   context,
   user,
+  activeOrganization,
   mapReady,
   mapLoading,
   hasUnsavedChanges,
@@ -147,6 +149,7 @@ export default function MapTopbar({
         <span className="maono-map-topbar__mode">
           {modeLabel(context.mode)}
         </span>
+        <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} suspended={loggingOut}/>
         <button
           type="button"
           className="maono-map-topbar__account-trigger"

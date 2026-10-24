@@ -16,6 +16,8 @@ test('CC07 local UI opens, marks read, paginates and supports keyboard focus',as
  await expect(page.getByRole('button',{name:'Marcar como lida',exact:true})).toBeVisible();
  await page.getByRole('button',{name:/CC-7: Nova resposta/}).click();
  await expect(page.getByLabel('Chamado aberto')).toHaveText('7');
+ await expect(page.getByRole('button',{name:'Notificações (1 não lidas)'})).toBeVisible();
+ await page.getByRole('button',{name:'Marcar como lida',exact:true}).click();
  await expect(page.getByRole('button',{name:'Notificações (0 não lidas)'})).toBeVisible();
  await page.getByRole('button',{name:'Mais antigas'}).click();
  await expect(page.getByRole('button',{name:/CC-7: Antiga/})).toBeVisible();

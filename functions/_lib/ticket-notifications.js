@@ -1,6 +1,7 @@
 import {feedbackDeliveryAllowed,feedbackFence} from './ticket-feedback.js';
 import { getDb, getTableColumns, tableExists } from './organizations.js';
 import { can } from './permissions.js';
+import {notificationAcceptancePolicy,notificationAcceptanceScope} from './ticket-notification-acceptance.js';
 import { buildTicketAccessPredicate, getTicketSelectiveAccessCapability, requireTicketAccess } from './ticket-access.js';
 
 const enabled = (value) => String(value || '').trim().toLowerCase() === 'true';
@@ -21,7 +22,9 @@ export function notificationOrganizations(env) {
   if (!values.length || values.length>20 || values.some(v=>!/^\d+$/.test(v)||!Number.isSafeInteger(Number(v))||Number(v)<1)) {
     throw notificationError('TICKET_NOTIFICATION_SCOPE_REQUIRED');
   }
-  return [...new Set(values.map(Number))];
+  const ids=[...new Set(values.map(Number))];
+  if(String(env.MAONO_RUNTIME_ENV).toLowerCase()==='production' && ids.includes(9)) throw notificationError('TICKET_NOTIFICATION_QA_EXCLUDED');
+  return ids;
 }
 export async function notificationReady(env, consumer = false) {
   if (!enabled(env[consumer ? 'MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED' : 'MAONO_TICKET_NOTIFICATIONS_ENABLED'])) return false;
@@ -62,30 +65,39 @@ const leaseSql = `EXISTS (SELECT 1 FROM ticket_command_outbox o WHERE o.id=?
   AND o.status='processing' AND o.notification_token=? AND o.notification_lease_until>?)`;
 export async function consumeTicketNotifications(env, { now = Date.now, batchSize = 10 } = {}) {
   if (!(await notificationReady(env, true))) return { enabled: false, claimed: 0 };
+  const policy=notificationAcceptancePolicy(env,now()),guard=notificationAcceptanceScope(policy);
+  if(policy&&!policy.active)return {enabled:false,claimed:0,windowClosed:true};
   const db = getDb(env), start = notificationStart(env);
   const organizations=notificationOrganizations(env), placeholders=organizations.map(()=>'?').join(',');
-  const limit = Math.max(1, Math.min(25, Number.isInteger(batchSize) ? batchSize : 10));
+  const limit = policy ? policy.batchSize : Math.max(1, Math.min(25, Number.isInteger(batchSize) ? batchSize : 10));
+  if(policy){
+    const inventory=await db.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN ${guard.sql} THEN 0 ELSE 1 END) AS unrelated
+      FROM ticket_command_outbox WHERE organization_id=? AND created_at>=?`).bind(...guard.values,policy.organizationId,start).first();
+    if(Number(inventory.total)>policy.maxEvents||Number(inventory.unrelated)>0)throw notificationError('TICKET_NOTIFICATION_ACCEPTANCE_DRIFT');
+  }
   const stamp = iso(now());
   // Expired final attempts become observable failures, never an infinite reclaim loop.
-  await db.prepare(`UPDATE ticket_command_outbox SET status='failed',notification_error='LEASE_EXHAUSTED',
+  const exhausted = await db.prepare(`UPDATE ticket_command_outbox SET status='failed',notification_error='LEASE_EXHAUSTED',
     notification_token=NULL,notification_lease_until=NULL
     WHERE id IN (SELECT id FROM ticket_command_outbox WHERE organization_id IN (${placeholders}) AND created_at>=? AND status='processing'
-      AND notification_lease_until<=? AND notification_attempts>=5 ORDER BY created_at LIMIT 25)`)
-    .bind(...organizations,start, stamp).run();
+      AND notification_lease_until<=? AND notification_attempts>=5 AND (${guard.sql}) ORDER BY created_at LIMIT 25)`)
+    .bind(...organizations,start, stamp,...guard.values).run();
   const rows = (await db.prepare(`SELECT o.id FROM ticket_command_outbox o
     WHERE o.organization_id IN (${placeholders}) AND o.created_at>=? AND o.notification_attempts<5
-    AND EXISTS (SELECT 1 FROM ticket_notification_candidates c WHERE c.outbox_id=o.id)
+    AND (${guard.sql}) AND EXISTS (SELECT 1 FROM ticket_notification_candidates c WHERE c.outbox_id=o.id)
     AND ((o.status='pending' AND (o.notification_next_at IS NULL OR o.notification_next_at<=?))
       OR (o.status='processing' AND o.notification_lease_until<=?))
-    ORDER BY o.created_at,o.id LIMIT ?`).bind(...organizations,start,stamp,stamp,limit).all()).results || [];
-  const report = { enabled: true, claimed: 0, delivered: 0, suppressed: 0, failed: 0, retried: 0, lostLease: 0 };
+    ORDER BY o.created_at,o.id LIMIT ?`).bind(...organizations,start,...guard.values,stamp,stamp,limit).all()).results || [];
+  const report = { enabled: true, claimed: 0, delivered: 0, suppressed: 0, failed: Number(exhausted.meta?.changes || 0), retried: 0, lostLease: 0 };
   for (const row of rows) {
+    if(policy&&!notificationAcceptancePolicy(env,now()).active)break;
     const token = crypto.randomUUID(), claimAt = iso(now());
     const claim = await db.prepare(`UPDATE ticket_command_outbox SET status='processing',notification_token=?,
       notification_lease_until=?,notification_attempts=notification_attempts+1
-      WHERE id=? AND notification_attempts<5 AND ((status='pending' AND (notification_next_at IS NULL OR notification_next_at<=?))
+      WHERE id=? AND notification_attempts<5 AND (? IS NULL OR (SELECT COALESCE(SUM(notification_attempts),0) FROM ticket_command_outbox WHERE organization_id=? AND created_at>=?)<?)
+      AND ((status='pending' AND (notification_next_at IS NULL OR notification_next_at<=?))
       OR (status='processing' AND notification_lease_until<=?)) RETURNING *`)
-      .bind(token,iso(now()+120000),row.id,claimAt,claimAt).first();
+      .bind(token,iso(Math.min(now()+120000,policy?Date.parse(policy.endAt):Infinity)),row.id,policy?.maxAttempts??null,policy?.organizationId??0,start,policy?.maxAttempts??null,claimAt,claimAt).first();
     if (!claim) continue;
     report.claimed++;
     try {
@@ -147,24 +159,68 @@ async function inboxFilter(env, organizationId, user) {
     AND (n.audience='ticket' OR ?=1) AND (${access.sql})`, values: [organizationId,user.id,note?1:0,...access.values] };
 }
 const inboxJoin = `FROM ticket_notifications n JOIN organization_tickets t ON t.id=n.ticket_id AND t.organization_id=n.organization_id`;
-export async function listTicketNotifications(env, organizationId, user, { before = null, limit = 20 } = {}) {
+async function recipientStateReady(env) {
+  const columns = await getTableColumns(env, 'ticket_notifications');
+  return ['dismissed_at','version','action_token'].every(name => columns.has(name));
+}
+export async function listTicketNotifications(env, organizationId, user, { before = null, limit = 20, folder = 'active' } = {}) {
   if (!(await notificationReady(env)) || !notificationOrganizations(env).includes(Number(organizationId))) return { enabled:false,items:[],unread:0,nextCursor:null };
+  if (!['active','deleted'].includes(folder)) throw notificationError('TICKET_NOTIFICATION_FOLDER_INVALID',400);
   const cursor = before == null || before==='' ? null : Number(before);
   if (cursor!==null && (!Number.isSafeInteger(cursor)||cursor<1)) throw notificationError('TICKET_NOTIFICATION_CURSOR_INVALID',400);
   const size = Math.max(1,Math.min(50,Number.isFinite(Number(limit)) ? Math.floor(Number(limit)||20) : 20));
   const db=getDb(env), filter=await inboxFilter(env,organizationId,user);
-  const count=await db.prepare(`SELECT COUNT(*) AS total ${inboxJoin} WHERE ${filter.sql} AND n.read_at IS NULL`).bind(...filter.values).first();
-  const rows=(await db.prepare(`SELECT n.id,n.ticket_id,n.audience,n.created_at,n.read_at,t.code,t.subject ${inboxJoin}
-    WHERE ${filter.sql} AND (? IS NULL OR n.id<?) ORDER BY n.id DESC LIMIT ?`)
+  const recipientState = await recipientStateReady(env);
+  if (folder === 'deleted' && !recipientState) throw notificationError('TICKET_NOTIFICATION_RECIPIENT_SCHEMA_REQUIRED');
+  const activeFilter = recipientState ? ' AND n.dismissed_at IS NULL' : '';
+  const folderFilter = folder === 'deleted' ? ' AND n.dismissed_at IS NOT NULL' : activeFilter;
+  const count=await db.prepare(`SELECT COUNT(*) AS total ${inboxJoin} WHERE ${filter.sql}${activeFilter} AND n.read_at IS NULL`).bind(...filter.values).first();
+  const rows=(await db.prepare(`SELECT n.id,n.ticket_id,n.audience,n.created_at,n.read_at,t.code,t.subject,
+    ${recipientState ? 'n.version,n.dismissed_at' : '1 AS version,NULL AS dismissed_at'} ${inboxJoin}
+    WHERE ${filter.sql}${folderFilter} AND (? IS NULL OR n.id<?) ORDER BY n.id DESC LIMIT ?`)
     .bind(...filter.values,cursor,cursor,Math.floor(size)+1).all()).results || [];
   const items=rows.slice(0,Math.floor(size)).map(r=>({id:r.id,ticketId:r.ticket_id,code:r.code,subject:r.subject,
-    internal:r.audience==='internal',createdAt:r.created_at,readAt:r.read_at}));
-  return {enabled:true,items,unread:Number(count?.total||0),nextCursor:rows.length>size ? String(items.at(-1).id):null};
+    internal:r.audience==='internal',createdAt:r.created_at,readAt:r.read_at,version:r.version,dismissedAt:r.dismissed_at}));
+  return {enabled:true,recipientState,items,unread:Number(count?.total||0),nextCursor:rows.length>size ? String(items.at(-1).id):null};
+}
+export async function changeTicketNotification(env, organizationId, user, notificationId, action, version) {
+  if (!(await notificationReady(env)) || !notificationOrganizations(env).includes(Number(organizationId))) throw notificationError('TICKET_NOTIFICATIONS_DISABLED');
+  if (!['read','unread','dismiss','restore'].includes(action) || !Number.isSafeInteger(notificationId) || notificationId<1 ||
+      !Number.isSafeInteger(version) || version<1) throw notificationError('TICKET_NOTIFICATION_INPUT_INVALID',400);
+  if (!(await recipientStateReady(env))) throw notificationError('TICKET_NOTIFICATION_RECIPIENT_SCHEMA_REQUIRED');
+  const db=getDb(env),filter=await inboxFilter(env,organizationId,user);
+  const row=await db.prepare(`SELECT n.id,n.read_at,n.dismissed_at,n.version ${inboxJoin} WHERE n.id=? AND ${filter.sql}`)
+    .bind(notificationId,...filter.values).first();
+  if (!row || (['read','unread'].includes(action) && row.dismissed_at)) throw notificationError('TICKET_NOTIFICATION_NOT_FOUND',404);
+  const field=['read','unread'].includes(action)?'read_at':'dismissed_at';
+  const set=['read','dismiss'].includes(action);
+  // Desired-state replay is idempotent, including a lost response. It never
+  // appends another audit row or changes the timestamp/version a second time.
+  if (Boolean(row[field])===set) return {ok:true,version:row.version,replayed:true};
+  if (row.version!==version) throw notificationError('TICKET_NOTIFICATION_CONFLICT',409);
+  const stamp=new Date().toISOString(),token=crypto.randomUUID();
+  const results=await db.batch([
+    db.prepare(`UPDATE ticket_notifications SET ${field}=?,version=version+1,action_token=?
+      WHERE version=? AND id IN (SELECT n.id ${inboxJoin} WHERE n.id=? AND ${filter.sql})`)
+      .bind(set?stamp:null,token,version,notificationId,...filter.values),
+    db.prepare(`INSERT INTO audit_logs(user_id,action,details,created_at)
+      SELECT ?,?,json_object('organizationId',organization_id,'notificationId',id),?
+      FROM ticket_notifications WHERE id=? AND recipient_id=? AND organization_id=? AND action_token=?`)
+      .bind(user.id,`ticket.notification.${action}`,stamp,notificationId,user.id,organizationId,token),
+  ]);
+  if (!results[0]?.meta?.changes) throw notificationError('TICKET_NOTIFICATION_CONFLICT',409);
+  return {ok:true,version:version+1,replayed:false};
 }
 export async function markTicketNotification(env, organizationId, user, notificationId, read) {
   if (!(await notificationReady(env)) || !notificationOrganizations(env).includes(Number(organizationId))) throw notificationError('TICKET_NOTIFICATIONS_DISABLED');
   if (!Number.isSafeInteger(Number(notificationId))||Number(notificationId)<1||typeof read!=='boolean') throw notificationError('TICKET_NOTIFICATION_INPUT_INVALID',400);
   const filter=await inboxFilter(env,organizationId,user);
+  if (await recipientStateReady(env)) {
+    const row=await getDb(env).prepare(`SELECT n.version ${inboxJoin} WHERE n.id=? AND n.dismissed_at IS NULL AND ${filter.sql}`)
+      .bind(Number(notificationId),...filter.values).first();
+    if (!row) throw notificationError('TICKET_NOTIFICATION_NOT_FOUND',404);
+    return changeTicketNotification(env,organizationId,user,Number(notificationId),read?'read':'unread',row.version);
+  }
   const result=await getDb(env).prepare(`UPDATE ticket_notifications SET read_at=? WHERE id IN
     (SELECT n.id ${inboxJoin} WHERE n.id=? AND ${filter.sql})`)
     .bind(read?new Date().toISOString():null,Number(notificationId),...filter.values).run();
