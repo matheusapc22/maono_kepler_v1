@@ -29,7 +29,12 @@ on:
         required: true
         type: string
       qa_user_ids:
-        description: "CC04 run: approved dedicated user IDs in order manager,allowed,restricted (no credentials)"
+        description: "CC03/CC04 run: approved IDs in order manager,allowed,restricted (no credentials)"
+        required: false
+        default: ""
+        type: string
+      cc03_window:
+        description: "CC03 run only: reviewed sanitized global-window JSON (never credentials); see runbook"
         required: false
         default: ""
         type: string
@@ -119,7 +124,7 @@ jobs:
           test "$ACTOR" = "$OWNER"
           test "$DISPATCH_REF" = "main"
           [[ "$ORG_ID" =~ ^[1-9][0-9]*$ ]]
-          if [[ "$MODE" = "run" && "$SUITE" = "cc04-selective-access" ]]; then
+          if [[ "$MODE" = "run" && ( "$SUITE" = "cc04-selective-access" || "$SUITE" = "cc03-command-lifecycle" ) ]]; then
             [[ "$QA_USER_IDS" =~ ^[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*$ ]]
           fi
           case "$MODE" in
@@ -193,6 +198,7 @@ jobs:
       ORG_ID: ${{ inputs.organization_id }}
       PROJECT_SLUG: ${{ inputs.project_slug }}
       QA_USER_IDS: ${{ inputs.qa_user_ids }}
+      MAONO_ACCEPTANCE_CC03_WINDOW_JSON: ${{ inputs.cc03_window }}
       VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
     steps:
       - name: Checkout exactly the validated product SHA
