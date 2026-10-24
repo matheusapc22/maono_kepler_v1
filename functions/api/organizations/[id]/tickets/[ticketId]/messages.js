@@ -44,7 +44,7 @@ export async function onRequestPost({ env, request, params }) {
     return jsonResponse({ ok: true, message: result.message }, {
       status: result.replayed ? 200 : 201,
       headers: {
-        "Cache-Control": "private, no-store",
+        "Cache-Control": "private, no-store, no-transform",
         "Idempotency-Replayed": String(result.replayed),
         ETag: result.message.etag,
       },

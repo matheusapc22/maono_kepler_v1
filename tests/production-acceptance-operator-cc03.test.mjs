@@ -7,6 +7,8 @@ import { suiteContext, PRODUCTION_D1_ID } from '../scripts/acceptance/production
 import { main } from '../scripts/acceptance/operator.mjs';
 import { manifest, run, prepare, verifyPreflight } from '../scripts/acceptance/suites/cc03-command-lifecycle.mjs';
 import { commandResources, QA_IDS } from '../scripts/acceptance/suites/cc03-resources.mjs';
+import * as recovery from '../scripts/acceptance/suites/cc03-recover-ticket-5.mjs';
+import { onRequest as middleware } from '../functions/_middleware.js';
 import { createTicketCommandDb } from './helpers/ticket-command-db.mjs';
 import { onRequestPost as create, onRequestGet as list } from '../functions/api/organizations/[id]/tickets.js';
 import { onRequestGet as detail, onRequestPatch as update } from '../functions/api/organizations/[id]/tickets/[ticketId].js';
@@ -18,6 +20,142 @@ import { onRequest as reopen } from '../functions/api/organizations/[id]/tickets
 import { onRequest as correction } from '../functions/api/organizations/[id]/tickets/[ticketId]/events/[eventId]/corrections.js';
 
 const runId = '12345678-1234-4321-8123-123456789abc';
+async function incident(t, options = {}) {
+  const f = await fixture(t, options);
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(recovery.target.createdAt) });
+  f.db.sqlite.exec("INSERT INTO sqlite_sequence(name, seq) VALUES('organization_tickets',4)");
+  const response = await f.ctx.api('manager', '/api/organizations/9/tickets', { method: 'POST',
+    headers: { 'Idempotency-Key': `cc03-${recovery.target.sourceRunId}` }, json: {
+      subject: `QA-CC03-${recovery.target.sourceRunId}`, description: 'Synthetic incident fixture', category: 'support', priority: 'normal',
+      assignedTo: 5, demandNature: 'question_request', expectedResult: 'Synthetic recovery', context: 'Local test only',
+      impact: 'individual', urgency: 'flexible', triageAnswers: {}, triageFormVersion: 1 } });
+  assert.equal(response.status, 201);
+  assert.equal(response.body.ticket.id, 5);
+  for (const includeAllowed of [true, false]) {
+    assert.equal((await f.ctx.api('manager', '/api/organizations/9/tickets/5/access', { method: 'PUT', json: {
+      visibility: 'private', policyIds: [], acl: [{ principalType: 'user', principalId: 5, action: 'ticket.manage', effect: 'allow' },
+        ...(includeAllowed ? [{ principalType: 'user', principalId: 11, action: 'ticket.view', effect: 'allow' }] : [])] } })).status, 200);
+  }
+  assert.equal(f.db.row(5).version, 4);
+  f.calls.length = 0;
+  return f;
+}
+
+test('incident recovery closes only existing QA9/5; original cycle/events/outbox/audit and ACL survive', async t => {
+  const f = await incident(t);
+  const before = f.db.snapshot();
+  await recovery.prepare(f.ctx);
+  await recovery.run(f.ctx);
+  assert.deepEqual(await f.ctx.cleanup(), []);
+  assert.equal(f.db.rows('organization_tickets').length, 1);
+  assert.equal(f.db.row(5).status, 'closed');
+  assert.equal(f.db.row(5).version, 5);
+  assert.equal(f.db.rows('ticket_cycles').length, 1);
+  const cycle = f.db.rows('ticket_cycles')[0];
+  assert.ok(cycle.closed_at && cycle.closure_json);
+  for (const [key, value] of Object.entries(before.ticket_cycles[0])) {
+    if (!['closed_at', 'closure_json'].includes(key)) assert.deepEqual(cycle[key], value);
+  }
+  for (const table of ['ticket_events', 'ticket_command_outbox', 'ticket_commands', 'audit_logs']) {
+    assert.ok(before[table].every(row => f.db.rows(table).some(next => JSON.stringify(next) === JSON.stringify(row))), table);
+    assert.equal(f.db.rows(table).length, before[table].length + 1, table);
+  }
+  assert.deepEqual(f.db.rows('ticket_acl_entries'), before.ticket_acl_entries);
+  assert.deepEqual(f.calls.filter(row => row.method !== 'GET').map(row => [row.method, row.path]),
+    [['POST', '/api/organizations/9/tickets/5/transitions']]);
+  assert.ok(f.calls.every(row => /^\/api\/organizations\/9\/tickets\/5\/(access|state|transitions)$/.test(row.path)));
+  assert.equal(f.journals.at(-1).cleanupVerified, true);
+  assert.equal(f.journals.at(-1).databasePreservationAudit, 'REQUIRED_SEPARATE_READ_ONLY_VERIFICATION');
+  assert.ok(f.ctx.cases.every(row => row.status === 'PASS'));
+});
+
+test('recovery prepare never calls detail/list/import paths with commands disabled', async t => {
+  const f = await incident(t);
+  f.db.env.MAONO_TICKET_COMMANDS_ENABLED = 'false';
+  f.db.createLegacySource();
+  f.db.sqlite.exec("INSERT INTO tickets(id,organization_id,subject,status,category,created_by) VALUES(99,9,'Synthetic legacy','new','support',5)");
+  const before = f.db.snapshot();
+  await recovery.prepare(f.ctx);
+  assert.deepEqual(f.db.snapshot(), before);
+  assert.deepEqual(f.calls.map(row => row.path), ['/api/organizations/9/tickets/5/access']);
+});
+
+for (const [name, sql, code] of [
+  ['subject', "UPDATE organization_tickets SET subject='different synthetic' WHERE id=5", 'CC03_RECOVERY_SCOPE_DRIFT'],
+  ['creator', 'UPDATE organization_tickets SET created_by=11 WHERE id=5', 'CC03_RECOVERY_SCOPE_DRIFT'],
+  ['version', 'UPDATE organization_tickets SET version=6 WHERE id=5', 'CC03_RECOVERY_STATE_DRIFT'],
+  ['ACL', 'INSERT INTO ticket_acl_entries(organization_id,ticket_id,principal_type,principal_id,action,effect,created_at,created_by) VALUES(9,5,\'user\',11,\'ticket.view\',\'allow\',\'now\',5)', 'CC03_RECOVERY_ACL_DRIFT'],
+]) test(`recovery rejects ${name} drift without writes or general-ID adoption`, async t => {
+  const f = await incident(t);
+  f.db.sqlite.exec(sql);
+  const before = f.db.snapshot();
+  await assert.rejects(async () => { await recovery.prepare(f.ctx); await recovery.run(f.ctx); }, error => error.code === code);
+  await f.ctx.cleanup();
+  assert.deepEqual(f.db.snapshot(), before);
+  assert.ok(f.calls.every(row => row.method === 'GET'));
+});
+
+for (const committed of [true, false]) test(`recovery lost close response (committed=${committed}) never repeats POST`, async t => {
+  let closing = false, posts = 0;
+  const f = await incident(t, { intercept: async request => {
+    if (closing && request.method === 'POST') {
+      posts++;
+      if (committed) await request.execute();
+      throw new Error('Synthetic lost response');
+    }
+    return request.execute();
+  } });
+  await recovery.prepare(f.ctx); await recovery.run(f.ctx); closing = true;
+  const errors = await f.ctx.cleanup();
+  assert.equal(posts, 1);
+  assert.equal(errors.length, committed ? 0 : 1);
+  assert.equal(f.db.row(5).status, committed ? 'closed' : 'new');
+  assert.equal(f.journals.at(-1).cleanupVerified, committed);
+});
+
+test('an already recovered incident is verified without a second close, event or outbox', async t => {
+  const f = await incident(t);
+  await recovery.prepare(f.ctx); await recovery.run(f.ctx); assert.deepEqual(await f.ctx.cleanup(), []);
+  const before = f.db.snapshot(); f.calls.length = 0;
+  const ctx = suiteContext({ baseUrl: f.ctx.baseUrl, organizationId: 9, runId, profiles: f.ctx.profiles,
+    deps: { fetchImpl: f.fetchImpl, onResourceJournal: async () => {} } });
+  await recovery.prepare(ctx); await recovery.run(ctx); assert.deepEqual(await ctx.cleanup(), []);
+  assert.deepEqual(f.db.snapshot(), before);
+  assert.ok(f.calls.every(row => row.method === 'GET'));
+});
+
+test('recovery rejects a concurrent change through CAS and never overwrites it', async t => {
+  const f = await incident(t, { intercept: async request => {
+    if (request.path.endsWith('/transitions')) request.db.sqlite.exec('UPDATE organization_tickets SET version=6 WHERE id=5');
+    return request.execute();
+  } });
+  await recovery.prepare(f.ctx); await recovery.run(f.ctx);
+  const events = f.db.rows('ticket_events'), outbox = f.db.rows('ticket_command_outbox');
+  assert.equal((await f.ctx.cleanup()).length, 1);
+  assert.equal(f.db.row(5).status, 'new'); assert.equal(f.db.row(5).version, 6);
+  assert.deepEqual(f.db.rows('ticket_events'), events); assert.deepEqual(f.db.rows('ticket_command_outbox'), outbox);
+  assert.equal(f.calls.filter(row => row.method === 'POST').length, 1);
+});
+
+test('ETag transport regression: weak header is diagnosed even when body IDs and canonical state are valid', async t => {
+  const f = await incident(t, { intercept: async request => {
+    const response = await request.execute();
+    if (request.path.endsWith('/state') && response.status === 200) {
+      assert.equal(request.options.headers['Accept-Encoding'], 'identity');
+      assert.equal(response.headers.get('cache-control'), 'private, no-store, no-transform');
+      // Fault injection represents a transforming intermediary, not a live Cloudflare observation.
+      response.headers.set('etag', `W/${response.headers.get('etag')}`);
+    }
+    return response;
+  } });
+  const before = f.db.snapshot();
+  await recovery.prepare(f.ctx);
+  await assert.rejects(recovery.run(f.ctx), error => error.code === 'CC03_STATE_ETAG_WEAK');
+  assert.equal((await f.ctx.cleanup())[0].code, 'CC03_RECOVERY_NOT_ADMITTED');
+  assert.deepEqual(f.db.snapshot(), before);
+  assert.ok(f.calls.every(row => row.method === 'GET'));
+});
+
 async function fixture(t, { intercept = null } = {}) {
   const db = await createTicketCommandDb(t);
   db.sqlite.exec(await readFile(new URL('../migrations/0027_ticket_selective_access.sql', import.meta.url), 'utf8'));
@@ -30,6 +168,7 @@ async function fixture(t, { intercept = null } = {}) {
     INSERT INTO user_permissions(user_id,permission,organization_id,active) VALUES(7,'ticket.view',9,1),(11,'ticket.view',9,1);`);
   await db.ready(9);
   db.env.MAONO_TICKET_SELECTIVE_ACCESS_ENABLED = 'true';
+  db.env.MAONO_RUNTIME_ENV = 'production';
   const journals = [], calls = [];
   const profiles = Object.fromEntries(Object.entries(QA_IDS).map(([name, id]) => [name, { cookie: db.sessionCookie(id, 9),
     organization: { id: 9, slug: 'maono-preview-qa' }, user: { id, role: name === 'manager' ? 'owner' : name === 'allowed' ? 'editor' : 'viewer',
@@ -45,7 +184,8 @@ async function fixture(t, { intercept = null } = {}) {
     const route = !match[1] ? (method === 'POST' ? create : list) :
       ({ '/access': access, '/state': state, '/transitions': transition, '/waits': waits, '/reopen': reopen })[suffix] ||
       (suffix.startsWith('/events/') ? correction : method === 'PATCH' ? update : detail);
-    const execute = () => route({ env: db.env, params: { id: '9', ticketId: match[1], eventId: suffix.split('/')[2] }, request: new Request(url, options) });
+    const context = { env: db.env, params: { id: '9', ticketId: match[1], eventId: suffix.split('/')[2] }, request: new Request(url, options) };
+    const execute = () => middleware({ ...context, next: () => route(context) });
     return intercept ? intercept({ path, method, options, execute, db, calls }) : execute();
   };
   const ctx = suiteContext({ baseUrl: 'https://synthetic.test', organizationId: 9, runId, profiles,
@@ -178,17 +318,23 @@ test('CC03 lost cleanup close response is checked once and confirmed without rep
   assert.equal(closes, 1); assert.equal(f.journals.at(-1).cleanupVerified, true);
 });
 
-for (const scenario of ['success', 'suite-error', 'cleanup-error', 'stale-admission', 'short-window']) {
+for (const scenario of ['success', 'suite-error', 'cleanup-error', 'stale-admission', 'short-window', 'recovery-success', 'recovery-state-error']) {
   test(`CC03 protected operator end-to-end (${scenario}): budget, journals, preserved flags and restoration`, async t => {
     const directory = await mkdtemp(join(tmpdir(), 'cc03-operator-')); t.after(() => rm(directory, { recursive: true, force: true }));
     t.mock.method(process.stdout, 'write', () => true);
     let cleanup = false, suiteFailed = false;
-    const f = await fixture(t, { intercept: async request => {
+    const recovering = scenario.startsWith('recovery-');
+    const success = ['success', 'recovery-success'].includes(scenario);
+    const cleanupFails = ['cleanup-error', 'recovery-state-error'].includes(scenario);
+    const f = await (recovering ? incident : fixture)(t, { intercept: async request => {
       if (request.path.endsWith('/access') && request.method === 'PUT') {
         const data = JSON.parse(request.options.body); cleanup = data.acl.length === 1;
         if (cleanup && scenario === 'cleanup-error') return Response.json({ ok: false }, { status: 403 });
       }
       const response = await request.execute();
+      if (scenario === 'recovery-state-error' && request.path.endsWith('/state') && response.status === 200) {
+        response.headers.set('etag', `W/${response.headers.get('etag')}`);
+      }
       if (scenario === 'suite-error' && !suiteFailed && request.path.endsWith('/waits')) {
         suiteFailed = true; throw new Error('synthetic interruption after wait');
       }
@@ -212,8 +358,8 @@ for (const scenario of ['success', 'suite-error', 'cleanup-error', 'stale-admiss
           assert.equal(vars.MAONO_TICKET_TRIAGE_ENABLED.value, 'true');
           configured = vars.MAONO_TICKET_COMMANDS_ENABLED.value === 'true';
           if (!configured) {
-            assert.ok(cleanup, 'cleanup attempted BEFORE restoring commands');
-            if (scenario !== 'cleanup-error') assert.equal(f.db.rows('organization_tickets')[0].status, 'closed');
+            if (!recovering) assert.ok(cleanup, 'cleanup attempted BEFORE restoring commands');
+            if (!cleanupFails) assert.equal(f.db.rows('organization_tickets')[0].status, 'closed');
           }
           return Response.json({ success: true, result: {} });
         }
@@ -236,7 +382,9 @@ for (const scenario of ['success', 'suite-error', 'cleanup-error', 'stale-admiss
         const profile = Object.values(f.ctx.profiles)[logins - 1];
         return Response.json({ authenticated: true, activeOrganization: profile.organization, user: profile.user, permissions: profile.user.permissions });
       }
-      assert.equal(canonical, true, 'no fixture requests before activation or after restoration');
+      if (!(recovering && options.method === 'GET' && path === '/api/organizations/9/tickets/5/access')) {
+        assert.equal(canonical, true, 'no fixture requests before activation or after restoration');
+      }
       return f.fetchImpl(url, options);
     };
     const window = { version: 1, expectedCommit: sha, databaseId: PRODUCTION_D1_ID, observedAt: new Date(start).toISOString(),
@@ -246,12 +394,12 @@ for (const scenario of ['success', 'suite-error', 'cleanup-error', 'stale-admiss
         skippedCount: 0, completedAt: new Date(start).toISOString(), actualPendingCount: 0, unclassifiedAdoptedCount: 0 }] };
     const reportPath = join(directory, 'report.json');
     const credentials = Object.fromEntries(Object.keys(QA_IDS).map(name => [name, { email: `${name}@synthetic.test`, password: 'synthetic-private-value' }]));
-    const code = await main(['--mode', 'run', '--suite', manifest.id, '--organization-id', '9', '--qa-user-ids', '5,11,7', '--expected-commit', sha, '--report', reportPath],
+    const code = await main(['--mode', 'run', '--suite', recovering ? recovery.manifest.id : manifest.id, '--organization-id', '9', '--qa-user-ids', '5,11,7', '--expected-commit', sha, '--report', reportPath],
       { GITHUB_ACTOR: 'synthetic-owner', GITHUB_RUN_ATTEMPT: '1', MAONO_ACCEPTANCE_CC03_WINDOW_JSON: JSON.stringify(window),
         MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: 'synthetic', MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: JSON.stringify(credentials) },
       { fetchImpl, now: () => clock, sleep: async ms => { clock += ms; } });
     const report = JSON.parse(await readFile(reportPath, 'utf8'));
-    assert.equal(code, scenario === 'success' ? 0 : 1, JSON.stringify(report.error));
+    assert.equal(code, success ? 0 : 1, JSON.stringify(report.error));
     assert.equal(report.configurationRestored, true, JSON.stringify(report.restoreError));
     assert.equal(canonical, false); assert.equal(configured, false);
     assert.doesNotMatch(JSON.stringify(report), /synthetic-private-value|maono_session|@synthetic.test/);
@@ -259,9 +407,13 @@ for (const scenario of ['success', 'suite-error', 'cleanup-error', 'stale-admiss
       assert.equal(patches, 0); assert.equal(f.calls.length, 0); assert.equal(report.acceptanceExecuted, false);
     } else {
       assert.equal(patches, 2); assert.equal(deployments, 2); assert.equal(f.db.rows('organization_tickets').length, 1);
-      assert.equal(report.cleanupComplete, scenario !== 'cleanup-error');
-      assert.equal(report.complete, scenario === 'success');
-      assert.equal(report.resourceJournal.cleanupVerified, scenario !== 'cleanup-error');
+      assert.equal(report.cleanupComplete, !cleanupFails);
+      assert.equal(report.complete, success);
+      assert.equal(report.resourceJournal.cleanupVerified, !cleanupFails);
+      if (recovering) {
+        assert.equal(f.calls.filter(row => row.method !== 'GET').length, success ? 1 : 0);
+        if (!success) assert.equal(report.error.code, 'CC03_STATE_ETAG_WEAK');
+      }
     }
   });
 }

@@ -7,6 +7,8 @@ import { onRequestGet as ticketDetail } from "../functions/api/organizations/[id
 import { onRequestGet as ticketList } from "../functions/api/organizations/[id]/tickets.js";
 import { onRequestGet as messageList, onRequestPost as messageCreate } from "../functions/api/organizations/[id]/tickets/[ticketId]/messages.js";
 import { onRequestPost as draftCreate } from "../functions/api/organizations/[id]/tickets/[ticketId]/drafts.js";
+import { onRequestGet as draftGet, onRequestPatch as draftPatch } from "../functions/api/organizations/[id]/tickets/[ticketId]/drafts/[draftId].js";
+import { onRequestPatch as messagePatch } from "../functions/api/organizations/[id]/tickets/[ticketId]/messages/[messageId].js";
 import { createTicketCommandDb, COMMAND_ACTORS } from "./helpers/ticket-command-db.mjs";
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
@@ -131,4 +133,30 @@ test("CC-05 HTTP drafts are server-side, own-user scoped and list counters do no
   const viewerDetail = await viewerDetailResponse.json();
   assert.deepEqual(viewerDetail.conversation.drafts, []);
   assert.deepEqual(viewerDetail.attachments, []);
+});
+
+test('CC-05 strong draft/message validators survive the HTTP contract; weak If-Match is still rejected', async t => {
+  const { db, ticket } = await fixture(t), cookie = db.sessionCookie(1, 1);
+  const check = async (response, field, status) => {
+    assert.equal(response.status, status, await response.clone().text());
+    const object = (await response.json())[field];
+    assert.equal(response.headers.get('cache-control'), 'private, no-store, no-transform');
+    assert.equal(response.headers.get('etag'), object.etag);
+    return object;
+  };
+  const draft = await check(await draftCreate(routeContext(db, cookie, ticket.id, {
+    method: 'POST', body: { kind: 'response', body: 'Synthetic draft' }, path: '/drafts' })), 'draft', 201);
+  const draftContext = options => ({ ...routeContext(db, cookie, ticket.id, options), params: {
+    id: '1', ticketId: String(ticket.id), draftId: draft.id } });
+  await check(await draftGet(draftContext({})), 'draft', 200);
+  const weakDraft = await draftPatch(draftContext({ method: 'PATCH', body: { body: 'Rejected' }, headers: { 'If-Match': `W/${draft.etag}` } }));
+  assert.equal(weakDraft.status, 412);
+  await check(await draftPatch(draftContext({ method: 'PATCH', body: { body: 'Synthetic update' }, headers: { 'If-Match': draft.etag } })), 'draft', 200);
+  const message = await check(await messageCreate(routeContext(db, cookie, ticket.id, { method: 'POST',
+    body: { kind: 'response', body: 'Synthetic message' }, headers: { 'Idempotency-Key': 'etag-contract-create' } })), 'message', 201);
+  const messageContext = etag => ({ ...routeContext(db, cookie, ticket.id, { method: 'PATCH',
+    body: { body: 'Synthetic edit', reason: 'Synthetic correction' }, headers: { 'If-Match': etag, 'Idempotency-Key': 'etag-contract-edit' } }),
+    params: { id: '1', ticketId: String(ticket.id), messageId: message.id } });
+  assert.equal((await messagePatch(messageContext(`W/${message.etag}`))).status, 412);
+  await check(await messagePatch(messageContext(message.etag)), 'message', 200);
 });

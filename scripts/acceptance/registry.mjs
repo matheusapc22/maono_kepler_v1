@@ -2,10 +2,12 @@ import * as durablePreview from "./suites/durable-project-preview.mjs";
 import * as durableSave from "./suites/durable-project-save.mjs";
 import * as cc04 from "./suites/cc04-selective-access.mjs";
 import * as cc03 from "./suites/cc03-command-lifecycle.mjs";
+import * as cc03Recovery from "./suites/cc03-recover-ticket-5.mjs";
 import { fail, validateManifest } from "./production-acceptance-lib.mjs";
 
 const suites = new Map([
   [cc03.manifest.id, cc03],
+  [cc03Recovery.manifest.id, cc03Recovery],
   [cc04.manifest.id, cc04],
   [durableSave.manifest.id, durableSave],
   [durablePreview.manifest.id, durablePreview],
