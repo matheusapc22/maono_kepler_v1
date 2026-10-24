@@ -3,6 +3,7 @@ name: Central de Chamados contracts
 on:
   pull_request:
     paths:
+      - '.github/scripts/acceptance-browser/**'
       - 'src/pages/Projects/components/useTicketDialog.ts'
       - 'src/pages/Projects/components/ticket-accessibility.css'
       - 'tests/browser/ticket-accessibility.spec.ts'
@@ -321,7 +322,7 @@ jobs:
         run: node --test tests/ticket-feedback*.test.mjs tests/ticket-metrics*.test.mjs tests/ticket-notifications*.test.mjs
 
   cc16-experience-accessibility:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -333,7 +334,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm install --legacy-peer-deps --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
+      - name: Prepare and verify isolated Chromium
+        timeout-minutes: 5
+        shell: bash
+        run: bash .github/scripts/acceptance-browser/setup.sh
       - name: Validate keyboard, drafts, conflicts and exact send replay
         run: npx playwright test tests/browser/ticket-accessibility.spec.ts --project=chromium
       - uses: actions/upload-artifact@v4

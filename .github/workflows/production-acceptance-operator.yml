@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/production-acceptance-operator.yml'
+      - '.github/scripts/acceptance-browser/**'
       - 'scripts/acceptance/**'
       - 'tests/production-acceptance-operator*.test.mjs'
       - 'docs/runbooks/production-acceptance-operator.md'
@@ -69,8 +70,30 @@ jobs:
           node --check scripts/acceptance/registry.mjs
           node --check scripts/acceptance/operator.mjs
           node --check scripts/acceptance/suites/cc04-selective-access.mjs
+          bash -n .github/scripts/acceptance-browser/setup.sh
+          node --check .github/scripts/acceptance-browser/smoke.mjs
       - name: Validate acceptance operator contracts
         run: node --test tests/production-acceptance-operator*.test.mjs
+
+  browser-setup-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Prove isolated browser setup without Production credentials
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          bash .github/scripts/acceptance-browser/setup.sh
+          git diff --exit-code -- .
+          test -z "$(git status --porcelain --untracked-files=no)"
 
   validate:
     if: github.event_name == 'workflow_dispatch'
@@ -137,6 +160,8 @@ jobs:
           node --check scripts/acceptance/production-acceptance-lib.mjs
           node --check scripts/acceptance/registry.mjs
           node --check scripts/acceptance/operator.mjs
+          bash -n .github/scripts/acceptance-browser/setup.sh
+          node --check .github/scripts/acceptance-browser/smoke.mjs
           description="$(node scripts/acceptance/operator.mjs --mode describe --suite "$SUITE")"
           browser_required="$(node -e 'const fs=require("node:fs"); const d=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(String(d.requiresBrowser===true));' <<<"$description")"
           echo "browser_required=$browser_required" >> "$GITHUB_OUTPUT"
@@ -145,7 +170,7 @@ jobs:
   protected:
     if: github.event_name == 'workflow_dispatch'
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Bounded steps: setup11 + operator192 + summary/artifacts3 =206 minutes.
     # Four more minutes remain below the job limit for Actions overhead.
     timeout-minutes: 210
@@ -185,11 +210,7 @@ jobs:
         if: needs.validate.outputs.browser_required == 'true' && inputs.mode == 'run'
         shell: bash
         run: |
-          set -euo pipefail
-          npm install --prefix scripts/acceptance \
-            --no-save --no-package-lock --ignore-scripts --no-audit --no-fund \
-            @playwright/test@1.55.0
-          ./scripts/acceptance/node_modules/.bin/playwright install --with-deps chromium
+          bash .github/scripts/acceptance-browser/setup.sh
           git diff --exit-code -- .
           test -z "$(git status --porcelain --untracked-files=no)"
 
