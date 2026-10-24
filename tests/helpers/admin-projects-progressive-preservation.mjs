@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {restoreApprovedNoticeIntegration} from './notice-board-preservation.mjs';
 import { restoreApprovedProjectsHeader } from './project-header-preservation.mjs';
 import { restorePasswordManagement } from './password-management-preservation.mjs';
 
@@ -739,6 +740,7 @@ const initialStageChanges = {
 };
 
 export function restoreAdminProjectsProgressiveLoading(path, source) {
+  source = restoreApprovedNoticeIntegration(path, source);
   source = restorePasswordManagement(path, source);
   // The later header-only change must be reversed before the initial-loading
   // inverse looks for its original title/description markup. Older hashes stay pinned.

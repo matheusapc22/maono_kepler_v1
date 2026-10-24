@@ -9,7 +9,7 @@ const cases=[
   {file:'TicketDetailDrawer',restore:restoreTicketDetailProgressiveLoading,hash:'a0c19fa754c8891256c7e1d6cd39260636949016211ac79bc799c66f0a3c4778',canaries:[['{canManage ? (','{true ? ('],['onUpdate,','onDelete,'],['ticket.status','ticket.priority'],['attachmentLimits={attachmentLimits}','attachmentLimits={{}}']]},
 ];
 for(const {file,restore,hash,canaries} of cases){
- const source=readFileSync(new URL(`../src/pages/Projects/components/${file}.tsx`,import.meta.url),'utf8');
+ const source=readFileSync(new URL(`../src/pages/Projects/components/${file}.tsx`,import.meta.url),'utf8').replace(/\r\n/g,'\n');
  const check=input=>assert.equal(createHash('sha256').update(restoreMaonoSelect(restore(input))).digest('hex'),hash);
  test(`${file}: exact inverse keeps independent original full-source hash`,()=>check(source));
  test(`${file}: permission/API/payload/options mutation canaries are rejected`,()=>{
@@ -46,7 +46,7 @@ const stageCanaries = {
  TicketsToolbar: ['onFiltersChange({ ...filters, [key]: value })', 'onFiltersChange({ ...filters })'],
 };
 for (const [name, hash] of Object.entries(initialBaselines)) {
- const source = readFileSync(new URL(`../src/pages/Projects/components/${name}.tsx`,import.meta.url),'utf8');
+ const source = readFileSync(new URL(`../src/pages/Projects/components/${name}.tsx`,import.meta.url),'utf8').replace(/\r\n/g,'\n');
  const check = input => assert.equal(createHash('sha256').update(restoreTicketDocumentInitialPresentation(input,name)).digest('hex'),hash);
  test(`${name}: staged presentation reverses to its exact independent pre-change baseline`, () => check(source));
  test(`${name}: initial presentation inverse rejects domain mutations and duplicate source`, () => {

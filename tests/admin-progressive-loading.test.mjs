@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { transformSync } from 'esbuild';
 import { restoreAdminProjectsProgressiveLoading, progressiveBaselines } from './helpers/admin-projects-progressive-preservation.mjs';
 
-const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g,'\n');
 const admin = read('src/pages/Admin.tsx');
 const projects = read('src/pages/Projects.tsx');
 const grid = read('src/pages/Projects/components/ProjectsSection.tsx');

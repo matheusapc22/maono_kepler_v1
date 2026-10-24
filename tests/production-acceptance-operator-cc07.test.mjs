@@ -50,6 +50,15 @@ test('CC07 Worker control uses fixed API paths and never retries uncertain deplo
  const fetchImpl=async(url,options)=>{const path=new URL(url).pathname;calls.push([path,options.method]);assert.ok(path.startsWith('/client/v4/accounts/'));if(options.method!=='GET')throw new Error('uncertain transport');const result=path.endsWith('/deployments')?s.deployments:path.endsWith('/schedules')?s.schedules:path.endsWith(p.worker.offVersion)?s.off:s.on;return Response.json({success:true,result});};
  const api=cc07Infrastructure('local-fixture','local-read-fixture',p,{fetchImpl});await assert.rejects(()=>api.setActive(true));assert.equal(calls.filter(x=>x[1]==='POST').length,1);assert.equal(calls.filter(x=>x[1]==='PUT').length,0);
 });
+test('CC07 rejects missing or divergent Worker runtime before any control write',async()=>{
+ for(const missing of [true,false]){
+  const p=plan(),s=snapshot(p),calls=[];
+  if(missing){delete s.off.resources.script_runtime;delete s.on.resources.script_runtime;}
+  else s.on.resources.script_runtime.compatibility_date='2026-09-01';
+  const fetchImpl=async(url,o)=>{calls.push(o.method);assert.equal(o.method,'GET');const path=new URL(url).pathname;return Response.json({success:true,result:path.endsWith('/deployments')?s.deployments:path.endsWith('/schedules')?s.schedules:path.endsWith(p.worker.offVersion)?s.off:s.on});};
+  await assert.rejects(()=>cc07Infrastructure('local-fixture','local-read-fixture',p,{fetchImpl}).setActive(true));assert.ok(calls.every(x=>x==='GET'));
+ }
+});
 test('CC07 preflight uses read-only infrastructure and never accesses QA credentials',async t=>{
  const dir=await mkdtemp(join(tmpdir(),'cc07-preflight-'));t.after(()=>rm(dir,{recursive:true,force:true}));const p=plan();
  const vars=Object.fromEntries(Object.entries({...safeFlags(manifest),MAONO_RUNTIME_ENV:'production',MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS:'1',MAONO_TICKET_NOTIFICATION_START_AT:p.policy.startAt}).map(([k,v])=>[k,{type:'plain_text',value:String(v)}]));

@@ -1370,7 +1370,7 @@
     },
     "/api/organizations/{id}/ticket-notifications": {
       "x-source-file": "functions/api/organizations/[id]/ticket-notifications.js",
-      "x-source-sha256": "6f55324ef7e187f6f15f6da71cfd9101d6a1c26ce5f783e480352d8ae4d4f68e",
+      "x-source-sha256": "cbe87b263b06db68ce74a8bd046c1435fa15cdd3b4dcda3b4bec8fa19652dc08",
       "parameters": [
         {
           "name": "id",
@@ -1388,7 +1388,7 @@
         "tags": [
           "Chamados"
         ],
-        "description": "Implementação: functions/api/organizations/[id]/ticket-notifications.js. Leitura sujeita a associação/capacidades e ACL; não usar cache compartilhado de conteúdo privado.",
+        "description": "Recipient-only inbox in the active organization. Membership, ticket.view, private-ticket ACL and internal-note access are rechecked for items and unread count. Active folder contains read and unread notices; deleted folder is recoverable and requires migration 0041. No read confirmation occurs on GET.",
         "x-domain-sources": [
           "functions/_lib/ticket-notification-http.js",
           "functions/_lib/ticket-notifications.js",
@@ -1413,6 +1413,20 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "deleted"
+              ],
+              "default": "active"
+            },
+            "description": "Recipient-local folder; deleted items never contribute to unread count."
           }
         ],
         "responses": {
@@ -1421,7 +1435,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Envelope"
+                  "$ref": "#/components/schemas/NotificationInbox"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
                 }
               }
             }
@@ -1444,7 +1468,7 @@
         "tags": [
           "Chamados"
         ],
-        "description": "Implementação: functions/api/organizations/[id]/ticket-notifications.js. Mutação sujeita a capacidades, ACL, readiness, precondições e política de Preview.",
+        "description": "Explicit recipient-local read/unread/dismiss/restore. New actions require migration 0041 and an integer version. Matching desired-state replay returns success without another audit/version change. A conflicting stale intent returns 409; current membership/ACL revocation returns 403/404. Dismiss/restore preserve other recipients, events and outbox. Legacy id/read remains compatible; no permanent deletion exists.",
         "x-domain-sources": [
           "functions/_lib/ticket-notification-http.js",
           "functions/_lib/ticket-notifications.js",
@@ -1459,6 +1483,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
                 }
               }
             }
@@ -1479,7 +1513,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DomainCommand"
+                "$ref": "#/components/schemas/NotificationRecipientAction"
               }
             }
           }
@@ -5585,6 +5619,140 @@
         },
         "additionalProperties": true,
         "description": "Retirada usa action=withdraw; recusa declined=true; resposta exige consent=true, outcome/effort válidos no instrumento e comment textual. Corpo até16000 bytes."
+      },
+      "NotificationRecipientAction": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "action",
+              "version"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "read",
+                  "unread",
+                  "dismiss",
+                  "restore"
+                ]
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "read"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "read": {
+                "type": "boolean"
+              }
+            },
+            "not": {
+              "required": [
+                "action"
+              ]
+            }
+          }
+        ]
+      },
+      "NotificationInbox": {
+        "type": "object",
+        "required": [
+          "ok",
+          "enabled",
+          "items",
+          "unread",
+          "nextCursor"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "recipientState": {
+            "type": "boolean",
+            "description": "Whether migration 0041 supports recoverable recipient actions."
+          },
+          "unread": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "ticketId",
+                "code",
+                "subject",
+                "internal",
+                "createdAt",
+                "readAt",
+                "dismissedAt",
+                "version"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "ticketId": {
+                  "type": "integer"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "internal": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "readAt": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "date-time"
+                },
+                "dismissedAt": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "date-time"
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

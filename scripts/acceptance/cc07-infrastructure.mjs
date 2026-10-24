@@ -10,6 +10,7 @@ function checkVersion(v,id,enabled,plan){
  check(v?.id===id && v.resources?.script?.etag===plan.worker.codeEtag,'CC07_WORKER_CODE_DRIFT');
  check(JSON.stringify(v.resources?.script?.handlers)==='["scheduled"]','CC07_WORKER_HANDLERS_INVALID');
  check(!v.resources.script.named_handlers?.length,'CC07_WORKER_HANDLERS_INVALID');
+ check(v.resources.script_runtime&&typeof v.resources.script_runtime==='object'&&!Array.isArray(v.resources.script_runtime)&&/^\d{4}-\d\d-\d\d$/.test(v.resources.script_runtime.compatibility_date||''),'CC07_WORKER_RUNTIME_INVALID');
  const entries=bindings(v);check(Array.isArray(entries)&&new Set(entries.map(x=>x.name)).size===entries.length,'CC07_WORKER_BINDINGS_INVALID');
  const expected={MAONO_RUNTIME_ENV:'production',MAONO_TICKET_SELECTIVE_ACCESS_ENABLED:'true',MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED:String(enabled),
   MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS:String(plan.organizationId),MAONO_TICKET_NOTIFICATION_START_AT:plan.policy.startAt,MAONO_TICKET_NOTIFICATION_ACCEPTANCE_JSON:JSON.stringify(plan.policy)};

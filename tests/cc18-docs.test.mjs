@@ -10,6 +10,16 @@ test('resumable reservation is attachments POST; uploads collection is GET only'
 test('export request example obeys the actual domain validator',()=>{const x=normalizeExportInput({idempotencyKey:'cc18-export-intent-001',from:'2026-09-01T00:00:00Z',to:'2026-09-28T00:00:00Z',asOf:'2026-09-29T00:00:00Z',report:'backlog'});assert.equal(x.report,'backlog');});
 test('spec keeps resource tokens and export idempotency distinct',()=>{assert.ok(spec.paths['/api/organizations/{id}/tickets/{ticketId}/state'].get.responses['200'].headers.ETag);assert.ok(spec.components.schemas.ExportCreate.properties.idempotencyKey);assert.equal(spec.components.securitySchemes.Session.name,'maono_session');});
 
+test('notice contract documents recipient folders, explicit versioned actions and legacy compatibility',()=>{
+ const route=spec.paths['/api/organizations/{id}/ticket-notifications'];
+ assert.deepEqual(route.get.parameters.find(p=>p.name==='folder').schema.enum,['active','deleted']);
+ assert.equal(route.get.responses['200'].content['application/json'].schema.$ref,'#/components/schemas/NotificationInbox');
+ const [current,legacy]=spec.components.schemas.NotificationRecipientAction.anyOf;
+ assert.deepEqual(current.required,['id','action','version']);assert.deepEqual(current.properties.action.enum,['read','unread','dismiss','restore']);assert.deepEqual(legacy.required,['id','read']);assert.deepEqual(legacy.not.required,['action']);
+ assert.equal(spec.components.schemas.NotificationInbox.properties.items.items.properties.version.minimum,1);
+ assert.deepEqual(route.patch.responses['200'].headers['Cache-Control'].schema.enum,['private, no-store']);
+});
+
 test('reviewed ETag responses document no-transform without weakening If-Match',()=>{
  for(const [suffix,method,status]of [['state','get','200'],['drafts','post','201'],['drafts/{draftId}','get','200'],['drafts/{draftId}','patch','200'],['messages','post','201'],['messages/{messageId}','patch','200']]){
   const operation=spec.paths['/api/organizations/{id}/tickets/{ticketId}/'+suffix][method];

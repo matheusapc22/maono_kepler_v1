@@ -7,13 +7,14 @@ import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservat
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
 import postcss from 'postcss';
 
 const root = new URL('../', import.meta.url);
-const read = path => readFileSync(new URL(path, root), 'utf8');
+const read = path => readFileSync(new URL(path, root), 'utf8').replace(/\r\n/g,'\n');
 const original = 'ba304ea3875dee6ed33bae1993b1bb247c9e0860';
 const hasOriginal = spawnSync('git', ['cat-file', '-e', `${original}^{commit}`], { cwd: root, stdio: 'ignore' }).status === 0;
 const requireOriginal = process.env.PROJECT_PAGES_REQUIRE_BASELINE === '1';
@@ -85,7 +86,7 @@ test('thumbnail inverse rejects unrelated access changes and altered identity/er
   assert.throws(() => restoreApprovedThumbnailReliability(presentationPath, presentation.replace('      return "failed-neutral";', '      return "missing-neutral";')), assert.AssertionError);
 });
 
-const bundle = await build({ entryPoints: [new URL('src/pages/Projects/components/project-page-query.ts', root).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('src/pages/Projects/components/project-page-query.ts', root))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { filterAndSortProjects, projectPage, PROJECT_PAGE_COPY, DEFAULT_PROJECT_FILTERS } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const sample = Array.from({ length: 173 }, (_, i) => ({
   id: i + 1, name: `Projeto ${String(i + 1).padStart(3, '0')}`, slug: `projeto-${i + 1}`,
