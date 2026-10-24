@@ -34,7 +34,8 @@ export async function ticketCommandStateResponse({ env, request, params }) {
     await authorize(env, request, ids, "ticket.view");
     const { state, etag } = await readTicketCommandState(env, ids.organizationId, ids.ticketId);
     return jsonResponse({ ok: true, state }, { headers: {
-      ETag: etag, "Cache-Control": "private, no-store",
+      // Preserve the strong If-Match validator across compression intermediaries.
+      ETag: etag, "Cache-Control": "private, no-store, no-transform",
       "Content-Location": new URL(request.url).pathname,
     } });
   } catch (error) { return ticketCenterErrorResponse(error, request); }

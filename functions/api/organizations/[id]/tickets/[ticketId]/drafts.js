@@ -34,7 +34,7 @@ export async function onRequestPost({ env, request, params }) {
     const draft = await createTicketDraft(env, conversationContext, await readJsonBody(request));
     return jsonResponse({ ok: true, draft }, {
       status: 201,
-      headers: { "Cache-Control": "private, no-store", ETag: draft.etag },
+      headers: { "Cache-Control": "private, no-store, no-transform", ETag: draft.etag },
     });
   } catch (error) {
     return ticketCenterErrorResponse(error, request);

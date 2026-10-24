@@ -25,7 +25,7 @@ export async function onRequestPatch({ env, request, params }) {
     );
     return jsonResponse({ ok: true, message: result.message }, {
       headers: {
-        "Cache-Control": "private, no-store",
+        "Cache-Control": "private, no-store, no-transform",
         "Idempotency-Replayed": String(result.replayed),
         ETag: result.message.etag,
       },

@@ -24,7 +24,7 @@ export async function onRequestGet({ env, request, params }) {
     const { conversationContext } = await authorizeTicketConversation(env, request, params);
     const draft = await getTicketDraft(env, conversationContext, getRouteParam(params, "draftId"));
     return jsonResponse({ ok: true, draft }, {
-      headers: { "Cache-Control": "private, no-store", ETag: draft.etag },
+      headers: { "Cache-Control": "private, no-store, no-transform", ETag: draft.etag },
     });
   } catch (error) {
     return ticketCenterErrorResponse(error, request);
@@ -42,7 +42,7 @@ export async function onRequestPatch({ env, request, params }) {
       request.headers.get("If-Match"),
     );
     return jsonResponse({ ok: true, draft }, {
-      headers: { "Cache-Control": "private, no-store", ETag: draft.etag },
+      headers: { "Cache-Control": "private, no-store, no-transform", ETag: draft.etag },
     });
   } catch (error) {
     return ticketCenterErrorResponse(error, request);

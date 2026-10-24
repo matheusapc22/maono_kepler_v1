@@ -55,7 +55,7 @@ test("HTTP state owns its ETag; list, detail and state GET perform no DML after 
   assert.equal(responses[1].headers.get("ETag"), null);
   const tag = responses[2].headers.get("ETag");
   assert.match(tag, /^"[^"\r\n]+"$/);
-  assert.equal(responses[2].headers.get("Cache-Control"), "private, no-store");
+  assert.equal(responses[2].headers.get("Cache-Control"), "private, no-store, no-transform");
   assert.equal(responses[2].headers.get("Content-Location"), `/api/organizations/1/tickets/${ticket.id}/state`);
   assert.deepEqual(db.snapshot(), before);
   assert.equal(db.statements.slice(start).filter(({ sql }) => /\b(?:INSERT|UPDATE|DELETE|REPLACE)\s/i.test(sql)).length, 0);

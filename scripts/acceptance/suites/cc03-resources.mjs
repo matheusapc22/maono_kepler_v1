@@ -1,5 +1,6 @@
 import { assertHttpResponse, fail } from '../production-acceptance-lib.mjs';
 import { assertQaContext } from './cc04-resources.mjs';
+import { readCc03State } from './cc03-state.mjs';
 
 export const QA_IDS = Object.freeze({ manager: 5, allowed: 11, restricted: 7 });
 export function assertCc03Context(ctx) {
@@ -42,13 +43,7 @@ export function commandResources(ctx) {
     own(result.body?.ticket);
     return result.body;
   };
-  const state = async () => {
-    const result = expect(await ctx.api('manager', path('/state')), 200, 'ler estado canônico');
-    const etag = result.headers?.get('etag');
-    if (!/^"ticket-state-[a-f0-9]+"$/.test(etag || '') || Number(result.body?.state?.id) !== Number(item.id) ||
-      Number(result.body?.state?.organizationId) !== 9) fail('CC03_STATE_INVALID', 'Estado/ETag canônico inválido.');
-    return { etag, state: result.body.state };
-  };
+  const state = () => readCc03State(ctx, item.id);
   const managerAcl = { principalType: 'user', principalId: QA_IDS.manager, action: 'ticket.manage', effect: 'allow' };
   const access = async (includeAllowed = false) => {
     await read(); // Ownership before every ACL write, including cleanup.
