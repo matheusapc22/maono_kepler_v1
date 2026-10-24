@@ -38,6 +38,11 @@ on:
         required: false
         default: ""
         type: string
+      cc07_plan:
+        description: "CC07 only: reviewed scoped window/Worker version/limit JSON; never credentials"
+        required: false
+        default: ""
+        type: string
       project_slug:
         description: "Optional project slug for suites that need one"
         required: false
@@ -199,6 +204,7 @@ jobs:
       PROJECT_SLUG: ${{ inputs.project_slug }}
       QA_USER_IDS: ${{ inputs.qa_user_ids }}
       MAONO_ACCEPTANCE_CC03_WINDOW_JSON: ${{ inputs.cc03_window }}
+      MAONO_ACCEPTANCE_CC07_PLAN_JSON: ${{ inputs.cc07_plan }}
       VALIDATED_RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
     steps:
       - name: Checkout exactly the validated product SHA
@@ -238,7 +244,10 @@ jobs:
         shell: bash
         env:
           MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN: ${{ secrets.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN }}
-          MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: ${{ inputs.mode == 'run' && secrets.MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON || '' }}
+          MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON: ${{ inputs.mode == 'run' && inputs.suite != 'cc07-notifications' && secrets.MAONO_ACCEPTANCE_QA_CREDENTIALS_JSON || '' }}
+          MAONO_ACCEPTANCE_CC07_WORKER_TOKEN: ${{ inputs.suite == 'cc07-notifications' && secrets.MAONO_ACCEPTANCE_CC07_WORKER_TOKEN || '' }}
+          MAONO_ACCEPTANCE_CC07_D1_READ_TOKEN: ${{ inputs.suite == 'cc07-notifications' && secrets.MAONO_ACCEPTANCE_CC07_D1_READ_TOKEN || '' }}
+          MAONO_ACCEPTANCE_CC07_QA_CREDENTIALS_JSON: ${{ inputs.suite == 'cc07-notifications' && inputs.mode == 'run' && secrets.MAONO_ACCEPTANCE_CC07_QA_CREDENTIALS_JSON || '' }}
         run: |
           set -euo pipefail
           mkdir -p .tmp/production-acceptance
@@ -281,7 +290,7 @@ jobs:
             `- result: **${r.ok && r.complete ? "PASS" : "FAIL"}**`,
           ];
           for (const c of r.cases || []) lines.push(`- ${c.id}: **${c.status}**`);
-          if (r.error) lines.push(`- error: \`${r.error.code}\` — ${r.error.message}`);
+          if (r.error) lines.push(`- error: \`${r.error.code}\` ÔÇö ${r.error.message}`);
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
           NODE
 
