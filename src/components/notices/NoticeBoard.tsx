@@ -7,13 +7,13 @@ import './notice-board.css';
 
 type Notice = {id:number; ticketId:number; code:string; subject:string; internal:boolean; createdAt:string; readAt:string|null; dismissedAt:string|null; version:number};
 type Inbox = {enabled:boolean; recipientState:boolean; items:Notice[]; unread:number; nextCursor:string|null};
-type Props = {userId?:string|number|null; organizationId?:string|number|null; suspended?:boolean};
+type Props = {userId?:string|number|null; organizationId?:string|number|null; canView:boolean; suspended?:boolean};
 
 // A changed identity remounts synchronously, before effects can display old data.
 export default function NoticeBoard(props:Props) {
-  return <ScopedNoticeBoard key={`${props.userId ?? ''}:${props.organizationId ?? ''}:${Boolean(props.suspended)}`} {...props}/>;
+  return <ScopedNoticeBoard key={`${props.userId ?? ''}:${props.organizationId ?? ''}:${props.canView}:${Boolean(props.suspended)}`} {...props}/>;
 }
-function ScopedNoticeBoard({userId,organizationId,suspended=false}:Props) {
+function ScopedNoticeBoard({userId,organizationId,canView,suspended=false}:Props) {
   const [page,setPage]=useState<Inbox|null>(null);
   const [folder,setFolder]=useState<'active'|'deleted'>('active');
   const [busy,setBusy]=useState(false),[error,setError]=useState(false),[open,setOpen]=useState(false);
@@ -21,7 +21,8 @@ function ScopedNoticeBoard({userId,organizationId,suspended=false}:Props) {
   const button=useRef<HTMLButtonElement>(null),dialog=useRef<HTMLDialogElement>(null);
   const request=useRef<AbortController|null>(null), sequence=useRef(0), mutating=useRef(false), blockedRef=useRef(suspended);
   const id=useId(), scope=`${userId ?? ''}:${organizationId ?? ''}`;
-  const valid=Boolean(userId && organizationId && !suspended);
+  const hasIdentity=Boolean(userId && organizationId && !suspended);
+  const valid=hasIdentity && canView;
   const path=`/api/organizations/${encodeURIComponent(String(organizationId))}/ticket-notifications`;
   const clear=useCallback(()=>{sequence.current++;request.current?.abort();setPage(null);setError(false);setBusy(false);setOpen(false);},[]);
   const load=useCallback(async(before?:string)=>{
@@ -83,7 +84,8 @@ function ScopedNoticeBoard({userId,organizationId,suspended=false}:Props) {
       <p className="maono-notice-caption">Avisos da sua conta nesta organização.</p>
       <nav aria-label="Pastas de avisos"><button type="button" aria-pressed={folder==='active'} onClick={()=>setFolder('active')} disabled={busy}>Todos</button><button type="button" aria-pressed={folder==='deleted'} onClick={()=>setFolder('deleted')} disabled={busy || page?.recipientState===false}>Excluídos</button><button type="button" onClick={()=>void load()} disabled={busy||blocked}>Atualizar</button></nav>
       <div aria-busy={busy} className="maono-notice-content">
-        {(!valid||blocked) && <p role="status">Selecione uma organização com sua sessão ativa.</p>}
+        {(!hasIdentity||blocked) && <p role="status">Selecione uma organização com sua sessão ativa.</p>}
+        {hasIdentity && !blocked && !canView && <p role="status">Você não tem acesso aos avisos nesta organização.</p>}
         {busy && <p role="status">Carregando avisos…</p>}
         {error && <p role="alert">Não foi possível atualizar os avisos. Atualize para conferir o estado antes de tentar novamente.</p>}
         {!busy && page?.enabled===false && <p>Os avisos ainda não estão disponíveis nesta organização.</p>}

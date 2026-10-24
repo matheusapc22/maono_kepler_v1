@@ -1,6 +1,23 @@
 import {test,expect} from '@playwright/test';
 const fixture='/tests/browser/fixtures/notice-board.html';
 const item={id:1,ticketId:7,code:'CC-7',subject:'Aviso local de teste',internal:false,createdAt:'2026-10-24T18:00:00.000Z',readAt:null,dismissedAt:null,version:1};
+test('missing ticket.view keeps the entry visible without organization requests',async({page})=>{
+ let requests=0;await page.route('**/api/organizations/**',r=>{requests++;return r.fulfill({json:{enabled:true,recipientState:true,unread:1,nextCursor:null,items:[item]}});});
+ await page.goto(`${fixture}?restricted`);await page.getByRole('button',{name:'Quadro de avisos',exact:true}).click();
+ await expect(page.getByText('Você não tem acesso aos avisos nesta organização.')).toBeVisible();
+ await page.getByRole('button',{name:'Atualizar',exact:true}).click();await page.keyboard.press('Escape');await page.getByRole('button',{name:'Refetch',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Quadro de avisos',exact:true})).toBeVisible();await expect(page.locator('.maono-notice-badge')).toHaveCount(0);expect(requests).toBe(0);
+});
+test('ticket.view revocation discards a delayed response and stops later requests',async({page})=>{
+ let requests=0,delay=false;let release!:()=>void;let entered!:()=>void;
+ const pending=new Promise<void>(resolve=>{release=resolve;}),arrived=new Promise<void>(resolve=>{entered=resolve;});
+ await page.route('**/api/organizations/**',async r=>{requests++;if(delay){entered();await pending;}await r.fulfill({json:{enabled:true,recipientState:true,unread:1,nextCursor:null,items:[item]}}).catch(()=>{});});
+ await page.goto(fixture);await expect(page.locator('.maono-notice-badge')).toHaveText('1');delay=true;
+ await page.getByRole('button',{name:'Refetch',exact:true}).click();await arrived;await page.getByRole('button',{name:'Revogar avisos',exact:true}).click();const before=requests;release();
+ await page.getByRole('button',{name:'Quadro de avisos',exact:true}).click();await expect(page.getByText('Você não tem acesso aos avisos nesta organização.')).toBeVisible();
+ await expect(page.getByRole('link',{name:/Aviso local/})).toHaveCount(0);await expect(page.locator('.maono-notice-badge')).toHaveCount(0);
+ await page.keyboard.press('Escape');await page.getByRole('button',{name:'Refetch',exact:true}).click();expect(requests).toBe(before);
+});
 test('always visible, explicit read, reversible per-item deletion and no profile click replacement',async({page})=>{
  let notice={...item,readAt:null as string|null,dismissedAt:null as string|null};let writes=0;
  await page.route('**/api/organizations/*/ticket-notifications*',async r=>{

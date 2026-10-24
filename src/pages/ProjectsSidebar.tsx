@@ -526,7 +526,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
           <div className="mm-sidebar-user">
             <div className="maono-profile-notices">
               <div className="mm-sidebar-avatar" aria-hidden="true">{getInitials(user?.name || user?.email)}</div>
-              <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} suspended={switchingOrganization}/>
+              <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} canView={can(user, PERMISSION.TICKET_VIEW, permissionContext)} suspended={switchingOrganization}/>
             </div>
 
             <div className="mm-sidebar-user-copy">
@@ -536,7 +536,7 @@ const ProjectsSidebar: React.FC<ProjectsSidebarProps> = ({
           </div>
         ) : null}
 
-        {!expanded && <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} suspended={switchingOrganization}/>}
+        {!expanded && <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} canView={can(user, PERMISSION.TICKET_VIEW, permissionContext)} suspended={switchingOrganization}/>}
         {expanded ? (
           <div className="mm-sidebar-search">
             <span aria-hidden="true">⌕</span>

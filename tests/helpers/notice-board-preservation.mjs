@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 const edits={
  'src/pages/ProjectsSidebar.tsx':[
   ['import NoticeBoard from "../components/notices/NoticeBoard";\n',''],
-  ['            <div className="maono-profile-notices">\n              <div className="mm-sidebar-avatar" aria-hidden="true">{getInitials(user?.name || user?.email)}</div>\n              <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} suspended={switchingOrganization}/>\n','            <div className="mm-sidebar-avatar" aria-hidden="true">\n              {getInitials(user?.name || user?.email)}\n'],
-  ['        {!expanded && <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} suspended={switchingOrganization}/>}\n',''],
+  ['            <div className="maono-profile-notices">\n              <div className="mm-sidebar-avatar" aria-hidden="true">{getInitials(user?.name || user?.email)}</div>\n              <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} canView={can(user, PERMISSION.TICKET_VIEW, permissionContext)} suspended={switchingOrganization}/>\n','            <div className="mm-sidebar-avatar" aria-hidden="true">\n              {getInitials(user?.name || user?.email)}\n'],
+  ['        {!expanded && <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} canView={can(user, PERMISSION.TICKET_VIEW, permissionContext)} suspended={switchingOrganization}/>}\n',''],
  ],
  'src/auth/session.tsx':[
   ['import {publishNoticeSession, resetNoticeSession} from "../components/notices/notice-events";\n',''],

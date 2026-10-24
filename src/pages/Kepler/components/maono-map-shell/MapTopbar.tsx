@@ -10,6 +10,8 @@ import type { useSession } from "../../../../auth/session";
 import type { MapPanelContextValue } from "../../map-panel/types";
 import MapShellIcon from "./MapShellIcon";
 import NoticeBoard from "../../../../components/notices/NoticeBoard";
+import {can} from "../../../../access-control/can";
+import {PERMISSION} from "../../../../access-control/permissions";
 import "./map-topbar-cleanup.css";
 
 type SessionValue = ReturnType<typeof useSession>;
@@ -149,7 +151,7 @@ export default function MapTopbar({
         <span className="maono-map-topbar__mode">
           {modeLabel(context.mode)}
         </span>
-        <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} suspended={loggingOut}/>
+        <NoticeBoard userId={user?.id} organizationId={activeOrganization?.id} canView={can(user, PERMISSION.TICKET_VIEW, {organizationId:activeOrganization?.id})} suspended={loggingOut}/>
         <button
           type="button"
           className="maono-map-topbar__account-trigger"
