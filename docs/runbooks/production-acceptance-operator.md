@@ -518,3 +518,120 @@ Consulte [o contrato e os pré-requisitos de PNG](../ops/production-png-acceptan
 CI local não é aceite integrado: accounts/storage de CI são fixtures e nenhum
 `run` real acontece em pull requests. Migration, Worker, secrets, janela real,
 merge, deploy e ativação permanente continuam com autorizações separadas.
+# CC03 — janela global de comandos e um chamado sintético
+
+`cc03-command-lifecycle` é a suíte API para preparar A-02. O aceite CC04 de
+acesso seletivo é A-03 e não autoriza ativar COMMANDS globalmente. Esta suíte não
+representa implantação permanente nem prova UI, CR, anexos, SLA ou entrega de
+notificações. Não reaplica migrations e não precisa de novos Workers.
+
+O manifesto exige QA9 (`maono-preview-qa`), IDs **5/11/7** na ordem
+manager/allowed/restricted, sem bypass administrativo. Usa o bundle protegido
+existente; nenhum segredo deve ser copiado para inputs, relatórios ou chat.
+O primeiro caso cria **um novo** chamado `QA-CC03-<run UUID>`. Imediatamente após
+registrar o ID, privatiza para o gestor e leitor permitido; até essa requisição
+o chamado é visível aos usuários com acesso à Central da QA9. Uma interrupção
+nesse intervalo pode exigir contenção humana do ID exato. Não usa o chamado
+preservado por outro run, nem cria anexo, grupo, etiqueta ou alteração relacionada.
+
+Cobertura API: replay/colisão de idempotência; If-Match obrigatório e CAS
+200/428/412; `/state` 200/404 e comando de viewer 403; triagem, progresso,
+espera/retomada, revisão, conclusão, reabertura, correção append-only e segunda
+conclusão. As versões são lidas de `/state`: gravações de ACL também alteram o
+ETag, por isso não se fixa uma contagem anterior de eventos/versões.
+
+## Gates antes de RUN
+
+1. Revisar e publicar o código no produto e o input compatível no dispatcher
+   `main`, com CI/revisão; executar preflight protegido do SHA publicado.
+2. Obter autorização **nova e específica** para COMMANDS temporariamente global,
+   para a pausa de escritores de todas as organizações ativas, horários UTC e
+   responsável pela restauração. A aprovação anterior de CC04 não cobre isso.
+3. Fazer auditoria somente leitura por SQL agregado, usando acesso já autorizado,
+   sem GETs que importem legados. Conferir o conjunto completo de organizações
+   ativas, marker ready/v1/completed, pending/skipped zero, pendências reais da
+   fonte zero e chamados já adotados sem classificação zero. Conferir também
+   schema/triggers/indexes do código publicado. Não consultar nomes/conteúdo
+   pessoal, importar ou reparar registros por inferência.
+4. Arquivar a evidência sanitizada e calcular seu SHA-256. Fornecer o input
+   **não secreto** `cc03_window` descrito abaixo; revisar os agregados contra a
+   evidência original antes de aprovar o Environment. Não preencher valores por
+   suposição. Mudança de conjunto/estado exige nova auditoria e decisão.
+5. Despachar uma única execução `run`, `qa_user_ids=5,11,7`, organização 9,
+   confirmação `RUN_PRODUCTION_ACCEPTANCE`; parar no Environment
+   `production-acceptance`. Não aprovar automaticamente.
+
+O token Pages não permite comprovar esses agregados em D1. O operador valida
+estrutura, identidade, completude declarada e frescor, mas **não autentica a
+origem do snapshot nem consulta D1**. O relatório identifica isso como
+`HUMAN_SUPPLIED_AGGREGATES_NOT_LIVE_D1`; `evidenceSha256` registra o hash declarado
+do arquivo que o humano deve conferir, e `inputSha256` identifica exatamente o
+JSON recebido. Isso não é substituto para auditoria e revisão humana. Preflight
+expõe esses gates como pendentes e não faz logins QA.
+
+## Contrato de `cc03_window`
+
+JSON de objeto, sem campos extras, URLs, SQL, nomes de secrets ou credenciais:
+
+| Campo | Valor exigido |
+| --- | --- |
+| `version` | `1` |
+| `expectedCommit` | SHA completo publicado e fixado pelo workflow |
+| `databaseId` | `5bc4dc32-f3bd-4c92-bbd1-cbda63e467db` |
+| `observedAt` | Horário da evidência, ISO UTC com milissegundos |
+| `startsAt`, `endsAt` | Janela explicitamente aprovada, mesmo formato UTC |
+| `globalCommandsApproved`, `writersPaused` | `true`, após decisão e pausa reais |
+| `restorationOwner` | Login GitHub do dono que despacha e responde pela restauração |
+| `evidenceSha256` | SHA-256 do arquivo sanitizado revisado, 64 hex minúsculos |
+| `schemaCompatible` | `true` após conferir tabelas/colunas, triggers e índices exigidos pelo SHA |
+| `allActiveOrganizations` | `true` somente com conjunto completo conferido |
+| `activeOrganizationCount` | Contagem real do conjunto de organizações ativas |
+| `organizations` | Uma linha por organização ativa, sem duplicatas; inclui QA9 |
+
+Cada linha contém exatamente `id`, `status` (`ready`), `schemaVersion` (`1`),
+`pendingCount` (`0`), `skippedCount` (`0`), `completedAt` (UTC normalizado),
+`actualPendingCount` (`0`) e `unclassifiedAdoptedCount` (`0`). Preservar a
+evidência original dos horários ao normalizar o formato. Não copiar o inventário
+histórico como evidência atual. O limite de payload é 20 KB/100 linhas por segurança
+de parsing; se o conjunto real exceder isso, é necessário revisar código, nunca
+truncar a auditoria.
+
+Evidência deve ter no máximo **10 minutos** antes dos logins e novamente antes
+da primeira alteração de flags; fila/aprovação demoradas podem invalidá-la.
+Não usar “Re-run jobs”: somente attempt 1 é aceito. Conferir o resultado anterior
+antes de qualquer novo despacho autorizado.
+
+O prazo aprovado pode apenas **encurtar** o orçamento técnico de 190 minutos;
+não amplia os 210 minutos do job. Mantêm-se os tetos de fase e as reservas de
+10 minutos de cleanup + 60 de restauração + 5 de relatório. Uma janela curta
+demais para essas reservas é recusada antes da alteração de flags. Esses tetos
+não são uma duração operacional escolhida pelo usuário nem uma garantia contra
+interrupção abrupta do runner. Registrar responsável e canal de incidente na
+aprovação; este input não envia notificações.
+
+## Contenção e fechamento
+
+Ao final ou em falha, conferir propriedade do ID observado, restringir ACL ao
+gestor, ler ETag atual e fechar via `/transitions` com os campos de conclusão,
+**antes** de restaurar COMMANDS=false. Não usar PATCH de status. Uma resposta de
+fechamento perdida é conferida por leitura antes de qualquer conclusão; não há
+repetição cega. Se já estiver fechado, não se cria outra conclusão.
+
+Preservam-se chamado, ciclos, esperas, eventos originais/correções, auditoria e
+outbox, sem DELETE, descarte de bytes ou prazo de retenção inventado. Verificam-se
+ACL final e 404 dos dois perfis negativos em detalhe e `/state`. Falha de cleanup
+continua FAIL mesmo que a restauração tenha sucesso. Se o create não devolver ID
+verificável, o diário mantém `unknownCreation`; nunca procura/adota por prefixo.
+
+Restauração mantém TRIAGE=true e SELECTIVE_ACCESS=true e retorna COMMANDS=false,
+publicando o mesmo SHA. Isso não desfaz comandos nem entrega de outbox; tickets
+com ciclo adotado podem ficar indisponíveis para escrita com COMMANDS=false.
+Por isso escritores externos devem estar pausados. Desligar SELECTIVE_ACCESS
+nunca é rollback de confidencialidade. Consumers de outbox e demais Workers são
+um lote posterior com escopo/data de início próprios, antes de qualquer entrega.
+
+Interrupção dura pode impedir finally: conferir primeiro journal, ID, flags e
+deployments; contenção de recursos e closure exigem o escopo autorizado. O modo
+closure restaura configuração mas não prova cleanup e não autoriza nova janela.
+Acceptance real, rollout permanente e exclusão de contas continuam decisões
+separadas. Testes locais com SQLite/fetch sintéticos não substituem esse aceite.

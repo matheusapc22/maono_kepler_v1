@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { inspectTicketLegacyBackfill, runTicketLegacyBackfillPage, reconcileEmptyTicketLegacyBackfill } from "../functions/_lib/ticket-legacy-backfill.js";
 
-function fixture(t, { source = true, path = ":memory:" } = {}) {
+function fixture(t, { source = true, path = ":memory:", afterClose = () => {} } = {}) {
   const sqlite = new DatabaseSync(path);
+  t.after(() => { try { sqlite.close(); } finally { afterClose(); } });
   sqlite.exec("PRAGMA foreign_keys = ON");
   sqlite.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
   sqlite.exec(`INSERT INTO users (id,email,name,role,password_hash) VALUES
@@ -21,7 +23,6 @@ function fixture(t, { source = true, path = ":memory:" } = {}) {
     priority TEXT, category TEXT, created_by INTEGER, assigned_to INTEGER, active INTEGER,
     created_at TEXT, updated_at TEXT, due_at TEXT, closed_at TEXT
   )`);
-  t.after(() => sqlite.close());
   const statements = [];
   let beforeBatch;
   const DB = {
@@ -233,11 +234,12 @@ test("invalid operator and invalid pagination are rejected before writes", async
 
 test("CLI defaults to read-only, accepts only explicit local execution and rejects --remote", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "cc03-backfill-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  // One teardown closes SQLite BEFORE deleting its unique temporary directory
+  // on Windows, including setup/assertion failures. No hook ordering dependency.
   const path = join(directory, "copy.sqlite");
-  const db = fixture(t, { path });
+  const db = fixture(t, { path, afterClose: () => rmSync(directory, { recursive: true, force: true }) });
   db.add(1);
-  const cli = new URL("../scripts/central-chamados/backfill-ticket-legacy.mjs", import.meta.url).pathname;
+  const cli = fileURLToPath(new URL("../scripts/central-chamados/backfill-ticket-legacy.mjs", import.meta.url));
   const args = [cli, "--sqlite", path, "--organization", "1", "--database-identity", "fixture-local"];
   const before = readFileSync(path);
   const dryRun = spawnSync(process.execPath, args, { encoding: "utf8" });
