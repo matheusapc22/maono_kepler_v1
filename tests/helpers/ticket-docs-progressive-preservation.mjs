@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {restoreApprovedNoticeIntegration} from './notice-board-preservation.mjs';
 import { restoreDocumentPreview } from "./document-preview-preservation.mjs";
 
 // Exact inverse of the reviewed progressive loading edits against 1ec6b11.
@@ -486,6 +487,7 @@ const initialPresentationChanges = {
   ]
 };
 export function restoreTicketDocumentInitialPresentation(source, name) {
+  if (name === 'TicketsSection') source = restoreApprovedNoticeIntegration('src/pages/Projects/components/TicketsSection.tsx',source);
   if (name === "DocumentsSection" && source.includes("DocumentPreviewDialog")) source = restoreDocumentPreview(source);
   for (const {after, before} of initialPresentationChanges[name]) {
     assert.equal(source.split(after).length - 1, 1, `exact approved ${name} initial presentation change`);

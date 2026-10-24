@@ -1,0 +1,42 @@
+name: CC07 Notice Board
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/components/notices/**'
+      - 'src/auth/session.tsx'
+      - 'src/pages/ProjectsSidebar.tsx'
+      - 'src/pages/Kepler/components/maono-map-shell/MapTopbar.tsx'
+      - 'src/pages/Projects/components/TicketNotifications.tsx'
+      - 'tests/browser/notice-board.spec.ts'
+      - 'tests/browser/ticket-notifications.spec.ts'
+      - 'tests/browser/fixtures/notice-board*'
+      - 'playwright.notices.config.ts'
+      - 'vite.notice-board.config.ts'
+      - '.github/workflows/cc07-notice-board.yml'
+permissions:
+  contents: read
+jobs:
+  local-browser-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm install --legacy-peer-deps --no-audit --no-fund --package-lock=false
+      - run: node node_modules/typescript/bin/tsc -b --pretty false
+      - run: npx eslint src/components/notices tests/browser/notice-board.spec.ts tests/browser/fixtures/notice-board.tsx playwright.notices.config.ts vite.notice-board.config.ts
+      - run: npx playwright install --with-deps chromium
+      - name: Local mock APIs only; never Production acceptance
+        run: npx playwright test --config playwright.notices.config.ts
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: cc07-notice-board-${{ github.sha }}
+          path: test-results/
+          retention-days: 7

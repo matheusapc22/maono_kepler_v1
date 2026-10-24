@@ -5,16 +5,17 @@ import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservat
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
 import postcss from 'postcss';
 
 const root = new URL('../', import.meta.url);
-const read = path => readFileSync(new URL(path, root), 'utf8');
+const read = path => readFileSync(new URL(path, root), 'utf8').replace(/\r\n/g,'\n');
 const switcher = read('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx');
 const css = postcss.parse(read('src/pages/Projects/projects.css'));
-const bundle = await build({ entryPoints: [new URL('src/pages/Projects/components/organization-switcher-position.ts', root).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('src/pages/Projects/components/organization-switcher-position.ts', root))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { organizationMenuPosition } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 
 for (const expanded of [true, false]) {

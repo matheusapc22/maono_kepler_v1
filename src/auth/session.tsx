@@ -27,6 +27,7 @@ import {
 } from "../lib/api-transport";
 import { normalizeUserError } from "../lib/user-error-catalog";
 import { fetchAuthLoginWithDeadline } from "./login-resilience";
+import {publishNoticeSession, resetNoticeSession} from "../components/notices/notice-events";
 import {
   classifySessionResponse,
   fetchSessionResponseWithRetry,
@@ -594,6 +595,7 @@ function publishSessionToWindow(session: PublicSession, reason: "session" | "log
     activeOrganization: session.activeOrganization ?? null,
     organizations: session.organizations ?? [],
   };
+  publishNoticeSession(session.authenticated ? session.user?.id : null, session.activeOrganization?.id);
 }
 
 async function readSuccessfulSessionJson(response: Response) {
@@ -752,6 +754,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
       setLoading(false);
       setSwitchingOrganization(true);
+      resetNoticeSession();
       setOrganizationSwitchError(null);
 
       try {
@@ -829,6 +832,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       password: string,
       options: { signal?: AbortSignal } = {},
     ) => {
+      resetNoticeSession();
       const response = await fetchAuthLoginWithDeadline({
         signal: options.signal,
         init: {
@@ -854,6 +858,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   );
 
   const logout = useCallback(async () => {
+    resetNoticeSession();
     requestSequenceRef.current += 1;
     requestControllerRef.current?.abort();
     requestControllerRef.current = null;

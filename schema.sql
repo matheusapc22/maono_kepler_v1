@@ -1373,6 +1373,9 @@ CREATE TABLE ticket_notifications (
   audience TEXT NOT NULL CHECK(audience IN ('ticket','internal')),
   created_at TEXT NOT NULL,
   read_at TEXT,
+  dismissed_at TEXT,
+  version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
+  action_token TEXT,
   UNIQUE(event_id, recipient_id, channel),
   FOREIGN KEY(ticket_id, organization_id) REFERENCES organization_tickets(id, organization_id) ON DELETE RESTRICT
 );

@@ -583,7 +583,9 @@ test("fresh schema and upgrade expose identical feedback objects and valid forei
         .prepare(
           "SELECT name,sql FROM sqlite_master WHERE name LIKE 'ticket_feedback_%' ORDER BY name",
         )
-        .all();
+        .all()
+        // Git checkout line endings do not change the SQLite schema contract.
+        .map(({ name, sql }) => ({ name, sql: sql.replace(/\r\n/g, "\n") }));
     assert.deepEqual(objects(f.sqlite), objects(fresh));
     assert.deepEqual(f.sqlite.prepare("PRAGMA foreign_key_check").all(), []);
     assert.equal(

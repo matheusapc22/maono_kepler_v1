@@ -1,6 +1,7 @@
 import { parseManualBundle, createManualAdministration, manualFunctionalCases, validateBeforeEvidence } from "./manual-evidence.mjs";
 import { createExecutionBudget } from "./execution-budget.mjs";
 import { validateCc03Window } from './cc03-window.mjs';
+import {runCc07Operator} from './cc07-operator.mjs';
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -50,6 +51,7 @@ async function main(argv = process.argv.slice(2), env = process.env, runtime = {
     return 1;
   }
 
+  if(options.suite==='cc07-notifications')return runCc07Operator(options,env,runtime);
   const suite = getSuite(options.suite);
   const manifest = suite.manifest;
   const budget = createExecutionBudget(manifest, { now: runtime.now || Date.now });
