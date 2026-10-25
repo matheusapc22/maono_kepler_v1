@@ -32,6 +32,12 @@ test('CC07 real CLI writes a successful read-only preflight to --report',async t
  assert.equal(result.preflight.configuredFlags.MAONO_TICKET_NOTIFICATIONS_ENABLED.value,false);
  assert.equal(calls.length,15);assert.equal(calls.filter(c=>c.method==='GET').length,6);assert.equal(calls.filter(c=>c.method==='POST'&&c.path.endsWith('/query')).length,9);
 });
+for(const scenario of ['preserved-success','preserved-drift'])test(`CC07 real CLI ${scenario} verifies exact historical projections without mutation`,async t=>{
+ const {code,result,calls}=await cli(t,scenario);assert.equal(code,scenario==='preserved-success'?0:1);
+ assert.equal(result.writesPerformed,false);assert.equal(result.acceptanceExecuted,false);assert.equal(calls.length,21);
+ assert.ok(calls.every(c=>c.method==='GET'||c.method==='POST'&&c.path.endsWith('/query')));
+ if(code)assert.equal(result.error.code,'CC07_PRESERVED_DRIFT');else assert.ok(result.pendingGates.includes('OFF_SCHEDULE_RECEIPT'));
+});
 for(const [scenario,errorCode,callCount]of [['missing-plan','CC07_PLAN_REQUIRED',0],['code-drift','CC07_WORKER_CODE_DRIFT',6],['api-refused','CLOUDFLARE_API_FAILED',2]])test(`CC07 real CLI preserves ${errorCode} in its failure report`,async t=>{
  const {code,result,calls}=await cli(t,scenario);assert.equal(code,1);
  assert.equal(result.ok,false);assert.equal(result.complete,false);assert.equal(result.writesPerformed,false);assert.equal(result.acceptanceExecuted,false);

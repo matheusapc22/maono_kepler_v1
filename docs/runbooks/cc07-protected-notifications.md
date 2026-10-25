@@ -35,12 +35,14 @@ rechecked server-side for every list, count and action. This is not a global pub
 
 1. Review and merge product and dispatcher PRs normally; verify their exact SHAs and
    Pages deployment. Audit/apply 0041 through the migration operator, separately.
-2. Choose an **empty dedicated organization other than QA9**, with no legacy tickets,
+2. Choose a **dedicated organization other than QA9**, empty except for an explicitly
+   approved preserved baseline described below, with no legacy tickets,
    a ready command backfill marker, and three dedicated non-admin accounts. The manager
    needs view/create/manage/access.manage; allowed and restricted need ticket.view
    without ACL bypass. No production IDs or identities are selected by this patch.
 3. Approve infrastructure provisioning separately: one fixed Worker
-   `maono-ticket-notifications`, no HTTP/queue/service handlers, canonical D1 DB only,
+   `maono-ticket-notifications`, no HTTP/queue/service handlers, canonical D1 DB and
+   native `CF_VERSION_METADATA` version metadata binding only,
    two reviewed immutable versions with identical code ETag/runtime/bindings except
    consumer OFF/ON. Baseline is OFF at 100% with no schedules. The operator never
    creates/uploads a Worker/version, secret, binding or account.
@@ -64,18 +66,21 @@ No URLs, SQL, command strings, HTTP methods, flag names or secret names are inpu
 
 | Field | Required evidence |
 |---|---|
-| version / productSha | Version 1 and exact pinned product SHA |
+| version / productSha | Version 2 and exact pinned product SHA; old plans fail closed |
 | organizationId / qaIds | Approved non-QA9 org and three distinct manager/allowed/restricted IDs |
 | worker | offVersion/onVersion UUIDs, reviewed codeEtag, fixed cron `* * * * *` |
 | policy | Fresh UUID runId, matching organizationId/managerId, UTC startAt/endAt, approved maxEvents/maxAttempts/batchSize |
 | approval | actor, confirmedAt, writersPaused, syntheticOnly, workerVersionsReviewed, costAndVolumeApproved, humanRecoveryAvailable |
 | qa9 | outboxCount 13 and digest from the reviewed structural SQL inventory |
 | limits | Explicit deliveryWaitSeconds (60–600), quiescenceSeconds (125–300) |
+| readiness | Explicit waitSeconds (60-1200) for each OFF scheduled proof; separate from delivery |
+| preserved | null for empty scope, or reviewed ticketId/runId/managerId/recipientId/version/cycleNumber, exact two outboxIds/four eventIds and structural digest |
 
 Technical bounds are ceilings, not granted volume/cost: at most 25 events, 125 total
 attempts, batch size 25 and a 210-minute window. The operator retains the 190-minute
 execution/210-minute job limit, 75-minute cleanup/restoration reserve and 135-minute
-initial admission. No timeouts may be expanded by input. Inventory validity is ten
+initial admission, rechecked before each ON transition. Readiness consumes existing
+phase budgets; it does not extend them or the delivery deadline. Inventory validity is ten
 minutes from its **oldest** query; it is renewed after authentication. Foreign activity,
 truncated inventories, schema/identity/version drift and QA9 hash mismatch stop the run.
 
@@ -94,12 +99,19 @@ it cannot provision missing prerequisites. Report and stop for window authorizat
 
 `run` requires owner/main, attempt 1, registered suite `cc07-notifications`,
 `RUN_PRODUCTION_ACCEPTANCE` and human Environment approval. It authenticates dedicated
-profiles, renews evidence, arms restoration, publishes the inbox flag on the same SHA,
+profiles, renews evidence, arms restoration, opens an ephemeral Worker Tail session,
+and installs the fixed schedule with the reviewed OFF version still at 100%. It waits
+for a successful scheduled invocation with an exact OFF receipt before publishing
+the inbox flag on the same SHA,
 creates one synthetic ticket and immediately privatizes it before starting the Worker.
 There is brief organization visibility between create and private ACL, with fictitious
 content only. Delivery, create replay, recipient read/delete/restore and ACL revocation
 are checked via API and the scheduled Worker. Local tests additionally fault-inject
 retries/lease loss; a normal productive run does not prove provider outage behavior.
+The receipt is checked again after Pages publication, immediately before ON. Between
+delivery and the revocation test, the schedule remains installed while the consumer
+is OFF; another fresh OFF receipt is required before reactivation. The final cleanup
+removes the schedule. This avoids treating schedule readback as proof of invocation.
 
 Cleanup stops schedules and restores the approved OFF Worker version before closing
 the exact owned ticket with a fresh canonical ETag and manager-only ACL. Ticket, cycles,
@@ -148,9 +160,47 @@ not proof of immediate global quiescence. Preserve the OFF version and verify ex
 history/counters by read-only means after the propagation horizon when required.
 
 A failed run leaves its private, closed synthetic ticket and pending outboxes intact.
-The existing preflight requires an empty target organization and must reject that
-nonempty state. Do not delete records, change the organization identity or silently
-exclude them to make a retry pass. A future retry needs separately reviewed support
-for an exact preserved-record baseline (including rejection of all other activity),
-and a fresh approved plan/window. Preparing the schedule ahead of time with the
-consumer OFF is a separate sequencing proposal, not implemented or authorized here.
+Plan v2 can explicitly preserve one such baseline: exact origin run, ticket ID,
+creator/version, closed/private state, one closed original cycle, manager-only ACL,
+no attached policy, four approved events, and two pending outboxes with zero attempts,
+no lease/delay/error/completion, two approved recipient candidates and no notices.
+Counts and ID sets must agree. The canonical digest covers structural projections,
+not message or closure text; append-only event content is not fetched into reports.
+Use `preservedCc07Snapshot` and `preservedCc07Digest` only to construct the separately
+reviewed plan from approved evidence. Never recompute/adopt a changed digest in a run.
+The source timestamp remains the oldest query; hashing does not renew its validity.
+Unknown rows still fail the empty/current-run checks. Old rows are partitioned only
+after their full gate passes, verified again through final audit, and excluded from
+consumption by the new run's subject/creator/cutoff policy. QA9 protection is unchanged.
+
+## Observable OFF proof, access and interruption boundary
+
+The [Cloudflare Tail create](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/tail/methods/create/)
+and [delete](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/tail/methods/delete/)
+APIs accept the existing `Individual Workers Editor` permission on this Worker. No
+new token, Tail Worker, persistent logging or database heartbeat is introduced.
+The reviewed versions must include the [native version metadata binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/version-metadata/).
+They must be uploaded/reviewed separately; this code change does not update deployed versions.
+The protected read-only preflight neither creates a Tail nor proves Tail access.
+If access is denied during the authorized run, stop and report; never broaden the token.
+
+The temporary trace-v1 stream is restricted to the fixed Worker and official Tail
+websocket host. Raw frames, URLs, provider errors and credential values are never
+persisted. Only a bounded successful scheduled event, with no exceptions and exactly
+one receipt matching native OFF version ID, run, organization, cron and scheduled
+time, can admit ON. The receipt must be after OFF readback and no more than 120 seconds
+old. Missing proof, a failed handler, disconnection, malformed frame or expiry fails
+closed. A fresh readback and inventory plus the 135-minute admission gate still apply.
+This proves one OFF invocation, not global propagation, delivery or ON database health.
+The existing delivery cases and diagnostic counters remain necessary; the original
+production timeout cause is still unproven.
+
+The Tail is deleted on normal success and all handled failures, independently of
+configuration restoration. Uncertain creation is never retried automatically;
+unconfirmed deletion is reported and cannot be marked complete. A hard kill can bypass
+finally: the provider session has a bounded expiration (validated at at most 24 hours),
+while policy expiry and separately authorized closure remain the production safeguards.
+Do not resume an old run or accept an old receipt. Renew plan, evidence, versions and
+human approval, inspecting actual state before any recovery mutation. Keep OFF after
+final schedule removal; read-only counters/history after the documented propagation
+horizon provide additional bounded quiescence evidence, not an instantaneous guarantee.

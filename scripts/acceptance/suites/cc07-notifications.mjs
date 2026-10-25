@@ -3,15 +3,15 @@ import {assertQaContext} from './cc04-resources.mjs';
 import {stateDigest} from './cc03-state.mjs';
 
 const fixedTrue={requiredBefore:true,activeValue:true,safeValue:true};
-export const manifest=Object.freeze({id:'cc07-notifications',version:1,description:'Scoped in-app notification delivery with preserved recipient state and independent consumer shutdown',
+export const manifest=Object.freeze({id:'cc07-notifications',version:2,description:'Scoped in-app notification delivery with preserved records and observed OFF schedule before consumption',
  mutationMode:'controlled_mutation',requiresBrowser:false,requiresApprovedIdentities:true,
  requiredProfiles:['manager','allowed','restricted'],requiredPermissions:{manager:['ticket.view','ticket.create','ticket.manage','ticket.access.manage'],allowed:['ticket.view'],restricted:['ticket.view']},
  managedFlags:{MAONO_TICKET_COMMANDS_ENABLED:fixedTrue,MAONO_TICKET_TRIAGE_ENABLED:fixedTrue,MAONO_TICKET_SELECTIVE_ACCESS_ENABLED:fixedTrue,
   MAONO_TICKET_NOTIFICATIONS_ENABLED:{requiredBefore:false,activeValue:true,safeValue:false}},
- prerequisites:['Separate human authorization for one empty dedicated organization other than QA9 and three dedicated non-admin identities',
+ prerequisites:['Separate human authorization for one dedicated organization other than QA9, an exact preserved-record baseline or empty scope, and three dedicated non-admin identities',
   '0041 audited/applied separately; approved immutable OFF/ON Worker versions, fixed D1 and no other bindings or handlers',
   'Approved cutoff/window, volume/cost limits, paused writers, QA9 digest and human recovery availability',
-  'Separate protected Worker-control and D1-read-only credentials; no consumer or resource provisioning by this operator'],
+  'Separate protected Worker-control and D1-read-only credentials; ephemeral tail receipt from approved OFF version before ON; no persistent log or resource provisioning'],
  cleanup:{policy:'preserve-private-cc07-v1',method:'Stop cron and consumer first; close only the new owned ticket using fresh state ETag and manager-only ACL; preserve all records',
   interruption:'Uncertain creation cannot be retried. Closure stops infrastructure; resource containment needs the journal and a separately approved recovery.'},
  cases:['CC07-DELIVERY','CC07-IDEMPOTENCY','CC07-RECIPIENT-STATE','CC07-ACL','CC07-CLEANUP']});

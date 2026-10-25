@@ -2,6 +2,8 @@ import {createExecutionBudget} from './execution-budget.mjs';
 import {validateCc07Plan,assertCc07Actor} from './cc07-plan.mjs';
 import {cc07Infrastructure,validateCc07Worker,cc07Digest} from './cc07-infrastructure.mjs';
 import {summarizeCc07Inventory} from './cc07-observations.mjs';
+import {currentCc07Inventory} from './cc07-preserved.mjs';
+import {createCc07Readiness,assertFreshOffReceipt} from './cc07-readiness.mjs';
 import * as suite from './suites/cc07-notifications.mjs';
 import {assertProduction,buildProfiles,fail,initialReport,parseCredentials,readProduction,safeError,suiteContext,transitionFlags,writeReport,activeFlags,safeFlags} from './production-acceptance-lib.mjs';
 const check=(ok,code)=>{if(!ok)fail(code,'Gate CC07 não comprovado; nenhuma ampliação automática.');};
@@ -19,9 +21,10 @@ export function assertCc07Pages(project,plan,{active=false}={}){
  }
 }
 export function assertCc07Inventory(audit,plan,{now=Date.now(),empty=false,before=null,ticketId=null}={}){
- check(Date.parse(audit.startedAt)<=now&&now-Date.parse(audit.startedAt)<=600000&&Date.parse(audit.completedAt)<=now,'CC07_INVENTORY_EXPIRED');
+ check(Date.parse(audit.startedAt)<=now&&now-Date.parse(audit.startedAt)<=600000&&Date.parse(audit.completedAt)>=Date.parse(audit.startedAt)&&Date.parse(audit.completedAt)<=now,'CC07_INVENTORY_EXPIRED');
  check(audit.qa9Digest===plan.qa9.digest,'CC07_QA9_PRESERVATION_FAILED');
  if(before)check(audit.outsideDigest===before.outsideDigest&&JSON.stringify(audit.organizationIds)===JSON.stringify(before.organizationIds),'CC07_FOREIGN_ACTIVITY');
+ audit=currentCc07Inventory(audit,plan);
  if(empty)check(Object.values(audit.scoped).every(rows=>rows.length===0),'CC07_TARGET_NOT_EMPTY');
  if(ticketId){
   check(audit.scoped.tickets.length===1&&audit.scoped.tickets[0].id===ticketId&&audit.scoped.tickets[0].created_by===plan.qaIds.manager,'CC07_TICKET_SCOPE_DRIFT');
@@ -30,20 +33,39 @@ export function assertCc07Inventory(audit,plan,{now=Date.now(),empty=false,befor
   const ids=new Set(audit.scoped.outbox.map(x=>x.id));
   check(audit.scoped.candidates.every(x=>ids.has(x.outbox_id)&&x.recipient_id===plan.qaIds.allowed)&&audit.scoped.notices.every(x=>ids.has(x.outbox_id)&&x.ticket_id===ticketId&&x.recipient_id===plan.qaIds.allowed&&x.channel==='in_app'),'CC07_RECIPIENT_SCOPE_DRIFT');
  }
+ return audit;
 }
 export async function runCc07Operator(options,env=process.env,runtime={}){
  const manifest=suite.manifest,now=runtime.now||Date.now,budget=createExecutionBudget(manifest,{now}),deps={...runtime,budget};
  const report=initialReport({mode:options.mode,suite:manifest.id,suiteVersion:manifest.version,organizationId:options.organizationId,expectedCommit:options.expectedCommit});
- let context=null,armed=false,initial=null,plan=null,infra=null,before=null,sequence=0,error=null,workerStopped=false;
+ let context=null,armed=false,initial=null,plan=null,infra=null,before=null,sequence=0,error=null,workerStopped=false,observer=null,offSince=0,pagesAttempted=false;
  const save=()=>writeReport(options.reportPath.replace(/\.json$/,`.checkpoint-${++sequence}.json`),report);
  // Diagnostic persistence must never replace the original failure or prevent
  // containment. The mandatory checkpoint before arming remains fail-closed.
  const saveObservation=async()=>{try{await save();}catch{report.diagnosticCheckpointUnavailable=true;}};
- const controlWorker=async active=>{
-  const observation={requestedAt:new Date(now()).toISOString(),active,outcome:'unconfirmed'};
+ const controlWorker=async(active,{scheduled=active}={})=>{
+  const observation={requestedAt:new Date(now()).toISOString(),active,scheduled,outcome:'unconfirmed'};
   (report.workerControls??=[]).push(observation);
-  try{observation.readback=await infra.setActive(active);observation.outcome='confirmed';}
+  try{observation.readback=await infra.setActive(active,{scheduled});observation.outcome='confirmed';}
   catch(cause){observation.error=safeError(cause);throw cause;}
+  finally{observation.completedAt=new Date(now()).toISOString();await saveObservation();}
+ };
+ const ready=async()=>{
+  const deadline=now()+plan.readiness.waitSeconds*1000;
+  const observation={startedAt:new Date(now()).toISOString(),deadline:new Date(deadline).toISOString(),outcome:'pending'};
+  (report.cronReadiness??=[]).push(observation);
+  try{
+   while(now()<deadline){
+    budget.assertAdmission();const receipt=observer.receipt();
+    if(receipt&&now()-Date.parse(receipt.scheduledAt)<=120000){
+     assertFreshOffReceipt(receipt,plan,{since:offSince,now:now()});
+     validateCc07Worker(await infra.readWorker(),plan,{active:false,scheduled:true});
+     observation.receipt=receipt;observation.outcome='confirmed';return receipt;
+    }
+    await budget.pause(1000,runtime.sleep);
+   }
+   fail('CC07_CRON_READINESS_TIMEOUT','Disparo OFF não comprovado no prazo aprovado; ON bloqueado.');
+  }catch(cause){observation.outcome='failed';observation.error=safeError(cause);throw cause;}
   finally{observation.completedAt=new Date(now()).toISOString();await saveObservation();}
  };
  try{
@@ -66,10 +88,10 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
   }
   before=await infra.audit();
   if(options.mode!=='closure')assertCc07Inventory(before,plan,{now:now(),empty:true});
-  report.preflight={commit:initial.canonical.commit,deploymentId:initial.canonical.id,configuredFlags:initial.configuredFlags,organizationId:plan.organizationId,qa9OutboxCount:13,qa9Digest:before.qa9Digest,outsideDigest:before.outsideDigest,inventoryAt:before.startedAt,workerOffVersion:plan.worker.offVersion};
+  report.preflight={commit:initial.canonical.commit,deploymentId:initial.canonical.id,configuredFlags:initial.configuredFlags,organizationId:plan.organizationId,qa9OutboxCount:13,qa9Digest:before.qa9Digest,outsideDigest:before.outsideDigest,inventoryAt:before.startedAt,workerOffVersion:plan.worker.offVersion,preservedBaselineVerified:plan.preserved!==null,preservedDigest:plan.preserved?.digest??null};
   if(options.mode==='preflight'){
    report.ok=true;report.complete=true;report.cleanupComplete=true;report.configurationRestored=true;
-   report.pendingGates=['EXPLICIT_CC07_WINDOW','FRESH_INVENTORY','QA_AUTHENTICATION','ENVIRONMENT_RUN_APPROVAL'];return 0;
+   report.pendingGates=['EXPLICIT_CC07_WINDOW','FRESH_INVENTORY','QA_AUTHENTICATION','OFF_SCHEDULE_RECEIPT','ENVIRONMENT_RUN_APPROVAL'];return 0;
   }
   check(options.qaUserIds,'QA_IDENTITIES_REQUIRED');
   validateCc07Plan(env.MAONO_ACCEPTANCE_CC07_PLAN_JSON,options,{now:now(),admit:true});
@@ -79,10 +101,16 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
   context=suiteContext({baseUrl:initial.baseUrl,organizationId:plan.organizationId,profiles,runId:plan.policy.runId,expectedCommit:options.expectedCommit,mutationMode:manifest.mutationMode,
    deps:{...deps,onResourceJournal:async value=>{report.resourceJournal=value;await save();}}});
   let currentTicket=null;
-  const audit=async()=>{const result=await infra.audit();assertCc07Inventory(result,plan,{now:now(),before,ticketId:currentTicket});report.lastDeliveryInventory=summarizeCc07Inventory(result);return result;};
+  const audit=async()=>{const result=assertCc07Inventory(await infra.audit(),plan,{now:now(),before,ticketId:currentTicket});report.lastDeliveryInventory=summarizeCc07Inventory(result);return result;};
   context.cc07={plan,audit,
-   async startConsumer(ticketId){currentTicket=ticketId;await audit();budget.assertAdmission();await controlWorker(true);workerStopped=false;},
-   async stopConsumer(){if(!workerStopped){await controlWorker(false);await budget.pause(plan.limits.quiescenceSeconds*1000,runtime.sleep);workerStopped=true;}},
+   async startConsumer(ticketId){
+    currentTicket=ticketId;const receipt=await ready();await audit();validateCc07Plan(env.MAONO_ACCEPTANCE_CC07_PLAN_JSON,options,{now:now(),admit:true});budget.assertAdmission();
+    assertFreshOffReceipt(receipt,plan,{since:offSince,now:now()});observer.resetSince(Infinity);await controlWorker(true);workerStopped=false;
+   },
+   async stopConsumer(){if(!workerStopped){
+    await controlWorker(false,{scheduled:true});offSince=now();observer.resetSince(offSince);
+    await budget.pause(plan.limits.quiescenceSeconds*1000,runtime.sleep);workerStopped=true;
+   }},
    async poll(read,stage){
     check(['first-delivery','outbox-completion','revocation-suppression'].includes(stage),'CC07_WAIT_STAGE_INVALID');
     const end=now()+plan.limits.deliveryWaitSeconds*1000;
@@ -101,6 +129,14 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
   initial=await readProduction(token,manifest,deps);assertCc07Pages(initial,plan);validateCc07Worker(await infra.readWorker(),plan);
   validateCc07Plan(env.MAONO_ACCEPTANCE_CC07_PLAN_JSON,options,{now:now(),admit:true});
   budget.enter('activation');await save();armed=true;report.writesPerformed=true;
+  observer=runtime.readiness||createCc07Readiness(env.MAONO_ACCEPTANCE_CC07_WORKER_TOKEN,plan,{...deps,onSessionCreated:async value=>{report.telemetry=value;await save();}});
+  await observer.start();await controlWorker(false,{scheduled:true});offSince=now();observer.resetSince(offSince);
+  await ready();
+  // Waiting for scheduler evidence cannot refresh the inventory's age by itself.
+  assertCc07Inventory(await infra.audit(),plan,{now:now(),empty:true,before});
+  validateCc07Plan(env.MAONO_ACCEPTANCE_CC07_PLAN_JSON,options,{now:now(),admit:true});
+  assertCc07Pages(await readProduction(token,manifest,deps),plan);
+  pagesAttempted=true;
   await transitionFlags({token,sourceDeploymentId:initial.canonical.id,commit:plan.productSha,manifest,values:activeFlags(manifest),deps,validateCurrent:current=>assertCc07Pages(current,plan)});
   assertCc07Pages(await readProduction(token,manifest,deps),plan,{active:true});
   budget.enter('suite');report.acceptanceExecuted=true;report.result=await suite.run(context);
@@ -117,7 +153,7 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
    try{
     budget.enter('restoration');
     // If stop was uncertain, inspect before another intent; never cancel an active cleanup.
-    await transitionFlags({token:env.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN,sourceDeploymentId:initial.canonical.id,commit:plan.productSha,manifest,values:safeFlags(manifest),deps,validateCurrent:current=>assertProduction(current,plan.productSha,invariants)});
+    if(pagesAttempted||options.mode==='closure')await transitionFlags({token:env.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN,sourceDeploymentId:initial.canonical.id,commit:plan.productSha,manifest,values:safeFlags(manifest),deps,validateCurrent:current=>assertProduction(current,plan.productSha,invariants)});
     if(!workerStopped){validateCc07Worker(await infra.readWorker(),plan);workerStopped=true;}
     const final=await readProduction(env.MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN,manifest,deps);assertCc07Pages(final,plan);validateCc07Worker(await infra.readWorker(),plan);
     report.final={commit:final.canonical.commit,deploymentId:final.canonical.id,flags:final.configuredFlags,workerStopped};
@@ -125,12 +161,13 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
    }catch(cause){report.configurationRestored=false;report.restorationError=safeError(cause);error??=cause;}
    // Keep the observed configuration result even if the independent data audit fails.
    try{
-    const after=await infra.audit();assertCc07Inventory(after,plan,{now:now(),before,ticketId:report.resourceJournal?.ticketId||null});
+    const after=assertCc07Inventory(await infra.audit(),plan,{now:now(),before,ticketId:report.resourceJournal?.ticketId||null,empty:!report.resourceJournal?.ticketId});
     check(after.scoped.outbox.every(x=>x.status!=='processing'),'CC07_INFLIGHT_UNRESOLVED');
     report.preservationVerified=Boolean(before);
-    report.finalAudit={qa9Preserved:after.qa9Digest===plan.qa9.digest,outsidePreserved:before?after.outsideDigest===before.outsideDigest:null,scopedCounts:Object.fromEntries(Object.entries(after.scoped).map(([k,v])=>[k,v.length]))};
+    report.finalAudit={qa9Preserved:after.qa9Digest===plan.qa9.digest,outsidePreserved:before?after.outsideDigest===before.outsideDigest:null,preservedRecordsVerified:plan.preserved?after.preservedVerified:true,scopedCounts:Object.fromEntries(Object.entries(after.scoped).map(([k,v])=>[k,v.length]))};
    }catch(cause){report.preservationVerified=false;report.preservationError=safeError(cause);error??=cause;}
   }
+  if(observer){try{report.telemetry=await observer.close();report.telemetryClosed=true;}catch(cause){report.telemetryClosed=false;report.telemetryError=safeError(cause);error??=cause;}}
   if(context)report.cases=context.cases;
   if(options.mode!=='preflight'){report.ok=!error&&report.cleanupComplete&&report.configurationRestored;report.complete=report.ok;}
   report.operationalTestsPassed=report.acceptanceExecuted&&manifest.cases.every(id=>report.cases.some(c=>c.id===id&&c.status==='PASS'));
