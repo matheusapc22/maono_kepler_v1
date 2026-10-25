@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile,mkdtemp,rm} from 'node:fs/promises';
+import {readFile,readdir,mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {validateCc07Plan,assertCc07Actor} from '../scripts/acceptance/cc07-plan.mjs';
 import {validateCc07Worker,cc07Infrastructure} from '../scripts/acceptance/cc07-infrastructure.mjs';
 import {assertCc07Inventory,runCc07Operator} from '../scripts/acceptance/cc07-operator.mjs';
 import {manifest,run} from '../scripts/acceptance/suites/cc07-notifications.mjs';
-import {safeFlags,suiteContext,PRODUCTION_D1_ID} from '../scripts/acceptance/production-acceptance-lib.mjs';
+import {parseArgs,safeFlags,suiteContext,PRODUCTION_D1_ID} from '../scripts/acceptance/production-acceptance-lib.mjs';
 import {createTicketCommandDb} from './helpers/ticket-command-db.mjs';
 import {consumeTicketNotifications} from '../functions/_lib/ticket-notifications.js';
 import {onRequest as middleware} from '../functions/_middleware.js';
@@ -24,6 +24,7 @@ const plan=()=>({version:1,productSha:sha,organizationId:1,qaIds:{manager:1,allo
  approval:{actor:'synthetic-owner',confirmedAt:'2026-10-24T17:50:00.000Z',writersPaused:true,syntheticOnly:true,workerVersionsReviewed:true,costAndVolumeApproved:true,humanRecoveryAvailable:true},
  qa9:{outboxCount:13,digest:'c'.repeat(64)},limits:{deliveryWaitSeconds:60,quiescenceSeconds:125}});
 const opts={expectedCommit:sha,organizationId:1,qaUserIds:{manager:1,allowed:2,restricted:3},projectSlug:null};
+const cliOptions=(mode,report)=>parseArgs(['--mode',mode,'--suite','cc07-notifications','--organization-id','1','--qa-user-ids','1,2,3','--expected-commit',sha,'--report',report]);
 const version=(p,on)=>({id:on?p.worker.onVersion:p.worker.offVersion,resources:{script:{etag:p.worker.codeEtag,handlers:['scheduled']},script_runtime:{compatibility_date:'2026-10-01'},bindings:[
  {name:'DB',type:'d1',id:PRODUCTION_D1_ID},...Object.entries({MAONO_RUNTIME_ENV:'production',MAONO_TICKET_SELECTIVE_ACCESS_ENABLED:'true',MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED:String(on),MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS:String(p.organizationId),MAONO_TICKET_NOTIFICATION_START_AT:p.policy.startAt,MAONO_TICKET_NOTIFICATION_ACCEPTANCE_JSON:JSON.stringify(p.policy)}).map(([name,text])=>({name,type:'plain_text',text}))]}});
 const snapshot=p=>({off:version(p,false),on:version(p,true),deployments:{deployments:[{id:'deployment',versions:[{version_id:p.worker.offVersion,percentage:100}]}]},schedules:{schedules:[]}});
@@ -66,7 +67,7 @@ test('CC07 preflight uses read-only infrastructure and never accesses QA credent
  const calls=[];const fetchImpl=async(url,o)=>{calls.push(o.method);assert.equal(o.method,'GET');return Response.json({success:true,result:String(url).includes('/deployments?')?[deployment]:{name:'maono-kepler-v1',production_branch:'mano_kepler_v1',subdomain:'maono-kepler-v1.pages.dev',deployment_configs:{production:{d1_databases:{DB:{id:PRODUCTION_D1_ID}},env_vars:vars}},canonical_deployment:deployment}});};
  const env={MAONO_ACCEPTANCE_CC07_PLAN_JSON:JSON.stringify(p),MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN:'local-fixture',GITHUB_RUN_ATTEMPT:'1',GITHUB_ACTOR:'synthetic-owner',GITHUB_REPOSITORY_OWNER:'synthetic-owner',GITHUB_REF:'refs/heads/main'};
  Object.defineProperty(env,'MAONO_ACCEPTANCE_CC07_QA_CREDENTIALS_JSON',{get(){throw Error('must not read QA secret');}});
- const report=join(dir,'report.json');assert.equal(await runCc07Operator({...opts,mode:'preflight',report},env,{now:()=>now,fetchImpl,infrastructure:{readWorker:async()=>snapshot(p),audit:async()=>inventory(p),setActive:async()=>assert.fail('preflight mutation')}}),0);
+ const report=join(dir,'report.json');assert.equal(await runCc07Operator(cliOptions('preflight',report),env,{now:()=>now,fetchImpl,infrastructure:{readWorker:async()=>snapshot(p),audit:async()=>inventory(p),setActive:async()=>assert.fail('preflight mutation')}}),0);
  const result=JSON.parse(await readFile(report));assert.equal(result.writesPerformed,false);assert.equal(result.acceptanceExecuted,false);assert.equal(result.complete,true);assert.ok(calls.length>0);
 });
 
@@ -145,7 +146,11 @@ async function operatorFixture(t,{fault=null,mode='run'}={}){
  if(mode==='closure'){active=true;activated=true;vars.MAONO_TICKET_NOTIFICATIONS_ENABLED.value='true';canonical=deployment();}
  const env={MAONO_ACCEPTANCE_CC07_PLAN_JSON:JSON.stringify(p),MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN:'local-fixture',MAONO_ACCEPTANCE_CC07_QA_CREDENTIALS_JSON:JSON.stringify(Object.fromEntries(manifest.requiredProfiles.map(name=>[name,{email:`${name}@synthetic.invalid`,password:'local-fixture-only'}]))),GITHUB_RUN_ATTEMPT:'1',GITHUB_ACTOR:'synthetic-owner',GITHUB_REPOSITORY_OWNER:'synthetic-owner',GITHUB_REF:'refs/heads/main'};
  const reportPath=join(dir,'report.json');
- const exit=await runCc07Operator({...opts,mode,report:reportPath},env,{fetchImpl,infrastructure,now:()=>clock,sleep:async ms=>{clock+=ms;}});
+ const exit=await runCc07Operator(cliOptions(mode,reportPath),env,{fetchImpl,infrastructure,now:()=>clock,sleep:async ms=>{clock+=ms;}});
+ const checkpoints=(await readdir(dir)).filter(name=>/^report\.checkpoint-\d+\.json$/.test(name));
+ assert.ok(checkpoints.length>0,'A durable checkpoint must precede simulated configuration writes');
+ const first=JSON.parse(await readFile(join(dir,'report.checkpoint-1.json')));
+ assert.equal(first.writesPerformed,false);assert.equal(first.acceptanceExecuted,false);
  return {...f,exit,result:JSON.parse(await readFile(reportPath)),controls,active,vars,canonical};
 }
 
