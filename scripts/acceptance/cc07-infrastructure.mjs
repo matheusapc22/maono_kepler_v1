@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {cfRequest,CF_ACCOUNT_ID,PRODUCTION_D1_ID,fail} from './production-acceptance-lib.mjs';
+import {summarizeCc07Worker} from './cc07-observations.mjs';
 export const CC07_WORKER='maono-ticket-notifications';
 const workerPath=`/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/${CC07_WORKER}`;
 const stable=v=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v;
@@ -73,7 +74,8 @@ export function cc07Infrastructure(workerToken,readToken,plan,deps={}){
   if(!active && observed.length)await schedules(false); // stop scheduling before restoring OFF version
   if(versions[0].version_id!==(active?plan.worker.onVersion:plan.worker.offVersion))await deploy(active?plan.worker.onVersion:plan.worker.offVersion);
   if(active&&!observed.length)await schedules(true);
-  validateCc07Worker(await readWorker(),plan,{active});
+  const final=await readWorker();validateCc07Worker(final,plan,{active});
+  return summarizeCc07Worker(final,{active,observedAt:new Date((deps.now||Date.now)()).toISOString()});
  };
  return {readWorker,audit,setActive};
 }

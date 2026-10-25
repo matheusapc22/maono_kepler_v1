@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile,readdir,mkdtemp,rm} from 'node:fs/promises';
+import {readFile,readdir,mkdtemp,mkdir,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {validateCc07Plan,assertCc07Actor} from '../scripts/acceptance/cc07-plan.mjs';
@@ -10,6 +10,8 @@ import {manifest,run} from '../scripts/acceptance/suites/cc07-notifications.mjs'
 import {parseArgs,safeFlags,suiteContext,PRODUCTION_D1_ID} from '../scripts/acceptance/production-acceptance-lib.mjs';
 import {createTicketCommandDb} from './helpers/ticket-command-db.mjs';
 import {consumeTicketNotifications} from '../functions/_lib/ticket-notifications.js';
+import notificationWorker from '../workers/ticket-notifications.js';
+import {summarizeCc07Worker} from '../scripts/acceptance/cc07-observations.mjs';
 import {onRequest as middleware} from '../functions/_middleware.js';
 import {onRequestPost as create} from '../functions/api/organizations/[id]/tickets.js';
 import {onRequestGet as detail,onRequestPatch as update} from '../functions/api/organizations/[id]/tickets/[ticketId].js';
@@ -102,9 +104,19 @@ test('CC07 uncertain create never retries, adopts another ticket or claims clean
 
 // Exercise the complete orchestrator against local HTTP/SQLite and a stateful
 // Pages/Worker simulator. These credentials are fixture strings, never remote.
-async function operatorFixture(t,{fault=null,mode='run'}={}){
+async function operatorFixture(t,{fault=null,mode='run',cronDelayMs=0,waitSeconds=60}={}){
  const f=await localFixture(t),p=f.plan,dir=await mkdtemp(join(tmpdir(),'cc07-operator-'));
  t.after(()=>rm(dir,{recursive:true,force:true}));let clock=Date.now(),active=false,activated=false,patchLost=false,deployments=0;
+ p.limits.deliveryWaitSeconds=waitSeconds;
+ let nextTick=Infinity;const scheduler={invocations:0,failures:0};
+ const tick=async()=>{
+  if(!active||clock<nextTick)return;
+  nextTick=clock+60000;scheduler.invocations++;
+  const pending=[];
+  const workerEnv=fault==='worker-before-claim'?{...f.db.env,DB:{prepare(){throw Error('private-worker-database-fixture');}}}:f.db.env;
+  await notificationWorker.scheduled({cron:p.worker.cron,scheduledTime:clock},workerEnv,{waitUntil:promise=>pending.push(promise)});
+  scheduler.failures+=(await Promise.allSettled(pending)).filter(result=>result.status==='rejected').length;
+ };
  let vars=Object.fromEntries(Object.entries({...safeFlags(manifest),MAONO_RUNTIME_ENV:'production',MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS:'1',MAONO_TICKET_NOTIFICATION_START_AT:p.policy.startAt}).map(([k,v])=>[k,{type:'plain_text',value:String(v)}]));
  const deployment=()=>({id:`deployment-${deployments}`,environment:'production',url:'https://maono-kepler-v1.pages.dev',deployment_trigger:{metadata:{commit_hash:sha,commit_dirty:false}},latest_stage:{name:'deploy',status:'success'},env_vars:structuredClone(vars)});
  let canonical=deployment();const controls=[];
@@ -134,7 +146,15 @@ async function operatorFixture(t,{fault=null,mode='run'}={}){
   setActive:async value=>{
    controls.push(['worker',value]);if(!value&&fault==='stop'&&activated)throw Error('Worker stop unavailable');
    active=value;f.db.env.MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED=String(value);
-   if(value){activated=true;if(fault==='worker-lost')throw Error('lost Worker response');await consumeTicketNotifications(f.db.env);}
+   if(value){
+    activated=true;if(fault==='worker-lost')throw Error('lost Worker response');nextTick=clock+cronDelayMs;await tick();
+    if(fault==='diagnostic-checkpoint'){
+     const sequences=(await readdir(dir)).map(name=>/^report\.checkpoint-(\d+)\.json$/.exec(name)).filter(Boolean).map(match=>Number(match[1]));
+     await mkdir(join(dir,`report.checkpoint-${Math.max(...sequences)+1}.json`));
+    }
+   }
+   else nextTick=Infinity;
+   return summarizeCc07Worker(await infrastructure.readWorker(),{active:value,observedAt:new Date(clock).toISOString()});
   },
   audit:async()=>{
    if(fault==='audit-unavailable')throw Error('read-only audit unavailable');
@@ -146,18 +166,53 @@ async function operatorFixture(t,{fault=null,mode='run'}={}){
  if(mode==='closure'){active=true;activated=true;vars.MAONO_TICKET_NOTIFICATIONS_ENABLED.value='true';canonical=deployment();}
  const env={MAONO_ACCEPTANCE_CC07_PLAN_JSON:JSON.stringify(p),MAONO_ACCEPTANCE_CLOUDFLARE_API_TOKEN:'local-fixture',MAONO_ACCEPTANCE_CC07_QA_CREDENTIALS_JSON:JSON.stringify(Object.fromEntries(manifest.requiredProfiles.map(name=>[name,{email:`${name}@synthetic.invalid`,password:'local-fixture-only'}]))),GITHUB_RUN_ATTEMPT:'1',GITHUB_ACTOR:'synthetic-owner',GITHUB_REPOSITORY_OWNER:'synthetic-owner',GITHUB_REF:'refs/heads/main'};
  const reportPath=join(dir,'report.json');
- const exit=await runCc07Operator(cliOptions(mode,reportPath),env,{fetchImpl,infrastructure,now:()=>clock,sleep:async ms=>{clock+=ms;}});
+ const exit=await runCc07Operator(cliOptions(mode,reportPath),env,{fetchImpl,infrastructure,now:()=>clock,sleep:async ms=>{clock+=ms;await tick();}});
  const checkpoints=(await readdir(dir)).filter(name=>/^report\.checkpoint-\d+\.json$/.test(name));
  assert.ok(checkpoints.length>0,'A durable checkpoint must precede simulated configuration writes');
  const first=JSON.parse(await readFile(join(dir,'report.checkpoint-1.json')));
  assert.equal(first.writesPerformed,false);assert.equal(first.acceptanceExecuted,false);
- return {...f,exit,result:JSON.parse(await readFile(reportPath)),controls,active,vars,canonical};
+ return {...f,exit,result:JSON.parse(await readFile(reportPath)),controls,active,vars,canonical,scheduler};
 }
 
 test('CC07 orchestrator completes delivery and containment, retaining COMMANDS and records',async t=>{
  const f=await operatorFixture(t);assert.equal(f.exit,0,JSON.stringify(f.result));
  assert.equal(f.result.operationalTestsPassed,true);assert.equal(f.result.cleanupComplete,true);assert.equal(f.result.preservationVerified,true);assert.equal(f.result.configurationRestored,true);
  assert.equal(f.db.rows('organization_tickets')[0].status,'closed');assert.equal(f.db.rows('ticket_command_outbox').length,3);assert.equal(f.active,false);assert.equal(f.vars.MAONO_TICKET_COMMANDS_ENABLED.value,'true');assert.equal(f.vars.MAONO_TICKET_NOTIFICATIONS_ENABLED.value,'false');
+});
+test('CC07 delayed scheduled invocations pass without changing approved wait or closure reserves',async t=>{
+ const f=await operatorFixture(t,{cronDelayMs:10000});assert.equal(f.exit,0,JSON.stringify(f.result));
+ assert.equal(f.scheduler.invocations,2);assert.equal(f.scheduler.failures,0);
+ assert.deepEqual(f.result.deliveryWaits.map(x=>[x.stage,x.outcome]),[['first-delivery','satisfied'],['outbox-completion','satisfied'],['revocation-suppression','satisfied']]);
+ assert.equal(f.result.deliveryWaits[0].lastInventory.evidence,'PERSISTED_PROCESSING_OBSERVED');
+ assert.ok(f.result.workerControls.every(x=>x.outcome==='confirmed'&&x.readback.configurationReadbackOnly===true));
+ assert.equal(f.result.budget.closureReserveMinutes,75);assert.equal(f.result.final.workerStopped,true);
+});
+test('CC07 reproduces documented cron propagation beyond a five-minute wait without extending it',async t=>{
+ const f=await operatorFixture(t,{cronDelayMs:15*60000,waitSeconds:300});
+ assert.equal(f.exit,1);assert.equal(f.result.error.code,'CC07_DELIVERY_TIMEOUT');assert.equal(f.scheduler.invocations,0);
+ const wait=f.result.deliveryWaits[0];assert.equal(wait.outcome,'timeout');assert.equal(wait.stage,'first-delivery');
+ assert.equal(Date.parse(wait.completedAt)-Date.parse(wait.startedAt),300000);assert.equal(wait.samples,60);
+ assert.equal(wait.lastInventory.attempts,0);assert.equal(wait.lastInventory.counts.notices,0);assert.equal(wait.lastInventory.evidence,'NO_PERSISTED_PROCESSING_OBSERVED');
+ assert.equal(f.result.configurationRestored,true);assert.equal(f.result.cleanupComplete,true);assert.equal(f.result.preservationVerified,true);
+ assert.deepEqual(f.result.cases.map(x=>x.id),['CC07-CLEANUP']);assert.equal(f.db.rows('ticket_command_outbox').length,2);
+ assert.equal(f.active,false);assert.equal(f.vars.MAONO_TICKET_COMMANDS_ENABLED.value,'true');
+});
+test('CC07 zero attempts also occurs after a real scheduled-handler failure before claim',async t=>{
+ const f=await operatorFixture(t,{fault:'worker-before-claim',cronDelayMs:10000});
+ assert.equal(f.exit,1);assert.equal(f.result.error.code,'CC07_DELIVERY_TIMEOUT');assert.ok(f.scheduler.invocations>0);assert.equal(f.scheduler.failures,f.scheduler.invocations);
+ assert.equal(f.result.deliveryWaits[0].lastInventory.evidence,'NO_PERSISTED_PROCESSING_OBSERVED');
+ assert.equal(f.result.deliveryWaits[0].lastInventory.attempts,0);
+ assert.equal(f.result.configurationRestored,true);assert.equal(f.result.cleanupComplete,true);
+ assert.ok(!JSON.stringify(f.result).includes('private-worker-database-fixture'));
+ assert.ok(!JSON.stringify(f.result).includes('CRON_NOT_PROPAGATED'));
+});
+test('CC07 diagnostic checkpoint failure preserves the delivery error and still contains the fixture',async t=>{
+ const f=await operatorFixture(t,{fault:'diagnostic-checkpoint',cronDelayMs:15*60000,waitSeconds:300});
+ assert.equal(f.exit,1);assert.equal(f.result.error.code,'CC07_DELIVERY_TIMEOUT');assert.equal(f.result.diagnosticCheckpointUnavailable,true);
+ assert.equal(f.result.deliveryWaits[0].outcome,'timeout');assert.equal(f.result.workerControls[0].outcome,'confirmed');
+ assert.equal(f.result.cleanupComplete,true);assert.equal(f.result.configurationRestored,true);assert.equal(f.result.preservationVerified,true);
+ assert.equal(f.active,false);assert.equal(f.db.rows('organization_tickets')[0].status,'closed');assert.equal(f.db.rows('ticket_command_outbox').length,2);
+ assert.equal(f.vars.MAONO_TICKET_COMMANDS_ENABLED.value,'true');assert.equal(f.vars.MAONO_TICKET_NOTIFICATIONS_ENABLED.value,'false');
 });
 for(const fault of ['pages-lost','worker-lost','foreign-after-create'])test(`CC07 contains ${fault} without retrying the acceptance or hiding audit failure`,async t=>{
  const f=await operatorFixture(t,{fault});assert.equal(f.exit,1);assert.equal(f.result.complete,false);assert.equal(f.result.configurationRestored,true,JSON.stringify(f.result));assert.equal(f.active,false);

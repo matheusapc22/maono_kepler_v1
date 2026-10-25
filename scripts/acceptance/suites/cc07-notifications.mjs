@@ -54,14 +54,14 @@ export async function run(ctx){
  ticketId=first.id;unknownCreation=false;await journal();await access(true);
  const replay=await ctx.api('manager',`${root}/tickets`,create);expect(replay,201);check(replay.body.ticket.id===ticketId&&replay.headers.get('Idempotency-Replayed')==='true','Repetição não idempotente.');
  await startConsumer(ticketId);
- const delivered=await poll(async()=>{const a=await audit();return a.scoped.notices.length===1?a:null;});
+ const delivered=await poll(async()=>{const a=await audit();return a.scoped.notices.length===1?a:null;},'first-delivery');
  check(delivered.scoped.outbox.length===1&&delivered.scoped.candidates.length===1&&delivered.scoped.notices[0].recipient_id===plan.qaIds.allowed,'Entrega excedeu o candidato aprovado.');
  ctx.record('CC07-DELIVERY','PASS',{channel:'in_app',recipients:1});
  const inbox=`${root}/ticket-notifications`;
  let allowed=expect(await ctx.api('allowed',inbox),200);check(allowed.items.length===1&&allowed.unread===1,'Aviso permitido ausente.');
  const noticeId=allowed.items[0].id;
  check(expect(await ctx.api('restricted',inbox),200).items.length===0,'Destinatário restrito recebeu aviso.');
- await poll(async()=>{const a=await audit();return a.scoped.outbox.every(x=>x.status==='delivered')?a:null;});
+ await poll(async()=>{const a=await audit();return a.scoped.outbox.every(x=>x.status==='delivered')?a:null;},'outbox-completion');
  check((await audit()).scoped.notices.length===1,'Entrega duplicada.');ctx.record('CC07-IDEMPOTENCY','PASS',{notices:1,createReplayed:true});
  for(const action of ['read','dismiss','restore']){
   const folder=action==='restore'?'?folder=deleted':'';allowed=expect(await ctx.api('allowed',inbox+folder),200);const n=allowed.items.find(x=>x.id===noticeId);check(n,'Aviso perdeu identidade.');
@@ -73,7 +73,7 @@ export async function run(ctx){
  await stopConsumer();await access(false);const before=await state();
  expect(await ctx.api('manager',path(),{method:'PATCH',headers:{'If-Match':before.etag},json:{nextAction:'Conferir supressão após revogação fictícia.'}}),200);
  await startConsumer(ticketId);
- await poll(async()=>{const a=await audit();return a.scoped.candidates.some(x=>x.state==='suppressed')?a:null;});
+ await poll(async()=>{const a=await audit();return a.scoped.candidates.some(x=>x.state==='suppressed')?a:null;},'revocation-suppression');
  check((await audit()).scoped.notices.length===1,'Revogação gerou entrega indevida.');
  check(expect(await ctx.api('allowed',inbox),200).items.length===0,'Conteúdo revogado ainda visível.');
  expect(await ctx.api('allowed',inbox,{method:'PATCH',json:{id:noticeId,action:'dismiss',version:allowed.items[0].version}}),404);

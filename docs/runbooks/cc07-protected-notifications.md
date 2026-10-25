@@ -119,3 +119,38 @@ Cloudflare contracts: [versions](https://developers.cloudflare.com/api/resources
 [deployments](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/create/),
 [schedules](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/schedules/methods/update/).
 Unexpected response shapes fail closed and need review; no fallback endpoint bypass.
+
+## Delivery timeout diagnosis and retry boundary
+
+The report records `workerControls` (request/completion timestamps, confirmed or
+unconfirmed control outcome, deployment/version/schedule readback) and `deliveryWaits`
+(stage, fixed deadline, samples, result and last validated aggregate inventory).
+Readback is explicitly `configurationReadbackOnly`: it is not a scheduled invocation
+receipt. Inventory observations contain counts/states/timestamps, never notification
+content, recipients, credentials, leases or raw provider errors. A diagnostic checkpoint
+failure cannot replace the original error or prevent containment; the mandatory
+checkpoint before arming configuration writes remains fail-closed.
+
+`NO_PERSISTED_PROCESSING_OBSERVED` means exactly that. Zero attempts can result from
+a scheduler that has not invoked the Worker, a handler failure before claim, or an
+eligibility rejection. It cannot establish which happened. Check the reviewed version,
+bindings, allowlist/cutoff/policy, scheduler history and existing observability before
+attributing a cause. Local tests exercise the real scheduled handler with delayed
+invocations and a database failure before claim; both can have zero attempts.
+
+Cloudflare documents that [Cron Trigger additions, updates and removals can take up
+to 15 minutes to propagate](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
+An immediate five-minute delivery observation can therefore end before propagation;
+this is a possible mechanism, not proof of a particular production failure. The patch
+does not extend any deadline, reserve, retry count, lease or operational authorization.
+After removal, OFF readback plus stable structural counters are bounded observations,
+not proof of immediate global quiescence. Preserve the OFF version and verify existing
+history/counters by read-only means after the propagation horizon when required.
+
+A failed run leaves its private, closed synthetic ticket and pending outboxes intact.
+The existing preflight requires an empty target organization and must reject that
+nonempty state. Do not delete records, change the organization identity or silently
+exclude them to make a retry pass. A future retry needs separately reviewed support
+for an exact preserved-record baseline (including rejection of all other activity),
+and a fresh approved plan/window. Preparing the schedule ahead of time with the
+consumer OFF is a separate sequencing proposal, not implemented or authorized here.

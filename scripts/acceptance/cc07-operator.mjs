@@ -1,6 +1,7 @@
 import {createExecutionBudget} from './execution-budget.mjs';
 import {validateCc07Plan,assertCc07Actor} from './cc07-plan.mjs';
 import {cc07Infrastructure,validateCc07Worker,cc07Digest} from './cc07-infrastructure.mjs';
+import {summarizeCc07Inventory} from './cc07-observations.mjs';
 import * as suite from './suites/cc07-notifications.mjs';
 import {assertProduction,buildProfiles,fail,initialReport,parseCredentials,readProduction,safeError,suiteContext,transitionFlags,writeReport,activeFlags,safeFlags} from './production-acceptance-lib.mjs';
 const check=(ok,code)=>{if(!ok)fail(code,'Gate CC07 não comprovado; nenhuma ampliação automática.');};
@@ -35,6 +36,16 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
  const report=initialReport({mode:options.mode,suite:manifest.id,suiteVersion:manifest.version,organizationId:options.organizationId,expectedCommit:options.expectedCommit});
  let context=null,armed=false,initial=null,plan=null,infra=null,before=null,sequence=0,error=null,workerStopped=false;
  const save=()=>writeReport(options.reportPath.replace(/\.json$/,`.checkpoint-${++sequence}.json`),report);
+ // Diagnostic persistence must never replace the original failure or prevent
+ // containment. The mandatory checkpoint before arming remains fail-closed.
+ const saveObservation=async()=>{try{await save();}catch{report.diagnosticCheckpointUnavailable=true;}};
+ const controlWorker=async active=>{
+  const observation={requestedAt:new Date(now()).toISOString(),active,outcome:'unconfirmed'};
+  (report.workerControls??=[]).push(observation);
+  try{observation.readback=await infra.setActive(active);observation.outcome='confirmed';}
+  catch(cause){observation.error=safeError(cause);throw cause;}
+  finally{observation.completedAt=new Date(now()).toISOString();await saveObservation();}
+ };
  try{
   budget.enter('preflight');plan=validateCc07Plan(env.MAONO_ACCEPTANCE_CC07_PLAN_JSON,options,{now:now(),admit:options.mode==='run'});assertCc07Actor(plan,env);
   if(options.mode==='run')budget.constrainDeadline(Date.parse(plan.policy.endAt));
@@ -68,11 +79,21 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
   context=suiteContext({baseUrl:initial.baseUrl,organizationId:plan.organizationId,profiles,runId:plan.policy.runId,expectedCommit:options.expectedCommit,mutationMode:manifest.mutationMode,
    deps:{...deps,onResourceJournal:async value=>{report.resourceJournal=value;await save();}}});
   let currentTicket=null;
-  const audit=async()=>{const result=await infra.audit();assertCc07Inventory(result,plan,{now:now(),before,ticketId:currentTicket});return result;};
+  const audit=async()=>{const result=await infra.audit();assertCc07Inventory(result,plan,{now:now(),before,ticketId:currentTicket});report.lastDeliveryInventory=summarizeCc07Inventory(result);return result;};
   context.cc07={plan,audit,
-   async startConsumer(ticketId){currentTicket=ticketId;await audit();budget.assertAdmission();await infra.setActive(true);workerStopped=false;},
-   async stopConsumer(){if(!workerStopped){await infra.setActive(false);await budget.pause(plan.limits.quiescenceSeconds*1000,runtime.sleep);workerStopped=true;}},
-   async poll(read){const end=now()+plan.limits.deliveryWaitSeconds*1000;while(now()<end){budget.assertAdmission();const value=await read();if(value)return value;await budget.pause(5000,runtime.sleep);}fail('CC07_DELIVERY_TIMEOUT','Entrega não confirmada dentro do limite aprovado.');}
+   async startConsumer(ticketId){currentTicket=ticketId;await audit();budget.assertAdmission();await controlWorker(true);workerStopped=false;},
+   async stopConsumer(){if(!workerStopped){await controlWorker(false);await budget.pause(plan.limits.quiescenceSeconds*1000,runtime.sleep);workerStopped=true;}},
+   async poll(read,stage){
+    check(['first-delivery','outbox-completion','revocation-suppression'].includes(stage),'CC07_WAIT_STAGE_INVALID');
+    const end=now()+plan.limits.deliveryWaitSeconds*1000;
+    const observation={stage,startedAt:new Date(now()).toISOString(),deadline:new Date(end).toISOString(),samples:0,outcome:'pending'};
+    (report.deliveryWaits??=[]).push(observation);
+    try{
+     while(now()<end){budget.assertAdmission();observation.samples++;const value=await read();if(value){observation.outcome='satisfied';return value;}await budget.pause(5000,runtime.sleep);}
+     observation.outcome='timeout';fail('CC07_DELIVERY_TIMEOUT','Entrega não confirmada dentro do limite aprovado.');
+    }catch(cause){if(observation.outcome==='pending')observation.outcome='interrupted';observation.error=safeError(cause);throw cause;}
+    finally{observation.completedAt=new Date(now()).toISOString();observation.lastInventory=report.lastDeliveryInventory??null;await saveObservation();}
+   }
   };
   suite.prepare(context);
   // Renew after authentication and immediately before configuration writes.
@@ -89,7 +110,7 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
    try{
     if(budget.phase!=='cleanup')budget.enter('cleanup');
     // Independently stop scheduling/consumption even if suite never registered cleanup.
-    await infra.setActive(false);await budget.pause(plan.limits.quiescenceSeconds*1000,runtime.sleep);workerStopped=true;
+    await controlWorker(false);await budget.pause(plan.limits.quiescenceSeconds*1000,runtime.sleep);workerStopped=true;
     const cleanup=context?await context.cleanup():[];report.cleanupComplete=Boolean(context)&&cleanup.length===0;
     if(cleanup.length)report.cleanupErrors=cleanup;
    }catch(cause){report.cleanupComplete=false;report.cleanupError=safeError(cause);error??=cause;}
@@ -117,6 +138,7 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
   if(options.mode==='run'&&(!report.operationalTestsPassed||!report.preservationVerified)){report.ok=false;report.complete=false;report.acceptanceIncomplete=true;}
   report.budget={startedAt:new Date(budget.startedAt).toISOString(),deadline:new Date(budget.endAt).toISOString(),closureReserveMinutes:75};
   report.planDigest=plan?cc07Digest(plan):null;
+  report.completedAt=new Date(now()).toISOString();
   await writeReport(options.reportPath,report);
  }
  return report.ok?0:1;
