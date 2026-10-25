@@ -204,3 +204,28 @@ Do not resume an old run or accept an old receipt. Renew plan, evidence, version
 human approval, inspecting actual state before any recovery mutation. Keep OFF after
 final schedule removal; read-only counters/history after the documented propagation
 horizon provide additional bounded quiescence evidence, not an instantaneous guarantee.
+
+## CLI transport shutdown
+
+Deleting the provider Tail does not prove that the local WebSocket has closed.
+The operator therefore owns the ephemeral socket in an isolated Node worker thread,
+with no inherited environment or runner arguments. Provider deletion, restoration
+and report writing stay in the main process. Shutdown attempts both provider deletion
+and local disposal, even if either fails; repeated/concurrent close shares one result
+and never retries an uncertain DELETE. A prior operational error remains the primary
+error, with separate cleanup evidence.
+
+The socket has at most one second of handshake grace (shortened by the remaining
+budget), then only its transport thread is terminated. Actual thread exit is awaited;
+one second is the handshake limit, not a guaranteed operating-system termination
+deadline. There is no forced process exit or early unref that could discard evidence.
+The report distinguishes `transportClosed`, `transportTerminated` and provider
+`deleted`; incomplete remote cleanup still fails the run. Expired budgets permit local
+resource disposal, not extra production requests or a larger recovery window.
+
+The CLI regression runs the actual entrypoint in child processes with local-only
+provider/SQLite fixtures and a real loopback WebSocket peer. It checks natural process
+exit and saved reports for normal/no-response close, DELETE rejection/timeout,
+connection/readiness failures and preservation of the original error. Node 22 and 24
+can reproduce the old live-socket failure when the peer ignores close. This establishes
+a code failure mode; it does not identify an unrecorded handle from a past runner.
