@@ -19,6 +19,9 @@ async function ready(page: Page) {
 }
 const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 const administrativeReads = (requests: string[]) => requests.filter(path => /^GET \/api\/admin\/(projects|users|organizations|access)$/.test(path));
+// The follow-up compact-density requirement uses Projects' 15rem rail at the
+// unchanged 16px root, replacing the original 262px visual proposal.
+const desktopRailWidth = 240;
 
 test.afterEach(async ({ page }) => { await expectAdminFixtureIntegrity(page); });
 
@@ -103,7 +106,7 @@ for (const viewport of [
     expect(Math.max(...cards.map(card => card.height)) - Math.min(...cards.map(card => card.height))).toBeLessThanOrEqual(2);
     expect(Math.max(...actions.map(action => action.y)) - Math.min(...actions.map(action => action.y))).toBeLessThanOrEqual(2);
     const rail = await page.locator('.admin-rail').boundingBox();
-    expect(Math.abs(rail!.width - 262)).toBeLessThanOrEqual(1);
+    expect(Math.abs(rail!.width - desktopRailWidth)).toBeLessThanOrEqual(1);
   }
   if (viewport.width <= 390) {
     expect(new Set(cards.map(card => Math.round(card.x))).size).toBe(1);
@@ -128,7 +131,7 @@ test('Admin desktop rail collapses with accessible labels, keeps navigation and 
   await page.locator('.admin-nav').getByRole('button', { name: 'Sistema', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Sistema', exact: true })).toBeVisible();
   await expand.click();
-  await expect(page.locator('.admin-rail')).toHaveCSS('width', '262px');
+  await expect(page.locator('.admin-rail')).toHaveCSS('width', `${desktopRailWidth}px`);
   await expect(page.locator('.admin-nav button')).toHaveCount(7);
 });
 
@@ -155,11 +158,13 @@ test('Projects to Admin to Projects is a real SPA transition and preserves each 
   await setupAdmin(page, { visualCounts: true, path: '/projects' });
   await expect(page.locator('.mm-project-pages__heading h1')).toHaveText('Todos os Projetos');
   const projectsBox = await page.locator('.mm-projects-sidebar').boundingBox();
+  expect(projectsBox!.width).toBe(desktopRailWidth);
   const projectsStyle = await page.locator('.mm-projects-page').evaluate(element => ({ color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
   await page.locator('.mm-sidebar-nav').getByRole('link', { name: 'Painel Admin', exact: true }).click();
   await ready(page);
   await expect(page.locator('main')).toHaveClass(/maono-admin-workspace/);
-  await expect(page.locator('.admin-rail')).toHaveCSS('width', '262px');
+  await expect(page.locator('.admin-rail')).toHaveCSS('width', `${desktopRailWidth}px`);
+  expect((await page.locator('.admin-rail').boundingBox())!.width).toBe(projectsBox!.width);
   await page.getByRole('link', { name: 'Voltar para Projetos', exact: true }).click();
   await expect(page.locator('.mm-project-pages__heading h1')).toHaveText('Todos os Projetos');
   expect((await page.locator('.mm-projects-sidebar').boundingBox())!.width).toBe(projectsBox!.width);

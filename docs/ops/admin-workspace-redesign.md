@@ -10,9 +10,9 @@ Base da implementação: `3233037d6c94c6da20de0edd698e685cdf4976c9`, na linha de
 
 | Elemento | Contrato |
 | --- | --- |
-| Sidebar desktop | 262 px aberta e 72 px recolhida, com logo oficial, avatar por iniciais e identidade da sessão. |
+| Sidebar desktop | 240 px aberta (mesma densidade de Projects) e 72 px recolhida, com logo oficial, avatar por iniciais e identidade da sessão. |
 | Navegação | Sete destinos em dois grupos; item ativo identificado visualmente e por `aria-current`. Rodapé com retorno a Projetos e Sair. |
-| Breadcrumb e cabeçalho | Alturas mínimas de 56 px e 118 px no desktop; título, ícone e descrição acompanham a seção. |
+| Breadcrumb e cabeçalho | Alturas mínimas de 52 px e 92 px no desktop; título, ícone e descrição acompanham a seção. |
 | Indicadores | Organizações, Projetos, Usuários e Arquivos; grade de 4 → 2 → 1 colunas conforme a largura disponível. Números com 40 px e entrelinha de 44 px, protegidos contra a cascata legada de Projects. |
 | Acesso rápido | Três cartões para Organizações, Projetos e Auditoria; grade de 3 → 2 → 1 colunas. |
 | Mobile | Até 960 px, sidebar expansível no fluxo da página; controles de toque com pelo menos 44 px. Tabelas preservam rolagem horizontal local. |
@@ -47,7 +47,7 @@ Inspecionar desktop aberto/recolhido, mobile, os sete destinos, três atalhos, t
 
 O helper de preservação restaura exatamente o `Admin.tsx` anterior e compara seu SHA-256 fixado; canários rejeitam alterações em autorização, endpoints, invalidação, cálculos e callbacks. Não atualizar a baseline para acomodar mudanças funcionais nesta entrega.
 
-## Registro da execução e capturas
+## Registro da execução inicial e capturas
 
 Validação local das fontes desta PR, derivadas da base registrada acima, em 25/10/2026. O commit publicado e os resultados de CI ficam identificados na PR.
 
@@ -70,3 +70,20 @@ Capturas da aplicação compilada em Chromium, com dados sintéticos:
 
 - [Admin desktop](../visual-maono/admin-workspace-desktop.png).
 - [Admin mobile](../visual-maono/admin-workspace-mobile.png).
+
+## Revisão de integração após a densidade compacta
+
+O pedido posterior de aplicar a densidade de Projects substitui a proposta inicial
+ de sidebar de 262 px: o contrato desktop é 240 px aberta e 72 px recolhida, com
+ raiz de 16 px preservada. O CSS compartilha os tokens de densidade sem modificar
+ a folha global, sem zoom e sem scale.
+
+O CI do head e87674b teve 561 testes de navegador aprovados e 12 falhas: as três
+ asserções equivalentes ainda exigiam 262 px em quatro casos por motor. A revisão
+ corrige esse contrato histórico mantendo a tolerância original e acrescenta a
+ comparação direta entre a sidebar de Projects e a do Admin durante navegação SPA.
+ Não altera o CSS para desfazer a compactação solicitada nem ignora testes.
+
+Os resultados da tabela anterior e as capturas são da implementação inicial,
+ anterior à compactação. A validação da integração com e8fbfa0 (PR 252) deve ser
+ registrada no novo head e no CI antes do merge.
