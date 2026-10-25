@@ -176,6 +176,7 @@ test("the known fallback white styles cannot override migrated controls in stand
   assert.match(css, /#root > :is\(\.maono-admin-page, \.maono-editor-inbox, \.maono-review-page\) \.maono-select > select\[data-maono-select\]/);
   assert.match(css, /-webkit-text-fill-color: currentColor !important/);
   assert.match(css, /#root \.maono-admin-page \.admin-user-filters input/);
-  // The fallback injector and all its unrelated layout/button rules stay intact.
-  assert.match(read("src/fallback-ui-styles.ts"), /#root > main:not\(\.maono-login-page, \.mm-projects-page\)/);
+  // The new Admin workspace owns its styles; legacy standalone shells still
+  // receive the same fallback declarations and migrated-control protection.
+  assert.match(read("src/fallback-ui-styles.ts"), /#root > main:not\(\.maono-login-page, \.mm-projects-page, \.maono-admin-workspace\)/);
 });

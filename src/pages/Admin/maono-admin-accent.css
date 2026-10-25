@@ -31,14 +31,14 @@
   box-shadow: 0 0 0 3px var(--maono-accent-glow) !important;
 }
 
-:root .maono-admin-page .admin-nav button.active,
+:root .maono-admin-page:not(.maono-admin-workspace) .admin-nav button.active,
 :root .maono-admin-page .admin-user-dialog-tabs button.active {
   border-color: var(--maono-accent-border) !important;
   color: var(--maono-accent-bright) !important;
   background: var(--maono-accent-surface) !important;
 }
 
-:root .maono-admin-page .admin-nav button.active {
+:root .maono-admin-page:not(.maono-admin-workspace) .admin-nav button.active {
   box-shadow: inset 3px 0 0 var(--maono-accent) !important;
 }
 

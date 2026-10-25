@@ -170,11 +170,11 @@ body .people-drawer-form footer { bottom: calc(-1 * var(--maono-density-space-5)
 
 /* Admin uses the same rail/gutter/control family, retaining its 960px reflow. */
 @media (min-width: 961px) {
-  body .maono-admin-page.admin-page { grid-template-columns: var(--maono-density-sidebar) minmax(0, 1fr); }
+  body .maono-admin-page.admin-page:not(.maono-admin-workspace) { grid-template-columns: var(--maono-density-sidebar) minmax(0, 1fr); }
 }
-body .maono-admin-page .admin-brand { min-height: 64px; padding: 14px; }
-body .maono-admin-page .admin-nav { padding: 12px 10px; }
-body .maono-admin-page .admin-nav button { min-height: var(--maono-density-control-small); padding-block: 6px; }
+body .maono-admin-page:not(.maono-admin-workspace) .admin-brand { min-height: 64px; padding: 14px; }
+body .maono-admin-page:not(.maono-admin-workspace) .admin-nav { padding: 12px 10px; }
+body .maono-admin-page:not(.maono-admin-workspace) .admin-nav button { min-height: var(--maono-density-control-small); padding-block: 6px; }
 body .maono-admin-page .admin-user-filters { padding: 12px; gap: 10px; }
 body .maono-admin-page .admin-user-filters :is(input, select) { height: var(--maono-density-control); }
 body .admin-user-dialog > header,
@@ -289,7 +289,7 @@ body .mm-projects-page :is(.ticket-view-control select, .ticket-filter-bar input
 }
 @media (max-width: 960px) {
   /* Override the viewport-height rail contract when Admin becomes a stack. */
-  body .maono-admin-page .admin-rail { min-height: 0 !important; }
+  body .maono-admin-page:not(.maono-admin-workspace) .admin-rail { min-height: 0 !important; }
 }
 @media (pointer: coarse) {
   body .mm-projects-page .mm-sidebar-logo-mask { max-width: 100%; }

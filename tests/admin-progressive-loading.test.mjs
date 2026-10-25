@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { transformSync } from 'esbuild';
 import { restoreAdminProjectsProgressiveLoading, progressiveBaselines } from './helpers/admin-projects-progressive-preservation.mjs';
+import { restoreApprovedAdminWorkspace, adminWorkspaceBaseline } from './helpers/admin-workspace-preservation.mjs';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g,'\n');
 const admin = read('src/pages/Admin.tsx');
@@ -29,7 +30,7 @@ function adminHarness() {
     requestRef, controllerRef, AbortController, isRegionAccessDenied, isRegionAuthenticationError, setUsersAccessEpoch: set('usersAccessEpoch'),
     setError: set('error'), setSuccess: set('success'), setRegions: set('regions'), setProjects: set('projects'), setUsers: set('users'), setOrganizations: set('organizations'), setAccess: set('access'),
     readJson: response => response,
-    normalizeUserError: error => ({ message: error.message || 'Falha simulada' }),
+    normalizeUserError: error => ({ message: error.message || 'Falha simulada', retryable: error.retryable === true || Number(error.status) >= 500 }),
     fetch: (path, options) => { const gate = deferred(); requests.push({ path, options, ...gate }); return gate.promise; },
   });
   return { state, requests, refresh, requestRef, controllerRef, resolve(index, data) { requests[index].resolve(data); } };
@@ -80,6 +81,21 @@ test('refresh preserves valid data on transient failure but denied regions disca
   await second;
   assert.equal(h.state.projects.length, 1); assert.equal(h.state.regions.projects.pending, false);
   assert.deepEqual(h.state.users, []); assert.equal(h.state.regions.users.loaded, false); assert.equal(h.state.regions.users.pending, false);
+  assert.equal(h.state.regions.projects.retryable, true);
+  assert.equal(h.state.regions.users.retryable, false);
+});
+
+test('contextual retry is restricted to recoverable reads and never turns authorization failure into a retry', async () => {
+  for (const [status, retryable] of [[503, true], [400, false], [403, false]]) {
+    const h = adminHarness(), finished = h.refresh();
+    h.requests[0].reject(Object.assign(new Error('Synthetic failure'), { status, retryable: status === 403 }));
+    h.resolve(1, { access: [] }); h.resolve(2, { users: [] }); h.resolve(3, { organizations: [] });
+    await finished;
+    assert.equal(h.state.regions.projects.retryable, retryable);
+  }
+  assert.match(admin, /state\.retryable && <button[^>]+disabled=\{isRefreshing\}/);
+  assert.match(admin, /if \(!isRefreshing\) void refreshAdminData\(\)/);
+  assert.doesNotMatch(admin, /\? "Atualizando\.\.\." : "Atualizar"/);
 });
 
 test('Admin authentication loss invalidates companions so their late successes cannot restore private data', async () => {
@@ -190,6 +206,33 @@ test('strict inverses preserve all prior Admin user controls, project selectors 
   try { rejected = createHash('sha256').update(restoreAdminProjectsProgressiveLoading(path, mutated)).digest('hex') !== progressiveBaselines[path]; }
   catch (error) { assert.ok(error instanceof assert.AssertionError); rejected = true; }
   assert.equal(rejected, true, 'unrelated creation behavior must not be accepted as a loading delta');
+});
+
+test('Admin workspace extraction preserves the complete pinned predecessor and rejects changed business logic', () => {
+  const path = 'src/pages/Admin.tsx';
+  const hash = source => createHash('sha256').update(source).digest('hex');
+  assert.equal(hash(restoreApprovedAdminWorkspace(path, admin)), adminWorkspaceBaseline);
+  // These mutations are deliberately outside presentation-only differences.
+  // An exact inverse either rejects the edit or leaves a differing pinned hash.
+  for (const [before, after] of [
+    ['normalizeRole(user?.role) !== "super_admin"', 'normalizeRole(user?.role) !== "viewer"'],
+    ['read("/api/admin/projects")', 'read("/api/projects")'],
+    ['revision === requestRef.current', 'revision !== requestRef.current'],
+    ['setProjects([]); setOrganizations([]); setUsers([]); setAccess([]);', 'setProjects([]); setOrganizations([]); setAccess([]);'],
+    ['projects.filter((item) => item.active !== false)', 'projects.filter((item) => item.active === false)'],
+    ['sum + Number(org.fileCount || 0)', 'sum + Number(org.fileCount || 1)'],
+    ['onRefresh={refreshAdminData}', 'onRefresh={async () => {}}'],
+    ['retryable: !denied && presentation.retryable === true', 'retryable: presentation.retryable === true'],
+  ]) {
+    const changed = admin.replace(before, after);
+    assert.notEqual(changed, admin, before);
+    let rejected = false;
+    try { rejected = hash(restoreApprovedAdminWorkspace(path, changed)) !== adminWorkspaceBaseline; }
+    catch (error) { assert.ok(error instanceof assert.AssertionError); rejected = true; }
+    assert.equal(rejected, true, `protected Admin logic: ${before}`);
+  }
+  // The shared preservation entry point also retains the full Admin baseline.
+  assert.equal(hash(restoreAdminProjectsProgressiveLoading(path, admin)), adminWorkspaceBaseline);
 });
 
 const presentationCode = transformSync(read('src/components/loading/initial-loading-presentation.ts'), { loader: 'ts', format: 'esm' }).code;

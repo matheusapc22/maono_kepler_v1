@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, HTMLAttributes } from "react";
 
 import Logo from "../../assets/images/Logo_Maono.png";
+import AdminIcon from "../../pages/Admin/components/AdminIcon";
+import "../../pages/Admin/admin-workspace.css";
 import {
   DEFAULT_PROLONGED_LOADING_MS,
 } from "./region-loading-policy";
@@ -365,18 +367,46 @@ function AdminSectionSkeleton({ section }: { section?: string }) {
   }
 
   return (
-    <>
-      <MetricsSkeleton count={4} />
-      <section className="admin-command-grid" aria-hidden="true">
-        {Array.from({ length: 3 }, (_, index) => (
-          <article className="mm-card mm-section-card mm-skeleton-stack" key={index}>
-            <Skeleton width="58%" height={20} />
-            <Skeleton width="88%" height={12} />
-            <Skeleton width={130} height={36} />
+    <section className="admin-overview" aria-hidden="true">
+      <section className="mm-metrics-grid admin-overview-metrics">
+        {([
+          ["Organizações", "building"], ["Projetos", "map"],
+          ["Usuários", "users"], ["Arquivos", "file"],
+        ] as const).map(([label, icon]) => (
+          <article className="mm-card metric admin-overview-metric" key={label}>
+            <div className="admin-overview-metric-copy">
+              <span><StaticLoadingText pending>{label}</StaticLoadingText></span>
+              <Skeleton width={54} height={40} />
+            </div>
+            <AdminIcon name={icon} />
           </article>
         ))}
       </section>
-    </>
+      <section className="admin-overview-shortcuts">
+        <h2><StaticLoadingText pending>Acesso rápido</StaticLoadingText></h2>
+        <div className="admin-command-grid admin-overview-shortcuts-grid">
+          {([
+            ["Gestão de Organizações", "Organizações, documentos, projetos e limites.", "Abrir organizações", "building"],
+            ["Projetos e Mapas", "Mapas, vínculos, previews e configurações.", "Abrir projetos", "map"],
+            ["Auditoria", "Eventos, bloqueios e ações administrativas.", "Abrir auditoria", "audit"],
+          ] as const).map(([title, description, action, icon]) => (
+            <article className="mm-card mm-section-card admin-overview-shortcut" key={title}>
+              <div className="admin-overview-shortcut-heading">
+                <AdminIcon name={icon} />
+                <div>
+                  <h3><StaticLoadingText pending>{title}</StaticLoadingText></h3>
+                  <p><StaticLoadingText pending>{description}</StaticLoadingText></p>
+                </div>
+              </div>
+              <div className="mm-btn admin-overview-shortcut-action">
+                <span><StaticLoadingText pending>{action}</StaticLoadingText></span>
+                <AdminIcon name="arrow-right" />
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
   );
 }
 
@@ -390,40 +420,72 @@ export function AdminPageSkeleton({ section = "overview" }: { section?: string }
     audit: "Auditoria",
     system: "Sistema",
   };
+  const groups = [
+    { title: "ADMINISTRAÇÃO MAÕNO", items: [
+      { section: "overview", label: "Painel", icon: "dashboard" },
+      { section: "organizations", label: "Gestão de Organizações", icon: "building" },
+      { section: "users", label: "Usuários e Permissões", icon: "users" },
+      { section: "projects", label: "Projetos e Mapas", icon: "map" },
+    ] },
+    { title: "CONTROLE", items: [
+      { section: "requests", label: "Solicitações", icon: "request" },
+      { section: "audit", label: "Auditoria", icon: "audit" },
+      { section: "system", label: "Sistema", icon: "settings" },
+    ] },
+  ] as const;
+  const headingIcon = section === "overview" ? "shield" : groups.flatMap(group => [...group.items]).find(item => item.section === section)?.icon || "shield";
   return (
     <>
-    <main className="maono-admin-page admin-page mm-skeleton-page">
-      <aside className="admin-rail mm-skeleton-admin-rail" aria-hidden="true">
-        <div className="admin-brand">
-          <Skeleton width={38} height={38} radius={9} />
-          <div className="mm-skeleton-stack mm-skeleton-grow">
-            <Skeleton width="68%" height={13} />
-            <Skeleton width="44%" height={11} />
+    <main className="maono-admin-page admin-page maono-admin-workspace mm-skeleton-page">
+      <aside className="admin-rail admin-workspace-sidebar mm-skeleton-admin-rail" aria-hidden="true">
+        <div className="admin-brand admin-workspace-brand">
+          <div className="admin-workspace-logo">
+            <img className="admin-workspace-logo-image" src={Logo} alt="" />
+          </div>
+          <span className="admin-workspace-toggle"><AdminIcon name="chevron-left" /></span>
+        </div>
+        <div className="admin-workspace-identity">
+          <Skeleton className="admin-workspace-avatar" width={44} height={44} radius="50%" />
+          <div className="admin-workspace-user mm-skeleton-admin-user">
+            <Skeleton width="90%" height={14} />
+            <Skeleton width="55%" height={12} />
+            <Skeleton width="100%" height={12} />
           </div>
         </div>
-        <nav className="admin-nav">
-          {Array.from({ length: 7 }, (_, index) => (
-            <Skeleton key={index} width="100%" height={38} radius={9} />
+        <div className="admin-nav admin-workspace-nav">
+          {groups.map(group => (
+            <div className="admin-workspace-nav-group" key={group.title}>
+              <h2 className="admin-workspace-nav-title"><StaticLoadingText pending>{group.title}</StaticLoadingText></h2>
+              {group.items.map(item => (
+                <div className={`admin-workspace-nav-item${section === item.section ? " active" : ""}`} key={item.section}>
+                  <AdminIcon name={item.icon} />
+                  <span className="admin-workspace-nav-label"><StaticLoadingText pending>{item.label}</StaticLoadingText></span>
+                </div>
+              ))}
+            </div>
           ))}
-        </nav>
-        <div className="admin-rail-footer mm-skeleton-stack">
-          <Skeleton width="100%" height={38} radius={9} />
-          <Skeleton width="100%" height={38} radius={9} />
+        </div>
+        <div className="admin-rail-footer admin-workspace-footer">
+          <p className="admin-workspace-footer-title"><StaticLoadingText pending>Maõno Maps</StaticLoadingText></p>
+          <div className="admin-workspace-footer-action"><AdminIcon name="return" /><span><StaticLoadingText pending>Voltar para Projetos</StaticLoadingText></span></div>
+          <div className="admin-workspace-footer-action"><AdminIcon name="logout" /><span><StaticLoadingText pending>Sair</StaticLoadingText></span></div>
         </div>
       </aside>
-      <section className="admin-main">
-        <header className="mm-projects-topbar admin-topbar">
-          <div className="mm-skeleton-stack mm-skeleton-topbar-copy">
-            <p className="mm-eyebrow"><StaticLoadingText pending>Administração Maõno</StaticLoadingText></p>
+      <section className="admin-main admin-workspace-main">
+        <nav className="admin-workspace-breadcrumb" aria-label="Caminho da página">
+          <span><StaticLoadingText pending>Início</StaticLoadingText></span>
+          <AdminIcon name="chevron-right" />
+          {section !== "overview" && <><span><StaticLoadingText pending>Painel Admin</StaticLoadingText></span><AdminIcon name="chevron-right" /></>}
+          <span aria-current="page"><StaticLoadingText pending>{titles[section] ?? titles.overview}</StaticLoadingText></span>
+        </nav>
+        <header className="mm-projects-topbar admin-topbar admin-workspace-header">
+          <AdminIcon name={headingIcon} className="admin-workspace-heading-icon" />
+          <div className="admin-workspace-heading-copy">
             <h1><StaticLoadingText pending>{titles[section] ?? titles.overview}</StaticLoadingText></h1>
-            <p><StaticLoadingText pending>Acesso administrativo.</StaticLoadingText></p>
-          </div>
-          <div className="mm-topbar-actions">
-            <Skeleton width={84} height={28} radius={999} />
-            <Skeleton width={96} height={38} radius={9} />
+            <p><StaticLoadingText pending>{section === "overview" ? "Visão geral da plataforma" : "Administração da plataforma"}</StaticLoadingText></p>
           </div>
         </header>
-        <div className="admin-content" aria-busy="true">
+        <div className="admin-content admin-workspace-content" aria-busy="true">
           <AdminSectionSkeleton section={section} />
         </div>
       </section>

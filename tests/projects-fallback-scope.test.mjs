@@ -18,7 +18,7 @@ function mockDocument(existing = false) {
   };
 }
 
-test('all 57 presentation selector occurrences exclude Projects, including media and pseudo-states', () => {
+test('all 57 presentation selector occurrences exclude Projects and the new Admin workspace, including media and pseudo-states', () => {
   assert.equal(fallbackCss.split(scopedSelector).length - 1, 57);
   assert.equal(fallbackCss.includes(legacySelector), false);
   const remaining = fallbackCss.replaceAll(scopedSelector, '');
@@ -33,7 +33,8 @@ test('legacy declarations, neutral resets and media queries remain byte-identica
 
 test('boundary is shell identity, not route/pathname, DOM removal or feature flags', () => {
   assert.doesNotMatch(runtime, /location\.|pathname|MAONO_|removeChild|\.remove\(/);
-  assert.ok(scopedSelector.includes(':not(.maono-login-page, .mm-projects-page)'));
+  assert.ok(scopedSelector.includes(':not(.maono-login-page, .mm-projects-page, .maono-admin-workspace)'));
+  assert.doesNotMatch(scopedSelector, /\.maono-admin-page|\.admin-page/);
 });
 
 test('module evaluation is safe without document', () => {

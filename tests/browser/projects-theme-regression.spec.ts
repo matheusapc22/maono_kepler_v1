@@ -1,6 +1,6 @@
 import { test } from '@playwright/test';
 import {
-  widths, verifyProjectScope, verifyLegacyParity, verifyReproduction, verifyShellTransition,
+  widths, verifyProjectScope, verifyAdminScope, verifyLegacyParity, verifyReproduction, verifyShellTransition,
 } from '../helpers/projects-fallback-fixture.mjs';
 
 // Isolated CSS contract. This suite intentionally does not authenticate or call APIs.
@@ -9,6 +9,9 @@ for (const width of widths) {
   for (const colorScheme of ['light', 'dark']) {
     test(`Projects fallback isolation: ${width}px / ${colorScheme}`, async ({ page }) => {
       await verifyProjectScope(page, width, { colorScheme });
+    });
+    test(`Admin workspace fallback isolation: ${width}px / ${colorScheme}`, async ({ page }) => {
+      await verifyAdminScope(page, width, { colorScheme });
     });
   }
   for (const shell of ['legacy-page', 'maono-admin-page', 'maono-login-page']) {
@@ -28,4 +31,8 @@ test('shell identity transitions do not depend on startup URL or injection order
 
 test('Projects exclusion respects forced-colors', async ({ page }) => {
   await verifyProjectScope(page, 390, { forcedColors: 'active' });
+});
+
+test('Admin workspace exclusion respects forced-colors', async ({ page }) => {
+  await verifyAdminScope(page, 390, { forcedColors: 'active' });
 });

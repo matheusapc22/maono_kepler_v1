@@ -6,6 +6,9 @@ on:
       - 'src/components/loading/**'
       - 'src/pages/Admin.tsx'
       - 'src/pages/Admin/**'
+      - 'src/fallback-ui-styles.ts'
+      - 'src/platform-density.css'
+      - 'src/platform-layout.css'
       - 'src/pages/Projects.tsx'
       - 'src/pages/Projects/**'
       - 'src/pages/Kepler/thumbnail/preview-metrics.ts'
@@ -13,7 +16,13 @@ on:
       - 'tests/*progressive*.test.mjs'
       - 'tests/initial-loading-presentation.test.mjs'
       - 'tests/helpers/*progressive*.mjs'
+      - 'tests/helpers/admin-workspace-preservation.mjs'
+      - 'tests/helpers/projects-fallback-fixture.mjs'
+      - 'tests/projects-fallback-scope.test.mjs'
       - 'tests/browser/*progressive-loading.spec.ts'
+      - 'tests/browser/admin-workspace.spec.ts'
+      - 'tests/browser/projects-theme-regression.spec.ts'
+      - 'tests/browser/fixtures/admin-workspace.ts'
       - 'tests/browser/fixtures/project-preview-metrics.ts'
       - 'playwright.progressive-loading.config.ts'
       - '.github/workflows/progressive-loading.yml'
@@ -40,11 +49,14 @@ jobs:
           tests/projects-section-loading.test.mjs tests/users-access*.test.mjs
           tests/roadmap-loading.test.mjs tests/maono-select-migration.test.mjs
           tests/project-pages-contract.test.mjs
+          tests/projects-fallback-scope.test.mjs
       - name: Scoped lint
         run: >-
           npx eslint src/components/loading/Skeleton.tsx src/components/loading/region-loading-policy.ts
           src/components/loading/useSkeletonCount.ts src/components/loading/initial-loading-presentation.ts
           src/components/loading/useInitialLoadingPresentation.ts src/pages/Admin.tsx
+          src/pages/Admin/components/AdminSidebar.tsx src/pages/Admin/components/AdminOverview.tsx
+          src/pages/Admin/components/AdminIcon.tsx
           src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
           src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
           src/pages/Projects/components/TicketLoadingSkeletons.tsx
@@ -56,6 +68,7 @@ jobs:
           src/pages/Projects/components/TicketsToolbar.tsx src/pages/Projects/components/DocumentsPagination.tsx
           src/pages/Projects/components/DocumentsUi.tsx
           tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
+          tests/browser/admin-workspace.spec.ts tests/browser/fixtures/admin-workspace.ts
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
@@ -77,5 +90,8 @@ jobs:
             test-results/progressive-loading/
             progressive-loading-results.json
             tests/browser/*progressive-loading.spec.ts
+            tests/browser/admin-workspace.spec.ts
+            tests/browser/projects-theme-regression.spec.ts
+            tests/browser/fixtures/admin-workspace.ts
           if-no-files-found: warn
           retention-days: 14

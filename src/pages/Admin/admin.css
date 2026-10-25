@@ -12,8 +12,8 @@
   color: var(--admin-text) !important;
 }
 
-.maono-admin-page aside,
-.maono-admin-page header,
+.maono-admin-page:not(.maono-admin-workspace) aside,
+.maono-admin-page:not(.maono-admin-workspace) header,
 .maono-admin-page .rounded-2xl,
 .maono-admin-page .rounded-3xl {
   border-color: var(--admin-border) !important;
@@ -21,24 +21,24 @@
   box-shadow: 0 1px 2px rgba(0,0,0,.35) !important;
 }
 
-.maono-admin-page aside {
+.maono-admin-page:not(.maono-admin-workspace) aside {
   background-color: #080a0d !important;
 }
 
-.maono-admin-page a,
-.maono-admin-page button {
+.maono-admin-page:not(.maono-admin-workspace) a,
+.maono-admin-page:not(.maono-admin-workspace) button {
   border-radius: 6px !important;
 }
 
-.maono-admin-page a:hover,
-.maono-admin-page button:hover {
+.maono-admin-page:not(.maono-admin-workspace) a:hover,
+.maono-admin-page:not(.maono-admin-workspace) button:hover {
   border-color: rgba(214,168,79,.46) !important;
   background-color: var(--admin-surface-2) !important;
 }
 
-.maono-admin-page h1,
-.maono-admin-page h2,
-.maono-admin-page h3 {
+.maono-admin-page:not(.maono-admin-workspace) h1,
+.maono-admin-page:not(.maono-admin-workspace) h2,
+.maono-admin-page:not(.maono-admin-workspace) h3 {
   color: var(--admin-text) !important;
   letter-spacing: -0.025em;
 }
