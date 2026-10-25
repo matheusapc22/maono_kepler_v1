@@ -3,15 +3,15 @@ import {assertQaContext} from './cc04-resources.mjs';
 import {stateDigest} from './cc03-state.mjs';
 
 const fixedTrue={requiredBefore:true,activeValue:true,safeValue:true};
-export const manifest=Object.freeze({id:'cc07-notifications',version:1,description:'Scoped in-app notification delivery with preserved recipient state and independent consumer shutdown',
+export const manifest=Object.freeze({id:'cc07-notifications',version:2,description:'Scoped in-app notification delivery with preserved records and observed OFF schedule before consumption',
  mutationMode:'controlled_mutation',requiresBrowser:false,requiresApprovedIdentities:true,
  requiredProfiles:['manager','allowed','restricted'],requiredPermissions:{manager:['ticket.view','ticket.create','ticket.manage','ticket.access.manage'],allowed:['ticket.view'],restricted:['ticket.view']},
  managedFlags:{MAONO_TICKET_COMMANDS_ENABLED:fixedTrue,MAONO_TICKET_TRIAGE_ENABLED:fixedTrue,MAONO_TICKET_SELECTIVE_ACCESS_ENABLED:fixedTrue,
   MAONO_TICKET_NOTIFICATIONS_ENABLED:{requiredBefore:false,activeValue:true,safeValue:false}},
- prerequisites:['Separate human authorization for one empty dedicated organization other than QA9 and three dedicated non-admin identities',
+ prerequisites:['Separate human authorization for one dedicated organization other than QA9, an exact preserved-record baseline or empty scope, and three dedicated non-admin identities',
   '0041 audited/applied separately; approved immutable OFF/ON Worker versions, fixed D1 and no other bindings or handlers',
   'Approved cutoff/window, volume/cost limits, paused writers, QA9 digest and human recovery availability',
-  'Separate protected Worker-control and D1-read-only credentials; no consumer or resource provisioning by this operator'],
+  'Separate protected Worker-control and D1-read-only credentials; ephemeral tail receipt from approved OFF version before ON; no persistent log or resource provisioning'],
  cleanup:{policy:'preserve-private-cc07-v1',method:'Stop cron and consumer first; close only the new owned ticket using fresh state ETag and manager-only ACL; preserve all records',
   interruption:'Uncertain creation cannot be retried. Closure stops infrastructure; resource containment needs the journal and a separately approved recovery.'},
  cases:['CC07-DELIVERY','CC07-IDEMPOTENCY','CC07-RECIPIENT-STATE','CC07-ACL','CC07-CLEANUP']});
@@ -54,14 +54,14 @@ export async function run(ctx){
  ticketId=first.id;unknownCreation=false;await journal();await access(true);
  const replay=await ctx.api('manager',`${root}/tickets`,create);expect(replay,201);check(replay.body.ticket.id===ticketId&&replay.headers.get('Idempotency-Replayed')==='true','Repetição não idempotente.');
  await startConsumer(ticketId);
- const delivered=await poll(async()=>{const a=await audit();return a.scoped.notices.length===1?a:null;});
+ const delivered=await poll(async()=>{const a=await audit();return a.scoped.notices.length===1?a:null;},'first-delivery');
  check(delivered.scoped.outbox.length===1&&delivered.scoped.candidates.length===1&&delivered.scoped.notices[0].recipient_id===plan.qaIds.allowed,'Entrega excedeu o candidato aprovado.');
  ctx.record('CC07-DELIVERY','PASS',{channel:'in_app',recipients:1});
  const inbox=`${root}/ticket-notifications`;
  let allowed=expect(await ctx.api('allowed',inbox),200);check(allowed.items.length===1&&allowed.unread===1,'Aviso permitido ausente.');
  const noticeId=allowed.items[0].id;
  check(expect(await ctx.api('restricted',inbox),200).items.length===0,'Destinatário restrito recebeu aviso.');
- await poll(async()=>{const a=await audit();return a.scoped.outbox.every(x=>x.status==='delivered')?a:null;});
+ await poll(async()=>{const a=await audit();return a.scoped.outbox.every(x=>x.status==='delivered')?a:null;},'outbox-completion');
  check((await audit()).scoped.notices.length===1,'Entrega duplicada.');ctx.record('CC07-IDEMPOTENCY','PASS',{notices:1,createReplayed:true});
  for(const action of ['read','dismiss','restore']){
   const folder=action==='restore'?'?folder=deleted':'';allowed=expect(await ctx.api('allowed',inbox+folder),200);const n=allowed.items.find(x=>x.id===noticeId);check(n,'Aviso perdeu identidade.');
@@ -73,7 +73,7 @@ export async function run(ctx){
  await stopConsumer();await access(false);const before=await state();
  expect(await ctx.api('manager',path(),{method:'PATCH',headers:{'If-Match':before.etag},json:{nextAction:'Conferir supressão após revogação fictícia.'}}),200);
  await startConsumer(ticketId);
- await poll(async()=>{const a=await audit();return a.scoped.candidates.some(x=>x.state==='suppressed')?a:null;});
+ await poll(async()=>{const a=await audit();return a.scoped.candidates.some(x=>x.state==='suppressed')?a:null;},'revocation-suppression');
  check((await audit()).scoped.notices.length===1,'Revogação gerou entrega indevida.');
  check(expect(await ctx.api('allowed',inbox),200).items.length===0,'Conteúdo revogado ainda visível.');
  expect(await ctx.api('allowed',inbox,{method:'PATCH',json:{id:noticeId,action:'dismiss',version:allowed.items[0].version}}),404);
