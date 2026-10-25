@@ -1,17 +1,42 @@
 # AD-VIS-01 - Projects fallback isolation
 
-## Scope
+## Historical scope of AD-VIS-01
 
 Exclude `.mm-projects-page` from every presentation selector in
 `src/fallback-ui-styles.ts`. Keep login excluded, preserve global neutral resets,
 legacy declarations, media queries and the idempotent stylesheet injection.
 
-Use a selector list inside the **existing** `:not()`:
+AD-VIS-01 introduced a selector list inside the **existing** `:not()`:
 `#root > main:not(.maono-login-page, .mm-projects-page)`.
 The maximum argument specificity remains one class. Do not chain an extra
 `:not(.mm-projects-page)`, which would increase specificity on legacy screens.
 Do not couple this boundary to `window.location`, delete the fallback globally,
 or compensate with new `!important` declarations inside each sub-tab.
+
+## Extensão atual: workspace Admin
+
+O redesenho de `/admin` estende a mesma fronteira de propriedade visual. O
+seletor atual em todas as 57 ocorrências de apresentação é:
+
+```css
+#root > main:not(.maono-login-page, .mm-projects-page, .maono-admin-workspace)
+```
+
+O Admin ativo e seu `AdminPageSkeleton` recebem `.maono-admin-workspace` de forma
+incondicional. A classe adicional fica na lista do `:not()` existente, mantendo
+a especificidade máxima de uma classe entre os argumentos. Recolher a sidebar
+ou navegar entre seções não altera essa exclusão.
+
+O Admin legado (`.maono-admin-page`, sem `.maono-admin-workspace`) **continua
+recebendo o fallback**. A fixture de paridade legada permanece para provar esse
+limite; não se exclui toda a família `.maono-admin-page` ou `.admin-page`.
+Declarações, resets neutros, media queries e injeção idempotente preservam a
+baseline histórica de AD-VIS-01. O CSS próprio do novo workspace permanece
+restrito à sua raiz.
+
+Contrato visual, recuperação contextual e verificação da aplicação real:
+[Workspace Admin](admin-workspace-redesign.md). Esta extensão não substitui o
+histórico nem os resultados anteriores de AD-VIS-01 por resultados do Admin.
 
 ## Evidence and tests
 
@@ -23,10 +48,16 @@ silently accepted by updating this baseline.
 
 The unit suite tests all 57 presentation-selector occurrences, baseline integrity,
 DOM-free evaluation, the stable style ID and duplicate-injection protection.
-The browser suite has 38 isolated cases: seven widths (320, 390, 768, 1024, 1280,
+The original browser suite had 38 isolated cases: seven widths (320, 390, 768, 1024, 1280,
 1440 and 1920 CSS px), light/dark preferences, legacy/admin/login shell fixtures,
 focus/hover/disabled states, equal-specificity competition, shell identity changes,
 forced colors, and reproduction of the old white/blue/centered controls.
+
+A matriz atual acrescenta a exclusão do workspace Admin nessas larguras e
+preferências de cor, forced colors e transições entre o shell legado e o novo.
+A paridade de `.maono-admin-page` sem a nova classe continua sendo verificada.
+Os resultados da execução atual devem ser registrados no SHA da entrega; os
+números históricos acima não representam aprovação desta extensão.
 
 **These are synthetic DOM/CSS tests, not a React application or a production
 acceptance.** The fixture stylesheet is intentionally small. Passing it does not

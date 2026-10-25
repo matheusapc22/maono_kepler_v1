@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 // Synthetic DOM: proves CSS scope, NOT React routing, authorization, D1 or storage.
 export const legacySelector = '#root > main:not(.maono-login-page)';
-export const scopedSelector = '#root > main:not(.maono-login-page, .mm-projects-page)';
+export const scopedSelector = '#root > main:not(.maono-login-page, .mm-projects-page, .maono-admin-workspace)';
 export const widths = [320, 390, 768, 1024, 1280, 1440, 1920];
 export const fallbackSource = readFileSync(new URL('../../src/fallback-ui-styles.ts', import.meta.url), 'utf8');
 const cssMatch = /const fallbackCss = `([\s\S]*?)`;/.exec(fallbackSource);
@@ -102,11 +102,11 @@ async function allStates(page) {
   return { idle, focus, hover };
 }
 
-export async function verifyProjectScope(page, width, media = {}) {
-  await prepare(page, width, 'mm-projects-page', media);
+async function verifyIsolatedShell(page, width, shell, media = {}) {
+  await prepare(page, width, shell, media);
   const withoutFallback = await allStates(page);
   await page.addStyleTag({ content: fallbackCss });
-  assert.deepEqual(await allStates(page), withoutFallback, 'Fallback must not change Projects or descendants');
+  assert.deepEqual(await allStates(page), withoutFallback, `Fallback must not change ${shell} or descendants`);
   const rules = await page.evaluate(() => {
     const found = [];
     function visit(list) {
@@ -119,7 +119,15 @@ export async function verifyProjectScope(page, width, media = {}) {
     return { count: found.length, matches: found.filter(selector => document.querySelector(selector)) };
   });
   assert.ok(rules.count > 30, 'Non-vacuous: CSSOM must contain the fallback rules');
-  assert.deepEqual(rules.matches, [], 'No presentation selector may match the Projects fixture');
+  assert.deepEqual(rules.matches, [], `No presentation selector may match the ${shell} fixture`);
+}
+
+export async function verifyProjectScope(page, width, media = {}) {
+  await verifyIsolatedShell(page, width, 'mm-projects-page', media);
+}
+
+export async function verifyAdminScope(page, width, media = {}) {
+  await verifyIsolatedShell(page, width, 'maono-admin-page admin-page maono-admin-workspace', media);
 }
 
 export async function verifyLegacyParity(page, width, shell = 'legacy-page') {
@@ -153,6 +161,10 @@ export async function verifyShellTransition(page) {
     ['mm-projects-page', 'rgb(14, 17, 22)'],
     ['maono-login-page', 'rgb(14, 17, 22)'],
     ['mm-projects-page extra-class', 'rgb(14, 17, 22)'],
+    ['maono-admin-page admin-page', 'rgb(255, 255, 255)'],
+    ['maono-admin-page admin-page maono-admin-workspace', 'rgb(14, 17, 22)'],
+    ['maono-admin-page admin-page maono-admin-workspace is-sidebar-collapsed', 'rgb(14, 17, 22)'],
+    ['maono-admin-page admin-page', 'rgb(255, 255, 255)'],
     ['legacy-page', 'rgb(255, 255, 255)'],
   ]) {
     await page.locator('main').evaluate((el, value) => { el.className = `fixture ${value}`; }, shell);

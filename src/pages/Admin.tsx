@@ -10,6 +10,10 @@ import { normalizeUserError } from "../lib/user-error-catalog";
 import "./Projects/projects.css";
 import "./Admin/admin.css";
 import AdminUserManager from "./Admin/components/AdminUserManager";
+import AdminSidebar from "./Admin/components/AdminSidebar";
+import AdminOverview from "./Admin/components/AdminOverview";
+import AdminIcon, { type AdminIconName } from "./Admin/components/AdminIcon";
+import "./Admin/admin-workspace.css";
 
 type AdminSection = "overview" | "organizations" | "users" | "projects" | "requests" | "audit" | "system";
 
@@ -99,7 +103,7 @@ function statusLabel(active?: boolean) {
 }
 
 type AdminRegionKey = "projects" | "organizations" | "users" | "access";
-type AdminRegionState = { pending: boolean; loaded: boolean; error: string };
+type AdminRegionState = { pending: boolean; loaded: boolean; error: string; retryable?: boolean };
 const initialRegions = (): Record<AdminRegionKey, AdminRegionState> => ({
   projects: { pending: true, loaded: false, error: "" },
   organizations: { pending: true, loaded: false, error: "" },
@@ -132,6 +136,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   const [success, setSuccess] = useState("");
   const [regions, setRegions] = useState(initialRegions);
   const [usersAccessEpoch, setUsersAccessEpoch] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const handleMessage = useCallback((kind: "error" | "success", text: string) => {
     setError(kind === "error" ? text : "");
     setSuccess(kind === "success" ? text : "");
@@ -197,7 +202,8 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
           if (key === "users") { setUsers([]); setUsersAccessEpoch(current => current + 1); }
           if (key === "access") setAccess([]);
         }
-        setRegions(current => ({ ...current, [key]: { ...current[key], pending: false, loaded: denied ? false : current[key].loaded, error: normalizeUserError(err).message } }));
+        const presentation = normalizeUserError(err);
+        setRegions(current => ({ ...current, [key]: { ...current[key], pending: false, loaded: denied ? false : current[key].loaded, error: presentation.message, retryable: !denied && presentation.retryable === true } }));
       }
     };
     const results = await Promise.allSettled([
@@ -230,14 +236,14 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   const activeUsers = useMemo(() => users.filter((item) => item.active !== false), [users]);
   const totalFiles = useMemo(() => organizations.reduce((sum, org) => sum + Number(org.fileCount || 0), 0), [organizations]);
 
-  const navItems = [
-    { section: "overview", label: "Painel", icon: "◎" },
-    { section: "organizations", label: "Gestão de Organizações", icon: "▥" },
-    { section: "users", label: "Usuários e Permissões", icon: "☷" },
-    { section: "projects", label: "Projetos e Mapas", icon: "▦" },
-    { section: "requests", label: "Solicitações", icon: "◇" },
-    { section: "audit", label: "Auditoria", icon: "◌" },
-    { section: "system", label: "Sistema", icon: "⚙" },
+  const navItems: Array<{ section: AdminSection; label: string; icon: AdminIconName }> = [
+    { section: "overview", label: "Painel", icon: "dashboard" },
+    { section: "organizations", label: "Gestão de Organizações", icon: "building" },
+    { section: "users", label: "Usuários e Permissões", icon: "users" },
+    { section: "projects", label: "Projetos e Mapas", icon: "map" },
+    { section: "requests", label: "Solicitações", icon: "request" },
+    { section: "audit", label: "Auditoria", icon: "audit" },
+    { section: "system", label: "Sistema", icon: "settings" },
   ];
 
   function setSection(value: AdminSection) {
@@ -246,32 +252,16 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
 
   function renderOverview() {
     return (
-      <>
-        <section className="mm-metrics-grid">
-          <AdminMetric label="Organizações" value={activeOrganizations.length} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />
-          <AdminMetric label="Projetos" value={activeProjects.length} state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending} />
-          <AdminMetric label="Usuários" value={activeUsers.length} state={regions.users} structurePending={structurePending} contentPending={userPresentation.contentPending} />
-          <AdminMetric label="Arquivos" value={totalFiles} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />
-        </section>
-
-        <section className="admin-command-grid">
-          <article className="mm-card mm-section-card">
-            <h2><StaticLoadingText pending={structurePending}>Gestão de Organizações</StaticLoadingText></h2>
-            <p><StaticLoadingText pending={structurePending}>Organizações, documentos, projetos e limites.</StaticLoadingText></p>
-            <button className="mm-btn primary" type="button" onClick={() => setSection("organizations")}><StaticLoadingText pending={structurePending}>Abrir organizações</StaticLoadingText></button>
-          </article>
-          <article className="mm-card mm-section-card">
-            <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>
-            <p><StaticLoadingText pending={structurePending}>Mapas, vínculos, previews e configurações.</StaticLoadingText></p>
-            <button className="mm-btn" type="button" onClick={() => setSection("projects")}><StaticLoadingText pending={structurePending}>Abrir projetos</StaticLoadingText></button>
-          </article>
-          <article className="mm-card mm-section-card">
-            <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>
-            <p><StaticLoadingText pending={structurePending}>Eventos, bloqueios e ações administrativas.</StaticLoadingText></p>
-            <button className="mm-btn" type="button" onClick={() => setSection("audit")}><StaticLoadingText pending={structurePending}>Abrir auditoria</StaticLoadingText></button>
-          </article>
-        </section>
-      </>
+      <AdminOverview
+        structurePending={structurePending}
+        onSection={setSection}
+        metrics={[
+          { label: "Organizações", value: activeOrganizations.length, icon: "building", state: regions.organizations, contentPending: organizationPresentation.contentPending },
+          { label: "Projetos", value: activeProjects.length, icon: "map", state: regions.projects, contentPending: projectPresentation.contentPending },
+          { label: "Usuários", value: activeUsers.length, icon: "users", state: regions.users, contentPending: userPresentation.contentPending },
+          { label: "Arquivos", value: totalFiles, icon: "file", state: regions.organizations, contentPending: organizationPresentation.contentPending },
+        ]}
+      />
     );
   }
 
@@ -392,57 +382,48 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   }
 
   return (
-    <main className="maono-admin-page admin-page">
-      <aside className="admin-rail">
-        <div className="admin-brand">
-          <span className="admin-brand-mark">M</span>
-          <div>
-            <strong><StaticLoadingText pending={structurePending}>Maõno Admin</StaticLoadingText></strong>
-            <span><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>
-          </div>
-        </div>
+    <main className={`maono-admin-page admin-page maono-admin-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
+      <AdminSidebar
+        user={user}
+        profileLabel={roleLabel(user?.role)}
+        section={section}
+        items={navItems}
+        collapsed={sidebarCollapsed}
+        structurePending={structurePending}
+        onToggle={() => setSidebarCollapsed(value => !value)}
+        onSection={value => setSection(value as AdminSection)}
+        onLogout={handleLogout}
+      />
 
-        <nav className="admin-nav">
-          {navItems.map((item) => (
-            <button
-              key={item.section}
-              type="button"
-              className={section === item.section ? "active" : ""}
-              onClick={() => setSection(item.section as AdminSection)}
-            >
-              <span>{item.icon}</span>
-              <StaticLoadingText pending={structurePending}>{item.label}</StaticLoadingText>
-            </button>
-          ))}
+      <section className="admin-main admin-workspace-main">
+        <nav className="admin-workspace-breadcrumb" aria-label="Caminho da página">
+          <Link to="/projects"><StaticLoadingText pending={structurePending}>Início</StaticLoadingText></Link>
+          <AdminIcon name="chevron-right" />
+          {section === "overview" ? (
+            <span aria-current="page"><StaticLoadingText pending={structurePending}>Painel Admin</StaticLoadingText></span>
+          ) : (
+            <>
+              <Link to="/admin?section=overview"><StaticLoadingText pending={structurePending}>Painel Admin</StaticLoadingText></Link>
+              <AdminIcon name="chevron-right" />
+              <span aria-current="page"><StaticLoadingText pending={structurePending}>{sectionTitle(section)}</StaticLoadingText></span>
+            </>
+          )}
         </nav>
-
-        <div className="admin-rail-footer">
-          <Link to="/projects" className="mm-btn"><StaticLoadingText pending={structurePending}>Voltar para Projects</StaticLoadingText></Link>
-          <button type="button" className="mm-btn" onClick={handleLogout}><StaticLoadingText pending={structurePending}>Sair</StaticLoadingText></button>
-        </div>
-      </aside>
-
-      <section className="admin-main">
-        <header className="mm-projects-topbar admin-topbar">
-          <div>
-            <p className="mm-eyebrow"><StaticLoadingText pending={structurePending}>Administração Maõno</StaticLoadingText></p>
+        <header className="mm-projects-topbar admin-topbar admin-workspace-header">
+          <AdminIcon name={section === "overview" ? "shield" : navItems.find(item => item.section === section)?.icon || "shield"} className="admin-workspace-heading-icon" />
+          <div className="admin-workspace-heading-copy">
             <h1><StaticLoadingText pending={structurePending}>{sectionTitle(section)}</StaticLoadingText></h1>
-            <p><StaticLoadingText pending={structurePending}>Acesso administrativo.</StaticLoadingText></p>
-          </div>
-          <div className="mm-topbar-actions">
-            <span className="mm-user-chip gold"><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>
-            <button type="button" className="mm-btn" onClick={refreshAdminData} disabled={isRefreshing}>
-              <StaticLoadingText pending={structurePending}>{isRefreshing ? "Atualizando..." : "Atualizar"}</StaticLoadingText>
-            </button>
+            <p><StaticLoadingText pending={structurePending}>{section === "overview" ? "Visão geral da plataforma" : "Administração da plataforma"}</StaticLoadingText></p>
           </div>
         </header>
 
-        <div className="admin-content">
+        <div className="admin-content admin-workspace-content">
           {error && <div className="admin-notice error">{error}</div>}
           {success && <div className="admin-notice success">{success}</div>}
           {Object.entries(regions).filter(([, state]) => state.error).map(([key, state]) => (
             <div className="admin-notice error" role="alert" key={key}>
               <strong>{regionLabels[key]}: </strong>{state.error}
+              {state.retryable && <button type="button" className="mm-btn admin-workspace-retry" disabled={isRefreshing} onClick={() => { if (!isRefreshing) void refreshAdminData(); }}>Tentar novamente</button>}
             </div>
           ))}
           <LoadingStatus loading={isRefreshing || presentationPending} refreshing={(regions.projects.pending && regions.projects.loaded && !projectPresentation.contentPending) || (regions.organizations.pending && regions.organizations.loaded && !organizationPresentation.contentPending) || (regions.users.pending && regions.users.loaded && !userPresentation.contentPending)} label="Carregando dados administrativos." refreshingLabel="Atualizando dados administrativos." />
@@ -451,13 +432,6 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
       </section>
     </main>
   );
-}
-
-function AdminMetric({ label, value, state, structurePending, contentPending }: { label: string; value: number; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {
-  return <article className="mm-card metric" aria-busy={state.pending || contentPending}>
-    <span><StaticLoadingText pending={structurePending}>{label}</StaticLoadingText></span>
-    {contentPending ? <Skeleton width={54} height={30} /> : state.loaded ? <strong>{value}</strong> : <strong aria-label="Indisponível">—</strong>}
-  </article>;
 }
 
 function Table({ headers, rows, state, structurePending, contentPending }: { headers: string[]; rows: string[][]; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {

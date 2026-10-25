@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import {restoreApprovedNoticeIntegration} from './notice-board-preservation.mjs';
 import { restoreApprovedProjectsHeader } from './project-header-preservation.mjs';
 import { restorePasswordManagement } from './password-management-preservation.mjs';
+import { restoreApprovedAdminWorkspace, adminWorkspaceBaseline } from './admin-workspace-preservation.mjs';
 
 // Exact inverse of only the reviewed progressive-loading changes. Independently
 // pinned pre-change hashes below do not accept arbitrary selector/API changes.
 export const progressiveBaselines = {
+  "src/pages/Admin.tsx": adminWorkspaceBaseline,
   "src/pages/Admin/components/AdminUserManagerLegacy.tsx": "2f22e9ed1bf80eaf501f8bf7d6f7554896369ac0c77028786cea92e03a59c4b9",
   "src/pages/Projects/components/ProjectPagesUi.tsx": "3c0988648d51bae64495710758f3b7ec29cdf4d28ad89a42db81a116670bb0d9",
   "src/pages/Projects.tsx": "0b0c72e874c69da3c0b33be54af11d1108b90cae880324799dba65bcb2b0ca13",
@@ -167,240 +169,6 @@ const changes = {
 // Exact inverse of the separately reviewed 80 ms structure / 260 ms content presentation.
 // Applied in reverse edit order before the original pinned-baseline inverse.
 const initialStageChanges = {
-  "src/pages/Admin.tsx": [
-    {
-      "before": "import { AdminPageSkeleton, LoadingStatus, Skeleton }",
-      "after": "import { StaticLoadingText, useInitialLoadingPresentation } from \"../components/loading\";\nimport { AdminPageSkeleton, LoadingStatus, Skeleton }"
-    },
-    {
-      "before": "  const isRefreshing = Object.values(regions).some(region => region.pending);",
-      "after": "  const isRefreshing = Object.values(regions).some(region => region.pending);\n  const { structurePending } = useInitialLoadingPresentation({\n    pending: isRefreshing, hasData: Object.values(regions).some(region => region.loaded),\n    scopeKey: \"admin-structure\", failed: Boolean(error) || Object.values(regions).some(region => Boolean(region.error)),\n  });\n  const projectPresentation = useInitialLoadingPresentation({ pending: regions.projects.pending, hasData: regions.projects.loaded, scopeKey: \"admin-projects\", failed: Boolean(error || regions.projects.error) });\n  const organizationPresentation = useInitialLoadingPresentation({ pending: regions.organizations.pending, hasData: regions.organizations.loaded, scopeKey: \"admin-organizations\", failed: Boolean(error || regions.organizations.error) });\n  const userPresentation = useInitialLoadingPresentation({ pending: regions.users.pending, hasData: regions.users.loaded, scopeKey: \"admin-users\", failed: Boolean(error || regions.users.error) });\n  const presentationPending = projectPresentation.contentPending || organizationPresentation.contentPending || userPresentation.contentPending;"
-    },
-    {
-      "before": "          <AdminMetric label=\"Organizações\" value={activeOrganizations.length} state={regions.organizations} />",
-      "after": "          <AdminMetric label=\"Organizações\" value={activeOrganizations.length} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />"
-    },
-    {
-      "before": "          <AdminMetric label=\"Projetos\" value={activeProjects.length} state={regions.projects} />",
-      "after": "          <AdminMetric label=\"Projetos\" value={activeProjects.length} state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending} />"
-    },
-    {
-      "before": "          <AdminMetric label=\"Usuários\" value={activeUsers.length} state={regions.users} />",
-      "after": "          <AdminMetric label=\"Usuários\" value={activeUsers.length} state={regions.users} structurePending={structurePending} contentPending={userPresentation.contentPending} />"
-    },
-    {
-      "before": "          <AdminMetric label=\"Arquivos\" value={totalFiles} state={regions.organizations} />",
-      "after": "          <AdminMetric label=\"Arquivos\" value={totalFiles} state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending} />"
-    },
-    {
-      "before": "<Table state={regions.organizations}",
-      "after": "<Table state={regions.organizations} structurePending={structurePending} contentPending={organizationPresentation.contentPending}"
-    },
-    {
-      "before": "<Table state={regions.projects}",
-      "after": "<Table state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending}"
-    },
-    {
-      "before": "        organizationsLoaded={regions.organizations.loaded}",
-      "after": "        organizationsLoaded={regions.organizations.loaded}\n        structurePending={structurePending}\n        usersContentPending={userPresentation.contentPending}\n        organizationsContentPending={organizationPresentation.contentPending}"
-    },
-    {
-      "before": "            <h2>Gestão de Organizações</h2>",
-      "after": "            <h2><StaticLoadingText pending={structurePending}>Gestão de Organizações</StaticLoadingText></h2>"
-    },
-    {
-      "before": "            <h2>Projetos e Mapas</h2>",
-      "after": "            <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>"
-    },
-    {
-      "before": "            <h2>Auditoria</h2>",
-      "after": "            <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>"
-    },
-    {
-      "before": "        <h2>Gestão de Organizações</h2>",
-      "after": "        <h2><StaticLoadingText pending={structurePending}>Gestão de Organizações</StaticLoadingText></h2>"
-    },
-    {
-      "before": "        <h2>Projetos e Mapas</h2>",
-      "after": "        <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>"
-    },
-    {
-      "before": "        <h2>Solicitações</h2>",
-      "after": "        <h2><StaticLoadingText pending={structurePending}>Solicitações</StaticLoadingText></h2>"
-    },
-    {
-      "before": "        <h2>Auditoria</h2>",
-      "after": "        <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>"
-    },
-    {
-      "before": "        <h2>Sistema</h2>",
-      "after": "        <h2><StaticLoadingText pending={structurePending}>Sistema</StaticLoadingText></h2>"
-    },
-    {
-      "before": "            <p>Organizações, documentos, projetos e limites.</p>",
-      "after": "            <p><StaticLoadingText pending={structurePending}>Organizações, documentos, projetos e limites.</StaticLoadingText></p>"
-    },
-    {
-      "before": "            <p>Mapas, vínculos, previews e configurações.</p>",
-      "after": "            <p><StaticLoadingText pending={structurePending}>Mapas, vínculos, previews e configurações.</StaticLoadingText></p>"
-    },
-    {
-      "before": "            <p>Eventos, bloqueios e ações administrativas.</p>",
-      "after": "            <p><StaticLoadingText pending={structurePending}>Eventos, bloqueios e ações administrativas.</StaticLoadingText></p>"
-    },
-    {
-      "before": "        <p>Arquivos e documentos por organização.</p>",
-      "after": "        <p><StaticLoadingText pending={structurePending}>Arquivos e documentos por organização.</StaticLoadingText></p>"
-    },
-    {
-      "before": "        <p>Mapas, configurações, previews e vínculos.</p>",
-      "after": "        <p><StaticLoadingText pending={structurePending}>Mapas, configurações, previews e vínculos.</StaticLoadingText></p>"
-    },
-    {
-      "before": "        <p>Criação, revisão e suporte.</p>",
-      "after": "        <p><StaticLoadingText pending={structurePending}>Criação, revisão e suporte.</StaticLoadingText></p>"
-    },
-    {
-      "before": "        <p>Eventos e ações administrativas.</p>",
-      "after": "        <p><StaticLoadingText pending={structurePending}>Eventos e ações administrativas.</StaticLoadingText></p>"
-    },
-    {
-      "before": "        <p>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</p>",
-      "after": "        <p><StaticLoadingText pending={structurePending}>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</StaticLoadingText></p>"
-    },
-    {
-      "before": "            <p>Acesso administrativo.</p>",
-      "after": "            <p><StaticLoadingText pending={structurePending}>Acesso administrativo.</StaticLoadingText></p>"
-    },
-    {
-      "before": "<strong>Maõno Admin</strong>",
-      "after": "<strong><StaticLoadingText pending={structurePending}>Maõno Admin</StaticLoadingText></strong>"
-    },
-    {
-      "before": "<span>{roleLabel(user?.role)}</span>",
-      "after": "<span><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>"
-    },
-    {
-      "before": "              {item.label}",
-      "after": "              <StaticLoadingText pending={structurePending}>{item.label}</StaticLoadingText>"
-    },
-    {
-      "before": "<p className=\"mm-eyebrow\">Administração Maõno</p>",
-      "after": "<p className=\"mm-eyebrow\"><StaticLoadingText pending={structurePending}>Administração Maõno</StaticLoadingText></p>"
-    },
-    {
-      "before": "<h1>{sectionTitle(section)}</h1>",
-      "after": "<h1><StaticLoadingText pending={structurePending}>{sectionTitle(section)}</StaticLoadingText></h1>"
-    },
-    {
-      "before": "<span className=\"mm-user-chip gold\">{roleLabel(user?.role)}</span>",
-      "after": "<span className=\"mm-user-chip gold\"><StaticLoadingText pending={structurePending}>{roleLabel(user?.role)}</StaticLoadingText></span>"
-    },
-    {
-      "before": "<LoadingStatus loading={isRefreshing}",
-      "after": "<LoadingStatus loading={isRefreshing || presentationPending}"
-    },
-    {
-      "before": "function AdminMetric({ label, value, state }: { label: string; value: number; state: AdminRegionState }) {\n  return <article className=\"mm-card metric\" aria-busy={state.pending}>\n    <span>{label}</span>\n    {state.loaded ? <strong>{value}</strong> : state.pending ? <Skeleton width={54} height={30} /> : <strong aria-label=\"Indisponível\">—</strong>}",
-      "after": "function AdminMetric({ label, value, state, structurePending, contentPending }: { label: string; value: number; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {\n  return <article className=\"mm-card metric\" aria-busy={state.pending || contentPending}>\n    <span><StaticLoadingText pending={structurePending}>{label}</StaticLoadingText></span>\n    {contentPending ? <Skeleton width={54} height={30} /> : state.loaded ? <strong>{value}</strong> : <strong aria-label=\"Indisponível\">—</strong>}"
-    },
-    {
-      "before": "function Table({ headers, rows, state }: { headers: string[]; rows: string[][]; state: AdminRegionState }) {",
-      "after": "function Table({ headers, rows, state, structurePending, contentPending }: { headers: string[]; rows: string[][]; state: AdminRegionState; structurePending: boolean; contentPending: boolean }) {"
-    },
-    {
-      "before": "<div className=\"mm-table-wrap\" aria-busy={state.pending}>",
-      "after": "<div className=\"mm-table-wrap\" aria-busy={state.pending || contentPending}>"
-    },
-    {
-      "before": "<th key={header} scope=\"col\">{header}</th>",
-      "after": "<th key={header} scope=\"col\"><StaticLoadingText pending={structurePending}>{header}</StaticLoadingText></th>"
-    },
-    {
-      "before": "{state.pending && !state.loaded ? Array.from",
-      "after": "{contentPending ? Array.from"
-    },
-    {
-      "before": ">Abrir organizações<",
-      "after": "><StaticLoadingText pending={structurePending}>Abrir organizações</StaticLoadingText><"
-    },
-    {
-      "before": ">Abrir projetos<",
-      "after": "><StaticLoadingText pending={structurePending}>Abrir projetos</StaticLoadingText><"
-    },
-    {
-      "before": ">Abrir auditoria<",
-      "after": "><StaticLoadingText pending={structurePending}>Abrir auditoria</StaticLoadingText><"
-    },
-    {
-      "before": ">Voltar para Projects<",
-      "after": "><StaticLoadingText pending={structurePending}>Voltar para Projects</StaticLoadingText><"
-    },
-    {
-      "before": ">Sair<",
-      "after": "><StaticLoadingText pending={structurePending}>Sair</StaticLoadingText><"
-    },
-    {
-      "before": "<span>Abertas</span><strong>0</strong>",
-      "after": "<span><StaticLoadingText pending={structurePending}>Abertas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong>"
-    },
-    {
-      "before": "<span>Em análise</span><strong>0</strong>",
-      "after": "<span><StaticLoadingText pending={structurePending}>Em análise</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong>"
-    },
-    {
-      "before": "<span>Concluídas</span><strong>0</strong>",
-      "after": "<span><StaticLoadingText pending={structurePending}>Concluídas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong>"
-    },
-    {
-      "before": "{isRefreshing ? \"Atualizando...\" : \"Atualizar\"}",
-      "after": "<StaticLoadingText pending={structurePending}>{isRefreshing ? \"Atualizando...\" : \"Atualizar\"}</StaticLoadingText>"
-    },
-    {
-      "before": ">admin.open<",
-      "after": "><StaticLoadingText pending={structurePending}>admin.open</StaticLoadingText><"
-    },
-    {
-      "before": ">admin.files.redirect<",
-      "after": "><StaticLoadingText pending={structurePending}>admin.files.redirect</StaticLoadingText><"
-    },
-    {
-      "before": ">projects.thumbnail<",
-      "after": "><StaticLoadingText pending={structurePending}>projects.thumbnail</StaticLoadingText><"
-    },
-    {
-      "before": ">/admin/files redireciona para Gestão de Organizações.<",
-      "after": "><StaticLoadingText pending={structurePending}>/admin/files redireciona para Gestão de Organizações.</StaticLoadingText><"
-    },
-    {
-      "before": ">Preview vinculado ao projeto.<",
-      "after": "><StaticLoadingText pending={structurePending}>Preview vinculado ao projeto.</StaticLoadingText><"
-    },
-    {
-      "before": "<span>Painel acessado por {roleLabel(user?.role)}.</span>",
-      "after": "<span><StaticLoadingText pending={structurePending}>{`Painel acessado por ${roleLabel(user?.role)}.`}</StaticLoadingText></span>"
-    },
-    {
-      "before": "/ = /projects<br />",
-      "after": "<StaticLoadingText pending={structurePending}>/ = /projects</StaticLoadingText><br />"
-    },
-    {
-      "before": "/admin = painel administrativo<br />",
-      "after": "<StaticLoadingText pending={structurePending}>/admin = painel administrativo</StaticLoadingText><br />"
-    },
-    {
-      "before": "/admin/files = /admin?section=organizations<br />",
-      "after": "<StaticLoadingText pending={structurePending}>/admin/files = /admin?section=organizations</StaticLoadingText><br />"
-    },
-    {
-      "before": "          /api/projects/:slug/thumbnail = preview do projeto",
-      "after": "          <StaticLoadingText pending={structurePending}>/api/projects/:slug/thumbnail = preview do projeto</StaticLoadingText>"
-    },
-    {
-      "before": "refreshing={Object.values(regions).some(region => region.loaded)}",
-      "after": "refreshing={(regions.projects.pending && regions.projects.loaded && !projectPresentation.contentPending) || (regions.organizations.pending && regions.organizations.loaded && !organizationPresentation.contentPending) || (regions.users.pending && regions.users.loaded && !userPresentation.contentPending)}"
-    }
-  ],
   "src/pages/Admin/components/AdminUserManagerLegacy.tsx": [
     {
       "before": "import { Skeleton }",
@@ -740,6 +508,10 @@ const initialStageChanges = {
 };
 
 export function restoreAdminProjectsProgressiveLoading(path, source) {
+  // Admin now has a complete pinned predecessor including the original staged
+  // loading. Keep all older component baselines unchanged and protect the full
+  // Admin controller with the strict presentation-only inverse.
+  if (path === 'src/pages/Admin.tsx') return restoreApprovedAdminWorkspace(path, source);
   source = restoreApprovedNoticeIntegration(path, source);
   source = restorePasswordManagement(path, source);
   // The later header-only change must be reversed before the initial-loading

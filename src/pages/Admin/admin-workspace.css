@@ -1,0 +1,426 @@
+/* Admin's approved workspace. Layout rules stay inside this root so Projects
+ * and the legacy administrative surfaces keep their own visual contracts. */
+.maono-admin-workspace.maono-admin-page.admin-page {
+  --admin-workspace-sidebar-width: 262px;
+  --admin-workspace-gutter: 28px;
+  --admin-workspace-muted: #a5adb9;
+  display: grid;
+  grid-template-columns: var(--admin-workspace-sidebar-width) minmax(0, 1fr);
+  height: var(--maono-app-viewport-height, 100dvh);
+  overflow: hidden;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color-scheme: dark;
+  transition: grid-template-columns 180ms ease;
+}
+
+.maono-admin-workspace,
+.maono-admin-workspace *,
+.maono-admin-workspace *::before,
+.maono-admin-workspace *::after { box-sizing: border-box; }
+.maono-admin-workspace :is(button, input, select, textarea) { font-family: inherit; }
+.maono-admin-workspace :is(button, a) { -webkit-tap-highlight-color: transparent; }
+.maono-admin-workspace button { cursor: pointer; }
+.maono-admin-workspace button:disabled { cursor: not-allowed; opacity: .5; }
+.maono-admin-workspace :is(h1, h2, h3) { color: var(--admin-text); letter-spacing: -.025em; }
+.maono-admin-workspace .admin-icon { display: block; width: 24px; height: 24px; flex: 0 0 auto; }
+
+.maono-admin-workspace .admin-workspace-sidebar.admin-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: var(--maono-app-viewport-height, 100dvh);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--admin-border);
+  background: var(--mm-sidebar, #080a0d);
+  box-shadow: none;
+}
+.maono-admin-workspace .admin-workspace-brand.admin-brand {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 12px;
+  min-height: 68px;
+  padding: 16px 18px 4px;
+  border: 0;
+}
+.maono-admin-workspace .admin-workspace-logo {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-decoration: none;
+}
+.maono-admin-workspace .admin-workspace-logo-image { display: block; width: 140px; height: 48px; object-fit: contain; }
+.maono-admin-workspace .admin-workspace-logo-symbol { display: none; width: 40px; height: 44px; object-fit: contain; }
+.maono-admin-workspace .admin-workspace-toggle {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  width: 36px;
+  height: 38px;
+  min-height: 0;
+  padding: 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  color: var(--maono-accent-bright);
+  background: var(--mm-bg-soft, #0e1116);
+}
+.maono-admin-workspace .admin-workspace-toggle .admin-icon { width: 18px; height: 18px; }
+.maono-admin-workspace .admin-workspace-toggle:hover { background: var(--maono-accent-surface); border-color: var(--maono-accent-border); }
+.maono-admin-workspace .admin-workspace-identity {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  margin: 14px 18px 0;
+}
+.maono-admin-workspace .admin-workspace-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--maono-accent-bright);
+  border-radius: 50%;
+  color: var(--maono-accent-bright);
+  font-size: 20px;
+  font-weight: 750;
+}
+.maono-admin-workspace .admin-workspace-user { min-width: 0; }
+.maono-admin-workspace .admin-workspace-user :is(strong, span) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.maono-admin-workspace .admin-workspace-user strong { font-size: 14px; font-weight: 750; line-height: 20px; }
+.maono-admin-workspace .admin-workspace-user > span { color: var(--admin-workspace-muted); font-size: 13px; line-height: 20px; }
+.maono-admin-workspace .admin-workspace-user > .admin-workspace-email { font-size: 12px; }
+
+.maono-admin-workspace .admin-workspace-nav.admin-nav {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 32px 10px 16px;
+  overscroll-behavior-y: contain;
+}
+.maono-admin-workspace .admin-workspace-nav-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.maono-admin-workspace .admin-workspace-nav-group + .admin-workspace-nav-group { margin-top: 24px; }
+.maono-admin-workspace .admin-workspace-nav-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 12px 8px;
+  color: var(--maono-accent-bright);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 18px;
+  letter-spacing: .045em;
+  white-space: nowrap;
+}
+.maono-admin-workspace .admin-workspace-nav-title::after { content: ""; height: 1px; min-width: 12px; flex: 1; background: var(--admin-border-strong); }
+.maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--admin-text);
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  text-align: left;
+  text-decoration: none;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.maono-admin-workspace .admin-workspace-nav-item .admin-icon { width: 26px; height: 26px; color: var(--maono-accent-text); }
+.maono-admin-workspace .admin-workspace-nav-item > .admin-workspace-nav-label { width: auto; min-width: 0; flex: 1; color: inherit; text-align: left; }
+.maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item:hover { color: var(--admin-text); background: rgb(255 255 255 / .035); border-color: transparent; }
+.maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item.active {
+  color: var(--maono-accent-bright);
+  border-color: var(--maono-accent-border);
+  background: linear-gradient(90deg, var(--maono-accent-surface), rgb(var(--maono-accent-rgb) / .055));
+}
+.maono-admin-workspace .admin-workspace-nav-item.active::before { content: ""; position: absolute; left: 0; top: 1px; bottom: 1px; width: 4px; border-radius: 4px 0 0 4px; background: var(--maono-accent-bright); }
+.maono-admin-workspace .admin-workspace-nav-item.active .admin-icon { color: var(--maono-accent-bright); }
+
+.maono-admin-workspace .admin-workspace-footer.admin-rail-footer {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 16px 22px 20px;
+  border-top: 1px solid var(--admin-border);
+}
+.maono-admin-workspace .admin-workspace-footer-title { margin: 0 0 4px; color: var(--maono-accent-bright); font-size: 14px; font-weight: 550; line-height: 20px; }
+.maono-admin-workspace .admin-workspace-footer-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--admin-text);
+  background: transparent;
+  font-size: 16px;
+  font-weight: 450;
+  line-height: 24px;
+  text-align: left;
+  text-decoration: none;
+}
+.maono-admin-workspace .admin-workspace-footer-action:hover { color: var(--maono-accent-bright); }
+.maono-admin-workspace .admin-workspace-footer-action .admin-icon { width: 26px; height: 26px; }
+
+.maono-admin-workspace .admin-workspace-main.admin-main { min-width: 0; min-height: 0; height: var(--maono-app-viewport-height, 100dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; }
+.maono-admin-workspace .admin-workspace-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 56px;
+  padding: 14px var(--admin-workspace-gutter);
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 14px;
+  line-height: 24px;
+}
+.maono-admin-workspace .admin-workspace-breadcrumb a { color: var(--maono-accent-bright); text-decoration: none; border-radius: 3px; }
+.maono-admin-workspace .admin-workspace-breadcrumb a:hover { text-decoration: underline; }
+.maono-admin-workspace .admin-workspace-breadcrumb .admin-icon { width: 12px; height: 12px; color: var(--admin-workspace-muted); }
+.maono-admin-workspace .admin-workspace-breadcrumb > :is(span, a) { overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-workspace-header.mm-projects-topbar {
+  position: relative;
+  top: auto;
+  z-index: auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 118px;
+  padding: 26px var(--admin-workspace-gutter) 28px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.maono-admin-workspace .admin-workspace-header .admin-workspace-heading-icon { width: 44px; height: 52px; color: var(--maono-accent-bright); }
+.maono-admin-workspace .admin-workspace-heading-copy { min-width: 0; }
+.maono-admin-workspace .admin-workspace-header .admin-workspace-heading-copy h1 { margin: 0; color: var(--admin-text); font-size: 28px; font-weight: 800; line-height: 36px; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-workspace-heading-copy p { margin: 4px 0 0; color: var(--admin-workspace-muted); font-size: 16px; line-height: 24px; }
+.maono-admin-workspace .admin-workspace-content.admin-content { min-width: 0; padding: 0 var(--admin-workspace-gutter) 40px; }
+.maono-admin-workspace .admin-workspace-content > .admin-notice { margin-top: 0; margin-bottom: 16px; }
+.maono-admin-workspace .admin-workspace-retry { min-height: 40px; margin-left: 12px; padding: 6px 12px; border: 1px solid var(--maono-accent-border); border-radius: 6px; color: var(--maono-accent-text); background: var(--maono-accent-surface); font-size: 14px; font-weight: 600; }
+
+.maono-admin-workspace .admin-overview { min-width: 0; container: admin-overview / inline-size; }
+.maono-admin-workspace .admin-overview-metrics.mm-metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 0; }
+.maono-admin-workspace .admin-overview-metric.mm-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  min-height: 117px;
+  padding: 22px 30px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 8px;
+  background: linear-gradient(120deg, #0d141c, #0a1017);
+  box-shadow: none;
+}
+.maono-admin-workspace .admin-overview-metric-copy { min-width: 0; }
+.maono-admin-workspace .admin-overview-metric-copy > span:not(.mm-skeleton) { display: block; color: var(--admin-workspace-muted); font-size: 12px; font-weight: 650; line-height: 18px; letter-spacing: .09em; text-transform: uppercase; }
+.maono-admin-workspace .admin-overview-metric .admin-overview-metric-copy > strong { display: block; margin: 6px 0 0; color: var(--admin-text); font-size: 40px; font-weight: 750; line-height: 44px; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-overview-metric-copy > .mm-skeleton { margin-top: 6px; }
+.maono-admin-workspace .admin-overview-metric > .admin-icon { width: 40px; height: 44px; color: var(--maono-accent-bright); }
+.maono-admin-workspace .admin-overview-shortcuts { margin-top: 46px; }
+.maono-admin-workspace .admin-overview-shortcuts > h2 { margin: 0 0 18px; color: var(--admin-text); font-size: 28px; font-weight: 800; line-height: 36px; letter-spacing: -.025em; }
+.maono-admin-workspace .admin-overview-shortcuts-grid.admin-command-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.maono-admin-workspace .admin-overview-shortcut.mm-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 220px;
+  padding: 20px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 8px;
+  background: linear-gradient(120deg, #0d141c, #0a1017);
+  box-shadow: none;
+}
+.maono-admin-workspace .admin-overview-shortcut-heading { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: start; gap: 24px; padding: 16px 16px 0; }
+.maono-admin-workspace .admin-overview-shortcut-heading > .admin-icon { width: 44px; height: 44px; color: var(--maono-accent-bright); }
+.maono-admin-workspace .admin-overview-shortcut-heading h3 { margin: 0; color: var(--admin-text); font-size: 20px; font-weight: 750; line-height: 28px; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-overview-shortcut-heading p { max-width: 260px; margin: 10px 0 0; color: var(--admin-workspace-muted); font-size: 16px; line-height: 24px; }
+.maono-admin-workspace .admin-overview-shortcut .admin-overview-shortcut-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 16px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: auto;
+  padding: 12px 22px;
+  border: 1px solid var(--maono-accent-border-strong);
+  border-radius: 7px;
+  color: var(--maono-accent-bright);
+  background: linear-gradient(110deg, var(--maono-accent-surface), rgb(var(--maono-accent-rgb) / .055));
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 24px;
+  text-align: left;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.maono-admin-workspace .admin-overview-shortcut-action > span { color: inherit; }
+.maono-admin-workspace .admin-overview-shortcut-action .admin-icon { width: 22px; height: 22px; }
+.maono-admin-workspace .admin-overview-shortcut .admin-overview-shortcut-action:hover { border-color: var(--maono-accent-bright); background: var(--maono-accent-surface-strong); }
+
+/* Existing administrative tables and controls now own their styles instead of
+ * inheriting the generic fallback. Their data and interaction logic is intact. */
+.maono-admin-workspace .admin-workspace-content > .mm-section-card { min-width: 0; }
+.maono-admin-workspace .admin-workspace-content .mm-table-wrap { max-width: 100%; overflow-x: auto; }
+.maono-admin-workspace .admin-workspace-content .mm-table-wrap table { width: 100%; border-collapse: collapse; }
+.maono-admin-workspace .admin-workspace-content .mm-table-wrap :is(th, td) { text-align: left; vertical-align: middle; }
+.maono-admin-workspace .admin-workspace-content .mm-btn { cursor: pointer; }
+
+@container admin-overview (max-width: 1079px) {
+  .maono-admin-workspace .admin-overview-shortcuts-grid.admin-command-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .maono-admin-workspace .admin-overview-shortcut { gap: 24px; }
+  .maono-admin-workspace .admin-overview-shortcut-heading { padding: 8px 4px 0; gap: 16px; }
+}
+@container admin-overview (max-width: 959px) {
+  .maono-admin-workspace .admin-overview-metrics.mm-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container admin-overview (max-width: 699px) {
+  .maono-admin-workspace .admin-overview-shortcuts-grid.admin-command-grid { grid-template-columns: minmax(0, 1fr); }
+  .maono-admin-workspace .admin-overview-shortcuts { margin-top: 32px; }
+}
+@container admin-overview (max-width: 419px) {
+  .maono-admin-workspace .admin-overview-metrics.mm-metrics-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (min-width: 961px) {
+  .maono-admin-workspace.maono-admin-page.admin-page.is-sidebar-collapsed { --admin-workspace-sidebar-width: 72px; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-brand.admin-brand { flex-direction: column; align-items: center; gap: 10px; padding: 12px 8px 0; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-logo { width: 44px; height: 44px; justify-content: center; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-logo-image { display: none; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-logo-symbol { display: block; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-identity { grid-template-columns: 44px; justify-content: center; margin: 18px 0 0; min-height: 44px; }
+  .maono-admin-workspace.is-sidebar-collapsed :is(.admin-workspace-user, .admin-workspace-nav-label, .admin-workspace-nav-title, .admin-workspace-footer-title, .admin-workspace-footer-action > span) { display: none; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-nav.admin-nav { padding: 20px 8px 12px; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-nav-group + .admin-workspace-nav-group { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--admin-border); }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-nav .admin-workspace-nav-item { justify-content: center; min-height: 46px; padding: 9px; gap: 0; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-footer.admin-rail-footer { padding: 12px 8px; }
+  .maono-admin-workspace.is-sidebar-collapsed .admin-workspace-footer-action { justify-content: center; }
+}
+
+@media (max-width: 960px) {
+  .maono-admin-workspace.maono-admin-page.admin-page { display: block; height: auto; overflow: visible; }
+  .maono-admin-workspace .admin-workspace-sidebar.admin-rail { height: auto; min-height: 0; border-right: 0; border-bottom: 1px solid var(--admin-border); }
+  .maono-admin-workspace .admin-workspace-brand.admin-brand { align-items: center; padding: 14px 20px 8px; }
+  .maono-admin-workspace .admin-workspace-identity { max-width: 360px; margin: 10px 20px 0; }
+  .maono-admin-workspace .admin-workspace-nav.admin-nav { overflow: visible; padding: 24px 14px 18px; }
+  .maono-admin-workspace .admin-workspace-nav-group { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+  .maono-admin-workspace .admin-workspace-nav-title { grid-column: 1 / -1; }
+  .maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item { gap: 14px; font-size: 15px; }
+  .maono-admin-workspace .admin-workspace-footer.admin-rail-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; padding: 14px 22px; }
+  .maono-admin-workspace .admin-workspace-footer-title { grid-column: 1 / -1; }
+  .maono-admin-workspace .admin-workspace-footer-action { font-size: 14px; gap: 10px; }
+  .maono-admin-workspace .admin-workspace-main.admin-main { height: auto; overflow: visible; }
+  .maono-admin-workspace.is-sidebar-collapsed :is(.admin-workspace-identity, .admin-workspace-nav, .admin-workspace-footer) { display: none; }
+  .maono-admin-workspace .admin-workspace-toggle { width: 44px; height: 44px; flex-basis: 44px; }
+}
+@media (max-width: 600px) {
+  .maono-admin-workspace.maono-admin-page.admin-page { --admin-workspace-gutter: 18px; }
+  .maono-admin-workspace .admin-workspace-header.mm-projects-topbar { gap: 16px; min-height: 112px; padding-block: 24px; }
+  .maono-admin-workspace .admin-workspace-header .admin-workspace-heading-copy h1 { font-size: 26px; line-height: 34px; }
+  .maono-admin-workspace .admin-workspace-heading-copy p { font-size: 14px; line-height: 22px; }
+  .maono-admin-workspace .admin-overview-metric.mm-card { padding-inline: 24px; }
+  .maono-admin-workspace .admin-overview-shortcuts > h2 { font-size: 25px; line-height: 34px; }
+  .maono-admin-workspace .admin-overview-shortcut.mm-card { padding: 18px; }
+  .maono-admin-workspace .admin-overview-shortcut-heading { grid-template-columns: 40px minmax(0, 1fr); gap: 16px; padding: 8px 0 0; }
+  .maono-admin-workspace .admin-overview-shortcut-heading > .admin-icon { width: 38px; height: 40px; }
+  .maono-admin-workspace .admin-overview-shortcut-heading h3 { font-size: 18px; line-height: 26px; }
+  .maono-admin-workspace .admin-overview-shortcut-heading p { font-size: 15px; line-height: 23px; }
+  .maono-admin-workspace .admin-overview-shortcut .admin-overview-shortcut-action { padding-inline: 16px; font-size: 16px; }
+  .maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item { padding-inline: 10px; gap: 10px; font-size: 14px; }
+  .maono-admin-workspace .admin-workspace-nav-item .admin-icon { width: 22px; height: 24px; }
+  .maono-admin-workspace .admin-workspace-retry { margin: 10px 0 0; }
+}
+@media (pointer: coarse) {
+  .maono-admin-workspace .admin-workspace-toggle { width: 44px; height: 44px; flex-basis: 44px; }
+  .maono-admin-workspace .admin-workspace-retry { min-height: 44px; }
+}
+@media (forced-colors: none) {
+  .maono-admin-workspace :is(.admin-workspace-main, .admin-workspace-nav) { scrollbar-width: thin; scrollbar-color: var(--maono-sidebar-scroll-thumb) transparent; }
+  .maono-admin-workspace :is(.admin-workspace-main, .admin-workspace-nav)::-webkit-scrollbar { width: 5px; height: 5px; }
+  .maono-admin-workspace :is(.admin-workspace-main, .admin-workspace-nav)::-webkit-scrollbar-thumb { border-radius: 99px; background: var(--maono-sidebar-scroll-thumb); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .maono-admin-workspace.maono-admin-page.admin-page,
+  .maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item,
+  .maono-admin-workspace .admin-overview-shortcut .admin-overview-shortcut-action { transition: none; }
+}
+
+
+/* AD-VIS density bridge: same real-size tokens as Projects, no zoom or scale. */
+@media (min-width: 961px) {
+  body .maono-admin-workspace.maono-admin-page.admin-page {
+    --admin-workspace-sidebar-width: var(--maono-density-sidebar, 15rem);
+  }
+}
+body .maono-admin-workspace.maono-admin-page.admin-page {
+  --admin-workspace-gutter: var(--maono-density-gutter, 24px);
+}
+body .maono-admin-workspace .admin-workspace-brand.admin-brand { min-height: 60px; padding: 10px 12px 4px; gap: 6px; }
+body .maono-admin-workspace .admin-workspace-logo { height: 44px; }
+body .maono-admin-workspace .admin-workspace-logo-image { width: 140px; height: 44px; }
+body .maono-admin-workspace .admin-workspace-toggle { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; padding: 6px; }
+body .maono-admin-workspace .admin-workspace-identity { grid-template-columns: 32px minmax(0, 1fr); gap: 8px; min-height: 48px; margin: 8px 12px 0; }
+body .maono-admin-workspace .admin-workspace-avatar { width: 32px; height: 32px; font-size: 14px; }
+body .maono-admin-workspace .admin-workspace-user strong { font-size: 13px; line-height: 18px; }
+body .maono-admin-workspace .admin-workspace-user > span { font-size: 11px; line-height: 16px; }
+body .maono-admin-workspace .admin-workspace-user > .admin-workspace-email { font-size: 10px; }
+body .maono-admin-workspace .admin-workspace-nav.admin-nav { padding: 18px 8px 10px; }
+body .maono-admin-workspace .admin-workspace-nav-group { gap: 2px; }
+body .maono-admin-workspace .admin-workspace-nav-group + .admin-workspace-nav-group { margin-top: 18px; }
+body .maono-admin-workspace .admin-workspace-nav-title { margin: 0 8px 7px; font-size: 11px; line-height: 16px; gap: 8px; }
+body .maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item { min-height: var(--maono-density-control-small, 36px); padding: 6px 8px; gap: 8px; font-size: 13px; line-height: 19px; }
+body .maono-admin-workspace .admin-workspace-nav-item .admin-icon { width: 18px; height: 18px; }
+body .maono-admin-workspace .admin-workspace-footer.admin-rail-footer { gap: 2px; padding: 10px 12px 12px; }
+body .maono-admin-workspace .admin-workspace-footer-title { font-size: 12px; line-height: 18px; }
+body .maono-admin-workspace .admin-workspace-footer-action { min-height: var(--maono-density-control-small, 36px); padding: 5px 0; gap: 9px; font-size: 13px; line-height: 20px; }
+body .maono-admin-workspace .admin-workspace-footer-action .admin-icon { width: 18px; height: 18px; }
+body .maono-admin-workspace .admin-workspace-breadcrumb { min-height: 52px; padding: 12px var(--admin-workspace-gutter); font-size: 12px; line-height: 20px; }
+body .maono-admin-workspace .admin-workspace-header.mm-projects-topbar { min-height: 92px; padding: 18px var(--admin-workspace-gutter); gap: 14px; }
+body .maono-admin-workspace .admin-workspace-header .admin-workspace-heading-copy h1 { font-size: var(--maono-density-heading, 26px); line-height: 1.2; }
+body .maono-admin-workspace .admin-workspace-heading-copy p { font-size: 13px; line-height: 20px; }
+body .maono-admin-workspace .admin-overview-metric.mm-card { min-height: 96px; padding: 14px 16px; }
+body .maono-admin-workspace .admin-overview-shortcut.mm-card { min-height: 184px; padding: 16px; }
+body .maono-admin-workspace .admin-overview-shortcuts > h2 { font-size: var(--maono-density-heading, 26px); line-height: 1.2; }
+body .maono-admin-workspace .admin-overview-shortcut-heading h3 { font-size: 16px; line-height: 22px; }
+body .maono-admin-workspace .admin-overview-shortcut-heading p { font-size: 13px; line-height: 20px; }
+body .maono-admin-workspace .admin-overview-shortcut .admin-overview-shortcut-action { min-height: var(--maono-density-control, 40px); font-size: 13px; }
+@media (max-width: 960px), (pointer: coarse) {
+  body .maono-admin-workspace .admin-workspace-toggle { min-width: 44px; min-height: 44px; flex-basis: 44px; }
+  body .maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item,
+  body .maono-admin-workspace .admin-workspace-footer-action,
+  body .maono-admin-workspace .admin-overview-shortcut .admin-overview-shortcut-action { min-height: 44px; }
+}
+@media (max-width: 600px) {
+  body .maono-admin-workspace .admin-workspace-header.mm-projects-topbar { min-height: 96px; }
+  body .maono-admin-workspace .admin-workspace-nav .admin-workspace-nav-item { font-size: 14px; }
+}
