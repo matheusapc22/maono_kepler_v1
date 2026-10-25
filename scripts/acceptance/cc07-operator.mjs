@@ -34,7 +34,7 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
  const manifest=suite.manifest,now=runtime.now||Date.now,budget=createExecutionBudget(manifest,{now}),deps={...runtime,budget};
  const report=initialReport({mode:options.mode,suite:manifest.id,suiteVersion:manifest.version,organizationId:options.organizationId,expectedCommit:options.expectedCommit});
  let context=null,armed=false,initial=null,plan=null,infra=null,before=null,sequence=0,error=null,workerStopped=false;
- const save=()=>writeReport(options.report.replace(/\.json$/,`.checkpoint-${++sequence}.json`),report);
+ const save=()=>writeReport(options.reportPath.replace(/\.json$/,`.checkpoint-${++sequence}.json`),report);
  try{
   budget.enter('preflight');plan=validateCc07Plan(env.MAONO_ACCEPTANCE_CC07_PLAN_JSON,options,{now:now(),admit:options.mode==='run'});assertCc07Actor(plan,env);
   if(options.mode==='run')budget.constrainDeadline(Date.parse(plan.policy.endAt));
@@ -117,7 +117,7 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
   if(options.mode==='run'&&(!report.operationalTestsPassed||!report.preservationVerified)){report.ok=false;report.complete=false;report.acceptanceIncomplete=true;}
   report.budget={startedAt:new Date(budget.startedAt).toISOString(),deadline:new Date(budget.endAt).toISOString(),closureReserveMinutes:75};
   report.planDigest=plan?cc07Digest(plan):null;
-  await writeReport(options.report,report);
+  await writeReport(options.reportPath,report);
  }
  return report.ok?0:1;
 }
