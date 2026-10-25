@@ -63,3 +63,27 @@ test('session checkpoint contains only safe metadata and failure still permits c
 for(const expiresAt of ['invalid',new Date(now+30000).toISOString(),new Date(now+86400001).toISOString()])test(`tail rejects unbounded or insufficient expiry ${expiresAt}`,async()=>{
  const f=transport({expiresAt});await assert.rejects(()=>f.observer.start(),{code:'CC07_TAIL_EXPIRY_INVALID'});await f.observer.close();assert.equal(f.socket(),undefined);
 });
+
+test('concurrent first close and later close share one confirmed cleanup result',async()=>{
+ const f=transport();await f.observer.start();
+ const first=f.observer.close(),second=f.observer.close();assert.equal(first,second);
+ assert.equal((await first).transportClosed,true);assert.equal(await f.observer.close(),await second);
+ assert.deepEqual(f.calls,['POST','DELETE']);
+});
+test('closing before start never allows later remote creation',async()=>{
+ const f=transport();assert.equal((await f.observer.close()).transportClosed,true);
+ await assert.rejects(()=>f.observer.start(),{code:'CC07_TAIL_ALREADY_STARTED'});assert.deepEqual(f.calls,[]);
+});
+test('transport disposal failure cannot prevent provider deletion or be reported as closed',async()=>{
+ const f=transport();await f.observer.start();f.socket().dispose=async()=>{throw Error('private-transport-canary');};
+ await assert.rejects(()=>f.observer.close(),e=>e.code==='CC07_TAIL_TRANSPORT_CLEANUP_UNCONFIRMED'&&!e.message.includes('private-transport-canary'));
+ assert.deepEqual(f.calls,['POST','DELETE']);assert.equal(f.observer.summary().deleted,true);assert.equal(f.observer.summary().transportClosed,false);
+ await assert.rejects(()=>f.observer.close());assert.deepEqual(f.calls,['POST','DELETE']);
+});
+test('expired budget still releases transport but does not start a provider request',async()=>{
+ let expired=false,disposed=false;const calls=[];
+ class Socket extends EventTarget{constructor(){super();queueMicrotask(()=>this.dispatchEvent(new Event('open')));}send(){}async dispose(timeout){assert.equal(timeout,1);disposed=true;return {closed:true,terminated:true};}}
+ const observer=createCc07Readiness('fixture',p,{now:()=>now,WebSocketImpl:Socket,budget:{assertActive(){},requestTimeoutMs:ms=>{if(expired)throw Error('expired');return ms;}},fetchImpl:async(_url,o)=>{calls.push(o.method);return Response.json({success:true,result:{id:'a'.repeat(32),expires_at:new Date(now+3600000).toISOString(),url:'wss://tail.developers.workers.dev/fixture'}});}});
+ await observer.start();expired=true;await assert.rejects(()=>observer.close(),{code:'CC07_TAIL_CLEANUP_UNCONFIRMED'});
+ assert.equal(disposed,true);assert.deepEqual(calls,['POST']);assert.equal(observer.summary().transportClosed,true);assert.equal(observer.summary().deleted,false);
+});

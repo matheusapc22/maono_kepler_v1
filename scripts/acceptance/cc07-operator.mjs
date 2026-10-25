@@ -167,7 +167,7 @@ export async function runCc07Operator(options,env=process.env,runtime={}){
     report.finalAudit={qa9Preserved:after.qa9Digest===plan.qa9.digest,outsidePreserved:before?after.outsideDigest===before.outsideDigest:null,preservedRecordsVerified:plan.preserved?after.preservedVerified:true,scopedCounts:Object.fromEntries(Object.entries(after.scoped).map(([k,v])=>[k,v.length]))};
    }catch(cause){report.preservationVerified=false;report.preservationError=safeError(cause);error??=cause;}
   }
-  if(observer){try{report.telemetry=await observer.close();report.telemetryClosed=true;}catch(cause){report.telemetryClosed=false;report.telemetryError=safeError(cause);error??=cause;}}
+  if(observer){try{report.telemetry=await observer.close();report.telemetryClosed=true;}catch(cause){report.telemetry=observer.summary?.()??report.telemetry;report.telemetryClosed=false;report.telemetryError=safeError(cause);error??=cause;}}
   if(context)report.cases=context.cases;
   if(options.mode!=='preflight'){report.ok=!error&&report.cleanupComplete&&report.configurationRestored;report.complete=report.ok;}
   report.operationalTestsPassed=report.acceptanceExecuted&&manifest.cases.every(id=>report.cases.some(c=>c.id===id&&c.status==='PASS'));
