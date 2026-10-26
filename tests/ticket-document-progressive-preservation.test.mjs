@@ -3,11 +3,22 @@ import test from 'node:test';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {restoreMaonoSelect} from './helpers/maono-select-preservation.mjs';
+import {restoreTicketRefreshFocus,restoreTicketRefreshFocusStyles} from './helpers/ticket-refresh-focus-preservation.mjs';
 import {restoreDocumentProgressiveLoading,restoreTicketDetailProgressiveLoading,restoreTicketDocumentInitialPresentation} from './helpers/ticket-docs-progressive-preservation.mjs';
 const cases=[
   {file:'DocumentsSection',restore:restoreDocumentProgressiveLoading,hash:'736bc1aba68b30ffd0250ccea8f69e70b3a488e6e4e12d4f0b2d4b276814b627',canaries:[['PERMISSION.DOCUMENT_VIEW','PERMISSION.DOCUMENT_UPLOAD'],['listOrganizationFiles(','listAllOrganizationFiles('],['limit: 50','limit: 500'],['formData,','new FormData(),'],['<option value="root">Raiz</option>','<option value="">Raiz</option>']]},
   {file:'TicketDetailDrawer',restore:restoreTicketDetailProgressiveLoading,hash:'a0c19fa754c8891256c7e1d6cd39260636949016211ac79bc799c66f0a3c4778',canaries:[['{canManage ? (','{true ? ('],['onUpdate,','onDelete,'],['ticket.status','ticket.priority'],['attachmentLimits={attachmentLimits}','attachmentLimits={{}}']]},
 ];
+test('refresh focus inverse rejects an altered activation guard and retains unrelated drift',()=>{
+ const source=readFileSync(new URL('../src/pages/Projects/components/TicketDetailDrawer.tsx',import.meta.url),'utf8');
+ assert.throws(()=>restoreTicketRefreshFocus(source.replace('if (!loading && !saving) onReload();','onReload();')));
+ assert.throws(()=>restoreTicketRefreshFocus(source+source));
+ const changed=source.replace('{canManage ? (','{true ? (');
+ assert.notEqual(restoreTicketRefreshFocus(changed),restoreTicketRefreshFocus(source));
+ const styles=readFileSync(new URL('../src/pages/Projects/projects.css',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+ assert.throws(()=>restoreTicketRefreshFocusStyles(styles.replace('.ticket-secondary-action[aria-disabled="true"],','.ticket-secondary-action[aria-disabled="false"],')));
+ assert.notEqual(restoreTicketRefreshFocusStyles(styles.replace('opacity: 0.48;','opacity: 1;')),restoreTicketRefreshFocusStyles(styles));
+});
 for(const {file,restore,hash,canaries} of cases){
  const source=readFileSync(new URL(`../src/pages/Projects/components/${file}.tsx`,import.meta.url),'utf8').replace(/\r\n/g,'\n');
  const check=input=>assert.equal(createHash('sha256').update(restoreMaonoSelect(restore(input))).digest('hex'),hash);

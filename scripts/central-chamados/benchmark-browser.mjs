@@ -7,6 +7,7 @@ import { onRequestGet as baselineList } from '../../.tmp/ticket-performance/base
 import { onRequestGet as baselineDetail } from '../../.tmp/ticket-performance/baseline-source/functions/api/organizations/[id]/tickets/[ticketId].js';
 
 const smoke=process.env.PERF_SMOKE==='1';
+const refreshOnly=process.env.PERF_REFRESH_ONLY==='1';
 const repeats=smoke?0:Number(process.env.PERF_SAMPLES||30), delayMs=Number(process.env.PERF_BINDING_DELAY_MS||0);
 assert.ok(smoke||repeats>=30);
 const browser=await chromium.launch({headless:true});
@@ -16,10 +17,11 @@ async function run(records,flow,variant,iteration) {
   const f=await fixture(records,flow,delayMs);
   if(variant==='before')f.setHandlers({list:baselineList,detail:baselineDetail});
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'pt-BR',timezoneId:'UTC',serviceWorkers:'block'});
-  const page=await context.newPage(), errors=[], requests=[], marks=[];
+  const page=await context.newPage(), errors=[], requests=[], marks=[], requestFailures=[];
   let start=performance.now(), inFlight=0, refreshFocusPreserved=false;
   const session={authenticated:true,user:{id:1,name:'Synthetic operator',role:'owner',activeOrganizationId:1,permissions:[],deniedPermissions:[]},projects:[],organizations:[{id:1,name:'Synthetic',slug:'synthetic',active:true}],activeOrganization:{id:1,name:'Synthetic',slug:'synthetic',active:true}};
   page.on('pageerror',e=>errors.push(e.message));
+  page.on('requestfailed',request=>requestFailures.push({reason:request.failure()?.errorText||'unknown',api:new URL(request.url()).pathname.startsWith('/api/')}));
   await page.route('**/*',async route=>{
     const req=route.request(), url=new URL(req.url());
     if(!['127.0.0.1','localhost'].includes(url.hostname))return route.abort();
@@ -55,11 +57,12 @@ async function run(records,flow,variant,iteration) {
     await mark('direct-first-authorized-kanban',async()=>{await page.goto('http://127.0.0.1:4178/projects?cc_org=1&cc_view=kanban');await ready();});
     await all();marks.push({name:'direct-four-first-pages',elapsedMs:performance.now()-start});
     await page.waitForTimeout(100);
+    const open=async()=>{await page.locator('.ticket-kanban-subject').first().click();await page.locator('.ticket-detail-content:not(.mm-loading-ticket-detail) .ticket-detail-summary').waitFor({state:'visible'});};
+    if(!refreshOnly) {
     await select('Lista');await page.locator('.ticket-list-table tbody tr').first().waitFor();
     const switched=performance.now();
     await mark('list-to-kanban-first',async()=>{await select('Kanban');await ready();});
     await all();marks.push({name:'list-to-kanban-four',elapsedMs:performance.now()-switched});
-    const open=async()=>{await page.locator('.ticket-kanban-subject').first().click();await page.locator('.ticket-detail-content:not(.mm-loading-ticket-detail) .ticket-detail-summary').waitFor({state:'visible'});};
     await mark('detail-first-authorized-summary',open);
     await page.waitForTimeout(100);
     await page.getByRole('button',{name:'Fechar detalhes',exact:true}).click();
@@ -78,6 +81,7 @@ async function run(records,flow,variant,iteration) {
     // Filter requests are debounced by the actual application; count that time.
     const search=page.getByRole('region',{name:'Filtros de chamados',exact:true}).getByRole('searchbox');
     await mark('filter-authorized-kanban',async()=>{await Promise.all([page.waitForResponse(r=>new URL(r.url()).searchParams.get('q')==='Synthetic 1'),search.fill('Synthetic 1')]);await all();});
+    }
     await open();
     const date=page.locator('.ticket-detail-content:not(.mm-loading-ticket-detail) input[type=date]').first();
     await date.fill('2099-01-01');
@@ -92,10 +96,11 @@ async function run(records,flow,variant,iteration) {
     });
     await page.waitForTimeout(150);
     assert.deepEqual(errors,[]);assert.equal(inFlight,0);
+    if(refreshOnly)assert.equal(refreshFocusPreserved,true,'refresh must preserve focus after the focused correction');
     const profile=await page.evaluate(()=>window.__ticketProfile||[]);
     assert.ok(profile.length,'React production profiler must be active');
     const snapshots=f.sqlite.prepare('SELECT COUNT(*) AS n FROM ticket_query_snapshots').get().n;
-    return {records,flow,variant,iteration,marks,requests,reactProfile:profile,snapshots,failures:errors.length,
+    return {records,flow,variant,iteration,marks,requests,requestFailures,reactProfile:profile,snapshots,failures:errors.length,
       invariants:{draftPreserved:true,refreshFocusPreserved},unmetExpectations:refreshFocusPreserved?[]:['refresh-button-focus']};
   } catch(error) {await mkdir('.tmp/ticket-performance',{recursive:true});await writeFile('.tmp/ticket-performance/browser-error.json',JSON.stringify({error:String(error),errors,marks,requests},null,2));throw error;}
   finally {await context.close();await f.close();}
@@ -103,18 +108,18 @@ async function run(records,flow,variant,iteration) {
 try {
   // Alternate order to reduce runtime/thermal drift. Warmups are retained separately.
   for(const records of smoke?[80]:[80,800])for(const flow of smoke?[true]:[false,true])for(let i=-1;i<repeats;i++) {
-    for(const variant of i%2===0?['before','after']:['after','before']) {
+    for(const variant of refreshOnly?['after']:i%2===0?['before','after']:['after','before']) {
       const result=await run(records,flow,variant,i);results.push(result);
       console.log(JSON.stringify({records,flow,variant,iteration:i,marks:result.marks}));
       await mkdir('.tmp/ticket-performance',{recursive:true});
-      await writeFile('.tmp/ticket-performance/browser-progress.json',JSON.stringify(results));
+      await writeFile(`.tmp/ticket-performance/${refreshOnly?'refresh':'browser'}-progress.json`,JSON.stringify(results));
     }
   }
   if(smoke)process.exitCode=0;
   const summary=[];
-  for(const records of smoke?[]:[80,800])for(const flow of [false,true])for(const variant of ['before','after']) {
+  for(const records of smoke?[]:[80,800])for(const flow of [false,true])for(const variant of refreshOnly?['after']:['before','after']) {
     const runs=results.filter(r=>r.records===records&&r.flow===flow&&r.variant===variant&&r.iteration>=0);
     summary.push({records,flow,variant,metrics:Object.fromEntries(runs[0].marks.map(m=>[m.name,stats(runs.map(r=>r.marks.find(x=>x.name===m.name)?.elapsedMs).filter(Number.isFinite))]))});
   }
-  await writeFile('.tmp/ticket-performance/browser-paired.json',JSON.stringify({sourceSha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),browser:browser.version(),delayMs,environment:'local production profiling build; intercepted same-process HTTP handlers + node:sqlite; no D1 remote; optional modules disabled by synthetic API',overhead:'React production Profiler active; per-binding timers/hash active equally; no CPU/network throttling; durations include Playwright interaction overhead',summary,results},null,2));
+  await writeFile(`.tmp/ticket-performance/${refreshOnly?'refresh-followup':'browser-paired'}.json`,JSON.stringify({sourceSha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),browser:browser.version(),delayMs,refreshOnly,environment:'local production profiling build; intercepted same-process HTTP handlers + node:sqlite; no D1 remote; optional modules disabled by synthetic API',overhead:'React production Profiler active; per-binding timers/hash active equally; no CPU/network throttling; durations include Playwright interaction overhead',summary,results},null,2));
 } finally {await browser.close();}
