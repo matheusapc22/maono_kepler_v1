@@ -4,6 +4,7 @@ import {
   isTicketTriageEnabled,
 } from "../../../_lib/ticket-triage.js";
 import { can, requireOrganizationPermission } from "../../../_lib/permissions.js";
+import { withRequestSchema } from "../../../_lib/request-schema.js";
 import {
   assertTicketCommandReady, executeTicketCreate, isTicketCommandsEnabled,
 } from "../../../_lib/ticket-commands.js";
@@ -32,6 +33,7 @@ export async function onRequest(context) {
 }
 
 export async function onRequestGet({ env, request, params }) {
+  env = withRequestSchema(env);
   try {
     const organizationId = parsePositiveInteger(
       getRouteParam(params, "id"),
