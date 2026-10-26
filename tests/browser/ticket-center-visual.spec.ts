@@ -920,6 +920,35 @@ test(`Kanban workers do not dequeue more queues after ${status} invalidates thei
 });
 }
 
+test("Kanban retry supersedes held workers before opening a fresh snapshot", async ({ page }) => {
+  const held = deferred(); let firstSnapshot: string | null = null, failed = false;
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforeList: request => {
+      if (!request.params.has("queue")) return Promise.resolve();
+      firstSnapshot ||= request.params.get("snapshot");
+      return request.params.get("snapshot") === firstSnapshot && ["in_progress", "in_review"].includes(request.params.get("queue") || "") ? held.promise : Promise.resolve();
+    },
+    failList: request => { if (!failed && request.params.get("queue") === "open") { failed = true; return 503; } return false; } });
+  try {
+    await openCentral(page); await expectCount(page, 5, 5);
+    const second = page.waitForRequest(request => new URL(request.url()).searchParams.get("queue") === "in_progress");
+    const third = page.waitForRequest(request => new URL(request.url()).searchParams.get("queue") === "in_review");
+    await chooseView(page, "Kanban"); const oldRequests = await Promise.all([second, third]);
+    await expect(shell(page).getByRole("alert").first()).toBeVisible();
+    expect(listRequests(requests).filter(request => request.params.has("queue"))).toHaveLength(3);
+    await shell(page).getByRole("button", { name: "Tentar novamente", exact: true }).click();
+    await expectQueueCount(page, "open", 2, 2); await expectQueueCount(page, "closed", 1, 1);
+    held.resolve(); for (const request of oldRequests) expect(await request.response()).toBeNull();
+    await expect(shell(page).getByRole("alert")).toHaveCount(0);
+    await expectQueueCount(page, "in_progress", 1, 1); await expectQueueCount(page, "in_review", 1, 1);
+    expect(listRequests(requests).filter(request => request.params.get("snapshot") === firstSnapshot && request.params.get("queue") === "closed")).toHaveLength(0);
+    const retry = listRequests(requests).filter(request => request.params.has("queue") && request.params.get("snapshot") !== firstSnapshot);
+    expect(retry).toHaveLength(4); expect(retry[0].params.has("snapshot")).toBe(false);
+    expect(retry.slice(1).every(request => Boolean(request.params.get("snapshot")))).toBe(true);
+    expect(new Set(retry.slice(1).map(request => request.params.get("snapshot"))).size).toBe(1);
+  } finally { held.resolve(); }
+});
+
 test("Kanban workers from the old filter never dequeue remaining queues or cancel the new query", async ({ page }) => {
   const old = deferred();
   const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,

@@ -70,6 +70,9 @@ export default function TicketKanbanBoard({ organizationId, snapshot, refreshKey
   }
 
   async function reconcile(forceFresh = false) {
+    // A same-query retry also supersedes every older worker and retained-pin read.
+    generation.current += 1;
+    for (const active of controllers.current.values()) active.abort();
     const epoch = generation.current, requestRevision = latestRevision.current;
     setColumns(state => Object.fromEntries(queues.map(queue => [queue, { ...(state[queue] || emptyColumn()), loading: true, loadingMore: false }])));
     // Only mutation reconciliation needs the atomic snapshot/overlay swap.
