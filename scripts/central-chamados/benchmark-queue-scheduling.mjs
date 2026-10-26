@@ -36,7 +36,10 @@ async function run(records,variant,iteration){
     }catch(error){errors.push(error.message);await route.abort().catch(()=>{});}finally{if(record){record.durationMs=performance.now()-start-record.startMs;active--;}}
   });
   try{
-    await page.goto(`${build.origin}/projects?cc_org=1&cc_view=list`);await page.locator('.ticket-list-table tbody tr').first().waitFor();assert.ok(snapshot);
+    await page.goto(`${build.origin}/projects?cc_org=1&cc_view=list`);
+    const preparedSubject=page.locator('.ticket-list-table .ticket-subject-button').first();
+    await preparedSubject.waitFor({state:'visible'});assert.ok(snapshot);
+    assert.ok([...authorized.values()].includes((await preparedSubject.textContent()).trim()),'list setup requires real authorized content');
     start=performance.now();
     await page.getByRole('combobox',{name:'Visualização dos chamados',exact:true}).click();await page.getByRole('listbox').getByRole('option',{name:'Kanban',exact:true}).click();
     await page.locator('.ticket-kanban-card:not(.mm-loading-ticket-card) .ticket-kanban-subject').first().waitFor({state:'visible'});const firstMs=performance.now()-start;
