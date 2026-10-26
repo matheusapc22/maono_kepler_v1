@@ -64,7 +64,7 @@ async function run(records,flow,variant,iteration) {
     } catch(e) {record.failure=e.message;errors.push(e.message);await route.abort().catch(()=>{});}
     finally {record.durationMs=performance.now()-began;inFlight--;}
   });
-  const mark=async(name,operation)=>{const began=performance.now();await operation();marks.push({name,elapsedMs:performance.now()-began});};
+  const mark=async(name,operation)=>{const began=performance.now();await operation();marks.push({name,startMs:began-start,elapsedMs:performance.now()-began});};
   const ready=()=>page.locator('.ticket-kanban-card').first().waitFor({state:'visible'});
   const all=()=>page.waitForFunction(()=>document.querySelectorAll('.ticket-kanban-column .ticket-kanban-card').length>0&&[...document.querySelectorAll('.ticket-kanban-stack')].length===4&&[...document.querySelectorAll('.ticket-kanban-stack')].every(e=>e.getAttribute('aria-busy')==='false'));
   const select=async(label)=>{await page.getByRole('combobox',{name:'Visualização dos chamados',exact:true}).click();await page.getByRole('listbox').getByRole('option',{name:label,exact:true}).click();};

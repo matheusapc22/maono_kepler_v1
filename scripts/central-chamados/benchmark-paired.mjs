@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fixture, stats } from './benchmark-read-paths.mjs';
@@ -7,6 +8,8 @@ import { onRequestGet as beforeDetail } from '../../.tmp/ticket-performance/base
 import { onRequestGet as afterList } from '../../functions/api/organizations/[id]/tickets.js';
 import { onRequestGet as afterDetail } from '../../functions/api/organizations/[id]/tickets/[ticketId].js';
 
+const label=process.env.PERF_OUTPUT_LABEL;
+if(label)assert.match(label,/^[a-z][a-z0-9-]*$/);
 const samples=30,results=[];
 for(const records of [80,800])for(const flow of [false,true])for(const profile of ['owner','viewer']){
   const f=await fixture(records,flow,Number(process.env.PERF_BINDING_DELAY_MS||0));
@@ -37,4 +40,4 @@ for(const records of [80,800])for(const flow of [false,true])for(const profile o
 const diff=execFileSync('git',['diff','HEAD','--','functions'],{encoding:'utf8'});
 const report={sourceSha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),baselineSha:'381c93256d985b0ae39722128fc4ad54f17f025f',trackedWorktreeDirty:!!diff,patchSha256:createHash('sha256').update(diff).digest('hex'),scopeModuleSha256:createHash('sha256').update(await readFile('functions/_lib/request-schema.js')).digest('hex'),runtime:process.version,samples,delayMs:Number(process.env.PERF_BINDING_DELAY_MS||0),environment:'local actual route handlers with in-memory SQLite; paired alternating order; no remote D1',limitations:['bindingMs is cumulative across possibly overlapping spans, not SQL time or wall time','adapterDurationMs includes Node SQLite and instrumentation overhead','rows_read, rows_written and D1 SQL duration unavailable','list-first means new snapshot/request, not a cold Worker process','First warm-up pair excluded per scenario','No payloads, SQL parameters or cookies recorded'],results};
 await mkdir('.tmp/ticket-performance',{recursive:true});
-await writeFile(`.tmp/ticket-performance/paired-${report.delayMs}ms.json`,JSON.stringify(report,null,2));
+await writeFile(`.tmp/ticket-performance/paired-${label?label+'-':''}${report.delayMs}ms.json`,JSON.stringify(report,null,2),{flag:'wx'});
