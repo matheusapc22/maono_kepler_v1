@@ -70,3 +70,17 @@ test('commands/triage OFF retains legacy import and authorization behavior',asyn
   }
   assert.equal(f.rows('organization_tickets').length,1);
 });
+test('authorized attachment count agrees between list and detail without exposing internal counts',async()=>{
+  const f=await fixture(5,true);
+  try{
+    for(const profile of ['owner','viewer']){
+      const listed=(await f.request('list','includeUndated=1',profile)).data.tickets.find(t=>t.id===1);
+      const detail=(await f.request('detail','',profile)).data;
+      assert.equal(detail.ticket.attachmentsCount,profile==='owner'?2:1);
+      assert.equal(detail.ticket.attachmentsCount,detail.attachments.length);
+      assert.equal(detail.ticket.attachmentsCount,listed.attachmentsCount);
+      assert.equal(detail.ticket.etag,listed.etag);
+      if(profile==='viewer')assert.equal(detail.attachments.some(a=>a.audience==='internal'),false);
+    }
+  }finally{await f.close();}
+});
