@@ -12,7 +12,7 @@ const cases=[
 ];
 test('Kanban scheduling inverse rejects token/guard drift and preserves unrelated ACL changes',()=>{
  const source=readFileSync(new URL('../src/pages/Projects/components/TicketKanbanBoard.tsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
- for(const [from,to] of [['if (sharedSnapshot)', 'if (true)'],['if (epoch !== generation.current || requestRevision !== latestRevision.current || pending.current) return;','if (pending.current) return;'],['load(queue, false, sharedSnapshot,','load(queue, false, null,']]){
+ for(const [from,to] of [['if (sharedSnapshot)', 'if (true)'],['if (epoch !== generation.current || requestRevision !== latestRevision.current || pending.current) return;','if (pending.current) return;'],['load(queues[index], false, sharedSnapshot,','load(queues[index], false, null,'],['results = queues.map(() => undefined);','results = new Array(queues.length);'],['await Promise.all([worker(), worker()]);','await Promise.all([worker()]);']]){
   assert.ok(source.includes(from));assert.throws(()=>restoreTicketKanbanSnapshot(source.replace(from,to)));
  }
  assert.throws(()=>restoreTicketKanbanSnapshot(source+source));

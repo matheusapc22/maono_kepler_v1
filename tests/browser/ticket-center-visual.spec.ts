@@ -853,12 +853,15 @@ test("Kanban cold entry waits for the first snapshot before starting sibling que
 });
 
 test("Kanban reuses an existing snapshot in all queues while open is pending", async ({ page }) => {
-  const open = deferred();
+  const open = deferred(), second = deferred();
   const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
-    beforeList: request => request.params.get("queue") === "open" ? open.promise : Promise.resolve() });
+    beforeList: request => request.params.get("queue") === "open" ? open.promise : request.params.get("queue") === "in_progress" ? second.promise : Promise.resolve() });
   try {
     await openCentral(page); await expectCount(page, 5, 5);
     await chooseView(page, "Kanban");
+    await expect.poll(() => listRequests(requests).filter(request => request.params.has("queue")).length).toBe(2);
+    expect(listRequests(requests).filter(request => request.params.has("queue")).map(request => request.params.get("queue"))).toEqual(["open", "in_progress"]);
+    second.resolve();
     for (const queue of ["in_progress", "in_review", "closed"]) await expectQueueCount(page, queue, 1, 1);
     await expect(kanbanColumn(page, "open").locator('.ticket-kanban-stack')).toHaveAttribute("aria-busy", "true");
     const queues = listRequests(requests).filter(request => request.params.has("queue"));
@@ -866,11 +869,12 @@ test("Kanban reuses an existing snapshot in all queues while open is pending", a
     const token = queues[0].params.get("snapshot"); expect(token).toBeTruthy();
     expect(queues.every(request => request.params.get("snapshot") === token)).toBe(true);
     open.resolve(); await expectQueueCount(page, "open", 2, 2);
-  } finally { open.resolve(); }
+  } finally { open.resolve(); second.resolve(); }
 });
 
-for (const status of [401, 403, 404, 409]) {
+for (const status of [401, 403, 404, 409, 503]) {
 test(`Kanban parallel snapshot queues handle ${status} without stale cards or silent token replacement`, async ({ page }) => {
+  const accessFailure = [401, 403, 404].includes(status);
   const open = deferred(), late = deferred(); let releaseLate = false;
   const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
     beforeList: request => request.params.get("queue") === "open" ? open.promise : request.params.get("queue") === "closed" ? late.promise.then(() => { releaseLate = true; }) : Promise.resolve(),
@@ -882,12 +886,12 @@ test(`Kanban parallel snapshot queues handle ${status} without stale cards or si
     await expectQueueCount(page, "in_progress", 1, 1);
     const pendingClosed = await closedRequest;
     open.resolve(); await expect(shell(page).getByRole("alert").first()).toBeVisible();
-    if (status !== 409) await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
+    if (accessFailure) await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
     late.resolve(); await expect.poll(() => releaseLate).toBe(true);
     const closedResponse = await pendingClosed.response();
-    if (status !== 409) expect(closedResponse, "Revocation aborts the held queue before its headers arrive").toBeNull();
+    if (accessFailure) expect(closedResponse, "Revocation aborts the held queue before its headers arrive").toBeNull();
     else { expect(closedResponse?.status()).toBe(200); await closedResponse!.finished(); }
-    if (status !== 409) await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
+    if (accessFailure) await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
     else { await expectQueueCount(page, "in_progress", 1, 1); await expectQueueCount(page, "closed", 1, 1); }
     const queues = listRequests(requests).filter(request => request.params.has("queue"));
     expect(queues).toHaveLength(4);
@@ -896,6 +900,42 @@ test(`Kanban parallel snapshot queues handle ${status} without stale cards or si
   } finally { open.resolve(); late.resolve(); }
 });
 }
+
+for (const status of [401, 403, 404]) {
+test(`Kanban workers do not dequeue more queues after ${status} invalidates their generation`, async ({ page }) => {
+  const open = deferred(), second = deferred();
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforeList: request => request.params.get("queue") === "open" ? open.promise : request.params.get("queue") === "in_progress" ? second.promise : Promise.resolve(),
+    failList: request => request.params.get("queue") === "open" ? status : false });
+  try {
+    await openCentral(page); await expectCount(page, 5, 5);
+    const pendingSecond = page.waitForRequest(request => new URL(request.url()).searchParams.get("queue") === "in_progress");
+    await chooseView(page, "Kanban"); const request = await pendingSecond;
+    await expect.poll(() => listRequests(requests).filter(request => request.params.has("queue")).length).toBe(2);
+    open.resolve(); await expect(shell(page).getByRole("alert").first()).toBeVisible();
+    second.resolve(); expect(await request.response()).toBeNull();
+    await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
+    expect(listRequests(requests).filter(request => request.params.has("queue"))).toHaveLength(2);
+  } finally { open.resolve(); second.resolve(); }
+});
+}
+
+test("Kanban workers from the old filter never dequeue remaining queues or cancel the new query", async ({ page }) => {
+  const old = deferred();
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforeList: request => !request.params.has("status") && ["open", "in_progress"].includes(request.params.get("queue") || "") ? old.promise : Promise.resolve() });
+  try {
+    await openCentral(page); await expectCount(page, 5, 5);
+    const pendingSecond = page.waitForRequest(request => new URL(request.url()).searchParams.get("queue") === "in_progress");
+    await chooseView(page, "Kanban"); const oldRequest = await pendingSecond;
+    await filters(page).getByRole("combobox", { name: "Situação", exact: true }).selectOption("new");
+    await expectQueueCount(page, "open", 1, 1); await expectQueueCount(page, "closed", 0, 0);
+    old.resolve(); expect(await oldRequest.response()).toBeNull();
+    await expectQueueCount(page, "open", 1, 1);
+    expect(listRequests(requests).filter(request => request.params.has("queue") && !request.params.has("status"))).toHaveLength(2);
+    expect(listRequests(requests).filter(request => request.params.has("queue") && request.params.get("status") === "new")).toHaveLength(4);
+  } finally { old.resolve(); }
+});
 async function openKanban(page: Page, total = 5) {
   await openCentral(page); await expectCount(page, Math.min(total, 10), total);
   await chooseView(page, "Kanban");

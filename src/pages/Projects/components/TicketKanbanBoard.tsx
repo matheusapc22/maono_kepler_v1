@@ -79,8 +79,18 @@ export default function TicketKanbanBoard({ organizationId, snapshot, refreshKey
     const sharedSnapshot = requestRevision === 0 && !forceFresh ? snapshot : null;
     let results: Awaited<ReturnType<typeof load>>[];
     if (sharedSnapshot) {
-      // Each read revalidates the existing token and ACL; no queue owns setup.
-      results = await Promise.all(queues.map(queue => load(queue, false, sharedSnapshot, revealPendingQueue(queue))));
+      // Bound simultaneous reads without making siblings depend on open.
+      // Each worker must retain this reconcile's access/mutation generation.
+      results = queues.map(() => undefined);
+      let nextQueue = 0;
+      const worker = async () => {
+        while (nextQueue < queues.length) {
+          if (epoch !== generation.current || requestRevision !== latestRevision.current || pending.current) return;
+          const index = nextQueue++;
+          results[index] = await load(queues[index], false, sharedSnapshot, revealPendingQueue(queues[index]));
+        }
+      };
+      await Promise.all([worker(), worker()]);
     } else {
       // A fresh snapshot must exist before sibling queues can reuse its membership.
       const first = await load(queues[0], false, null, revealPendingQueue(queues[0]));
