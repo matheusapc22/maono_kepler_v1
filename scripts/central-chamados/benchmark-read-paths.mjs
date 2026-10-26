@@ -33,15 +33,16 @@ export async function fixture(records = 80, flow = true, bindingDelayMs = 0) {
   const attachmentId = Number(f.sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
   await createTicketMessage(f.env,context,{kind:'internal',body:draft.body,draftId:draft.id,draftVersion:draft.version,attachmentIds:[attachmentId]},new Request('http://synthetic.test/messages',{method:'POST',headers:{'Idempotency-Key':'synthetic-note'}}));
   const db = f.env.DB;
+  let handlers = { list, detail };
   const traces = [];
   function instrument(base, events, origin) {
-    async function call(kind, sql, operation) {
+    async function call(kind, sql, operation, sqlStatements = 1) {
       const start = performance.now();
       if (bindingDelayMs) await delay(bindingDelayMs);
       const bindingStart = performance.now();
       try { return await operation(); }
       finally {
-        events.push({ kind, query: createHash('sha256').update(sql).digest('hex').slice(0,12),
+        events.push({ kind, sqlStatements, query: createHash('sha256').update(sql).digest('hex').slice(0,12),
           phase: /sqlite_master|PRAGMA table_info/i.test(sql) ? 'schema' : /ticket_query_snapshot/i.test(sql) ? 'snapshot' : /sessions|permissions|organization_users|ticket_acl|ticket_access_/i.test(sql) ? 'authorization' : 'query',
           startMs: start-origin, durationMs: performance.now()-start, adapterDurationMs: performance.now()-bindingStart });
       }
@@ -54,26 +55,25 @@ export async function fixture(records = 80, flow = true, bindingDelayMs = 0) {
           __execute: () => stmt.__execute(), __description: () => stmt.__description() };
         return wrapped;
       },
-      batch: stmts => call('batch',stmts.map(s=>s.__description().sql).join('\n'),()=>base.batch(stmts)),
+      batch: stmts => call('batch',stmts.map(s=>s.__description().sql).join('\n'),()=>base.batch(stmts),stmts.length),
     };
   }
   const cookies = { owner: f.sessionCookie(1), viewer: f.sessionCookie(3) };
-  async function request(kind, query = '', profile = 'owner') {
+  async function request(kind, query = '', profile = 'owner', ticketId = 1) {
     const start = performance.now(), events = [];
-    const countStart = f.statements.length;
-    const response = await (kind === 'detail' ? detail : list)({ env: { ...f.env, DB: instrument(db,events,start) },
-      params: { id: '1', ticketId: '1' }, request: new Request(`http://synthetic.test/api/organizations/1/tickets${kind === 'detail' ? '/1' : ''}?${query}`, { headers: { cookie: cookies[profile] } }) });
+    const response = await handlers[kind]({ env: { ...f.env, DB: instrument(db,events,start) },
+      params: { id: '1', ticketId: String(ticketId) }, request: new Request(`http://synthetic.test/api/organizations/1/tickets${kind === 'detail' ? '/'+ticketId : ''}?${query}`, { headers: { cookie: cookies[profile] } }) });
     const serializeStart = performance.now();
     const body = await response.text();
     const trace = { kind, profile, elapsedMs: performance.now()-start, consumeBodyMs: performance.now()-serializeStart,
-      status: response.status, bytes: Buffer.byteLength(body), sqlCalls: f.statements.length-countStart, bindingCalls: events.length,
+      status: response.status, bytes: Buffer.byteLength(body), sqlCalls: events.reduce((n,e)=>n+e.sqlStatements,0), bindingCalls: events.length,
       bindingMs: events.reduce((n,e)=>n+e.durationMs,0), schemaCalls: events.filter(e=>e.phase==='schema').length, events };
     traces.push(trace);
     assert.equal(response.status,200,`Synthetic ${kind} failed: ${response.status}`);
     assert.equal(response.headers.get('cache-control'),'private, no-store');
     return { data: JSON.parse(body), trace };
   }
-  return { ...f, request, traces, close: async () => { for (const fn of cleanup.reverse()) await fn(); } };
+  return { ...f, request, traces, setHandlers: value => { handlers=value; }, close: async () => { for (const fn of cleanup.reverse()) await fn(); } };
 }
 export const stats = values => {
   const sorted = [...values].sort((a,b)=>a-b);

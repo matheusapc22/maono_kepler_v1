@@ -50,3 +50,4 @@ playwright/auth.json
 .tmp/cc18/
 
 .tmp/ticket-performance/
+dist-ticket-performance/
