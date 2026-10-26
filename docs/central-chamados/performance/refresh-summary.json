@@ -1,0 +1,328 @@
+{
+  "sourceSha": "118fdc264ca6ae41e069578bcc6d4828de8f758f",
+  "browser": "140.0.7339.16",
+  "delayMs": 0,
+  "refreshOnly": true,
+  "environment": "local production profiling build; intercepted same-process HTTP handlers + node:sqlite; no D1 remote; optional modules disabled by synthetic API",
+  "overhead": "React production Profiler active; per-binding timers/hash active equally; no CPU/network throttling; durations include Playwright interaction overhead",
+  "summary": [
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 415.72770000000037,
+          "p95": 479.8172999999988
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 592.5915,
+          "p95": 642.9289000000008
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 333.1137999999992,
+          "p95": 415.6304000000018
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 450.2231000000029,
+          "p95": 503.0828000000038
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 620.0145000000048,
+          "p95": 686.3790000000154
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 341.1365000000078,
+          "p95": 439.51320000000123
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 442.44920000000275,
+          "p95": 519.5832999999984
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 673.0484999999753,
+          "p95": 720.9241000000038
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 443.6570000000065,
+          "p95": 537.5904999999912
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 458.1106999999902,
+          "p95": 496.87879999997676
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 675.0830999999889,
+          "p95": 768.1435000000056
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 471.53370000002906,
+          "p95": 538.4943000000203
+        }
+      }
+    }
+  ],
+  "conditions": [
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 415.72770000000037,
+          "p95": 479.8172999999988
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 592.5915,
+          "p95": 642.9289000000008
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 333.1137999999992,
+          "p95": 415.6304000000018
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 0,
+      "clientRequestFailures": [],
+      "requestCounts": {
+        "n": 30,
+        "p50": 24,
+        "p95": 24
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 252469,
+        "p95": 252469
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 681,
+        "p95": 681
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "reactCommitDurationMs": {
+        "n": 1202,
+        "p50": 1.100000023841858,
+        "p95": 33.6000000834465
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 266.5999995470047,
+        "p95": 290.0000006556511
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 450.2231000000029,
+          "p95": 503.0828000000038
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 620.0145000000048,
+          "p95": 686.3790000000154
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 341.1365000000078,
+          "p95": 439.51320000000123
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 0,
+      "clientRequestFailures": [],
+      "requestCounts": {
+        "n": 30,
+        "p50": 24,
+        "p95": 24
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 254427,
+        "p95": 254427
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 773,
+        "p95": 773
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 4,
+        "p95": 4
+      },
+      "reactCommitDurationMs": {
+        "n": 1194,
+        "p50": 1.199999988079071,
+        "p95": 33.59999990463257
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 270.4000009894371,
+        "p95": 310.79999977350235
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 442.44920000000275,
+          "p95": 519.5832999999984
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 673.0484999999753,
+          "p95": 720.9241000000038
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 443.6570000000065,
+          "p95": 537.5904999999912
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 0,
+      "clientRequestFailures": [],
+      "requestCounts": {
+        "n": 30,
+        "p50": 24,
+        "p95": 24
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 308396,
+        "p95": 308396
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 681,
+        "p95": 681
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "reactCommitDurationMs": {
+        "n": 1197,
+        "p50": 1.3000000715255737,
+        "p95": 35.8999999165535
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 307.49999952316284,
+        "p95": 328.7999991774559
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 458.1106999999902,
+          "p95": 496.87879999997676
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 675.0830999999889,
+          "p95": 768.1435000000056
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 471.53370000002906,
+          "p95": 538.4943000000203
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 0,
+      "clientRequestFailures": [],
+      "requestCounts": {
+        "n": 30,
+        "p50": 24,
+        "p95": 24
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 310354,
+        "p95": 310354
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 773,
+        "p95": 773
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 4,
+        "p95": 4
+      },
+      "reactCommitDurationMs": {
+        "n": 1205,
+        "p50": 1.399999976158142,
+        "p95": 36.30000019073486
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 311.00000005960464,
+        "p95": 358.30000072717667
+      }
+    }
+  ]
+}
