@@ -835,6 +835,67 @@ test("refresh keeps keyboard focus while a delayed request disables only the pen
 const kanbanColumn = (page: Page, queue: string) => shell(page).locator(`.ticket-kanban-column.column-${queue}`);
 const kanbanCard = (page: Page, code: string) => shell(page).locator(".ticket-kanban-card").filter({ has: page.locator(".ticket-kanban-card-topline strong", { hasText: new RegExp(`^${code}$`) }) });
 const patchRequests = (requests: RequestRecord[]) => requests.filter(request => request.method === "PATCH" && /\/tickets\/\d+$/.test(request.path));
+test("Kanban cold entry waits for the first snapshot before starting sibling queues", async ({ page }) => {
+  const open = deferred(), broad = deferred();
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true, startUrl: "/projects?cc_org=1&cc_view=kanban",
+    beforeList: request => !request.params.has("queue") ? broad.promise : request.params.get("queue") === "open" ? open.promise : Promise.resolve() });
+  try {
+    await expect.poll(() => listRequests(requests).filter(request => request.params.has("queue")).length).toBe(1);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(listRequests(requests).filter(request => request.params.has("queue")).map(request => request.params.get("queue"))).toEqual(["open"]);
+    expect(listRequests(requests).find(request => request.params.get("queue") === "open")!.params.has("snapshot")).toBe(false);
+    open.resolve(); broad.resolve();
+    for (const queue of ["in_progress", "in_review", "closed"]) await expectQueueCount(page, queue, 1, 1);
+    const siblings = listRequests(requests).filter(request => request.params.has("queue") && request.params.get("queue") !== "open");
+    expect(siblings).toHaveLength(3); expect(siblings.every(request => Boolean(request.params.get("snapshot")))).toBe(true);
+    expect(new Set(siblings.map(request => request.params.get("snapshot"))).size).toBe(1);
+  } finally { open.resolve(); broad.resolve(); }
+});
+
+test("Kanban reuses an existing snapshot in all queues while open is pending", async ({ page }) => {
+  const open = deferred();
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforeList: request => request.params.get("queue") === "open" ? open.promise : Promise.resolve() });
+  try {
+    await openCentral(page); await expectCount(page, 5, 5);
+    await chooseView(page, "Kanban");
+    for (const queue of ["in_progress", "in_review", "closed"]) await expectQueueCount(page, queue, 1, 1);
+    await expect(kanbanColumn(page, "open").locator('.ticket-kanban-stack')).toHaveAttribute("aria-busy", "true");
+    const queues = listRequests(requests).filter(request => request.params.has("queue"));
+    expect(queues).toHaveLength(4);
+    const token = queues[0].params.get("snapshot"); expect(token).toBeTruthy();
+    expect(queues.every(request => request.params.get("snapshot") === token)).toBe(true);
+    open.resolve(); await expectQueueCount(page, "open", 2, 2);
+  } finally { open.resolve(); }
+});
+
+for (const status of [401, 403, 404, 409]) {
+test(`Kanban parallel snapshot queues handle ${status} without stale cards or silent token replacement`, async ({ page }) => {
+  const open = deferred(), late = deferred(); let releaseLate = false;
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 5), snapshot: true,
+    beforeList: request => request.params.get("queue") === "open" ? open.promise : request.params.get("queue") === "closed" ? late.promise.then(() => { releaseLate = true; }) : Promise.resolve(),
+    failList: request => request.params.get("queue") === "open" ? status : false });
+  try {
+    await openCentral(page); await expectCount(page, 5, 5);
+    const closedRequest = page.waitForRequest(request => new URL(request.url()).searchParams.get("queue") === "closed");
+    await chooseView(page, "Kanban");
+    await expectQueueCount(page, "in_progress", 1, 1);
+    const pendingClosed = await closedRequest;
+    open.resolve(); await expect(shell(page).getByRole("alert").first()).toBeVisible();
+    if (status !== 409) await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
+    late.resolve(); await expect.poll(() => releaseLate).toBe(true);
+    const closedResponse = await pendingClosed.response();
+    if (status !== 409) expect(closedResponse, "Revocation aborts the held queue before its headers arrive").toBeNull();
+    else { expect(closedResponse?.status()).toBe(200); await closedResponse!.finished(); }
+    if (status !== 409) await expect(shell(page).locator(".ticket-kanban-card")).toHaveCount(0);
+    else { await expectQueueCount(page, "in_progress", 1, 1); await expectQueueCount(page, "closed", 1, 1); }
+    const queues = listRequests(requests).filter(request => request.params.has("queue"));
+    expect(queues).toHaveLength(4);
+    expect(queues.every(request => Boolean(request.params.get("snapshot")))).toBe(true);
+    expect(new Set(queues.map(request => request.params.get("snapshot"))).size).toBe(1);
+  } finally { open.resolve(); late.resolve(); }
+});
+}
 async function openKanban(page: Page, total = 5) {
   await openCentral(page); await expectCount(page, Math.min(total, 10), total);
   await chooseView(page, "Kanban");

@@ -76,19 +76,28 @@ export default function TicketKanbanBoard({ organizationId, snapshot, refreshKey
     // Initial authorized queues can reveal independently once the first token exists.
     const hasQueryChanges = changes.some(change => change.queryKey === ticketQueryKey(filters));
     const revealPendingQueue = (queue: string) => !hasQueryChanges && !current.current[queue]?.pagination;
-    const first = await load(queues[0], false, requestRevision === 0 && !forceFresh ? snapshot : null, revealPendingQueue(queues[0]));
-    if (epoch !== generation.current || pending.current) return;
-    if (!first) {
-      setColumns(state => Object.fromEntries(Object.entries(state).map(([queue, column]) => [queue, { ...column, loading: false }])));
-      return;
+    const sharedSnapshot = requestRevision === 0 && !forceFresh ? snapshot : null;
+    let results: Awaited<ReturnType<typeof load>>[];
+    if (sharedSnapshot) {
+      // Each read revalidates the existing token and ACL; no queue owns setup.
+      results = await Promise.all(queues.map(queue => load(queue, false, sharedSnapshot, revealPendingQueue(queue))));
+    } else {
+      // A fresh snapshot must exist before sibling queues can reuse its membership.
+      const first = await load(queues[0], false, null, revealPendingQueue(queues[0]));
+      if (epoch !== generation.current || requestRevision !== latestRevision.current || pending.current) return;
+      if (!first) {
+        setColumns(state => Object.fromEntries(Object.entries(state).map(([queue, column]) => [queue, { ...column, loading: false }])));
+        return;
+      }
+      const rest = await Promise.all(queues.slice(1).map(queue => load(queue, false, first.snapshot, revealPendingQueue(queue))));
+      results = [first, ...rest];
     }
-    const rest = await Promise.all(queues.slice(1).map(queue => load(queue, false, first.snapshot, revealPendingQueue(queue))));
     if (epoch !== generation.current || requestRevision !== latestRevision.current || pending.current) return;
-    if (rest.some(result => !result)) {
+    if (results.some(result => !result)) {
       setColumns(state => Object.fromEntries(Object.entries(state).map(([queue, column]) => [queue, { ...column, loading: false }])));
       return;
     }
-    const next: Record<string, Column> = Object.fromEntries([first, ...rest].map((result, index) => [queues[index], result!.column]));
+    const next: Record<string, Column> = Object.fromEntries(results.map((result, index) => [queues[index], result!.column]));
     const visibleIds = new Set(Object.values(next).flatMap(column => column.tickets.map(ticket => String(ticket.id))));
     const latestChanges = new Map(changes.filter(change => change.queryKey === ticketQueryKey(filters)).map(change => [String((change.ticket || change.previous)!.id), change]));
     const pins = new Map<string, Ticket>();

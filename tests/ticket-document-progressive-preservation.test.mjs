@@ -3,12 +3,21 @@ import test from 'node:test';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {restoreMaonoSelect} from './helpers/maono-select-preservation.mjs';
+import {restoreTicketKanbanSnapshot} from './helpers/ticket-kanban-snapshot-preservation.mjs';
 import {restoreTicketRefreshFocus,restoreTicketRefreshFocusStyles} from './helpers/ticket-refresh-focus-preservation.mjs';
 import {restoreDocumentProgressiveLoading,restoreTicketDetailProgressiveLoading,restoreTicketDocumentInitialPresentation} from './helpers/ticket-docs-progressive-preservation.mjs';
 const cases=[
   {file:'DocumentsSection',restore:restoreDocumentProgressiveLoading,hash:'736bc1aba68b30ffd0250ccea8f69e70b3a488e6e4e12d4f0b2d4b276814b627',canaries:[['PERMISSION.DOCUMENT_VIEW','PERMISSION.DOCUMENT_UPLOAD'],['listOrganizationFiles(','listAllOrganizationFiles('],['limit: 50','limit: 500'],['formData,','new FormData(),'],['<option value="root">Raiz</option>','<option value="">Raiz</option>']]},
   {file:'TicketDetailDrawer',restore:restoreTicketDetailProgressiveLoading,hash:'a0c19fa754c8891256c7e1d6cd39260636949016211ac79bc799c66f0a3c4778',canaries:[['{canManage ? (','{true ? ('],['onUpdate,','onDelete,'],['ticket.status','ticket.priority'],['attachmentLimits={attachmentLimits}','attachmentLimits={{}}']]},
 ];
+test('Kanban scheduling inverse rejects token/guard drift and preserves unrelated ACL changes',()=>{
+ const source=readFileSync(new URL('../src/pages/Projects/components/TicketKanbanBoard.tsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+ for(const [from,to] of [['if (sharedSnapshot)', 'if (true)'],['if (epoch !== generation.current || requestRevision !== latestRevision.current || pending.current) return;','if (pending.current) return;'],['load(queue, false, sharedSnapshot,','load(queue, false, null,']]){
+  assert.ok(source.includes(from));assert.throws(()=>restoreTicketKanbanSnapshot(source.replace(from,to)));
+ }
+ assert.throws(()=>restoreTicketKanbanSnapshot(source+source));
+ assert.notEqual(restoreTicketKanbanSnapshot(source.replace('failure.status === 404','failure.status === 500')),restoreTicketKanbanSnapshot(source));
+});
 test('refresh focus inverse rejects an altered activation guard and retains unrelated drift',()=>{
  const source=readFileSync(new URL('../src/pages/Projects/components/TicketDetailDrawer.tsx',import.meta.url),'utf8');
  assert.throws(()=>restoreTicketRefreshFocus(source.replace('if (!loading && !saving) onReload();','onReload();')));
