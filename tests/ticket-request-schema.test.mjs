@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+import { restoreTicketRequestSchema } from './helpers/ticket-request-schema-preservation.mjs';
 import { withRequestSchema } from '../functions/_lib/request-schema.js';
 import { tableExists, getTableColumns } from '../functions/_lib/organizations.js';
 import { createTicketCommandDb } from './helpers/ticket-command-db.mjs';
@@ -83,4 +85,11 @@ test('authorized attachment count agrees between list and detail without exposin
       if(profile==='viewer')assert.equal(detail.attachments.some(a=>a.audience==='internal'),false);
     }
   }finally{await f.close();}
+});
+test('preservation inverse rejects modified schema wrappers and leaves unrelated drift detectable',()=>{
+  const path='functions/_lib/organizations.js';
+  const source=readFileSync(new URL('../'+path,import.meta.url),'utf8').replaceAll('\r\n','\n');
+  assert.throws(()=>restoreTicketRequestSchema(path,source.replace('return new Set(names);','return new Set();')),/exact request-schema edit/);
+  const restored=restoreTicketRequestSchema(path,source);
+  assert.notEqual(restoreTicketRequestSchema(path,source.replace('export async function requireTable','export async function changedTable')),restored);
 });
