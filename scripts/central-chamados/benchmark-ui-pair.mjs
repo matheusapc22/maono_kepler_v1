@@ -65,8 +65,8 @@ async function run(records,flow,variant,iteration) {
     finally {record.durationMs=performance.now()-began;inFlight--;}
   });
   const mark=async(name,operation)=>{const began=performance.now();await operation();marks.push({name,startMs:began-start,elapsedMs:performance.now()-began});};
-  const ready=()=>page.locator('.ticket-kanban-card').first().waitFor({state:'visible'});
-  const all=()=>page.waitForFunction(()=>document.querySelectorAll('.ticket-kanban-column .ticket-kanban-card').length>0&&[...document.querySelectorAll('.ticket-kanban-stack')].length===4&&[...document.querySelectorAll('.ticket-kanban-stack')].every(e=>e.getAttribute('aria-busy')==='false'));
+  const ready=()=>page.locator('.ticket-kanban-card:not(.mm-loading-ticket-card) .ticket-kanban-subject').first().waitFor({state:'visible'});
+  const all=()=>page.waitForFunction(()=>document.querySelectorAll('.ticket-kanban-card:not(.mm-loading-ticket-card) .ticket-kanban-subject').length>0&&[...document.querySelectorAll('.ticket-kanban-stack')].length===4&&[...document.querySelectorAll('.ticket-kanban-stack')].every(e=>e.getAttribute('aria-busy')==='false'));
   const select=async(label)=>{await page.getByRole('combobox',{name:'Visualização dos chamados',exact:true}).click();await page.getByRole('listbox').getByRole('option',{name:label,exact:true}).click();};
   try {
     await mark('direct-first-authorized-kanban',async()=>{await page.goto(`${builds[variant].origin}/projects?cc_org=1&cc_view=kanban`);await ready();});
@@ -126,6 +126,8 @@ try {
   builds.after=await loadPerformanceUiBuild(afterDirectory);
   assert.notEqual(builds.before.origin,builds.after.origin);
   assert.notEqual(builds.before.manifest.sourceSha,builds.after.manifest.sourceSha);
+  assert.deepEqual(builds.before.manifest.fixtureFiles,builds.after.manifest.fixtureFiles,'identical common fixture');
+  assert.deepEqual(builds.before.manifest.dependencies,builds.after.manifest.dependencies,'identical recorded dependency versions');
   browser=await chromium.launch({headless:true});
   // Alternate order to reduce runtime/thermal drift. Warmups are retained separately.
   for(const records of smoke?[80]:[80,800])for(const flow of smoke?[true]:[false,true])for(let i=-1;i<repeats;i++) {

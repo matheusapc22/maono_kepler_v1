@@ -1,5 +1,7 @@
 # Ticket Center performance evidence — 2026-10-26
 
+**Measurement correction:** the original browser harness selected `.ticket-kanban-card`, a class also used by skeletons. Its `direct-first-authorized-kanban` and `list-to-kanban-first` timings are withdrawn as evidence of useful authorized content. Historical files remain unchanged for audit. Four-page completion, detail and backend marks use different completion criteria. The separately built UI comparison now requires a visible real ticket subject; results are recorded separately, never substituted into historical tables.
+
 This is an incremental draft PR, not performance acceptance or authorization to deploy. The proven change removes repeated schema introspection inside each ticket GET. It does not cache authorization, sessions, ticket data, or schema across requests. Local measurements do not establish remote D1 latency, and the proposed 30% p95 target is not met across the measured UI conditions.
 
 ## Provenance and isolation
@@ -37,7 +39,7 @@ No new endpoint, index, migration, shared cache, client detail cache, JSON.strin
 
 ## Kanban ownership and remaining work
 
-The measured request waterfall confirms the general list request still runs alongside queue loading; it supplies assignees, attachment limits, flags and snapshot metadata. The board then awaits `open` before starting the other three queues. With a valid shared snapshot, that dependency is avoidable in principle; with a fresh snapshot, token creation is a real dependency. General and queue initialization can create equivalent snapshots. These are recorded remaining costs, not silently removed responsibilities.
+The measured request waterfall confirms the general list request still runs alongside queue loading; it supplies assignees, attachment limits, flags and snapshot metadata. Before commit `65ee553`, the board awaited `open` before starting the other three queues even with a valid shared snapshot. That dependency is now removed only when an existing token is available. Each queue still reauthorizes its read. A held-open browser control demonstrated all three siblings ready with the same token, with 401/403/404 invalidation and local 409 errors preserved. With a fresh snapshot, token creation remains a real dependency. The cold control still creates two snapshots (general + open); no metadata responsibility was removed.
 
 Candidate A is a lightweight common initialization owned by TicketsSection, followed by independent queue reads using one validated snapshot. Candidate B is a metadata/first-pages bootstrap response, with later pagination per queue. A has the smaller contract footprint; B changes the endpoint contract and response-size distribution. Neither has been implemented or measured in this incremental patch. A follow-up must prove snapshot owner/query/expiry binding, frozen membership/order and ACL holes, remove redundant general cards only after replacing metadata duties, and retain atomic reconciliation swaps after mutations. No endpoint is justified by the present local timing alone.
 
@@ -69,4 +71,4 @@ See the generated measurement tables, compact JSON summaries, and sanitized requ
 
 ## Acceptance status
 
-The local evidence supports reduced per-request schema/binding work and the attachment-count correctness fix. It does **not** establish complete acceptance: the UI 30% p95 target is not met, some critical p95 conditions regress more than 10%, remote D1 and real optional-module completion are unmeasured, full logical backend spans are absent, and original-browser client abort counts are unavailable. Snapshot initialization/general-card duplication and queue dependency remain unchanged. A merge or rollout decision must not reinterpret this draft as those criteria having passed.
+The local evidence supports reduced per-request schema/binding work, the attachment-count correctness fix and independent queues with an existing snapshot. It does **not** establish complete acceptance: first-content timing needs the corrected UI comparison, some critical p95 conditions regress more than 10%, remote D1 and real optional-module completion are unmeasured, full logical backend spans are absent, and original-browser client abort counts are unavailable. Cold snapshot initialization/general-card duplication remain unchanged. A merge or rollout decision must not reinterpret this draft as those criteria having passed.
