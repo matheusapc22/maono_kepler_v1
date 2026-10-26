@@ -1,0 +1,22 @@
+{
+  "runLabel": "bounded-final-v1",
+  "toolingSha": "fff045800dee5181c83f3282b211ebf3c9f98bcc",
+  "candidateSourceSha": "177cc6a95c3220694340cc873575e501536e57ff",
+  "observation": "The selected execution environment became unavailable to tools during the existing benchmark. A status poll returned No usable execution environment. The environment then reconnected to the same MAONO workspace.",
+  "firstRecordedRecoveryCheckUtc": "2026-10-26T22:43:21Z",
+  "progressFileWriteObservedUtc": "2026-10-26T22:42:59Z",
+  "exactOutageOnsetAndDuration": "Not recorded; do not infer from benchmark timestamps",
+  "sessionContinuity": "The original exec session 49443 remained active after reconnection. The same run label and progress file advanced from the 80-ticket conditions to 800/flow OFF. No process restart or benchmark rerun was requested.",
+  "possibleExternalHostWork": {
+    "noticeRecordedUtc": "2026-10-26T22:54:59Z",
+    "conditionInProgress": "800 tickets, flow ON",
+    "description": "Parent reported a separate incident investigation that might use read-only browser panels on this host. Actual browser start/end and CPU/network overlap were not established by this task. This is potential contamination, not a confirmed concurrent workload.",
+    "handling": "Preserve every raw sample and label this limitation. Do not mix the condition into a clean-environment acceptance claim, selectively discard samples, or start another benchmark cycle. Scheduling was already rejected based on the completed 80/flow ON condition."
+  },
+  "limitations": [
+    "Tool observability continuity is not a proof that all host conditions were unchanged during the gap.",
+    "Light status reads and documentation edits occurred during the run; no concurrent local tests, builds or other benchmarks were started.",
+    "The benchmark uses immutable source/build directories; subsequent rollback in the working checkout does not change either measured variant.",
+    "All measured results remain reported, including p95 regressions. The candidate is rejected, not accepted from partial or selected samples."
+  ]
+}

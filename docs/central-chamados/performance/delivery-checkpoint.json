@@ -1,0 +1,106 @@
+{
+  "baselineSha": "381c93256d985b0ae39722128fc4ad54f17f025f",
+  "restorationCommit": "62fbb462225cd01040455c1b8de3bd9a4369498b",
+  "productAndTestsEqual": "13b3a66ae499f384f5ba89e33cbb3334dc700c24",
+  "backendEqualMeasured": "f4a49ea5098ce1cbbbab6468c5e7496fcb781c4f",
+  "productFiles": [
+    "functions/_lib/organizations.js",
+    "functions/_lib/request-schema.js",
+    "functions/_lib/ticket-center.js",
+    "functions/api/organizations/[id]/tickets.js",
+    "functions/api/organizations/[id]/tickets/[ticketId].js",
+    "src/pages/Projects/components/TicketDetailDrawer.tsx",
+    "src/pages/Projects/maono-residual-accent.css",
+    "src/pages/Projects/projects.css"
+  ],
+  "candidateDisposition": {
+    "parallel4": "rejected and reverted",
+    "bounded2": "rejected and reverted"
+  },
+  "bounded": {
+    "sourceSha": "177cc6a95c3220694340cc873575e501536e57ff",
+    "toolingSha": "fff045800dee5181c83f3282b211ebf3c9f98bcc",
+    "rawSha256": "4d6afa818daad9c89483c64c59668afe09031440f8a9231c047956a255a61f63",
+    "measured": 240,
+    "warmups": 8,
+    "failures": 0,
+    "requestFailures": 0,
+    "draftFailures": 0,
+    "candidateFocusFailures": 0,
+    "regressions": [
+      {
+        "records": 80,
+        "flow": true,
+        "name": "list-to-kanban-first",
+        "before": {
+          "n": 30,
+          "p50": 332.50459999998566,
+          "p95": 378.1496999999508
+        },
+        "after": {
+          "n": 30,
+          "p50": 386.52679999999236,
+          "p95": 464.83599999989383
+        },
+        "p95ChangePct": 22.92380504333449
+      },
+      {
+        "records": 800,
+        "flow": true,
+        "name": "detail-first-authorized-summary",
+        "before": {
+          "n": 30,
+          "p50": 415.36129999998957,
+          "p95": 452.23809999995865
+        },
+        "after": {
+          "n": 30,
+          "p50": 409.3220000001602,
+          "p95": 509.7587999999523
+        },
+        "p95ChangePct": 12.719118535125396
+      }
+    ],
+    "observationNotes": "bounded-observation-gap.json"
+  },
+  "causal": {
+    "rawSha256": "a3a1e6fc79135e68a0dbab1531cd8f65b26daf2249e02df29dcd09ed165d0324",
+    "measured": 180,
+    "warmups": 6,
+    "requestFailures": 0
+  },
+  "localValidation": {
+    "typecheck": {
+      "exitCode": 0
+    },
+    "scopedLint": {
+      "exitCode": 0
+    },
+    "targetedTests": {
+      "total": 61,
+      "passed": 60,
+      "failed": 1,
+      "skipped": 0,
+      "knownWindowsFailure": "Shared footer render comparison uses URL.pathname as resolveDir, producing /C:/ paths. Exact failing test body matches product baseline381; not changed/skipped."
+    },
+    "fullBuild": "Not repeated after known local memory limit; final-head Linux CI performs actual application build and browser tests"
+  },
+  "independentReview": "Rollback source/test equivalence and unchanged original gates confirmed by read-only review; no additional blocker",
+  "originalCheckout": {
+    "head": "cdc2277774ffe89a944761d5738b40b0d038cb73",
+    "status": "Only previously present untracked exports/; no changes from this task"
+  },
+  "finalHeadCi": "Check the PR final-head status after publishing; this checkpoint does not assert CI success for a later evidence commit",
+  "scopeLimits": [
+    "No new complete latency run of restored final UI; rejected-candidate timing is not final-product timing",
+    "Historical first-content Kanban marks withdrawn; valid historical detail/backend evidence remains separately identified",
+    "No 30% UI p95 claim or complete performance acceptance",
+    "No D1 remote or real optional-module completion latency measured",
+    "No merge, direct deploy, DNS, flags, credentials, production acceptance, migration or production benchmark performed"
+  ],
+  "library": {
+    "status": "not uploaded",
+    "libraryFileId": null,
+    "reason": "Automatic approval review denied copying the Library transfer helper; parent instructed no retry or workaround. Sanitized source-controlled summaries/waterfalls are delivered through GitHub."
+  }
+}

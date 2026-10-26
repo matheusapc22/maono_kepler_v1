@@ -1,5 +1,7 @@
 # Immutable UI comparison
 
+**Rejected candidate:** this table measures four-way queue scheduling in `65ee553`, not the final restored product. Four critical p95 guardrails failed. The later two-worker trial was also rejected; delivered scheduling returns to `13b3a66`. Historical values remain intact.
+
 Baseline `381c93256d985b0ae39722128fc4ad54f17f025f`; candidate product `65ee55390b3055c82c9e57cdcd80d981d0fa1eab`; harness `bcb9b18ecb5a390f61115afeaaa4d9d3b87fc3a6`. Each variant serves a separately built, hash-verified UI and frozen handlers. Same Chromium 140.0.7339.16, production React Profiler, 80/800 synthetic tickets, owner, flow OFF/ON, no network/CPU throttle. Thirty alternating pairs per condition; 240 measured journeys, 8 excluded warmups.
 
 Full request lifecycle is recorded for assets and intercepted APIs. Body bytes and Chromium-reported sizes are local observations, not remote wire cost. Original historical comparisons remain separate. No concurrent local tests/builds/benchmarks ran during this comparison.

@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { stats } from './benchmark-read-paths.mjs';
 
-const file='.tmp/ticket-performance/ui-pair-kanban-authorized.json';
+const [label='kanban-authorized',stem='immutable',disposition='historical']=process.argv.slice(2);
+assert.match(label,/^[a-z][a-z0-9-]*$/);
+assert.match(stem,/^[a-z][a-z0-9-]*$/);
+assert.ok(['historical','rejected'].includes(disposition));
+const file=`.tmp/ticket-performance/ui-pair-${label}.json`;
+const observationNotes=label==='bounded-final-v1'?JSON.parse(await readFile('docs/central-chamados/performance/bounded-observation-gap.json','utf8')):null;
 const bytes=await readFile(file),report=JSON.parse(bytes);
 const runs=report.results.filter(r=>r.iteration>=0),comparisons=[];
 assert.equal(runs.length,240);
@@ -27,14 +32,16 @@ for(const records of [80,800])for(const flow of [false,true])for(const variant o
   }
   timing.push(metric);
 }
-const summary={sourceSha:report.builds.after.sourceSha,baselineSha:report.builds.before.sourceSha,toolingSha:report.toolingSha,rawSha256:createHash('sha256').update(bytes).digest('hex'),browser:report.browser,environment:report.environment,overhead:report.overhead,
+const summary={disposition,observationNotes,sourceSha:report.builds.after.sourceSha,baselineSha:report.builds.before.sourceSha,toolingSha:report.toolingSha,rawSha256:createHash('sha256').update(bytes).digest('hex'),browser:report.browser,environment:report.environment,overhead:report.overhead,
  builds:Object.fromEntries(Object.entries(report.builds).map(([k,m])=>[k,{sourceSha:m.sourceSha,toolingSha:m.toolingSha,digest:m.digest,assets:m.assets}])),
  measuredJourneys:runs.length,warmups:report.results.length-runs.length,failures:runs.reduce((n,r)=>n+r.failures,0),requestFailures:runs.flatMap(r=>r.requestFailures),draftFailures:runs.filter(r=>!r.invariants.draftPreserved).length,candidateFocusFailures:runs.filter(r=>r.variant==='after'&&!r.invariants.refreshFocusPreserved).length,baselineFocusFailures:runs.filter(r=>r.variant==='before'&&!r.invariants.refreshFocusPreserved).length,
  comparisons,timing,limitations:['Same-process intercepted actual handlers + SQLite, not D1 remote','Optional modules return disabled envelopes; completion of real secondary modules is not measured','Response-to-visible probe includes transport/React/presentation/Playwright wait overhead, not an isolated render span','React total is summed actualDuration over the complete journey, not a milestone','The host is not a dedicated performance appliance; all measured tail regressions remain reported']};
 const out='docs/central-chamados/performance/';
-await writeFile(out+'immutable-ui-summary.json',JSON.stringify(summary,null,2)+'\n');
+await writeFile(out+`${stem}-ui-summary.json`,JSON.stringify(summary,null,2)+'\n',{flag:'wx'});
 const fmt=n=>n.toFixed(2);
 let md='# Immutable UI comparison\n\n';
+if(disposition==='rejected')md+='**Rejected scheduling candidate:** these timings belong to the frozen experimental source below. Delivered product restores scheduling to 13b3a66; do not attribute this table to the final restored product. No loading-duration tuning or further concurrency cycle followed the rejection.\n\n';
+if(observationNotes)md+='**Observation limitation:** tool connectivity was temporarily unavailable and later recovered in the same running session. A separate incident investigation might have used browser panels during 800/flow ON; actual overlap was not established. All samples are retained. See [observation notes](bounded-observation-gap.json); this is not clean-host performance acceptance.\n\n';
 md+=`Baseline \`${summary.baselineSha}\`; candidate product \`${summary.sourceSha}\`; harness \`${summary.toolingSha}\`. Each variant serves a separately built, hash-verified UI and frozen handlers. Same Chromium ${summary.browser}, production React Profiler, 80/800 synthetic tickets, owner, flow OFF/ON, no network/CPU throttle. Thirty alternating pairs per condition; ${summary.measuredJourneys} measured journeys, ${summary.warmups} excluded warmups.\n\n`;
 md+='Full request lifecycle is recorded for assets and intercepted APIs. Body bytes and Chromium-reported sizes are local observations, not remote wire cost. Original historical comparisons remain separate. No concurrent local tests/builds/benchmarks ran during this comparison.\n\n';
 md+=`Runtime failures: ${summary.failures}; request failures/aborts: ${summary.requestFailures.length}; draft failures: ${summary.draftFailures}; candidate focus failures: ${summary.candidateFocusFailures}; baseline focus failures: ${summary.baselineFocusFailures}.\n\n`;
@@ -44,8 +51,8 @@ md+='\nNegative change is faster. Every condition with more than 10% p95 regress
 md+='| Tickets | Flow | Variant | First detail request p95 ms | Response to visible probe p95 ms | Whole journey React actualDuration p95 ms |\n|---:|:---:|---|---:|---:|---:|\n';
 for(const t of timing)md+=`| ${t.records} | ${t.flow?'ON':'OFF'} | ${t.variant} | ${fmt(t['detail-first-authorized-summary'].requestDurationMs.p95)} | ${fmt(t['detail-first-authorized-summary'].responseToVisibleProbeMs.p95)} | ${fmt(t.reactActualDurationTotal.p95)} |\n`;
 md+='\nThe response-to-visible probe is not an isolated rendering measurement: it includes client handling, existing presentation timing and Playwright observation. The unchanged presentation policy has a 260 ms content deadline; these figures must not be interpreted as permission to shorten it. Optional-module completion, remote D1 latency, full logical backend spans and D1 rows_read/rows_written remain unmeasured.\n';
-await writeFile(out+'IMMUTABLE-MEASUREMENTS.md',md);
+await writeFile(out+`${stem.toUpperCase()}-MEASUREMENTS.md`,md,{flag:'wx'});
 const csv=['records,flow,variant,source_sha,iteration,order,kind,page,reuses_snapshot,start_ms,duration_ms,body_bytes,status,binding_calls,binding_ms'];
 for(const r of runs.filter(r=>r.iteration===0))r.requests.forEach((q,i)=>csv.push([r.records,r.flow,r.variant,r.sourceSha,0,i,q.kind,q.page??'',q.reusesSnapshot??'',q.startMs,q.durationMs??'',q.bytes??'',q.status??'',q.backend?.bindingCalls??'',q.backend?.bindingMs??''].join(',')));
-await writeFile(out+'immutable-http-waterfall.csv',csv.join('\n')+'\n');
+await writeFile(out+`${stem}-http-waterfall.csv`,csv.join('\n')+'\n',{flag:'wx'});
 console.log(JSON.stringify({measuredJourneys:summary.measuredJourneys,failures:summary.failures,requestFailures:summary.requestFailures.length,candidateFocusFailures:summary.candidateFocusFailures,regressions:comparisons.filter(c=>c.p95ChangePct>10),principal:comparisons.filter(c=>['direct-first-authorized-kanban','list-to-kanban-first','detail-first-authorized-summary'].includes(c.name))},null,2));
