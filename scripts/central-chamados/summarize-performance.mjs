@@ -50,6 +50,7 @@ for(const a of browser.summary.filter(s=>s.variant==='before')){
 const focusRows=refresh.summary.map(s=>`| ${s.records} | ${s.flow?'ON':'OFF'} | ${s.metrics['refresh-with-draft'].n} | ${num(s.metrics['refresh-with-draft'].p50)} | ${num(s.metrics['refresh-with-draft'].p95)} |`);
 await writeFile(`${destination}/MEASUREMENTS.md`,[
   '# Measured results',
+  '**Historical correction:** direct-first-authorized-kanban and list-to-kanban-first used a selector that could match a skeleton. These two marks are withdrawn as authorized-content evidence; see withdrawn-metrics.json. Other milestones retain their original criteria.',
   '',
   `Original paired code: ${browser.sourceSha}; backend baseline: ${backend.baselineSha}. Focus follow-up: ${refresh.sourceSha}. Chromium: ${browser.browser}. All times below are milliseconds. See README for scope/overhead and unavailable fields.`,
   '',
@@ -107,7 +108,7 @@ for(const p of plots){
   for(let t=0;t<=maximum;t+=100)shapes.push(`<text x="${180+t*scale}" y="${y+15}" font-size="10">${t}</text>`);
   y+=60;
 }
-shapes.push(`<text x="24" y="${y}" font-size="12">Milliseconds from journey start. Green: first authorized content. Purple: all first pages. Gray: disabled optional APIs.</text>`);
+shapes.push(`<text x="24" y="${y}" font-size="12">Milliseconds from journey start. Green: WITHDRAWN (may be skeleton). Purple: all first pages. Gray: disabled optional APIs.</text>`);
 shapes.push(`<text x="24" y="${y+22}" font-size="12">Local Chromium profiling fixture + real handlers + SQLite. Intercepted HTTP; no remote D1 or production latency claim.</text>`);
 await writeFile(`${destination}/kanban-waterfall.svg`,`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${y+50}" viewBox="0 0 1080 ${y+50}" font-family="Arial, sans-serif" fill="#172033">${shapes.join('')}</svg>\n`);
 console.log(JSON.stringify({backendConditions:backend.results.length,backendRequests:2880,browserJourneys:measured.length,focusJourneys:repeated.length,backendP95RegressionsAbove10Percent:regressions,uiP95RegressionsAbove10Percent:uiRegressions,files:['paired-summary.json','browser-summary.json','refresh-summary.json','MEASUREMENTS.md','http-waterfall.csv','sql-waterfall.csv']}));

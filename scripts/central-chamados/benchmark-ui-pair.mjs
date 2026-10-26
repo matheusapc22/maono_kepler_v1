@@ -1,12 +1,19 @@
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { fixture, stats } from './benchmark-read-paths.mjs';
 import { loadPerformanceUiBuild } from './performance-ui-build.mjs';
 
 const [beforeDirectory,afterDirectory,label]=process.argv.slice(2);
+const toolingSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 assert.match(label||'',/^[a-z][a-z0-9-]*$/,'unique output label required');
+await mkdir('.tmp/ticket-performance',{recursive:true});
+for(const suffix of ['','-progress','-error']){
+  try{await access(`.tmp/ticket-performance/ui-pair-${label}${suffix}.json`);throw new Error(`Output label already used: ${label}`);}
+  catch(error){if(error.code!=='ENOENT')throw error;}
+}
+await writeFile(`.tmp/ticket-performance/ui-pair-${label}-reservation.json`,JSON.stringify({label,startedAt:new Date().toISOString(),beforeDirectory,afterDirectory,toolingSha}),{flag:'wx'});
 const smoke=process.env.PERF_SMOKE==='1';
 const refreshOnly=false;
 const repeats=smoke?0:Number(process.env.PERF_SAMPLES||30), delayMs=Number(process.env.PERF_BINDING_DELAY_MS||0);
@@ -144,7 +151,7 @@ try {
     const runs=results.filter(r=>r.records===records&&r.flow===flow&&r.variant===variant&&r.iteration>=0);
     summary.push({records,flow,variant,metrics:Object.fromEntries(runs[0].marks.map(m=>[m.name,stats(runs.map(r=>r.marks.find(x=>x.name===m.name)?.elapsedMs).filter(Number.isFinite))]))});
   }
-  await writeFile(`.tmp/ticket-performance/ui-pair-${label}.json`,JSON.stringify({toolingSha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),builds:Object.fromEntries(Object.entries(builds).map(([variant,build])=>[variant,build.manifest])),browser:browser.version(),delayMs,environment:'separate immutable production profiling UI bundles + their frozen actual route handlers; same-process intercepted APIs + node:sqlite; no D1 remote; optional modules disabled by synthetic API',overhead:'React production Profiler active; per-binding timers/hash and full request lifecycle recording equally; no CPU/network throttling; durations include Playwright interaction overhead; Chromium reported sizes for intercepted APIs are not remote wire measurements',summary,results},null,2));
+  await writeFile(`.tmp/ticket-performance/ui-pair-${label}.json`,JSON.stringify({toolingSha,builds:Object.fromEntries(Object.entries(builds).map(([variant,build])=>[variant,build.manifest])),browser:browser.version(),delayMs,environment:'separate immutable production profiling UI bundles + their frozen actual route handlers; same-process intercepted APIs + node:sqlite; no D1 remote; optional modules disabled by synthetic API',overhead:'React production Profiler active; per-binding timers/hash and full request lifecycle recording equally; no CPU/network throttling; durations include Playwright interaction overhead; Chromium reported sizes for intercepted APIs are not remote wire measurements',summary,results},null,2),{flag:'wx'});
 } finally {
   await browser?.close();
   const closed=await Promise.allSettled(Object.values(builds).map(build=>build.close()));

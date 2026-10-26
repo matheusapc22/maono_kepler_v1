@@ -60,6 +60,7 @@ export async function fixture(records = 80, flow = true, bindingDelayMs = 0) {
   }
   const cookies = { owner: f.sessionCookie(1), viewer: f.sessionCookie(3) };
   async function request(kind, query = '', profile = 'owner', ticketId = 1) {
+    const cpuStart = process.env.PERF_CPU_DIAGNOSTICS === '1' ? process.cpuUsage() : null;
     const start = performance.now(), events = [];
     const response = await handlers[kind]({ env: { ...f.env, DB: instrument(db,events,start) },
       params: { id: '1', ticketId: String(ticketId) }, request: new Request(`http://synthetic.test/api/organizations/1/tickets${kind === 'detail' ? '/'+ticketId : ''}?${query}`, { headers: { cookie: cookies[profile] } }) });
@@ -68,6 +69,7 @@ export async function fixture(records = 80, flow = true, bindingDelayMs = 0) {
     const trace = { kind, profile, elapsedMs: performance.now()-start, consumeBodyMs: performance.now()-serializeStart,
       status: response.status, bytes: Buffer.byteLength(body), sqlCalls: events.reduce((n,e)=>n+e.sqlStatements,0), bindingCalls: events.length,
       bindingMs: events.reduce((n,e)=>n+e.durationMs,0), schemaCalls: events.filter(e=>e.phase==='schema').length, events };
+    if (cpuStart) { const cpu = process.cpuUsage(cpuStart); trace.cpuMs = (cpu.user + cpu.system) / 1000; }
     traces.push(trace);
     assert.equal(response.status,200,`Synthetic ${kind} failed: ${response.status}`);
     assert.equal(response.headers.get('cache-control'),'private, no-store');

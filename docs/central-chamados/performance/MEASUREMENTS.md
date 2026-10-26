@@ -1,5 +1,7 @@
 # Measured results
 
+**Historical measurement correction:** `direct-first-authorized-kanban` and `list-to-kanban-first` below used a selector that could match a skeleton. They are retained as raw historical observations but withdrawn as evidence of useful authorized content. Consult `IMMUTABLE-MEASUREMENTS.md` for the corrected, separately built UI comparison when available. Backend, detail and four-page completion use other criteria and are not withdrawn by this selector finding.
+
 Original paired code: f4a49ea5098ce1cbbbab6468c5e7496fcb781c4f; backend baseline: 381c93256d985b0ae39722128fc4ad54f17f025f. Focus follow-up: 118fdc264ca6ae41e069578bcc6d4828de8f758f. Chromium: 140.0.7339.16. All times below are milliseconds. See README for scope/overhead and unavailable fields.
 
 Acceptance remains incomplete: 4/48 backend conditions and 2/40 UI conditions show more than 10% p95 regression. The 30% UI reduction target is not demonstrated across conditions. These are observed local results, not remote D1 measurements.
