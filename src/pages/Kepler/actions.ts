@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import { push } from "react-router-redux";
 import { fetch } from "global";
@@ -19,6 +18,22 @@ import {
   MAP_CONFIG_URL,
 } from "./constants/default-settings";
 
+
+import type { AppDispatch, AppThunk, RootState } from "../../store";
+import type { SavedConfigV1, ProtoDataset, ProcessorResult } from "@kepler.gl/types";
+import type { SampleMapDescriptor } from "./components/load-data-modal/sample-data-viewer";
+
+export type SampleOptions = Partial<SampleMapDescriptor> & { keplergl?: string; queryType?: string };
+export type RemoteDataset = ProtoDataset | { info: { id: string }; data: ProcessorResult };
+export type RemoteResourceResult = {
+  response: unknown; config: SavedConfigV1 | null; options: SampleOptions;
+  remoteDatasetConfig: RemoteDataset | null;
+};
+export type ProcessedRemoteResourceResult = RemoteResourceResult & { datasets: RemoteDataset | null };
+type ResourceError = { status?: number; message?: string };
+type ExportProvider = { getShareUrl?: (fullUrl: boolean) => string; getMapUrl?: (fullUrl: boolean) => string };
+type LoadProvider = { name: string; getMapUrl: (params: Record<string, string>) => string | null | undefined };
+
 // CONSTANTS
 export const INIT = "INIT";
 export const LOAD_REMOTE_RESOURCE_SUCCESS = "LOAD_REMOTE_RESOURCE_SUCCESS";
@@ -35,18 +50,18 @@ export const CLOUD_LOGIN_SUCCESS = "CLOUD_LOGIN_SUCCESS";
 // ACTIONS
 export function initApp() {
   return {
-    type: INIT,
+    type: INIT as typeof INIT,
   };
 }
 
 export function loadRemoteResourceSuccess(
-  response,
-  config,
-  options,
-  remoteDatasetConfig
+  response: unknown,
+  config: SavedConfigV1 | null,
+  options: SampleOptions,
+  remoteDatasetConfig: RemoteDataset | null
 ) {
   return {
-    type: LOAD_REMOTE_RESOURCE_SUCCESS,
+    type: LOAD_REMOTE_RESOURCE_SUCCESS as typeof LOAD_REMOTE_RESOURCE_SUCCESS,
     response,
     config,
     options,
@@ -54,31 +69,31 @@ export function loadRemoteResourceSuccess(
   };
 }
 
-export function loadRemoteDatasetProcessedSuccessAction(result) {
+export function loadRemoteDatasetProcessedSuccessAction(result: ProcessedRemoteResourceResult) {
   return {
-    type: LOAD_REMOTE_DATASET_PROCESSED_SUCCESS,
+    type: LOAD_REMOTE_DATASET_PROCESSED_SUCCESS as typeof LOAD_REMOTE_DATASET_PROCESSED_SUCCESS,
     payload: result,
   };
 }
 
-export function loadRemoteResourceError(error, url) {
+export function loadRemoteResourceError(error: ResourceError, url?: string) {
   return {
-    type: LOAD_REMOTE_RESOURCE_ERROR,
+    type: LOAD_REMOTE_RESOURCE_ERROR as typeof LOAD_REMOTE_RESOURCE_ERROR,
     error,
     url,
   };
 }
 
-export function loadMapSampleFile(samples) {
+export function loadMapSampleFile(samples: SampleMapDescriptor[]) {
   return {
-    type: LOAD_MAP_SAMPLE_FILE,
+    type: LOAD_MAP_SAMPLE_FILE as typeof LOAD_MAP_SAMPLE_FILE,
     samples,
   };
 }
 
-export function setLoadingMapStatus(isMapLoading) {
+export function setLoadingMapStatus(isMapLoading: boolean) {
   return {
-    type: SET_SAMPLE_LOADING_STATUS,
+    type: SET_SAMPLE_LOADING_STATUS as typeof SET_SAMPLE_LOADING_STATUS,
     isMapLoading,
   };
 }
@@ -90,8 +105,8 @@ export function setLoadingMapStatus(isMapLoading) {
  *
  * @param {*} param0
  */
-export function onExportFileSuccess({ provider, options }) {
-  return (dispatch) => {
+export function onExportFileSuccess({ provider, options }: { provider: ExportProvider; options: { isPublic?: boolean } }) {
+  return (dispatch: AppDispatch) => {
     // if isPublic is true, use share Url
     if (options.isPublic && provider.getShareUrl) {
       dispatch(push(provider.getShareUrl(false)));
@@ -102,10 +117,10 @@ export function onExportFileSuccess({ provider, options }) {
   };
 }
 
-export function onLoadCloudMapSuccess({ provider, loadParams }) {
-  return (dispatch) => {
+export function onLoadCloudMapSuccess({ provider, loadParams }: { provider?: LoadProvider; loadParams: Record<string, string> }) {
+  return (dispatch: AppDispatch) => {
     const mapUrl = provider?.getMapUrl(loadParams);
-    if (mapUrl) {
+    if (mapUrl && provider) {
       const url = `/demo/map/${provider.name}?path=${mapUrl}`;
       dispatch(push(url));
     }
@@ -121,14 +136,19 @@ export function onLoadCloudMapSuccess({ provider, loadParams }) {
  * @param {string} options.dataUrl the URL to fetch data from. Current supported file type json,csv, kepler.json
  * @returns {Function}
  */
-export function loadRemoteMap(options) {
-  return (dispatch) => {
+export function loadRemoteMap(options: { dataUrl: string }) {
+  return (dispatch: AppDispatch) => {
     dispatch(setLoadingMapStatus(true));
     // breakdown url into url+query params
     loadRemoteRawData(options.dataUrl).then(
       // In this part we turn the response into a FileBlob
       // so we can use it to call loadFiles
-      ([file, url]) => {
+      (loaded) => {
+        if (!loaded) {
+          dispatch(loadRemoteResourceError({ message: "Missing remote data URL" }, options.dataUrl));
+          return;
+        }
+        const [file, url] = loaded;
         const { file: filename } = parseUri(url);
         dispatch(loadFiles([new File([file], filename)])).then(() =>
           dispatch(setLoadingMapStatus(false))
@@ -153,7 +173,7 @@ export function loadRemoteMap(options) {
  * @param url
  * @returns {Promise<any>}
  */
-function loadRemoteRawData(url) {
+function loadRemoteRawData(url: string): Promise<[Blob, string] | null> {
   if (!url) {
     // TODO: we should return reject with an appropriate error
     return Promise.resolve(null);
@@ -168,7 +188,7 @@ function loadRemoteRawData(url) {
       return resp.blob();
     })
     .then((data) => {
-      return [data, url];
+      return [data, url] as [Blob, string];
     });
 }
 
@@ -187,14 +207,14 @@ function loadRemoteRawData(url) {
  * @param {string} [keplergl] url to fetch the full data/config generated by kepler
  * @returns {Function}
  */
-export function loadSample(options, pushRoute = true) {
+export function loadSample(options: SampleOptions, pushRoute = true): AppThunk {
   return (dispatch, getState) => {
-    const { routing } = getState();
+    const { routing } = getState() as RootState & { routing?: { locationBeforeTransitions?: { search?: string } } };
     if (options.id && pushRoute) {
       dispatch(
         push(
           `/demo/${options.id}${
-            routing.locationBeforeTransitions?.search ?? ""
+            routing?.locationBeforeTransitions?.search ?? ""
           }`
         )
       );
@@ -215,16 +235,16 @@ export function loadSample(options, pushRoute = true) {
  * @param options {configUrl, dataUrl}
  * @returns {Function}
  */
-function loadRemoteSampleMap(options) {
-  return (dispatch) => {
+function loadRemoteSampleMap(options: SampleOptions) {
+  return (dispatch: AppDispatch) => {
     // Load configuration first
     const { configUrl, dataUrl, remoteDatasetConfigUrl } = options;
-    const toLoad = [loadRemoteConfig(configUrl)];
-    toLoad.push(dataUrl ? loadRemoteData(dataUrl) : null);
-    // Load remote dataset config for tiled layers
-    toLoad.push(
-      remoteDatasetConfigUrl ? loadRemoteConfig(remoteDatasetConfigUrl) : null
-    );
+    const toLoad = [
+      loadRemoteConfig<SavedConfigV1>(configUrl),
+      dataUrl ? loadRemoteData(dataUrl) : null,
+      // Load remote dataset config for tiled layers.
+      remoteDatasetConfigUrl ? loadRemoteConfig<RemoteDataset>(remoteDatasetConfigUrl) : null,
+    ] as const;
 
     Promise.all(toLoad).then(
       ([config, data, remoteDatasetConfig]) => {
@@ -259,7 +279,7 @@ function loadRemoteSampleMap(options) {
  * @param url
  * @returns {Promise<any>}
  */
-function loadRemoteConfig(url) {
+function loadRemoteConfig<Result>(url?: string): Promise<Result | null> {
   if (!url) {
     // TODO: we should return reject with an appropriate error
     return Promise.resolve(null);
@@ -280,14 +300,14 @@ function loadRemoteConfig(url) {
  * @param url to fetch data from (csv, json, geojson)
  * @returns {Promise<any>}
  */
-function loadRemoteData(url) {
+function loadRemoteData(url?: string): Promise<unknown> {
   if (!url) {
     // TODO: we should return reject with an appropriate error
     return Promise.resolve(null);
   }
 
   // Load data
-  return new Promise((resolve) => {
+  return new Promise<unknown>((resolve) => {
     const loaders = [
   CSVLoader,
   GeoArrowLoader,
@@ -296,13 +316,13 @@ function loadRemoteData(url) {
 ];
     const loadOptions = {
       csv: {
-        shape: "object-row-table",
+        shape: "object-row-table" as const,
       },
       arrow: {
-        shape: "arrow-table",
+        shape: "arrow-table" as const,
       },
       parquet: {
-        shape: "arrow-table",
+        shape: "arrow-table" as const,
       },
       metadata: true,
     };
@@ -317,8 +337,8 @@ function loadRemoteData(url) {
  * map sample configurations we are going to load the actual map data if it exists
  * @returns {function(*)}
  */
-export function loadSampleConfigurations(sampleMapId = null) {
-  return (dispatch) => {
+export function loadSampleConfigurations(sampleMapId: string | null = null) {
+  return (dispatch: AppDispatch) => {
     fetch(MAP_CONFIG_URL)
       .then((response) => {
         if (!response.ok) {
@@ -329,7 +349,7 @@ export function loadSampleConfigurations(sampleMapId = null) {
           return response.json();
         }
       })
-      .then((samples) => {
+      .then((samples: SampleMapDescriptor[]) => {
         dispatch(loadMapSampleFile(samples));
         // Load the specified map
         const map = sampleMapId && samples.find((s) => s.id === sampleMapId);

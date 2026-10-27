@@ -168,7 +168,7 @@ export function resolvePointClusterMode({
   previousMode,
   policy,
 }: {
-  zoom: number;
+  zoom: number | undefined;
   previousMode?: PointClusterMode;
   policy: PointClusterLayerPolicy;
 }): PointClusterMode {

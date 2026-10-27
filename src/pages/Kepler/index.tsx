@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-import React, {
+import {
+  type CSSProperties,
+  type RefObject,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -29,7 +31,8 @@ import {
 } from "@kepler.gl/ai-assistant";
 import { panelBorderColor, theme } from "@kepler.gl/styles";
 import { getApplicationConfig } from "@kepler.gl/utils";
-import { SqlPanel } from "@kepler.gl/duckdb";
+import { SqlPanel } from "@kepler.gl/duckdb/components";
+import type { RootState, AppDispatch } from "../../store";
 import Banner from "./components/banner";
 import Announcement, { FormLink } from "./components/announcement";
 import MaonoSaveButton from "./components/maono-save-button";
@@ -66,15 +69,6 @@ import { loadCloudMap, toggleMapControl, toggleModal } from "@kepler.gl/actions"
 import { CLOUD_PROVIDERS } from "./cloud-providers";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
-
-
-
-
-
-
-
-
-
 import { injectComponents } from "@kepler.gl/components";
 import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
@@ -95,7 +89,11 @@ import { KeplerEngineAdapterProvider } from "./engine-adapter/index.ts";
 import MaonoMapRuntime from "./components/maono-map-shell/MaonoMapRuntime";
 import "./map-panel/map-panel.css";
 
-const KeplerGl = injectComponents([
+// The SDK infers never[] from its default empty array, but its injector
+// accepts recipe arrays of original/replacement factory functions.
+type ComponentRecipe = ReadonlyArray<(...dependencies: never[]) => unknown>;
+const injectKeplerComponents = injectComponents as (recipes: readonly ComponentRecipe[]) => ReturnType<typeof injectComponents>;
+const KeplerGl = injectKeplerComponents([
   replaceCaptureMapContainer(),
   replaceLoadDataModal(),
   replaceFileUpload(),
@@ -114,7 +112,7 @@ const KeplerGl = injectComponents([
   replaceDataImportNotifications(),
 ]);
 
-function shouldForwardProp(propName, target) {
+function shouldForwardProp(propName: string, target: unknown) {
   if (typeof target === "string") {
     return isPropValid(propName);
   }
@@ -123,11 +121,18 @@ function shouldForwardProp(propName, target) {
 
 const BannerHeight = 48;
 const BannerKey = `banner-${FormLink}`;
-const keplerGlGetState = (state) => state.demo.keplerGl;
+const keplerGlGetState = (state: RootState) => state.demo.keplerGl;
 const MAONO_SCREENSHOT_TIMEOUT_MS = 6000;
 
-let observedMaonoMap = null;
-let releaseObservedMaonoMapListeners = null;
+type ObservedMap = {
+  isStyleLoaded?: () => boolean;
+  getStyle?: () => {layers?: unknown[]};
+  triggerRepaint?: () => void;
+  on?: (event: string, handler: (event?: unknown) => void) => void;
+  off?: (event: string, handler: (event?: unknown) => void) => void;
+};
+let observedMaonoMap: ObservedMap | null = null;
+let releaseObservedMaonoMapListeners: (() => void) | null = null;
 
 function emitMaonoMapRuntimeEvent(
   phase:
@@ -211,7 +216,7 @@ function observeMaonoMapRef(mapRef: unknown) {
     notifyMaonoMapRender({ styleLoaded });
     emitMaonoMapRuntimeEvent("map-render", { styleLoaded });
   };
-  const handleError = (event) => {
+  const handleError = (event: unknown) => {
     const error = (event as {error?: {message?: unknown}} | null)?.error;
     emitMaonoMapRuntimeEvent("map-error", {
       message: safeMapErrorMessage(error?.message),
@@ -229,7 +234,10 @@ function observeMaonoMapRef(mapRef: unknown) {
   };
 }
 
-function normalizeScreenshotPayload(screenshot) {
+type ScreenshotPayload = string | null | undefined | {
+  dataUrl?: string; dataURL?: string; image?: string; screenshot?: string; src?: string;
+};
+function normalizeScreenshotPayload(screenshot: ScreenshotPayload) {
   if (!screenshot) return null;
   if (typeof screenshot === "string") return screenshot;
   if (typeof screenshot === "object") {
@@ -280,9 +288,10 @@ const GlobalStyle = styled.div`
   }
 `;
 
-const EMPTY_MAP_SIZE = Object.freeze({ width: 0, height: 0 });
+type MapSize = { width: number; height: number };
+const EMPTY_MAP_SIZE: Readonly<MapSize> = Object.freeze({ width: 0, height: 0 });
 
-function normalizeMapSize(rect) {
+function normalizeMapSize(rect: Partial<MapSize> | null | undefined) {
   return {
     width: Math.max(0, Math.round(Number(rect?.width) || 0)),
     height: Math.max(0, Math.round(Number(rect?.height) || 0)),
@@ -290,7 +299,7 @@ function normalizeMapSize(rect) {
 }
 
 function useParentElementSize() {
-  const elementRef = useRef(null);
+  const elementRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(EMPTY_MAP_SIZE);
 
   useLayoutEffect(() => {
@@ -331,10 +340,10 @@ function useParentElementSize() {
     };
   }, []);
 
-  return [elementRef, size];
+  return [elementRef, size] as const;
 }
 
-function useSynchronizedKeplerFrame(rootRef, size) {
+function useSynchronizedKeplerFrame(rootRef: RefObject<HTMLDivElement | null>, size: MapSize) {
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root || size.width <= 0 || size.height <= 0) return;
@@ -378,7 +387,7 @@ function useSynchronizedKeplerFrame(rootRef, size) {
   }, [rootRef, size.height, size.width]);
 }
 
-const CONTAINER_STYLE = {
+const CONTAINER_STYLE: CSSProperties = {
   position: "absolute",
   inset: 0,
   minWidth: 0,
@@ -389,7 +398,7 @@ const CONTAINER_STYLE = {
   backgroundColor: "#333",
 };
 
-function MeasuredKeplerViewport({ fallbackSize, renderMap }) {
+function MeasuredKeplerViewport({ fallbackSize, renderMap }: { fallbackSize: MapSize; renderMap: (size: MapSize) => ReactNode }) {
   const [viewportRef, measuredSize] = useParentElementSize();
   const width = measuredSize.width || fallbackSize.width;
   const height = measuredSize.height || fallbackSize.height;
@@ -436,14 +445,29 @@ const StyledVerticalResizeHandle = styled(PanelResizeHandle)`
   }
 `;
 
-const App = (props) => {
+type ScreenshotRequest = {
+  promise: Promise<string>; resolve: (value: string) => void;
+  reject: (reason: Error) => void; timeoutId: number;
+};
+declare global {
+  interface Window { __MAONO_CAPTURE_SCREENSHOT__?: () => Promise<string>; }
+}
+
+type NativeCloudPayload = Parameters<typeof loadCloudMap>[0];
+type RuntimeCloudPayload = Omit<NativeCloudPayload, "provider"> & { provider: (typeof CLOUD_PROVIDERS)[number] };
+// LOAD_CLOUD_MAP's updater calls provider.downloadMap; its public declaration
+// incorrectly says string. Keep the same action creator and object payload.
+const loadCloudMapWithProvider = loadCloudMap as unknown as
+  (payload: RuntimeCloudPayload) => Omit<ReturnType<typeof loadCloudMap>, "payload"> & { payload: RuntimeCloudPayload };
+
+const App = (props: RootState) => {
   const [showBanner, toggleShowBanner] = useState(false);
 
   const { id, provider } = useParams();
   const [searchParams] = useSearchParams();
   const query = Object.fromEntries(searchParams.entries());
-  const dispatch = useDispatch();
-  const screenshotRequestRef = useRef(null);
+  const dispatch = useDispatch<AppDispatch>();
+  const screenshotRequestRef = useRef<ScreenshotRequest | null>(null);
   const pointClustering = usePointClustering();
   const [mapRootRef, mapRootSize] = useParentElementSize();
   useSynchronizedKeplerFrame(mapRootRef, mapRootSize);
@@ -459,17 +483,18 @@ const App = (props) => {
   );
 
   const isSqlPanelOpen = useSelector(
-    (state) =>
+    (state: RootState) =>
       duckDbPluginEnabled &&
-      state?.demo?.keplerGl?.map?.uiState.mapControls.sqlPanel?.active
+      (state?.demo?.keplerGl?.map?.uiState.mapControls as
+        typeof state.demo.keplerGl.map.uiState.mapControls & { sqlPanel?: { active: boolean } })?.sqlPanel?.active
   );
 
   const isAiAssistantPanelOpen = useSelector(
-    (state) =>
+    (state: RootState) =>
       state?.demo?.keplerGl?.map?.uiState.mapControls.aiAssistant?.active
   );
 
-  const prevQueryRef = useRef<number>(null);
+  const prevQueryRef = useRef<{ provider?: string; id?: string; query: Record<string, string> } | null>(null);
 
   useEffect(() => {
     const cloudProvider = CLOUD_PROVIDERS.find((c) => c.name === provider);
@@ -479,7 +504,7 @@ const App = (props) => {
       }
 
       dispatch(
-        loadCloudMap({
+        loadCloudMapWithProvider({
           loadParams: query,
           provider: cloudProvider,
           onSuccess: onLoadCloudMapSuccess,
@@ -507,22 +532,22 @@ const App = (props) => {
   }, []);
 
   const onViewStateChange = useCallback(
-    (viewState) => {
+    (viewState: ConstructorParameters<typeof WebMercatorViewport>[0]) => {
       const viewport = new WebMercatorViewport(viewState);
       const nw = viewport.unproject([0, 0]);
       const se = viewport.unproject([viewport.width, viewport.height]);
-      dispatch(setMapBoundary(nw, se));
+      dispatch(setMapBoundary(nw as [number, number], se as [number, number]));
     },
     [dispatch]
   );
 
   const _setStartScreenCapture = useCallback(
-    (flag) => {
+    (flag: Parameters<typeof setStartScreenCapture>[0]) => {
       dispatch(setStartScreenCapture(flag));
     }, [dispatch]);
 
   const _setScreenCaptured = useCallback(
-    (screenshot) => {
+    (screenshot: Parameters<typeof setScreenCaptured>[0]) => {
       dispatch(setScreenCaptured(screenshot));
 
       const pending = screenshotRequestRef.current;
@@ -546,10 +571,10 @@ const App = (props) => {
         return screenshotRequestRef.current.promise;
       }
 
-      let resolveRequest;
-      let rejectRequest;
+      let resolveRequest!: ScreenshotRequest["resolve"];
+      let rejectRequest!: ScreenshotRequest["reject"];
 
-      const promise = new Promise((resolve, reject) => {
+      const promise = new Promise<string>((resolve, reject) => {
         resolveRequest = resolve;
         rejectRequest = reject;
       });
@@ -676,11 +701,11 @@ const App = (props) => {
                                     height,
                                   })
                                 }
-                                onDeckInitialized={(deck) => {
+                                onDeckInitialized={(deck: Parameters<typeof registerMaonoDeckRuntime>[0]) => {
                                   registerMaonoDeckRuntime(deck);
                                   emitMaonoMapRuntimeEvent("deck-initialized");
                                 }}
-                                getMapboxRef={(mapRef) =>
+                                getMapboxRef={(mapRef: unknown) =>
                                   observeMaonoMapRef(mapRef)
                                 }
                                 onViewStateChange={onViewStateChange}
@@ -725,8 +750,8 @@ const App = (props) => {
   );
 };
 
-const mapStateToProps = (state) => state;
-const dispatchToProps = (dispatch) => ({ dispatch });
+const mapStateToProps = (state: RootState) => state;
+const dispatchToProps = (dispatch: AppDispatch) => ({ dispatch });
 
 const ConnectedApp = connect(mapStateToProps, dispatchToProps)(App);
 

@@ -1,0 +1,40 @@
+name: Product Lint Maintenance
+
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: npm run lint
+
+  preserved-module-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: TypeScript with unchanged compiler options
+        run: node --max-old-space-size=4096 node_modules/typescript/bin/tsc -b
+      - name: Extraction, provider and ingestion contracts
+        run: >-
+          node --experimental-strip-types --test --test-concurrency=1
+          tests/lint-module-extraction.test.mjs
+          tests/dropbox-provider-login.test.mjs
+          tests/foursquare-provider-contract.test.mjs
+          tests/legacy-ingestion-contract.test.mjs

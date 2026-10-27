@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import { combineReducers } from "redux";
 import { handleActions } from "redux-actions";
@@ -92,8 +91,25 @@ function buildInitialMapControls() {
   };
 }
 
+
+import type { AnyAction } from "redux";
+import type { KeplerGlState } from "@kepler.gl/reducers";
+import type { ProcessorResult, AddDataToMapPayload, ParsedConfig } from "@kepler.gl/types";
+import type { ArrowTable, ObjectRowTable } from "@loaders.gl/schema";
+import type { SampleMapDescriptor } from "../components/load-data-modal/sample-data-viewer";
+import type { RemoteDataset, SampleOptions } from "../actions";
+import { loadMapSampleFile, setLoadingMapStatus,
+  loadRemoteResourceSuccess as remoteResourceSuccessAction,
+  loadRemoteResourceError as remoteResourceErrorAction } from "../actions";
+
+type AppState = {
+  appName: string; loaded: boolean; sampleMaps: SampleMapDescriptor[];
+  isMapLoading: boolean; error: unknown; currentSample?: SampleOptions;
+};
+type RemoteProcessor = (input: unknown) => ProcessorResult | Promise<ProcessorResult>;
+
 // INITIAL_APP_STATE
-const initialAppState = {
+const initialAppState: AppState = {
   appName: "example",
   loaded: false,
   sampleMaps: [], // this is used to store sample maps fetch from a remote json file
@@ -106,7 +122,7 @@ const initialAppState = {
 };
 
 // App reducer
-export const appReducer = handleActions(
+export const appReducer = handleActions<AppState, unknown>(
   {
     [INIT]: (state) => ({
       ...state,
@@ -114,11 +130,11 @@ export const appReducer = handleActions(
     }),
     [LOAD_MAP_SAMPLE_FILE]: (state, action) => ({
       ...state,
-      sampleMaps: action.samples,
+      sampleMaps: (action as unknown as ReturnType<typeof loadMapSampleFile>).samples,
     }),
     [SET_SAMPLE_LOADING_STATUS]: (state, action) => ({
       ...state,
-      isMapLoading: action.isMapLoading,
+      isMapLoading: (action as unknown as ReturnType<typeof setLoadingMapStatus>).isMapLoading,
     }),
   },
   initialAppState,
@@ -141,7 +157,7 @@ const demoReducer = combineReducers({
       exportMap: {
         ...DEFAULT_EXPORT_MAP,
         [EXPORT_MAP_FORMATS.HTML]: {
-          ...DEFAULT_EXPORT_MAP[[EXPORT_MAP_FORMATS.HTML]],
+          ...DEFAULT_EXPORT_MAP[EXPORT_MAP_FORMATS.HTML],
           exportMapboxAccessToken:
             CLOUD_PROVIDERS_CONFIGURATION.EXPORT_MAPBOX_TOKEN,
         },
@@ -157,10 +173,19 @@ const demoReducer = combineReducers({
       loaders: [], // Add additional loaders.gl loaders here
       loadOptions: {}, // Add additional loaders.gl loader options here
     },
-  }).plugin(reconcileFilterEnabledState),
+  }).plugin(reconcileFilterEnabledState) as import("redux").Reducer<Record<string, KeplerGlState>, AnyAction>,
   app: appReducer,
   aiAssistant: aiAssistantReducer,
 });
+
+type DemoState = Omit<ReturnType<typeof demoReducer>, "keplerGl"> & { keplerGl: Record<string, KeplerGlState> };
+// The native updater handles absent config and nullable processor results.
+// Keep those values unchanged at this legacy ingestion boundary.
+type RemoteDataPayload = Omit<AddDataToMapPayload, "datasets" | "config"> & {
+  datasets: RemoteDataset | null; config: ParsedConfig | null;
+};
+const addRemoteDataToMapUpdater = combinedUpdaters.addDataToMapUpdater as unknown as
+  (state: KeplerGlState, action: { payload: RemoteDataPayload }) => KeplerGlState;
 
 async function loadRemoteResourceSuccessTask({
   dataUrl,
@@ -168,6 +193,9 @@ async function loadRemoteResourceSuccessTask({
   processorMethod,
   remoteDatasetConfig,
   unprocessedData,
+}: {
+  dataUrl?: string; datasetId: string; processorMethod: RemoteProcessor;
+  remoteDatasetConfig: RemoteDataset | null; unprocessedData: unknown;
 }) {
   if (dataUrl) {
     const data = await processorMethod(unprocessedData);
@@ -195,23 +223,23 @@ const LOAD_REMOTE_RESOURCE_SUCCESS_TASK = Task.fromPromise(
  * @param action {map: resultset, config, map}
  * @returns {{app: {isMapLoading: boolean}, keplerGl: {map: (state|*)}}}
  */
-export const loadRemoteResourceSuccess = (state, action) => {
+export const loadRemoteResourceSuccess = (state: DemoState, action: ReturnType<typeof remoteResourceSuccessAction>) => {
   // TODO: replace generate with a different function
   const datasetId = action.options.id || generateHashId(6);
   const { dataUrl } = action.options;
 
-  const { shape } = dataUrl ? action.response : {};
-  let processorMethod = processRowObject;
+  const { shape } = dataUrl ? action.response as { shape?: string } : {};
+  let processorMethod: RemoteProcessor = (data) => processRowObject(data as unknown[]);
   let unprocessedData = action.response;
   unprocessedData =
-    shape === "object-row-table" ? action.response.data : unprocessedData;
+    shape === "object-row-table" ? (action.response as ObjectRowTable).data : unprocessedData;
 
   if (dataUrl) {
     const table = getApplicationConfig().table ?? KeplerTable;
     if (typeof table.getFileProcessor === "function") {
       if (shape === "arrow-table") {
         // arrow processor from table plugin expects batches
-        unprocessedData = action.response.data.batches;
+        unprocessedData = (action.response as ArrowTable).data.batches;
       }
       // use custom processors from table class
       const processorResult = table.getFileProcessor(unprocessedData);
@@ -219,9 +247,9 @@ export const loadRemoteResourceSuccess = (state, action) => {
       processorMethod = processorResult.processor;
     } else {
       if (shape === "arrow-table") {
-        processorMethod = processArrowTable;
+        processorMethod = (data) => processArrowTable(data as ArrowTable);
       } else if (shape === "object-row-table") {
-        processorMethod = processRowObject;
+        processorMethod = (data) => processRowObject(data as unknown[]);
       } else if (dataUrl.includes(".json") || dataUrl.includes(".geojson")) {
         processorMethod = processGeojson;
       } else {
@@ -248,22 +276,23 @@ export const loadRemoteResourceSuccess = (state, action) => {
   return withTask(state, task);
 };
 
-const loadRemoteDatasetProcessedSuccess = (state, action) => {
+const loadRemoteDatasetProcessedSuccess = (state: DemoState, action: ReturnType<typeof loadRemoteDatasetProcessedSuccessAction>) => {
   const { config, datasets, options } = action.payload;
 
   const parsedConfig = config ? KeplerGlSchema.parseSavedConfig(config) : null;
 
-  // a hack to use minZoom and maxZoom from examples
+  // Legacy sample configs may contain bounds omitted from SavedMapState's schema type.
+  const bounds = config?.config?.mapState as { maxZoom?: number; minZoom?: number } | undefined;
   if (parsedConfig?.mapState) {
-    if (typeof config?.config?.mapState?.maxZoom === "number") {
-      parsedConfig.mapState.maxZoom = config.config.mapState.maxZoom;
+    if (typeof bounds?.maxZoom === "number") {
+      Object.assign(parsedConfig.mapState, { maxZoom: bounds.maxZoom });
     }
-    if (typeof config?.config?.mapState?.minZoom === "number") {
-      parsedConfig.mapState.minZoom = config.config.mapState.minZoom;
+    if (typeof bounds?.minZoom === "number") {
+      Object.assign(parsedConfig.mapState, { minZoom: bounds.minZoom });
     }
   }
 
-  const keplerGlInstance = combinedUpdaters.addDataToMapUpdater(
+  const keplerGlInstance = addRemoteDataToMapUpdater(
     state.keplerGl.map, // "map" is the id of your kepler.gl instance
     {
       payload: {
@@ -290,11 +319,11 @@ const loadRemoteDatasetProcessedSuccess = (state, action) => {
   };
 };
 
-export const loadRemoteResourceError = (state, action) => {
+export const loadRemoteResourceError = (state: DemoState, action: ReturnType<typeof remoteResourceErrorAction>) => {
   const { error, url } = action;
 
   const errorNote = {
-    type: "error",
+    type: "error" as const,
     message: error.message || `Error loading ${url}`,
   };
 
@@ -319,15 +348,17 @@ export const loadRemoteResourceError = (state, action) => {
   };
 };
 
-const composedUpdaters = {
-  [LOAD_REMOTE_RESOURCE_SUCCESS]: loadRemoteResourceSuccess,
-  [LOAD_REMOTE_DATASET_PROCESSED_SUCCESS]: loadRemoteDatasetProcessedSuccess,
-  [LOAD_REMOTE_RESOURCE_ERROR]: loadRemoteResourceError,
+const composedUpdaters: Partial<Record<string, (state: DemoState, action: AnyAction) => DemoState>> = {
+  [LOAD_REMOTE_RESOURCE_SUCCESS]: (state, action) => loadRemoteResourceSuccess(state, action as ReturnType<typeof remoteResourceSuccessAction>),
+  [LOAD_REMOTE_DATASET_PROCESSED_SUCCESS]: (state, action) => loadRemoteDatasetProcessedSuccess(state, action as ReturnType<typeof loadRemoteDatasetProcessedSuccessAction>),
+  [LOAD_REMOTE_RESOURCE_ERROR]: (state, action) => loadRemoteResourceError(state, action as ReturnType<typeof remoteResourceErrorAction>),
 };
 
-const composedReducer = (state, action) => {
-  if (composedUpdaters[action.type]) {
-    return composedUpdaters[action.type](state, action);
+const composedReducer = (state: DemoState | undefined, action: AnyAction): DemoState => {
+  const updater = composedUpdaters[action.type];
+  if (updater) {
+    // Redux initializes the state before dispatching these application actions.
+    return updater(state!, action);
   }
   return demoReducer(state, action);
 };
