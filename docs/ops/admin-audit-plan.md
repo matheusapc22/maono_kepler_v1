@@ -1,5 +1,16 @@
 # Auditoria - plano, operação e limites
 
+## Entrega local concluída
+
+Código validado: `e2708003f55c0b6409dfcae005a058253625a839`.
+50 contratos, TypeScript app/node, build Vite, lint de escopo e diff-check aprovados.
+258/258 casos nos três motores passaram, sem falhas, flaky ou ignorados.
+As três páginas do PDF final foram renderizadas e inspecionadas; a captura mobile
+confirma tabela legível e layout sem corte horizontal em 320 px.
+Evidência consolidada: `docs/ops/admin-audit-validation.md`.
+CI remoto será conferido no HEAD final da PR; não é declarado aprovado aqui.
+As seções abaixo preservam o planejamento e os registros históricos anteriores.
+
 Base independente: `e47deac18888195b945a244dadb9e27c5902638f`.
 Branch `feat/admin-audit-reader`; PR draft, sem merge.
 
