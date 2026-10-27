@@ -1,0 +1,9 @@
+.maono-admin-workspace .admin-overview-metric-note { margin: 4px 0 0; max-width: 180px; font-size: 12px; line-height: 17px; color: var(--admin-workspace-muted); overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-overview-provenance { margin-top: 16px; padding: 16px; border: 1px solid var(--admin-border); border-radius: 12px; background: var(--admin-surface); }
+.maono-admin-workspace .admin-overview-provenance summary { cursor: pointer; color: var(--admin-gold); min-height: 28px; line-height: 28px; }
+.maono-admin-workspace .admin-overview-provenance summary:focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 3px; }
+.maono-admin-workspace .admin-overview-provenance :is(p, dd) { color: var(--admin-workspace-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.maono-admin-workspace .admin-overview-provenance dl > div { margin: 12px 0; }
+.maono-admin-workspace .admin-overview-provenance dt { font-weight: 700; }
+.maono-admin-workspace .admin-overview-provenance dd { margin: 4px 0 0; }
+@media (max-width: 960px), (pointer: coarse) { .maono-admin-workspace .admin-overview-provenance summary { min-height: 44px; } }

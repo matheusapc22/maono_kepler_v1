@@ -180,7 +180,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         return true;
       } catch (err) {
         if (!isCurrent()) return;
-        const denied = isRegionAccessDenied(err);
+        const denied = isRegionAccessDenied(err) || Number((err as { status?: unknown })?.status) === 404;
         const sessionLost = isRegionAuthenticationError(err);
         if (sessionLost) {
           // Session loss invalidates the entire batch, including companions
@@ -207,12 +207,22 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
       }
     };
     const results = await Promise.allSettled([
-      loadRegion("projects", projectsRead, data => setProjects(data.projects || [])),
+      loadRegion("projects", projectsRead, data => {
+        if (!Array.isArray(data.projects) || data.projects.some((item: unknown) => !item || typeof item !== "object")) throw Object.assign(new Error("Resposta administrativa inválida."), { status: 502 });
+        setProjects(data.projects);
+      }),
       loadRegion("access", accessRead, data => setAccess(data.access || [])),
       // Preserve the existing users endpoint precedence, including [] being
       // authoritative. Access users are only a successful-response fallback.
-      loadRegion("users", usersRead.then(async usersData => usersData.users || (await accessRead).users || []), setUsers),
-      loadRegion("organizations", organizationsRead, data => setOrganizations(data.organizations || [])),
+      loadRegion("users", usersRead.then(async usersData => {
+        const collection = usersData.users || (await accessRead).users;
+        if (!Array.isArray(collection) || collection.some((item: unknown) => !item || typeof item !== "object")) throw Object.assign(new Error("Resposta administrativa inválida."), { status: 502 });
+        return collection;
+      }), setUsers),
+      loadRegion("organizations", organizationsRead, data => {
+        if (!Array.isArray(data.organizations) || data.organizations.some((item: unknown) => !item || typeof item !== "object")) throw Object.assign(new Error("Resposta administrativa inválida."), { status: 502 });
+        setOrganizations(data.organizations);
+      }),
     ]);
     if (isCurrent()) controllerRef.current = null;
     return results.every(result => result.status === "fulfilled" && result.value === true);
@@ -256,10 +266,10 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
         structurePending={structurePending}
         onSection={setSection}
         metrics={[
-          { label: "Organizações", value: activeOrganizations.length, icon: "building", state: regions.organizations, contentPending: organizationPresentation.contentPending },
-          { label: "Projetos", value: activeProjects.length, icon: "map", state: regions.projects, contentPending: projectPresentation.contentPending },
-          { label: "Usuários", value: activeUsers.length, icon: "users", state: regions.users, contentPending: userPresentation.contentPending },
-          { label: "Arquivos", value: totalFiles, icon: "file", state: regions.organizations, contentPending: organizationPresentation.contentPending },
+          { label: "Organizações", available: organizations.every(item => typeof item.active === "boolean"), value: activeOrganizations.length, icon: "building", state: regions.organizations, contentPending: organizationPresentation.contentPending },
+          { label: "Projetos", available: projects.every(item => typeof item.active === "boolean"), value: activeProjects.length, icon: "map", state: regions.projects, contentPending: projectPresentation.contentPending },
+          { label: "Usuários", available: users.every(item => typeof item.active === "boolean"), value: activeUsers.length, icon: "users", state: regions.users, contentPending: userPresentation.contentPending },
+          { label: "Arquivos", available: organizations.every(org => typeof org.fileCount === "number" && Number.isSafeInteger(org.fileCount) && org.fileCount >= 0), value: totalFiles, icon: "file", state: regions.organizations, contentPending: organizationPresentation.contentPending },
         ]}
       />
     );

@@ -42,6 +42,35 @@ function settleBatch(h, start, suffix = '') {
   h.resolve(start + 3, { organizations: [{ id: 3, name: `Organização${suffix}` }] });
 }
 
+test('missing or malformed administrative collections are unavailable instead of fabricated empty lists', async () => {
+  for (const [key, index, payload] of [
+    ['projects', 0, {}], ['projects', 0, { projects: [null] }],
+    ['organizations', 3, {}], ['organizations', 3, { organizations: 'invalid' }],
+    ['users', 2, { users: [null] }], ['users', 2, {}],
+  ]) {
+    const h = adminHarness(), finished = h.refresh();
+    const payloads = [{ projects: [] }, { access: [] }, { users: [] }, { organizations: [] }];
+    payloads[index] = payload;
+    payloads.forEach((value, requestIndex) => h.resolve(requestIndex, value));
+    await finished;
+    assert.equal(h.state.regions[key].loaded, false, key);
+    assert.notEqual(h.state.regions[key].error, '', key);
+    assert.deepEqual(h.state[key], [], key);
+  }
+});
+
+test('404 invalidates previously loaded administrative regions and never offers authorization retry', async () => {
+  const h = adminHarness(), first = h.refresh(); settleBatch(h, 0); await first;
+  const next = h.refresh();
+  for (const index of [4, 6, 7]) h.requests[index].reject(Object.assign(new Error('Unavailable'), { status: 404 }));
+  h.resolve(5, { access: [] }); await next;
+  for (const key of ['projects', 'users', 'organizations']) {
+    assert.equal(h.state.regions[key].loaded, false);
+    assert.equal(h.state.regions[key].retryable, false);
+    assert.deepEqual(h.state[key], []);
+  }
+});
+
 test('Admin starts all four original authorized GETs immediately and reveals each result independently', async () => {
   const h = adminHarness(), finished = h.refresh();
   assert.deepEqual(h.requests.map(request => request.path), ['/api/admin/projects', '/api/admin/access', '/api/admin/users', '/api/admin/organizations']);
