@@ -196,7 +196,8 @@ export default class FoursquareProvider extends Provider {
   }
 
   async downloadMap(loadParams) {
-    let { id, path } = loadParams;
+    let { id } = loadParams;
+    const { path } = loadParams;
     if (!id) {
       // try to get map id from foursquare map path
       if (typeof path === "string") {

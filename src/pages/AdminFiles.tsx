@@ -424,7 +424,7 @@ const AdminFilesPage: React.FC = () => {
   async function handleDeleteOrganization(organization: Organization, deleteDropbox = false) {
     const actionText = deleteDropbox ? "excluir também a pasta no Dropbox" : "desativar no sistema";
     const confirmed = window.confirm(
-      `Deseja ${actionText} a organização \"${organization.name}\"?`
+      `Deseja ${actionText} a organização "${organization.name}"?`
     );
 
     if (!confirmed) return;
@@ -529,7 +529,7 @@ const AdminFilesPage: React.FC = () => {
 
   async function handleDeleteFile(file: OrganizationFile, deleteDropbox = false) {
     const actionText = deleteDropbox ? "excluir também do Dropbox" : "desativar no sistema";
-    const confirmed = window.confirm(`Deseja ${actionText} o arquivo \"${file.fileName}\"?`);
+    const confirmed = window.confirm(`Deseja ${actionText} o arquivo "${file.fileName}"?`);
 
     if (!confirmed) return;
 

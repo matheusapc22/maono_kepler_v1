@@ -47,7 +47,7 @@ export default class CartoProvider extends Provider {
   login(onCloudLoginSuccess) {
     try {
       this._carto.login().then(() => {
-        onCloudLoginSuccess && onCloudLoginSuccess(this.name);
+        if (onCloudLoginSuccess) onCloudLoginSuccess(this.name);
       });
     } catch (error) {
       this._manageErrors(error);
