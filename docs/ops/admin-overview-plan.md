@@ -60,3 +60,12 @@ do gate compilado permanecem intactos. Não há relaxamento da contagem de reque
 49 testes passaram (contratos específicos e gates administrativos históricos),
 zero falhas/ignorados. ESLint de escopo e git diff --check passaram. TypeScript,
 build e navegadores compilados serão acompanhados no SHA publicado do CI.
+
+## Gate completo dividido por motor
+
+O run 40557843588 de Solicitações executou 558 dos 591 casos antes da janela
+de 35 minutos encerrar o job. A suíte completa agora roda em uma matriz de
+Chromium/Firefox/WebKit, cada um com o mesmo timeout de 35 minutos e um worker.
+Nenhum teste, assertion, etapa de contrato/lint/build ou motor foi removido.
+O check final mantém o nome progressive-loading e só aprova quando todos os
+jobs de motores têm sucesso; fail-fast é false e artefatos têm sufixo do motor.
