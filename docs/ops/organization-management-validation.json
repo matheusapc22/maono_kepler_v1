@@ -2,12 +2,12 @@
   "productBase": "e47deac18888195b945a244dadb9e27c5902638f",
   "note": "Final working-tree application sources are identified by SHA-256 below. Published commit and terminal CI are recorded in PR 254.",
   "regression": {
-    "total": 544,
-    "passed": 542,
+    "total": 547,
+    "passed": 545,
     "failed": 0,
     "skipped": 2,
     "skipReason": "Bash operator cases require Linux; included in CI",
-    "execution": "536 passed + 2 skipped in 43 files, plus 6 loading-final-acceptance tests; 44 files in CI"
+    "execution": "545 passed and 2 Bash skips in all 44 workflow files; 17 integration cases rerun after additional legacy resume/pause assertions"
   },
   "scopedLint": {
     "files": [
@@ -110,6 +110,14 @@
     "organization-flag-matrix-proof.json": {
       "sha256": "7d82722dcfdaeb329fb5a3128e700a414bff2c25fee3f1aa365128b52cfa4bf8",
       "bytes": 570
+    },
+    "organization-regressions-pre-migration-final.tap": {
+      "bytes": 219664,
+      "sha256": "fac11725b74a5ead7483e3a549c03812cdd0e00c44470daae2c97f78bf370d39"
+    },
+    "organization-pre-migration-compatibility.tap": {
+      "bytes": 3159,
+      "sha256": "6b5b3b10ab61bc8ce502b06e8e82af1da82f84b3c9aa32147da80dfec86c36ae"
     }
   },
   "migration": {
@@ -120,9 +128,10 @@
   "manual": {
     "file": "docs/user-guide/Manual_Gestao_Organizacoes_Maono.pdf",
     "pages": 14,
-    "bytes": 76701,
-    "sha256": "2b0f2fa0cf8b725cf4339ac6717141738e3d187eb9feba8ed46e5e145ac7e23d",
-    "visualReview": "all 14 rendered pages inspected"
+    "bytes": 76825,
+    "sha256": "08c913fab1e8557f57a176bffb11b87255543b228df83954bef94177eb040470",
+    "visualReview": "All 14 pages rendered; changed cover, initial guidance and final evidence pages inspected; unchanged content pages compared against the previously reviewed edition.",
+    "edition": "1.6"
   },
   "testedWorkingTreeBase": "cd4a6c2f1fab00b1a4a2a790029188bda82aa761",
   "applicationSources": {
@@ -147,7 +156,7 @@
     "allOrganizationCasesInDedicatedGate": true,
     "noTimeoutOrAssertionChanged": true
   },
-  "configurationValidation": "Application source hashes unchanged. Browser configs, explicit OFF case and unconditional product-PR workflow coverage validated locally. Final published CI is recorded in PR 254. Branch protection is absent; repository settings were not changed.",
+  "configurationValidation": "Application source hashes unchanged. Browser configs, explicit OFF case and unconditional product-PR workflow coverage validated locally. Final published CI is recorded in PR 254. Branch protection is absent; repository settings were not changed. Additional changes after 70929c0 affect only fixture/test/docs; application hashes remain unchanged. New pre-migration integration and all 44 regression files pass.",
   "flagCoverage": {
     "preexistingGeneralCases": 290,
     "currentGeneralCases": 291,
@@ -164,5 +173,31 @@
       "rulesets": [],
       "note": "Workflow execution does not enforce merge blocking. Repository settings were audited read-only and not changed."
     }
+  },
+  "preMigrationCompatibility": {
+    "schema": "Canonical product schema before the 0042 block, including prior 0007 requests table",
+    "managementFlagStates": [
+      "absent",
+      "false",
+      "true before migration (fail closed)"
+    ],
+    "addedCases": 3,
+    "integrationPassed": 17,
+    "integrationFailed": 0,
+    "paths": [
+      "session",
+      "legacy Admin listing",
+      "legacy lifecycle create/edit/resume/pause",
+      "project quota snapshot and reservation",
+      "legacy limit request",
+      "disabled management API"
+    ],
+    "newManagementSqlInOffPaths": false,
+    "existingOptionalSessionSchemaProbes": "Preserved from product baseline, including missing plan fallback; authenticated session returns 200",
+    "remoteDatabaseInspected": false,
+    "remoteMigrationApplied": false,
+    "applicationDelayed": true,
+    "mergeAuthorized": false,
+    "autoMergeEnabled": false
   }
 }

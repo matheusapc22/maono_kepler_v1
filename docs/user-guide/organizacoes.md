@@ -7,7 +7,7 @@ Base inspecionada: `e47deac18888195b945a244dadb9e27c5902638f`.
 ## 01. Antes de usar
 Estado da entrega e condições de acesso
 
-Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 542 regressões locais, TypeScript, build e os testes de navegador. O lint global possui falhas preexistentes; a entrega permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy direto ou ativação em Produção.
+Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 545 regressões locais, TypeScript, build e os testes de navegador. O lint global possui falhas preexistentes; a entrega permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy direto ou ativação em Produção.
 
 > Estado: candidato para revisão. O CI do SHA publicado e suas limitações estão na PR. Testes locais não certificam D1, Dropbox, Preview ou Produção.
 
@@ -30,7 +30,7 @@ O módulo é destinado ao Super Admin. O servidor verifica a autorização, e ca
 | Capacidade de projetos | PROJECT_QUOTA_RESERVATION_V1=true para criação e edição operacional de planos/quotas. |
 | Banco | Migration candidata 0042 previamente revisada e aplicada no ambiente de QA autorizado. Em Produção, seguir o operador protegido do repositório. |
 
-Com a flag da interface desligada, o Admin mantém a tabela anterior. Com o servidor ou o schema indisponível, a API retorna erro explícito e não simula sucesso.
+Com a flag da interface desligada, o Admin mantém a tabela anterior. Com o servidor ou o schema indisponível, a API retorna erro explícito e não simula sucesso. O fluxo legado foi testado antes da 0042, com a flag ausente e desligada. A aplicação remota está adiada; esta PR não a executa nem agenda.
 
 ## 02. A tela principal
 Indicadores, tabela e significado dos dados
@@ -327,7 +327,7 @@ Evidência local de 27/10/2026; limites de aceite
 
 | Verificação | Resultado desta revisão |
 | --- | --- |
-| Node e SQLite | 542 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, lifecycle e quotas do produto. |
+| Node e SQLite | 545 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 17 integrações do módulo com schema, sessão, ACL, lifecycle e quotas do produto; três cenários cobrem o banco anterior à 0042. |
 | Frontend | TypeScript e build completos aprovados. Lint dos 10 arquivos TS/TSX do escopo: sem erros ou avisos. |
 | Navegador | 20 casos locais: 19 no build compilado com flag ligada e um no servidor dev com flag desligada. Cinco viewports, toque, teclado/foco, filtros/URL, revogação, resposta atrasada, CSV e falhas seguras. Quatro fluxos usam handlers reais. |
 | Lint global | 109 erros e 44 avisos anteriores. Todos os arquivos com problemas e a configuração são iguais à base do produto. Nenhuma regra foi relaxada. |

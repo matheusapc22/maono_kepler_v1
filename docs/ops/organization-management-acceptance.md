@@ -28,7 +28,7 @@ As suítes de lifecycle, concorrência, wiring e project-creation-limits cobrem 
 
 ## Resultado e pendências explícitas
 
-542 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 10 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
+545 regressões passaram (2 skips Bash no Windows), incluindo 17 integrações do módulo. TypeScript e build completos aprovados. Lint dos 10 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
 
 Navegador: 20 casos aprovados (19 ON compilados e um OFF em dev), cinco viewports inspecionados. Quatro casos usam sessões/ACL/handlers reais com SQLite. Os demais verificam UI com HTTP interceptado. Teste humano com leitor de tela e homologação de dispositivos reais permanecem pendentes.
 
@@ -45,6 +45,8 @@ O adaptador passou a usar o transporte e o catálogo de erros compartilhados, pr
 O gate geral de desenvolvimento mantém os 290 casos anteriores. Os 19 novos casos de Organizações executam integralmente no gate compilado próprio, com a flag local necessária. A descoberta foi comparada antes/depois por arquivo, linha e título: nenhum caso anterior removido; os dois arquivos novos coincidem exatamente com os 19 casos da configuração dedicada. Nenhum assert, skip ou timeout foi alterado. Essa correção trata a descoberta indevida dos novos casos pelo servidor dev sem a funcionalidade habilitada.
 
 ## Matriz de flags e gatilhos
+
+Banco anterior à 0042: três cenários adicionais aprovados com schema real, incluindo o requisito histórico 0007. Flag ausente/false preserva sessão autenticada, Admin legado, criação/edição/reativação/pausa e reserva de quota; não há queries aos novos campos/tabelas gerenciais. As sondagens opcionais antigas da sessão (incluindo plan) conservam o fallback anterior. Flag ligada antes da migration retorna 503 / ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED antes de escrita de negócio ou armazenamento. Aplicação remota adiada; não houve merge, auto-merge, migration ou alteração de flags remotas.
 
 | Condição | Cobertura |
 | --- | --- |

@@ -7,8 +7,10 @@ import {onRequest} from '../functions/api/admin/organization-management/[[path]]
 import {onRequestPost as requestIncrease} from '../functions/api/organizations/[id]/limits/requests.js';
 import {getOrganizationLimits} from '../functions/_lib/organizations.js';
 import {getOrganizationLimitsSnapshot,reserveProjectQuota} from '../functions/_lib/organization-limit-service.js';
-import {updateOrganizationLifecycle} from '../functions/_lib/organization-lifecycle.js';
+import {createOrganizationLifecycle,updateOrganizationLifecycle} from '../functions/_lib/organization-lifecycle.js';
 import {requirePermission} from '../functions/_lib/permissions.js';
+import {onRequest as readSession} from '../functions/api/session.js';
+import {onRequest as legacyOrganizations} from '../functions/api/admin/organizations/index.js';
 
 // Actual product schema, sessions, ACL, Pages route, lifecycle, audit and quotas.
 // Only Dropbox HTTP is simulated by the existing offline persistence fixture.
@@ -151,6 +153,67 @@ test('canonical schema equals additive migration applied to populated previous s
   const clean=new DatabaseSync(':memory:');t.after(()=>clean.close());clean.exec(schema);
   const definitions=connection=>connection.prepare("SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
   assert.deepEqual(definitions(db),definitions(clean));
+});
+
+for (const flag of [undefined, 'false']) {
+  test(`pre-0042 schema preserves real session, legacy Admin, lifecycle and quota with flag ${flag ?? 'absent'}`,async t=>{
+    // Canonical schema before the appended 0042 block, including its existing
+    // 0007 prerequisite. No new management table, trigger or column is present.
+    const schemaSql=readFileSync(new URL('../schema.sql',import.meta.url),'utf8')
+      .split('-- Organization management (migration 0042)')[0];
+    const f=persistenceFixture(t,{schemaSql});
+    if(flag!==undefined)f.env.ORGANIZATION_MANAGEMENT_V1=flag;
+    f.db.exec("UPDATE users SET role='super_admin' WHERE id=1");
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name LIKE 'organization_management_%' OR name LIKE 'org_management_%'").get().n,0);
+    assert.equal(f.db.prepare('PRAGMA table_info(organizations)').all().some(c=>c.name.startsWith('management_')||c.name==='project_limit'||c.name==='plan'),false);
+    const request=path=>new Request(`https://local.invalid${path}`,{headers:f.headers()});
+    const sessionResponse=await readSession({env:f.env,request:request('/api/session')});
+    assert.equal(sessionResponse.status,200);
+    const session=await sessionResponse.json();
+    assert.equal(session.authenticated,true);assert.equal(session.user.id,1);
+    assert.equal(session.activeOrganization.id,1);
+    const listResponse=await legacyOrganizations({env:f.env,request:request('/api/admin/organizations')});
+    assert.equal(listResponse.status,200);
+    assert.equal((await listResponse.json()).organizations.length,2);
+    await requirePermission(f.env,request('/api/organizations/1'),'organization.view',{scopeType:'organization',organizationId:1},{audit:false,auditOnSuccess:false});
+    const created=await createOrganizationLifecycle(f.env,{name:'Legacy paused',slug:'legacy-paused',active:false});
+    assert.equal(created.created,true);assert.equal(created.organization.active,0);
+    await updateOrganizationLifecycle(f.env,created.organization.id,{name:'Legacy edited',active:false});
+    assert.equal(f.db.prepare('SELECT name FROM organizations WHERE id=?').get(created.organization.id).name,'Legacy edited');
+    await updateOrganizationLifecycle(f.env,created.organization.id,{active:true});
+    assert.equal(f.db.prepare('SELECT storage_status FROM organizations WHERE id=?').get(created.organization.id).storage_status,'READY');
+    await updateOrganizationLifecycle(f.env,created.organization.id,{active:false});
+    assert.equal(f.db.prepare('SELECT active FROM organizations WHERE id=?').get(created.organization.id).active,0);
+    const snapshot=await getOrganizationLimitsSnapshot(f.env,1);
+    assert.equal(Object.hasOwn(snapshot.organization,'managementVersion'),false);
+    assert.equal(snapshot.projects.limit,5);
+    assert.equal((await getOrganizationLimits(f.env,1)).projects.limit,5);
+    const reservation=await reserveProjectQuota(f.env,{organizationId:1,actorUserId:1,idempotencyKey:'pre-management-project'});
+    assert.ok(reservation.id);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM organization_resource_reservations').get().n,1);
+    const response=await onRequest({env:f.env,request:request('/api/admin/organization-management/organizations')});
+    assert.equal(response.status,503);
+    assert.equal((await response.json()).error.code,'ORGANIZATION_MANAGEMENT_DISABLED');
+    const increase=await requestIncrease({env:f.env,params:{id:'1'},request:new Request('https://local.invalid/api/organizations/1/limits/requests',{method:'POST',headers:{...f.headers(),'Content-Type':'application/json'},body:JSON.stringify({requestType:'plan_upgrade',requestedPlan:'pro',reason:'Legacy request'})})});
+    assert.equal(increase.status,201);
+    assert.equal(f.db.prepare('SELECT created_by FROM organization_limit_requests').get().created_by,1);
+    assert.equal(f.sqlCalls.some(({sql})=>/\bmanagement_\w+|\borganization_management_\w+|\breview_operation_key\b|\brequested_limits_json\b/.test(sql)),false,'OFF paths must not query new management schema');
+    assert.equal(f.db.prepare('PRAGMA quick_check').get().quick_check,'ok');
+    assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
+  });
+}
+
+test('pre-0042 schema fails closed before management writes even if API flag is enabled',async t=>{
+  const schemaSql=readFileSync(new URL('../schema.sql',import.meta.url),'utf8')
+    .split('-- Organization management (migration 0042)')[0];
+  const f=fixture(t,{schemaSql});
+  const before=f.db.prepare('SELECT * FROM organizations ORDER BY id').all();
+  const result=await f.call('/operations',{kind:'create',items:[{name:'Not created',slug:'not-created',plan:'free',ownerEmail:'other@offline.invalid'}]},1,{'Idempotency-Key':'pre-migration-rejection'});
+  assert.equal(result.status,503);
+  assert.equal(result.data.error.code,'ORGANIZATION_MANAGEMENT_SCHEMA_REQUIRED');
+  assert.deepEqual(f.db.prepare('SELECT * FROM organizations ORDER BY id').all(),before);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name LIKE 'organization_management_%'").get().n,0);
+  assert.equal(f.calls.length,0,'Schema rejection must not reach the storage provider');
 });
 
 test('plan edits preserve inherited defaults and unrelated overrides',async t=>{
