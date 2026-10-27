@@ -64,3 +64,11 @@ entrega; nenhum dado remoto é criado ou alterado.
   gates existentes em CI. Não confundir estes resultados com validação em Produção.
 
 O lint global preexistente é tratado por outra frente e não foi reexecutado aqui.
+
+## Ambiente dos testes de navegador
+
+A suíte nova integra exclusivamente o gate compilado progressive-loading, nos
+três motores, como as suítes administrativas existentes. O config de desenvolvimento
+a exclui porque StrictMode remonta efeitos: a execução duplicada mostrou oito
+leituras onde o contrato compilado exige quatro. Assertions, timeouts e cobertura
+do gate compilado permanecem intactos. Não há relaxamento da contagem de requests.
