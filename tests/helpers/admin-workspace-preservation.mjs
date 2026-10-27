@@ -1,3 +1,4 @@
+import { restoreAdminAudit } from './admin-audit-preservation.mjs';
 import assert from 'node:assert/strict';
 
 // Strict inverse of the approved Admin presentation, extraction and contextual
@@ -45,6 +46,7 @@ const changes = [
 
 export function restoreApprovedAdminWorkspace(path, source) {
   if (path !== 'src/pages/Admin.tsx') return source;
+  source = restoreAdminAudit(source);
   for (const { before, after } of changes) {
     assert.equal(source.split(after).length - 1, 1, `exact approved Admin workspace edit: ${path}`);
     source = source.replace(after, before);

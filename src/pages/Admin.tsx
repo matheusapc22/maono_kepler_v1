@@ -12,6 +12,7 @@ import "./Admin/admin.css";
 import AdminUserManager from "./Admin/components/AdminUserManager";
 import AdminSidebar from "./Admin/components/AdminSidebar";
 import AdminOverview from "./Admin/components/AdminOverview";
+import AdminAudit from "./Admin/components/AdminAudit";
 import AdminIcon, { type AdminIconName } from "./Admin/components/AdminIcon";
 import "./Admin/admin-workspace.css";
 
@@ -343,17 +344,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   }
 
   function renderAudit() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Auditoria</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>Eventos e ações administrativas.</StaticLoadingText></p>
-        <div className="mm-audit-list">
-          <div><strong><StaticLoadingText pending={structurePending}>admin.open</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>{`Painel acessado por ${roleLabel(user?.role)}.`}</StaticLoadingText></span></div>
-          <div><strong><StaticLoadingText pending={structurePending}>admin.files.redirect</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>/admin/files redireciona para Gestão de Organizações.</StaticLoadingText></span></div>
-          <div><strong><StaticLoadingText pending={structurePending}>projects.thumbnail</StaticLoadingText></strong><span><StaticLoadingText pending={structurePending}>Preview vinculado ao projeto.</StaticLoadingText></span></div>
-        </div>
-      </section>
-    );
+    return <AdminAudit sessionAvailable={!error} />;
   }
 
   function renderSystem() {
