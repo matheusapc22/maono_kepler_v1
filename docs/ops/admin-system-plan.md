@@ -1,5 +1,16 @@
 # Sistema - diagnóstico básico
 
+## Entrega local concluída
+
+Código validado: `ef0ebf642bb449087ca03291c5bb986c4d1e1903`.
+48 contratos, TypeScript app/node, build Vite, lint de escopo e diff-check aprovados.
+261/261 casos nos três motores passaram, sem falhas, flaky ou ignorados.
+As três páginas do PDF final foram renderizadas e inspecionadas; capturas desktop
+e mobile confirmam cinco observações legíveis, horário e limites explícitos.
+Evidência consolidada: `docs/ops/admin-system-validation.md`.
+CI remoto será conferido no HEAD final da PR; não é declarado aprovado aqui.
+As seções abaixo preservam o planejamento e os registros históricos anteriores.
+
 Base independente `e47deac18888195b945a244dadb9e27c5902638f`.
 Branch `feat/admin-system-diagnostics`; uma PR draft e PDF, sem merge.
 
