@@ -51,3 +51,12 @@ três motores, como as suítes administrativas existentes. O config de desenvolv
 a exclui porque StrictMode remonta efeitos: a execução duplicada mostrou oito
 leituras onde o contrato compilado exige quatro. Assertions, timeouts e cobertura
 do gate compilado permanecem intactos. Não há relaxamento da contagem de requests.
+
+## Gate completo dividido por motor
+
+O run 40557843588 de Solicitações executou 558 dos 591 casos antes da janela
+de 35 minutos encerrar o job. A suíte completa agora roda em uma matriz de
+Chromium/Firefox/WebKit, cada um com o mesmo timeout de 35 minutos e um worker.
+Nenhum teste, assertion, etapa de contrato/lint/build ou motor foi removido.
+O check final mantém o nome progressive-loading e só aprova quando todos os
+jobs de motores têm sucesso; fail-fast é false e artefatos têm sufixo do motor.
