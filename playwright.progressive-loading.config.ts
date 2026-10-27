@@ -4,7 +4,7 @@ import projectPages from "./playwright.project-pages.config";
 // Built React and controlled fixture HTTP only. No real authenticated account.
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: ["admin-progressive-loading.spec.ts", "admin-workspace.spec.ts", "projects-theme-regression.spec.ts", "projects-progressive-loading.spec.ts", "roadmap-progressive-loading.spec.ts", "ticket-documents-progressive-loading.spec.ts", "ticket-optional-progressive-loading.spec.ts"],
+  testMatch: ["admin-audit-progressive-loading.spec.ts", "admin-progressive-loading.spec.ts", "admin-workspace.spec.ts", "projects-theme-regression.spec.ts", "projects-progressive-loading.spec.ts", "roadmap-progressive-loading.spec.ts", "ticket-documents-progressive-loading.spec.ts", "ticket-optional-progressive-loading.spec.ts"],
   outputDir: "test-results/progressive-loading",
   timeout: 45_000,
   expect: { timeout: 10_000 },

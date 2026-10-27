@@ -13,6 +13,8 @@ on:
       - 'src/pages/Projects/**'
       - 'src/pages/Kepler/thumbnail/preview-metrics.ts'
       - 'functions/_lib/project-preview-metrics.js'
+      - 'functions/_lib/admin-audit-reader.js'
+      - 'functions/api/admin/audit/**'
       - 'tests/*progressive*.test.mjs'
       - 'tests/initial-loading-presentation.test.mjs'
       - 'tests/helpers/*progressive*.mjs'
@@ -57,6 +59,8 @@ jobs:
           src/components/loading/useInitialLoadingPresentation.ts src/pages/Admin.tsx
           src/pages/Admin/components/AdminSidebar.tsx src/pages/Admin/components/AdminOverview.tsx
           src/pages/Admin/components/AdminIcon.tsx
+          src/pages/Admin/components/AdminAudit.tsx src/pages/Admin/components/admin-audit-model.ts
+          functions/_lib/admin-audit-reader.js functions/api/admin/audit/index.js
           src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
           src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
           src/pages/Projects/components/TicketLoadingSkeletons.tsx
@@ -69,6 +73,7 @@ jobs:
           src/pages/Projects/components/DocumentsUi.tsx
           tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
           tests/browser/admin-workspace.spec.ts tests/browser/fixtures/admin-workspace.ts
+          tests/admin-audit-progressive.test.mjs tests/helpers/admin-audit-preservation.mjs
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
