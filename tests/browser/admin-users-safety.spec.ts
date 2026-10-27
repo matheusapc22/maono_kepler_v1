@@ -6,7 +6,7 @@ test.afterEach(async ({ page }) => { await expectAdminFixtureIntegrity(page); })
 test('repeated membership action preserves the draft and focus after an owner conflict', async ({ page }) => {
   await setupAdmin(page, { section: 'users' });
   const gate = deferred(); let writes = 0;
-  await page.route('**/api/admin/users/2/organizations**', async route => {
+  await page.route(/\/api\/admin\/users\/2\/organizations(?:\/1)?$/, async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { ok: true, organizations: [{ id: 1, name: 'Synthetic organization', slug: 'synthetic', assigned: true, accessLevel: 'owner', active: true }] } });
     writes++; await gate.promise;
     await route.fulfill({ status: 409, json: { ok: false, code: 'LAST_OWNER_REMOVAL_BLOCKED', error: 'Blocked', category: 'PERMISSION', retryable: false } });
@@ -32,7 +32,7 @@ test('Back cancels the old view and a late membership success cannot publish int
   const fixture = await setupAdmin(page);
   await page.locator('.admin-nav').getByRole('button', { name: 'Usuários e Permissões', exact: true }).click();
   const gate = deferred(); let writes = 0;
-  await page.route('**/api/admin/users/2/organizations**', async route => {
+  await page.route(/\/api\/admin\/users\/2\/organizations(?:\/1)?$/, async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { ok: true, organizations: [{ id: 1, name: 'Synthetic organization', slug: 'synthetic', assigned: true, accessLevel: 'viewer', active: true }] } });
     writes++; await gate.promise;
     await route.fulfill({ json: { ok: true, removed: true } });
