@@ -1,0 +1,35 @@
+.maono-admin-workspace .admin-projects { min-width: 0; }
+.maono-admin-workspace .admin-projects-filters { display: grid; grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(160px, 1fr)); gap: 12px; margin: 20px 0 12px; }
+.maono-admin-workspace .admin-projects :is(label, .admin-projects-secondary) { display: block; color: var(--admin-workspace-muted); font-size: 12px; line-height: 1.5; }
+.maono-admin-workspace .admin-projects :is(input, select) { width: 100%; min-height: 40px; margin-top: 5px; padding: 8px 10px; border: 1px solid var(--admin-border); border-radius: 7px; background: var(--mm-bg-soft, #0e1116); color: var(--admin-text); font: inherit; }
+.maono-admin-workspace .admin-projects-filter-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.maono-admin-workspace .admin-projects .mm-btn { min-height: 40px; font-size: 13px; }
+.maono-admin-workspace .admin-projects .admin-projects-context { margin: 12px 0; color: var(--admin-workspace-muted); font-size: 12px; line-height: 1.6; }
+.maono-admin-workspace .admin-projects a { color: var(--maono-accent-bright); text-decoration: underline; text-underline-offset: 3px; }
+.maono-admin-workspace .admin-projects-table { max-width: 100%; overflow-x: auto; }
+.maono-admin-workspace .admin-projects-table table { width: 100%; min-width: 800px; table-layout: fixed; }
+.maono-admin-workspace .admin-projects-table :is(th, td) { padding: 12px; vertical-align: top; overflow-wrap: anywhere; font-size: 13px; text-align: left; }
+.maono-admin-workspace .admin-projects-table th:first-child { width: 25%; }
+.maono-admin-workspace .admin-projects-table th:nth-child(2) { width: 19%; }
+.maono-admin-workspace .admin-projects-table th:nth-child(3) { width: 27%; }
+.maono-admin-workspace .admin-projects-table th:nth-child(4) { width: 9%; }
+.maono-admin-workspace .admin-projects-table tbody th { font-weight: 400; }
+.maono-admin-workspace .admin-projects-status { display: inline-block; padding: 3px 8px; border: 1px solid var(--admin-border); border-radius: 6px; color: var(--maono-accent-bright); font-size: 12px; }
+.maono-admin-workspace .admin-projects-secondary { margin-top: 5px; }
+.maono-admin-workspace .admin-projects-destinations { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.maono-admin-workspace .admin-projects-destinations a { display: inline-flex; align-items: center; min-height: 36px; }
+.maono-admin-workspace .admin-projects-details summary { display: list-item; min-height: 36px; padding-block: 8px; color: var(--maono-accent-bright); cursor: pointer; }
+.maono-admin-workspace .admin-projects-details dl { margin: 8px 0 0; font-size: 12px; }
+.maono-admin-workspace .admin-projects-details dt { margin-top: 10px; color: var(--admin-workspace-muted); }
+.maono-admin-workspace .admin-projects-details dd { margin: 2px 0 0; }
+.maono-admin-workspace .admin-projects-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: 12px; }
+.maono-admin-workspace .admin-projects-pagination p { margin: 0; flex: 1 1 250px; font-size: 12px; }
+.maono-admin-workspace .admin-projects-pagination label { display: flex; align-items: center; gap: 8px; }
+.maono-admin-workspace .admin-projects-pagination select { min-width: 70px; margin-top: 0; }
+.maono-admin-workspace .admin-projects-pagination nav { display: flex; align-items: center; gap: 10px; }
+.maono-admin-workspace .admin-projects :is(input, select, button, a, summary, [tabindex]):focus-visible { outline: 2px solid var(--maono-accent-bright); outline-offset: 3px; }
+.maono-admin-workspace .admin-projects-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 1100px) { .maono-admin-workspace .admin-projects-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .maono-admin-workspace .admin-projects-search { grid-column: 1 / -1; } }
+@media (max-width: 600px) { .maono-admin-workspace .admin-projects-filters { grid-template-columns: minmax(0, 1fr); } .maono-admin-workspace .admin-projects-pagination nav { gap: 6px; width: 100%; justify-content: space-between; } }
+@media (max-width: 960px), (pointer: coarse) { .maono-admin-workspace .admin-projects :is(input, select, button, summary, .admin-projects-destinations a) { min-height: 44px; } }
+@media (forced-colors: active) { .maono-admin-workspace .admin-projects :is(input, select, button, a, summary, [tabindex]):focus-visible { outline-color: Highlight; } }

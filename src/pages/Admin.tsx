@@ -14,20 +14,10 @@ import AdminSidebar from "./Admin/components/AdminSidebar";
 import AdminOverview from "./Admin/components/AdminOverview";
 import AdminIcon, { type AdminIconName } from "./Admin/components/AdminIcon";
 import "./Admin/admin-workspace.css";
+import AdminProjects from "./Admin/components/AdminProjects";
+import type { AdminProject } from "./Admin/components/admin-projects-model";
 
 type AdminSection = "overview" | "organizations" | "users" | "projects" | "requests" | "audit" | "system";
-
-type AdminProject = {
-  id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  dropboxRootPath?: string;
-  defaultConfigFile?: string;
-  active?: boolean;
-  accessCount?: number;
-  updatedAt?: string;
-};
 
 type AdminOrganization = {
   id: number;
@@ -309,23 +299,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   }
 
   function renderProjects() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Projetos e Mapas</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>Mapas, configurações, previews e vínculos.</StaticLoadingText></p>
-        <Table state={regions.projects} structurePending={structurePending} contentPending={projectPresentation.contentPending}
-          headers={["Projeto", "Slug", "JSON", "Pasta", "Acessos", "Status"]}
-          rows={projects.map((project) => [
-            project.name,
-            project.slug,
-            project.defaultConfigFile || "config.kepler.json",
-            project.dropboxRootPath || "/projects",
-            String(project.accessCount || 0),
-            statusLabel(project.active),
-          ])}
-        />
-      </section>
-    );
+    return <AdminProjects projects={projects} organizations={organizations} state={regions.projects} organizationsState={regions.organizations} user={user} structurePending={structurePending} contentPending={projectPresentation.contentPending} />;
   }
 
   function renderRequests() {
