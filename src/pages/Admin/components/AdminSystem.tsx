@@ -27,17 +27,19 @@ export default function AdminSystem({ sessionAvailable }: { sessionAvailable: bo
     return () => controller.abort();
   }, [retry, sessionAvailable]);
   const checks = sessionAvailable ? state.checks : null;
-  return <section className="mm-card mm-section-card admin-system" aria-labelledby="admin-system-title" aria-busy={sessionAvailable && state.pending}>
+  return <section className="mm-card mm-section-card admin-system" aria-labelledby="admin-system-title">
     <h2 id="admin-system-title">Diagnóstico básico</h2>
     <p>Consulta contextual de /api/health. Os resultados descrevem somente as verificações abaixo, no instante da consulta.</p>
     {!sessionAvailable ? <p role="alert">Sessão indisponível. O diagnóstico foi removido desta tela.</p> : <>
       {state.pending && <p role="status">Consultando diagnóstico básico.</p>}
       {state.error && <div role="alert"><p>{state.error}</p>{state.retryable && <button className="mm-btn" type="button" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button>}</div>}
+      {checks && <p role="status">{basicHealthSummary(checks)}</p>}
+      <div className="admin-system-data" aria-busy={sessionAvailable && state.pending}>
       {checks && <>
-        <p role="status">{basicHealthSummary(checks)}</p>
         <p>Recebido nesta sessão em <time dateTime={state.observedAt!}>{new Date(state.observedAt!).toLocaleString('pt-BR', { timeZone: 'UTC' })} UTC</time>.</p>
         <dl>{healthChecks.map(check => <div key={check.key}><dt>{check.label}</dt><dd>{checks[check.key] === null ? 'Indisponível' : checks[check.key] ? check.confirmed : check.unconfirmed}</dd></div>)}</dl>
       </>}
+      </div>
     </>}
     <h3>O que esta consulta verifica</h3>
     <p>Presença do vínculo D1 e das três configurações do Dropbox. No banco, executa somente SELECT 1. Valores de chaves, segredos e tokens não são exibidos.</p>

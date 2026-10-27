@@ -48,7 +48,9 @@ test('system contextual retry and mobile rendering retain limited scope', async 
 test('cancelled system observation cannot overwrite the next visit', async ({ page }) => {
   const gate = deferred(); let reads = 0;
   await openSystem(page, async route => { const current = ++reads; if (current === 1) await gate.promise; await route.fulfill({ json: { ok: current === 1, checks: current === 1 ? checks : { ...checks, databaseReachable: false } } }); });
-  await expect(page.locator('.admin-system')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('.admin-system-data')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('.admin-system [aria-busy="true"] [role="status"]')).toHaveCount(0);
+  await expect(page.locator('.admin-system > [role="status"]')).toHaveText('Consultando diagnóstico básico.');
   const nav = page.getByRole('navigation', { name: 'Navegação administrativa' });
   await nav.getByRole('button', { name: 'Painel', exact: true }).click();
   await nav.getByRole('button', { name: 'Sistema', exact: true }).click();

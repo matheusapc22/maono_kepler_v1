@@ -60,3 +60,11 @@ Chromium/Firefox/WebKit, cada um com o mesmo timeout de 35 minutos e um worker.
 Nenhum teste, assertion, etapa de contrato/lint/build ou motor foi removido.
 O check final mantém o nome progressive-loading e só aprova quando todos os
 jobs de motores têm sucesso; fail-fast é false e artefatos têm sufixo do motor.
+
+## Anúncios de carregamento
+
+aria-busy foi limitado à região de dados. Mensagens role=status e controles
+ficam fora da região ocupada, para não suprimir os anúncios de carregamento.
+O cenário de leitura cancelada verifica busy nos dados, ausência de status
+dentro de busy e o texto de status fora dele. Nenhum timeout ou assertion
+existente de dados/cancelamento foi removido.
