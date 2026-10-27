@@ -53,3 +53,11 @@ diff-check aprovados. Dependências compartilhadas apenas por junção; artefato
 temporários próprios, sem instalação ou alteração de lockfiles. Fallback histórico
 normalizado de CRLF para LF localmente, preservando assertions e SHA esperado.
 TypeScript/build/browser pendentes de CI e coordenação local.
+
+## Ambiente dos testes de navegador
+
+A suíte nova integra exclusivamente o gate compilado progressive-loading, nos
+três motores, como as suítes administrativas existentes. O config de desenvolvimento
+a exclui porque StrictMode remonta efeitos: a execução duplicada mostrou oito
+leituras onde o contrato compilado exige quatro. Assertions, timeouts e cobertura
+do gate compilado permanecem intactos. Não há relaxamento da contagem de requests.
