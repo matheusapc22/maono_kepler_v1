@@ -54,6 +54,8 @@ jobs:
           tests/admin-progressive-loading.test.mjs
           tests/project-pages-contract.test.mjs
           tests/maono-layer-workflow-placement.test.mjs
+          tests/maono-map-legend.test.mjs
+          tests/password-management.test.mjs
           tests/dropbox-provider-login.test.mjs
           tests/foursquare-provider-contract.test.mjs
           tests/legacy-ingestion-contract.test.mjs
