@@ -215,7 +215,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
       // Preserve the existing users endpoint precedence, including [] being
       // authoritative. Access users are only a successful-response fallback.
       loadRegion("users", usersRead.then(async usersData => {
-        const collection = usersData.users || (await accessRead).users;
+        const collection = usersData.users === undefined ? (await accessRead).users : usersData.users;
         if (!Array.isArray(collection) || collection.some((item: unknown) => !item || typeof item !== "object")) throw Object.assign(new Error("Resposta administrativa inválida."), { status: 502 });
         return collection;
       }), setUsers),

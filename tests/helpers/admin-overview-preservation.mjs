@@ -16,7 +16,7 @@ const changes = [
   },
   {
     "before": "usersRead.then(async usersData => usersData.users || (await accessRead).users || [])",
-    "after": "usersRead.then(async usersData => {\n        const collection = usersData.users || (await accessRead).users;\n        if (!Array.isArray(collection) || collection.some((item: unknown) => !item || typeof item !== \"object\")) throw Object.assign(new Error(\"Resposta administrativa inválida.\"), { status: 502 });\n        return collection;\n      })"
+    "after": "usersRead.then(async usersData => {\n        const collection = usersData.users === undefined ? (await accessRead).users : usersData.users;\n        if (!Array.isArray(collection) || collection.some((item: unknown) => !item || typeof item !== \"object\")) throw Object.assign(new Error(\"Resposta administrativa inválida.\"), { status: 502 });\n        return collection;\n      })"
   },
   {
     "before": "{ label: \"Organizações\", value:",

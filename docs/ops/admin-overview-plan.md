@@ -69,3 +69,11 @@ Chromium/Firefox/WebKit, cada um com o mesmo timeout de 35 minutos e um worker.
 Nenhum teste, assertion, etapa de contrato/lint/build ou motor foi removido.
 O check final mantém o nome progressive-loading e só aprova quando todos os
 jobs de motores têm sucesso; fail-fast é false e artefatos têm sufixo do motor.
+
+## Validação da precedência de usuários
+
+Reproduzido um payload users:null que caía na lista legada mesmo sendo inválido.
+O fallback agora ocorre somente quando users é undefined (campo omitido); null,
+false, zero, string e objeto explícitos são rejeitados, mantendo [] autoritativo.
+50 contratos locais passaram após a correção, inclusive os gates históricos e
+o inverso exato do hash. Lint de escopo passou. Build/browser seguem pendentes.

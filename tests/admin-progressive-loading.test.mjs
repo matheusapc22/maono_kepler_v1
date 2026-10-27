@@ -71,6 +71,20 @@ test('404 invalidates previously loaded administrative regions and never offers 
   }
 });
 
+test('an explicitly malformed users collection cannot fall through to valid legacy data', async () => {
+  for (const users of [null, false, 0, '', {}]) {
+    const h = adminHarness(), finished = h.refresh();
+    h.resolve(0, { projects: [] });
+    h.resolve(1, { access: [], users: [{ id: 99, name: 'Legacy user', active: true }] });
+    h.resolve(2, { users });
+    h.resolve(3, { organizations: [] });
+    await finished;
+    assert.equal(h.state.regions.users.loaded, false);
+    assert.notEqual(h.state.regions.users.error, '');
+    assert.deepEqual(h.state.users, []);
+  }
+});
+
 test('Admin starts all four original authorized GETs immediately and reveals each result independently', async () => {
   const h = adminHarness(), finished = h.refresh();
   assert.deepEqual(h.requests.map(request => request.path), ['/api/admin/projects', '/api/admin/access', '/api/admin/users', '/api/admin/organizations']);

@@ -20,11 +20,15 @@ test('missing file counts and missing collections are unavailable, not zero', as
   await setupAdmin(page);
   await page.route('**/api/admin/organizations', route => route.fulfill({ json: { ok: true, organizations: [{ id: 1, name: 'Sintética', active: true }] } }));
   await page.route('**/api/admin/projects', route => route.fulfill({ json: { ok: true } }));
+  await page.route('**/api/admin/users', route => route.fulfill({ json: { ok: true, users: null } }));
+  await page.route('**/api/admin/access', route => route.fulfill({ json: { ok: true, access: [], users: [{ id: 99, active: true, name: 'Legacy user' }] } }));
   await page.reload();
   await expect(adminMetric(page, 'Organizações').locator('strong')).toHaveText('1');
   await expect(adminMetric(page, 'Arquivos').locator('strong')).toHaveAttribute('aria-label', 'Indisponível');
   await expect(adminMetric(page, 'Projetos').locator('strong')).toHaveAttribute('aria-label', 'Indisponível');
   await expect(adminMetric(page, 'Projetos').locator('strong')).not.toHaveText('0');
+  await expect(adminMetric(page, 'Usuários').locator('strong')).toHaveAttribute('aria-label', 'Indisponível');
+  await expect(adminMetric(page, 'Usuários').locator('strong')).not.toHaveText('1');
 });
 test('valid empty response remains zero', async ({ page }) => {
   await setupAdmin(page, { empty: true });
