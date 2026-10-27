@@ -11,6 +11,7 @@ on:
       - 'tests/helpers/admin-workspace-preservation.mjs'
       - 'tests/browser/admin-projects.spec.ts'
       - 'playwright.admin-projects.config.ts'
+      - 'playwright.config.ts'
       - '.github/workflows/admin-projects.yml'
   workflow_dispatch:
 permissions:
@@ -32,7 +33,7 @@ jobs:
       - name: Existing project boundaries
         run: npm run test:project-lifecycle && npm run test:project-metadata && node --experimental-strip-types --test tests/project-route-semantics.test.mjs tests/map-panel-navigation-api.test.mjs
       - name: Scoped lint
-        run: npx eslint src/pages/Admin.tsx src/pages/Admin/components/AdminProjects.tsx src/pages/Admin/components/admin-projects-model.ts tests/browser/admin-projects.spec.ts playwright.admin-projects.config.ts
+        run: npx eslint src/pages/Admin.tsx src/pages/Admin/components/AdminProjects.tsx src/pages/Admin/components/admin-projects-model.ts tests/browser/admin-projects.spec.ts playwright.admin-projects.config.ts playwright.config.ts
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: 'true'

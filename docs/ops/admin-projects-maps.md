@@ -40,7 +40,9 @@ As capturas e testes de navegador usam fixtures HTTP sintéticas com origens ext
 
 ## Verificação e rastreabilidade
 
-Base: `e47deac18888195b945a244dadb9e27c5902638f`. Branch: `feat/admin-projects-maps`. Implementação inicial: `c35c2960c29d9e3f071546dc10afaee873602eb2`.
+Base: `e47deac18888195b945a244dadb9e27c5902638f`. Branch: `feat/admin-projects-maps`. Implementação inicial: `c35c2960c29d9e3f071546dc10afaee873602eb2`. Validação/capturas: `70bc41ac428f1b58190c8c275e262c8f8447d3a1`, sem alterações nos fontes de aplicação em relação à implementação.
+
+[PR draft #256](https://github.com/matheusapc22/maono_kepler_v1/pull/256). [PDF de funcionamento e implementação](../../output/pdf/admin-projects-maps.pdf).
 
 Validação local em 27/10/2026, no Windows, com os fontes de aplicação de `c35c2960`:
 
@@ -53,11 +55,16 @@ Validação local em 27/10/2026, no Windows, com os fontes de aplicação de `c3
 | Modelo/API, isolamento e rotas | 48/48; inclui 11 testes novos de inventário/API/preservação. |
 | Lifecycle e metadata | Scripts completos aprovados; metadata 50/50. |
 | Navegador da subaba | 63/63 cenários funcionais + 6/6 capturas, três motores, um worker, sem retries ou skips. |
+| Regressão compartilhada | 240/240: 80 por motor, lotes finais com exit 0, sem retries/skips. |
 | Inspeção visual | Desktop 1440 px e mobile 390 px conferidos em Chromium, Firefox e WebKit; geometria também cobre 320 px. |
 
 [Captura desktop](../visual-maono/admin-projects-desktop.png) e [captura mobile](../visual-maono/admin-projects-mobile.png), com dados sintéticos. O desktop mostra o inventário; o mobile mostra o filtro Rascunho e sidebar recolhida pelo controle existente.
 
-A regressão do shell compartilhado, a publicação do PDF e os resultados remotos de CI serão registrados ao terminar. Resultados locais não substituem esses gates pendentes.
+Regressão compartilhada: `admin-workspace.spec.ts`, `admin-progressive-loading.spec.ts` e `projects-theme-regression.spec.ts`. O lote inicial perdeu seu processo antes do relatório terminal; os três lotes finais separados concluíram com exit 0 (Chromium 3,7 min, Firefox 5,2 min, WebKit 7,5 min). A tentativa parcial foi descartada da contagem final.
+
+O PDF tem cinco páginas, renderizadas e inspecionadas. Os checks da PR registram o resultado remoto do head publicado. Resultados locais não substituem CI nem aceite de Produção.
+
+O primeiro Product Reliability UX incluiu indevidamente esta suíte compilada no runner Vite dev, causando duas cargas iniciais e quatro falhas de fixture. `playwright.config.ts` agora registra o mesmo isolamento já usado pelas outras suítes Admin: os 69 casos continuam obrigatórios no workflow Admin Projects Inventory e os 290 casos preexistentes continuam no gate dev. Nenhuma assertion, timeout ou teste foi removido; mudanças nessa configuração também disparam o workflow dedicado.
 
 ## Migrações, flags e reversão
 
