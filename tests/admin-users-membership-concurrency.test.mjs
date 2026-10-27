@@ -77,6 +77,15 @@ test('permission cleanup failure rolls back the membership removal', async t => 
   assert.equal(f.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE action='admin.user_organization.remove'").get().n, 0);
 });
 
+test('legacy schema without optional grants table keeps valid removal and owner protection', async t => {
+  const f = await adminUsersFixture(t);
+  f.db.exec('DROP TABLE user_permissions');
+  assert.equal((await routes.legacyDelete(f, '2')).status, 200);
+  assert.equal(f.owners(), 1);
+  assert.equal((await routes.legacyDelete(f, '3')).status, 409);
+  assert.equal(f.owners(), 1);
+});
+
 for (const methods of [['DELETE','DELETE'], ['PUT','PUT'], ['PUT','DELETE']]) test(`concurrent ${methods.join('/')} preserves one owner and rejects the losing write`, async t => {
   const f = await adminUsersFixture(t);
   f.holdConcurrentWrites();

@@ -54,11 +54,14 @@ export async function changeMembership(env, { userId, organizationId, accessLeve
   if (remove) {
     // Cleanup runs only after the conditional delete actually removed the link.
     // A blocked last-owner removal leaves both grants and denials untouched.
+    const hasGrants = await readRequestSchema(env, 'owner-retention:grants-table', async () => Boolean(
+      await env.DB.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'user_permissions'").first(),
+    ));
     [result] = await env.DB.batch([
       env.DB.prepare(`DELETE FROM organization_users WHERE user_id = ? AND organization_id = ? AND ${guard.sql}`).bind(userId, organizationId, ...guard.args),
-      env.DB.prepare(`DELETE FROM user_permissions WHERE user_id = ? AND organization_id = ?
+      ...(hasGrants ? [env.DB.prepare(`DELETE FROM user_permissions WHERE user_id = ? AND organization_id = ?
         AND NOT EXISTS (SELECT 1 FROM organization_users WHERE user_id = ? AND organization_id = ?)`)
-        .bind(userId, organizationId, userId, organizationId),
+        .bind(userId, organizationId, userId, organizationId)] : []),
     ]);
   } else {
     result = await env.DB.prepare(`INSERT INTO organization_users (organization_id, user_id, access_level, created_at)
