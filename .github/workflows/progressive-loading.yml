@@ -57,6 +57,7 @@ jobs:
           src/components/loading/useInitialLoadingPresentation.ts src/pages/Admin.tsx
           src/pages/Admin/components/AdminSidebar.tsx src/pages/Admin/components/AdminOverview.tsx
           src/pages/Admin/components/AdminIcon.tsx
+          src/pages/Admin/components/AdminRequests.tsx src/pages/Admin/components/admin-request-navigation.ts
           src/pages/Projects/components/ProjectCard.tsx src/pages/Projects/components/ProjectPagesUi.tsx
           src/pages/Projects/components/ProjectsSection.tsx src/pages/Projects/components/ProjectSectionSkeletons.tsx
           src/pages/Projects/components/TicketLoadingSkeletons.tsx
@@ -69,6 +70,7 @@ jobs:
           src/pages/Projects/components/DocumentsUi.tsx
           tests/browser/*progressive-loading.spec.ts playwright.progressive-loading.config.ts
           tests/browser/admin-workspace.spec.ts tests/browser/fixtures/admin-workspace.ts
+          tests/admin-requests-progressive.test.mjs tests/helpers/admin-requests-preservation.mjs
       - name: Compile actual application
         env:
           VITE_MAONO_MAP_SHELL_V1: "true"
