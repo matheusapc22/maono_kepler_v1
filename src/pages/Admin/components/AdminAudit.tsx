@@ -40,18 +40,21 @@ export default function AdminAudit({ sessionAvailable }: { sessionAvailable: boo
   function navigate(beforeId: number | null) {
     setParams(previous => { const next = new URLSearchParams(previous); next.set('section', 'audit'); if (beforeId === null) next.delete('audit_before'); else next.set('audit_before', String(beforeId)); return next; });
   }
-  return <section className="mm-card mm-section-card admin-audit" aria-labelledby="admin-audit-title" aria-busy={pending}>
+  return <section className="mm-card mm-section-card admin-audit" aria-labelledby="admin-audit-title">
     <h2 id="admin-audit-title">Registros de auditoria</h2>
     <p>Leitura global restrita ao Super Admin. Até 25 registros por página, do maior para o menor ID.</p>
     <p>Exibe apenas ID, horário registrado e categoria de ação. Não identifica organização, pessoa ou projeto; detalhes privados e resultado da operação não são exibidos. A presença de um registro não comprova sucesso nem cobertura completa das operações.</p>
     {pending && <p role="status">Consultando registros de auditoria.</p>}
     {!sessionAvailable && <p role="alert">Sessão indisponível. Os registros foram removidos desta tela.</p>}
     {current?.error && <div role="alert"><p>{current.error}</p>{current.retryable && <button className="mm-btn" type="button" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button>}</div>}
-    {page && (page.entries.length === 0 ? <p role="status">Nenhum registro encontrado nesta página.</p> : <div className="mm-table-wrap"><table>
+    {page?.entries.length === 0 && <p role="status">Nenhum registro encontrado nesta página.</p>}
+    <div className="admin-audit-data" aria-busy={pending}>
+    {page && page.entries.length > 0 && <div className="mm-table-wrap"><table>
       <caption>Eventos registrados, sem detalhes privados</caption>
       <thead><tr><th scope="col">ID</th><th scope="col">Horário (UTC)</th><th scope="col">Categoria da ação</th></tr></thead>
       <tbody>{page.entries.map(entry => <tr key={entry.id}><td>{entry.id}</td><td>{entry.createdAt ? <time dateTime={entry.createdAt}>{entry.createdAt.replace('T', ' ').replace('.000Z', ' UTC')}</time> : 'Horário indisponível'}</td><td>{auditEventLabels[entry.event]}</td></tr>)}</tbody>
-    </table></div>)}
+    </table></div>}
+    </div>
     <nav aria-label="Páginas de auditoria">
       {before !== null && <button type="button" className="mm-btn" disabled={pending || !sessionAvailable} onClick={() => navigate(null)}>Registros mais recentes</button>}
       {page?.nextBefore !== null && page?.nextBefore !== undefined && <button type="button" className="mm-btn" onClick={() => navigate(page.nextBefore)}>Registros anteriores</button>}

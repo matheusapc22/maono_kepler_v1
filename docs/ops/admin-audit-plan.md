@@ -70,3 +70,20 @@ Chromium/Firefox/WebKit, cada um com o mesmo timeout de 35 minutos e um worker.
 Nenhum teste, assertion, etapa de contrato/lint/build ou motor foi removido.
 O check final mantém o nome progressive-loading e só aprova quando todos os
 jobs de motores têm sucesso; fail-fast é false e artefatos têm sufixo do motor.
+
+## Revisão adicional de segurança e schema
+
+50 contratos locais passaram. O teste SQLite executa o schema.sql versionado em
+memória, sem migration adicional. O leitor real consulta com PRAGMA query_only=ON;
+novos eventos inseridos pela fixture entre páginas não repetem nem deslocam os
+40 registros iniciais. Schema version e total de linhas são conferidos após a
+leitura. Categorias desconhecidas continuam neutras e nenhum detalhe/organização
+inferida sai na resposta. 401/403 retornam no-store e não consultam audit_logs.
+
+## Anúncios de carregamento
+
+aria-busy foi limitado à região de dados. Mensagens role=status e controles
+ficam fora da região ocupada, para não suprimir os anúncios de carregamento.
+O cenário de leitura cancelada verifica busy nos dados, ausência de status
+dentro de busy e o texto de status fora dele. Nenhum timeout ou assertion
+existente de dados/cancelamento foi removido.

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { createAdminAuditHandler } from '../functions/api/admin/audit/index.js';
 import { auditCursor, readAdminAuditPage } from '../functions/_lib/admin-audit-reader.js';
 import { parseAuditPage } from '../src/pages/Admin/components/admin-audit-model.ts';
@@ -24,7 +25,47 @@ test('audit is GET-only and authenticates before reading any records', async () 
   const denied = createAdminAuditHandler(async () => { throw Object.assign(new Error('private'), { status: 401 }); });
   assert.equal((await denied({ request: request(), env: { DB: db } })).status, 401);
   assert.equal((await denied({ request: request('', 'POST'), env: { DB: db } })).status, 405);
+  for (const status of [401, 403]) {
+    const response = await createAdminAuditHandler(async () => { throw Object.assign(new Error('PRIVATE_AUTH_DETAIL'), { status }); })({ request: request(), env: { DB: db } });
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.doesNotMatch(await response.text(), /PRIVATE_AUTH_DETAIL|entries|details/);
+  }
   assert.equal(db.calls.length, 0);
+});
+
+test('existing schema supports read-only stable cursor pages while new events arrive', async t => {
+  const sqlite = new DatabaseSync(':memory:');
+  t.after(() => sqlite.close());
+  // Use the committed baseline directly: no additional table or migration.
+  sqlite.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+  const schemaVersion = sqlite.prepare('PRAGMA schema_version').get().schema_version;
+  const insert = sqlite.prepare('INSERT INTO audit_logs (action, details, created_at) VALUES (?, ?, ?)');
+  for (let index = 0; index < 40; index++) insert.run('ticket.created', '{"organizationId":99,"token":"PRIVATE_SECRET"}', '2026-10-27 12:00:00');
+  const db = { prepare(sql) {
+    assert.match(sql, /^SELECT id, action, created_at FROM audit_logs(?: WHERE id < \?)? ORDER BY id DESC LIMIT 26$/);
+    let values = [];
+    return { bind(...params) { values = params; return this; }, async all() { return { results: sqlite.prepare(sql).all(...values) }; } };
+  } };
+  sqlite.exec('PRAGMA query_only = ON');
+  const first = await readAdminAuditPage(db, null);
+  assert.deepEqual(first.entries.map(entry => entry.id), Array.from({ length: 25 }, (_, index) => 40 - index));
+  assert.equal(first.nextBefore, 16);
+  // Only the fixture writer inserts new records; the actual reader remains read-only.
+  sqlite.exec('PRAGMA query_only = OFF');
+  insert.run('PRIVATE_RAW_ACTION', 'PRIVATE_NEW_DETAIL', '2026-10-27 13:00:00');
+  insert.run('ticket.created', 'PRIVATE_NEW_DETAIL', '2026-10-27 13:01:00');
+  sqlite.exec('PRAGMA query_only = ON');
+  const second = await readAdminAuditPage(db, first.nextBefore);
+  assert.deepEqual(second.entries.map(entry => entry.id), Array.from({ length: 15 }, (_, index) => 15 - index));
+  assert.equal(second.nextBefore, null);
+  assert.equal(new Set([...first.entries, ...second.entries].map(entry => entry.id)).size, 40);
+  const latest = await readAdminAuditPage(db, null);
+  assert.deepEqual(latest.entries.slice(0, 2).map(entry => entry.id), [42, 41]);
+  assert.equal(latest.entries[1].event, 'other');
+  assert.doesNotMatch(JSON.stringify({ first, second, latest }), /PRIVATE|organizationId|token|user_id|project_id|details/);
+  assert.equal(sqlite.prepare('PRAGMA schema_version').get().schema_version, schemaVersion);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM audit_logs').get().count, 42);
 });
 
 test('bounded projection omits raw actions, details, identities and inferred organizations', async () => {

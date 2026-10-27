@@ -38,7 +38,9 @@ for (const status of [401, 403, 404]) test(`audit clears earlier rows and disabl
 test('unmounted audit request cannot publish late private rows into another page', async ({ page }) => {
   const gate = deferred(); let attempt = 0;
   await openAudit(page, async route => { const current = ++attempt; if (current === 1) await gate.promise; await route.fulfill({ json: { ok: true, entries: current === 1 ? entries : [], nextBefore: null } }); });
-  await expect(page.locator('.admin-audit')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('.admin-audit-data')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('.admin-audit [aria-busy="true"] [role="status"]')).toHaveCount(0);
+  await expect(page.locator('.admin-audit > [role="status"]')).toHaveText('Consultando registros de auditoria.');
   const nav = page.getByRole('navigation', { name: 'Navegação administrativa' });
   await nav.getByRole('button', { name: 'Painel', exact: true }).click();
   await nav.getByRole('button', { name: 'Auditoria', exact: true }).click();
