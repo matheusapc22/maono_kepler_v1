@@ -81,3 +81,13 @@ Chromium/Firefox/WebKit, cada um com o mesmo timeout de 35 minutos e um worker.
 Nenhum teste, assertion, etapa de contrato/lint/build ou motor foi removido.
 O check final mantém o nome progressive-loading e só aprova quando todos os
 jobs de motores têm sucesso; fail-fast é false e artefatos têm sufixo do motor.
+
+## Teclado no WebKit local
+
+A primeira execução local terminou com 255/258 casos aprovados. As três falhas
+foram Tab entre os dois links no WebKit Windows. Uma reprodução mínima com
+anchors demonstrou que tabindex=0 explícito mantém esses links na ordem natural
+de teclado. Aplicado somente aos dois atalhos; continuam links nativos e os
+testes mantêm Tab, foco esperado e timeout originais. Novo build e gate completo
+são exigidos após essa correção. Contexto do comportamento nativo: questão
+[Playwright #2114](https://github.com/microsoft/playwright/issues/2114).

@@ -21,7 +21,7 @@ export default function AdminRequests({ sessionAvailable }: { sessionAvailable: 
           <p>Suporte, pedidos e acompanhamento por organização. Filtros, responsáveis, comentários e histórico continuam na Central.</p>
           {destination ? <>
             <p>Organização ativa: <strong>{destination.organizationName}</strong></p>
-            <Link className="mm-btn" to={destination.href}>Abrir chamados da organização</Link>
+            <Link className="mm-btn" tabIndex={0} to={destination.href}>Abrir chamados da organização</Link>
           </> : <p role="status">Chamados indisponíveis neste contexto. Abra Projetos e selecione uma organização disponível na sua sessão.</p>}
           <p>Para outra organização, selecione o contexto em Projetos antes de abrir a Central de Chamados.</p>
         </article>
@@ -29,7 +29,7 @@ export default function AdminRequests({ sessionAvailable }: { sessionAvailable: 
           <h3 id="admin-map-requests-title">Revisões de mapas</h3>
           <p>Propostas de alteração são consultadas por projeto. Abra um projeto autorizado para acessar suas solicitações de revisão.</p>
           <p>A revisão e a aplicação de propostas permanecem no fluxo do mapa, com verificação de acesso própria.</p>
-          {available && <Link className="mm-btn" to="/projects">Abrir projetos</Link>}
+          {available && <Link className="mm-btn" tabIndex={0} to="/projects">Abrir projetos</Link>}
         </article>
       </div>
     </section>
