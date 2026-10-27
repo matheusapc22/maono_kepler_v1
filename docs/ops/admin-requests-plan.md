@@ -1,5 +1,16 @@
 # Solicitações - plano e limites de entrega
 
+## Entrega local concluída
+
+Código validado: `a20c723ec5acedbc1a17e5e4837d522006f8587f`.
+47 contratos, TypeScript app/node, build Vite, lint de escopo e diff-check aprovados.
+258/258 casos nos três motores passaram, sem falhas, flaky ou ignorados.
+As três páginas do PDF final foram renderizadas e inspecionadas; as capturas
+WebKit em 1440 e 320 px confirmaram foco visível e layout sem corte horizontal.
+Evidência consolidada: `docs/ops/admin-requests-validation.md`.
+CI remoto será conferido no HEAD final da PR; não é declarado aprovado aqui.
+As seções abaixo preservam o planejamento e os registros históricos anteriores.
+
 Base: `e47deac18888195b945a244dadb9e27c5902638f`, produto `mano_kepler_v1`.
 Branch: `feat/admin-requests-navigation`. Entrega por PR draft; sem merge.
 
