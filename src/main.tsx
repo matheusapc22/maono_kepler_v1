@@ -18,7 +18,7 @@ import App from "./App.tsx";
 import { Provider } from "react-redux";
 import store from "./store";
 import { BrowserRouter } from "react-router";
-import { SessionProvider } from "./auth/session";
+import { SessionProvider } from "./auth/session.ts";
 import { LoadingProvider } from "./components/loading";
 import {
   acknowledgeInitialBootRuntime,

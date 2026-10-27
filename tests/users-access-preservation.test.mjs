@@ -10,7 +10,7 @@ import { restoreLintModuleExtraction } from './helpers/lint-module-extraction-pr
 import { assertUsersAccessPreserved, canonical, declaration, digest, nodes, parse, preservedHelpers, preservedValues, usersAccessBaseline } from './helpers/users-access-preservation.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8').replace(/\r\n/g,'\n');
-const source = read(usersAccessBaseline.path);
+const source = restoreLintModuleExtraction(usersAccessBaseline.path, read(usersAccessBaseline.path));
 const ast = parse(source);
 const compile = contents => ts.transpileModule(contents, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
 const importTs = async path => import(`data:text/javascript;base64,${Buffer.from(compile(read(path))).toString('base64')}`);

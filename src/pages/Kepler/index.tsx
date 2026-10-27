@@ -44,14 +44,14 @@ import { replaceAddDataDialog } from "./factories/add-data-dialog";
 import { replaceFileUpload } from "./factories/file-upload";
 import { replaceExportHtmlMap, replaceExportJsonMap } from "./factories/export-map-help";
 import { replaceLoadDataModal } from "./factories/load-data-modal";
-import { replaceMapControl } from "./factories/map-control";
+import { replaceMapControl } from "./factories/map-control.ts";
 import { replaceCaptureMapContainer } from "./factories/capture-render-generation";
-import { replaceMapLegendPanel } from "./factories/maono-map-legend-panel";
-import { replaceLegendRow } from "./factories/maono-legend-row";
-import { replaceMapPopover } from "./factories/maono-map-popover";
-import { replacePanelHeader } from "./factories/panel-header";
-import { replaceLayerConfigurator } from "./factories/layer-configurator";
-import { replaceSidePanel } from "./factories/side-panel";
+import { replaceMapLegendPanel } from "./factories/maono-map-legend-panel.ts";
+import { replaceLegendRow } from "./factories/maono-legend-row.ts";
+import { replaceMapPopover } from "./factories/maono-map-popover.ts";
+import { replacePanelHeader } from "./factories/panel-header.ts";
+import { replaceLayerConfigurator } from "./factories/layer-configurator.ts";
+import { replaceSidePanel } from "./factories/side-panel.ts";
 import {
   CLOUD_PROVIDERS_CONFIGURATION,
   DEFAULT_FEATURE_FLAGS,

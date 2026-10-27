@@ -11,7 +11,7 @@ import {
 } from "../../engine-adapter/geometry-filter-command";
 import { authorizeMapPanelCommand } from "../../map-panel/map-panel-capabilities";
 import { emitMapPanelTelemetry } from "../../map-panel/map-panel-telemetry";
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 
 type GeometryFilterStatus = {
   tone: "error" | "success";

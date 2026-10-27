@@ -1,4 +1,4 @@
-export { KeplerEngineAdapterProvider } from "./KeplerEngineAdapterProvider.tsx";
+export { KeplerEngineAdapterProvider } from "./KeplerEngineAdapterProvider.ts";
 export {
   useViewerAwareKeplerEngineAdapter as useKeplerEngineAdapter,
 } from "./useViewerAwareKeplerEngineAdapter.ts";

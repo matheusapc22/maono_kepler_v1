@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 // Copyright contributors to the kepler.gl project
 
 import { SidePanelFactory } from "@kepler.gl/components";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 
 export function CustomSidePanelFactory(...deps: Parameters<typeof SidePanelFactory>) {
   const DefaultSidePanel = SidePanelFactory(...deps);

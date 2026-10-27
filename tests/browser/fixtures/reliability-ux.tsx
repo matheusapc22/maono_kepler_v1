@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
-import { SessionProvider, useSession } from "../../../src/auth/session";
+import { SessionProvider, useSession } from "../../../src/auth/session.ts";
 import { LoadingProvider } from "../../../src/components/loading";
 import DocumentsSection from "../../../src/pages/Projects/components/DocumentsSection";
 import AdminFiles from "../../../src/pages/AdminFiles";

@@ -1,5 +1,5 @@
 
-import { PointClusterControllerBridge } from "../clustering/point-cluster-controller-bridge";
+import { PointClusterControllerBridge } from "../clustering/point-cluster-controller-bridge.ts";
 
 export default function PointClusterSettingsPanel({
   controller,

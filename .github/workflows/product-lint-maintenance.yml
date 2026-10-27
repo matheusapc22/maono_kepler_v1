@@ -45,6 +45,7 @@ jobs:
         run: >-
           node --experimental-strip-types --test --test-concurrency=1
           tests/lint-module-extraction.test.mjs
+          tests/lint-public-entrypoints.test.mjs
           tests/dropbox-provider-login.test.mjs
           tests/foursquare-provider-contract.test.mjs
           tests/legacy-ingestion-contract.test.mjs

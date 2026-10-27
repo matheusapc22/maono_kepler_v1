@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LoadingStatus, Skeleton, StaticLoadingText, TableSkeleton } from "../../../components/loading/Skeleton";
 
-import type { MaonoUser } from "../../../auth/session";
+import type { MaonoUser } from "../../../auth/session.ts";
 import {
   createOrganizationLimitRequest,
   getOrganizationLimits,

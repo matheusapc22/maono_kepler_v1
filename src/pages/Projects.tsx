@@ -15,7 +15,7 @@ import {
   useSession,
   type MaonoProject,
   type MaonoUser,
-} from "../auth/session";
+} from "../auth/session.ts";
 import {
   LoadingOverlay,
   useCompleteLoadingHandoff,

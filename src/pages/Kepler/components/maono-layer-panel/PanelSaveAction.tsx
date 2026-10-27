@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 import "./panel-save-action.css";
 
 const SECONDARY_ACTIONS = [

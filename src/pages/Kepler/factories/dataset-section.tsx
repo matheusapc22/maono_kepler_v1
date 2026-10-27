@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 import { DatasetSectionFactory } from "@kepler.gl/components";
 import { connect } from "react-redux";
 
-import { useMapPanelCapability } from "../map-panel/MapPanelContext";
+import { useMapPanelCapability } from "../map-panel/MapPanelContext.ts";
 
 // eslint-disable-next-line react-refresh/only-export-components
 function CustomDatasetSectionFactory(...deps: Parameters<typeof DatasetSectionFactory>) {

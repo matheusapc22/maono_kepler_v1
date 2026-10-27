@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import { LayerConfiguratorFactory } from "@kepler.gl/components";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 
 const POINT_STYLE_LAYER_TYPES = new Set(["point", "cluster", "heatmap"]);
 

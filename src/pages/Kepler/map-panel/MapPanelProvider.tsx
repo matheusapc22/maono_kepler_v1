@@ -8,7 +8,7 @@ import React, {
 import { Link, useLocation, useParams } from "react-router";
 
 import MapErrorNotice from "../components/map-notice/MapErrorNotice";
-import { useSession } from "../../../auth/session";
+import { useSession } from "../../../auth/session.ts";
 import { normalizeUserError } from "../../../lib/user-error-catalog";
 import {
   useCompleteLoadingHandoff,
@@ -18,7 +18,7 @@ import {
   fetchNewMapCreateContext,
   fetchProjectMapNavigation,
 } from "./map-panel-api";
-import { MapPanelContextProvider, useMapPanel } from "./MapPanelContext";
+import { MapPanelContextProvider, useMapPanel } from "./MapPanelContext.ts";
 import { consumeMapPanelContextHandoff } from "./map-panel-context-handoff";
 import { normalizeIsochroneFeatureState } from "./isochrone-feature-diagnostic";
 import { emitMapPanelTelemetry } from "./map-panel-telemetry";

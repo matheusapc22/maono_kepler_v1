@@ -27,7 +27,7 @@ import { normalizeUserError } from "../../../lib/user-error-catalog";
 import OrganizationPermissionManager, {
   loadAccessGovernance,
   type AccessGovernanceCapabilities,
-} from "../../../components/access/OrganizationPermissionManager";
+} from "../../../components/access/OrganizationPermissionManager.ts";
 import ProjectMapAccessManager from "../../../components/access/ProjectMapAccessManager";
 import {
   accessFromCode,

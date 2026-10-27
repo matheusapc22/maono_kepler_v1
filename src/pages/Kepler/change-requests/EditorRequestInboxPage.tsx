@@ -6,7 +6,7 @@ import {
   LoadingOverlay,
   useLoadingActivity,
 } from "../../../components/loading";
-import { useSession } from "../../../auth/session";
+import { useSession } from "../../../auth/session.ts";
 import "./editor-request-inbox.css";
 
 type InboxItem = {

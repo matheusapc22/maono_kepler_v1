@@ -13,7 +13,7 @@ import type {
   MaonoId,
   MaonoOrganization,
   MaonoUser,
-} from "../auth/session";
+} from "../auth/session.ts";
 import OrganizationWorkspaceSwitcher from "./Projects/components/OrganizationWorkspaceSwitcher";
 import HeadsetIcon from "../components/icons/HeadsetIcon";
 import NoticeBoard from "../components/notices/NoticeBoard";

@@ -9,7 +9,7 @@ import {
 } from "../access-control/can";
 import { PERMISSION } from "../access-control/permissions";
 import Logo from "../assets/images/Logo_Maono.png";
-import { useSession } from "../auth/session";
+import { useSession } from "../auth/session.ts";
 import {
   LoadingOverlay,
   UniversalLoader,

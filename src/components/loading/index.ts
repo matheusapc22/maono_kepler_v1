@@ -1,6 +1,6 @@
 export { LoadingOverlay } from "./LoadingOverlay";
 export type { LoadingOverlayScope } from "./LoadingOverlay";
-export { LoadingProvider, useLoading } from "./LoadingProvider";
+export { LoadingProvider, useLoading } from "./LoadingProvider.ts";
 export { UniversalLoader } from "./UniversalLoader";
 export { useLoadingActivity } from "./useLoadingActivity";
 export { useCompleteLoadingHandoff } from "./useCompleteLoadingHandoff";

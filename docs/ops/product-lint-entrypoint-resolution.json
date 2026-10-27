@@ -1,0 +1,533 @@
+{
+  "observed_at_utc": "2026-10-27T20:44:37.621308+00:00",
+  "prior_head": "69abc1fd0e0040d5a01b526972ac251343e3aa5d",
+  "branch": "chore/product-lint-maintenance",
+  "ci_failure": {
+    "run": 40574456819,
+    "job": 122437013976,
+    "phase": "esbuild bundling of real project-preview-pipeline fixture",
+    "errors": 3,
+    "cause": "esbuild default extension order chooses .tsx component before .ts public entry"
+  },
+  "correction": {
+    "consumers": 52,
+    "imports": [
+      {
+        "file": "src/Routes.tsx",
+        "line": 6,
+        "before": "./auth/session",
+        "after": "./auth/session.ts"
+      },
+      {
+        "file": "src/components/PermissionGate.tsx",
+        "line": 9,
+        "before": "../auth/session",
+        "after": "../auth/session.ts"
+      },
+      {
+        "file": "src/components/loading/index.ts",
+        "line": 3,
+        "before": "./LoadingProvider",
+        "after": "./LoadingProvider.ts"
+      },
+      {
+        "file": "src/components/loading/useCompleteLoadingHandoff.ts",
+        "line": 3,
+        "before": "./LoadingProvider",
+        "after": "./LoadingProvider.ts"
+      },
+      {
+        "file": "src/components/loading/useInitialBootReadiness.ts",
+        "line": 3,
+        "before": "./LoadingProvider",
+        "after": "./LoadingProvider.ts"
+      },
+      {
+        "file": "src/components/loading/useLoadingActivity.ts",
+        "line": 3,
+        "before": "./LoadingProvider",
+        "after": "./LoadingProvider.ts"
+      },
+      {
+        "file": "src/hooks/useSession.ts",
+        "line": 6,
+        "before": "../auth/session",
+        "after": "../auth/session.ts"
+      },
+      {
+        "file": "src/main.tsx",
+        "line": 21,
+        "before": "./auth/session",
+        "after": "./auth/session.ts"
+      },
+      {
+        "file": "src/pages/Admin.tsx",
+        "line": 3,
+        "before": "../auth/session",
+        "after": "../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Admin/components/AdminSidebar.tsx",
+        "line": 2,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Admin/components/AdminUserManagerLegacy.tsx",
+        "line": 8,
+        "before": "../../../components/access/OrganizationPermissionManager",
+        "after": "../../../components/access/OrganizationPermissionManager.ts"
+      },
+      {
+        "file": "src/pages/AdminFiles.tsx",
+        "line": 12,
+        "before": "../auth/session",
+        "after": "../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/EditorRequestInboxPage.tsx",
+        "line": 9,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx",
+        "line": 10,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx",
+        "line": 16,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/back-to-projects-button.tsx",
+        "line": 3,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-layer-panel/AddLayerMenu.tsx",
+        "line": 4,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-layer-panel/MaonoLayerPanel.tsx",
+        "line": 11,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-layer-panel/PanelSaveAction.tsx",
+        "line": 3,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-layer-panel/PointSpatialGroupingSection.tsx",
+        "line": 2,
+        "before": "../../clustering/point-cluster-controller-bridge",
+        "after": "../../clustering/point-cluster-controller-bridge.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-map-shell/MaonoMapRuntime.tsx",
+        "line": 13,
+        "before": "../../../../auth/session",
+        "after": "../../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-map-shell/MaonoMapRuntime.tsx",
+        "line": 18,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-map-shell/MapTopbar.tsx",
+        "line": 9,
+        "before": "../../../../auth/session",
+        "after": "../../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-save-button.tsx",
+        "line": 4,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/maono-save-button.tsx",
+        "line": 17,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx",
+        "line": 14,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/MaonoGeometryFilterRuntime.tsx",
+        "line": 14,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+        "line": 10,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx",
+        "line": 3,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/useBufferPreview.ts",
+        "line": 18,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/map-overlay/useIsochronePreview.ts",
+        "line": 12,
+        "before": "../../map-panel/MapPanelContext",
+        "after": "../../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/components/point-cluster-settings-panel.tsx",
+        "line": 2,
+        "before": "../clustering/point-cluster-controller-bridge",
+        "after": "../clustering/point-cluster-controller-bridge.ts"
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/basemap-controller.ts",
+        "line": 7,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/engine-adapter/index.ts",
+        "line": 1,
+        "before": "./KeplerEngineAdapterProvider.tsx",
+        "after": "./KeplerEngineAdapterProvider.ts"
+      },
+      {
+        "file": "src/pages/Kepler/factories/dataset-section.tsx",
+        "line": 5,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/factories/layer-configurator.tsx",
+        "line": 3,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/factories/panel-header.tsx",
+        "line": 7,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/factories/side-panel.tsx",
+        "line": 6,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 47,
+        "before": "./factories/map-control",
+        "after": "./factories/map-control.ts"
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 49,
+        "before": "./factories/maono-map-legend-panel",
+        "after": "./factories/maono-map-legend-panel.ts"
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 50,
+        "before": "./factories/maono-legend-row",
+        "after": "./factories/maono-legend-row.ts"
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 51,
+        "before": "./factories/maono-map-popover",
+        "after": "./factories/maono-map-popover.ts"
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 52,
+        "before": "./factories/panel-header",
+        "after": "./factories/panel-header.ts"
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 53,
+        "before": "./factories/layer-configurator",
+        "after": "./factories/layer-configurator.ts"
+      },
+      {
+        "file": "src/pages/Kepler/index.tsx",
+        "line": 54,
+        "before": "./factories/side-panel",
+        "after": "./factories/side-panel.ts"
+      },
+      {
+        "file": "src/pages/Kepler/map-panel/MapManagementPage.tsx",
+        "line": 12,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/map-panel/MapPanelProvider.tsx",
+        "line": 11,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Kepler/map-panel/MapPanelProvider.tsx",
+        "line": 21,
+        "before": "./MapPanelContext",
+        "after": "./MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Kepler/map-url-loader/index.tsx",
+        "line": 18,
+        "before": "../map-panel/MapPanelContext",
+        "after": "../map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "src/pages/Login.tsx",
+        "line": 7,
+        "before": "../auth/session",
+        "after": "../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Projects.tsx",
+        "line": 18,
+        "before": "../auth/session",
+        "after": "../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Projects/components/LimitsPlansSection.tsx",
+        "line": 8,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Projects/components/OrganizationSection.tsx",
+        "line": 7,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx",
+        "line": 15,
+        "before": "../../../auth/session",
+        "after": "../../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/Projects/components/UsersAccessOverviewSection.tsx",
+        "line": 30,
+        "before": "../../../components/access/OrganizationPermissionManager",
+        "after": "../../../components/access/OrganizationPermissionManager.ts"
+      },
+      {
+        "file": "src/pages/Projects/index.tsx",
+        "line": 1,
+        "before": "../Projects",
+        "after": "../Projects.ts"
+      },
+      {
+        "file": "src/pages/Projects/projects-api.ts",
+        "line": 5,
+        "before": "../../auth/session",
+        "after": "../../auth/session.ts"
+      },
+      {
+        "file": "src/pages/ProjectsSidebar.tsx",
+        "line": 16,
+        "before": "../auth/session",
+        "after": "../auth/session.ts"
+      },
+      {
+        "file": "src/route-modules.ts",
+        "line": 5,
+        "before": "./pages/Projects",
+        "after": "./pages/Projects.ts"
+      },
+      {
+        "file": "tests/browser/fixtures/durable-save-button.tsx",
+        "line": 6,
+        "before": "../../../src/pages/Kepler/map-panel/MapPanelContext",
+        "after": "../../../src/pages/Kepler/map-panel/MapPanelContext.ts"
+      },
+      {
+        "file": "tests/browser/fixtures/reliability-ux.tsx",
+        "line": 4,
+        "before": "../../../src/auth/session",
+        "after": "../../../src/auth/session.ts"
+      },
+      {
+        "file": "tests/browser/users-access-workspace.spec.ts",
+        "line": 4,
+        "before": "../../src/components/access/OrganizationPermissionManager",
+        "after": "../../src/components/access/OrganizationPermissionManager.ts"
+      }
+    ],
+    "public_entries": 14,
+    "resolver_order_changed": false,
+    "provider_alias_or_stub_added": false
+  },
+  "validation": {
+    "clean_baseline": {
+      "file": "lint-entrypoints-clean-before.log",
+      "bytes": 2658,
+      "sha256": "ff829d04e9b0fe50663c24a31b7f2f79b9fa739ac5272034f18ecb515a17c652",
+      "exit_code": 1,
+      "expected_export_errors": 3
+    },
+    "clean_after": {
+      "file": "lint-entrypoints-clean-after.log",
+      "bytes": 542,
+      "sha256": "9705052a110741e5d14ce0ce94d209505a1b8c2e45995517cfa1b0e9c225bf44",
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "preservation_after": {
+      "file": "lint-entrypoints-preservation-after.log",
+      "bytes": 17589,
+      "sha256": "5051739fafd4fdfab2e58d93c0e0c0961ce629b1ba6a5fd2d823b3122cf09662",
+      "exit_code": 0,
+      "passed": 170,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typescript": {
+      "file": "lint-entrypoints-types.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0
+    },
+    "scope_lint": {
+      "file": "lint-entrypoints-scope-lint.json",
+      "bytes": 120935,
+      "sha256": "d8729d55209ed438846b664d547908e198b56d7268e74fc4aa7b5973dfb2b61f",
+      "exit_code": 0,
+      "files": 52,
+      "errors": 0,
+      "warnings": 4,
+      "diagnostics_identical_to_prior": true
+    },
+    "strict_error_audit": {
+      "file": "lint-entrypoints-error-audit-verified.json",
+      "bytes": 26607,
+      "sha256": "c6ed389a6af7db037c763d87470ef1b350d210b2dd00deb94d9eec45fc36afa9",
+      "exit_code": 0,
+      "method": "scanRepository + summarize + compareWithBaselineExact exported functions",
+      "findings": 3222,
+      "drift": 0
+    },
+    "counts_overlap": true,
+    "full_local_build": "not run; coordinated window reserved",
+    "local_browser": "not run; coordinated window reserved",
+    "new_sha_ci": "not yet published",
+    "windows_cli_caveat": "The empty CLI log is not audit evidence: its isDirectExecution URL pathname comparison does not invoke main on Windows. Verified exported functions are used above; no scanner rule or baseline changed."
+  },
+  "unchanged_controls": [
+    "package.json",
+    "yarn.lock",
+    "eslint.config.js",
+    "tsconfig.app.json",
+    "tsconfig.node.json",
+    "scripts/user-error-sink-baseline.json",
+    "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+    "tests/fixtures/lint-extracted-definitions.json"
+  ],
+  "changed_since_prior": [
+    ".github/workflows/product-lint-maintenance.yml",
+    "docs/ops/product-lint-entrypoint-resolution.json",
+    "docs/ops/product-lint-maintenance.md",
+    "src/Routes.tsx",
+    "src/components/PermissionGate.tsx",
+    "src/components/loading/index.ts",
+    "src/components/loading/useCompleteLoadingHandoff.ts",
+    "src/components/loading/useInitialBootReadiness.ts",
+    "src/components/loading/useLoadingActivity.ts",
+    "src/hooks/useSession.ts",
+    "src/main.tsx",
+    "src/pages/Admin.tsx",
+    "src/pages/Admin/components/AdminSidebar.tsx",
+    "src/pages/Admin/components/AdminUserManagerLegacy.tsx",
+    "src/pages/AdminFiles.tsx",
+    "src/pages/Kepler/change-requests/EditorRequestInboxPage.tsx",
+    "src/pages/Kepler/change-requests/PointFromPinWorkflow.tsx",
+    "src/pages/Kepler/components/back-to-projects-button.tsx",
+    "src/pages/Kepler/components/maono-layer-panel/AddLayerMenu.tsx",
+    "src/pages/Kepler/components/maono-layer-panel/MaonoLayerPanel.tsx",
+    "src/pages/Kepler/components/maono-layer-panel/PanelSaveAction.tsx",
+    "src/pages/Kepler/components/maono-layer-panel/PointSpatialGroupingSection.tsx",
+    "src/pages/Kepler/components/maono-map-shell/MaonoMapRuntime.tsx",
+    "src/pages/Kepler/components/maono-map-shell/MapTopbar.tsx",
+    "src/pages/Kepler/components/maono-save-button.tsx",
+    "src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx",
+    "src/pages/Kepler/components/map-overlay/MaonoGeometryFilterRuntime.tsx",
+    "src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+    "src/pages/Kepler/components/map-overlay/MarkerContextMenu.tsx",
+    "src/pages/Kepler/components/map-overlay/useBufferPreview.ts",
+    "src/pages/Kepler/components/map-overlay/useIsochronePreview.ts",
+    "src/pages/Kepler/components/point-cluster-settings-panel.tsx",
+    "src/pages/Kepler/engine-adapter/basemap-controller.ts",
+    "src/pages/Kepler/engine-adapter/index.ts",
+    "src/pages/Kepler/factories/dataset-section.tsx",
+    "src/pages/Kepler/factories/layer-configurator.tsx",
+    "src/pages/Kepler/factories/panel-header.tsx",
+    "src/pages/Kepler/factories/side-panel.tsx",
+    "src/pages/Kepler/index.tsx",
+    "src/pages/Kepler/map-panel/MapManagementPage.tsx",
+    "src/pages/Kepler/map-panel/MapPanelProvider.tsx",
+    "src/pages/Kepler/map-url-loader/index.tsx",
+    "src/pages/Login.tsx",
+    "src/pages/Projects.tsx",
+    "src/pages/Projects/components/LimitsPlansSection.tsx",
+    "src/pages/Projects/components/OrganizationSection.tsx",
+    "src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx",
+    "src/pages/Projects/components/UsersAccessOverviewSection.tsx",
+    "src/pages/Projects/index.tsx",
+    "src/pages/Projects/projects-api.ts",
+    "src/pages/ProjectsSidebar.tsx",
+    "src/route-modules.ts",
+    "tests/browser/fixtures/durable-save-button.tsx",
+    "tests/browser/fixtures/reliability-ux.tsx",
+    "tests/browser/users-access-workspace.spec.ts",
+    "tests/fixtures/lint-module-extraction-preservation.json",
+    "tests/lint-public-entrypoints.test.mjs",
+    "tests/organization-switcher-redesign.test.mjs",
+    "tests/users-access-preservation.test.mjs"
+  ],
+  "remaining_lint_blocker": "Carto original suppression; denied semantic patch untouched",
+  "pr_metadata_update": {
+    "status": "denied by automatic approval review",
+    "target": "PR261 description",
+    "reason": "Replacing public PR metadata with a substantial readiness/status statement requires specific authorization.",
+    "retried": false
+  },
+  "restrictions": [
+    "No merge or auto-merge",
+    "No remote migrations or flags",
+    "No Production action",
+    "No CI cancellation"
+  ]
+}

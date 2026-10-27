@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 
-import { useMapPanel } from "../../map-panel/MapPanelContext";
+import { useMapPanel } from "../../map-panel/MapPanelContext.ts";
 
 export const MAONO_CREATE_POINT_FROM_MARKER_EVENT =
   "maono:create-point-from-marker";

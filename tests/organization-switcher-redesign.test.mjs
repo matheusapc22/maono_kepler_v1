@@ -15,7 +15,7 @@ import postcss from 'postcss';
 
 const root = new URL('../', import.meta.url);
 const read = path => readFileSync(new URL(path, root), 'utf8').replace(/\r\n/g,'\n');
-const switcher = read('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx');
+const switcher = restoreLintModuleExtraction('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx', read('src/pages/Projects/components/OrganizationWorkspaceSwitcher.tsx'));
 const css = postcss.parse(read('src/pages/Projects/projects.css'));
 const bundle = await build({ entryPoints: [fileURLToPath(new URL('src/pages/Projects/components/organization-switcher-position.ts', root))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { organizationMenuPosition } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);

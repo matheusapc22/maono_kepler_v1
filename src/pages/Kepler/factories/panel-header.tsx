@@ -4,7 +4,7 @@ import type { ComponentProps } from "react";
 
 import { PanelHeaderFactory } from "@kepler.gl/components";
 import Logo from "../../../assets/images/Logo_Maono.png";
-import { useMapPanel } from "../map-panel/MapPanelContext";
+import { useMapPanel } from "../map-panel/MapPanelContext.ts";
 
 export function CustomPanelHeaderFactory(...deps: Parameters<typeof PanelHeaderFactory>) {
   const DefaultPanelHeader = PanelHeaderFactory(...deps);

@@ -6,7 +6,7 @@ Base: `e47deac18888195b945a244dadb9e27c5902638f` (`mano_kepler_v1`). Branch: `ch
 
 ## Implementação
 
-- Separação de componentes TSX e módulos de hooks, contextos, tipos e funções puras. Entradas `.ts` mantêm os caminhos públicos sem extensão; imports explícitos foram ajustados. Os componentes permanecem em `.tsx`.
+- Separação de componentes TSX e módulos de hooks, contextos, tipos e funções puras. Entradas públicas `.ts` mantêm os nomes exportados; os consumidores declaram a extensão `.ts` para evitar a prioridade diferente dos resolvers. Os componentes permanecem em `.tsx`.
 - Declarações para as superfícies efetivamente usadas de bibliotecas JavaScript/Flow e tipos de props, refs, ações, reducers e adaptadores Kepler. Diferenças nas declarações nativas são documentadas no ponto de integração, preservando payloads e protótipos.
 - Remoção de imports, callbacks vazios e dois arquivos Dropbox sem referências; correções mecânicas de escapes, const e expressão de callback.
 - Login Dropbox: executor de Promise síncrono e propagação das falhas de conta/storage, com limpeza do listener. Testes cobrem popup aberto/bloqueado e rejeições; não houve login real.
@@ -46,6 +46,18 @@ Os contratos adicionais de Usuários/Projects preservam os hashes históricos e 
 Após a correção, TypeScript app e Node/Vite passaram no snapshot limpo; **122 testes em dez arquivos passaram, zero falhas/skips**, incluindo classes nativas de clustering. Essa contagem se sobrepõe à bateria inicial de 265 e não deve ser somada. Build/navegador locais continuam aguardando a janela coordenada; novo CI precisa de confirmação própria. [Diagnóstico, logs com hashes e manifesto atualizado](product-lint-ci-compatibility.json).
 
 O check Cloudflare `122423118649` informa apenas `Build failed`. Seu log detalhado exigiu login na aba isolada, fechada sem autenticação; a causa própria permanece desconhecida. Não se atribui ao Cloudflare a causa do GitHub Actions sem o log correspondente.
+
+## Resolução explícita das entradas públicas
+
+No SHA `69abc1f`, Synthetic Contracts, Ticket Center, Save Contract e Cloudflare Pages passaram. O Reliability, entretanto, falhou no bundling da fixture real de preview: o esbuild escolhe `.tsx` antes de `.ts`, enquanto o build da aplicação escolhia a entrada pública `.ts`. Os três hooks de loading acabavam lendo a implementação do componente, que já não exportava `useLoading`.
+
+A instalação limpa reproduziu exatamente os três erros de exportação. A correção atualiza 62 imports em 52 consumidores, incluindo reexports, import dinâmico, fixtures e spec de navegador. Eles apontam às entradas `.ts` reais. Nenhum alias ou substituto de provider foi introduzido; a única fronteira simulada no teste da fixture é o preloading de rotas que já existia no spec de navegador. Não foi alterada a ordem de resolução do esbuild.
+
+O contrato novo audita imports em `src`, `tests` e `scripts`, verifica que a forma antiga é detectada, compila as 14 entradas públicas com seus nomes exportados históricos e compila a fixture `project-preview-pipeline` com a resolução padrão. Ele integra o job de manutenção em todas as PRs de produto. Imports sem extensão para esses pares `.ts`/`.tsx` passam a ser rejeitados por esse contrato, para que a ambiguidade não reapareça.
+
+As verificações de preservação recompõem somente os imports exatos alterados; hashes históricos, definições movidas, baselines de erros e regras ESLint permanecem intactos. A rodada de sete arquivos passou com **170 testes, zero falhas/skips**. Os quatro contratos novos também passaram na instalação limpa; essas contagens se sobrepõem. Lint dos 52 consumidores: **zero erros e quatro avisos**. Build e navegador locais completos continuam dependentes da janela coordenada; bundling da fixture não é aceite de navegador. Resultados do próximo SHA precisam ser confirmados no CI.
+
+TypeScript passou na instalação limpa, e os quatro avisos de lint são idênticos aos desses arquivos no checkpoint anterior. A auditoria de erros foi verificada pelas funções exportadas `scanRepository`, `summarize` e `compareWithBaselineExact`, sem alterar o scanner ou o baseline. Ressalva dos registros locais anteriores: a saída vazia do CLI no Windows não comprovava a auditoria, pois sua comparação de pathname não invoca `main` nessa plataforma. Essa evidência vazia deve ser desconsiderada; o resultado verificável e os hashes estão em [product-lint-entrypoint-resolution.json](product-lint-entrypoint-resolution.json).
 
 ## Arquivos compartilhados e integração das outras PRs
 
