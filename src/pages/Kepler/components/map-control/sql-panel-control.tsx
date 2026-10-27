@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import React, { useCallback, type ComponentType } from "react";
 
@@ -25,9 +24,9 @@ SqlPanelControlFactory.deps = [MapControlTooltipFactory];
 export default function SqlPanelControlFactory(
   MapControlTooltip: ReturnType<typeof MapControlTooltipFactory>
 ): React.FC<SqlPanelControlProps> {
-  const SqlPanelControl = ({ mapControls, onToggleMapControl }) => {
+  const SqlPanelControl = ({ mapControls, onToggleMapControl }: SqlPanelControlProps) => {
     const onClick = useCallback(
-      (event) => {
+      (event: React.MouseEvent) => {
         event.preventDefault();
         onToggleMapControl("sqlPanel");
       },

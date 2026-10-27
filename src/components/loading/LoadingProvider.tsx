@@ -1,7 +1,6 @@
+import {LoadingContext, type LoadingOperation, type BeginLoadingOptions, type LoadingContextValue} from './loading-context';
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -15,7 +14,6 @@ import { LoadingOverlay } from "./LoadingOverlay";
 import {
   LoadingController,
   type LoadingToken,
-  type LoadingTokenMetadataInput,
 } from "./loading-controller";
 import {
   DEFAULT_LOADING_STALE_MS,
@@ -31,43 +29,12 @@ import {
 const DEFAULT_SHOW_AFTER_MS = 120;
 const DEFAULT_MIN_VISIBLE_MS = 250;
 
-type LoadingOperation<T> = () => Promise<T> | T;
-type BeginLoadingOptions = {
-  immediate?: boolean;
-  metadata?: LoadingTokenMetadataInput;
-};
-
-type LoadingContextValue = {
-  isLoading: boolean;
-  isVisible: boolean;
-  initialBootActive: boolean;
-  activeCount: number;
-  beginLoading: (options?: BeginLoadingOptions) => LoadingToken;
-  endLoading: (token: LoadingToken) => void;
-  handoffLoading: (
-    key: string,
-    token: LoadingToken,
-    destination: string,
-  ) => void;
-  claimLoadingHandoff: (key: string) => boolean;
-  completeLoadingHandoff: (key: string) => boolean;
-  cancelLoadingHandoff: (key: string) => boolean;
-  getLoadingHandoffCount: () => number;
-  completeInitialBootLoading: () => boolean;
-  withLoading: <T>(
-    operation: LoadingOperation<T>,
-    options?: BeginLoadingOptions,
-  ) => Promise<T>;
-};
-
 type LoadingProviderProps = {
   children: ReactNode;
   showAfterMs?: number;
   minVisibleMs?: number;
   staleAfterMs?: number;
 };
-
-const LoadingContext = createContext<LoadingContextValue | null>(null);
 
 export function LoadingProvider({
   children,
@@ -368,14 +335,4 @@ export function LoadingProvider({
       />
     </LoadingContext.Provider>
   );
-}
-
-export function useLoading() {
-  const context = useContext(LoadingContext);
-
-  if (!context) {
-    throw new Error("useLoading precisa estar dentro de LoadingProvider.");
-  }
-
-  return context;
 }

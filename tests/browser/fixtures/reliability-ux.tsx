@@ -9,7 +9,7 @@ import { MapPanelProvider, MapPanelAccessGate } from "../../../src/pages/Kepler/
 
 // Only the surrounding page is a fixture. Requests, error conversion, loading,
 // file transfer, permissions and rendered error surfaces are production code.
-function DocumentsFixture() {
+export function DocumentsFixture() {
   const [organizationId, setOrganizationId] = useState(1);
   return (
     <main>
@@ -19,7 +19,7 @@ function DocumentsFixture() {
   );
 }
 
-function MapFixture() {
+export function MapFixture() {
   const { loading } = useSession();
   if (loading) return null;
   return (

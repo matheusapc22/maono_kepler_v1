@@ -15,7 +15,7 @@ import React, {
 import styled, { ThemeProvider, StyleSheetManager } from "styled-components";
 import Window from "global/window";
 import { connect, useDispatch } from "react-redux";
-import cloneDeep from "lodash/cloneDeep";
+
 import isEqual from "lodash/isEqual";
 import { useSelector } from "react-redux";
 import isPropValid from "@emotion/is-prop-valid";
@@ -62,41 +62,19 @@ import {
   onLoadCloudMapSuccess,
 } from "./actions";
 
-import {
-  loadCloudMap,
-  addDataToMap,
-  replaceDataInMap,
-  toggleMapControl,
-  toggleModal,
-} from "@kepler.gl/actions";
+import { loadCloudMap, toggleMapControl, toggleModal } from "@kepler.gl/actions";
 import { CLOUD_PROVIDERS } from "./cloud-providers";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-/* eslint-disable no-unused-vars */
-import sampleTripData, {
-  testCsvData,
-  sampleTripDataConfig,
-} from "./data/sample-trip-data";
-import sampleGeojsonConfig from "./data/sample-geojson-config";
-import sampleH3Data, { config as h3MapConfig } from "./data/sample-hex-id-csv";
-import sampleS2Data, {
-  config as s2MapConfig,
-  dataId as s2DataId,
-} from "./data/sample-s2-data";
-import sampleAnimateTrip, {
-  pointData,
-  pointDataId,
-  animateTripDataId,
-  replacePointData,
-  config as syncedTripConfig,
-} from "./data/sample-animate-trip-data";
-import sampleIconCsv from "./data/sample-icon-csv";
-import sampleGpsData from "./data/sample-gps-data";
-import sampleRowData, { config as rowDataConfig } from "./data/sample-row-data";
-import {
-  processCsvData,
-  processGeojson,
-  processRowObject,
-} from "@kepler.gl/processors";
+
+
+
+
+
+
+
+
+
+
 import { injectComponents } from "@kepler.gl/components";
 import { replaceDatasetSection } from "./factories/dataset-section";
 import { useParams, useSearchParams } from "react-router";
@@ -614,23 +592,6 @@ const App = (props) => {
     hideBanner();
     Window.localStorage.setItem(BannerKey, "true");
   }, [hideBanner]);
-
-  const _loadRowData = useCallback(() => {
-    dispatch(addDataToMap({ datasets: [{ info: { label: "Sample Visit Data", id: "sample_visit_data" }, data: processRowObject(sampleRowData) }], config: rowDataConfig }));
-  }, [dispatch]);
-
-  const _loadVectorTileData = useCallback(() => {}, [dispatch]);
-  const _loadPointData = useCallback(() => {}, [dispatch]);
-  const _loadScenegraphLayer = useCallback(() => {}, [dispatch]);
-  const _loadIconData = useCallback(() => {}, [dispatch]);
-  const _loadTripGeoJson = useCallback(() => {}, [dispatch]);
-  const _loadGeojsonData = useCallback(() => {}, [dispatch]);
-  const _loadSyncedFilterWTripLayer = useCallback(() => {}, [dispatch]);
-  const _replaceSyncedFilterWTripLayer = useCallback(() => {}, [dispatch]);
-  const _replaceData = useCallback(() => {}, [dispatch]);
-  const _loadH3HexagonData = useCallback(() => {}, [dispatch]);
-  const _loadS2Data = useCallback(() => {}, [dispatch]);
-  const _loadGpsData = useCallback(() => {}, [dispatch]);
 
   const _loadSampleData = useCallback(() => {}, []);
 

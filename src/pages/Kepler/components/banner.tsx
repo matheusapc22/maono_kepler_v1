@@ -1,11 +1,11 @@
+import type { ReactNode } from "react";
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import styled from "styled-components";
 import { Icons } from "@kepler.gl/components";
 
-const StyledBanner = styled.div`
+const StyledBanner = styled.div<{bgColor: string; fontColor: string; height: number; visible?: boolean}>`
   align-items: center;
   background-color: ${(props) => props.bgColor};
   color: ${(props) => props.fontColor};
@@ -32,7 +32,7 @@ const Banner = ({
   children,
   onClose,
   show,
-}) => (
+}: { bgColor?: string; fontColor?: string; height?: number; children?: ReactNode; onClose?: () => void; show?: boolean }) => (
   <StyledBanner
     className="top-banner"
     bgColor={bgColor}

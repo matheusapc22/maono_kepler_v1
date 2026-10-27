@@ -1,0 +1,179 @@
+{
+  "base": "e47deac18888195b945a244dadb9e27c5902638f",
+  "definitions": [
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "MaonoFeatureFlag",
+      "sha256": "65272a2dabb2bbfdeea3c071e5b12361ec32d525fcf80f8d7a8a567fb776eefc"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "MaonoId",
+      "sha256": "f4cd02c31045547b3f89cbba5c830e681c7cc819ab197eac621a4fc19ce5f633"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "MaonoLimits",
+      "sha256": "cc4f5ca0afedc1441ecdbe092a6fce1eff202e3faefe1b042f0d5bec2a1e7c92"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "MaonoOrganization",
+      "sha256": "9a9dfac375c85f3c841fe258574aae393e397e0afb3cce92bbb49803d9502de6"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "MaonoProject",
+      "sha256": "1539ae8036c641e7ba0a06dfd585a27383bd8e44d2599439d3ec218fe6c82e4a"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "MaonoRole",
+      "sha256": "953e73ec1d3fc5a96049b1ed9d061a4b5683e7549a32f760b566cba6b2968fd4"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "ProjectActor",
+      "sha256": "dc704c2d003a15c19f9ac0e1826af9fd5d65396cc2d8d4c13c41b8cc9ec9b4a9"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "MaonoUser",
+      "sha256": "dc509bb6de06dbe72d13e1f6e1b82c972ba95ae7faecc3e5c5a88b4196405a50"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "PublicSession",
+      "sha256": "9c159bbf86e04c135d29e73c9cbc9071f154e1642b3079a142516658b3faf1e4"
+    },
+    {
+      "path": "src/auth/session-types.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "SessionState",
+      "sha256": "8417098ecba5aa9e0a851745cd6ecc8ebc7293878d19294a3853f048493e9b3c"
+    },
+    {
+      "path": "src/auth/session-context.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "SessionContext",
+      "sha256": "b24f35640f452a290191cc410ce83f64088d717829374ab2ee0c7eae92e48070"
+    },
+    {
+      "path": "src/auth/session-context.ts",
+      "originalPath": "src/auth/session.tsx",
+      "name": "useSession",
+      "sha256": "c703a80eaed4b6ba30d7545c30412093037e2e4f2bca6915ccb9087fcad25f37"
+    },
+    {
+      "path": "src/components/loading/loading-context.ts",
+      "originalPath": "src/components/loading/LoadingProvider.tsx",
+      "name": "LoadingOperation",
+      "sha256": "9cbccdad59f518abceb2c60d720f91dfcdfc0e1fc317c403687fdd5d578cec36"
+    },
+    {
+      "path": "src/components/loading/loading-context.ts",
+      "originalPath": "src/components/loading/LoadingProvider.tsx",
+      "name": "BeginLoadingOptions",
+      "sha256": "6470e85d10b3dc0031267098afd7d9d1a07a1168e8a36bfcaa907bf28a333d72"
+    },
+    {
+      "path": "src/components/loading/loading-context.ts",
+      "originalPath": "src/components/loading/LoadingProvider.tsx",
+      "name": "LoadingContextValue",
+      "sha256": "fdd32ba5b3ae913810598b455804aeca23b13d8d9cedd40c82ae23728f0caef6"
+    },
+    {
+      "path": "src/components/loading/loading-context.ts",
+      "originalPath": "src/components/loading/LoadingProvider.tsx",
+      "name": "LoadingContext",
+      "sha256": "c77d66fb07b93f65c9980917de61b8961c498bd0174c24af56ac8ba7c7e64be6"
+    },
+    {
+      "path": "src/components/loading/loading-context.ts",
+      "originalPath": "src/components/loading/LoadingProvider.tsx",
+      "name": "useLoading",
+      "sha256": "24e1b38627cc2a4f929100495da46851b9102ed8993ea7837183d6c6d6f1b08d"
+    },
+    {
+      "path": "src/components/access/access-governance.ts",
+      "originalPath": "src/components/access/OrganizationPermissionManager.tsx",
+      "name": "ApiId",
+      "sha256": "3068522e118d64d20cda17b66e53063b8884f70be5338ebd2aab376589298b23"
+    },
+    {
+      "path": "src/components/access/access-governance.ts",
+      "originalPath": "src/components/access/OrganizationPermissionManager.tsx",
+      "name": "AccessGovernanceCapabilities",
+      "sha256": "5dbd9282f275ddf5c5455c4a5e65dffbff64468b36084ada55a9bfca9b8a564a"
+    },
+    {
+      "path": "src/components/access/access-governance.ts",
+      "originalPath": "src/components/access/OrganizationPermissionManager.tsx",
+      "name": "loadAccessGovernance",
+      "sha256": "f418ff032bd3d56070a40a366bb7b069d54fd83f4c860252e8ec29e28b23b2ce"
+    },
+    {
+      "path": "src/pages/Projects/project-snapshot.ts",
+      "originalPath": "src/pages/Projects.tsx",
+      "name": "sameProject",
+      "sha256": "b69dbba831dad8b52d5db07c07c574d692312ff3158a6a4a7cab21b33913fce0"
+    },
+    {
+      "path": "src/pages/Projects/project-snapshot.ts",
+      "originalPath": "src/pages/Projects.tsx",
+      "name": "mergeProjectSnapshot",
+      "sha256": "9be5cb566adc07ccdf0b816312525dd8714a6249baf1e908fb49a19aff47f8d1"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/map-panel-context.ts",
+      "originalPath": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "name": "MapPanelRuntimeContext",
+      "sha256": "c9017d443d3f24ee116428c9ea0e05851624f04077eb85b6d9aa1ff1b39edef9"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/map-panel-context.ts",
+      "originalPath": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "name": "MapPanelContext",
+      "sha256": "952ebf27bf77fd2fc1b7c45867363db54e19902bf911ac83a90abe53c8a4321d"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/map-panel-context.ts",
+      "originalPath": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "name": "useMapPanel",
+      "sha256": "361ed897b48775a4a47f607fd097c5b48cb29382c5d0cac41e6371aa668f36f3"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/map-panel-context.ts",
+      "originalPath": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "name": "useOptionalMapPanel",
+      "sha256": "ce7be3706bdaf948929a2c9c6fa7cc9517385d8f99794ef7e08a6927689041e2"
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/map-panel-context.ts",
+      "originalPath": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "name": "useMapPanelCapability",
+      "sha256": "d80646cd540033b4967cb2bf69d32dd1168438de400792e79fbcda6ccc87803f"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/kepler-engine-adapter-context.ts",
+      "originalPath": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+      "name": "KeplerEngineAdapterContext",
+      "sha256": "168e315d44694f3e0ba49ca0ee17be191e1d6fd00276b2539f5ecd2655baa281"
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/kepler-engine-adapter-context.ts",
+      "originalPath": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+      "name": "useKeplerEngineAdapter",
+      "sha256": "123b45d07ecc323881768873b027c9f9d5d4d03a8951124887f5707d924e5a2e"
+    }
+  ]
+}

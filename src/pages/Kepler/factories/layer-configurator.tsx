@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React from "react";
+import type { ComponentProps } from "react";
 import { LayerConfiguratorFactory } from "@kepler.gl/components";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 
@@ -19,7 +18,7 @@ function getCurrentLayerOption(options: any[], layer: any) {
 }
 
 function getSafeLayerTypeConfig(props: any, restrict: boolean) {
-  const options = Array.isArray(props?.layerTypeOptions) ? props.layerTypeOptions : [];
+  const options: Array<ComponentProps<ReturnType<typeof LayerConfiguratorFactory>>["layerTypeOptions"][number] & { disabled?: boolean }> = Array.isArray(props?.layerTypeOptions) ? props.layerTypeOptions : [];
 
   if (!restrict) {
     return {
@@ -50,10 +49,10 @@ function getSafeLayerTypeConfig(props: any, restrict: boolean) {
   };
 }
 
-export function CustomLayerConfiguratorFactory(...deps: any[]) {
+export function CustomLayerConfiguratorFactory(...deps: Parameters<typeof LayerConfiguratorFactory>) {
   const DefaultLayerConfigurator = LayerConfiguratorFactory(...deps);
 
-  const Wrapped = (props: any) => {
+  const Wrapped = (props: ComponentProps<ReturnType<typeof LayerConfiguratorFactory>>) => {
     const { context } = useMapPanel();
     const safeLayerTypeConfig = getSafeLayerTypeConfig(
       props,
@@ -68,7 +67,3 @@ export function CustomLayerConfiguratorFactory(...deps: any[]) {
 }
 
 CustomLayerConfiguratorFactory.deps = LayerConfiguratorFactory.deps;
-
-export function replaceLayerConfigurator() {
-  return [LayerConfiguratorFactory, CustomLayerConfiguratorFactory];
-}

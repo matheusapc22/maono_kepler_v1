@@ -71,11 +71,6 @@ function parseQueryString(query: string): Record<string, string> {
   return params;
 }
 
-function isConfigFile(err: any): boolean {
-  const summary = err?.error?.error_summary ?? err?.error_summary ?? "";
-  return typeof summary === "string" && Boolean(summary.match(/path\/conflict\/file\//g));
-}
-
 function isDropboxPathNotFound(err: any): boolean {
   const summary = err?.error?.error_summary ?? err?.error_summary ?? "";
   return typeof summary === "string" && summary.includes("path/not_found");
@@ -112,18 +107,18 @@ export default class DropboxProvider extends Provider {
   }
 
   async login(): Promise<any> {
-    return new Promise<any>(async (resolve, reject) => {
-      try {
-        const link = await this._authLink();
+    const link = await this._authLink();
+    return new Promise<any>((resolve, reject) => {
         const authWindow = Window.open(link, "_blank", "width=1024,height=716");
 
         const handleToken = async (event: MessageEvent<any>) => {
           if (!event?.data?.token) return;
 
+          try {
           if (authWindow) {
             authWindow.close();
-            Window.removeEventListener("message", handleToken as any);
           }
+          Window.removeEventListener("message", handleToken);
 
           const { token } = event.data as { token?: string };
           if (!token) {
@@ -142,12 +137,12 @@ export default class DropboxProvider extends Provider {
           }
 
           resolve(user);
+          } catch (error) {
+            reject(error);
+          }
         };
 
-        Window.addEventListener("message", handleToken as any);
-      } catch (e) {
-        reject(e);
-      }
+        Window.addEventListener("message", handleToken);
     });
   }
 

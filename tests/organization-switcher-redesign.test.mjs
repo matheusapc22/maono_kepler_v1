@@ -5,6 +5,7 @@ import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservat
 import { restoreTicketRefreshFocusStyles } from './helpers/ticket-refresh-focus-preservation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { restoreLintModuleExtraction } from './helpers/lint-module-extraction-preservation.mjs';
 import { readFileSync } from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import { createHash } from 'node:crypto';
@@ -87,7 +88,7 @@ const preserved = {
 };
 for (const [path, hash] of Object.entries(preserved)) {
   test(`card/switcher revision preserves ${path}`, () => {
-    let source = restoreTicketVisualExtraction(path, restoreMaonoSelect(restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, read(path)))));
+    let source = restoreTicketVisualExtraction(path, restoreMaonoSelect(restoreAdminProjectsProgressiveLoading(path, restoreApprovedPreviewPipeline(path, restoreLintModuleExtraction(path, read(path))))));
     // The later Roadmap workspace redesign adds only the existing home callback.
     // Reverse exactly that prop in this scope guard; all controller bytes stay frozen.
     if (path === 'src/pages/Projects.tsx') {

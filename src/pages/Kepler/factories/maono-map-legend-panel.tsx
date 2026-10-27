@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
-// @ts-nocheck
 
-import React from "react";
-import styled, { ThemeProvider } from "styled-components";
+import type { ComponentProps } from "react";
+import styled, { ThemeProvider, type DefaultTheme } from "styled-components";
 
 import { MapLegendPanelFactory } from "@kepler.gl/components";
 
@@ -78,7 +77,7 @@ const MaonoLegendFrame = styled.div`
   }
 `;
 
-function maonoLegendTheme(outerTheme = {}) {
+function maonoLegendTheme(outerTheme: DefaultTheme = {}) {
   return {
     ...outerTheme,
     activeColor: "#c5a059",
@@ -96,17 +95,17 @@ function maonoLegendTheme(outerTheme = {}) {
   };
 }
 
-function hasStoredLegendPosition(position) {
+function hasStoredLegendPosition(position: { x?: unknown; y?: unknown; anchorX?: string; anchorY?: string } | undefined) {
   return Boolean(
     position &&
       Number.isFinite(Number(position.x)) &&
       Number.isFinite(Number(position.y)) &&
-      ["left", "right"].includes(position.anchorX) &&
-      ["top", "bottom"].includes(position.anchorY),
+      ["left", "right"].includes(position.anchorX ?? "") &&
+      ["top", "bottom"].includes(position.anchorY ?? ""),
   );
 }
 
-function mapControlsWithInitialLegendPosition(mapControls, position) {
+function mapControlsWithInitialLegendPosition(mapControls: ComponentProps<ReturnType<typeof MapLegendPanelFactory>>["mapControls"], position: ReturnType<typeof calculateMaonoLegendInitialPosition> | null) {
   if (!mapControls?.mapLegend || !position) {
     return mapControls;
   }
@@ -138,11 +137,11 @@ MaonoMapLegendPanelFactory.deps = MapLegendPanelFactory.deps;
  * fazia o DraggableLegend executar uma action fora do fluxo esperado ao abrir.
  */
 export function MaonoMapLegendPanelFactory(
-  MapControlTooltip,
-  MapControlPanel,
-  MapLegend,
+  MapControlTooltip: Parameters<typeof MapLegendPanelFactory>[0],
+  MapControlPanel: Parameters<typeof MapLegendPanelFactory>[1],
+  MapLegend: Parameters<typeof MapLegendPanelFactory>[2],
 ) {
-  const MaonoLegendControlPanel = (props) => (
+  const MaonoLegendControlPanel = (props: ComponentProps<typeof MapControlPanel>) => (
     <MaonoLegendFrame data-maono-kepler-factory="map-legend-panel">
       <MapControlPanel
         {...props}
@@ -158,7 +157,7 @@ export function MaonoMapLegendPanelFactory(
     MapLegend,
   );
 
-  const MaonoMapLegendPanel = (props) => {
+  const MaonoMapLegendPanel = (props: ComponentProps<typeof NativeMapLegendPanel>) => {
     const mapLegend = props.mapControls?.mapLegend;
     const storedPosition = mapLegend?.settings?.position;
     const width = Number(props.mapState?.width) || 0;
@@ -179,15 +178,11 @@ export function MaonoMapLegendPanelFactory(
 
     return (
       <ThemeProvider theme={maonoLegendTheme}>
-        <NativeMapLegendPanel {...props} mapControls={mapControls} />
+        <NativeMapLegendPanel {...props} mapControls={mapControls as typeof props.mapControls} />
       </ThemeProvider>
     );
   };
 
   MaonoMapLegendPanel.displayName = "MaonoMapLegendPanel";
   return MaonoMapLegendPanel;
-}
-
-export function replaceMapLegendPanel() {
-  return [MapLegendPanelFactory, MaonoMapLegendPanelFactory];
 }

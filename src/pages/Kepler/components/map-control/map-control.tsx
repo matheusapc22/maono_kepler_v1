@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import classnames from "classnames";
-import { useState } from "react";
+import { useState, type MouseEventHandler, type ReactNode } from "react";
 import Markdown from "markdown-to-jsx";
 import styled from "styled-components";
 import { useLocalStorage } from "usehooks-ts";
@@ -54,7 +53,7 @@ const StyledProjectPanel = styled.div`
     justify-content: flex-end;
   }
 `;
-const StyledPanelAction = styled.div`
+const StyledPanelAction = styled.div<{active?: boolean}>`
   border-radius: 2px;
   margin-left: 4px;
   padding: 5px;
@@ -82,7 +81,7 @@ const StyledPanelAction = styled.div`
   }
 `;
 
-export const LinkButton = (props) => (
+export const LinkButton = (props: {href?: string; iconComponent: typeof Icons.Files | typeof Icons.CodeAlt; height?: string; label: ReactNode}) => (
   <StyledPanelAction className="project-link__action">
     <a target="_blank" rel="noopener noreferrer" href={props.href}>
       <props.iconComponent height={props.height || "16px"} />
@@ -91,7 +90,7 @@ export const LinkButton = (props) => (
   </StyledPanelAction>
 );
 
-const CloseButton = ({ onClick }) => (
+const CloseButton = ({ onClick }: {onClick: MouseEventHandler<SVGElement>}) => (
   <IconRoundSmall>
     <Icons.Close height="16px" onClick={onClick} />
   </IconRoundSmall>
@@ -99,7 +98,7 @@ const CloseButton = ({ onClick }) => (
 
 // convert https://raw.githubusercontent.com/keplergl/kepler.gl-data/master/nyctrips/config.json
 // to https://github.com/keplergl/kepler.gl-data/blob/master/movement_pittsburgh/config.json
-function getURL(url) {
+function getURL(url?: string) {
   return url
     ? url
         .replace("https://raw.githubusercontent.com", "https://github.com")
@@ -107,7 +106,7 @@ function getURL(url) {
     : url;
 }
 
-export function SampleMapPanel(props) {
+export function SampleMapPanel(props: {currentSample: import("../load-data-modal/sample-data-viewer").SampleMapDescriptor}) {
   const [isActive, setActive] = useState(true);
 
   return (
@@ -169,7 +168,7 @@ export function SampleMapPanel(props) {
 export function BannerMapPanel() {
   const [isActive, setActive] = useState(true);
   // Once the banner is closed, the user won't see the banner during next sessions.
-  const [showBanner, setShowBanner] = useLocalStorage(
+  const [showBanner] = useLocalStorage(
     "show-duckdb-preview-banner",
     getApplicationConfig().showReleaseBanner
   );

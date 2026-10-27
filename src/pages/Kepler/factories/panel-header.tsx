@@ -1,12 +1,12 @@
+import type { ComponentProps } from "react";
 // SPDX-License-Identifier: MIT
 // Copyright contributors to the kepler.gl project
-// @ts-nocheck
 
 import { PanelHeaderFactory } from "@kepler.gl/components";
 import Logo from "../../../assets/images/Logo_Maono.png";
 import { useMapPanel } from "../map-panel/MapPanelContext";
 
-export function CustomPanelHeaderFactory(...deps) {
+export function CustomPanelHeaderFactory(...deps: Parameters<typeof PanelHeaderFactory>) {
   const DefaultPanelHeader = PanelHeaderFactory(...deps);
   const defaultActionItems =
     DefaultPanelHeader.defaultProps?.actionItems ?? [];
@@ -22,23 +22,24 @@ export function CustomPanelHeaderFactory(...deps) {
     );
   };
 
-  const WrappedPanelHeader = (props) => {
+  const WrappedPanelHeader = (props: ComponentProps<ReturnType<typeof PanelHeaderFactory>>) => {
     const { context } = useMapPanel();
+    const saveAction = defaultActionItems.find((item) => item.id === "save");
     const actionItems = [
       ...(context?.capabilities?.saveMap
         ? [
           defaultActionItems.find((item) => item.id === "storage"),
-          {
-            ...defaultActionItems.find((item) => item.id === "save"),
+          ...(saveAction ? [{
+            ...saveAction,
             label: "",
             tooltip: "Share",
             id: "share-url-only",
             // dropdownComponent: (p: any) => <ShareButton {...p} />,
             // iconComponent: () => <></>,
-          },
+          }] : []),
         ]
         : []),
-    ].filter(Boolean);
+    ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
     return (
       <DefaultPanelHeader
@@ -49,12 +50,8 @@ export function CustomPanelHeaderFactory(...deps) {
     );
   };
 
-  WrappedPanelHeader.deps = DefaultPanelHeader.deps;
+  WrappedPanelHeader.deps = (DefaultPanelHeader as typeof DefaultPanelHeader & { deps?: unknown }).deps;
   return WrappedPanelHeader;
 }
 
 CustomPanelHeaderFactory.deps = PanelHeaderFactory.deps;
-
-export function replacePanelHeader() {
-  return [PanelHeaderFactory, CustomPanelHeaderFactory];
-}
