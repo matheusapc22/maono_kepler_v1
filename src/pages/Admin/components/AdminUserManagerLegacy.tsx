@@ -831,7 +831,7 @@ export default function AdminUserManager({
                   role="tab"
                   aria-selected={selectedView === "profile"}
                   className={selectedView === "profile" ? "active" : ""}
-                  onClick={() => setSelectedView("profile")}
+                  onClick={(event) => { event.currentTarget.focus(); setSelectedView("profile"); }}
                 >
                   <strong>Dados do usuário</strong>
                   <small>Identificação, perfil, situação e senha</small>
@@ -841,7 +841,7 @@ export default function AdminUserManager({
                   role="tab"
                   aria-selected={selectedView === "organizations"}
                   className={selectedView === "organizations" ? "active" : ""}
-                  onClick={() => setSelectedView("organizations")}
+                  onClick={(event) => { event.currentTarget.focus(); setSelectedView("organizations"); }}
                 >
                   <strong>Organizações</strong>
                   <small>Vínculos e perfil em cada organização</small>
@@ -851,7 +851,7 @@ export default function AdminUserManager({
                   role="tab"
                   aria-selected={selectedView === "features"}
                   className={selectedView === "features" ? "active" : ""}
-                  onClick={() => setSelectedView("features")}
+                  onClick={(event) => { event.currentTarget.focus(); setSelectedView("features"); }}
                 >
                   <strong>Funcionalidades</strong>
                   <small>Conceder ou revogar acessos adicionais</small>
@@ -861,7 +861,7 @@ export default function AdminUserManager({
                   role="tab"
                   aria-selected={selectedView === "delegation"}
                   className={selectedView === "delegation" ? "active" : ""}
-                  onClick={() => setSelectedView("delegation")}
+                  onClick={(event) => { event.currentTarget.focus(); setSelectedView("delegation"); }}
                 >
                   <strong>Delegação</strong>
                   <small>Limites para Admin ou Owner delegar</small>

@@ -23,8 +23,15 @@ test('repeated membership action preserves the draft and focus after an owner co
   await name.focus(); gate.release();
   await expect(page.getByText(/Mantenha outro responsável ativo/)).toBeVisible();
   await expect(name).toHaveValue('Rascunho preservado'); await expect(name).toBeFocused();
+  for (const label of [/Dados do usuário/, /Organizações/, /Funcionalidades/, /Delegação/]) {
+    const tab = dialog.getByRole('tab', { name: label });
+    await tab.click();
+    await expect(tab).toBeFocused();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+  }
   await dialog.getByRole('tab', { name: /Organizações/ }).click();
   await expect(action).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('tab', { name: /Organizações/ })).toBeFocused();
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
 });
 

@@ -57,6 +57,8 @@ reaberta ou um componente desmontado. Troca da identidade administradora recria
 o editor. Atualizações incidentais de callbacks não reinicializam o rascunho.
 Uma falha de recarga após escrita confirmada é comunicada separadamente do sucesso
 da escrita. Erro de leitura de vínculos não aparece simultaneamente como lista vazia.
+As quatro abas internas recebem foco ao serem acionadas, inclusive em WebKit;
+o teclado continua dentro do editor e Escape fecha o contexto correto.
 
 ## Salvaguardas e limites
 

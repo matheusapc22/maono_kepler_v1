@@ -165,6 +165,22 @@
       {
         "before": "          </div>\n        </div>\n      )}\n\n      {creating && (\n        <div className=\"admin-user-modal\" role=\"dialog\" aria-modal=\"true\">\n          <div className=\"admin-user-dialog compact\">\n            <header>\n              <h3>Novo usuário</h3>\n              <button disabled={busy} onClick={() => setCreating(false)} aria-label=\"Fechar\">\n                ×\n",
         "after": "          </div>\n        </div>\n      )}\n\n      {creating && (\n        <div className=\"admin-user-modal\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Novo usuário\">\n          <div className=\"admin-user-dialog compact\">\n            <header>\n              <h3>Novo usuário</h3>\n              <button disabled={busy} onClick={() => setCreating(false)} aria-label=\"Fechar\">\n                ×\n"
+      },
+      {
+        "before": "                  onClick={() => setSelectedView(\"profile\")}\n",
+        "after": "                  onClick={(event) => { event.currentTarget.focus(); setSelectedView(\"profile\"); }}\n"
+      },
+      {
+        "before": "                  onClick={() => setSelectedView(\"organizations\")}\n",
+        "after": "                  onClick={(event) => { event.currentTarget.focus(); setSelectedView(\"organizations\"); }}\n"
+      },
+      {
+        "before": "                  onClick={() => setSelectedView(\"features\")}\n",
+        "after": "                  onClick={(event) => { event.currentTarget.focus(); setSelectedView(\"features\"); }}\n"
+      },
+      {
+        "before": "                  onClick={() => setSelectedView(\"delegation\")}\n",
+        "after": "                  onClick={(event) => { event.currentTarget.focus(); setSelectedView(\"delegation\"); }}\n"
       }
     ],
     "src/pages/Admin/components/AdminUserManager.tsx": [
