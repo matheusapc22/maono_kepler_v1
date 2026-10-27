@@ -12,6 +12,7 @@ import "./Admin/admin.css";
 import AdminUserManager from "./Admin/components/AdminUserManager";
 import AdminSidebar from "./Admin/components/AdminSidebar";
 import AdminOverview from "./Admin/components/AdminOverview";
+import AdminRequests from "./Admin/components/AdminRequests";
 import AdminIcon, { type AdminIconName } from "./Admin/components/AdminIcon";
 import "./Admin/admin-workspace.css";
 
@@ -329,17 +330,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   }
 
   function renderRequests() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Solicitações</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>Criação, revisão e suporte.</StaticLoadingText></p>
-        <section className="mm-metrics-grid compact">
-          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Abertas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
-          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Em análise</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
-          <article className="mm-card metric"><span><StaticLoadingText pending={structurePending}>Concluídas</StaticLoadingText></span><strong><StaticLoadingText pending={structurePending}>0</StaticLoadingText></strong></article>
-        </section>
-      </section>
-    );
+    return <AdminRequests sessionAvailable={!error} />;
   }
 
   function renderAudit() {
