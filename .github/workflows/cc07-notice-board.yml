@@ -34,9 +34,14 @@ jobs:
         run: |
           lock_dir=$(mktemp -d "${RUNNER_TEMP}/cc07-lock.XXXXXX")
           cp package.json yarn.lock "$lock_dir/"
-          npm --prefix "$lock_dir" install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          (
+            cd "$lock_dir"
+            npm install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+            npm ci --legacy-peer-deps --no-audit --no-fund
+          )
+          test ! -e node_modules
+          mv "$lock_dir/node_modules" ./node_modules
           cp "$lock_dir/package-lock.json" ./package-lock.json
-          npm ci --legacy-peer-deps --no-audit --no-fund
           git diff --exit-code -- package.json yarn.lock
       - name: Record installed SDK versions
         run: |
