@@ -28,7 +28,7 @@ As suítes de lifecycle, concorrência, wiring e project-creation-limits cobrem 
 
 ## Resultado e pendências explícitas
 
-542 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 8 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
+542 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 9 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
 
 Navegador: 19 casos aprovados, cinco viewports inspecionados. Quatro casos usam sessões/ACL/handlers reais com SQLite. Os demais verificam UI com HTTP interceptado. Teste humano com leitor de tela e homologação de dispositivos reais permanecem pendentes.
 
@@ -39,3 +39,7 @@ Auditoria antiga sanitizada continua fora do histórico novo (entrega parcial ne
 ## Correções encontradas pelo CI inicial
 
 O adaptador passou a usar o transporte e o catálogo de erros compartilhados, preservando status/referência para diagnóstico sem exibir mensagens remotas. Três novos testes verificam respostas de acesso, payload malformado, falha de rede e cancelamento. Os botões usam StaticLoadingText do produto, preservando o rótulo durante operações. Auditoria estrita sem drift, 70 testes de erro aprovados (com sobreposição às regressões), seis testes de loading aprovados. Não houve alteração de baseline, regras, asserts ou timeouts para obter aprovação.
+
+## Composição das suítes de navegador
+
+O gate geral de desenvolvimento mantém os 290 casos anteriores. Os 19 novos casos de Organizações executam integralmente no gate compilado próprio, com a flag local necessária. A descoberta foi comparada antes/depois por arquivo, linha e título: nenhum caso anterior removido; os dois arquivos novos coincidem exatamente com os 19 casos da configuração dedicada. Nenhum assert, skip ou timeout foi alterado. Essa correção trata a descoberta indevida dos novos casos pelo servidor dev sem a funcionalidade habilitada.

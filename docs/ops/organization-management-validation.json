@@ -18,7 +18,8 @@
       "src/pages/Admin/organizations/organizations-api.ts",
       "src/pages/Admin/organizations/organizations-types.ts",
       "tests/browser/organization-management-integration.spec.ts",
-      "tests/browser/organization-management.spec.ts"
+      "tests/browser/organization-management.spec.ts",
+      "playwright.config.ts"
     ],
     "errors": 0,
     "warnings": 0
@@ -96,6 +97,10 @@
     "organization-lint.json": {
       "sha256": "06dd018bf86f8d98c617b2e1866fc75e984cbc584d0ed831b165effc7c7e0850",
       "bytes": 1188215
+    },
+    "organization-discovery-proof.json": {
+      "sha256": "cfc4f6dbdb314d24afec531ccdb1db32b3ffe63a8e739ca98b24344d34a75795",
+      "bytes": 200
     }
   },
   "migration": {
@@ -107,7 +112,7 @@
     "file": "docs/user-guide/Manual_Gestao_Organizacoes_Maono.pdf",
     "pages": 14,
     "bytes": 76691,
-    "sha256": "6c8c0cf3cb9c1ae9b9b6e09a1fa48c0b94202187fdca0ca73584fb8e74e962f1",
+    "sha256": "b5c82be82a1fd2fd9a1ba23e5936bf9cf51b975b3b2c97cb9e3f9c25ee956e4e",
     "visualReview": "all 14 rendered pages inspected"
   },
   "testedWorkingTreeBase": "cd4a6c2f1fab00b1a4a2a790029188bda82aa761",
@@ -124,5 +129,14 @@
   "errorRatchet": {
     "drift": [],
     "baselineUnchanged": true
-  }
+  },
+  "browserDiscovery": {
+    "generalBefore": 309,
+    "generalAfter": 290,
+    "dedicated": 19,
+    "preexistingCasesPreserved": true,
+    "allOrganizationCasesInDedicatedGate": true,
+    "noTimeoutOrAssertionChanged": true
+  },
+  "configurationValidation": "Only browser suite routing and documentation changed after f3b31a14075578c01951d780e52b1f964d3a62d2. Application source hashes are unchanged. Config lint and exact discovery preservation passed; final published CI is recorded in PR 254."
 }
