@@ -18,6 +18,11 @@ test('requests separates real destinations without extra reads or invented count
   await expect(panel).toBeVisible();
   expect(fixture.requests.filter(request => request.includes('/api/admin/'))).toEqual(reads);
   expect(fixture.requests.some(request => /tickets|change-requests/.test(request))).toBe(false);
+  // The destination reads the existing export-panel contract independently.
+  // Keep its disabled response complete; writes still reach the rejecting fixture.
+  await page.route('**/api/organizations/1/tickets/exports**', route => route.request().method() === 'GET'
+    ? route.fulfill({ json: { ok: true, enabled: false, jobs: [], nextCursor: null } })
+    : route.fallback());
   await panel.getByRole('link', { name: 'Abrir chamados da organização' }).click();
   await expect(page).toHaveURL(/\/projects\?cc_org=1&cc_view=list$/);
   await expect(page.getByRole('heading', { name: 'Central de Chamados', exact: true }).first()).toBeVisible();
