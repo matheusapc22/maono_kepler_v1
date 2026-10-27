@@ -43,3 +43,11 @@ e fallback), sem falhas/ignorados. ESLint de escopo e diff-check aprovados.
 TypeScript/build/browser ainda pendentes de CI. As dependências existentes são
 reutilizadas por junção aprovada, sem instalação/lockfile; a normalização local
 CRLF/LF do fallback preserva as assertions e o hash histórico esperado.
+
+## Ambiente dos testes de navegador
+
+A suíte nova integra exclusivamente o gate compilado progressive-loading, nos
+três motores, como as suítes administrativas existentes. O config de desenvolvimento
+a exclui porque StrictMode remonta efeitos: a execução duplicada mostrou oito
+leituras onde o contrato compilado exige quatro. Assertions, timeouts e cobertura
+do gate compilado permanecem intactos. Não há relaxamento da contagem de requests.
