@@ -31,7 +31,7 @@ import {
 } from "@kepler.gl/ai-assistant";
 import { panelBorderColor, theme } from "@kepler.gl/styles";
 import { getApplicationConfig } from "@kepler.gl/utils";
-import { SqlPanel } from "@kepler.gl/duckdb/components";
+import { SqlPanel } from "@kepler.gl/duckdb";
 import type { RootState, AppDispatch } from "../../store";
 import Banner from "./components/banner";
 import Announcement, { FormLink } from "./components/announcement";

@@ -4,6 +4,7 @@ import {createRequire} from 'node:module';
 import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
+import {tableFromArrays} from 'apache-arrow';
 
 const require=createRequire(import.meta.url);
 function compile(path){return ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;}
@@ -114,4 +115,25 @@ test('custom Arrow processors receive batches and a remote dataset config bypass
   f.reducer(state,f.actions.loadRemoteResourceSuccess(null,null,{},config));
   const remote=await f.tasks[1].run(); assert.equal(remote.payload.datasets,config); assert.equal(f.processorCalls.length,0);
   f.reducer(state,remote); assert.equal(f.updaterCalls.at(-1).config,null);
+});
+
+test('an Apache Arrow Table reaches the custom processor with its original record batches',async()=>{
+  const f=reducerFixture(); const arrow=tableFromArrays({id:[1,2],name:['first','second']}); let received;
+  f.setTable({getFileProcessor:batches=>{received=batches;return {processor:async()=>({fields:[],rows:[]})};}});
+  const state=f.reducer(undefined,{type:'INIT'});
+  f.reducer(state,f.actions.loadRemoteResourceSuccess({shape:'arrow-table',data:arrow},null,{dataUrl:'https://example.invalid/data.arrow'},null));
+  assert.equal(received,arrow.batches);
+  assert.equal(received[0].numRows,2);
+  await f.tasks[0].run();
+});
+
+test('malformed Arrow data is rejected before calling the table plugin or scheduling work',()=>{
+  for(const data of [null,undefined,'invalid',{}, {batches:null}, {batches:{}}]){
+    const f=reducerFixture(); let calls=0;
+    f.setTable({getFileProcessor:()=>{calls++;throw new Error('must not run');}});
+    const state=f.reducer(undefined,{type:'INIT'});
+    assert.throws(()=>f.reducer(state,f.actions.loadRemoteResourceSuccess({shape:'arrow-table',data},null,{dataUrl:'https://example.invalid/data.arrow'},null)),/Remote Arrow table must contain record batches/);
+    assert.equal(calls,0); assert.equal(f.tasks.length,0);
+    assert.equal(f.processorCalls.length,0); assert.equal(f.updaterCalls.length,0);
+  }
 });

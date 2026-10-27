@@ -41,12 +41,16 @@ type ClusterRenderArgs = { layer: AdaptiveLayer; opts: RenderOptions; policy: Po
 // A CompositeLayer may return nested layer lists. Kepler infers only the
 // ScatterplotLayer returned by its own implementation; retain the native
 // constructor/prototype and restore the base renderLayers contract for labels.
-interface CompositeClusterRuntime extends Omit<DeckGLClusterLayer, "renderLayers" | "updateState"> {
+// Kepler 3.2.0 also references an aggregation-layer declaration absent from some
+// locked Deck layouts; props, state and construction come from its real base.
+interface CompositeClusterRuntime extends
+  Omit<DeckGLClusterLayer, "renderLayers" | "updateState" | "props" | "state">,
+  Pick<CompositeLayer<unknown>, "props" | "state"> {
   updateState(...args: Parameters<DeckGLClusterLayer["updateState"]>): ReturnType<DeckGLClusterLayer["updateState"]>;
   renderLayers(): ReturnType<CompositeLayer<unknown>["renderLayers"]>;
 }
 const CompositeDeckClusterLayer = DeckGLClusterLayer as unknown as
-  new (...args: ConstructorParameters<typeof DeckGLClusterLayer>) => CompositeClusterRuntime;
+  new (...args: ConstructorParameters<typeof CompositeLayer>) => CompositeClusterRuntime;
 
 const POINT_CLUSTERING_FEATURE_ENABLED =
   isPointClusteringFeatureEnabled(

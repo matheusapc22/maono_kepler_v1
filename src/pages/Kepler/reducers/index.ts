@@ -216,6 +216,19 @@ const LOAD_REMOTE_RESOURCE_SUCCESS_TASK = Task.fromPromise(
   "LOAD_REMOTE_RESOURCE_SUCCESS_TASK",
 );
 
+function getRemoteArrowBatches(response: unknown): unknown[] {
+  // loaders.gl 4.3.x intentionally declares Arrow data as unknown. Validate
+  // the boundary before handing the original batch array to a table plugin.
+  if (
+    !response || typeof response !== "object" || !("data" in response) ||
+    !response.data || typeof response.data !== "object" ||
+    !("batches" in response.data) || !Array.isArray(response.data.batches)
+  ) {
+    throw new Error("Remote Arrow table must contain record batches");
+  }
+  return response.data.batches;
+}
+
 // this can be moved into a action and call kepler.gl action
 /**
  * Used to load Kepler.gl demo examples
@@ -239,7 +252,7 @@ export const loadRemoteResourceSuccess = (state: DemoState, action: ReturnType<t
     if (typeof table.getFileProcessor === "function") {
       if (shape === "arrow-table") {
         // arrow processor from table plugin expects batches
-        unprocessedData = (action.response as ArrowTable).data.batches;
+        unprocessedData = getRemoteArrowBatches(action.response);
       }
       // use custom processors from table class
       const processorResult = table.getFileProcessor(unprocessedData);

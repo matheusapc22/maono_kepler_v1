@@ -29,6 +29,16 @@ jobs:
         with:
           node-version: 22
       - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Record installed SDK versions
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          console.log('Node', process.version);
+          for (const name of ['@kepler.gl/duckdb', '@kepler.gl/utils', '@loaders.gl/schema', 'apache-arrow', 'typescript']) {
+            const pkg = JSON.parse(fs.readFileSync(`node_modules/${name}/package.json`, 'utf8'));
+            console.log(name, pkg.version);
+          }
+          NODE
       - name: TypeScript with unchanged compiler options
         run: node --max-old-space-size=4096 node_modules/typescript/bin/tsc -b
       - name: Extraction, provider and ingestion contracts
@@ -38,3 +48,5 @@ jobs:
           tests/dropbox-provider-login.test.mjs
           tests/foursquare-provider-contract.test.mjs
           tests/legacy-ingestion-contract.test.mjs
+          tests/maono-select-migration.test.mjs
+          tests/map-add-data-sidebar.test.mjs
