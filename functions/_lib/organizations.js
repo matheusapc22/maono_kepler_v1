@@ -1,10 +1,10 @@
+import { ownerRetention, guardedAudit, lastOwnerError } from "./owner-retention.js";
 import {
   can,
   isKnownPermission,
   isNativeAdminOrOwnerPermission,
   recordAuditLog,
 } from "./permissions.js";
-import { prepareAuditLog } from "./projects.js";
 import { readRequestSchema } from "./request-schema.js";
 
 const JSON_HEADERS = {
@@ -562,7 +562,7 @@ export async function insertRow(env, tableName, data) {
   return { id: lastInsertId || null, ...data };
 }
 
-async function prepareRowUpdate(env, tableName, rowId, data) {
+async function prepareRowUpdate(env, tableName, rowId, data, guard = null) {
   const columns = await getTableColumns(env, tableName);
   const entries = Object.entries(data).filter(
     ([column, value]) => value !== undefined && hasColumn(columns, column),
@@ -581,16 +581,17 @@ async function prepareRowUpdate(env, tableName, rowId, data) {
       `
       UPDATE ${quoteIdentifier(tableName)}
       SET ${assignments}
-      WHERE id = ?
+      WHERE id = ? ${guard ? `AND ${guard.sql}` : ""}
       `,
     )
-    .bind(...entries.map(([, value]) => value), rowId);
+    .bind(...entries.map(([, value]) => value), rowId, ...(guard?.args || []));
 }
 
-export async function updateRow(env, tableName, rowId, data) {
-  const statement = await prepareRowUpdate(env, tableName, rowId, data);
+export async function updateRow(env, tableName, rowId, data, guard = null) {
+  const statement = await prepareRowUpdate(env, tableName, rowId, data, guard);
   if (!statement) return null;
-  await statement.run();
+  const result = await statement.run();
+  if (guard && Number(result.meta?.changes) !== 1) throw lastOwnerError();
 
   return getDb(env)
     .prepare(`SELECT * FROM ${quoteIdentifier(tableName)} WHERE id = ? LIMIT 1`)
@@ -1132,11 +1133,12 @@ async function ensureOrganizationMembership(env, organizationId, userId, accessL
   const now = nowIso();
 
   if (existing?.membership_id) {
+    const guard = await ownerRetention(env, { userId, organizationId, accessLevel });
     await updateRow(env, "organization_users", existing.membership_id, {
       access_level: accessLevel,
       active: 1,
       updated_at: now,
-    });
+    }, guard);
 
     return getOrganizationUserRow(env, organizationId, userId);
   }
@@ -1281,6 +1283,8 @@ export async function updateOrganizationUser(env, organizationId, targetUserId, 
     accessLevel: patchMembership.access_level,
   });
 
+  const guard = await ownerRetention(env, { userId, organizationId: id, role: patchUser.role ?? null, active: patchUser.active ?? null, accessLevel: patchMembership.access_level ?? null });
+
   const now = nowIso();
 
   if (passwordHash) {
@@ -1293,20 +1297,20 @@ export async function updateOrganizationUser(env, organizationId, targetUserId, 
     }
     patchUser.password_hash = passwordHash;
     patchUser.updated_at = now;
-    const statements = [await prepareRowUpdate(env, "users", userId, patchUser)];
+    const statements = [await prepareRowUpdate(env, "users", userId, patchUser, guard)];
     if (Object.keys(patchMembership).length > 0 && current.membership_id) {
       patchMembership.updated_at = now;
-      statements.push(await prepareRowUpdate(env, "organization_users", current.membership_id, patchMembership));
+      statements.push(await prepareRowUpdate(env, "organization_users", current.membership_id, patchMembership, guard));
     }
     statements.push(
-      getDb(env).prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId),
-      prepareAuditLog(env, {
+      getDb(env).prepare(`DELETE FROM sessions WHERE user_id = ? AND ${guard.sql}`).bind(userId, ...guard.args),
+      guardedAudit(env, guard, {
         userId: actor.id,
         action: "admin.users.password_changed",
         details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
           metadata: { sessionsInvalidated: true } },
       }),
-      prepareAuditLog(env, {
+      guardedAudit(env, guard, {
         userId: actor.id,
         action: active === false ? "users.disable" : "users.edit",
         details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
@@ -1316,34 +1320,27 @@ export async function updateOrganizationUser(env, organizationId, targetUserId, 
       await getOrganizationUserRow(env, id, userId, true),
     );
     const results = await getDb(env).batch(statements);
+    if (Number(results[0].meta?.changes) !== 1) throw lastOwnerError();
     return sanitizeOrganizationUser(results.at(-1).results[0]);
   }
 
+  const statements = [];
   if (Object.keys(patchUser).length > 0) {
     patchUser.updated_at = now;
-    await updateRow(env, "users", userId, patchUser);
+    statements.push(await prepareRowUpdate(env, "users", userId, patchUser, guard));
   }
-
   if (Object.keys(patchMembership).length > 0 && current.membership_id) {
     patchMembership.updated_at = now;
-    await updateRow(env, "organization_users", current.membership_id, patchMembership);
+    statements.push(await prepareRowUpdate(env, "organization_users", current.membership_id, patchMembership, guard));
   }
-
-  const updated = await getOrganizationUserRow(env, id, userId);
-
-  await recordAuditLog(env, {
-    actorUserId: actor?.id,
-    organizationId: id,
-    action: active === false ? "users.disable" : "users.edit",
-    resourceType: "user",
-    resourceId: userId,
-    metadata: {
-      changedUserFields: Object.keys(patchUser),
-      changedMembershipFields: Object.keys(patchMembership),
-    },
-  });
-
-  return sanitizeOrganizationUser(updated);
+  statements.push(guardedAudit(env, guard, {
+    userId: actor.id, action: active === false ? "users.disable" : "users.edit",
+    details: { organizationId: id, resourceType: "user", resourceId: userId, result: "success",
+      metadata: { changedUserFields: Object.keys(patchUser), changedMembershipFields: Object.keys(patchMembership) } },
+  }), await getOrganizationUserRow(env, id, userId, true));
+  const results = await getDb(env).batch(statements);
+  if (Number(results[0].meta?.changes) !== 1) throw lastOwnerError();
+  return sanitizeOrganizationUser(results.at(-1).results[0]);
 }
 
 function assertCanManagePermission(actor, permission) {

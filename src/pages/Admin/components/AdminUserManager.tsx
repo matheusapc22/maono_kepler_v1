@@ -213,7 +213,7 @@ export default function AdminUserManager(props: AdminUserManagerProps) {
       onChange={handleChange}
       onKeyDown={handleKeyDown}
     >
-      <AdminUserManagerLegacy {...props} />
+      <AdminUserManagerLegacy {...props} key={JSON.stringify([props.currentUserId, props.isSuperAdmin])} />
     </div>
   );
 }

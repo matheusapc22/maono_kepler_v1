@@ -1,3 +1,4 @@
+import { changeMembership } from "../../../../_lib/owner-retention.js";
 import { hashPassword, normalizeRole, requireSession } from "../../../../_lib/auth.js";
 import { validateNewPassword } from "../../../../_lib/password-policy.js";
 import { can, recordAuditLog } from "../../../../_lib/permissions.js";
@@ -301,14 +302,7 @@ export async function onRequestDelete({ env, request, params }) {
     }
     const target = await env.DB.prepare("SELECT ou.id, ou.access_level FROM organization_users ou WHERE ou.organization_id = ? AND ou.user_id = ? LIMIT 1").bind(organizationId, targetUserId).first();
     if (!target) { const error = new Error("Acesso não encontrado na organização."); error.status = 404; error.code = "MEMBERSHIP_NOT_FOUND"; throw error; }
-    if (String(target.access_level).toLowerCase() === "owner") {
-      const owners = await env.DB.prepare("SELECT COUNT(*) AS total FROM organization_users WHERE organization_id = ? AND LOWER(access_level) = 'owner'").bind(organizationId).first();
-      if (Number(owners?.total || 0) <= 1) { const error = new Error("Não é possível remover o último responsável da organização."); error.status = 409; error.code = "LAST_OWNER_REMOVAL_BLOCKED"; throw error; }
-    }
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM user_permissions WHERE user_id = ? AND organization_id = ?").bind(targetUserId, organizationId),
-      env.DB.prepare("DELETE FROM organization_users WHERE user_id = ? AND organization_id = ?").bind(targetUserId, organizationId),
-    ]);
+    await changeMembership(env, { userId: targetUserId, organizationId, remove: true });
     await recordAuditLog(env, { actorUserId: user.id, organizationId, action: "users.membership.delete", resourceType: "user", resourceId: targetUserId, result: "success", request });
     return jsonResponse({ ok: true, removed: true });
   } catch (error) { return handleApiError(error); }

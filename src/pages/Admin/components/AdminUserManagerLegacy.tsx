@@ -139,13 +139,25 @@ export default function AdminUserManager({
   onSessionInvalidated?: () => void;
 }) {
   const skeletonRows = useSkeletonCount({ layout: "table", itemHeight: 54, reservedHeight: 320, maxCount: 10 });
-  const [selected, setSelected] = useState<User | null>(null);
+  const [selected, setSelectedState] = useState<User | null>(null);
+  const selectionVersion = useRef(0);
+  function setSelected(user: User | null) {
+    selectionVersion.current += 1;
+    setSelectedState(user);
+  }
   const [selectedView, setSelectedView] =
     useState<UserManagementView>("profile");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [busy, setBusy] = useState(false);
   const mutationPending = useRef(false);
+  const mounted = useRef(true);
+  const selection = useRef<User | null>(selected);
+  selection.current = selected;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  function selectionIsCurrent(userId: number, version: number) {
+    return mounted.current && selection.current?.id === userId && selectionVersion.current === version;
+  }
   const [formError, setFormError] = useState("");
   const [membershipsError, setMembershipsError] = useState("");
   const [membershipsLoading, setMembershipsLoading] = useState(false);
@@ -191,6 +203,9 @@ export default function AdminUserManager({
     });
     setFormError("");
     setMembershipsError("");
+    setMemberships([]);
+    setDelegationEditor(null);
+    setAccessEditor(null);
 
     if (!isSuperAdmin) return;
 
@@ -214,20 +229,22 @@ export default function AdminUserManager({
     return () => {
       cancelled = true;
     };
-  }, [selected, isSuperAdmin, onMessage]);
+  }, [selected, isSuperAdmin]);
 
   async function refreshAfterSave(message: string) {
     mutationPending.current = true;
     setBusy(true);
     let refreshed = false;
     try { refreshed = (await onRefresh()) !== false; } catch { /* The write already succeeded. */ }
-    finally { mutationPending.current = false; setBusy(false); }
+    finally { mutationPending.current = false; if (mounted.current) setBusy(false); }
+    if (!mounted.current) return;
     onMessage("success", refreshed ? message : `${message} Não foi possível recarregar a lista. Atualize a página para consultar os dados.`);
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected || !draft || busy || mutationPending.current) return;
+    const targetVersion = selectionVersion.current;
     const password = String(new FormData(event.currentTarget).get("password") ?? "");
     mutationPending.current = true;
     setBusy(true);
@@ -246,6 +263,7 @@ export default function AdminUserManager({
           password: password || undefined,
         }),
       });
+      if (!selectionIsCurrent(selected.id, targetVersion)) return;
       message = result.passwordChanged && result.sessionsInvalidated
         ? "Senha alterada. As sessões anteriores foram encerradas."
         : "Usuário atualizado.";
@@ -253,11 +271,12 @@ export default function AdminUserManager({
       setDraft(null);
       setSelected(null);
     } catch (error) {
+      if (!selectionIsCurrent(selected.id, targetVersion)) return;
       const text = userMutationErrorMessage(error);
       setFormError(text);
       onMessage("error", text);
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
       mutationPending.current = false;
     }
     if (!message) return;
@@ -271,13 +290,16 @@ export default function AdminUserManager({
 
   async function remove() {
     if (
-      !selected ||
+      !selected || busy || mutationPending.current ||
       !confirm(
         `Excluir definitivamente ${selected.email}? Esta ação remove sessões e vínculos.`,
       )
     ) {
       return;
     }
+    mutationPending.current = true;
+    const targetId = selected.id;
+    const targetVersion = selectionVersion.current;
     setBusy(true);
     try {
       await fetch(`/api/admin/users/${selected.id}`, {
@@ -285,16 +307,19 @@ export default function AdminUserManager({
         credentials: "include",
         headers: { Accept: "application/json" },
       }).then(json);
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage("success", "Usuário excluído.");
       setSelected(null);
-      await onRefresh();
+      await refreshAfterSave("Usuário excluído.");
     } catch (error) {
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage(
         "error",
         normalizeUserError(error).message,
       );
     } finally {
-      setBusy(false);
+      mutationPending.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -320,14 +345,16 @@ export default function AdminUserManager({
           active: true,
         }),
       });
+      if (!mounted.current) return;
       created = true;
       setCreating(false);
     } catch (error) {
+      if (!mounted.current) return;
       const text = userMutationErrorMessage(error);
       setFormError(text);
       onMessage("error", text);
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
       mutationPending.current = false;
     }
     if (created) await refreshAfterSave("Usuário criado com senha inicial protegida.");
@@ -338,7 +365,10 @@ export default function AdminUserManager({
     assigned: boolean,
     accessLevel = organization.accessLevel,
   ) {
-    if (!selected) return;
+    if (!selected || busy || mutationPending.current) return;
+    mutationPending.current = true;
+    const targetId = selected.id;
+    const targetVersion = selectionVersion.current;
     setBusy(true);
     try {
       await fetch(
@@ -350,6 +380,7 @@ export default function AdminUserManager({
           body: assigned ? JSON.stringify({ accessLevel }) : undefined,
         },
       ).then(json);
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       setMemberships((items) =>
         items.map((item) =>
           item.id === organization.id
@@ -367,14 +398,16 @@ export default function AdminUserManager({
         "success",
         assigned ? "Organização atribuída." : "Organização removida.",
       );
-      await onRefresh();
+      await refreshAfterSave(assigned ? "Vínculo atualizado." : "Organização removida.");
     } catch (error) {
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage(
         "error",
         normalizeUserError(error).message,
       );
     } finally {
-      setBusy(false);
+      mutationPending.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -389,7 +422,10 @@ export default function AdminUserManager({
   }
 
   async function openDelegation(organization: Membership) {
-    if (!selected || !isEligibleForDelegation(organization)) return;
+    if (!selected || busy || mutationPending.current || !isEligibleForDelegation(organization)) return;
+    mutationPending.current = true;
+    const targetId = selected.id;
+    const targetVersion = selectionVersion.current;
     setBusy(true);
     try {
       const data = await fetch(
@@ -399,6 +435,7 @@ export default function AdminUserManager({
           headers: { Accept: "application/json" },
         },
       ).then(json);
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       const existing = data.delegation;
       const selectedPermissions = new Map<string, DelegationPermission>(
         (existing?.permissions || []).map(
@@ -427,12 +464,14 @@ export default function AdminUserManager({
         permissions: permissionDraft,
       });
     } catch (error) {
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage(
         "error",
         normalizeUserError(error).message,
       );
     } finally {
-      setBusy(false);
+      mutationPending.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -473,7 +512,7 @@ export default function AdminUserManager({
 
   async function saveDelegation(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !delegationEditor) return;
+    if (!selected || !delegationEditor || busy || mutationPending.current) return;
 
     const permissions = Object.entries(delegationEditor.permissions)
       .filter(([, item]) => item.enabled)
@@ -498,6 +537,9 @@ export default function AdminUserManager({
       return;
     }
 
+    mutationPending.current = true;
+    const targetId = selected.id;
+    const targetVersion = selectionVersion.current;
     setBusy(true);
     try {
       const expiresAt = delegationEditor.expiresAt
@@ -517,23 +559,26 @@ export default function AdminUserManager({
           }),
         },
       ).then(json);
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage(
         "success",
         "Delegação ativada. O delegado fará a gestão pelos botões por usuário em Projects → Usuários e Acessos.",
       );
       setDelegationEditor(null);
     } catch (error) {
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage(
         "error",
         normalizeUserError(error).message,
       );
     } finally {
-      setBusy(false);
+      mutationPending.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
   async function disableDelegation() {
-    if (!selected || !delegationEditor) return;
+    if (!selected || !delegationEditor || busy || mutationPending.current) return;
     if (
       !confirm(
         `Revogar a delegação de ${selected.email} em ${delegationEditor.organization.name}?`,
@@ -541,6 +586,9 @@ export default function AdminUserManager({
     ) {
       return;
     }
+    mutationPending.current = true;
+    const targetId = selected.id;
+    const targetVersion = selectionVersion.current;
     setBusy(true);
     try {
       await fetch(
@@ -551,15 +599,18 @@ export default function AdminUserManager({
           headers: { Accept: "application/json" },
         },
       ).then(json);
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage("success", "Delegação revogada imediatamente.");
       setDelegationEditor(null);
     } catch (error) {
+      if (!selectionIsCurrent(targetId, targetVersion)) return;
       onMessage(
         "error",
         normalizeUserError(error).message,
       );
     } finally {
-      setBusy(false);
+      mutationPending.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -753,7 +804,7 @@ export default function AdminUserManager({
       </div>
 
       {selected && draft && (
-        <div className="admin-user-modal" role="dialog" aria-modal="true">
+        <div className="admin-user-modal" role="dialog" aria-modal="true" aria-label="Gerenciar usuário">
           <div className="admin-user-dialog">
             <header>
               <div className="admin-user-dialog-title">
@@ -956,7 +1007,7 @@ export default function AdminUserManager({
                       Carregando vínculos organizacionais...
                     </p>
                   )}
-                  {!membershipsLoading && memberships.length === 0 && (
+                  {!membershipsLoading && !membershipsError && memberships.length === 0 && (
                     <p className="admin-memberships-status">
                       Nenhuma organização disponível.
                     </p>
@@ -1184,7 +1235,7 @@ export default function AdminUserManager({
       )}
 
       {delegationEditor && selected && (
-        <div className="admin-user-modal" role="dialog" aria-modal="true">
+        <div className="admin-user-modal" role="dialog" aria-modal="true" aria-label="Limites de delegação">
           <div className="admin-user-dialog delegation-policy-dialog">
             <header>
               <div>
@@ -1358,7 +1409,7 @@ export default function AdminUserManager({
       )}
 
       {creating && (
-        <div className="admin-user-modal" role="dialog" aria-modal="true">
+        <div className="admin-user-modal" role="dialog" aria-modal="true" aria-label="Novo usuário">
           <div className="admin-user-dialog compact">
             <header>
               <h3>Novo usuário</h3>
