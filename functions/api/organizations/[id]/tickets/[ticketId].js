@@ -8,6 +8,7 @@ import {
   assertTicketCommandReady, executeTicketUpdate, isTicketCommandsEnabled,
 } from "../../../../_lib/ticket-commands.js";
 import { requireOrganizationPermission } from "../../../../_lib/permissions.js";
+import { withRequestSchema } from "../../../../_lib/request-schema.js";
 import { requireTicketAccess } from "../../../../_lib/ticket-access.js";
 import {
   readTicketConversationBundle,
@@ -50,6 +51,7 @@ function routeIds(params) {
 }
 
 export async function onRequestGet({ env, request, params }) {
+  env = withRequestSchema(env);
   try {
     const { organizationId, ticketId } = routeIds(params);
     const { user } = await requireOrganizationPermission(

@@ -1,0 +1,1603 @@
+{
+  "sourceSha": "65ee55390b3055c82c9e57cdcd80d981d0fa1eab",
+  "baselineSha": "381c93256d985b0ae39722128fc4ad54f17f025f",
+  "toolingSha": "bcb9b18ecb5a390f61115afeaaa4d9d3b87fc3a6",
+  "rawSha256": "c38a81bf3371db41aa07f405f3942ae415889fe40b6d1eee85569fe243441362",
+  "browser": "140.0.7339.16",
+  "environment": "separate immutable production profiling UI bundles + their frozen actual route handlers; same-process intercepted APIs + node:sqlite; no D1 remote; optional modules disabled by synthetic API",
+  "overhead": "React production Profiler active; per-binding timers/hash and full request lifecycle recording equally; no CPU/network throttling; durations include Playwright interaction overhead; Chromium reported sizes for intercepted APIs are not remote wire measurements",
+  "builds": {
+    "before": {
+      "sourceSha": "381c93256d985b0ae39722128fc4ad54f17f025f",
+      "toolingSha": "81f02b0a47d95f14de226765868c1d9f333b8ef0",
+      "digest": "c35ede1fc836abec6cfbd8b2129cdc1232e25cde76bb4d10b658573e97bd496d",
+      "assets": [
+        {
+          "path": "assets/index-BFJ_ReEk.css",
+          "bytes": 181069,
+          "sha256": "a438cded57c50c8fc69d29551e3a6cedce279281bfb6503619484745a098a79a"
+        },
+        {
+          "path": "assets/index-Du_Bo8ij.js",
+          "bytes": 445160,
+          "sha256": "db657a77c74abf2398a09a588521b527010298e6e8bb38803066630f0e64bafa"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "6353e1864c4d251baf5009ffee320840df38afd10dc6a0065b2847ff8a79538c"
+        }
+      ]
+    },
+    "after": {
+      "sourceSha": "65ee55390b3055c82c9e57cdcd80d981d0fa1eab",
+      "toolingSha": "65ee55390b3055c82c9e57cdcd80d981d0fa1eab",
+      "digest": "fead95a04cc53e12b4630698a60191d7bc3bea1d72cf8f7159551fb97d35c58c",
+      "assets": [
+        {
+          "path": "assets/index-C72F3wNR.js",
+          "bytes": 445288,
+          "sha256": "1e2e9a57ff31785ff62ccbd6abf7e43b1f3587b0fdeb6ef18f0b406eb74a21b1"
+        },
+        {
+          "path": "assets/index-t0ZcjX5m.css",
+          "bytes": 181140,
+          "sha256": "14b93f03efc6f63211f9f9219a6cbf140b8a94b879fb3d87f8fdbe3bc5c16856"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "489446b599e67fde18cd9cac801d5cfab329fb973f86f4f84821054f5db989af"
+        }
+      ]
+    }
+  },
+  "measuredJourneys": 240,
+  "warmups": 8,
+  "failures": 0,
+  "requestFailures": [],
+  "draftFailures": 0,
+  "candidateFocusFailures": 0,
+  "baselineFocusFailures": 120,
+  "comparisons": [
+    {
+      "records": 80,
+      "flow": false,
+      "name": "direct-first-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 627.5173000000068,
+        "p95": 735.66320000001
+      },
+      "after": {
+        "n": 30,
+        "p50": 633.7430000000022,
+        "p95": 744.9565000000002
+      },
+      "p95ChangePct": 1.2632547067720878
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "direct-four-first-pages",
+      "before": {
+        "n": 30,
+        "p50": 728.5074000000022,
+        "p95": 835.459600000002
+      },
+      "after": {
+        "n": 30,
+        "p50": 760.5812000000151,
+        "p95": 853.0822999999946
+      },
+      "p95ChangePct": 2.109341971771306
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "list-to-kanban-first",
+      "before": {
+        "n": 30,
+        "p50": 311.4553999999771,
+        "p95": 340.0405000000028
+      },
+      "after": {
+        "n": 30,
+        "p50": 298.0119999999879,
+        "p95": 364.13959999999497
+      },
+      "p95ChangePct": 7.087126386413378
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "list-to-kanban-four",
+      "before": {
+        "n": 30,
+        "p50": 448.85979999997653,
+        "p95": 502.15770000001066
+      },
+      "after": {
+        "n": 30,
+        "p50": 422.0771999999997,
+        "p95": 475.5996000000014
+      },
+      "p95ChangePct": -5.288796726607748
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "detail-first-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 429.0610999999917,
+        "p95": 472.9849000000104
+      },
+      "after": {
+        "n": 30,
+        "p50": 432.2621999999974,
+        "p95": 488.99559999999474
+      },
+      "p95ChangePct": 3.3850340676803814
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "detail-reopen-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 404.5596000000078,
+        "p95": 439.6612000000023
+      },
+      "after": {
+        "n": 30,
+        "p50": 399.34330000000773,
+        "p95": 432.7350000000006
+      },
+      "p95ChangePct": -1.5753493826613951
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "rapid-switch-final-summary",
+      "before": {
+        "n": 30,
+        "p50": 741.4246999999887,
+        "p95": 857.2543000000005
+      },
+      "after": {
+        "n": 30,
+        "p50": 761.5468999999575,
+        "p95": 862.0200000000041
+      },
+      "p95ChangePct": 0.5559260536813326
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "column-pagination",
+      "before": {
+        "n": 30,
+        "p50": 175.22669999999925,
+        "p95": 205.56780000000435
+      },
+      "after": {
+        "n": 30,
+        "p50": 161.533500000005,
+        "p95": 202.4389000000083
+      },
+      "p95ChangePct": -1.5220769011469737
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "filter-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 522.4931999999972,
+        "p95": 559.52429999999
+      },
+      "after": {
+        "n": 30,
+        "p50": 514.1880000000237,
+        "p95": 566.8642000000109
+      },
+      "p95ChangePct": 1.3118107649696453
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "name": "refresh-with-draft",
+      "before": {
+        "n": 30,
+        "p50": 215.3459000000148,
+        "p95": 272.27189999999973
+      },
+      "after": {
+        "n": 30,
+        "p50": 227.70789999999397,
+        "p95": 285.15810000000056
+      },
+      "p95ChangePct": 4.732842427000672
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "direct-first-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 607.3206999999238,
+        "p95": 760.202500000014
+      },
+      "after": {
+        "n": 30,
+        "p50": 608.8451999999816,
+        "p95": 803.0994000000064
+      },
+      "p95ChangePct": 5.6428254313806825
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "direct-four-first-pages",
+      "before": {
+        "n": 30,
+        "p50": 737.9111000000266,
+        "p95": 874.05349999998
+      },
+      "after": {
+        "n": 30,
+        "p50": 742.5553000000073,
+        "p95": 883.3172999999952
+      },
+      "p95ChangePct": 1.059866472706239
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "list-to-kanban-first",
+      "before": {
+        "n": 30,
+        "p50": 296.9116999999969,
+        "p95": 380.16890000004787
+      },
+      "after": {
+        "n": 30,
+        "p50": 409.843200000003,
+        "p95": 497.3683000000892
+      },
+      "p95ChangePct": 30.828245024784138
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "list-to-kanban-four",
+      "before": {
+        "n": 30,
+        "p50": 422.35129999998026,
+        "p95": 472.1365999999689
+      },
+      "after": {
+        "n": 30,
+        "p50": 486.5222000000067,
+        "p95": 561.3686000000453
+      },
+      "p95ChangePct": 18.89961506904616
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "detail-first-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 426.63549999997485,
+        "p95": 506.5234000000055
+      },
+      "after": {
+        "n": 30,
+        "p50": 406.1635000000242,
+        "p95": 461.2270000000717
+      },
+      "p95ChangePct": -8.942607587316454
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "detail-reopen-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 406.79529999999795,
+        "p95": 435.73649999999907
+      },
+      "after": {
+        "n": 30,
+        "p50": 396.0594000000274,
+        "p95": 428.7460999999894
+      },
+      "p95ChangePct": -1.6042723067747788
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "rapid-switch-final-summary",
+      "before": {
+        "n": 30,
+        "p50": 765.8068999999668,
+        "p95": 903.6931999999797
+      },
+      "after": {
+        "n": 30,
+        "p50": 751.9322999999858,
+        "p95": 829.1178999999538
+      },
+      "p95ChangePct": -8.252280751921958
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "column-pagination",
+      "before": {
+        "n": 30,
+        "p50": 174.5722999999998,
+        "p95": 219.92800000007264
+      },
+      "after": {
+        "n": 30,
+        "p50": 164.24040000000969,
+        "p95": 204.82099999999627
+      },
+      "p95ChangePct": -6.869066239892774
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "filter-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 530.8362999999663,
+        "p95": 574.0635000000475
+      },
+      "after": {
+        "n": 30,
+        "p50": 530.0874000000185,
+        "p95": 585.8356000001077
+      },
+      "p95ChangePct": 2.0506616428425106
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "name": "refresh-with-draft",
+      "before": {
+        "n": 30,
+        "p50": 224.26230000000214,
+        "p95": 280.4579000000376
+      },
+      "after": {
+        "n": 30,
+        "p50": 192.89690000005066,
+        "p95": 225.03049999999348
+      },
+      "p95ChangePct": -19.763180142201985
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "direct-first-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 593.340099999914,
+        "p95": 880.8634999999776
+      },
+      "after": {
+        "n": 30,
+        "p50": 619.8301999999676,
+        "p95": 917.5786999999546
+      },
+      "p95ChangePct": 4.168091878023983
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "direct-four-first-pages",
+      "before": {
+        "n": 30,
+        "p50": 827.3978999999817,
+        "p95": 913.1968999999808
+      },
+      "after": {
+        "n": 30,
+        "p50": 852.4980000001378,
+        "p95": 966.4643999999389
+      },
+      "p95ChangePct": 5.833079372034566
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "list-to-kanban-first",
+      "before": {
+        "n": 30,
+        "p50": 316.82829999993555,
+        "p95": 376.74640000006184
+      },
+      "after": {
+        "n": 30,
+        "p50": 305.63809999998193,
+        "p95": 358.9283999999752
+      },
+      "p95ChangePct": -4.729441343058271
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "list-to-kanban-four",
+      "before": {
+        "n": 30,
+        "p50": 547.3612999999896,
+        "p95": 602.7914999999339
+      },
+      "after": {
+        "n": 30,
+        "p50": 523.7486999999965,
+        "p95": 602.8961999999592
+      },
+      "p95ChangePct": 0.017369189848448485
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "detail-first-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 395.66250000009313,
+        "p95": 469.20039999997243
+      },
+      "after": {
+        "n": 30,
+        "p50": 389.1228000000119,
+        "p95": 435.78819999995176
+      },
+      "p95ChangePct": -7.12109367341175
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "detail-reopen-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 368.02020000014454,
+        "p95": 431.71830000006594
+      },
+      "after": {
+        "n": 30,
+        "p50": 363.85759999998845,
+        "p95": 434.7998999999836
+      },
+      "p95ChangePct": 0.7137987896082221
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "rapid-switch-final-summary",
+      "before": {
+        "n": 30,
+        "p50": 816.7260999999708,
+        "p95": 920.2352000002284
+      },
+      "after": {
+        "n": 30,
+        "p50": 858.1149999999907,
+        "p95": 926.0957000000635
+      },
+      "p95ChangePct": 0.6368480579566738
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "column-pagination",
+      "before": {
+        "n": 30,
+        "p50": 276.7589000000153,
+        "p95": 358.405299999984
+      },
+      "after": {
+        "n": 30,
+        "p50": 270.9425999999512,
+        "p95": 329.06449999986216
+      },
+      "p95ChangePct": -8.186486081573886
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "filter-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 703.3216000000248,
+        "p95": 775.5558999999193
+      },
+      "after": {
+        "n": 30,
+        "p50": 720.4176000000443,
+        "p95": 790.3611999999266
+      },
+      "p95ChangePct": 1.9089919888442441
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "name": "refresh-with-draft",
+      "before": {
+        "n": 30,
+        "p50": 471.0982999999542,
+        "p95": 544.1698999998625
+      },
+      "after": {
+        "n": 30,
+        "p50": 449.9555999999866,
+        "p95": 571.5009999999311
+      },
+      "p95ChangePct": 5.022530647151835
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "direct-first-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 608.003100000089,
+        "p95": 849.1735000000335
+      },
+      "after": {
+        "n": 30,
+        "p50": 597.0740000000224,
+        "p95": 841.5960999999661
+      },
+      "p95ChangePct": -0.8923264798144426
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "direct-four-first-pages",
+      "before": {
+        "n": 30,
+        "p50": 845.9370000001509,
+        "p95": 907.7600000000093
+      },
+      "after": {
+        "n": 30,
+        "p50": 834.9591000000946,
+        "p95": 928.4683000000659
+      },
+      "p95ChangePct": 2.281252754038121
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "list-to-kanban-first",
+      "before": {
+        "n": 30,
+        "p50": 334.4316000000108,
+        "p95": 540.9986000000499
+      },
+      "after": {
+        "n": 30,
+        "p50": 600.8323000001255,
+        "p95": 689.0296999998391
+      },
+      "p95ChangePct": 27.36256618774531
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "list-to-kanban-four",
+      "before": {
+        "n": 30,
+        "p50": 539.6761999998707,
+        "p95": 636.5700999998953
+      },
+      "after": {
+        "n": 30,
+        "p50": 628.7874999998603,
+        "p95": 723.34309999994
+      },
+      "p95ChangePct": 13.63133455373713
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "detail-first-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 406.0788000000175,
+        "p95": 459.4495000001043
+      },
+      "after": {
+        "n": 30,
+        "p50": 387.42460000002757,
+        "p95": 428.4216000000015
+      },
+      "p95ChangePct": -6.753277563713922
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "detail-reopen-authorized-summary",
+      "before": {
+        "n": 30,
+        "p50": 368.5097999998834,
+        "p95": 445.7422000002116
+      },
+      "after": {
+        "n": 30,
+        "p50": 368.89810000010766,
+        "p95": 470.35660000005737
+      },
+      "p95ChangePct": 5.522115698229624
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "rapid-switch-final-summary",
+      "before": {
+        "n": 30,
+        "p50": 845.6408000001684,
+        "p95": 973.5778999999166
+      },
+      "after": {
+        "n": 30,
+        "p50": 842.3499000000302,
+        "p95": 947.3465999998152
+      },
+      "p95ChangePct": -2.694319581422666
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "column-pagination",
+      "before": {
+        "n": 30,
+        "p50": 276.8167000000831,
+        "p95": 347.2224999999162
+      },
+      "after": {
+        "n": 30,
+        "p50": 310.21870000008494,
+        "p95": 370.9587000000756
+      },
+      "p95ChangePct": 6.836020131231457
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "filter-authorized-kanban",
+      "before": {
+        "n": 30,
+        "p50": 753.8562999998685,
+        "p95": 803.6736000000965
+      },
+      "after": {
+        "n": 30,
+        "p50": 725.4894000000786,
+        "p95": 802.7282000000123
+      },
+      "p95ChangePct": -0.11763482091288191
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "name": "refresh-with-draft",
+      "before": {
+        "n": 30,
+        "p50": 450.2231000000611,
+        "p95": 537.313199999975
+      },
+      "after": {
+        "n": 30,
+        "p50": 491.21570000005886,
+        "p95": 590.4800000002142
+      },
+      "p95ChangePct": 9.894936510073006
+    }
+  ],
+  "timing": [
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "before",
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 244117,
+        "p95": 244117
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 628.1000000834465,
+        "p95": 661.6999994516373
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 181.16629999998258,
+          "p95": 215.73379999998724
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 53.15120000000752,
+          "p95": 88.02600000001257
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 399.26250000001164,
+          "p95": 461.52110000001267
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 133.7679000000062,
+          "p95": 149.95660000000498
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 29.706399999995483,
+          "p95": 49.58359999998356
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 147.41749999999956,
+          "p95": 177.8761999999988
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 100.08659999998054,
+          "p95": 157.3917000000074
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 32.48369999999704,
+          "p95": 45.4096000000136
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 295.6588999999949,
+          "p95": 317.14550000001327
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 76.49179999999615,
+          "p95": 96.30719999999565
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 36.1591000000044,
+          "p95": 46.88259999998263
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 290.70289999997476,
+          "p95": 309.18980000005104
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 123.31260000000475,
+          "p95": 153.05369999998948
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 46.62809999997262,
+          "p95": 59.90899999999965
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 52.41060000000289,
+          "p95": 81.76720000000205
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "after",
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 244117,
+        "p95": 244117
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 630.4999994635582,
+        "p95": 692.9000000953674
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 178.26939999999013,
+          "p95": 224.64380000000529
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 49.630999999993946,
+          "p95": 78.04959999999846
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 403.2348999999813,
+          "p95": 484.5482000000047
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 130.57199999998556,
+          "p95": 148.95609999999579
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 24.990500000014435,
+          "p95": 30.57630000001518
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 145.35339999999997,
+          "p95": 212.58149999997113
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 112.64970000000903,
+          "p95": 177.1031999999832
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 20.410499999998137,
+          "p95": 29.840999999956694
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 302.6277000000009,
+          "p95": 332.128400000016
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 78.1710000000312,
+          "p95": 96.52090000000317
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 25.20429999998305,
+          "p95": 32.139799999997194
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 291.7433999999921,
+          "p95": 309.84599999999045
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 128.57619999995222,
+          "p95": 178.78170000000682
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 45.57979999999952,
+          "p95": 51.705999999991036
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 54.6704000000027,
+          "p95": 79.67030000000523
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "before",
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 248033,
+        "p95": 248033
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 623.1000009179115,
+        "p95": 673.100001335144
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 177.5044999999809,
+          "p95": 215.37979999999516
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 59.56750000000466,
+          "p95": 87.88309999997728
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 365.29019999993034,
+          "p95": 467.2840000000433
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 126.27960000000894,
+          "p95": 141.17170000000624
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 28.22029999998631,
+          "p95": 37.03000000002794
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 139.3289999999106,
+          "p95": 225.75470000004862
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 109.08600000001024,
+          "p95": 169.1257999999798
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 31.147400000016205,
+          "p95": 40.53820000006817
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 295.595500000054,
+          "p95": 324.01699999999255
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 81.36510000005364,
+          "p95": 102.34439999994356
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 36.57420000003185,
+          "p95": 43.931400000001304
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 280.84390000003623,
+          "p95": 317.4973999999929
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 114.5683999999892,
+          "p95": 175.9712999999756
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 55.87910000002012,
+          "p95": 72.24209999991581
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 51.66779999999562,
+          "p95": 80.0625
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "after",
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 248033,
+        "p95": 248033
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 616.199999332428,
+        "p95": 680.9999998211861
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 175.297600000049,
+          "p95": 237.6376000000164
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 57.70550000004005,
+          "p95": 89.39529999997467
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 387.31359999999404,
+          "p95": 526.9998999999953
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 134.81239999993704,
+          "p95": 149.80849999992643
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 102.14120000001276,
+          "p95": 131.9228000000585
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 185.18349999998463,
+          "p95": 235.37059999996563
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 87.29850000003353,
+          "p95": 118.64560000004712
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 19.218299999949522,
+          "p95": 29.267100000055507
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 295.31400000001304,
+          "p95": 350.03919999999925
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 75.02029999997467,
+          "p95": 111.98279999999795
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 25.31479999999283,
+          "p95": 32.903499999898486
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 296.15480000001844,
+          "p95": 329.515699999989
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 83.52439999999478,
+          "p95": 109.52909999992698
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 45.711899999994785,
+          "p95": 64.46770000003744
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 55.0344000000041,
+          "p95": 77.10339999996359
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "before",
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 537905,
+        "p95": 537905
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 788.4000003933907,
+        "p95": 869.1000009775162
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 165.2323000000324,
+          "p95": 196.68739999993704
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 53.693100000033155,
+          "p95": 69.55019999993965
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 370.17209999996703,
+          "p95": 613.2605999999214
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 139.48670000000857,
+          "p95": 151.3385999999009
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 28.9285000001546,
+          "p95": 37.24330000008922
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 154.14489999995567,
+          "p95": 209.49330000008922
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 108.56889999995474,
+          "p95": 161.51129999989644
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 28.825599999981932,
+          "p95": 39.07539999997243
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 253.6343999998644,
+          "p95": 312.30810000002384
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 109.30260000005364,
+          "p95": 130.28810000000522
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 33.4804999998305,
+          "p95": 41.822799999965355
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 226.00939999998081,
+          "p95": 300.78000000002794
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 266.655700000003,
+          "p95": 320.8365999998059
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 53.48869999987073,
+          "p95": 79.43030000000726
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 148.80550000001676,
+          "p95": 188.80540000007022
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "after",
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 537905,
+        "p95": 537905
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 818.7999994754791,
+        "p95": 877.8000018000603
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 182.4368999999715,
+          "p95": 212.44649999996182
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 55.573899999959394,
+          "p95": 73.01610000000801
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 395.4376999998931,
+          "p95": 647.2225000000326
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 136.5960999999661,
+          "p95": 154.6443000000436
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 23.704199999920093,
+          "p95": 31.444100000080653
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 145.26499999989755,
+          "p95": 193.84990000003017
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 113.0897999999579,
+          "p95": 147.1774999999907
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 21.489000000059605,
+          "p95": 30.36740000010468
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 254.73670000000857,
+          "p95": 302.48629999998957
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 100.1938000000082,
+          "p95": 139.16889999993145
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 24.26909999991767,
+          "p95": 30.271700000041164
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 227.294399999897,
+          "p95": 318.61510000005364
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 244.46120000001974,
+          "p95": 316.781399999978
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 48.95060000009835,
+          "p95": 75.83549999981187
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 151.04249999998137,
+          "p95": 205.6875
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "before",
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 541821,
+        "p95": 541821
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 804.4000001549721,
+        "p95": 849.6000003814697
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 168.93619999988005,
+          "p95": 205.96369999996386
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 81.31149999983609,
+          "p95": 99.77919999998994
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 358.16989999986254,
+          "p95": 601.8369999998249
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 133.99300000001676,
+          "p95": 156.6311000001151
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 34.36009999993257,
+          "p95": 42.7793000000529
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 168.0390999999363,
+          "p95": 388.82730000000447
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 112.39240000001155,
+          "p95": 180.85580000001937
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 26.13980000000447,
+          "p95": 42.646500000031665
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 251.05220000003465,
+          "p95": 319.68069999990985
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 110.76699999999255,
+          "p95": 144.2780999999959
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 31.74820000003092,
+          "p95": 44.96929999999702
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 226.17439999990165,
+          "p95": 319.1347000000533
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 252.03490000008605,
+          "p95": 329.3523999999743
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 53.22429999988526,
+          "p95": 81.82930000009947
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 147.21570000005886,
+          "p95": 200.6321000000462
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "after",
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "apiRequests": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBytes": {
+        "n": 30,
+        "p50": 541821,
+        "p95": 541821
+      },
+      "reactActualDurationTotal": {
+        "n": 30,
+        "p50": 827.0999993085861,
+        "p95": 871.7000004053116
+      },
+      "direct-first-authorized-kanban": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 169.9324000000488,
+          "p95": 212.8976000000257
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 69.52680000010878,
+          "p95": 109.10060000000522
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 360.8182000000961,
+          "p95": 574.031500000041
+        }
+      },
+      "list-to-kanban-first": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 144.38489999994636,
+          "p95": 161.31000000005588
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 111.59859999991022,
+          "p95": 148.59909999999218
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 337.1126000001095,
+          "p95": 420.1313999998383
+        }
+      },
+      "detail-first-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 108.05779999983497,
+          "p95": 128.92069999990053
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 23.21490000002086,
+          "p95": 29.827500000130385
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 257.1174999999348,
+          "p95": 307.24199999985285
+        }
+      },
+      "detail-reopen-authorized-summary": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 103.0930000001099,
+          "p95": 131.90879999985918
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 24.11239999998361,
+          "p95": 30.86960000009276
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 234.56930000009015,
+          "p95": 324.16680000000633
+        }
+      },
+      "refresh-with-draft": {
+        "requestStartAfterActionMs": {
+          "n": 30,
+          "p50": 276.31560000008903,
+          "p95": 335.73560000001453
+        },
+        "requestDurationMs": {
+          "n": 30,
+          "p50": 52.249100000131875,
+          "p95": 75.94580000010319
+        },
+        "responseToVisibleProbeMs": {
+          "n": 30,
+          "p50": 160.99940000008792,
+          "p95": 205.85540000000037
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Same-process intercepted actual handlers + SQLite, not D1 remote",
+    "Optional modules return disabled envelopes; completion of real secondary modules is not measured",
+    "Response-to-visible probe includes transport/React/presentation/Playwright wait overhead, not an isolated render span",
+    "React total is summed actualDuration over the complete journey, not a milestone",
+    "The host is not a dedicated performance appliance; all measured tail regressions remain reported"
+  ]
+}

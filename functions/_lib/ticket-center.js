@@ -994,12 +994,13 @@ export async function getTicketDetails(
   const triageEnabled = await getTicketTriageCapability(env);
   const row = await getTicketOrThrow(env, organizationId, ticketId);
   const lifecycle = await readTicketLifecycleDetails(env, organizationId, ticketId);
+  const attachments = await listTicketAttachments(env, organizationId, ticketId, { canViewInternal });
 
   return {
-    ticket: { ...publicTicket(row, { triageEnabled }), ...(lifecycle.lifecycleEnabled ? await ticketLifecycleProjection(row) : {}) },
+    ticket: { ...publicTicket({ ...row, attachments_count: attachments.length }, { triageEnabled }), ...(lifecycle.lifecycleEnabled ? await ticketLifecycleProjection(row) : {}) },
     triageEnabled,
     ...lifecycle,
-    attachments: await listTicketAttachments(env, organizationId, ticketId, { canViewInternal }),
+    attachments,
     events: await listTicketEvents(env, organizationId, ticketId, { canViewInternal }),
     assignees: await listTicketAssignees(env, organizationId),
     attachmentLimits: TICKET_ATTACHMENT_LIMITS,

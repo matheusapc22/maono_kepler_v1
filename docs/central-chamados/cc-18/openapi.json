@@ -1621,7 +1621,7 @@
     },
     "/api/organizations/{id}/tickets": {
       "x-source-file": "functions/api/organizations/[id]/tickets.js",
-      "x-source-sha256": "5091d37af0043e0b0f161def0000b51a13e5d7a112133eb0dadfe13227819129",
+      "x-source-sha256": "8a8fd5e8a57727fdd366bfdfbd0cf4620b1d2e96f2c8c6697640a45069a0de53",
       "parameters": [
         {
           "name": "id",
@@ -1742,7 +1742,7 @@
     },
     "/api/organizations/{id}/tickets/{ticketId}": {
       "x-source-file": "functions/api/organizations/[id]/tickets/[ticketId].js",
-      "x-source-sha256": "316e011ff8d7285e4b7c7a136f3b8d445f00c7fde887f88f02a0165980cf0f4b",
+      "x-source-sha256": "34fc0b6b4ad7d49dbaa180653ebca8aa2a2660f12fe36920cba55d92857adfa0",
       "parameters": [
         {
           "name": "id",

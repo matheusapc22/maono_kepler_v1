@@ -27,7 +27,7 @@ html:root {
   color: var(--maono-accent-text);
 }
 
-:root .ticket-secondary-action:hover:not(:disabled),
+:root .ticket-secondary-action:hover:not(:disabled):not([aria-disabled="true"]),
 :root .ticket-table-action:hover:not(:disabled),
 :root .ticket-load-more:hover:not(:disabled),
 :root .ticket-pagination button:hover:not(:disabled),

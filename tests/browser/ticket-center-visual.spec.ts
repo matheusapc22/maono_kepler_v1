@@ -689,6 +689,33 @@ test("create, interrupted draft, detail opening and existing PATCH update remain
   await expect(rows(page).filter({ hasText: created.code }).locator(".ticket-status-badge")).toHaveText("Em andamento");
 });
 
+test("conflict refresh retains keyboard focus and draft while suppressing repeated activation", async ({ page }) => {
+  const gate = deferred(); let detailReads = 0;
+  const { requests } = await setup(page, { dataset: tickets.slice(0, 1), lifecycleEnabled: true,
+    failPatch: () => 412, beforeDetail: async () => { if (++detailReads > 1) await gate.promise; } });
+  try {
+    await openCentral(page); await expectCount(page, 1, 1);
+    await rows(page).getByRole("button", { name: "Abrir CH-0001", exact: true }).click();
+    const content = page.locator(".ticket-detail-content:not(.mm-loading-ticket-detail)");
+    const date = content.locator('input[type="date"]').first();
+    await date.fill("2099-01-01");
+    await content.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+    const reload = content.getByRole("button", { name: "Consultar versão atual", exact: true });
+    await reload.focus(); await page.keyboard.press("Enter");
+    await expect(reload).toHaveAttribute("aria-disabled", "true");
+    await expect(reload).toBeFocused(); await expect(date).toHaveValue("2099-01-01");
+    await page.keyboard.press("Enter"); await page.keyboard.press("Space");
+    await reload.evaluate(button => (button as HTMLButtonElement).click());
+    await expect.poll(() => detailReads).toBe(2);
+    gate.resolve();
+    await expect(reload).toHaveAttribute("aria-disabled", "false");
+    await expect(reload).toBeFocused(); await expect(date).toHaveValue("2099-01-01");
+    expect(detailReads).toBe(2);
+    const patches = requests.filter(request => request.method === "PATCH");
+    expect(patches).toHaveLength(1); expect(patches[0].headers["if-match"]).toBe(tickets[0].etag);
+  } finally { gate.resolve(); }
+});
+
 test("existing Kanban and Calendar controls remain wired to queue and date-range APIs", async ({ page }) => {
   const { requests } = await setup(page); await openCentral(page); await expectCount(page, 10, 63);
   await chooseView(page, "Kanban");

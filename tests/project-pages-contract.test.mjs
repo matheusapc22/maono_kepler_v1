@@ -4,6 +4,7 @@ import { restoreTicketDocumentsProgressiveLoading } from "./helpers/ticket-docs-
 import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { restoreApprovedDocumentHelperRemoval } from "./helpers/document-helper-preservation.mjs";
 import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
+import { restoreTicketRefreshFocusStyles } from './helpers/ticket-refresh-focus-preservation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -354,7 +355,7 @@ test('sidebar and organization styling do not modify page, card, table, modal or
     return entries;
   };
   const baseline = execFileSync('git', ['show', `${original}:${path}`], { cwd: root, encoding: 'utf8' });
-  assert.deepEqual(withoutSidebar(read(path)), withoutSidebar(baseline));
+  assert.deepEqual(withoutSidebar(restoreTicketRefreshFocusStyles(read(path))), withoutSidebar(baseline));
 });
 
 // The save refactor intentionally replaces only this endpoint's POST writer.

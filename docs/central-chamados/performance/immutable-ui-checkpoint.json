@@ -1,0 +1,221 @@
+{
+  "builds": [
+    {
+      "sourceSha": "381c93256d985b0ae39722128fc4ad54f17f025f",
+      "toolingSha": "81f02b0a47d95f14de226765868c1d9f333b8ef0",
+      "digest": "c35ede1fc836abec6cfbd8b2129cdc1232e25cde76bb4d10b658573e97bd496d",
+      "assets": [
+        {
+          "path": "assets/index-BFJ_ReEk.css",
+          "bytes": 181069,
+          "sha256": "a438cded57c50c8fc69d29551e3a6cedce279281bfb6503619484745a098a79a"
+        },
+        {
+          "path": "assets/index-Du_Bo8ij.js",
+          "bytes": 445160,
+          "sha256": "db657a77c74abf2398a09a588521b527010298e6e8bb38803066630f0e64bafa"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "6353e1864c4d251baf5009ffee320840df38afd10dc6a0065b2847ff8a79538c"
+        }
+      ],
+      "buildMs": 5201.286300000001
+    },
+    {
+      "sourceSha": "13b3a66ae499f384f5ba89e33cbb3334dc700c24",
+      "toolingSha": "81f02b0a47d95f14de226765868c1d9f333b8ef0",
+      "digest": "eb65ad03dfe1983e7044e504c549c34dc6bd4542eab85fe790b2215625e10164",
+      "assets": [
+        {
+          "path": "assets/index-Ba5XnDT7.js",
+          "bytes": 445183,
+          "sha256": "7345132427a9585806c124dd8dfa00d14477557e6502bf12d9ba6322a28e5e67"
+        },
+        {
+          "path": "assets/index-t0ZcjX5m.css",
+          "bytes": 181140,
+          "sha256": "14b93f03efc6f63211f9f9219a6cbf140b8a94b879fb3d87f8fdbe3bc5c16856"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "f674ab297e6f5a54203feded98d206a9878f12bcaa1fd17a123abced1d2d6bb3"
+        }
+      ],
+      "buildMs": 4618.101
+    },
+    {
+      "sourceSha": "65ee55390b3055c82c9e57cdcd80d981d0fa1eab",
+      "toolingSha": "65ee55390b3055c82c9e57cdcd80d981d0fa1eab",
+      "digest": "fead95a04cc53e12b4630698a60191d7bc3bea1d72cf8f7159551fb97d35c58c",
+      "assets": [
+        {
+          "path": "assets/index-C72F3wNR.js",
+          "bytes": 445288,
+          "sha256": "1e2e9a57ff31785ff62ccbd6abf7e43b1f3587b0fdeb6ef18f0b406eb74a21b1"
+        },
+        {
+          "path": "assets/index-t0ZcjX5m.css",
+          "bytes": 181140,
+          "sha256": "14b93f03efc6f63211f9f9219a6cbf140b8a94b879fb3d87f8fdbe3bc5c16856"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "489446b599e67fde18cd9cac801d5cfab329fb973f86f4f84821054f5db989af"
+        }
+      ],
+      "buildMs": 5444.804099999999
+    }
+  ],
+  "checks": [
+    {
+      "sourceSha": "13b3a66ae499f384f5ba89e33cbb3334dc700c24",
+      "manifestDigest": "eb65ad03dfe1983e7044e504c549c34dc6bd4542eab85fe790b2215625e10164",
+      "results": [
+        {
+          "cold": false,
+          "status": 200,
+          "expected": "serial",
+          "siblingsReady": false,
+          "queuesBeforeRelease": [
+            "open"
+          ],
+          "allReusedExistingToken": true,
+          "snapshotsBeforeRelease": 1,
+          "passed": true
+        },
+        {
+          "cold": true,
+          "status": 200,
+          "expected": "serial",
+          "siblingsReady": false,
+          "queuesBeforeRelease": [
+            "open"
+          ],
+          "allReusedExistingToken": false,
+          "snapshotsBeforeRelease": 2,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "sourceSha": "65ee55390b3055c82c9e57cdcd80d981d0fa1eab",
+      "manifestDigest": "fead95a04cc53e12b4630698a60191d7bc3bea1d72cf8f7159551fb97d35c58c",
+      "results": [
+        {
+          "cold": false,
+          "status": 200,
+          "expected": "parallel",
+          "siblingsReady": true,
+          "queuesBeforeRelease": [
+            "open",
+            "in_progress",
+            "in_review",
+            "closed"
+          ],
+          "allReusedExistingToken": true,
+          "snapshotsBeforeRelease": 1,
+          "passed": true
+        },
+        {
+          "cold": true,
+          "status": 200,
+          "expected": "parallel",
+          "siblingsReady": false,
+          "queuesBeforeRelease": [
+            "open"
+          ],
+          "allReusedExistingToken": false,
+          "snapshotsBeforeRelease": 2,
+          "passed": true
+        },
+        {
+          "cold": false,
+          "status": 401,
+          "expected": "parallel",
+          "siblingsReady": true,
+          "queuesBeforeRelease": [
+            "open",
+            "in_progress",
+            "in_review",
+            "closed"
+          ],
+          "allReusedExistingToken": true,
+          "snapshotsBeforeRelease": 1,
+          "passed": true
+        },
+        {
+          "cold": false,
+          "status": 403,
+          "expected": "parallel",
+          "siblingsReady": true,
+          "queuesBeforeRelease": [
+            "open",
+            "in_progress",
+            "in_review",
+            "closed"
+          ],
+          "allReusedExistingToken": true,
+          "snapshotsBeforeRelease": 1,
+          "passed": true
+        },
+        {
+          "cold": false,
+          "status": 404,
+          "expected": "parallel",
+          "siblingsReady": true,
+          "queuesBeforeRelease": [
+            "open",
+            "in_progress",
+            "in_review",
+            "closed"
+          ],
+          "allReusedExistingToken": true,
+          "snapshotsBeforeRelease": 1,
+          "passed": true
+        },
+        {
+          "cold": false,
+          "status": 409,
+          "expected": "parallel",
+          "siblingsReady": true,
+          "queuesBeforeRelease": [
+            "open",
+            "in_progress",
+            "in_review",
+            "closed"
+          ],
+          "allReusedExistingToken": true,
+          "snapshotsBeforeRelease": 1,
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "localValidation": {
+    "tests": 125,
+    "passed": 125,
+    "skipped": 0,
+    "typeScript": "passed",
+    "scopedLint": "passed"
+  },
+  "note": "Functional gate results, not performance measurements. Cold duplicate snapshot remains. Full immutable UI paired measurements pending."
+}

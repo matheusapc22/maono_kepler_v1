@@ -1,0 +1,22 @@
+{
+  "reason": "Generic ticket-kanban-card selector also matched visible skeletons. Two first-content marks are not authorized-content measurements.",
+  "withdrawnMetrics": [
+    "direct-first-authorized-kanban",
+    "list-to-kanban-first"
+  ],
+  "affectedArtifacts": [
+    "browser-summary.json",
+    "MEASUREMENTS.md (historical first-content rows)",
+    "kanban-waterfall.svg (green first-content markers)",
+    "kanban-waterfall-withdrawn-original.svg",
+    "ui-pair-kanban-immutable-progress.json (interrupted, excluded in full)"
+  ],
+  "unaffected": [
+    "backend measurements",
+    "detail summary/reopen/rapid-switch/refresh marks (real visible summary excludes skeleton)",
+    "four-page completion (all aria-busy=false)",
+    "HTTP and SQL request timing rows"
+  ],
+  "originalWaterfallSha256": "fdab450c949e137a56d4b524c15871f44dd57ad3a60f4823b4e9e91609266179",
+  "replacement": "Separately built UI run kanban-authorized; real ticket subject selector; source381 versus candidate65; completed: IMMUTABLE-MEASUREMENTS.md; 240 measured journeys, candidate65 failed four p95 guardrails"
+}
