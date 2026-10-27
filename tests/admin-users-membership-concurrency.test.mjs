@@ -5,8 +5,30 @@ import { onRequest } from '../functions/api/admin/users/[id]/organizations/[orga
 import { onRequest as legacyMembership } from '../functions/api/admin/organization-users/[id].js';
 import { onRequest as organizationUser } from '../functions/api/organizations/[id]/users/[userId].js';
 import { onRequest as globalUser } from '../functions/api/admin/users/[id].js';
+import { onRequest as legacyAssignment } from '../functions/api/admin/organizations/[id]/users.js';
 
 const change = (f, id, method) => onRequest({ env: f.env, request: f.request(method, method === 'PUT' ? { accessLevel: 'viewer' } : undefined), params: { id, organizationId: '1' } });
+
+test('legacy assignment POST cannot demote both owners concurrently', async t => {
+  const f = await adminUsersFixture(t); f.holdConcurrentWrites();
+  const responses = await Promise.all([2,3].map(userId => legacyAssignment({
+    env: f.env, request: f.request('POST', { userId, accessLevel: 'viewer' }), params: { id: '1' },
+  })));
+  assert.deepEqual(responses.map(response => response.status).sort(), [201,409]);
+  assert.equal(f.owners(), 1);
+});
+
+test('legacy assignment POST preserves eligibility, missing-target and ACL boundaries', async t => {
+  const f = await adminUsersFixture(t);
+  const post = userId => legacyAssignment({ env: f.env, request: f.request('POST', { userId, accessLevel: 'viewer' }), params: { id: '1' } });
+  f.db.exec('UPDATE users SET active=0 WHERE id=3');
+  assert.equal((await post(2)).status, 409);
+  assert.equal((await post(3)).status, 400);
+  assert.equal((await post(99)).status, 404);
+  f.db.exec("UPDATE users SET role='viewer' WHERE id=1");
+  assert.equal((await post(2)).status, 403);
+  assert.equal(f.owners(), 2);
+});
 
 test('the only owner cannot be demoted and keeps additional permissions', async t => {
   const f = await adminUsersFixture(t);

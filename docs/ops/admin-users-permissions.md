@@ -40,7 +40,8 @@ A condição agora participa do UPDATE/DELETE/UPSERT executado pelo SQLite. A
 remoção de vínculo e a limpeza dos acessos adicionais ocorrem em batch transacional;
 se houver falha na limpeza, o vínculo é restaurado pelo rollback.
 
-A proteção cobre a rota de vínculo do editor, a rota administrativa legada, a
+A proteção cobre a rota de vínculo do editor, as rotas administrativas legadas
+(incluindo o POST de atribuição por organização), a
 remoção organizacional, a atualização organizacional, a reatribuição de vínculo
 existente e a desativação/exclusão global. Alterações globais consideram todas as
 organizações afetadas. Um responsável inativo ou de outra organização não satisfaz

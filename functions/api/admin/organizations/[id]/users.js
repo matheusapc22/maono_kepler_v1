@@ -6,6 +6,7 @@ import {
 } from "../../../../_lib/http.js";
 import { requirePermission } from "../../../../_lib/permissions.js";
 import { logAudit } from "../../../../_lib/projects.js";
+import { ownerRetention, lastOwnerError } from "../../../../_lib/owner-retention.js";
 
 const ALLOWED_ACCESS_LEVELS = new Set(["viewer", "editor", "owner"]);
 
@@ -278,6 +279,7 @@ async function upsertOrganizationUser(env, organizationId, body) {
     accessLevel,
   );
 
+  const guard = await ownerRetention(env, { userId, organizationId, accessLevel });
   const organizationUser = await env.DB.prepare(
     `INSERT INTO organization_users (
       organization_id,
@@ -286,7 +288,7 @@ async function upsertOrganizationUser(env, organizationId, body) {
     )
     VALUES (?, ?, ?)
     ON CONFLICT(organization_id, user_id) DO UPDATE SET
-      access_level = excluded.access_level
+      access_level = excluded.access_level WHERE ${guard.sql}
     RETURNING
       id,
       organization_id,
@@ -294,8 +296,10 @@ async function upsertOrganizationUser(env, organizationId, body) {
       access_level,
       created_at`,
   )
-    .bind(organizationId, userId, accessLevel)
+    .bind(organizationId, userId, accessLevel, ...guard.args)
     .first();
+
+  if (!organizationUser) throw lastOwnerError();
 
   return {
     organizationUser,

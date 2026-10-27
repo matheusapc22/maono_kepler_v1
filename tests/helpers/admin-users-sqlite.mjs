@@ -21,7 +21,7 @@ export async function adminUsersFixture(t) {
         const results = db.prepare(sql).all(...args).map(row => ({ ...row }));
         return { success: true, results, meta: { ...db.prepare('SELECT changes() AS changes').get() } };
       };
-      return { sql, bind(...values) { args = values; return this; }, async first() { return execute().results[0] ?? null; }, async all() { return execute(); }, async run() { if (/^(UPDATE|DELETE FROM|INSERT INTO) organization_users/.test(sql.trim())) await writeGate(); return execute(); }, execute };
+      return { sql, bind(...values) { args = values; return this; }, async first() { if (/^(UPDATE|DELETE FROM|INSERT INTO) organization_users/.test(sql.trim())) await writeGate(); return execute().results[0] ?? null; }, async all() { return execute(); }, async run() { if (/^(UPDATE|DELETE FROM|INSERT INTO) organization_users/.test(sql.trim())) await writeGate(); return execute(); }, execute };
     },
     async batch(statements) {
       if (statements.some(statement => /(?:UPDATE|DELETE FROM) "?(?:organization_users|users)\b/.test(statement.sql))) await writeGate();

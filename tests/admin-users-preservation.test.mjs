@@ -16,6 +16,7 @@ for (const [path, before, after] of [
   ['src/pages/Admin/components/AdminUserManagerLegacy.tsx', 'selectionIsCurrent(targetId, targetVersion)', 'true'],
   ['functions/api/admin/users/[id]/organizations/[organizationId].js', 'await changeMembership(env, { userId, organizationId, accessLevel })', 'Promise.resolve()'],
   ['functions/api/admin/users/[id].js', 'AND ${guard.sql}', ''],
+  ['functions/api/admin/organizations/[id]/users.js', 'WHERE ${guard.sql}', ''],
 ]) test(`inverse rejects removal of the reviewed safety contract: ${path} / ${before}`, () => {
   const source = readFileSync(new URL('../' + path, import.meta.url), 'utf8');
   assert.ok(source.includes(before));

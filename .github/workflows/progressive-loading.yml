@@ -4,7 +4,15 @@ on:
     branches: [mano_kepler_v1]
     paths:
       - 'functions/_lib/owner-retention.js'
+      - 'functions/_lib/organizations.js'
+      - 'functions/api/admin/users/**'
+      - 'functions/api/admin/organization-users/**'
+      - 'functions/api/admin/organizations/**/users.js'
+      - 'functions/api/organizations/**/users/**'
       - 'tests/admin-users-*.test.mjs'
+      - 'tests/helpers/admin-users*.mjs'
+      - 'tests/helpers/owner-retention-worker.mjs'
+      - 'tests/fixtures/admin-users-safety-preservation.json'
       - 'tests/owner-retention-sqlite-workers.test.mjs'
       - 'tests/browser/admin-users-safety.spec.ts'
       - 'src/components/loading/**'
