@@ -1,13 +1,13 @@
 {
   "productBase": "e47deac18888195b945a244dadb9e27c5902638f",
-  "testedCodeHead": "2656b3568a5de80aea863fcf1454499ac89b96b5",
-  "note": "Subsequent changes are browser tests, workflow, benchmark and documentation. Application sources match testedCodeHead.",
+  "note": "Final working-tree application sources are identified by SHA-256 below. Published commit and terminal CI are recorded in PR 254.",
   "regression": {
-    "total": 535,
-    "passed": 533,
+    "total": 544,
+    "passed": 542,
     "failed": 0,
     "skipped": 2,
-    "skipReason": "Bash operator cases require Linux; included in CI"
+    "skipReason": "Bash operator cases require Linux; included in CI",
+    "execution": "536 passed + 2 skipped in 43 files, plus 6 loading-final-acceptance tests; 44 files in CI"
   },
   "scopedLint": {
     "files": [
@@ -27,12 +27,12 @@
   "build": {
     "status": "passed",
     "modules": 11945,
-    "duration": "10m31s"
+    "duration": "8m 3s"
   },
   "browser": {
-    "passed": 18,
+    "passed": 19,
     "failed": 0,
-    "execution": "17 cases in full suite + one additional touch case",
+    "execution": "one full suite after both CI fixes",
     "viewports": [
       [
         1774,
@@ -65,23 +65,31 @@
     "remoteMigration": "not run"
   },
   "logs": {
-    "organization-regressions-e47.tap": {
-      "sha256": "84ed364f59577c80723127d658092141dda49afcf18a44962f1066a18d9fc1d1",
-      "bytes": 310983
+    "organization-regressions-final.tap": {
+      "sha256": "9760d3c1c9a64d645935838b6d4cb57c24c76771cb51ebfedf24ff7cfa8b45ea",
+      "bytes": 311624
     },
-    "organization-build-e47.log": {
-      "sha256": "cb8c22e147ca754088e4059198c9187057547cda96363b4adbffef2459c05b57",
-      "bytes": 26140
+    "organization-loading-fix.tap": {
+      "sha256": "f6e4cb0950af565e4f12208683626b28f4fe89814d153f27f1f63f513c7a8ac0",
+      "bytes": 1324
     },
-    "organization-browser-final.log": {
-      "sha256": "79323c0870e55cd331d94a2b31d60e627ea38e2ce5554f5f617c5acb8d8c3d8f",
-      "bytes": 6355
+    "organization-error-contract-fix.tap": {
+      "sha256": "08044c1e4c715a2ae315495193098dc339cfbe484bcadc9e111ff6c2bc499ebd",
+      "bytes": 6126
     },
-    "organization-touch.log": {
-      "sha256": "f4e0ee3ee51ab9e991b7ef33c449d24d91f5dd07e8e4efbc81f6416e443bdc70",
-      "bytes": 779
+    "organization-error-ratchet-final.log": {
+      "sha256": "6072d2afe86254b69a4c0d5ebee9b345594e3688b1081a92b712bfaa73b6c2a7",
+      "bytes": 14
     },
-    "organization-scoped-lint.json": {
+    "organization-build-final-complete.log": {
+      "sha256": "fa02fbf95daa3edb4a0bb78b9335708882326846cc671900e9aaf53ff7366cee",
+      "bytes": 26138
+    },
+    "organization-browser-final-complete.log": {
+      "sha256": "456dd44af2d756fa8876d38c9b4af54e93d71b434a2b1b95efeaa1a9dc3e9c63",
+      "bytes": 6688
+    },
+    "organization-scoped-lint-final.json": {
       "sha256": "3072e1c0743057e0604d9f8565dea05b2403d798b88f1bf47f4c3d4ed95589b3",
       "bytes": 2434
     },
@@ -98,8 +106,23 @@
   "manual": {
     "file": "docs/user-guide/Manual_Gestao_Organizacoes_Maono.pdf",
     "pages": 14,
-    "bytes": 76654,
-    "sha256": "5137e1f3349be91e5072f28dee0d26b0f9186343b70eb7388cc77ba60cf1f7b4",
+    "bytes": 76691,
+    "sha256": "6c8c0cf3cb9c1ae9b9b6e09a1fa48c0b94202187fdca0ca73584fb8e74e962f1",
     "visualReview": "all 14 rendered pages inspected"
+  },
+  "testedWorkingTreeBase": "cd4a6c2f1fab00b1a4a2a790029188bda82aa761",
+  "applicationSources": {
+    "src/pages/Admin/organizations/organizations-api.ts": "fd59b37ce397dd6a061d9f55e87e4142b4d4e964e682cce47d9faf97247f8450",
+    "src/pages/Admin/organizations/OrganizationDialogs.tsx": "cd49912b2296d8eedba9d8fad9811e1f93d7f8857ead62a4c5adcb4b2fa90fca",
+    "src/pages/Admin/organizations/AdminOrganizationsSection.tsx": "d70184a5126c4c65e3dbae094b8c093cd1648b5b8093a71ad794e11983abf27c"
+  },
+  "additionalErrorContracts": {
+    "passed": 70,
+    "failed": 0,
+    "note": "Overlaps organization-management and API/catalog tests; do not add to unique regression count."
+  },
+  "errorRatchet": {
+    "drift": [],
+    "baselineUnchanged": true
   }
 }

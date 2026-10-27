@@ -1,6 +1,6 @@
 # Gestão de Organizações: integração e operação
 
-Estado em 27/10/2026: candidato na branch `feat/admin-organizations-management`, reconciliado com `mano_kepler_v1` em `e47deac18888195b945a244dadb9e27c5902638f` após a PR 253. Preparado para PR draft nova; o CI por SHA na PR determina o resultado remoto. Lint global preexistente impede declarar pronto. Nenhum merge desta funcionalidade, deploy, migration remota, alteração de flags implantadas ou credencial nova.
+Estado em 27/10/2026: candidato na branch `feat/admin-organizations-management`, reconciliado com `mano_kepler_v1` em `e47deac18888195b945a244dadb9e27c5902638f` após a PR 253. Preparado para PR draft nova; o CI por SHA na PR determina o resultado remoto. Lint global preexistente impede declarar pronto. Nenhum merge desta funcionalidade, deploy direto, migration remota, alteração de flags implantadas ou credencial nova.
 
 ## Origem
 
@@ -31,9 +31,9 @@ A API exige Super Admin e admin.panel.access, reavaliados por request/item. Oper
 
 ## Validação local
 
-- **533 regressões aprovadas, 0 falhas, 2 skips** em 43 arquivos de teste, sequencialmente. Os skips são casos Bash do operador de recuperação, incluídos no CI Linux. Cobertura de lifecycle/storage/readiness/drift/chaos/error-contract/quota, usuários/ACL/persistência e schema de chamados após o merge da PR 253. Entre esses testes, 14 integram o novo módulo com schema, sessões, permissões, Pages handler, lifecycle e quotas reais em SQLite; HTTP Dropbox é simulado.
-- **TypeScript completo e build aprovados**. Vite: 11.945 módulos, 10m31s. Flags somente no processo local do build/fixtures; nenhuma flag implantada foi alterada.
-- **18 testes de navegador aprovados**: 17 em execução completa e um teste adicional de toque. Chromium local com um worker, quatro fluxos com backend real da fixture, revogação, resposta atrasada, filtros e URL/back/forward, teclado/foco, UTF-8 e cinco viewports (1774x887, 1366x768, 1920x1080, 768x1024, 390x844). Capturas inspecionadas; a tabela usa rolagem interna em telas pequenas. Não houve teste humano com leitor de tela.
+- **542 regressões aprovadas, 0 falhas, 2 skips** em 44 arquivos de teste, sequencialmente. Os skips são casos Bash do operador de recuperação, incluídos no CI Linux. Cobertura de lifecycle/storage/readiness/drift/chaos/error-contract/quota, usuários/ACL/persistência e schema de chamados após o merge da PR 253. Entre esses testes, 14 integram o novo módulo com schema, sessões, permissões, Pages handler, lifecycle e quotas reais em SQLite; HTTP Dropbox é simulado.
+- **TypeScript completo e build aprovados**. Vite: 11.945 módulos, 8m 3s. Flags somente no processo local do build/fixtures; nenhuma flag implantada foi alterada.
+- **19 testes de navegador aprovados**: 19 em execução completa, incluindo toque e proteção contra mensagem remota bruta. Chromium local com um worker, quatro fluxos com backend real da fixture, revogação, resposta atrasada, filtros e URL/back/forward, teclado/foco, UTF-8 e cinco viewports (1774x887, 1366x768, 1920x1080, 768x1024, 390x844). Capturas inspecionadas; a tabela usa rolagem interna em telas pequenas. Não houve teste humano com leitor de tela.
 - **Lint do escopo: 8 arquivos TS/TSX, 0 erros e 0 avisos**. Os demais arquivos alterados não são cobertos pela configuração ESLint existente. Lint global anterior: **109 erros e 44 avisos** em 68 arquivos; todos os arquivos com problemas e a configuração são idênticos à base atual e à base original. Comparativo em [organization-management-lint-baseline.json](organization-management-lint-baseline.json). Não houve nova varredura global local após reconciliar a base, correção fora de escopo ou relaxamento de regras. CI mantém o lint completo em job independente e bloqueante.
 - Migration sobre dados existentes e schema completo coincidem; `quick_check=ok`, sem violações em `foreign_key_check`. Apenas SQLite isolado.
 - Manual PDF/Markdown revisado conforme comportamento e evidência, 14 páginas renderizadas e inspecionadas.
@@ -64,4 +64,8 @@ Rollback de código não desfaz quotas, vínculos, pastas ou operações. Deslig
 
 ## Manual
 
-scripts/documentation/build-organization-manual.py gera o Markdown e o PDF com ReportLab e fontes Vera. Edição 1.2 revisada com os resultados locais, limitações e distinção entre CI, Preview e Produção. Identidade Library original e versão desconhecida seguem preservadas no registro local; não houve substituição na Library indisponível.
+scripts/documentation/build-organization-manual.py gera o Markdown e o PDF com ReportLab e fontes Vera. Edição 1.3 revisada com os resultados locais, limitações e distinção entre CI, Preview e Produção. Identidade Library original e versão desconhecida seguem preservadas no registro local; não houve substituição na Library indisponível.
+
+## Correções encontradas pelo CI inicial
+
+O adaptador passou a usar o transporte e o catálogo de erros compartilhados, preservando status/referência para diagnóstico sem exibir mensagens remotas. Três novos testes verificam respostas de acesso, payload malformado, falha de rede e cancelamento. Os botões usam StaticLoadingText do produto, preservando o rótulo durante operações. Auditoria estrita sem drift, 70 testes de erro aprovados (com sobreposição às regressões), seis testes de loading aprovados. Não houve alteração de baseline, regras, asserts ou timeouts para obter aprovação.

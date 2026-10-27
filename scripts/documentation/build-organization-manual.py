@@ -16,9 +16,9 @@ chapters=[('01',
   'Antes de usar',
   'Estado da entrega e condições de acesso',
   [('p',
-    'Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 533 '
+    'Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 542 '
     'regressões locais, TypeScript, build e os testes de navegador. O lint global possui falhas preexistentes; a entrega '
-    'permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy ou ativação em Produção.'),
+    'permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy direto ou ativação em Produção.'),
    ('callout',
     'Estado: candidato para revisão. O CI do SHA publicado e suas limitações estão na PR. Testes locais não certificam D1, '
     'Dropbox, Preview ou Produção.'),
@@ -378,12 +378,12 @@ chapters=[('01',
   [('table',
     [['Verificação', 'Resultado desta revisão'],
      ['Node e SQLite',
-      '533 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, '
+      '542 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, '
       'lifecycle e quotas do produto.'],
      ['Frontend', 'TypeScript e build completos aprovados. Lint dos 8 arquivos TS/TSX do escopo: sem erros ou avisos.'],
      ['Navegador',
-      '18 casos em Chromium local: 17 em uma execução e um caso adicional de toque. Cinco viewports, filtros/URL, foco, '
-      'revogação, resposta atrasada, CSV e quatro fluxos com handlers reais.'],
+      '19 casos em uma execução de Chromium local após as correções do CI. Cinco viewports, toque, teclado/foco, filtros/URL, '
+      'revogação, resposta atrasada, CSV, apresentação segura de falhas e quatro fluxos com handlers reais.'],
      ['Lint global',
       '109 erros e 44 avisos anteriores. Todos os arquivos com problemas e a configuração são iguais à base do produto. Nenhuma '
       'regra foi relaxada.'],
@@ -453,7 +453,7 @@ def chrome(canvas,doc):
         canvas.setFont('MaonoBold',16);canvas.drawString(48,H-93,'MAÕNO')
         canvas.setFont('MaonoSans',9);canvas.setFillColor(colors.HexColor('#c8d0d9'));canvas.drawString(48,H-110,'o território como parte da estratégia')
         canvas.setStrokeColor(colors.HexColor('#34404f'));canvas.line(48,58,W-48,58)
-        canvas.setFont('MaonoSans',8);canvas.drawString(48,42,'Edição 1.2 • Manual do candidato de implementação')
+        canvas.setFont('MaonoSans',8);canvas.drawString(48,42,'Edição 1.3 • Manual do candidato de implementação')
     else:
         canvas.setStrokeColor(LINE);canvas.line(LEFT,H-37,W-RIGHT,H-37)
         canvas.setFillColor(MUTED);canvas.setFont('MaonoSans',8)
@@ -467,7 +467,7 @@ def chrome(canvas,doc):
 coverTitle=ParagraphStyle('coverTitle',fontName='MaonoBold',fontSize=31,leading=37,textColor=colors.white,spaceAfter=16)
 coverSub=ParagraphStyle('coverSub',fontName='MaonoSans',fontSize=14,leading=21,textColor=colors.HexColor('#c8d0d9'),spaceAfter=20)
 coverNote=ParagraphStyle('coverNote',fontName='MaonoSans',fontSize=10.4,leading=16,textColor=colors.HexColor('#e5d5b6'))
-story += [Spacer(1,150),Paragraph('Gestão de<br/>Organizações',coverTitle),Paragraph('Manual de funcionamento da subaba<br/>Painel Admin · Maõno Maps',coverSub),Spacer(1,17),Paragraph('CADASTRO  /  PESSOAS  /  CAPACIDADE<br/>SOLICITAÇÕES  /  IMPORTAÇÃO  /  OPERAÇÕES',ParagraphStyle('coverK',fontName='MaonoBold',fontSize=9,leading=16,textColor=GOLD)),Spacer(1,45),Paragraph('Revisão da integração: 533 regressões, TypeScript, build e navegador aprovados localmente. O lint global possui falhas anteriores à integração. A entrega permanece em revisão, com CI por SHA na PR draft.',coverNote),Spacer(1,17),Paragraph('Os procedimentos descrevem o comportamento codificado no pacote e as restrições explícitas da primeira versão. Não atestam recursos ativos em Produção.',coverNote),PageBreak()]
+story += [Spacer(1,150),Paragraph('Gestão de<br/>Organizações',coverTitle),Paragraph('Manual de funcionamento da subaba<br/>Painel Admin · Maõno Maps',coverSub),Spacer(1,17),Paragraph('CADASTRO  /  PESSOAS  /  CAPACIDADE<br/>SOLICITAÇÕES  /  IMPORTAÇÃO  /  OPERAÇÕES',ParagraphStyle('coverK',fontName='MaonoBold',fontSize=9,leading=16,textColor=GOLD)),Spacer(1,45),Paragraph('Revisão da integração: 542 regressões, TypeScript, build e navegador aprovados localmente. O lint global possui falhas anteriores à integração. A entrega permanece em revisão, com CI por SHA na PR draft.',coverNote),Spacer(1,17),Paragraph('Os procedimentos descrevem o comportamento codificado no pacote e as restrições explícitas da primeira versão. Não atestam recursos ativos em Produção.',coverNote),PageBreak()]
 
 for index,(num,title,sub,blocks) in enumerate(chapters):
     story += [P(f'GUIA {num}','eyebrow'),P(title,'title'),P(sub,'sub')]

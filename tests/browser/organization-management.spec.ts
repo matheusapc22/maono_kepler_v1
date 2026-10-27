@@ -144,3 +144,17 @@ test('resposta antiga não restaura dados após acesso revogado em consulta mais
   await expect(page.getByRole('button',{name:'Resposta antiga',exact:true})).toHaveCount(0);
   await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
 });
+
+test('falha remota exibe apresentação segura sem detalhes técnicos',async({page})=>{
+  await setup(page);
+  await expect(page.getByRole('button',{name:'Organização Sintética Alfa',exact:true})).toBeVisible();
+  await page.route('**/api/admin/organization-management/organizations?*',route=>route.fulfill({
+    status:500,headers:{'X-Request-Id':'private-reference'},
+    json:{ok:false,error:{code:'UNKNOWN_PROVIDER_FAILURE',message:'secret-provider-trace',details:{token:'secret-provider-trace'}}},
+  }));
+  await page.getByRole('textbox',{name:'Buscar',exact:true}).fill('Alfa');
+  await page.getByRole('button',{name:'Aplicar',exact:true}).click();
+  const notice=page.getByRole('alert');await expect(notice).toBeVisible();
+  await expect(notice).not.toContainText(/secret-provider-trace|private-reference|UNKNOWN_PROVIDER_FAILURE/);
+  await expect(page.getByRole('button',{name:'Tentar novamente',exact:true})).toBeVisible();
+});

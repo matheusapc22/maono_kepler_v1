@@ -97,6 +97,9 @@ jobs:
           tests/users-access-preservation.test.mjs
           tests/users-access-workspace.test.mjs
           tests/ticket-request-schema.test.mjs
+          tests/loading-final-acceptance.test.mjs
+      - name: Error presentation ratchet
+        run: node scripts/audit-user-error-sinks.mjs --baseline scripts/user-error-sink-baseline.json --strict-baseline
       - name: Product TypeScript
         run: npx tsc -b --pretty false
       - name: Compile actual app with workspace enabled

@@ -28,10 +28,14 @@ As suítes de lifecycle, concorrência, wiring e project-creation-limits cobrem 
 
 ## Resultado e pendências explícitas
 
-533 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 8 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
+542 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 8 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
 
-Navegador: 18 casos aprovados (17 + toque adicional), cinco viewports inspecionados. Quatro casos usam sessões/ACL/handlers reais com SQLite. Os demais verificam UI com HTTP interceptado. Teste humano com leitor de tela e homologação de dispositivos reais permanecem pendentes.
+Navegador: 19 casos aprovados, cinco viewports inspecionados. Quatro casos usam sessões/ACL/handlers reais com SQLite. Os demais verificam UI com HTTP interceptado. Teste humano com leitor de tela e homologação de dispositivos reais permanecem pendentes.
 
 Benchmark local de 6/50/500: 30 amostras, p50/p95 e statements em `organization-management-benchmark.json`. Não é medição de D1, latência de rede ou carregamento completo da página. O número de statements permanece 8; linhas retornadas não equivalem a linhas lidas.
 
 Auditoria antiga sanitizada continua fora do histórico novo (entrega parcial nesse critério). Imagem aprovada indisponível; sem alegação de fidelidade exata. Preview, Produção, provedor real e migration remota não executados. CI e SHA remoto são registrados na PR draft nova. Evidências detalhadas e reversão: `organization-management.md` e `organization-management-validation.json`.
+
+## Correções encontradas pelo CI inicial
+
+O adaptador passou a usar o transporte e o catálogo de erros compartilhados, preservando status/referência para diagnóstico sem exibir mensagens remotas. Três novos testes verificam respostas de acesso, payload malformado, falha de rede e cancelamento. Os botões usam StaticLoadingText do produto, preservando o rótulo durante operações. Auditoria estrita sem drift, 70 testes de erro aprovados (com sobreposição às regressões), seis testes de loading aprovados. Não houve alteração de baseline, regras, asserts ou timeouts para obter aprovação.

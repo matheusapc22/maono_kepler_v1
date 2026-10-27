@@ -3,10 +3,44 @@ import assert from 'node:assert/strict';
 import {fixture} from './helpers/organization-management-fixture.mjs';
 import {parseImportCsv,queryInput,changeInput,createInput,requestHash,safeCsvCell} from '../functions/_lib/organization-management-contract.js';
 import * as service from '../functions/_lib/organization-management-service.js';
+import {api as managementRequest,errorText,denied} from '../src/pages/Admin/organizations/organizations-api.ts';
+import {apiErrorDiagnostic} from '../src/lib/error-contract.ts';
 const payload={name:'Nova',slug:'nova',description:'Teste',plan:'free',ownerEmail:'owner@example.test'};
 const withDb=(name,fn)=>test(name,async()=>{const f=fixture();try{await fn(f);}finally{f.close();}});
 const start=(f,kind,items,key=crypto.randomUUID())=>service.startOperation(f.env,f.actor,key,{kind,items});
 const step=(f,op,retry=false)=>service.stepOperation(f.env,f.actor,op.id,retry,f.deps);
+
+test('cliente preserva status de acesso e diagnóstico sem exibir mensagem remota',async t=>{
+  for(const status of [401,403,404,409,500]){
+    t.mock.method(globalThis,'fetch',async()=>new Response(JSON.stringify({ok:false,error:{code:'UNKNOWN_PROVIDER_FAILURE',message:'secret-provider-trace',details:{token:'secret-provider-trace'}}}),{status,headers:{'X-Request-Id':'private-reference'}}));
+    await assert.rejects(managementRequest('/organizations'),failure=>{
+      assert.equal(failure.status,status);assert.equal(denied(failure),[401,403,404].includes(status));
+      assert.equal(apiErrorDiagnostic(failure).correlationId,'private-reference');
+      assert.doesNotMatch(errorText(failure),/secret-provider-trace|private-reference|UNKNOWN_PROVIDER_FAILURE/);
+      return true;
+    });
+  }
+});
+test('cliente recusa resposta de sucesso malformada sem expor seu conteúdo',async t=>{
+  for(const body of ['<html>secret-proxy-trace</html>','null','{"ok":false,"error":{"message":"secret-proxy-trace"}}']){
+    t.mock.method(globalThis,'fetch',async()=>new Response(body,{status:200}));
+    await assert.rejects(managementRequest('/organizations'),failure=>{
+      assert.equal(failure.status,502);assert.equal(denied(failure),false);
+      assert.doesNotMatch(errorText(failure),/secret-proxy-trace|html/);return true;
+    });
+  }
+});
+test('cliente normaliza falha de rede e preserva cancelamento',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>{throw new TypeError('secret-network-trace');});
+  await assert.rejects(managementRequest('/organizations'),failure=>{
+    assert.equal(failure.status,503);assert.match(errorText(failure),/conexão/);
+    assert.doesNotMatch(errorText(failure),/secret-network-trace/);return true;
+  });
+  const abort=new DOMException('Cancelled','AbortError');
+  t.mock.method(globalThis,'fetch',async()=>{throw abort;});
+  await assert.rejects(managementRequest('/organizations'),failure=>failure===abort);
+  assert.doesNotMatch(errorText(new Error('secret-native-trace')),/secret-native-trace/);
+});
 
 withDb('totais globais deduplicam pessoas e excluem lixo/expurgos',async f=>{const out=await service.workspace(f.env,'https://qa.test/?page=1&size=10',f.deps);assert.equal(out.summary.organizations,3);assert.equal(out.summary.active,2);assert.equal(out.summary.users,2);assert.equal(out.summary.files,2);assert.equal(out.summary.requests,2);assert.equal(out.organizations.find(o=>o.id===1).userCount,2);assert.equal(out.organizations.find(o=>o.id===2).userCount,1);assert.equal(f.storageCalls,0);});
 withDb('filtros não alteram o escopo global dos indicadores',async f=>{const out=await service.workspace(f.env,'https://qa.test/?q=Alfa&status=active&size=10',f.deps);assert.equal(out.pagination.total,1);assert.equal(out.summary.organizations,3);assert.equal(out.organizations[0].slug,'alfa');});

@@ -7,7 +7,7 @@ Base inspecionada: `e47deac18888195b945a244dadb9e27c5902638f`.
 ## 01. Antes de usar
 Estado da entrega e condições de acesso
 
-Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 533 regressões locais, TypeScript, build e os testes de navegador. O lint global possui falhas preexistentes; a entrega permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy ou ativação em Produção.
+Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 542 regressões locais, TypeScript, build e os testes de navegador. O lint global possui falhas preexistentes; a entrega permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy direto ou ativação em Produção.
 
 > Estado: candidato para revisão. O CI do SHA publicado e suas limitações estão na PR. Testes locais não certificam D1, Dropbox, Preview ou Produção.
 
@@ -327,9 +327,9 @@ Evidência local de 27/10/2026; limites de aceite
 
 | Verificação | Resultado desta revisão |
 | --- | --- |
-| Node e SQLite | 533 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, lifecycle e quotas do produto. |
+| Node e SQLite | 542 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, lifecycle e quotas do produto. |
 | Frontend | TypeScript e build completos aprovados. Lint dos 8 arquivos TS/TSX do escopo: sem erros ou avisos. |
-| Navegador | 18 casos em Chromium local: 17 em uma execução e um caso adicional de toque. Cinco viewports, filtros/URL, foco, revogação, resposta atrasada, CSV e quatro fluxos com handlers reais. |
+| Navegador | 19 casos em uma execução de Chromium local após as correções do CI. Cinco viewports, toque, teclado/foco, filtros/URL, revogação, resposta atrasada, CSV, apresentação segura de falhas e quatro fluxos com handlers reais. |
 | Lint global | 109 erros e 44 avisos anteriores. Todos os arquivos com problemas e a configuração são iguais à base do produto. Nenhuma regra foi relaxada. |
 | Escala local | 6, 50 e 500 organizações; 30 amostras após aquecimento. p50/p95 e statements registrados em docs/ops/organization-management-benchmark.json. Não mede latência de rede nem rows_read do D1. |
 | CI e ambientes | Consultar o resultado por SHA na PR draft. Nenhuma homologação em Preview, Produção ou provedor real; nenhuma migration remota executada. |

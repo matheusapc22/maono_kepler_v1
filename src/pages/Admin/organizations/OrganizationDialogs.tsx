@@ -1,6 +1,7 @@
 import {useEffect,useId,useRef,useState,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {MaonoSelect} from '../../../components/selection/MaonoSelect';
+import {StaticLoadingText} from '../../../components/loading/Skeleton';
 import {api,dateLabel,errorText,denied,storageLabel} from './organizations-api';
 import {PLAN_LABELS,type Detail,type EventRow,type FileRow,type LimitRequest,type Operation,type OperationInput,type Person,type Plan} from './organizations-types';
 
@@ -18,7 +19,7 @@ export function OperationStatus({operation,onContinue,onRetry,busy,error}:{opera
   const labels={pending:'Pendente',running:'Em processamento',succeeded:'Concluído',partial:'Parcial',failed:'Falhou'};
   return <section aria-busy={busy}><p>Operação <code>{operation.id}</code></p><p>A execução avança enquanto esta tela envia etapas. Fechar a página preserva o progresso confirmado, mas não processa os itens restantes.</p>
     <Notice message={error}/><ul className="aog-operation-items">{operation.items.map(item=><li key={item.index}><strong>{item.label}</strong><span>{labels[item.state]}</span>{item.error&&<p>{item.error}</p>}{item.result?.id&&<small>Registro #{item.result.id}</small>}</li>)}</ul>
-    <footer>{operation.items.some(i=>i.state==='pending'||i.state==='running')&&<button type="button" disabled={busy} onClick={onContinue}>{busy?'Processando…':'Continuar pendências'}</button>}{operation.items.some(i=>i.retryable)&&<button type="button" disabled={busy} onClick={onRetry}>Retomar próximo item recuperável</button>}</footer>
+    <footer>{operation.items.some(i=>i.state==='pending'||i.state==='running')&&<button type="button" disabled={busy} onClick={onContinue}><StaticLoadingText pending={busy}>Continuar pendências</StaticLoadingText></button>}{operation.items.some(i=>i.retryable)&&<button type="button" disabled={busy} onClick={onRetry}>Retomar próximo item recuperável</button>}</footer>
   </section>;
 }
 export function CreateForm({onSubmit,busy}:{onSubmit:(value:Record<string,unknown>)=>void;busy:boolean}){
@@ -31,7 +32,7 @@ export function CreateForm({onSubmit,busy}:{onSubmit:(value:Record<string,unknow
     <label>Plano<MaonoSelect value={plan} onChange={e=>setPlan(e.target.value as Plan)} disabled={busy}>{Object.entries(PLAN_LABELS).map(([key,label])=><option key={key} value={key}>{label}</option>)}</MaonoSelect></label>
     <label>E-mail do responsável<input type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} disabled={busy}/><small>Usuário existente e ativo. Receberá vínculo de proprietário, sem mudança de papel global.</small></label>
     <label className="aog-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Confirmo o cadastro e o vínculo de proprietário.</label>
-    <button className="aog-primary" type="submit" disabled={busy||!confirmed}>{busy?'Registrando…':'Criar organização'}</button>
+    <button className="aog-primary" type="submit" disabled={busy||!confirmed}><StaticLoadingText pending={busy}>Criar organização</StaticLoadingText></button>
   </form>;
 }
 export function OrganizationEditor({detail,tab,onTab,onSubmit,onPeople,onDocuments,busy,onDenied}:{detail:Detail;tab:string;onTab:(v:string)=>void;onSubmit:(input:OperationInput)=>void;onPeople:()=>void;onDocuments:()=>void;busy:boolean;onDenied:()=>void}){
