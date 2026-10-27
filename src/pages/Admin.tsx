@@ -12,6 +12,7 @@ import "./Admin/admin.css";
 import AdminUserManager from "./Admin/components/AdminUserManager";
 import AdminSidebar from "./Admin/components/AdminSidebar";
 import AdminOverview from "./Admin/components/AdminOverview";
+import AdminSystem from "./Admin/components/AdminSystem";
 import AdminIcon, { type AdminIconName } from "./Admin/components/AdminIcon";
 import "./Admin/admin-workspace.css";
 
@@ -357,18 +358,7 @@ function AdminWorkspace({ user, logout }: { user: MaonoUser | null; logout: () =
   }
 
   function renderSystem() {
-    return (
-      <section className="mm-card mm-section-card">
-        <h2><StaticLoadingText pending={structurePending}>Sistema</StaticLoadingText></h2>
-        <p><StaticLoadingText pending={structurePending}>React, Vite, Cloudflare Pages Functions, D1 e Kepler.gl.</StaticLoadingText></p>
-        <div className="mm-code-panel">
-          <StaticLoadingText pending={structurePending}>/ = /projects</StaticLoadingText><br />
-          <StaticLoadingText pending={structurePending}>/admin = painel administrativo</StaticLoadingText><br />
-          <StaticLoadingText pending={structurePending}>/admin/files = /admin?section=organizations</StaticLoadingText><br />
-          <StaticLoadingText pending={structurePending}>/api/projects/:slug/thumbnail = preview do projeto</StaticLoadingText>
-        </div>
-      </section>
-    );
+    return <AdminSystem sessionAvailable={!error} />;
   }
 
   function renderActiveSection() {
