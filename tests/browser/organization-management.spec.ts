@@ -42,10 +42,10 @@ for (const [width,height] of [[1774,887],[1366,768],[1920,1080],[768,1024],[390,
 }
 test('filtros confirmados mantêm totais globais',async({page})=>{
   await setup(page);await expect(page.getByRole('button',{name:'Organização Sintética Beta',exact:true})).toBeVisible();
-  await page.getByPlaceholder('Nome ou identificador…').fill('Alfa');
+  await page.getByRole('textbox',{name:'Buscar',exact:true}).fill('Alfa');
   await page.getByRole('button',{name:'Aplicar',exact:true}).click();
   await expect(page.getByRole('button',{name:'Organização Sintética Beta',exact:true})).toHaveCount(0);
-  await expect(page.locator('.aog-metric').filter({hasText:'Organizações'}).locator('strong')).toHaveText('2');
+  await expect(page.getByRole('article',{name:'Todas as organizações, inclusive pausadas.',exact:true}).locator('strong')).toHaveText('2');
   await expect(page).toHaveURL(/org_q=Alfa/);
 });
 test('detalhe não lê módulos secundários antes da escolha',async({page})=>{
@@ -62,7 +62,7 @@ test('seleção em página é limpa ao aplicar busca',async({page})=>{
   await setup(page);await expect(page.getByRole('button',{name:'Organização Sintética Alfa',exact:true})).toBeVisible();
   await page.getByRole('checkbox',{name:'Selecionar a página atual'}).check();
   await expect(page.getByText('2 selecionados nesta página',{exact:true})).toBeVisible();
-  await page.getByPlaceholder('Nome ou identificador…').fill('Beta');
+  await page.getByRole('textbox',{name:'Buscar',exact:true}).fill('Beta');
   await page.getByRole('button',{name:'Aplicar',exact:true}).click();
   await expect(page.getByText('0 selecionados nesta página',{exact:true})).toBeVisible();
 });
@@ -75,7 +75,7 @@ test('viewer não alcança API global do workspace',async({page})=>{
 
 test('rascunho e filtros aplicados acompanham voltar e avançar',async({page})=>{
   await setup(page);
-  const search=page.getByPlaceholder('Nome ou identificador.');
+  const search=page.getByRole('textbox',{name:'Buscar',exact:true});
   await search.fill('Alfa');
   await expect(page.getByRole('button',{name:'Organização Sintética Beta',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Aplicar',exact:true}).click();
@@ -106,4 +106,41 @@ test('arquivo que não é UTF-8 é rejeitado antes da validação remota',async(
   await expect(page.getByRole('alert')).toContainText('CSV UTF-8');
   await expect(page.getByRole('button',{name:'Validar arquivo'})).toBeDisabled();
   expect(state.writes).toEqual([]);
+});
+
+test.describe('interação por toque',()=>{
+  test.use({hasTouch:true,viewport:{width:390,height:844}});
+  test('abre e fecha o painel em 390px',async({page})=>{
+    await setup(page);
+    await page.getByRole('button',{name:'Organização Sintética Alfa',exact:true}).tap();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    page.once('dialog',async confirmation=>{
+      expect(confirmation.message()).toBe('Descartar as alterações não salvas?');
+      await confirmation.accept();
+    });
+    await page.getByRole('button',{name:'Fechar painel'}).tap();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+});
+
+test('resposta antiga não restaura dados após acesso revogado em consulta mais recente',async({page})=>{
+  await setup(page);
+  await expect(page.getByRole('button',{name:'Organização Sintética Alfa',exact:true})).toBeVisible();
+  let release!:()=>void,entered!:()=>void;
+  const pending=new Promise<void>(resolve=>{release=resolve;}),started=new Promise<void>(resolve=>{entered=resolve;});
+  await page.route('**/api/admin/organization-management/organizations?*',async route=>{
+    if(new URL(route.request().url()).searchParams.get('q')==='Alfa'){
+      entered();await pending;
+      await route.fulfill({json:{ok:true,organizations:[{id:99,name:'Resposta antiga',slug:'old',active:true,version:0,plan:'free',owner:null,projectCount:0,userCount:0,fileCount:0,storageStatus:'READY',lastActivityAt:null}],pagination:{total:1,page:1,size:10,pages:1},summary:{organizations:1,active:1,users:0,files:0,requests:0},capabilities:{projectQuotaEnforced:true}}}).catch(()=>{});
+    }else await route.fulfill({status:403,json:{ok:false,error:{message:'Acesso revogado',code:'FORBIDDEN'}}});
+  });
+  await page.getByRole('textbox',{name:'Buscar',exact:true}).fill('Alfa');
+  await page.getByRole('button',{name:'Aplicar',exact:true}).click();await started;
+  await page.getByRole('textbox',{name:'Buscar',exact:true}).fill('Beta');
+  await page.getByRole('button',{name:'Aplicar',exact:true}).click();
+  await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
+  release();await page.waitForLoadState('networkidle');
+  await expect(page.getByRole('button',{name:'Resposta antiga',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();
 });

@@ -96,6 +96,7 @@ jobs:
           tests/user-mutation.test.mjs
           tests/users-access-preservation.test.mjs
           tests/users-access-workspace.test.mjs
+          tests/ticket-request-schema.test.mjs
       - name: Product TypeScript
         run: npx tsc -b --pretty false
       - name: Compile actual app with workspace enabled

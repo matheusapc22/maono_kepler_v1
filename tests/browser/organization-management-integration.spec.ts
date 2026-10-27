@@ -83,7 +83,7 @@ test('sessão revogada limpa registros anteriores na consulta seguinte',async({p
   await page.goto('/admin?section=organizations');
   await expect(page.getByRole('button',{name:'Offline A',exact:true})).toBeVisible();
   backend.db.exec('UPDATE users SET active=0 WHERE id=1');
-  await page.getByPlaceholder('Nome ou identificador.').fill('Offline');
+  await page.getByRole('textbox',{name:'Buscar',exact:true}).fill('Offline');
   await page.getByRole('button',{name:'Aplicar',exact:true}).click();
   await expect(page.getByRole('button',{name:'Offline A',exact:true})).toHaveCount(0);
   await expect(page.getByRole('link',{name:'Entrar novamente'})).toBeVisible();

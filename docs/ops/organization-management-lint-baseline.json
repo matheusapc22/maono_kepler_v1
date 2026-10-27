@@ -1,0 +1,488 @@
+{
+  "base": "381c93256d985b0ae39722128fc4ad54f17f025f",
+  "errors": 109,
+  "warnings": 44,
+  "allProblemFilesUnchanged": true,
+  "files": [
+    {
+      "path": "scripts/central-chamados/command-ui-harness.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "scripts/central-chamados/flow-ui-harness.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "scripts/central-chamados/triage-ui-harness.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/auth/session.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/components/access/OrganizationPermissionManager.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/components/loading/LoadingProvider.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/main.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/AdminFiles.tsx",
+      "errors": 4,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/actions.ts",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/change-requests/ChangeRequestReviewPage.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/change-requests/ViewerPersistentMutationRuntime.tsx",
+      "errors": 0,
+      "warnings": 2,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/change-requests/ViewerWorkingCopyRuntimeLegacy.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/change-requests/viewer-working-copy.ts",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+      "errors": 2,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-error-modal.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider-legacy.ts",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/dropbox/dropbox-provider.ts",
+      "errors": 3,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/cloud-providers/foursquare/foursquare-provider.ts",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-adaptive-layer.ts",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller-bridge.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/clustering/point-cluster-controller.ts",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/announcement.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/banner.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/load-remote-map.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/sample-data-viewer.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/load-data-modal/sample-maps-tab.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/map-control/map-control.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/map-control/sql-panel-control.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/map-overlay/GeometryFilterMenu.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/map-overlay/MaonoGeometryFilterRuntime.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/map-overlay/MapOverlayControls.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/components/point-cluster-settings-panel.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/engine-adapter/KeplerEngineAdapterProvider.tsx",
+      "errors": 1,
+      "warnings": 3,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/dataset-section.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/layer-configurator.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/load-data-modal.ts",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-legend-row.tsx",
+      "errors": 5,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-legend-panel.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/maono-map-popover.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/map-control.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/panel-header.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/factories/side-panel.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/hooks/use-point-clustering.ts",
+      "errors": 1,
+      "warnings": 3,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/index.tsx",
+      "errors": 35,
+      "warnings": 13,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/map-panel/MapPanelContext.tsx",
+      "errors": 3,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Kepler/reducers/index.ts",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/RoadmapSection.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketAttachmentList.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketCasesPanel.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketConversationPanel.tsx",
+      "errors": 0,
+      "warnings": 4,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketExportsPanel.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketFeedbackPanel.tsx",
+      "errors": 0,
+      "warnings": 2,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketKnowledgePanel.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketMetricsPanel.tsx",
+      "errors": 0,
+      "warnings": 2,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/pages/Projects/components/TicketSlaPanel.tsx",
+      "errors": 0,
+      "warnings": 1,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "src/store.ts",
+      "errors": 1,
+      "warnings": 2,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/reliability-ux.tsx",
+      "errors": 2,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/save-local-runtime.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-accessibility.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-cases.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-exports.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-feedback.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-knowledge.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-metrics.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-notifications.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/fixtures/ticket-sla.tsx",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    },
+    {
+      "path": "tests/browser/ticket-changes.spec.ts",
+      "errors": 1,
+      "warnings": 0,
+      "unchangedFromBase": true,
+      "unchangedFromProductBase": true
+    }
+  ],
+  "productBase": "e47deac18888195b945a244dadb9e27c5902638f",
+  "allProblemFilesUnchangedFromProductBase": true,
+  "note": "Existing full-lint result; file-byte comparison to both product bases. No full-tree lint rerun after reconciliation.",
+  "lintConfigurationUnchanged": true
+}

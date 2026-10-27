@@ -1,15 +1,15 @@
 # Gestão de Organizações — Manual de funcionamento
 
-**Candidato local. Publicação, integração completa e homologação pendentes.**
+**Candidato em revisão. Gates locais documentados; lint global bloqueado por baseline. Consulte CI por SHA na PR draft.**
 
-Base inspecionada: `381c93256d985b0ae39722128fc4ad54f17f025f`.
+Base inspecionada: `e47deac18888195b945a244dadb9e27c5902638f`.
 
 ## 01. Antes de usar
 Estado da entrega e condições de acesso
 
-Este manual acompanha a integração local na branch feat/admin-organizations-management. Testes com handlers, sessões, permissões e SQLite reais passaram; somente o HTTP do Dropbox foi simulado. Lint completo, TypeScript, build, navegador e CI ainda aguardam validação. Não houve merge, deploy ou ativação em Produção.
+Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 533 regressões locais, TypeScript, build e os testes de navegador. O lint global possui falhas preexistentes; a entrega permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy ou ativação em Produção.
 
-> Estado: integração local em revisão; validação completa e publicação pendentes. Testes locais não comprovam D1, Dropbox ou funcionamento em Produção.
+> Estado: candidato para revisão. O CI do SHA publicado e suas limitações estão na PR. Testes locais não certificam D1, Dropbox, Preview ou Produção.
 
 ### Quem pode acessar
 
@@ -146,7 +146,7 @@ Interrupção reversível, sem excluir recursos
 2. Leia a confirmação com o nome do cadastro.
 3. Confirme e acompanhe o resultado. A alteração usa atualização do ciclo de vida, não DELETE.
 
-A pausa mantém os vínculos de pessoas, os projetos, os arquivos e o histórico. O estado administrativo passa a Pausada. As barreiras de acesso às rotas existentes ainda precisam de validação autenticada no ambiente de QA antes do aceite de Produção.
+A pausa mantém pessoas, projetos, arquivos e histórico. Com o módulo habilitado, operações de sessões existentes reconsultam o estado da organização e bloqueiam o contexto pausado. O Admin conserva o acesso para recuperação; outros contextos elegíveis continuam disponíveis. Esse comportamento foi verificado localmente com sessões e permissões reais.
 
 ### Reativar ou verificar o armazenamento
 
@@ -170,12 +170,12 @@ Uma política de capacidade, sem cobrança automática
 
 Em Plano e limites, a tela mostra o uso de projetos, as reservas ativas e a capacidade restante. Os valores usam o mesmo resolvedor operacional de política de projetos, em vez de um catálogo independente da interface.
 
-1. Abra Plano e limites na organização.
-2. Revise plano, quantidade em uso e reservas em andamento.
-3. Informe o limite efetivo de projetos e a justificativa.
+1. Abra Plano e limites e confira a origem da quota, uso e reservas.
+2. Para manter o limite herdado, deixe desmarcada a opção de limite específico. Para criar um override, marque-a e informe a quantidade.
+3. Revise plano, limite e justificativa. Desmarcar um override existente restaura a herança.
 4. Pressione Salvar plano e quota e acompanhe a operação.
 
-Trocar o rótulo do plano não apaga um limite explícito. Revise o número antes de confirmar. Uma redução abaixo da soma de projetos ativos e reservas válidas é bloqueada; recursos existentes não são removidos para adequar a capacidade.
+Mudar apenas o plano preserva defaults e overrides não editados. Uma redução abaixo de projetos em uso e reservas válidas é bloqueada. Reservas iniciadas com uma versão antiga da política são recusadas; os recursos existentes não são apagados para reduzir o uso.
 
 | Recurso | Comportamento desta versão |
 | --- | --- |
@@ -187,7 +187,7 @@ Trocar o rótulo do plano não apaga um limite explícito. Revise o número ante
 
 > Não habilite a quota de projetos em Produção apenas para liberar um botão. A ativação depende da revisão e do processo operacional da plataforma.
 
-As novas proteções SQL também procuram impedir que uma reserva iniciada com o limite anterior ultrapasse uma redução concorrente. Esse comportamento foi testado localmente; o fluxo real de criação precisa da regressão integrada.
+A revisão local cobre herança, overrides, concorrência entre quota e reserva, aprovação de pedidos e preservação de recursos. A validação remota exige uma etapa operacional separada.
 
 ## 08. Pessoas e documentos
 Reutilização das áreas existentes da plataforma
@@ -323,24 +323,21 @@ Não há elevação de papel global, mudança silenciosa de pasta, exclusão per
 > Reverter o código não reverte os dados já gravados. Quotas, vínculos, eventos e pastas precisam ser tratados por procedimentos próprios de recuperação.
 
 ## 13. Entrega técnica e validação
-Evidência local de 27/10/2026; etapas pendentes explícitas
+Evidência local de 27/10/2026; limites de aceite
 
 | Verificação | Resultado desta revisão |
 | --- | --- |
-| Node e SQLite | 88 testes passaram; zero falhas e zero skips. Incluem contratos do módulo, lifecycle, concorrência, quota e nove integrações reais. |
-| Integração do produto | Sessões, permissões, handlers, criação, pausa, versões e quotas reais em SQLite local. Somente HTTP do Dropbox simulado. Não equivale a D1 remoto. |
-| Migration e compatibilidade | Schema completo e migration aditiva sobre dados existentes coincidem. quick_check e foreign_key_check passaram; sem histórico retrospectivo fabricado. |
-| Sintaxe e frontend | Oito fontes TypeScript/TSX sem erros de parsing. Isso não é typecheck. Lint completo, TypeScript, build e 13 casos de navegador preparados ainda pendentes. |
-| CI, Preview e Produção | Não executados nesta revisão. Branch ainda local e PR não publicada. Nenhuma migration remota, flag ou credencial real alterada. |
+| Node e SQLite | 533 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, lifecycle e quotas do produto. |
+| Frontend | TypeScript e build completos aprovados. Lint dos 8 arquivos TS/TSX do escopo: sem erros ou avisos. |
+| Navegador | 18 casos em Chromium local: 17 em uma execução e um caso adicional de toque. Cinco viewports, filtros/URL, foco, revogação, resposta atrasada, CSV e quatro fluxos com handlers reais. |
+| Lint global | 109 erros e 44 avisos anteriores. Todos os arquivos com problemas e a configuração são iguais à base do produto. Nenhuma regra foi relaxada. |
+| Escala local | 6, 50 e 500 organizações; 30 amostras após aquecimento. p50/p95 e statements registrados em docs/ops/organization-management-benchmark.json. Não mede latência de rede nem rows_read do D1. |
+| CI e ambientes | Consultar o resultado por SHA na PR draft. Nenhuma homologação em Preview, Produção ou provedor real; nenhuma migration remota executada. |
 
-### Correções da integração
+### Limitações que permanecem
 
-A tabela histórica de solicitações passou a integrar o schema completo antes da 0042. Consultas legadas de lifecycle foram preservadas. Auditoria legada registra antes/depois corretos. Armazenamento pendente retorna Parcial; há verificação explícita para organização ativa.
+O histórico anterior à migration não foi incorporado. Documentos são apenas consulta. Usuários, armazenamento e exportações não têm quota editável. Lotes não avançam após fechar a página. Não houve teste humano com leitor de tela nem comparação com a imagem aprovada, que não foi fornecida.
 
-### Próximas verificações
+> A migration 0042 foi testada somente em SQLite isolado. Reverter código não desfaz quotas, vínculos, eventos ou pastas; as proteções SQL continuam presentes. Produção exige o processo protegido do repositório.
 
-Coordenar CPU e navegador com a medição da Central; executar gates completos e revisar evidências visuais. Publicar somente uma PR draft coesa e acompanhar o CI do SHA remoto. O plano separado não estava no ZIP e nenhuma imagem de referência foi fornecida.
-
-> A migration 0042 foi executada somente em SQLite isolado. Produção exige o operador protegido e autorização específica posterior à auditoria. Rollback de código não desfaz quotas, vínculos, eventos ou pastas.
-
-Base de integração: 381c93256d985b0ae39722128fc4ad54f17f025f. Documentação operacional: docs/ops/organization-management.md. Este manual não certifica Preview ou Produção.
+Base do produto: e47deac18888195b945a244dadb9e27c5902638f. Consulte a matriz de critérios e os detalhes de evidência em docs/ops/organization-management-acceptance.md.

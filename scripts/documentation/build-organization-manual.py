@@ -11,124 +11,402 @@ import reportlab
 
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'docs/user-guide/Manual_Gestao_Organizacoes_Maono.pdf'
-BASE='381c93256d985b0ae39722128fc4ad54f17f025f'
-chapters=[
-('01','Antes de usar','Estado da entrega e condições de acesso',[
-('p','Este manual acompanha a integração local na branch feat/admin-organizations-management. Testes com handlers, sessões, permissões e SQLite reais passaram; somente o HTTP do Dropbox foi simulado. Lint completo, TypeScript, build, navegador e CI ainda aguardam validação. Não houve merge, deploy ou ativação em Produção.'),
-('callout','Estado: integração local em revisão; validação completa e publicação pendentes. Testes locais não comprovam D1, Dropbox ou funcionamento em Produção.'),
-('h','Quem pode acessar'),
-('p','O módulo é destinado ao Super Admin. O servidor verifica a autorização, e cada item de uma operação coletiva passa por nova validação. A autonomia para gerir organizações não concede acesso global a proprietários, editores ou usuários de consulta.'),
-('h','Como chegar à subaba'),
-('steps',['Entre na plataforma com uma conta autorizada.','Abra Painel Admin e selecione Gestão de Organizações na barra lateral.','Aguarde os indicadores e a tabela. Dados não recebidos aparecem como indisponíveis, não como zero.']),
-('h','O que precisa estar preparado'),
-('table',[['Camada','Condição'],['Interface','Build com VITE_ORGANIZATION_MANAGEMENT_V1=true.'],['Servidor','ORGANIZATION_MANAGEMENT_V1=true e schema de gestão completo.'],['Capacidade de projetos','PROJECT_QUOTA_RESERVATION_V1=true para criação e edição operacional de planos/quotas.'],['Banco','Migration candidata 0042 previamente revisada e aplicada no ambiente de QA autorizado. Em Produção, seguir o operador protegido do repositório.']]),
-('p','Com a flag da interface desligada, o Admin mantém a tabela anterior. Com o servidor ou o schema indisponível, a API retorna erro explícito e não simula sucesso.')]),
-('02','A tela principal','Indicadores, tabela e significado dos dados',[
-('p','A subaba utiliza o shell compacto existente: logo, usuário, breadcrumb e navegação permanecem. No cabeçalho aparecem Solicitações, Importar e Nova organização. Não há botão geral Atualizar; a consulta é revalidada após operações e pode ser repetida quando ocorre um erro.'),
-('table',[['Indicador global','Como interpretar'],['Organizações','Todas as organizações do escopo administrativo, inclusive pausadas.'],['Ativas','Organizações com estado ativo. O percentual usa o mesmo total do primeiro indicador.'],['Usuários totais','Pessoas distintas com conta ativa e vínculo em organização ativa. Uma pessoa em duas organizações conta apenas uma vez.'],['Arquivos','Arquivos ativos vinculados a organizações, com status ACTIVE, fora da lixeira e não expurgados. Não soma revisões binárias internas.']]),
-('h','Os filtros não alteram os indicadores globais'),
-('p','A busca modifica as linhas da tabela e a quantidade exibida no rodapé. Os quatro indicadores continuam mostrando o escopo global. Essa diferença evita interpretar uma página de dez registros como se fosse toda a plataforma.'),
-('h','Como ler uma linha'),
-('p','A organização apresenta nome e identificador, plano, responsável principal, contagens de projetos/pessoas/arquivos, estado administrativo, estado técnico de armazenamento e última atividade do novo módulo. Clicar no nome abre o painel de gestão.'),
-('callout','“Não definido” no responsável e “Sem registro” na atividade são estados reais. O módulo não escolhe o primeiro usuário como responsável nem inventa datas históricas.'),
-('p','As ações por linha abrem Pessoas, Documentos, Plano e limites ou Dados gerais. O histórico consultado nesta versão cobre eventos registrados a partir da nova gestão e alterações detectadas depois da migration.')]),
-('03','Buscar e organizar','Filtros, paginação, seleção e exportação',[
-('h','Buscar e aplicar filtros'),
-('steps',['Digite parte do nome ou do identificador da organização.','Escolha Ativas, Pausadas ou Todos os status. Selecione o plano e a ordenação.','Pressione Aplicar. A consulta começa na primeira página. Limpar filtros restaura os padrões.']),
-('p','A ordenação oferece Mais recentes, Nome A–Z e Cadastro atualizado. As opções de página são 10, 20 ou 50 registros. O servidor também limita o tamanho da página; não existe seleção automática de toda a base.'),
-('h','Navegação preservada'),
-('p','Os filtros aplicados, a página, o painel selecionado e a operação aberta usam parâmetros próprios na URL. Voltar e avançar no navegador recuperam esse contexto. Ao retornar de Pessoas, use Voltar às organizações. A preservação visual de scroll deve ser conferida na homologação de navegador.'),
-('h','Selecionar linhas'),
-('p','O checkbox do cabeçalho seleciona somente os registros carregados na página atual. O texto informa “selecionados nesta página”. Aplicar uma consulta diferente ou mudar de página limpa a seleção para impedir uma ação sobre itens que deixaram de estar visíveis.'),
-('h','Exportar seleção'),
-('steps',['Marque as organizações desejadas.','Use Exportar seleção.','O navegador salva um CSV com ID, nome, identificador, plano, estado e contagens.']),
-('p','A exportação representa a seleção autorizada já carregada; não inclui arquivos, senhas ou conteúdo de documentos. O código neutraliza células que poderiam ser interpretadas como fórmulas por uma planilha.'),
-('callout','Não trate um CSV exportado como uma cópia completa de segurança. Ele contém apenas os campos do cadastro apresentados na tabela.')]),
-('04','Criar organização','Cadastro, responsável e preparação de armazenamento',[
-('steps',['Selecione Nova organização.','Informe nome, identificador, descrição opcional, plano e e-mail de um usuário existente e ativo.','Revise a confirmação de cadastro e vínculo de proprietário.','Pressione Criar organização e acompanhe o resultado por item na própria tela.']),
-('table',[['Campo','Regra'],['Nome','Obrigatório; até 160 caracteres.'],['Identificador','Até 64 caracteres; letras minúsculas, números e hífens. Define a identidade técnica da nova organização.'],['Descrição','Opcional; até 3.000 caracteres.'],['Plano','Básico (free), Profissional (pro) ou Empresarial (enterprise).'],['Responsável','Conta existente e ativa. Recebe vínculo owner na nova organização, sem alteração do papel global.']]),
-('p','O servidor define a pasta de armazenamento. O formulário não aceita uma raiz Dropbox arbitrária nem cria credenciais de usuário. Identificador ou pasta já pertencentes a outro cadastro são rejeitados, inclusive em importações.'),
-('h','Quando o cadastro existe, mas a preparação não terminou'),
-('p','O resultado pode ser Parcial: a organização foi persistida, porém o armazenamento ou a configuração inicial ainda não foram confirmados. O número do registro é mostrado quando conhecido. Não crie outra organização com outro nome para contornar a mensagem.'),
-('callout','Use Minhas operações para consultar a tentativa. Retome apenas itens marcados como recuperáveis. A retomada da mesma criação utiliza a identidade da operação e não deve criar um cadastro duplicado.'),
-('p','O botão pode ficar indisponível quando a quota operacional de projetos não está habilitada. Essa condição exige preparação do ambiente pelo operador técnico; o usuário não deve tentar resolver ativando flags por conta própria.')]),
-('05','Editar dados e responsável','Rascunhos, versões e proteção contra sobrescrita',[
-('h','Dados gerais'),
-('steps',['Clique no nome da organização ou na ação de edição.','Na área Dados gerais, altere nome ou descrição. O identificador permanece somente para leitura.','Informe uma justificativa de 5 a 500 caracteres e pressione Salvar dados.','Confira a operação registrada e consulte a versão atual antes de iniciar outra alteração sobre o mesmo cadastro.']),
-('p','Renomear não muda a pasta nem move documentos. Alterações de identificador ou raiz técnica não fazem parte desse formulário. A versão carregada acompanha a gravação para detectar alterações concorrentes.'),
-('h','Quando outra pessoa alterou o cadastro'),
-('p','A gravação com versão antiga é recusada. O formulário continua com o conteúdo digitado; não há sobrescrita automática da alteração de outra pessoa. Consultar versão atual substitui o formulário depois de confirmação: copie antes o que deseja reaproveitar.'),
-('h','Designar responsável principal'),
-('steps',['Abra Pessoas dentro do painel da organização.','Escolha um usuário ativo que já tenha vínculo de proprietário na organização.','Informe a justificativa e pressione Designar responsável.']),
-('p','A designação não altera o papel global do usuário e não remove o proprietário anterior. As proteções do banco exigem substituição do responsável principal antes de remover seu vínculo, rebaixar esse vínculo ou desativar a conta.'),
-('callout','Não confunda “responsável principal” com “Super Admin”. A primeira designação é restrita à organização; a segunda é um papel global da plataforma.')]),
-('06','Pausar e reativar','Interrupção reversível, sem excluir recursos',[
-('h','Pausar uma organização'),
-('steps',['Abra a organização e selecione Pausar organização.','Leia a confirmação com o nome do cadastro.','Confirme e acompanhe o resultado. A alteração usa atualização do ciclo de vida, não DELETE.']),
-('p','A pausa mantém os vínculos de pessoas, os projetos, os arquivos e o histórico. O estado administrativo passa a Pausada. As barreiras de acesso às rotas existentes ainda precisam de validação autenticada no ambiente de QA antes do aceite de Produção.'),
-('h','Reativar ou verificar o armazenamento'),
-('p', 'Na organização pausada, use Reativar / verificar armazenamento. Se o cadastro estiver ativo e o armazenamento pendente, consulte a versão atual e use Verificar armazenamento. O resultado permanece Parcial até confirmar prontidão. Pastas legadas incompatíveis exigem revisão operacional; a tela não muda a raiz silenciosamente.'),
-('table',[['Estado','Significado'],['Ativa / Pausada','Situação administrativa da organização.'],['Pronto','Estado técnico READY, ACTIVE ou CONFIGURED informado pelo serviço.'],['Preparando','Provisionamento técnico PENDING.'],['Falha','Estado técnico de falha registrado.'],['Desativado','Armazenamento marcado DISABLED após a pausa.'],['Não informado','Ausência de um estado técnico reconhecido; não significa pronto.']]),
-('callout','Não há exclusão permanente ou remoção de pasta Dropbox nesta tela. O endpoint destrutivo legado não é utilizado para a pausa.'),
-('p','Se uma reativação ficar parcial, consulte a versão atual e execute uma nova verificação autorizada. Operações sem confirmação não devem ser repetidas cegamente.')]),
-('07','Plano e quota de projetos','Uma política de capacidade, sem cobrança automática',[
-('p','Em Plano e limites, a tela mostra o uso de projetos, as reservas ativas e a capacidade restante. Os valores usam o mesmo resolvedor operacional de política de projetos, em vez de um catálogo independente da interface.'),
-('steps',['Abra Plano e limites na organização.','Revise plano, quantidade em uso e reservas em andamento.','Informe o limite efetivo de projetos e a justificativa.','Pressione Salvar plano e quota e acompanhe a operação.']),
-('p','Trocar o rótulo do plano não apaga um limite explícito. Revise o número antes de confirmar. Uma redução abaixo da soma de projetos ativos e reservas válidas é bloqueada; recursos existentes não são removidos para adequar a capacidade.'),
-('table',[['Recurso','Comportamento desta versão'],['Projetos','Limite editável com quota operacional habilitada, controle de versão e consideração de reservas.'],['Armazenamento','Uso e limite informativos; não editáveis neste módulo.'],['Usuários e exportações','Sem edição de limite no novo painel. Não são apresentados como capacidade efetivamente aplicada por este código.'],['Planos','Identificadores free, pro e enterprise, com rótulos comerciais uniformes.'],['Cobrança','Não há integração financeira, pagamento ou alteração automática de assinatura.']]),
-('callout','Não habilite a quota de projetos em Produção apenas para liberar um botão. A ativação depende da revisão e do processo operacional da plataforma.'),
-('p','As novas proteções SQL também procuram impedir que uma reserva iniciada com o limite anterior ultrapasse uma redução concorrente. Esse comportamento foi testado localmente; o fluxo real de criação precisa da regressão integrada.')]),
-('08','Pessoas e documentos','Reutilização das áreas existentes da plataforma',[
-('h','Pessoas'),
-('p','O painel lista os membros da organização, seu e-mail, nível de vínculo e situação da conta. Gerenciar vínculos e permissões abre a área existente de Usuários e Permissões já filtrada pela organização.'),
-('steps',['Abra Pessoas na linha desejada.','Use Gerenciar vínculos e permissões para acessar o gerenciador existente.','Faça a operação permitida por esse gerenciador.','Use Voltar às organizações para recuperar o contexto da subaba.']),
-('p','O atalho de pessoas não muda silenciosamente a organização ativa da sessão. As regras de último proprietário e atribuição de owner devem permanecer válidas nas operações existentes.'),
-('h','Documentos'),
-('p','Nesta versão, Documentos mostra uma lista de arquivos ativos do cadastro selecionado, paginada em grupos de vinte. O carregamento ocorre somente ao abrir essa área, sem consultar Dropbox para preencher todas as linhas da tabela principal.'),
-('steps',['Abra Documentos na organização.','Confira os arquivos e use Carregar mais documentos quando disponível.','Para enviar, mover, criar pastas ou usar a lixeira, selecione Abrir esta organização em Projetos.','Confirme a mudança de organização ativa. Em Projects, escolha Arquivos e Documentos.']),
-('callout','A consulta de documentos no painel é somente leitura. Não foi criado um segundo sistema de upload, lixeira ou edição de configurações de mapas. O gerenciamento continua na experiência existente.'),
-('p','O botão de encaminhamento fica indisponível para organização pausada. A troca de contexto usa a sessão existente e pode ser recusada pelo servidor se o acesso não for elegível.')]),
-('09','Solicitações','Pedidos reais, revisão e aplicação da decisão',[
-('p','O botão Solicitações apresenta a quantidade real de pedidos pendentes de plano e limites. O painel permite alternar entre Pendentes, Aprovadas e Recusadas, com vinte registros por página.'),
-('steps',['Selecione o pedido e confira organização, solicitante, justificativa e plano solicitado.','Para um pedido de quota de projetos, informe o limite aprovado.','Escreva uma justificativa da decisão com 5 a 500 caracteres.','Escolha Aprovar e aplicar ou Recusar e confirme a ação.']),
-('h','Aprovar e aplicar'),
-('p','Para planos e aumento da quota de projetos, a decisão e a alteração de política são gravadas na mesma transação, com versões do pedido e da organização. Se a precondição falhar, a solicitação não deve ficar aprovada sem a política correspondente.'),
-('h','Recusar'),
-('p','A recusa registra revisor, data e justificativa, sem alterar o plano ou a quota. A decisão também entra no histórico administrativo. Um pedido já revisado não pode ser aplicado novamente como se ainda estivesse pendente.'),
-('table',[['Tipo de solicitação','Disponibilidade'],['Plano (plan_upgrade)','Consulta, aprovação com aplicação e recusa.'],['Projetos (projects_increase)','Consulta, revisão do limite, aprovação com aplicação e recusa.'],['Usuários, armazenamento ou exportações','Consulta e recusa; aprovação operacional não implementada nesta versão.']]),
-('callout','A tela não usa o contador fixo da antiga subaba Solicitações. Também não inventa uma fila de criação de organizações. O botão tem finalidade delimitada a pedidos de plano e capacidade.'),
-('p','O schema de pedidos é compatibilizado pela migration candidata. A aplicação em um banco remoto exige conferir suas colunas reais antes de executar qualquer alteração.')]),
-('10','Importar organizações','CSV validado antes da criação',[
-('p','Importar recebe um CSV UTF-8 de novas organizações. A primeira versão aceita até 100 linhas de dados e 128 KiB por arquivo. Ela não atualiza registros já existentes silenciosamente.'),
-('code','nome,slug,descricao,plano,responsavel_email\nEmpresa QA,empresa-qa,Exemplo sintético,free,qa@example.test'),
-('steps',['Use Baixar modelo e preencha as cinco colunas, sem alterar o cabeçalho.','Escolha o arquivo e pressione Validar arquivo.','Revise o resultado de cada linha. Corrija duplicidades, planos inválidos e responsáveis inexistentes ou inativos.','Marque a confirmação dos vínculos de proprietário.','Pressione Confirmar importação e acompanhe os resultados por organização.']),
-('p','A prévia faz leituras e validações, mas não cria organizações. No momento da execução, cada linha é validada novamente: um arquivo que passou na prévia pode encontrar um conflito criado por outra operação nesse intervalo.'),
-('h','Retomar sem repetir cadastros'),
-('p','A operação e seus itens ficam registrados no servidor. A tela processa uma etapa por vez, mantendo o progresso confirmado. Depois de uma interrupção, abra Minhas operações, selecione a tentativa e use Continuar pendências ou Retomar próximo item recuperável.'),
-('callout','Não há processamento em background após fechar a página. Os próximos itens só avançam quando a tela volta a enviar etapas. Um item em processamento precisa concluir ou ter sua reserva de execução expirada antes da retomada.'),
-('p','O importador não recebe senhas, papéis globais, URLs externas ou caminhos técnicos arbitrários. Dados pessoais do arquivo não são armazenados em localStorage nem em cache público; o payload operacional fica no servidor para a retomada autorizada.')]),
-('11','Ações em lote e operações','Resultados individuais, continuidade e recuperação',[
-('h','Executar um lote'),
-('steps',['Selecione organizações na página atual e abra Ações em lote.','Escolha Pausar ou Reativar. Revise nomes e quantidade.','Informe uma justificativa e marque a confirmação.','Execute o lote e confira cada resultado.']),
-('p','Cada organização passa por autorização e versão próprias. Uma falha em um item não é apresentada como sucesso do conjunto. Também não há promessa de uma transação global que abranja várias organizações e o Dropbox.'),
-('table',[['Resultado','Ação do operador'],['Pendente','Usar Continuar pendências.'],['Em processamento','Consultar novamente; uma etapa ativa não deve ser executada duas vezes.'],['Concluído','Operação confirmada para esse item.'],['Parcial','Cadastro ou estado salvo, mas alguma etapa não foi confirmada. Ler a mensagem e o ID.'],['Falhou','Ler o motivo. Conflito de versão exige revisão; não repetir o mesmo rascunho automaticamente.']]),
-('h','Minhas operações'),
-('p','O botão lista as vinte tentativas mais recentes da conta atual. Abrir uma operação apenas consulta seu estado; o processamento depende de continuar explicitamente. O endereço contém a referência da tentativa para recuperação.'),
-('p','Retomar próximo item recuperável trata um item elegível por clique. Operações concluídas não são executadas novamente. A chave da tentativa relaciona ator, tipo e conteúdo, rejeitando o uso da mesma chave para outro pedido.'),
-('callout','O resultado “Parcial” não autoriza apagar o cadastro como rollback. Primeiro consulte o registro e o armazenamento. A tela não fornece exclusão definitiva em lote.')]),
-('12','Histórico, erros e segurança','Rastreabilidade e ações diante de falhas',[
-('h','Histórico'),
-('p','A aba Histórico apresenta eventos reais do novo módulo: criação, configuração, edição, pausa, reativação, política e decisão de pedidos. São mostrados tipo, ator quando conhecido, justificativa, data/hora e versão. A paginação usa o último evento como referência.'),
-('p','Alterações realizadas por caminhos legados depois da migration invalidam a versão de gestão e podem aparecer como operação legada sem atribuição de ator. Eventos antigos não são reconstruídos nem agregados retrospectivamente nesta entrega.'),
-('table',[['Situação','Conduta'],['Sessão expirada ou acesso negado','A tela retira dados do contexto e oferece nova entrada. Não insistir com uma operação de outra conta.'],['Versão alterada','Preservar o rascunho, consultar a versão atual e revisar antes de salvar.'],['Duplicidade','Escolher um identificador realmente novo ou consultar o cadastro existente.'],['Armazenamento parcial','Consultar Minhas operações e retomar somente quando o resultado indicar recuperação permitida.'],['Limite abaixo do uso','Rever o valor; não excluir recursos para contornar a regra.'],['Feature/schema indisponível','Solicitar a preparação controlada do ambiente; não alterar flags ou migrations sem autorização.']]),
-('h','Proteções deliberadas'),
-('p','Não há elevação de papel global, mudança silenciosa de pasta, exclusão permanente, cache público de dados administrativos ou disparo de migration pela interface. As gravações exigem origem compatível, JSON, autorização e identificação da operação.'),
-('callout','Reverter o código não reverte os dados já gravados. Quotas, vínculos, eventos e pastas precisam ser tratados por procedimentos próprios de recuperação.')]),
-('13', 'Entrega técnica e validação', 'Evidência local de 27/10/2026; etapas pendentes explícitas', [('table', [['Verificação', 'Resultado desta revisão'], ['Node e SQLite', '88 testes passaram; zero falhas e zero skips. Incluem contratos do módulo, lifecycle, concorrência, quota e nove integrações reais.'], ['Integração do produto', 'Sessões, permissões, handlers, criação, pausa, versões e quotas reais em SQLite local. Somente HTTP do Dropbox simulado. Não equivale a D1 remoto.'], ['Migration e compatibilidade', 'Schema completo e migration aditiva sobre dados existentes coincidem. quick_check e foreign_key_check passaram; sem histórico retrospectivo fabricado.'], ['Sintaxe e frontend', 'Oito fontes TypeScript/TSX sem erros de parsing. Isso não é typecheck. Lint completo, TypeScript, build e 13 casos de navegador preparados ainda pendentes.'], ['CI, Preview e Produção', 'Não executados nesta revisão. Branch ainda local e PR não publicada. Nenhuma migration remota, flag ou credencial real alterada.']]), ('h', 'Correções da integração'), ('p', 'A tabela histórica de solicitações passou a integrar o schema completo antes da 0042. Consultas legadas de lifecycle foram preservadas. Auditoria legada registra antes/depois corretos. Armazenamento pendente retorna Parcial; há verificação explícita para organização ativa.'), ('h', 'Próximas verificações'), ('p', 'Coordenar CPU e navegador com a medição da Central; executar gates completos e revisar evidências visuais. Publicar somente uma PR draft coesa e acompanhar o CI do SHA remoto. O plano separado não estava no ZIP e nenhuma imagem de referência foi fornecida.'), ('callout', 'A migration 0042 foi executada somente em SQLite isolado. Produção exige o operador protegido e autorização específica posterior à auditoria. Rollback de código não desfaz quotas, vínculos, eventos ou pastas.'), ('p', 'Base de integração: 381c93256d985b0ae39722128fc4ad54f17f025f. Documentação operacional: docs/ops/organization-management.md. Este manual não certifica Preview ou Produção.')]),
-]
+BASE='e47deac18888195b945a244dadb9e27c5902638f'
+chapters=[('01',
+  'Antes de usar',
+  'Estado da entrega e condições de acesso',
+  [('p',
+    'Esta revisão acompanha a branch feat/admin-organizations-management reconciliada com o produto após a PR 253. Passaram 533 '
+    'regressões locais, TypeScript, build e os testes de navegador. O lint global possui falhas preexistentes; a entrega '
+    'permanece candidata em PR draft. Não houve merge desta funcionalidade, deploy ou ativação em Produção.'),
+   ('callout',
+    'Estado: candidato para revisão. O CI do SHA publicado e suas limitações estão na PR. Testes locais não certificam D1, '
+    'Dropbox, Preview ou Produção.'),
+   ('h', 'Quem pode acessar'),
+   ('p',
+    'O módulo é destinado ao Super Admin. O servidor verifica a autorização, e cada item de uma operação coletiva passa por nova '
+    'validação. A autonomia para gerir organizações não concede acesso global a proprietários, editores ou usuários de '
+    'consulta.'),
+   ('h', 'Como chegar à subaba'),
+   ('steps',
+    ['Entre na plataforma com uma conta autorizada.',
+     'Abra Painel Admin e selecione Gestão de Organizações na barra lateral.',
+     'Aguarde os indicadores e a tabela. Dados não recebidos aparecem como indisponíveis, não como zero.']),
+   ('h', 'O que precisa estar preparado'),
+   ('table',
+    [['Camada', 'Condição'],
+     ['Interface', 'Build com VITE_ORGANIZATION_MANAGEMENT_V1=true.'],
+     ['Servidor', 'ORGANIZATION_MANAGEMENT_V1=true e schema de gestão completo.'],
+     ['Capacidade de projetos', 'PROJECT_QUOTA_RESERVATION_V1=true para criação e edição operacional de planos/quotas.'],
+     ['Banco',
+      'Migration candidata 0042 previamente revisada e aplicada no ambiente de QA autorizado. Em Produção, seguir o operador '
+      'protegido do repositório.']]),
+   ('p',
+    'Com a flag da interface desligada, o Admin mantém a tabela anterior. Com o servidor ou o schema indisponível, a API retorna '
+    'erro explícito e não simula sucesso.')]),
+ ('02',
+  'A tela principal',
+  'Indicadores, tabela e significado dos dados',
+  [('p',
+    'A subaba utiliza o shell compacto existente: logo, usuário, breadcrumb e navegação permanecem. No cabeçalho aparecem '
+    'Solicitações, Importar e Nova organização. Não há botão geral Atualizar; a consulta é revalidada após operações e pode ser '
+    'repetida quando ocorre um erro.'),
+   ('table',
+    [['Indicador global', 'Como interpretar'],
+     ['Organizações', 'Todas as organizações do escopo administrativo, inclusive pausadas.'],
+     ['Ativas', 'Organizações com estado ativo. O percentual usa o mesmo total do primeiro indicador.'],
+     ['Usuários totais',
+      'Pessoas distintas com conta ativa e vínculo em organização ativa. Uma pessoa em duas organizações conta apenas uma vez.'],
+     ['Arquivos',
+      'Arquivos ativos vinculados a organizações, com status ACTIVE, fora da lixeira e não expurgados. Não soma revisões '
+      'binárias internas.']]),
+   ('h', 'Os filtros não alteram os indicadores globais'),
+   ('p',
+    'A busca modifica as linhas da tabela e a quantidade exibida no rodapé. Os quatro indicadores continuam mostrando o escopo '
+    'global. Essa diferença evita interpretar uma página de dez registros como se fosse toda a plataforma.'),
+   ('h', 'Como ler uma linha'),
+   ('p',
+    'A organização apresenta nome e identificador, plano, responsável principal, contagens de projetos/pessoas/arquivos, estado '
+    'administrativo, estado técnico de armazenamento e última atividade do novo módulo. Clicar no nome abre o painel de gestão.'),
+   ('callout',
+    '“Não definido” no responsável e “Sem registro” na atividade são estados reais. O módulo não escolhe o primeiro usuário como '
+    'responsável nem inventa datas históricas.'),
+   ('p',
+    'As ações por linha abrem Pessoas, Documentos, Plano e limites ou Dados gerais. O histórico consultado nesta versão cobre '
+    'eventos registrados a partir da nova gestão e alterações detectadas depois da migration.')]),
+ ('03',
+  'Buscar e organizar',
+  'Filtros, paginação, seleção e exportação',
+  [('h', 'Buscar e aplicar filtros'),
+   ('steps',
+    ['Digite parte do nome ou do identificador da organização.',
+     'Escolha Ativas, Pausadas ou Todos os status. Selecione o plano e a ordenação.',
+     'Pressione Aplicar. A consulta começa na primeira página. Limpar filtros restaura os padrões.']),
+   ('p',
+    'A ordenação oferece Mais recentes, Nome A–Z e Cadastro atualizado. As opções de página são 10, 20 ou 50 registros. O '
+    'servidor também limita o tamanho da página; não existe seleção automática de toda a base.'),
+   ('h', 'Navegação preservada'),
+   ('p',
+    'Os filtros aplicados, a página, o painel selecionado e a operação aberta usam parâmetros próprios na URL. Voltar e avançar '
+    'no navegador recuperam esse contexto. Ao retornar de Pessoas, use Voltar às organizações. A preservação visual de scroll '
+    'deve ser conferida na homologação de navegador.'),
+   ('h', 'Selecionar linhas'),
+   ('p',
+    'O checkbox do cabeçalho seleciona somente os registros carregados na página atual. O texto informa “selecionados nesta '
+    'página”. Aplicar uma consulta diferente ou mudar de página limpa a seleção para impedir uma ação sobre itens que deixaram '
+    'de estar visíveis.'),
+   ('h', 'Exportar seleção'),
+   ('steps',
+    ['Marque as organizações desejadas.',
+     'Use Exportar seleção.',
+     'O navegador salva um CSV com ID, nome, identificador, plano, estado e contagens.']),
+   ('p',
+    'A exportação representa a seleção autorizada já carregada; não inclui arquivos, senhas ou conteúdo de documentos. O código '
+    'neutraliza células que poderiam ser interpretadas como fórmulas por uma planilha.'),
+   ('callout',
+    'Não trate um CSV exportado como uma cópia completa de segurança. Ele contém apenas os campos do cadastro apresentados na '
+    'tabela.')]),
+ ('04',
+  'Criar organização',
+  'Cadastro, responsável e preparação de armazenamento',
+  [('steps',
+    ['Selecione Nova organização.',
+     'Informe nome, identificador, descrição opcional, plano e e-mail de um usuário existente e ativo.',
+     'Revise a confirmação de cadastro e vínculo de proprietário.',
+     'Pressione Criar organização e acompanhe o resultado por item na própria tela.']),
+   ('table',
+    [['Campo', 'Regra'],
+     ['Nome', 'Obrigatório; até 160 caracteres.'],
+     ['Identificador',
+      'Até 64 caracteres; letras minúsculas, números e hífens. Define a identidade técnica da nova organização.'],
+     ['Descrição', 'Opcional; até 3.000 caracteres.'],
+     ['Plano', 'Básico (free), Profissional (pro) ou Empresarial (enterprise).'],
+     ['Responsável', 'Conta existente e ativa. Recebe vínculo owner na nova organização, sem alteração do papel global.']]),
+   ('p',
+    'O servidor define a pasta de armazenamento. O formulário não aceita uma raiz Dropbox arbitrária nem cria credenciais de '
+    'usuário. Identificador ou pasta já pertencentes a outro cadastro são rejeitados, inclusive em importações.'),
+   ('h', 'Quando o cadastro existe, mas a preparação não terminou'),
+   ('p',
+    'O resultado pode ser Parcial: a organização foi persistida, porém o armazenamento ou a configuração inicial ainda não foram '
+    'confirmados. O número do registro é mostrado quando conhecido. Não crie outra organização com outro nome para contornar a '
+    'mensagem.'),
+   ('callout',
+    'Use Minhas operações para consultar a tentativa. Retome apenas itens marcados como recuperáveis. A retomada da mesma '
+    'criação utiliza a identidade da operação e não deve criar um cadastro duplicado.'),
+   ('p',
+    'O botão pode ficar indisponível quando a quota operacional de projetos não está habilitada. Essa condição exige preparação '
+    'do ambiente pelo operador técnico; o usuário não deve tentar resolver ativando flags por conta própria.')]),
+ ('05',
+  'Editar dados e responsável',
+  'Rascunhos, versões e proteção contra sobrescrita',
+  [('h', 'Dados gerais'),
+   ('steps',
+    ['Clique no nome da organização ou na ação de edição.',
+     'Na área Dados gerais, altere nome ou descrição. O identificador permanece somente para leitura.',
+     'Informe uma justificativa de 5 a 500 caracteres e pressione Salvar dados.',
+     'Confira a operação registrada e consulte a versão atual antes de iniciar outra alteração sobre o mesmo cadastro.']),
+   ('p',
+    'Renomear não muda a pasta nem move documentos. Alterações de identificador ou raiz técnica não fazem parte desse '
+    'formulário. A versão carregada acompanha a gravação para detectar alterações concorrentes.'),
+   ('h', 'Quando outra pessoa alterou o cadastro'),
+   ('p',
+    'A gravação com versão antiga é recusada. O formulário continua com o conteúdo digitado; não há sobrescrita automática da '
+    'alteração de outra pessoa. Consultar versão atual substitui o formulário depois de confirmação: copie antes o que deseja '
+    'reaproveitar.'),
+   ('h', 'Designar responsável principal'),
+   ('steps',
+    ['Abra Pessoas dentro do painel da organização.',
+     'Escolha um usuário ativo que já tenha vínculo de proprietário na organização.',
+     'Informe a justificativa e pressione Designar responsável.']),
+   ('p',
+    'A designação não altera o papel global do usuário e não remove o proprietário anterior. As proteções do banco exigem '
+    'substituição do responsável principal antes de remover seu vínculo, rebaixar esse vínculo ou desativar a conta.'),
+   ('callout',
+    'Não confunda “responsável principal” com “Super Admin”. A primeira designação é restrita à organização; a segunda é um '
+    'papel global da plataforma.')]),
+ ('06',
+  'Pausar e reativar',
+  'Interrupção reversível, sem excluir recursos',
+  [('h', 'Pausar uma organização'),
+   ('steps',
+    ['Abra a organização e selecione Pausar organização.',
+     'Leia a confirmação com o nome do cadastro.',
+     'Confirme e acompanhe o resultado. A alteração usa atualização do ciclo de vida, não DELETE.']),
+   ('p',
+    'A pausa mantém pessoas, projetos, arquivos e histórico. Com o módulo habilitado, operações de sessões existentes '
+    'reconsultam o estado da organização e bloqueiam o contexto pausado. O Admin conserva o acesso para recuperação; outros '
+    'contextos elegíveis continuam disponíveis. Esse comportamento foi verificado localmente com sessões e permissões reais.'),
+   ('h', 'Reativar ou verificar o armazenamento'),
+   ('p',
+    'Na organização pausada, use Reativar / verificar armazenamento. Se o cadastro estiver ativo e o armazenamento pendente, '
+    'consulte a versão atual e use Verificar armazenamento. O resultado permanece Parcial até confirmar prontidão. Pastas '
+    'legadas incompatíveis exigem revisão operacional; a tela não muda a raiz silenciosamente.'),
+   ('table',
+    [['Estado', 'Significado'],
+     ['Ativa / Pausada', 'Situação administrativa da organização.'],
+     ['Pronto', 'Estado técnico READY, ACTIVE ou CONFIGURED informado pelo serviço.'],
+     ['Preparando', 'Provisionamento técnico PENDING.'],
+     ['Falha', 'Estado técnico de falha registrado.'],
+     ['Desativado', 'Armazenamento marcado DISABLED após a pausa.'],
+     ['Não informado', 'Ausência de um estado técnico reconhecido; não significa pronto.']]),
+   ('callout',
+    'Não há exclusão permanente ou remoção de pasta Dropbox nesta tela. O endpoint destrutivo legado não é utilizado para a '
+    'pausa.'),
+   ('p',
+    'Se uma reativação ficar parcial, consulte a versão atual e execute uma nova verificação autorizada. Operações sem '
+    'confirmação não devem ser repetidas cegamente.')]),
+ ('07',
+  'Plano e quota de projetos',
+  'Uma política de capacidade, sem cobrança automática',
+  [('p',
+    'Em Plano e limites, a tela mostra o uso de projetos, as reservas ativas e a capacidade restante. Os valores usam o mesmo '
+    'resolvedor operacional de política de projetos, em vez de um catálogo independente da interface.'),
+   ('steps',
+    ['Abra Plano e limites e confira a origem da quota, uso e reservas.',
+     'Para manter o limite herdado, deixe desmarcada a opção de limite específico. Para criar um override, marque-a e informe a '
+     'quantidade.',
+     'Revise plano, limite e justificativa. Desmarcar um override existente restaura a herança.',
+     'Pressione Salvar plano e quota e acompanhe a operação.']),
+   ('p',
+    'Mudar apenas o plano preserva defaults e overrides não editados. Uma redução abaixo de projetos em uso e reservas válidas é '
+    'bloqueada. Reservas iniciadas com uma versão antiga da política são recusadas; os recursos existentes não são apagados para '
+    'reduzir o uso.'),
+   ('table',
+    [['Recurso', 'Comportamento desta versão'],
+     ['Projetos', 'Limite editável com quota operacional habilitada, controle de versão e consideração de reservas.'],
+     ['Armazenamento', 'Uso e limite informativos; não editáveis neste módulo.'],
+     ['Usuários e exportações',
+      'Sem edição de limite no novo painel. Não são apresentados como capacidade efetivamente aplicada por este código.'],
+     ['Planos', 'Identificadores free, pro e enterprise, com rótulos comerciais uniformes.'],
+     ['Cobrança', 'Não há integração financeira, pagamento ou alteração automática de assinatura.']]),
+   ('callout',
+    'Não habilite a quota de projetos em Produção apenas para liberar um botão. A ativação depende da revisão e do processo '
+    'operacional da plataforma.'),
+   ('p',
+    'A revisão local cobre herança, overrides, concorrência entre quota e reserva, aprovação de pedidos e preservação de '
+    'recursos. A validação remota exige uma etapa operacional separada.')]),
+ ('08',
+  'Pessoas e documentos',
+  'Reutilização das áreas existentes da plataforma',
+  [('h', 'Pessoas'),
+   ('p',
+    'O painel lista os membros da organização, seu e-mail, nível de vínculo e situação da conta. Gerenciar vínculos e permissões '
+    'abre a área existente de Usuários e Permissões já filtrada pela organização.'),
+   ('steps',
+    ['Abra Pessoas na linha desejada.',
+     'Use Gerenciar vínculos e permissões para acessar o gerenciador existente.',
+     'Faça a operação permitida por esse gerenciador.',
+     'Use Voltar às organizações para recuperar o contexto da subaba.']),
+   ('p',
+    'O atalho de pessoas não muda silenciosamente a organização ativa da sessão. As regras de último proprietário e atribuição '
+    'de owner devem permanecer válidas nas operações existentes.'),
+   ('h', 'Documentos'),
+   ('p',
+    'Nesta versão, Documentos mostra uma lista de arquivos ativos do cadastro selecionado, paginada em grupos de vinte. O '
+    'carregamento ocorre somente ao abrir essa área, sem consultar Dropbox para preencher todas as linhas da tabela principal.'),
+   ('steps',
+    ['Abra Documentos na organização.',
+     'Confira os arquivos e use Carregar mais documentos quando disponível.',
+     'Para enviar, mover, criar pastas ou usar a lixeira, selecione Abrir esta organização em Projetos.',
+     'Confirme a mudança de organização ativa. Em Projects, escolha Arquivos e Documentos.']),
+   ('callout',
+    'A consulta de documentos no painel é somente leitura. Não foi criado um segundo sistema de upload, lixeira ou edição de '
+    'configurações de mapas. O gerenciamento continua na experiência existente.'),
+   ('p',
+    'O botão de encaminhamento fica indisponível para organização pausada. A troca de contexto usa a sessão existente e pode ser '
+    'recusada pelo servidor se o acesso não for elegível.')]),
+ ('09',
+  'Solicitações',
+  'Pedidos reais, revisão e aplicação da decisão',
+  [('p',
+    'O botão Solicitações apresenta a quantidade real de pedidos pendentes de plano e limites. O painel permite alternar entre '
+    'Pendentes, Aprovadas e Recusadas, com vinte registros por página.'),
+   ('steps',
+    ['Selecione o pedido e confira organização, solicitante, justificativa e plano solicitado.',
+     'Para um pedido de quota de projetos, informe o limite aprovado.',
+     'Escreva uma justificativa da decisão com 5 a 500 caracteres.',
+     'Escolha Aprovar e aplicar ou Recusar e confirme a ação.']),
+   ('h', 'Aprovar e aplicar'),
+   ('p',
+    'Para planos e aumento da quota de projetos, a decisão e a alteração de política são gravadas na mesma transação, com '
+    'versões do pedido e da organização. Se a precondição falhar, a solicitação não deve ficar aprovada sem a política '
+    'correspondente.'),
+   ('h', 'Recusar'),
+   ('p',
+    'A recusa registra revisor, data e justificativa, sem alterar o plano ou a quota. A decisão também entra no histórico '
+    'administrativo. Um pedido já revisado não pode ser aplicado novamente como se ainda estivesse pendente.'),
+   ('table',
+    [['Tipo de solicitação', 'Disponibilidade'],
+     ['Plano (plan_upgrade)', 'Consulta, aprovação com aplicação e recusa.'],
+     ['Projetos (projects_increase)', 'Consulta, revisão do limite, aprovação com aplicação e recusa.'],
+     ['Usuários, armazenamento ou exportações', 'Consulta e recusa; aprovação operacional não implementada nesta versão.']]),
+   ('callout',
+    'A tela não usa o contador fixo da antiga subaba Solicitações. Também não inventa uma fila de criação de organizações. O '
+    'botão tem finalidade delimitada a pedidos de plano e capacidade.'),
+   ('p',
+    'O schema de pedidos é compatibilizado pela migration candidata. A aplicação em um banco remoto exige conferir suas colunas '
+    'reais antes de executar qualquer alteração.')]),
+ ('10',
+  'Importar organizações',
+  'CSV validado antes da criação',
+  [('p',
+    'Importar recebe um CSV UTF-8 de novas organizações. A primeira versão aceita até 100 linhas de dados e 128 KiB por arquivo. '
+    'Ela não atualiza registros já existentes silenciosamente.'),
+   ('code', 'nome,slug,descricao,plano,responsavel_email\nEmpresa QA,empresa-qa,Exemplo sintético,free,qa@example.test'),
+   ('steps',
+    ['Use Baixar modelo e preencha as cinco colunas, sem alterar o cabeçalho.',
+     'Escolha o arquivo e pressione Validar arquivo.',
+     'Revise o resultado de cada linha. Corrija duplicidades, planos inválidos e responsáveis inexistentes ou inativos.',
+     'Marque a confirmação dos vínculos de proprietário.',
+     'Pressione Confirmar importação e acompanhe os resultados por organização.']),
+   ('p',
+    'A prévia faz leituras e validações, mas não cria organizações. No momento da execução, cada linha é validada novamente: um '
+    'arquivo que passou na prévia pode encontrar um conflito criado por outra operação nesse intervalo.'),
+   ('h', 'Retomar sem repetir cadastros'),
+   ('p',
+    'A operação e seus itens ficam registrados no servidor. A tela processa uma etapa por vez, mantendo o progresso confirmado. '
+    'Depois de uma interrupção, abra Minhas operações, selecione a tentativa e use Continuar pendências ou Retomar próximo item '
+    'recuperável.'),
+   ('callout',
+    'Não há processamento em background após fechar a página. Os próximos itens só avançam quando a tela volta a enviar etapas. '
+    'Um item em processamento precisa concluir ou ter sua reserva de execução expirada antes da retomada.'),
+   ('p',
+    'O importador não recebe senhas, papéis globais, URLs externas ou caminhos técnicos arbitrários. Dados pessoais do arquivo '
+    'não são armazenados em localStorage nem em cache público; o payload operacional fica no servidor para a retomada '
+    'autorizada.')]),
+ ('11',
+  'Ações em lote e operações',
+  'Resultados individuais, continuidade e recuperação',
+  [('h', 'Executar um lote'),
+   ('steps',
+    ['Selecione organizações na página atual e abra Ações em lote.',
+     'Escolha Pausar ou Reativar. Revise nomes e quantidade.',
+     'Informe uma justificativa e marque a confirmação.',
+     'Execute o lote e confira cada resultado.']),
+   ('p',
+    'Cada organização passa por autorização e versão próprias. Uma falha em um item não é apresentada como sucesso do conjunto. '
+    'Também não há promessa de uma transação global que abranja várias organizações e o Dropbox.'),
+   ('table',
+    [['Resultado', 'Ação do operador'],
+     ['Pendente', 'Usar Continuar pendências.'],
+     ['Em processamento', 'Consultar novamente; uma etapa ativa não deve ser executada duas vezes.'],
+     ['Concluído', 'Operação confirmada para esse item.'],
+     ['Parcial', 'Cadastro ou estado salvo, mas alguma etapa não foi confirmada. Ler a mensagem e o ID.'],
+     ['Falhou', 'Ler o motivo. Conflito de versão exige revisão; não repetir o mesmo rascunho automaticamente.']]),
+   ('h', 'Minhas operações'),
+   ('p',
+    'O botão lista as vinte tentativas mais recentes da conta atual. Abrir uma operação apenas consulta seu estado; o '
+    'processamento depende de continuar explicitamente. O endereço contém a referência da tentativa para recuperação.'),
+   ('p',
+    'Retomar próximo item recuperável trata um item elegível por clique. Operações concluídas não são executadas novamente. A '
+    'chave da tentativa relaciona ator, tipo e conteúdo, rejeitando o uso da mesma chave para outro pedido.'),
+   ('callout',
+    'O resultado “Parcial” não autoriza apagar o cadastro como rollback. Primeiro consulte o registro e o armazenamento. A tela '
+    'não fornece exclusão definitiva em lote.')]),
+ ('12',
+  'Histórico, erros e segurança',
+  'Rastreabilidade e ações diante de falhas',
+  [('h', 'Histórico'),
+   ('p',
+    'A aba Histórico apresenta eventos reais do novo módulo: criação, configuração, edição, pausa, reativação, política e '
+    'decisão de pedidos. São mostrados tipo, ator quando conhecido, justificativa, data/hora e versão. A paginação usa o último '
+    'evento como referência.'),
+   ('p',
+    'Alterações realizadas por caminhos legados depois da migration invalidam a versão de gestão e podem aparecer como operação '
+    'legada sem atribuição de ator. Eventos antigos não são reconstruídos nem agregados retrospectivamente nesta entrega.'),
+   ('table',
+    [['Situação', 'Conduta'],
+     ['Sessão expirada ou acesso negado',
+      'A tela retira dados do contexto e oferece nova entrada. Não insistir com uma operação de outra conta.'],
+     ['Versão alterada', 'Preservar o rascunho, consultar a versão atual e revisar antes de salvar.'],
+     ['Duplicidade', 'Escolher um identificador realmente novo ou consultar o cadastro existente.'],
+     ['Armazenamento parcial', 'Consultar Minhas operações e retomar somente quando o resultado indicar recuperação permitida.'],
+     ['Limite abaixo do uso', 'Rever o valor; não excluir recursos para contornar a regra.'],
+     ['Feature/schema indisponível',
+      'Solicitar a preparação controlada do ambiente; não alterar flags ou migrations sem autorização.']]),
+   ('h', 'Proteções deliberadas'),
+   ('p',
+    'Não há elevação de papel global, mudança silenciosa de pasta, exclusão permanente, cache público de dados administrativos '
+    'ou disparo de migration pela interface. As gravações exigem origem compatível, JSON, autorização e identificação da '
+    'operação.'),
+   ('callout',
+    'Reverter o código não reverte os dados já gravados. Quotas, vínculos, eventos e pastas precisam ser tratados por '
+    'procedimentos próprios de recuperação.')]),
+ ('13',
+  'Entrega técnica e validação',
+  'Evidência local de 27/10/2026; limites de aceite',
+  [('table',
+    [['Verificação', 'Resultado desta revisão'],
+     ['Node e SQLite',
+      '533 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, '
+      'lifecycle e quotas do produto.'],
+     ['Frontend', 'TypeScript e build completos aprovados. Lint dos 8 arquivos TS/TSX do escopo: sem erros ou avisos.'],
+     ['Navegador',
+      '18 casos em Chromium local: 17 em uma execução e um caso adicional de toque. Cinco viewports, filtros/URL, foco, '
+      'revogação, resposta atrasada, CSV e quatro fluxos com handlers reais.'],
+     ['Lint global',
+      '109 erros e 44 avisos anteriores. Todos os arquivos com problemas e a configuração são iguais à base do produto. Nenhuma '
+      'regra foi relaxada.'],
+     ['Escala local',
+      '6, 50 e 500 organizações; 30 amostras após aquecimento. p50/p95 e statements registrados em '
+      'docs/ops/organization-management-benchmark.json. Não mede latência de rede nem rows_read do D1.'],
+     ['CI e ambientes',
+      'Consultar o resultado por SHA na PR draft. Nenhuma homologação em Preview, Produção ou provedor real; nenhuma migration '
+      'remota executada.']]),
+   ('h', 'Limitações que permanecem'),
+   ('p',
+    'O histórico anterior à migration não foi incorporado. Documentos são apenas consulta. Usuários, armazenamento e exportações '
+    'não têm quota editável. Lotes não avançam após fechar a página. Não houve teste humano com leitor de tela nem comparação '
+    'com a imagem aprovada, que não foi fornecida.'),
+   ('callout',
+    'A migration 0042 foi testada somente em SQLite isolado. Reverter código não desfaz quotas, vínculos, eventos ou pastas; as '
+    'proteções SQL continuam presentes. Produção exige o processo protegido do repositório.'),
+   ('p',
+    'Base do produto: e47deac18888195b945a244dadb9e27c5902638f. Consulte a matriz de critérios e os detalhes de evidência em '
+    'docs/ops/organization-management-acceptance.md.')])]
 
 # Generate a matching, editable Markdown manual from the exact same content.
-md=['# Gestão de Organizações — Manual de funcionamento','', '**Candidato local. Publicação, integração completa e homologação pendentes.**','',f'Base inspecionada: `{BASE}`.','']
+md=['# Gestão de Organizações — Manual de funcionamento','', '**Candidato em revisão. Gates locais documentados; lint global bloqueado por baseline. Consulte CI por SHA na PR draft.**','',f'Base inspecionada: `{BASE}`.','']
 for num,title,sub,blocks in chapters:
     md += [f'## {num}. {title}',sub,'']
     for kind,content in blocks:
@@ -175,21 +453,21 @@ def chrome(canvas,doc):
         canvas.setFont('MaonoBold',16);canvas.drawString(48,H-93,'MAÕNO')
         canvas.setFont('MaonoSans',9);canvas.setFillColor(colors.HexColor('#c8d0d9'));canvas.drawString(48,H-110,'o território como parte da estratégia')
         canvas.setStrokeColor(colors.HexColor('#34404f'));canvas.line(48,58,W-48,58)
-        canvas.setFont('MaonoSans',8);canvas.drawString(48,42,'Edição 1.1 • Manual do candidato de implementação')
+        canvas.setFont('MaonoSans',8);canvas.drawString(48,42,'Edição 1.2 • Manual do candidato de implementação')
     else:
         canvas.setStrokeColor(LINE);canvas.line(LEFT,H-37,W-RIGHT,H-37)
         canvas.setFillColor(MUTED);canvas.setFont('MaonoSans',8)
         canvas.drawString(LEFT,H-26,'MAÕNO  /  GESTÃO DE ORGANIZAÇÕES')
         canvas.setStrokeColor(GOLD);canvas.line(LEFT,40,W-RIGHT,40)
         canvas.setFont('MaonoSans',7.5);canvas.setFillColor(MUTED)
-        canvas.drawString(LEFT,26,'Candidato local • Publicação e homologação pendentes')
+        canvas.drawString(LEFT,26,'Candidato em revisão • Não homologado em Produção')
         canvas.drawRightString(W-RIGHT,26,str(doc.page))
     canvas.restoreState()
 
 coverTitle=ParagraphStyle('coverTitle',fontName='MaonoBold',fontSize=31,leading=37,textColor=colors.white,spaceAfter=16)
 coverSub=ParagraphStyle('coverSub',fontName='MaonoSans',fontSize=14,leading=21,textColor=colors.HexColor('#c8d0d9'),spaceAfter=20)
 coverNote=ParagraphStyle('coverNote',fontName='MaonoSans',fontSize=10.4,leading=16,textColor=colors.HexColor('#e5d5b6'))
-story += [Spacer(1,150),Paragraph('Gestão de<br/>Organizações',coverTitle),Paragraph('Manual de funcionamento da subaba<br/>Painel Admin · Maõno Maps',coverSub),Spacer(1,17),Paragraph('CADASTRO  /  PESSOAS  /  CAPACIDADE<br/>SOLICITAÇÕES  /  IMPORTAÇÃO  /  OPERAÇÕES',ParagraphStyle('coverK',fontName='MaonoBold',fontSize=9,leading=16,textColor=GOLD)),Spacer(1,45),Paragraph('Este documento acompanha a integração local revisada. Passaram 88 testes curtos, incluindo nove de integração com o produto. Build, navegador, CI e publicação permanecem pendentes.',coverNote),Spacer(1,17),Paragraph('Os procedimentos descrevem o comportamento codificado no pacote e as restrições explícitas da primeira versão. Não atestam recursos ativos em Produção.',coverNote),PageBreak()]
+story += [Spacer(1,150),Paragraph('Gestão de<br/>Organizações',coverTitle),Paragraph('Manual de funcionamento da subaba<br/>Painel Admin · Maõno Maps',coverSub),Spacer(1,17),Paragraph('CADASTRO  /  PESSOAS  /  CAPACIDADE<br/>SOLICITAÇÕES  /  IMPORTAÇÃO  /  OPERAÇÕES',ParagraphStyle('coverK',fontName='MaonoBold',fontSize=9,leading=16,textColor=GOLD)),Spacer(1,45),Paragraph('Revisão da integração: 533 regressões, TypeScript, build e navegador aprovados localmente. O lint global possui falhas anteriores à integração. A entrega permanece em revisão, com CI por SHA na PR draft.',coverNote),Spacer(1,17),Paragraph('Os procedimentos descrevem o comportamento codificado no pacote e as restrições explícitas da primeira versão. Não atestam recursos ativos em Produção.',coverNote),PageBreak()]
 
 for index,(num,title,sub,blocks) in enumerate(chapters):
     story += [P(f'GUIA {num}','eyebrow'),P(title,'title'),P(sub,'sub')]
@@ -205,6 +483,6 @@ for index,(num,title,sub,blocks) in enumerate(chapters):
             t=Table([[P(content,'code')]],colWidths=[width]);t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#f1f4f8')),('LEFTPADDING',(0,0),(-1,-1),10),('RIGHTPADDING',(0,0),(-1,-1),10),('TOPPADDING',(0,0),(-1,-1),10),('BOTTOMPADDING',(0,0),(-1,-1),10)]));story += [t,Spacer(1,10)]
     if index<len(chapters)-1:story.append(PageBreak())
 
-SimpleDocTemplate(str(OUT),pagesize=A4,rightMargin=RIGHT,leftMargin=LEFT,topMargin=56,bottomMargin=57,title='Maõno | Gestão de Organizações - Manual de funcionamento',author='Maõno',subject='Candidato local; publicação e homologação pendentes').build(story,onFirstPage=chrome,onLaterPages=chrome)
+SimpleDocTemplate(str(OUT),pagesize=A4,rightMargin=RIGHT,leftMargin=LEFT,topMargin=56,bottomMargin=57,title='Maõno | Gestão de Organizações - Manual de funcionamento',author='Maõno',subject='Candidato em revisão; não homologado em Produção').build(story,onFirstPage=chrome,onLaterPages=chrome)
 
 print(OUT)

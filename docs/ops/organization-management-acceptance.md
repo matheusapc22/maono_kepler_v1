@@ -6,11 +6,11 @@ Fonte: critérios do plano recuperado da Library pelo executor coordenador em 27
 
 | Critério | Implementação e evidência | Limite do aceite |
 | --- | --- | --- |
-| 1. Rota e shell | Integração condicionada à subaba `organizations`; ações no cabeçalho existente, sem título adicional, Atualizar ou zoom. CSS do workspace e de seus dialogs. | Verificar densidade/layout nos viewports do plano com build real. |
+| 1. Rota e shell | Integração condicionada à subaba `organizations`; ações no cabeçalho existente, sem título adicional, Atualizar ou zoom. CSS do workspace e de seus dialogs. | Cinco viewports do build real inspecionados, sem overflow global. Sem referência aprovada para equivalência exata. |
 | 2. Indicadores e semântica | SQL independente para summary global e total filtrado; pessoas ativas distintas; arquivos contabilizados uma vez por registro, excluindo lixeira/expurgados e órfãos. Owner explícito ativo, sem inferência legada. Datas em America/Sao_Paulo. Atividade usa eventos, não updated_at. | Atividade anterior ao módulo não aparece. Falha de consulta não produz zeros substitutos. |
-| 3. Navegação | Filtros rascunho/aplicados, URL, paginação, seleção da página, AbortController e sequências. Uma recarga de workspace ao fim de uma operação/lote. Detalhe carregado sob demanda. | Browser deve confirmar voltar/avançar e respostas fora de ordem. |
+| 3. Navegação | Filtros rascunho/aplicados, URL, paginação, seleção da página, AbortController e sequências. Uma recarga de workspace ao fim de uma operação/lote. Detalhe carregado sob demanda. | Voltar/avançar, seleção e resposta antiga após revogação aprovados no browser local. |
 | 4. Lifecycle | Chave por ator e hash; progresso/lease persistidos. Criação retoma o mesmo registro inclusive enquanto claim de armazenamento está ativo. Nenhum GET cria pasta. Slug/pasta ausentes do contrato de edição. | HTTP Dropbox simulado nos testes locais; não é aceitação do provedor. |
-| 5. Pausa e responsável | Pausa via lifecycle, sem DELETE; teste com snapshots de vínculos, projetos, ACL e arquivos. Permissão operacional reconsulta estado do contexto quando o módulo está habilitado. Admin mantém acesso para recuperação. Owner elegível protegido por triggers, sem promoção de papel global. | Proteções de último owner/autodesativação continuam sob os contratos dos endpoints legados de usuários, que devem integrar a regressão. |
+| 5. Pausa e responsável | Pausa via lifecycle, sem DELETE; teste com snapshots de vínculos, projetos, ACL e arquivos. Permissão operacional reconsulta estado do contexto quando o módulo está habilitado. Admin mantém acesso para recuperação. Owner elegível protegido por triggers, sem promoção de papel global. | Proteções de último owner/autodesativação continuam sob os contratos dos endpoints legados de usuários, incluídos na regressão aprovada. |
 | 6. Quotas | Mesmo resolver de Projects; uso e reservas ativos; origem do limite visível. Edição/aprovação preservam herança e overrides não editados. Reserva exige versão atual da política. SQL impede downgrade abaixo do uso/reservas. | Usuários, armazenamento e exportações não editáveis como limites operacionais. |
 | 7. Solicitações | created_by, requested_limits_json, motivo, valores solicitados e versões exibidos. Decisão/política/evento em batch com asserção transacional; UPDATE sem linhas provoca rollback. Recusa preserva política. | Aprovação apenas de plano/projetos. Outros tipos podem ser consultados/recusados. |
 | 8. CSV | UTF-8 estrito, 100 linhas/128 KiB, prévia sem escrita de negócio, contratos fechados, slug/plano/owner/duplicidade validados. Nenhuma URL é buscada. Hash e progresso duráveis; retry apenas recuperável; fórmulas neutralizadas na exportação. | A página precisa permanecer aberta para avançar etapas; não há worker em background. Validação de prévia faz consultas por linha, limitada a 100. |
@@ -26,9 +26,12 @@ Fonte: critérios do plano recuperado da Library pelo executor coordenador em 27
 
 As suítes de lifecycle, concorrência, wiring e project-creation-limits cobrem regressões existentes. A contagem agregada é informativa; não substitui os cenários nem os gates pendentes. O log da execução final deve prevalecer sobre checkpoints anteriores.
 
-## Pendências explícitas
+## Resultado e pendências explícitas
 
-- Execução e registro de lint, TypeScript, build, regressões storage/readiness/drift/chaos/error-contract/quota e suites de usuários.
-- Browser: 1366x768, 1920x1080, 768px e 390px; teclado/foco, retorno por histórico, toque e estados de falha. Inspeção de atributos não equivale a teste humano com leitor de tela.
-- Benchmark 6/50/500 organizações: reportar p50/p95, requests e linhas, distinguindo simulação local, navegador e D1. O teste de statements constantes não é esse benchmark.
-- PR draft/CI do SHA remoto; Preview, Produção, provedor real e migration remota não fazem parte da execução autorizada.
+533 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 8 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
+
+Navegador: 18 casos aprovados (17 + toque adicional), cinco viewports inspecionados. Quatro casos usam sessões/ACL/handlers reais com SQLite. Os demais verificam UI com HTTP interceptado. Teste humano com leitor de tela e homologação de dispositivos reais permanecem pendentes.
+
+Benchmark local de 6/50/500: 30 amostras, p50/p95 e statements em `organization-management-benchmark.json`. Não é medição de D1, latência de rede ou carregamento completo da página. O número de statements permanece 8; linhas retornadas não equivalem a linhas lidas.
+
+Auditoria antiga sanitizada continua fora do histórico novo (entrega parcial nesse critério). Imagem aprovada indisponível; sem alegação de fidelidade exata. Preview, Produção, provedor real e migration remota não executados. CI e SHA remoto são registrados na PR draft nova. Evidências detalhadas e reversão: `organization-management.md` e `organization-management-validation.json`.

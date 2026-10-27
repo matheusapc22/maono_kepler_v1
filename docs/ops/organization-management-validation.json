@@ -1,0 +1,105 @@
+{
+  "productBase": "e47deac18888195b945a244dadb9e27c5902638f",
+  "testedCodeHead": "2656b3568a5de80aea863fcf1454499ac89b96b5",
+  "note": "Subsequent changes are browser tests, workflow, benchmark and documentation. Application sources match testedCodeHead.",
+  "regression": {
+    "total": 535,
+    "passed": 533,
+    "failed": 0,
+    "skipped": 2,
+    "skipReason": "Bash operator cases require Linux; included in CI"
+  },
+  "scopedLint": {
+    "files": [
+      "playwright.organization-management.config.ts",
+      "src/pages/Admin.tsx",
+      "src/pages/Admin/organizations/AdminOrganizationsSection.tsx",
+      "src/pages/Admin/organizations/OrganizationDialogs.tsx",
+      "src/pages/Admin/organizations/organizations-api.ts",
+      "src/pages/Admin/organizations/organizations-types.ts",
+      "tests/browser/organization-management-integration.spec.ts",
+      "tests/browser/organization-management.spec.ts"
+    ],
+    "errors": 0,
+    "warnings": 0
+  },
+  "typecheck": "passed",
+  "build": {
+    "status": "passed",
+    "modules": 11945,
+    "duration": "10m31s"
+  },
+  "browser": {
+    "passed": 18,
+    "failed": 0,
+    "execution": "17 cases in full suite + one additional touch case",
+    "viewports": [
+      [
+        1774,
+        887
+      ],
+      [
+        1366,
+        768
+      ],
+      [
+        1920,
+        1080
+      ],
+      [
+        768,
+        1024
+      ],
+      [
+        390,
+        844
+      ]
+    ],
+    "visualInspection": "all five captures inspected; internal table scroll on small screens"
+  },
+  "environments": {
+    "local": "validated within described scope",
+    "CI": "see exact published SHA on draft PR",
+    "Preview": "not run",
+    "Production": "not run",
+    "remoteMigration": "not run"
+  },
+  "logs": {
+    "organization-regressions-e47.tap": {
+      "sha256": "84ed364f59577c80723127d658092141dda49afcf18a44962f1066a18d9fc1d1",
+      "bytes": 310983
+    },
+    "organization-build-e47.log": {
+      "sha256": "cb8c22e147ca754088e4059198c9187057547cda96363b4adbffef2459c05b57",
+      "bytes": 26140
+    },
+    "organization-browser-final.log": {
+      "sha256": "79323c0870e55cd331d94a2b31d60e627ea38e2ce5554f5f617c5acb8d8c3d8f",
+      "bytes": 6355
+    },
+    "organization-touch.log": {
+      "sha256": "f4e0ee3ee51ab9e991b7ef33c449d24d91f5dd07e8e4efbc81f6416e443bdc70",
+      "bytes": 779
+    },
+    "organization-scoped-lint.json": {
+      "sha256": "3072e1c0743057e0604d9f8565dea05b2403d798b88f1bf47f4c3d4ed95589b3",
+      "bytes": 2434
+    },
+    "organization-lint.json": {
+      "sha256": "06dd018bf86f8d98c617b2e1866fc75e984cbc584d0ed831b165effc7c7e0850",
+      "bytes": 1188215
+    }
+  },
+  "migration": {
+    "file": "migrations/0042_organization_management.sql",
+    "sha256": "e47d8a1444c8c14681589733867a5f00e2490835ffc588e0de9dde1bcac6aa00",
+    "environment": "isolated SQLite only"
+  },
+  "manual": {
+    "file": "docs/user-guide/Manual_Gestao_Organizacoes_Maono.pdf",
+    "pages": 14,
+    "bytes": 76654,
+    "sha256": "5137e1f3349be91e5072f28dee0d26b0f9186343b70eb7388cc77ba60cf1f7b4",
+    "visualReview": "all 14 rendered pages inspected"
+  }
+}
