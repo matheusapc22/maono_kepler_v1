@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { restoreOrganizationManagement } from './organization-management-preservation.mjs';
 
 // Strict inverse of the approved Admin presentation, extraction and contextual
 // retry metadata. The complete predecessor is pinned independently at product
@@ -44,6 +45,7 @@ const changes = [
 ];
 
 export function restoreApprovedAdminWorkspace(path, source) {
+  source = restoreOrganizationManagement(path, source);
   if (path !== 'src/pages/Admin.tsx') return source;
   for (const { before, after } of changes) {
     assert.equal(source.split(after).length - 1, 1, `exact approved Admin workspace edit: ${path}`);

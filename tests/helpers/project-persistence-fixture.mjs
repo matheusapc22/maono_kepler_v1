@@ -92,7 +92,7 @@ export function persistenceFixture(t, hooks = {}) {
             db
           });
           const stmt = db.prepare(sql);
-          const value = kind === "first" ? stmt.get(...args) ?? null : kind === "all" ? {
+          const value = kind === "first" ? stmt.get(...args) ?? null : (kind === "all" || (kind === "batch" && stmt.columns().length > 0)) ? {
             results: stmt.all(...args)
           } : (() => {
             const r = stmt.run(...args);

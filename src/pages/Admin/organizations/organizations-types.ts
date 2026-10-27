@@ -1,0 +1,15 @@
+export type Plan = 'free' | 'pro' | 'enterprise';
+export const PLAN_LABELS: Record<Plan,string> = {free:'Básico',pro:'Profissional',enterprise:'Empresarial'};
+export type Organization = {id:number;name:string;slug:string;description:string;active:boolean;version:number;plan:Plan;owner:{id:number;name:string;email:string}|null;projectCount:number;userCount:number;fileCount:number;storageStatus:string;updatedAt:string;lastActivityAt:string|null};
+export type Query = {q:string;status:string;plan:string;sort:string;page:number;size:number};
+export type Workspace = {organizations:Organization[];pagination:{total:number;page:number;size:number;pages:number};summary:{organizations:number;active:number;users:number;files:number;requests:number};capabilities:{projectQuotaEnforced:boolean;edits:boolean;imports:boolean}};
+export type Policy = {plan:Plan;projects:number;storageMb:number;projectOverride:number|null;projectSource?:'organization'|'legacy'|'environment'|'plan';used:number;reserved:number;remaining:number;storageUsedMb:number;projectQuotaEnforced:boolean;informational:string[]};
+export type Detail = {organization:Organization;policy:Policy};
+export type Person = {id:number;name:string;email:string;active:number;accessLevel:string};
+export type FileRow = {id:number;name:string;fileType:string;sizeBytes:number;folderId:number|null;isProject:boolean;createdAt:string};
+export type EventRow = {id:number;action:string;reason:string|null;createdAt:string;actorName:string|null;version:number};
+export type OperationItem = {index:number;label:string;state:'pending'|'running'|'succeeded'|'partial'|'failed';attempts:number;result:{id?:number;storageStatus?:string}|null;error:string|null;code:string|null;retryable:boolean};
+export type Operation = {id:string;kind:string;createdAt:string;done:boolean;items:OperationItem[]};
+export type OperationInput = {kind:'create'|'import'|'change'|'pause'|'resume'|'review';items:Record<string,unknown>[]};
+export type ImportPreview = {valid:boolean;hash:string;rows:{line:number;error?:string;ownerId?:number;input?:Record<string,unknown>}[]};
+export type LimitRequest = {id:number;organizationId:number;organizationName:string;requestType:string;requestedPlan:Plan|null;requestedLimits:unknown;reason:string;status:string;version:number;organizationVersion:number;requestedBy:string;createdAt:string;reviewNotes:string;approvalSupported:boolean};

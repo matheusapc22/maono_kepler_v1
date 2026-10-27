@@ -1,3 +1,4 @@
+import { restoreOrganizationManagementDomain } from './helpers/organization-management-preservation.mjs';
 import { isRegionAccessDenied, isRegionAuthenticationError } from "../src/components/loading/region-loading-policy.ts";
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -8,7 +9,7 @@ import { createStorageSqliteEnv } from './helpers/storage-sqlite.mjs';
 import { restorePasswordManagement } from './helpers/password-management-preservation.mjs';
 import { assertUsersAccessPreserved, canonical, declaration, digest, nodes, parse, preservedHelpers, preservedValues, usersAccessBaseline } from './helpers/users-access-preservation.mjs';
 
-const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8').replace(/\r\n/g,'\n');
 const source = read(usersAccessBaseline.path);
 const ast = parse(source);
 const compile = contents => ts.transpileModule(contents, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
@@ -40,7 +41,7 @@ test('redesigned overview preserves independently pinned helpers, gates, filters
 });
 for (const [path, expected] of Object.entries(usersAccessBaseline.unchangedFiles)) {
   test(`domain source preserves 158e2b3 outside the reviewed password fix: ${path}`, () => {
-    let value=restorePasswordManagement(path, read(path));
+    let value=restorePasswordManagement(path, restoreOrganizationManagementDomain(path, read(path)));
     if(path === "src/lib/api.ts") {
       const marker="export function listOrganizationFiles(";
       assert.equal(value.split(marker).length,2);

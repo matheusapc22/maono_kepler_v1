@@ -146,7 +146,21 @@ function resolvePlanName(organization) {
     : "free";
 }
 
-function resolveOrganizationPolicy(organization, env) {
+export function resolveProjectQuotaPolicy(organization, env) {
+  const plan = resolvePlanName(organization);
+  const limitsJson = parseJsonObject(organization?.limits_json ?? organization?.plan_limits_json ?? organization?.limits);
+  const candidates = [
+    [organization?.project_limit, "organization"],
+    [organization?.projects_limit, "legacy"],
+    [limitsJson?.projects?.limit ?? limitsJson?.projects, "legacy"],
+    [env?.[`PROJECT_LIMIT_${plan.toUpperCase()}`], "environment"],
+  ];
+  const [value, source] = candidates.find(([candidate]) => candidate != null) || [];
+  const valid = Number.isInteger(Number(value)) && Number(value) > 0;
+  return {limit: valid ? Number(value) : DEFAULT_PLAN_LIMITS[plan].projects, source: valid ? source : "plan"};
+}
+
+export function resolveOrganizationPolicy(organization, env) {
   const plan = resolvePlanName(organization);
   const defaults = DEFAULT_PLAN_LIMITS[plan];
   const limitsJson = parseJsonObject(
@@ -154,14 +168,7 @@ function resolveOrganizationPolicy(organization, env) {
       organization?.plan_limits_json ??
       organization?.limits,
   );
-  const projectLimit = normalizePositiveInteger(
-    organization?.project_limit ??
-      organization?.projects_limit ??
-      limitsJson?.projects?.limit ??
-      limitsJson?.projects ??
-      env?.[`PROJECT_LIMIT_${plan.toUpperCase()}`],
-    defaults.projects,
-  );
+  const projectLimit = resolveProjectQuotaPolicy(organization, env).limit;
   const storageLimitMb = normalizePositiveInteger(
     organization?.storage_limit_mb ??
       limitsJson?.storageMb?.limit ??
@@ -327,6 +334,7 @@ export async function getOrganizationLimitsSnapshot(
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
+      ...(Number.isSafeInteger(organization.management_version) ? {managementVersion: organization.management_version} : {}),
     },
     plan: policy.plan,
     projects: {
@@ -444,6 +452,7 @@ async function reactivateTerminalReservation(
     currentTime,
     expiresAt,
     limit,
+    managementVersion,
   },
 ) {
   const row = await getDb(env)
@@ -458,6 +467,7 @@ async function reactivateTerminalReservation(
        WHERE id = ?
          AND status IN ('FAILED', 'RELEASED', 'EXPIRED')
          AND ${buildCapacityPredicate()}
+         ${Number.isSafeInteger(managementVersion) ? 'AND EXISTS (SELECT 1 FROM organizations WHERE id=? AND management_version=? AND active=1)' : ''}
        RETURNING *`,
     )
     .bind(
@@ -468,6 +478,7 @@ async function reactivateTerminalReservation(
       organizationId,
       currentTime,
       limit,
+      ...(Number.isSafeInteger(managementVersion) ? [organizationId, managementVersion] : []),
     )
     .first();
 
@@ -483,6 +494,7 @@ async function insertReservation(
     currentTime,
     expiresAt,
     limit,
+    managementVersion,
   },
 ) {
   const row = await getDb(env)
@@ -502,6 +514,7 @@ async function insertReservation(
        SELECT ?, 'project', ?, NULL, ?, 'RESERVED', ?, NULL,
               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
        WHERE ${buildCapacityPredicate()}
+         ${Number.isSafeInteger(managementVersion) ? 'AND EXISTS (SELECT 1 FROM organizations WHERE id=? AND management_version=? AND active=1)' : ''}
        ON CONFLICT (organization_id, resource_type, idempotency_key)
        DO NOTHING
        RETURNING *`,
@@ -515,6 +528,7 @@ async function insertReservation(
       organizationId,
       currentTime,
       limit,
+      ...(Number.isSafeInteger(managementVersion) ? [organizationId, managementVersion] : []),
     )
     .first();
 
@@ -587,6 +601,7 @@ export async function reserveProjectQuota(
       currentTime,
       expiresAt,
       limit: snapshot.projects.limit,
+      managementVersion: snapshot.organization.managementVersion,
     });
 
     if (reactivated) {
@@ -600,6 +615,7 @@ export async function reserveProjectQuota(
       currentTime,
       expiresAt,
       limit: snapshot.projects.limit,
+      managementVersion: snapshot.organization.managementVersion,
     });
 
     if (inserted) {
@@ -622,6 +638,15 @@ export async function reserveProjectQuota(
   const latest = await getOrganizationLimitsSnapshot(env, id, {
     now,
   });
+
+  if (Number.isSafeInteger(snapshot.organization.managementVersion) &&
+      latest.organization.managementVersion !== snapshot.organization.managementVersion) {
+    throw createOrganizationLimitError(
+      "A política da organização mudou. Consulte a capacidade atual antes de tentar novamente.",
+      409,
+      "ORGANIZATION_QUOTA_POLICY_CHANGED",
+    );
+  }
 
   throw createOrganizationLimitError(
     "A organização atingiu o limite de projetos.",

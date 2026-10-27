@@ -1,0 +1,59 @@
+/* Scoped to this workspace and its native top-layer dialogs. Never page scaling. */
+.admin-organizations-workspace,.admin-organizations-dialog{--aog-surface:#0d131b;--aog-border:var(--mm-border,#252b35);--aog-gold:var(--maono-accent-bright,#f2c766);color:var(--mm-text,#f4f1e8);font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif;color-scheme:dark}
+.admin-organizations-workspace *,.admin-organizations-dialog *{box-sizing:border-box}
+.admin-organizations-workspace{display:grid;gap:18px;min-width:0}
+.admin-organizations-workspace button,.admin-organizations-dialog button,.aog-header-actions button{min-height:var(--maono-density-control-small,36px);padding:7px 12px;border:1px solid var(--mm-border-strong,#333a46);border-radius:7px;background:#0d131b;color:#f4f1e8;font:inherit;cursor:pointer}
+.admin-organizations-workspace button:hover,.admin-organizations-dialog button:hover,.aog-header-actions button:hover{border-color:var(--maono-accent,#d6a84f)}
+.admin-organizations-workspace button:disabled,.admin-organizations-dialog button:disabled,.aog-header-actions button:disabled{opacity:.5;cursor:not-allowed}
+.admin-organizations-workspace :is(button,input,select,textarea,a):focus-visible,.admin-organizations-dialog :is(button,input,select,textarea,a):focus-visible{outline:2px solid var(--aog-gold);outline-offset:3px}
+.admin-organizations-workspace .aog-primary,.admin-organizations-dialog .aog-primary,.aog-header-actions .aog-primary{background:linear-gradient(180deg,#f2c766,#d6a84f);border-color:#d6a84f;color:#171105;font-weight:750}
+#admin-organizations-actions{margin-left:auto;min-width:0}
+.aog-header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
+.aog-count{padding:2px 6px;margin-left:8px;border:1px solid #8a6a2f;border-radius:4px;color:#f2c766}
+.aog-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.aog-metric{display:flex;gap:14px;align-items:center;padding:16px;min-height:96px;border:1px solid var(--aog-border);border-radius:10px;background:var(--aog-surface)}
+.aog-metric-icon{display:grid;place-items:center;width:48px;height:48px;flex:0 0 48px;border-radius:10px;background:rgba(214,168,79,.09);color:var(--aog-gold)}
+.aog-metric strong{display:block;font-size:26px;line-height:1.15;margin:4px 0}
+.aog-metric small{font-size:11px;color:#9da7b6;display:block}
+.aog-filters{display:grid;grid-template-columns:minmax(180px,1.7fr) repeat(3,minmax(130px,1fr)) auto auto;gap:12px;align-items:end}
+.aog-filters label,.aog-form label{display:grid;gap:6px;font-size:12px;font-weight:650}
+.admin-organizations-workspace input:not([type=checkbox]),.admin-organizations-dialog input:not([type=checkbox]),.admin-organizations-dialog textarea{width:100%;min-width:0;min-height:var(--maono-density-control,40px);padding:8px 10px;border:1px solid #333a46;border-radius:7px;background:#080e14;color:#f4f1e8;font:inherit}
+.admin-organizations-dialog input[readonly]{color:#9da7b6}
+.admin-organizations-dialog textarea{min-height:84px;resize:vertical}
+.admin-organizations-workspace input[type=checkbox],.admin-organizations-dialog input[type=checkbox]{width:17px;height:17px;accent-color:#d6a84f}
+.aog-table-card{border:1px solid var(--aog-border);border-radius:12px;background:var(--aog-surface);min-width:0;padding:12px}
+.aog-selection{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 0 12px;font-size:12px}
+.aog-check{display:flex!important;align-items:center;gap:9px;font-size:13px}
+.aog-table-scroll{overflow:auto;border:1px solid var(--aog-border);border-radius:8px}
+.aog-table-scroll table{width:100%;min-width:1080px;border-collapse:collapse}
+.aog-table-scroll th{padding:12px 10px;background:#090e14;font-size:10px;text-transform:uppercase;text-align:left;white-space:nowrap}
+.aog-table-scroll td{padding:12px 10px;font-size:12px;border-top:1px solid var(--aog-border);vertical-align:middle}
+.aog-table-scroll td small{display:block;font-size:10px;color:#9da7b6;margin-top:3px}
+.admin-organizations-workspace .aog-name{padding:0;border:0;min-height:24px;background:transparent;font-weight:700;text-align:left}
+.aog-plan,.aog-state{display:inline-flex;padding:4px 9px;border-radius:20px;border:1px solid #394555;font-size:10px;white-space:nowrap}
+.admin-organizations-workspace .plan-pro{border-color:#375f91;color:#abd1ff}.admin-organizations-workspace .plan-enterprise{border-color:#8a6a2f;color:#f2c766}.is-active.aog-state{color:#86efac;border-color:#245e40;background:#0f271d}.is-paused.aog-state{color:#f2c766;border-color:#8a6a2f;background:#241e10}
+.aog-actions{display:flex;gap:5px}.admin-organizations-workspace .aog-actions button{display:grid;place-items:center;width:32px;padding:5px;min-height:32px}
+.maono-admin-workspace .aog-actions .admin-icon{width:17px;height:17px}
+.aog-pagination{display:flex;align-items:center;gap:10px;font-size:12px;flex-wrap:wrap}
+.aog-pagination>span:first-child{margin-right:auto}.aog-pagination label{display:flex;gap:8px;align-items:center}
+.aog-status{color:#9da7b6;font-size:12px;margin:0}.aog-error{padding:12px;border:1px solid #793939;border-radius:8px;background:#271116;color:#ffb5b5;overflow-wrap:anywhere}
+.aog-skeleton{display:block;height:26px;border-radius:5px;background:linear-gradient(100deg,#11151c,#1b2531,#11151c)}
+.aog-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.admin-organizations-dialog{width:min(680px,calc(100vw - 24px));max-height:calc(100dvh - 32px);padding:0;border:1px solid #394555;border-radius:14px;background:#0c1219;box-shadow:0 24px 90px #0008}
+.admin-organizations-dialog.is-wide{width:min(960px,calc(100vw - 24px))}
+.admin-organizations-dialog::backdrop{background:#000b}
+.admin-organizations-dialog>header{display:flex;justify-content:space-between;align-items:start;gap:16px;padding:20px;border-bottom:1px solid #252b35}
+.admin-organizations-dialog>header h2{font-size:20px;margin:4px 0 0}.admin-organizations-dialog>header small{font-size:10px;color:#f2c766;letter-spacing:.08em}
+.aog-dialog-body{padding:20px;display:grid;gap:16px}.aog-dialog-body p{margin:0;line-height:1.5}.aog-dialog-body small{color:#9da7b6;font-size:11px}.aog-dialog-body a{color:#f2c766}
+.aog-form{display:grid;gap:14px}.aog-form>button{justify-self:start}.aog-form footer{display:flex;gap:12px;flex-wrap:wrap}
+.aog-tabs{display:flex;gap:6px;flex-wrap:wrap}.admin-organizations-dialog .aog-tabs button{font-size:12px}.admin-organizations-dialog .aog-tabs .is-active{border-color:#b98a36;color:#f2c766;background:#241e10}
+.aog-records,.aog-operation-items{list-style:none;padding:0;margin:0;display:grid;gap:8px;max-height:360px;overflow:auto}
+.aog-records li,.aog-operation-items li{padding:10px 12px;border:1px solid #252b35;border-radius:7px;display:grid;gap:4px}
+.aog-records li span,.aog-operation-items li p{font-size:12px;color:#acb5c2}
+.aog-policy-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.aog-policy-summary span{padding:12px;background:#121b25;border-radius:8px;font-size:12px}.aog-policy-summary strong{display:block;font-size:23px}
+.aog-danger-zone{display:flex;gap:10px;flex-wrap:wrap;padding-top:14px;border-top:1px solid #252b35}.aog-file-label{display:grid;gap:8px}.aog-inline{display:flex;align-items:center;gap:10px}
+.admin-workspace-header:has(#admin-organizations-actions){flex-wrap:wrap}
+@media(max-width:1250px){.aog-filters{grid-template-columns:repeat(3,minmax(0,1fr))}.aog-metric{gap:10px;padding:12px}.aog-metric-icon{width:36px;height:36px;flex-basis:36px}.aog-metric small{font-size:10px}}
+@media(max-width:760px){.aog-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.aog-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.aog-dialog-body{padding:14px}#admin-organizations-actions{width:100%;margin:0}.aog-header-actions{display:grid;grid-template-columns:repeat(3,1fr)}.aog-header-actions button{font-size:12px;padding:7px}.aog-selection{gap:6px}}
+@media(max-width:460px){.aog-filters{grid-template-columns:1fr}.aog-header-actions{grid-template-columns:1fr}.aog-metric{align-items:start}.aog-metric-icon{display:none}.aog-policy-summary{grid-template-columns:1fr}.aog-pagination label{width:100%}.admin-organizations-dialog{max-height:calc(100dvh - 16px)}}
+@media(pointer:coarse),(max-width:760px){.admin-organizations-workspace button,.admin-organizations-dialog button,.aog-header-actions button{min-height:44px}.admin-organizations-workspace .aog-actions button{min-width:44px;min-height:44px}}

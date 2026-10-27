@@ -1,0 +1,121 @@
+name: Organization Management
+on:
+  pull_request:
+    branches: [mano_kepler_v1]
+    paths:
+      - 'src/pages/Admin.tsx'
+      - 'src/pages/Admin/organizations/**'
+      - 'functions/_lib/organization-management*'
+      - 'functions/_lib/organization-lifecycle.js'
+      - 'functions/_lib/organization-limit-service.js'
+      - 'functions/_lib/organizations.js'
+      - 'functions/api/admin/organization-management/**'
+      - 'migrations/0042_organization_management.sql'
+      - 'schema.sql'
+      - 'functions/_lib/permissions.js'
+      - 'functions/_lib/auth.js'
+      - 'tests/helpers/project-persistence-fixture.mjs'
+      - 'tests/helpers/admin-workspace-preservation.mjs'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'tests/organization-management*'
+      - 'tests/helpers/organization-management*'
+      - 'tests/fixtures/organization-management*'
+      - 'scripts/organization-management-benchmark.mjs'
+      - 'tests/browser/organization-management*.spec.ts'
+      - 'playwright.organization-management.config.ts'
+      - '.github/workflows/organization-management.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  product-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: npm run lint
+  organization-management:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Product regressions (sequential, no remote bindings)
+        run: >-
+          node --experimental-strip-types --test --test-concurrency=1
+          tests/access-delegation.test.mjs
+          tests/admin-progressive-loading.test.mjs
+          tests/api-error-client.test.mjs
+          tests/dropbox-folder-safety.test.mjs
+          tests/dropbox-resilience-wiring.test.mjs
+          tests/dropbox-resilience.test.mjs
+          tests/error-envelope-contract.test.mjs
+          tests/error-taxonomy.test.mjs
+          tests/organization-context.test.mjs
+          tests/organization-file-filters.test.mjs
+          tests/organization-file-folders.test.mjs
+          tests/organization-file-hardening.test.mjs
+          tests/organization-file-purge.test.mjs
+          tests/organization-file-query-sorting.test.mjs
+          tests/organization-file-rename.test.mjs
+          tests/organization-file-trash.test.mjs
+          tests/organization-lifecycle-concurrency.test.mjs
+          tests/organization-lifecycle-wiring.test.mjs
+          tests/organization-lifecycle.test.mjs
+          tests/organization-management-integration.test.mjs
+          tests/organization-management.test.mjs
+          tests/organization-storage-chaos.test.mjs
+          tests/organization-storage-drift-wiring.test.mjs
+          tests/organization-storage-drift.test.mjs
+          tests/organization-storage-invariants.test.mjs
+          tests/organization-storage-readiness-wiring.test.mjs
+          tests/organization-storage-readiness.test.mjs
+          tests/organization-storage-recovery-operator.test.mjs
+          tests/organization-storage-recovery.test.mjs
+          tests/organization-storage-slo.test.mjs
+          tests/organization-storage-wiring.test.mjs
+          tests/organization-switcher-redesign.test.mjs
+          tests/platform-density.test.mjs
+          tests/project-creation-limits.test.mjs
+          tests/project-persistence-integration.test.mjs
+          tests/project-recycle-recovery.test.mjs
+          tests/result-types.test.mjs
+          tests/user-access-commercial.test.mjs
+          tests/user-management-evolution.test.mjs
+          tests/user-mutation.test.mjs
+          tests/users-access-preservation.test.mjs
+          tests/users-access-workspace.test.mjs
+      - name: Product TypeScript
+        run: npx tsc -b --pretty false
+      - name: Compile actual app with workspace enabled
+        env:
+          VITE_ORGANIZATION_MANAGEMENT_V1: 'true'
+          VITE_MAONO_MAP_SHELL_V1: 'true'
+          VITE_MAONO_LAYER_MANAGER_V1: 'true'
+          VITE_MAONO_MAP_OVERLAY_V1: 'true'
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Compiled UI and local product integration
+        run: npx playwright test --config=playwright.organization-management.config.ts
+      - name: Local handler scaling (not remote D1 acceptance)
+        run: node scripts/organization-management-benchmark.mjs > test-results/organization-management/local-handler-benchmark.json
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: organization-management-${{ github.sha }}
+          path: test-results/organization-management/
+          retention-days: 14
+          if-no-files-found: warn
