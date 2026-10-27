@@ -175,3 +175,16 @@ for (const width of [1440, 390, 320]) test(`projects fit ${width}px with local s
   else expect((await page.locator('.admin-rail').boundingBox())?.width).toBe(240);
   await page.screenshot({ path: testInfo.outputPath(`admin-projects-${width}.png`), fullPage: true });
 });
+
+for (const width of [1440, 390]) test(`delivery capture at ${width}px`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 }); await setup(page); await ready(page);
+  if (width === 390) {
+    await page.locator('.admin-workspace-toggle').click();
+    await select(page, 'Estado do ciclo').selectOption('DRAFT');
+    await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
+    await expect(panel(page).locator('tbody tr')).toHaveCount(1);
+  }
+  await page.locator('.admin-workspace-main').evaluate(element => element.scrollTo(0, 0));
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath(`admin-projects-delivery-${width}.png`), fullPage: width === 390 });
+});

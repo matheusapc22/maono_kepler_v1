@@ -14,6 +14,14 @@ Branch dedicada: `feat/admin-projects-maps`. Entrega por PR draft, sem merge.
 
 ## Implementação prevista
 
+### Volume e paginação: limite explícito do contrato
+
+Na base `e47deac1`, `listAdminProjects` termina em `GROUP BY projects.id ORDER BY projects.updated_at DESC, projects.name ASC`, sem `LIMIT`, `OFFSET`, cursor ou contagem separada. `onRequest(GET)` devolve `projects: projects.map(publicAdminProject)` de uma única leitura; o Admin já carregava essa coleção inteira no bootstrap. O único filtro servidor dessa rota é organização, com autorização contextual anterior à consulta.
+
+Esta entrega não aumenta a quantidade de requisições nem busca páginas adicionais. Os filtros e as páginas de 10/25/50 operam sobre a resposta recebida. A paginação limita somente as linhas renderizadas: **não reduz bytes transferidos, trabalho no D1 nem memória da coleção no cliente**. A busca percorre a coleção recebida. Não há limite máximo de registros declarado pelo endpoint nem capacidade medida em Produção; não se afirma suporte escalável a grandes volumes. Os testes de navegador usam 27 projetos sintéticos, suficientes para verificar três páginas, filtros e redução da coleção, não para certificar carga.
+
+Não foi fornecida evidência de um volume que exija mudar esse contrato nesta subaba. Introduzir paginação servidor agora também afetaria as contagens de Painel e os consumidores da resposta completa. Portanto, preserva-se o contrato. Uma evolução para grandes inventários exige medição de latência/tamanho, paginação autorizada no servidor, filtros e total com semântica definida e adaptação explícita desses consumidores; não é substituída por uma alegação de escalabilidade da paginação local.
+
 1. Extrair somente a apresentação da subaba para componente dedicado; preservar bootstrap, quatro leituras, ACL, cancelamento, sequência e retry contextual do Admin.
 2. Usar os campos já retornados. Distinguir estado do ciclo, flag ativo, disponibilidade de navegação e ausência de informação. Exibir organização, versões, autores e datas; JSON/pasta em detalhes.
 3. Filtrar localmente a coleção completa por busca, organização e ciclo; paginar 10/25/50 por página. Contagem explicitamente dos registros recebidos, sem total global inventado. Não buscar páginas adicionais.
@@ -45,3 +53,11 @@ Organizações (PR 254) e Usuários evoluem separadamente. Não alterar seus com
 - Contratos de rota + inventário/API: 48/48. O gate confirma que Super Admin usa Editor e não recebe link direto Viewer.
 - Dependências existentes reutilizadas por junction, sem instalação/lockfile. Não executar `npm run build` local diretamente com esta junction: os tsconfigs gravam build-info em node_modules compartilhado. Para validação local, direcionar os dois build-info para pasta própria desta tarefa e executar Vite separadamente, com flags de mapa; CI usa instalação isolada normal.
 - Pendente de coordenação técnica: TypeScript/build/browser, captura visual, PDF final renderizado, publicação/PR draft e CI terminal. Não representa entrega validada nem aceite de Produção.
+
+## Retomada e validação - 27/10/2026
+
+- Coordenação técnica liberou a execução sequencial. Após o bloqueio temporário de limite, a tentativa autorizada executou comandos reais e concluiu ambos os projetos TypeScript com exit 0.
+- Build Vite aprovado em 5m44s, com outputs e cache próprios e flags de mapa somente locais. Avisos de dependências e tamanho de chunks preservados; nenhuma alteração global para contorná-los.
+- Subaba: 21 cenários por motor (63/63) e duas capturas adicionais por motor (6/6), Chromium/Firefox/WebKit. Sem retries, skips ou alteração das assertions. Capturas desktop/mobile inspecionadas.
+- O servidor de preview próprio usa a pasta compilada sem carregar configuração Vite, evitando escrita temporária no node_modules compartilhado. Porta 4197 exclusiva; nenhum processo alheio encerrado.
+- O manual `admin-projects-maps.md` explicita funcionamento, rotas, permissões, limites de volume e fronteiras de operação. A regressão do shell, PDF e CI permanecem registrados separadamente até seus resultados terminais.
