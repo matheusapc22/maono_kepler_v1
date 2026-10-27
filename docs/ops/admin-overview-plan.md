@@ -1,5 +1,16 @@
 # Painel - escopo, origem e disponibilidade
 
+## Entrega local concluída
+
+Código validado: `aad481847a957e704826c05c4c896d3f9e9fcd1a`.
+50 contratos, TypeScript app/node, build Vite, lint de escopo e diff-check aprovados.
+261/261 casos nos três motores passaram, sem falhas, flaky ou ignorados.
+As três páginas do PDF final foram renderizadas e inspecionadas; capturas desktop
+e mobile confirmam métricas, fontes acessíveis por teclado e atalhos legíveis.
+Evidência consolidada: `docs/ops/admin-overview-validation.md`.
+CI remoto será conferido no HEAD final da PR; não é declarado aprovado aqui.
+As seções abaixo preservam o planejamento e os registros históricos anteriores.
+
 Base independente `e47deac18888195b945a244dadb9e27c5902638f`.
 Branch `feat/admin-overview-provenance`; PR draft e PDF próprios, sem merge.
 
