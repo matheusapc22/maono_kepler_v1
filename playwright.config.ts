@@ -26,7 +26,7 @@ export default defineConfig({
   },
   webServer: {
     // Local browser regression only; does not change a deployed environment.
-    env: { VITE_POINT_CLUSTERING_V1: "true" },
+    env: { VITE_POINT_CLUSTERING_V1: "true", VITE_ORGANIZATION_MANAGEMENT_V1: "false" },
     command: "npm run dev -- --host 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173/login",
     timeout: 120_000,

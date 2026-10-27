@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 // Compiled UI with intercepted HTTP. Never authenticates a production account.
 export default defineConfig({
   testDir: './tests/browser',
-  testMatch: 'organization-management*.spec.ts',
+  testMatch: ['organization-management.spec.ts', 'organization-management-integration.spec.ts'],
   outputDir: 'test-results/organization-management',
   timeout: 45_000,
   expect: { timeout: 10_000 },

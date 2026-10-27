@@ -19,7 +19,8 @@
       "src/pages/Admin/organizations/organizations-types.ts",
       "tests/browser/organization-management-integration.spec.ts",
       "tests/browser/organization-management.spec.ts",
-      "playwright.config.ts"
+      "playwright.config.ts",
+      "tests/browser/organization-management-disabled.spec.ts"
     ],
     "errors": 0,
     "warnings": 0
@@ -31,9 +32,9 @@
     "duration": "8m 3s"
   },
   "browser": {
-    "passed": 19,
+    "passed": 20,
     "failed": 0,
-    "execution": "one full suite after both CI fixes",
+    "execution": "19 compiled ON cases plus one explicit OFF development-server case; all existing assertions and timeouts retained",
     "viewports": [
       [
         1774,
@@ -101,6 +102,14 @@
     "organization-discovery-proof.json": {
       "sha256": "cfc4f6dbdb314d24afec531ccdb1db32b3ffe63a8e739ca98b24344d34a75795",
       "bytes": 200
+    },
+    "organization-browser-flag-off.log": {
+      "sha256": "45b956ed1f89c15f0b22094fc97f27b8b8a9d8e8c7fd43edb8bc7f84a4b0484f",
+      "bytes": 789
+    },
+    "organization-flag-matrix-proof.json": {
+      "sha256": "7d82722dcfdaeb329fb5a3128e700a414bff2c25fee3f1aa365128b52cfa4bf8",
+      "bytes": 570
     }
   },
   "migration": {
@@ -111,8 +120,8 @@
   "manual": {
     "file": "docs/user-guide/Manual_Gestao_Organizacoes_Maono.pdf",
     "pages": 14,
-    "bytes": 76691,
-    "sha256": "b5c82be82a1fd2fd9a1ba23e5936bf9cf51b975b3b2c97cb9e3f9c25ee956e4e",
+    "bytes": 76701,
+    "sha256": "2b0f2fa0cf8b725cf4339ac6717141738e3d187eb9feba8ed46e5e145ac7e23d",
     "visualReview": "all 14 rendered pages inspected"
   },
   "testedWorkingTreeBase": "cd4a6c2f1fab00b1a4a2a790029188bda82aa761",
@@ -138,5 +147,22 @@
     "allOrganizationCasesInDedicatedGate": true,
     "noTimeoutOrAssertionChanged": true
   },
-  "configurationValidation": "Only browser suite routing and documentation changed after f3b31a14075578c01951d780e52b1f964d3a62d2. Application source hashes are unchanged. Config lint and exact discovery preservation passed; final published CI is recorded in PR 254."
+  "configurationValidation": "Application source hashes unchanged. Browser configs, explicit OFF case and unconditional product-PR workflow coverage validated locally. Final published CI is recorded in PR 254. Branch protection is absent; repository settings were not changed.",
+  "flagCoverage": {
+    "preexistingGeneralCases": 290,
+    "currentGeneralCases": 291,
+    "dedicatedEnabledCases": 19,
+    "dedicatedDisabledCases": 1,
+    "preexistingCasesPreserved": true,
+    "allEnabledCasesPreserved": true,
+    "flagOffAlsoRunsInGeneralGate": true,
+    "everyProductPullRequestTriggersDedicatedGate": true,
+    "pathFilters": null,
+    "continueOnError": false,
+    "mergeProtection": {
+      "branchProtected": false,
+      "rulesets": [],
+      "note": "Workflow execution does not enforce merge blocking. Repository settings were audited read-only and not changed."
+    }
+  }
 }

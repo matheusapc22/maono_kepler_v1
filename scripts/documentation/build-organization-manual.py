@@ -380,10 +380,10 @@ chapters=[('01',
      ['Node e SQLite',
       '542 testes aprovados; 2 skips de scripts Bash no Windows. Inclui 14 integrações do módulo com schema, sessão, ACL, '
       'lifecycle e quotas do produto.'],
-     ['Frontend', 'TypeScript e build completos aprovados. Lint dos 9 arquivos TS/TSX do escopo: sem erros ou avisos.'],
+     ['Frontend', 'TypeScript e build completos aprovados. Lint dos 10 arquivos TS/TSX do escopo: sem erros ou avisos.'],
      ['Navegador',
-      '19 casos em uma execução de Chromium local após as correções do CI. Cinco viewports, toque, teclado/foco, filtros/URL, '
-      'revogação, resposta atrasada, CSV, apresentação segura de falhas e quatro fluxos com handlers reais.'],
+      '20 casos locais: 19 no build compilado com flag ligada e um no servidor dev com flag desligada. Cinco viewports, toque, '
+      'teclado/foco, filtros/URL, revogação, resposta atrasada, CSV e falhas seguras. Quatro fluxos usam handlers reais.'],
      ['Lint global',
       '109 erros e 44 avisos anteriores. Todos os arquivos com problemas e a configuração são iguais à base do produto. Nenhuma '
       'regra foi relaxada.'],
@@ -453,7 +453,7 @@ def chrome(canvas,doc):
         canvas.setFont('MaonoBold',16);canvas.drawString(48,H-93,'MAÕNO')
         canvas.setFont('MaonoSans',9);canvas.setFillColor(colors.HexColor('#c8d0d9'));canvas.drawString(48,H-110,'o território como parte da estratégia')
         canvas.setStrokeColor(colors.HexColor('#34404f'));canvas.line(48,58,W-48,58)
-        canvas.setFont('MaonoSans',8);canvas.drawString(48,42,'Edição 1.4 • Manual do candidato de implementação')
+        canvas.setFont('MaonoSans',8);canvas.drawString(48,42,'Edição 1.5 • Manual do candidato de implementação')
     else:
         canvas.setStrokeColor(LINE);canvas.line(LEFT,H-37,W-RIGHT,H-37)
         canvas.setFillColor(MUTED);canvas.setFont('MaonoSans',8)

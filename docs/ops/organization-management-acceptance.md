@@ -28,9 +28,9 @@ As suítes de lifecycle, concorrência, wiring e project-creation-limits cobrem 
 
 ## Resultado e pendências explícitas
 
-542 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 9 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
+542 regressões passaram (2 skips Bash no Windows), incluindo 14 integrações do módulo. TypeScript e build completos aprovados. Lint dos 10 TS/TSX alterados limpo; lint global preexistente com 109 erros e 44 avisos, comparado arquivo a arquivo com as duas bases. Não declarar ready enquanto gate obrigatório falhar.
 
-Navegador: 19 casos aprovados, cinco viewports inspecionados. Quatro casos usam sessões/ACL/handlers reais com SQLite. Os demais verificam UI com HTTP interceptado. Teste humano com leitor de tela e homologação de dispositivos reais permanecem pendentes.
+Navegador: 20 casos aprovados (19 ON compilados e um OFF em dev), cinco viewports inspecionados. Quatro casos usam sessões/ACL/handlers reais com SQLite. Os demais verificam UI com HTTP interceptado. Teste humano com leitor de tela e homologação de dispositivos reais permanecem pendentes.
 
 Benchmark local de 6/50/500: 30 amostras, p50/p95 e statements em `organization-management-benchmark.json`. Não é medição de D1, latência de rede ou carregamento completo da página. O número de statements permanece 8; linhas retornadas não equivalem a linhas lidas.
 
@@ -43,3 +43,15 @@ O adaptador passou a usar o transporte e o catálogo de erros compartilhados, pr
 ## Composição das suítes de navegador
 
 O gate geral de desenvolvimento mantém os 290 casos anteriores. Os 19 novos casos de Organizações executam integralmente no gate compilado próprio, com a flag local necessária. A descoberta foi comparada antes/depois por arquivo, linha e título: nenhum caso anterior removido; os dois arquivos novos coincidem exatamente com os 19 casos da configuração dedicada. Nenhum assert, skip ou timeout foi alterado. Essa correção trata a descoberta indevida dos novos casos pelo servidor dev sem a funcionalidade habilitada.
+
+## Matriz de flags e gatilhos
+
+| Condição | Cobertura |
+| --- | --- |
+| Interface ON e backend habilitado | 19 casos no build compilado, incluindo quatro fluxos com handlers locais reais. |
+| Interface OFF | Novo caso no servidor dev com flag explicitamente false: tabela legada, ações novas ausentes, nenhum request à API de gestão ou escrita. O StrictMode faz dois lotes exatos dos quatro GETs legados. |
+| API OFF | Teste existente exige 503 / ORGANIZATION_MANAGEMENT_DISABLED; não simula sucesso. |
+| Descoberta | 290 casos gerais anteriores preservados + um OFF novo; os 19 ON permanecem integralmente na suíte compilada. |
+| Gatilhos | Organization Management executa ON e OFF em toda PR para mano_kepler_v1, sem filtros de caminho, condições de skip ou continue-on-error; workflow_dispatch preservado. |
+
+Auditoria de merge: o GitHub retornou `Branch not protected` para mano_kepler_v1 e nenhum ruleset. Executar o workflow automaticamente não impede merge manual com checks pendentes/falhos. Nenhuma regra de repositório foi alterada; não se afirma que o novo check é obrigatório na proteção da branch. A PR permanece draft. Esta é uma limitação real do controle de merge, separada do resultado dos testes.

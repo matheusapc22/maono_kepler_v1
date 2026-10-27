@@ -1,6 +1,6 @@
 # Gestão de Organizações: integração e operação
 
-Estado em 27/10/2026: candidato na branch `feat/admin-organizations-management`, reconciliado com `mano_kepler_v1` em `e47deac18888195b945a244dadb9e27c5902638f` após a PR 253. Preparado para PR draft nova; o CI por SHA na PR determina o resultado remoto. Lint global preexistente impede declarar pronto. Nenhum merge desta funcionalidade, deploy direto, migration remota, alteração de flags implantadas ou credencial nova.
+Estado em 27/10/2026: candidato na branch `feat/admin-organizations-management`, reconciliado com `mano_kepler_v1` em `e47deac18888195b945a244dadb9e27c5902638f` após a PR 253. Publicado na PR draft #254; o CI por SHA na PR determina o resultado remoto. Lint global preexistente impede declarar pronto. Nenhum merge desta funcionalidade, deploy direto, migration remota, alteração de flags implantadas ou credencial nova.
 
 ## Origem
 
@@ -33,8 +33,8 @@ A API exige Super Admin e admin.panel.access, reavaliados por request/item. Oper
 
 - **542 regressões aprovadas, 0 falhas, 2 skips** em 44 arquivos de teste, sequencialmente. Os skips são casos Bash do operador de recuperação, incluídos no CI Linux. Cobertura de lifecycle/storage/readiness/drift/chaos/error-contract/quota, usuários/ACL/persistência e schema de chamados após o merge da PR 253. Entre esses testes, 14 integram o novo módulo com schema, sessões, permissões, Pages handler, lifecycle e quotas reais em SQLite; HTTP Dropbox é simulado.
 - **TypeScript completo e build aprovados**. Vite: 11.945 módulos, 8m 3s. Flags somente no processo local do build/fixtures; nenhuma flag implantada foi alterada.
-- **19 testes de navegador aprovados**: 19 em execução completa, incluindo toque e proteção contra mensagem remota bruta. Chromium local com um worker, quatro fluxos com backend real da fixture, revogação, resposta atrasada, filtros e URL/back/forward, teclado/foco, UTF-8 e cinco viewports (1774x887, 1366x768, 1920x1080, 768x1024, 390x844). Capturas inspecionadas; a tabela usa rolagem interna em telas pequenas. Não houve teste humano com leitor de tela.
-- **Lint do escopo: 9 arquivos TS/TSX, 0 erros e 0 avisos**. Os demais arquivos alterados não são cobertos pela configuração ESLint existente. Lint global anterior: **109 erros e 44 avisos** em 68 arquivos; todos os arquivos com problemas e a configuração são idênticos à base atual e à base original. Comparativo em [organization-management-lint-baseline.json](organization-management-lint-baseline.json). Não houve nova varredura global local após reconciliar a base, correção fora de escopo ou relaxamento de regras. CI mantém o lint completo em job independente e bloqueante.
+- **20 testes de navegador aprovados**: 19 no build compilado com flag ON e um no servidor dev com flag explicitamente OFF. Chromium local com um worker; quatro fluxos usam backend real da fixture. Revogação, resposta atrasada, filtros/URL, teclado/foco, toque, UTF-8 e cinco viewports inspecionados permanecem cobertos. Nenhum teste humano com leitor de tela foi realizado.
+- **Lint do escopo: 10 arquivos TS/TSX, 0 erros e 0 avisos**. Os demais arquivos alterados não são cobertos pela configuração ESLint existente. Lint global anterior: **109 erros e 44 avisos** em 68 arquivos; todos os arquivos com problemas e a configuração são idênticos à base atual e à base original. Comparativo em [organization-management-lint-baseline.json](organization-management-lint-baseline.json). Não houve nova varredura global local após reconciliar a base, correção fora de escopo ou relaxamento de regras. CI mantém o lint completo em job independente, sem mascarar suas falhas. A branch não exige checks obrigatórios, conforme a auditoria de merge abaixo.
 - Migration sobre dados existentes e schema completo coincidem; `quick_check=ok`, sem violações em `foreign_key_check`. Apenas SQLite isolado.
 - Manual PDF/Markdown revisado conforme comportamento e evidência, 14 páginas renderizadas e inspecionadas.
 
@@ -64,7 +64,7 @@ Rollback de código não desfaz quotas, vínculos, pastas ou operações. Deslig
 
 ## Manual
 
-scripts/documentation/build-organization-manual.py gera o Markdown e o PDF com ReportLab e fontes Vera. Edição 1.4 revisada com os resultados locais, limitações e distinção entre CI, Preview e Produção. Identidade Library original e versão desconhecida seguem preservadas no registro local; não houve substituição na Library indisponível.
+scripts/documentation/build-organization-manual.py gera o Markdown e o PDF com ReportLab e fontes Vera. Edição 1.5 revisada com os resultados locais, limitações e distinção entre CI, Preview e Produção. Identidade Library original e versão desconhecida seguem preservadas no registro local; não houve substituição na Library indisponível.
 
 ## Correções encontradas pelo CI inicial
 
@@ -73,3 +73,15 @@ O adaptador passou a usar o transporte e o catálogo de erros compartilhados, pr
 ## Composição das suítes de navegador
 
 O gate geral de desenvolvimento mantém os 290 casos anteriores. Os 19 novos casos de Organizações executam integralmente no gate compilado próprio, com a flag local necessária. A descoberta foi comparada antes/depois por arquivo, linha e título: nenhum caso anterior removido; os dois arquivos novos coincidem exatamente com os 19 casos da configuração dedicada. Nenhum assert, skip ou timeout foi alterado. Essa correção trata a descoberta indevida dos novos casos pelo servidor dev sem a funcionalidade habilitada.
+
+## Matriz de flags e gatilhos
+
+| Condição | Cobertura |
+| --- | --- |
+| Interface ON e backend habilitado | 19 casos no build compilado, incluindo quatro fluxos com handlers locais reais. |
+| Interface OFF | Novo caso no servidor dev com flag explicitamente false: tabela legada, ações novas ausentes, nenhum request à API de gestão ou escrita. O StrictMode faz dois lotes exatos dos quatro GETs legados. |
+| API OFF | Teste existente exige 503 / ORGANIZATION_MANAGEMENT_DISABLED; não simula sucesso. |
+| Descoberta | 290 casos gerais anteriores preservados + um OFF novo; os 19 ON permanecem integralmente na suíte compilada. |
+| Gatilhos | Organization Management executa ON e OFF em toda PR para mano_kepler_v1, sem filtros de caminho, condições de skip ou continue-on-error; workflow_dispatch preservado. |
+
+Auditoria de merge: o GitHub retornou `Branch not protected` para mano_kepler_v1 e nenhum ruleset. Executar o workflow automaticamente não impede merge manual com checks pendentes/falhos. Nenhuma regra de repositório foi alterada; não se afirma que o novo check é obrigatório na proteção da branch. A PR permanece draft. Esta é uma limitação real do controle de merge, separada do resultado dos testes.

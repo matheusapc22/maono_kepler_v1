@@ -2,29 +2,7 @@ name: Organization Management
 on:
   pull_request:
     branches: [mano_kepler_v1]
-    paths:
-      - 'src/pages/Admin.tsx'
-      - 'src/pages/Admin/organizations/**'
-      - 'functions/_lib/organization-management*'
-      - 'functions/_lib/organization-lifecycle.js'
-      - 'functions/_lib/organization-limit-service.js'
-      - 'functions/_lib/organizations.js'
-      - 'functions/api/admin/organization-management/**'
-      - 'migrations/0042_organization_management.sql'
-      - 'schema.sql'
-      - 'functions/_lib/permissions.js'
-      - 'functions/_lib/auth.js'
-      - 'tests/helpers/project-persistence-fixture.mjs'
-      - 'tests/helpers/admin-workspace-preservation.mjs'
-      - 'package.json'
-      - 'yarn.lock'
-      - 'tests/organization-management*'
-      - 'tests/helpers/organization-management*'
-      - 'tests/fixtures/organization-management*'
-      - 'scripts/organization-management-benchmark.mjs'
-      - 'tests/browser/organization-management*.spec.ts'
-      - 'playwright.organization-management.config.ts'
-      - '.github/workflows/organization-management.yml'
+    # Run on every product PR so feature/config/test changes cannot bypass coverage.
   workflow_dispatch:
 permissions:
   contents: read
@@ -113,6 +91,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Compiled UI and local product integration
         run: npx playwright test --config=playwright.organization-management.config.ts
+      - name: Feature OFF preserves legacy Admin
+        run: npx playwright test --config=playwright.config.ts organization-management-disabled.spec.ts --project=chromium --output=test-results/organization-management/flag-off
       - name: Local handler scaling (not remote D1 acceptance)
         run: node scripts/organization-management-benchmark.mjs > test-results/organization-management/local-handler-benchmark.json
       - name: Preserve evidence
