@@ -460,7 +460,7 @@ export default function TicketDetailDrawer({
 
                 {lifecycleEnabled && ticketWriteNeedsReview(saveError) ? <div className="ticket-command-conflict" role="status">
                   <strong>Seu rascunho foi preservado.</strong><p>Consulte a versão atual e revise os campos antes de salvar novamente.</p>
-                  <button type="button" className="ticket-secondary-action" disabled={loading || saving} onClick={onReload}>Consultar versão atual</button>
+                  <button type="button" className="ticket-secondary-action" aria-disabled={loading || saving} onClick={() => { if (!loading && !saving) onReload(); }}>Consultar versão atual</button>
                   {ticket.etag && ticket !== writeSnapshotRef.current ? <>
                     <p>Situação atual: {STATUS_LABELS[ticket.status]}. Responsável: {ticketPersonName(ticket.assignedTo)}. Prazo: {formatTicketDateTime(ticket.dueAt)}.</p>
                     <button type="button" className="ticket-secondary-action" disabled={loading || saving} onClick={() => { writeSnapshotRef.current = ticket; setSaveError(null); setTriageError(null); }}>Usar versão atual e manter rascunho</button>

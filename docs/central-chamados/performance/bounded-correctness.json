@@ -1,0 +1,280 @@
+{
+  "checks": {
+    "sourceSha": "177cc6a95c3220694340cc873575e501536e57ff",
+    "manifestDigest": "27164b15e9a8f39dc4a52afc8b3c57643ce3e166e72ea5afbf96d1a14ddf89c6",
+    "results": [
+      {
+        "cold": false,
+        "status": 200,
+        "expected": "bounded",
+        "earlyRevocation": false,
+        "siblingsReady": true,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress",
+          "in_review",
+          "closed"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 41,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": true,
+        "status": 200,
+        "expected": "bounded",
+        "earlyRevocation": false,
+        "siblingsReady": false,
+        "queuesBeforeRelease": [
+          "open"
+        ],
+        "allReusedExistingToken": false,
+        "snapshotsBeforeRelease": 2,
+        "semanticAuthorizedCards": 0,
+        "skeletonNegativeControl": true,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 401,
+        "expected": "bounded",
+        "earlyRevocation": false,
+        "siblingsReady": true,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress",
+          "in_review",
+          "closed"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 41,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 403,
+        "expected": "bounded",
+        "earlyRevocation": false,
+        "siblingsReady": true,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress",
+          "in_review",
+          "closed"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 41,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 404,
+        "expected": "bounded",
+        "earlyRevocation": false,
+        "siblingsReady": true,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress",
+          "in_review",
+          "closed"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 41,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 409,
+        "expected": "bounded",
+        "earlyRevocation": false,
+        "siblingsReady": true,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress",
+          "in_review",
+          "closed"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 41,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 503,
+        "expected": "bounded",
+        "earlyRevocation": false,
+        "siblingsReady": true,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress",
+          "in_review",
+          "closed"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 41,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 401,
+        "expected": "bounded",
+        "earlyRevocation": true,
+        "siblingsReady": false,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 0,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 403,
+        "expected": "bounded",
+        "earlyRevocation": true,
+        "siblingsReady": false,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 0,
+        "skeletonNegativeControl": false,
+        "passed": true
+      },
+      {
+        "cold": false,
+        "status": 404,
+        "expected": "bounded",
+        "earlyRevocation": true,
+        "siblingsReady": false,
+        "queuesBeforeRelease": [
+          "open",
+          "in_progress"
+        ],
+        "allReusedExistingToken": true,
+        "snapshotsBeforeRelease": 1,
+        "semanticAuthorizedCards": 0,
+        "skeletonNegativeControl": false,
+        "passed": true
+      }
+    ]
+  },
+  "retryBefore": {
+    "sourceSha": "ba88ed7f6f390ec8d3a1cfaed637d40c6a3de798",
+    "manifestDigest": "80491d3e24c7c89cc0482f0f9133e44881d8a3592f2753a359110b58fd94d2af",
+    "expected": "known-bug",
+    "staleClosedRequests": 1,
+    "requests": [
+      {
+        "queue": "open",
+        "reusesOriginal": true,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "in_progress",
+        "reusesOriginal": true,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "in_review",
+        "reusesOriginal": true,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "open",
+        "reusesOriginal": false,
+        "hasSnapshot": false
+      },
+      {
+        "queue": "in_progress",
+        "reusesOriginal": false,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "in_review",
+        "reusesOriginal": false,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "closed",
+        "reusesOriginal": false,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "closed",
+        "reusesOriginal": true,
+        "hasSnapshot": true
+      }
+    ],
+    "passed": true
+  },
+  "retryAfter": {
+    "sourceSha": "177cc6a95c3220694340cc873575e501536e57ff",
+    "manifestDigest": "27164b15e9a8f39dc4a52afc8b3c57643ce3e166e72ea5afbf96d1a14ddf89c6",
+    "expected": "fixed",
+    "staleClosedRequests": 0,
+    "requests": [
+      {
+        "queue": "open",
+        "reusesOriginal": true,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "in_progress",
+        "reusesOriginal": true,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "in_review",
+        "reusesOriginal": true,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "open",
+        "reusesOriginal": false,
+        "hasSnapshot": false
+      },
+      {
+        "queue": "in_progress",
+        "reusesOriginal": false,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "in_review",
+        "reusesOriginal": false,
+        "hasSnapshot": true
+      },
+      {
+        "queue": "closed",
+        "reusesOriginal": false,
+        "hasSnapshot": true
+      }
+    ],
+    "passed": true
+  },
+  "outputProtection": {
+    "passed": true,
+    "exitCode": 1,
+    "rawSha256": "c38a81bf3371db41aa07f405f3942ae415889fe40b6d1eee85569fe243441362",
+    "unchanged": true,
+    "failedBeforeBuildLoad": true
+  },
+  "note": "Functional controls, not performance results. The ba88 bundle is known-bug control only; 177cc6a is the candidate for measurement."
+}

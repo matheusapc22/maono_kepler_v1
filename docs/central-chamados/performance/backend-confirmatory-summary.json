@@ -1,0 +1,1029 @@
+{
+  "sourceSha": "fb76f0ea623322948febe98f40d1633610344f2a",
+  "baselineSha": "381c93256d985b0ae39722128fc4ad54f17f025f",
+  "trackedWorktreeDirty": false,
+  "patchSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "scopeModuleSha256": "6468e612946f7b37bb46052294b1266e0f354ade3a35eb0e66633ea67cd087e1",
+  "runtime": "v24.15.0",
+  "samples": 30,
+  "delayMs": 0,
+  "environment": "local actual route handlers with in-memory SQLite; paired alternating order; no remote D1",
+  "limitations": [
+    "bindingMs is cumulative across possibly overlapping spans, not SQL time or wall time",
+    "adapterDurationMs includes Node SQLite and instrumentation overhead",
+    "rows_read, rows_written and D1 SQL duration unavailable",
+    "list-first means new snapshot/request, not a cold Worker process",
+    "First warm-up pair excluded per scenario",
+    "No payloads, SQL parameters or cookies recorded"
+  ],
+  "results": [
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 16.3737000000001,
+        "p95": 40.56000000000017
+      },
+      "after": {
+        "n": 30,
+        "p50": 14.467300000000023,
+        "p95": 41.38560000000007
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": 2.035502958579616
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 14.949799999999868,
+        "p95": 27.943499999999858
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.82490000000007,
+        "p95": 20.437000000000353
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -26.863134539336674
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 15.492099999999482,
+        "p95": 47.45010000000002
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.841100000000097,
+        "p95": 42.27129999999988
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -10.914202499046654
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 11.361899999999878,
+        "p95": 35.56840000000011
+      },
+      "after": {
+        "n": 30,
+        "p50": 9.708200000000033,
+        "p95": 34.01060000000052
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -4.37973032241985
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 16.817399999999907,
+        "p95": 43.07210000000032
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.656999999999243,
+        "p95": 52.383200000000215
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": 21.617473956458653
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 20.887700000000223,
+        "p95": 30.9354000000003
+      },
+      "after": {
+        "n": 30,
+        "p50": 16.72859999999946,
+        "p95": 30.765599999999722
+      },
+      "bindings": [
+        174,
+        85
+      ],
+      "p95ChangePct": -0.5488857425492322
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 14.415100000000166,
+        "p95": 21.700699999999415
+      },
+      "after": {
+        "n": 30,
+        "p50": 10.881600000000617,
+        "p95": 18.945099999999
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -12.69820789191357
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 13.95470000000023,
+        "p95": 25.89389999999912
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.766100000000733,
+        "p95": 20.933899999999994
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -19.155090581176626
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 14.723799999999756,
+        "p95": 27.02849999999853
+      },
+      "after": {
+        "n": 30,
+        "p50": 11.533300000000963,
+        "p95": 16.37199999999939
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -39.426901233881715
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 12.420599999999467,
+        "p95": 31.797700000000987
+      },
+      "after": {
+        "n": 30,
+        "p50": 9.66150000000016,
+        "p95": 16.792300000000978
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -47.190205580905356
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 18.577400000000125,
+        "p95": 31.006100000000515
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.779200000000856,
+        "p95": 29.44959999999992
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -5.019979939433117
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 16.7583999999988,
+        "p95": 27.897000000000844
+      },
+      "after": {
+        "n": 30,
+        "p50": 11.886399999999412,
+        "p95": 26.59349999999904
+      },
+      "bindings": [
+        171,
+        82
+      ],
+      "p95ChangePct": -4.672545434999343
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 17.61239999999998,
+        "p95": 34.124400000000605
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.054900000000998,
+        "p95": 33.788000000000466
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": -0.9858048786209661
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 20.20089999999982,
+        "p95": 24.96049999999923
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.965699999998833,
+        "p95": 21.70759999999973
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -13.032190861559666
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 18.966300000000047,
+        "p95": 24.714700000000448
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.72979999999734,
+        "p95": 21.52889999999752
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -12.890304150982491
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 16.205900000000838,
+        "p95": 22.255300000000716
+      },
+      "after": {
+        "n": 30,
+        "p50": 14.448599999999715,
+        "p95": 18.965299999999843
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -14.78299551118505
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 15.055000000000291,
+        "p95": 23.52440000000206
+      },
+      "after": {
+        "n": 30,
+        "p50": 13.617599999997765,
+        "p95": 21.71809999999823
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": -7.678410501452415
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 15.77009999999791,
+        "p95": 29.17580000000089
+      },
+      "after": {
+        "n": 30,
+        "p50": 11.851699999999255,
+        "p95": 21.435099999998783
+      },
+      "bindings": [
+        174,
+        85
+      ],
+      "p95ChangePct": -26.53123479048345
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 14.685499999999593,
+        "p95": 29.293000000001484
+      },
+      "after": {
+        "n": 30,
+        "p50": 13.15060000000085,
+        "p95": 22.298899999997957
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": -23.876352712262904
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 13.499399999996967,
+        "p95": 26.438999999998487
+      },
+      "after": {
+        "n": 30,
+        "p50": 11.954099999999016,
+        "p95": 22.21140000000014
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -15.990014750930781
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 13.537799999998242,
+        "p95": 23.340299999999843
+      },
+      "after": {
+        "n": 30,
+        "p50": 11.76589999999851,
+        "p95": 20.968000000000757
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -10.163965330347525
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 14.986700000001292,
+        "p95": 35.46759999999995
+      },
+      "after": {
+        "n": 30,
+        "p50": 11.884900000000926,
+        "p95": 21.50170000000071
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -39.376501370262595
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 17.948300000000017,
+        "p95": 23.93199999999706
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.728800000000774,
+        "p95": 24.454499999999825
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": 2.183269262923404
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 15.925400000000081,
+        "p95": 30.51970000000074
+      },
+      "after": {
+        "n": 30,
+        "p50": 11.376799999998184,
+        "p95": 18.535600000002887
+      },
+      "bindings": [
+        171,
+        82
+      ],
+      "p95ChangePct": -39.26676867727259
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 15.118900000001304,
+        "p95": 23.531999999999243
+      },
+      "after": {
+        "n": 30,
+        "p50": 13.186000000001513,
+        "p95": 22.889800000000832
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -2.729049804514838
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 17.274099999998725,
+        "p95": 24.169600000001083
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.068599999998696,
+        "p95": 25.891799999997602
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": 7.125479941730273
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 13.237099999998463,
+        "p95": 23.03650000000198
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.708099999999831,
+        "p95": 20.985599999999977
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -8.90282812059916
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 12.94800000000032,
+        "p95": 20.276700000002165
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.263899999998102,
+        "p95": 19.221199999999953
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -5.205482154404317
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 16.664600000000064,
+        "p95": 29.352999999999156
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.49239999999918,
+        "p95": 24.581600000001345
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -16.25523796544799
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 19.669699999998556,
+        "p95": 27.377199999998993
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.455399999998917,
+        "p95": 19.1234000000004
+      },
+      "bindings": [
+        174,
+        85
+      ],
+      "p95ChangePct": -30.14844469119886
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 13.854099999996834,
+        "p95": 20.469700000001467
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.22099999999773,
+        "p95": 17.57329999999638
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -14.149694426419924
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 14.202799999999115,
+        "p95": 24.553399999997055
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.55000000000291,
+        "p95": 22.390299999999115
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -8.809777871896351
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 13.518400000000838,
+        "p95": 23.266300000002957
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.172700000002806,
+        "p95": 19.413899999999558
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -16.55785406361523
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 15.502800000002026,
+        "p95": 23.065300000002026
+      },
+      "after": {
+        "n": 30,
+        "p50": 13.892399999996996,
+        "p95": 17.542200000003504
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": -23.945493880409252
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 18.170899999997346,
+        "p95": 21.56369999999879
+      },
+      "after": {
+        "n": 30,
+        "p50": 17.442699999999604,
+        "p95": 21.59219999999914
+      },
+      "bindings": [
+        81,
+        47
+      ],
+      "p95ChangePct": 0.13216655768886199
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 16.893599999995786,
+        "p95": 19.360999999997148
+      },
+      "after": {
+        "n": 30,
+        "p50": 12.148600000000442,
+        "p95": 25.790000000000873
+      },
+      "bindings": [
+        171,
+        82
+      ],
+      "p95ChangePct": 33.20592944581722
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 22.667999999997846,
+        "p95": 38.070499999994354
+      },
+      "after": {
+        "n": 30,
+        "p50": 20.82890000000043,
+        "p95": 34.862600000000384
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": -8.426209269629881
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 20.43920000000071,
+        "p95": 30.83650000000489
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.601499999997031,
+        "p95": 25.670200000000477
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -16.753846902221692
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 18.725500000000466,
+        "p95": 28.522899999996298
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.633199999996577,
+        "p95": 24.11250000000291
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -15.462663333651061
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 19.320099999997183,
+        "p95": 33.40929999999935
+      },
+      "after": {
+        "n": 30,
+        "p50": 16.9661000000051,
+        "p95": 30.368099999999686
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -9.102854594378574
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 24.96059999999852,
+        "p95": 32.42199999999866
+      },
+      "after": {
+        "n": 30,
+        "p50": 25.711100000000442,
+        "p95": 44.09820000000036
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": 36.01320091296707
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 14.550199999997858,
+        "p95": 25.084799999996903
+      },
+      "after": {
+        "n": 30,
+        "p50": 10.169099999999162,
+        "p95": 15.087099999997008
+      },
+      "bindings": [
+        174,
+        85
+      ],
+      "p95ChangePct": -39.85560977165905
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "before": {
+        "n": 30,
+        "p50": 21.80909999999858,
+        "p95": 34.61839999999938
+      },
+      "after": {
+        "n": 30,
+        "p50": 19.284399999996822,
+        "p95": 26.096799999999348
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": -24.615811244887652
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "before": {
+        "n": 30,
+        "p50": 15.581500000000233,
+        "p95": 25.17609999999695
+      },
+      "after": {
+        "n": 30,
+        "p50": 13.594499999999243,
+        "p95": 23.113400000002002
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -8.193087888891437
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "before": {
+        "n": 30,
+        "p50": 17.466800000001967,
+        "p95": 23.554900000002817
+      },
+      "after": {
+        "n": 30,
+        "p50": 14.957800000003772,
+        "p95": 23.078599999993457
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -2.02208457692159
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "before": {
+        "n": 30,
+        "p50": 19.826499999995576,
+        "p95": 28.976300000002084
+      },
+      "after": {
+        "n": 30,
+        "p50": 15.608299999999872,
+        "p95": 26.870699999999488
+      },
+      "bindings": [
+        96,
+        55
+      ],
+      "p95ChangePct": -7.266628244470286
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "before": {
+        "n": 30,
+        "p50": 24.63969999999972,
+        "p95": 41.42640000000392
+      },
+      "after": {
+        "n": 30,
+        "p50": 22.35570000000007,
+        "p95": 35.69680000000517
+      },
+      "bindings": [
+        97,
+        56
+      ],
+      "p95ChangePct": -13.83079388988232
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "detail",
+      "before": {
+        "n": 30,
+        "p50": 18.489399999998568,
+        "p95": 26.876499999998487
+      },
+      "after": {
+        "n": 30,
+        "p50": 14.03229999999894,
+        "p95": 19.391100000000733
+      },
+      "bindings": [
+        171,
+        82
+      ],
+      "p95ChangePct": -27.851096682969047
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import {
   recordAuditLog,
 } from "./permissions.js";
 import { prepareAuditLog } from "./projects.js";
+import { readRequestSchema } from "./request-schema.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -344,6 +345,7 @@ function quoteIdentifier(identifier) {
 }
 
 export async function tableExists(env, tableName) {
+  return readRequestSchema(env, `table:${tableName}`, async () => {
   const db = getDb(env);
   const row = await db
     .prepare(
@@ -359,6 +361,7 @@ export async function tableExists(env, tableName) {
     .first();
 
   return Boolean(row?.name);
+  });
 }
 
 export async function requireTable(env, tableName) {
@@ -373,12 +376,16 @@ export async function requireTable(env, tableName) {
 }
 
 export async function getTableColumns(env, tableName) {
+  const names = await readRequestSchema(env, `columns:${tableName}`, async () => {
   await requireTable(env, tableName);
 
   const db = getDb(env);
   const result = await db.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all();
 
-  return new Set((result?.results || []).map((row) => String(row.name)));
+  return (result?.results || []).map((row) => String(row.name));
+  });
+  // Preserve the caller-owned Set contract; callers cannot change the cache.
+  return new Set(names);
 }
 
 function hasColumn(columns, column) {

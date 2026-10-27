@@ -1,0 +1,231 @@
+{
+  "toolingSha": "fff045800dee5181c83f3282b211ebf3c9f98bcc",
+  "rawSha256": "a3a1e6fc79135e68a0dbab1531cd8f65b26daf2249e02df29dcd09ed165d0324",
+  "browser": "140.0.7339.16",
+  "conditions": "80/800 synthetic tickets; owner; flow ON; list prepared first, then measured List→Kanban; 30 samples per variant in balanced six-order rotations; same fixture/dependency versions/backend, only Board differs; real authorized subject required; no artificial delay/throttle, no remote D1; production React Profiler and per-binding instrumentation",
+  "variantMeaning": {
+    "serial": "Existing open-first read, then three concurrent siblings",
+    "parallel": "Four concurrent reads with a prepared snapshot",
+    "bounded": "Two workers; each freed worker starts the next queue without depending on open"
+  },
+  "builds": {
+    "serial": {
+      "sourceSha": "13b3a66ae499f384f5ba89e33cbb3334dc700c24",
+      "digest": "eb65ad03dfe1983e7044e504c549c34dc6bd4542eab85fe790b2215625e10164",
+      "assets": [
+        {
+          "path": "assets/index-Ba5XnDT7.js",
+          "bytes": 445183,
+          "sha256": "7345132427a9585806c124dd8dfa00d14477557e6502bf12d9ba6322a28e5e67"
+        },
+        {
+          "path": "assets/index-t0ZcjX5m.css",
+          "bytes": 181140,
+          "sha256": "14b93f03efc6f63211f9f9219a6cbf140b8a94b879fb3d87f8fdbe3bc5c16856"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "f674ab297e6f5a54203feded98d206a9878f12bcaa1fd17a123abced1d2d6bb3"
+        }
+      ]
+    },
+    "parallel": {
+      "sourceSha": "65ee55390b3055c82c9e57cdcd80d981d0fa1eab",
+      "digest": "fead95a04cc53e12b4630698a60191d7bc3bea1d72cf8f7159551fb97d35c58c",
+      "assets": [
+        {
+          "path": "assets/index-C72F3wNR.js",
+          "bytes": 445288,
+          "sha256": "1e2e9a57ff31785ff62ccbd6abf7e43b1f3587b0fdeb6ef18f0b406eb74a21b1"
+        },
+        {
+          "path": "assets/index-t0ZcjX5m.css",
+          "bytes": 181140,
+          "sha256": "14b93f03efc6f63211f9f9219a6cbf140b8a94b879fb3d87f8fdbe3bc5c16856"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "489446b599e67fde18cd9cac801d5cfab329fb973f86f4f84821054f5db989af"
+        }
+      ]
+    },
+    "bounded": {
+      "sourceSha": "177cc6a95c3220694340cc873575e501536e57ff",
+      "digest": "27164b15e9a8f39dc4a52afc8b3c57643ce3e166e72ea5afbf96d1a14ddf89c6",
+      "assets": [
+        {
+          "path": "assets/index-hULYYdPk.js",
+          "bytes": 445496,
+          "sha256": "7e9e8c36ec55ade138f87056faebb0ae0ec0a124c31ff35a2f36b36cd9e5682a"
+        },
+        {
+          "path": "assets/index-t0ZcjX5m.css",
+          "bytes": 181140,
+          "sha256": "14b93f03efc6f63211f9f9219a6cbf140b8a94b879fb3d87f8fdbe3bc5c16856"
+        },
+        {
+          "path": "assets/Logo_Maono-DwL3yG-H.png",
+          "bytes": 121543,
+          "sha256": "d139b392a12fad6edcbfe0695305c6722977c77215462271800099e5e9ae8082"
+        },
+        {
+          "path": "index.html",
+          "bytes": 379,
+          "sha256": "ce6f5a0fe733862fdfb4a81695204231d0638d944c2ddee83f8bf64ac7a10a5a"
+        }
+      ]
+    }
+  },
+  "measuredJourneys": 180,
+  "warmups": 6,
+  "requestFailures": [],
+  "allPreparedSnapshotReads": true,
+  "comparisons": [
+    {
+      "records": 80,
+      "variant": "serial",
+      "firstMs": {
+        "n": 30,
+        "p50": 442.8098000000027,
+        "p95": 526.5706999999966
+      },
+      "fourMs": {
+        "n": 30,
+        "p50": 646.7958999999973,
+        "p95": 671.3607999999949
+      },
+      "maxActiveHandlers": {
+        "n": 30,
+        "p50": 3,
+        "p95": 3
+      },
+      "firstP95ChangePct": 0,
+      "fourP95ChangePct": 0
+    },
+    {
+      "records": 80,
+      "variant": "parallel",
+      "firstMs": {
+        "n": 30,
+        "p50": 639.1545000000042,
+        "p95": 705.8868000000002
+      },
+      "fourMs": {
+        "n": 30,
+        "p50": 705.5154000000039,
+        "p95": 773.0407999999879
+      },
+      "maxActiveHandlers": {
+        "n": 30,
+        "p50": 4,
+        "p95": 4
+      },
+      "firstP95ChangePct": 34.053565836459335,
+      "fourP95ChangePct": 15.145358501716789
+    },
+    {
+      "records": 80,
+      "variant": "bounded",
+      "firstMs": {
+        "n": 30,
+        "p50": 500.0424000000057,
+        "p95": 523.8180000000029
+      },
+      "fourMs": {
+        "n": 30,
+        "p50": 655.2663999999932,
+        "p95": 705.566899999998
+      },
+      "maxActiveHandlers": {
+        "n": 30,
+        "p50": 2,
+        "p95": 2
+      },
+      "firstP95ChangePct": -0.5227598117391707,
+      "fourP95ChangePct": 5.095039805720458
+    },
+    {
+      "records": 800,
+      "variant": "serial",
+      "firstMs": {
+        "n": 30,
+        "p50": 435.40420000004815,
+        "p95": 807.732799999998
+      },
+      "fourMs": {
+        "n": 30,
+        "p50": 784.0911999999662,
+        "p95": 932.6031000000075
+      },
+      "maxActiveHandlers": {
+        "n": 30,
+        "p50": 3,
+        "p95": 3
+      },
+      "firstP95ChangePct": 0,
+      "fourP95ChangePct": 0
+    },
+    {
+      "records": 800,
+      "variant": "parallel",
+      "firstMs": {
+        "n": 30,
+        "p50": 864.0410999999731,
+        "p95": 960.8788000000059
+      },
+      "fourMs": {
+        "n": 30,
+        "p50": 926.0844999999972,
+        "p95": 1013.7302999999956
+      },
+      "maxActiveHandlers": {
+        "n": 30,
+        "p50": 4,
+        "p95": 4
+      },
+      "firstP95ChangePct": 18.95998280619635,
+      "fourP95ChangePct": 8.699006040188738
+    },
+    {
+      "records": 800,
+      "variant": "bounded",
+      "firstMs": {
+        "n": 30,
+        "p50": 526.3448000000208,
+        "p95": 586.4721999999892
+      },
+      "fourMs": {
+        "n": 30,
+        "p50": 787.5875000000233,
+        "p95": 884.9001999999746
+      },
+      "maxActiveHandlers": {
+        "n": 30,
+        "p50": 2,
+        "p95": 2
+      },
+      "firstP95ChangePct": -27.39279623162626,
+      "fourP95ChangePct": -5.115026960561531
+    }
+  ],
+  "decision": "Four concurrent reads rejected. Two-worker candidate passed this causal p95 guardrail but then failed the full journey (80/flow ON first content +22.9%). Both scheduling changes are reverted; this causal run is retained, not performance acceptance.",
+  "limitations": [
+    "First-ever List to Kanban after real authorized List setup, unlike the full journey that opens Kanban before List; do not compare absolute timings across these protocols",
+    "Same local process SQLite backend, not remote D1",
+    "Production React Profiler, per-binding tracing and Playwright overhead on every variant",
+    "First-content medians are worse for both parallel candidates; report p50 as well as p95",
+    "No 30% p95 improvement demonstrated by this run"
+  ]
+}

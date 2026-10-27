@@ -1,0 +1,1203 @@
+{
+  "sourceSha": "f4a49ea5098ce1cbbbab6468c5e7496fcb781c4f",
+  "browser": "140.0.7339.16",
+  "delayMs": 0,
+  "environment": "local production profiling build; intercepted same-process HTTP handlers + node:sqlite; no D1 remote; optional modules disabled by synthetic API",
+  "overhead": "React production Profiler active; per-binding timers/hash active equally; no CPU/network throttling; durations include Playwright interaction overhead",
+  "summary": [
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 429.29670000000624,
+          "p95": 481.6570000000065
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 608.7019999999902,
+          "p95": 664.2452000000048
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 259.1545000000042,
+          "p95": 307.3561000000336
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 359.9659000000029,
+          "p95": 410.39420000000973
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 394.6677999999956,
+          "p95": 454.2212999999756
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 379.89549999998417,
+          "p95": 408.8036999999895
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 688.6027000000031,
+          "p95": 734.9372999999905
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 139.0112000000081,
+          "p95": 166.3583000000217
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 470.09350000001723,
+          "p95": 509.7011999999959
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 194.72410000000673,
+          "p95": 250.18919999999343
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 424.2411999999895,
+          "p95": 495.0339999999851
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 601.4955999999947,
+          "p95": 666.9904000000097
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 252.5963000000338,
+          "p95": 299.1565999999875
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 353.1601999999839,
+          "p95": 409.4664000000048
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 410.1515999999974,
+          "p95": 455.87510000000475
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 365.1106999999902,
+          "p95": 411.54240000003483
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 672.2249000000302,
+          "p95": 810.8776999999973
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 131.87020000000484,
+          "p95": 174.84260000000359
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 465.5871000000043,
+          "p95": 519.3522999999986
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 206.70350000000326,
+          "p95": 276.52029999997467
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 443.2956000000122,
+          "p95": 519.8002999999444
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 618.4607000000542,
+          "p95": 671.8366999999853
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 257.3401999999769,
+          "p95": 327.71329999994487
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 333.0994000000064,
+          "p95": 411.78289999999106
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 441.25209999998333,
+          "p95": 494.07050000003073
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 373.4728999999352,
+          "p95": 420.8231000000378
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 671.6468999999925,
+          "p95": 748.487000000081
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 141.25439999997616,
+          "p95": 180.01110000000335
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 484.38120000006165,
+          "p95": 527.3294999999925
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 206.5405000000028,
+          "p95": 269.44129999994766
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 425.26390000001993,
+          "p95": 518.1439999999711
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 619.6643000000622,
+          "p95": 690.1203000000096
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 256.99680000002263,
+          "p95": 289.0960999999661
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 356.85660000005737,
+          "p95": 401.81020000000717
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 409.8318000000436,
+          "p95": 456.356899999897
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 371.9525999999605,
+          "p95": 409.0442000000039
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 671.01800000004,
+          "p95": 785.392200000002
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 124.54379999998491,
+          "p95": 193.69000000000233
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 470.6468000000459,
+          "p95": 498.9417999999714
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 207.04749999998603,
+          "p95": 260.8061999999918
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 424.69330000004265,
+          "p95": 512.2762000000803
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 663.6161999999313,
+          "p95": 743.1392000000924
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 269.5575999999419,
+          "p95": 315.343600000022
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 449.3554000000004,
+          "p95": 487.2924999999814
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 416.92310000001453,
+          "p95": 448.52879999997094
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 400.608899999992,
+          "p95": 430.79020000004675
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 799.3473000000231,
+          "p95": 872.6167999999598
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 203.26409999991301,
+          "p95": 260.59560000000056
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 622.3401000000304,
+          "p95": 678.516399999964
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 405.53000000002794,
+          "p95": 470.1724000000395
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 435.9489000000758,
+          "p95": 486.18819999997504
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 665.1606000000611,
+          "p95": 748.5931000000564
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 269.9139000000432,
+          "p95": 312.11190000001807
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 446.860800000024,
+          "p95": 510.47340000001714
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 415.5324000000255,
+          "p95": 469.7150000000838
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 398.38630000001285,
+          "p95": 435.45250000001397
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 761.0281999999424,
+          "p95": 860.7852999999886
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 202.07990000001155,
+          "p95": 282.34560000000056
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 615.5457999999635,
+          "p95": 673.9942000000738
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 378.8527999999933,
+          "p95": 495.9939000000013
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 440.58190000010654,
+          "p95": 506.0622999998741
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 669.3229000000283,
+          "p95": 742.841199999908
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 287.6296000001021,
+          "p95": 324.08129999996163
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 425.36710000014864,
+          "p95": 522.7375000000466
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 424.75969999982044,
+          "p95": 488.0374999998603
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 399.55569999990985,
+          "p95": 440.18859999999404
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 783.4799000001512,
+          "p95": 898.1720000000205
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 228.69109999993816,
+          "p95": 297.74709999980405
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 643.4266999999527,
+          "p95": 676.1170999999158
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 384.8338999999687,
+          "p95": 472.76780000003055
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 432.91870000003837,
+          "p95": 523.4251999999397
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 666.1644999999553,
+          "p95": 759.6274999999441
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 254.54340000008233,
+          "p95": 298.09499999997206
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 413.9216000000015,
+          "p95": 484.5087000001222
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 420.14999999990687,
+          "p95": 525.404499999946
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 397.50230000005104,
+          "p95": 442.8469000000041
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 798.4407999999821,
+          "p95": 879.620699999854
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 229.95860000001267,
+          "p95": 263.36049999995157
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 635.2724999999627,
+          "p95": 702.3725000000559
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 400.41049999999814,
+          "p95": 490.26069999998435
+        }
+      }
+    }
+  ],
+  "conditions": [
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 429.29670000000624,
+          "p95": 481.6570000000065
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 608.7019999999902,
+          "p95": 664.2452000000048
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 259.1545000000042,
+          "p95": 307.3561000000336
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 359.9659000000029,
+          "p95": 410.39420000000973
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 394.6677999999956,
+          "p95": 454.2212999999756
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 379.89549999998417,
+          "p95": 408.8036999999895
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 688.6027000000031,
+          "p95": 734.9372999999905
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 139.0112000000081,
+          "p95": 166.3583000000217
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 470.09350000001723,
+          "p95": 509.7011999999959
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 194.72410000000673,
+          "p95": 250.18919999999343
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 244117,
+        "p95": 244117
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 2808,
+        "p95": 2808
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "reactCommitDurationMs": {
+        "n": 3697,
+        "p50": 0.8999999761581421,
+        "p95": 20.200000047683716
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 508.30000191926956,
+        "p95": 539.0999992489815
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 424.2411999999895,
+          "p95": 495.0339999999851
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 601.4955999999947,
+          "p95": 666.9904000000097
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 252.5963000000338,
+          "p95": 299.1565999999875
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 353.1601999999839,
+          "p95": 409.4664000000048
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 410.1515999999974,
+          "p95": 455.87510000000475
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 365.1106999999902,
+          "p95": 411.54240000003483
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 672.2249000000302,
+          "p95": 810.8776999999973
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 131.87020000000484,
+          "p95": 174.84260000000359
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 465.5871000000043,
+          "p95": 519.3522999999986
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 206.70350000000326,
+          "p95": 276.52029999997467
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 244117,
+        "p95": 244117
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 1526,
+        "p95": 1526
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "reactCommitDurationMs": {
+        "n": 3667,
+        "p50": 0.9000000357627869,
+        "p95": 21.299999952316284
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 511.30000054836273,
+        "p95": 551.7999995946884
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 443.2956000000122,
+          "p95": 519.8002999999444
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 618.4607000000542,
+          "p95": 671.8366999999853
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 257.3401999999769,
+          "p95": 327.71329999994487
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 333.0994000000064,
+          "p95": 411.78289999999106
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 441.25209999998333,
+          "p95": 494.07050000003073
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 373.4728999999352,
+          "p95": 420.8231000000378
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 671.6468999999925,
+          "p95": 748.487000000081
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 141.25439999997616,
+          "p95": 180.01110000000335
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 484.38120000006165,
+          "p95": 527.3294999999925
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 206.5405000000028,
+          "p95": 269.44129999994766
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 248033,
+        "p95": 248033
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 3144,
+        "p95": 3144
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "reactCommitDurationMs": {
+        "n": 3692,
+        "p50": 0.8999999761581421,
+        "p95": 20.40000009536743
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 514.3000009059906,
+        "p95": 551.8000002503395
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 425.26390000001993,
+          "p95": 518.1439999999711
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 619.6643000000622,
+          "p95": 690.1203000000096
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 256.99680000002263,
+          "p95": 289.0960999999661
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 356.85660000005737,
+          "p95": 401.81020000000717
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 409.8318000000436,
+          "p95": 456.356899999897
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 371.9525999999605,
+          "p95": 409.0442000000039
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 671.01800000004,
+          "p95": 785.392200000002
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 124.54379999998491,
+          "p95": 193.69000000000233
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 470.6468000000459,
+          "p95": 498.9417999999714
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 207.04749999998603,
+          "p95": 260.8061999999918
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 248033,
+        "p95": 248033
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 1708,
+        "p95": 1708
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "reactCommitDurationMs": {
+        "n": 3708,
+        "p50": 0.8999999761581421,
+        "p95": 21.399999916553497
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 512.7999997735023,
+        "p95": 548.7999995350838
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 424.69330000004265,
+          "p95": 512.2762000000803
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 663.6161999999313,
+          "p95": 743.1392000000924
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 269.5575999999419,
+          "p95": 315.343600000022
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 449.3554000000004,
+          "p95": 487.2924999999814
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 416.92310000001453,
+          "p95": 448.52879999997094
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 400.608899999992,
+          "p95": 430.79020000004675
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 799.3473000000231,
+          "p95": 872.6167999999598
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 203.26409999991301,
+          "p95": 260.59560000000056
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 622.3401000000304,
+          "p95": 678.516399999964
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 405.53000000002794,
+          "p95": 470.1724000000395
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 537905,
+        "p95": 537905
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 2808,
+        "p95": 2808
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "reactCommitDurationMs": {
+        "n": 3446,
+        "p50": 1.199999988079071,
+        "p95": 24.599999845027924
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 638.5000001788139,
+        "p95": 706.9999995231628
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 435.9489000000758,
+          "p95": 486.18819999997504
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 665.1606000000611,
+          "p95": 748.5931000000564
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 269.9139000000432,
+          "p95": 312.11190000001807
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 446.860800000024,
+          "p95": 510.47340000001714
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 415.5324000000255,
+          "p95": 469.7150000000838
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 398.38630000001285,
+          "p95": 435.45250000001397
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 761.0281999999424,
+          "p95": 860.7852999999886
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 202.07990000001155,
+          "p95": 282.34560000000056
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 615.5457999999635,
+          "p95": 673.9942000000738
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 378.8527999999933,
+          "p95": 495.9939000000013
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 537905,
+        "p95": 537905
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 1526,
+        "p95": 1526
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 0,
+        "p95": 0
+      },
+      "reactCommitDurationMs": {
+        "n": 3437,
+        "p50": 1.199999988079071,
+        "p95": 25.50000011920929
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 649.5999999642372,
+        "p95": 707.1999998688698
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "before",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 440.58190000010654,
+          "p95": 506.0622999998741
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 669.3229000000283,
+          "p95": 742.841199999908
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 287.6296000001021,
+          "p95": 324.08129999996163
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 425.36710000014864,
+          "p95": 522.7375000000466
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 424.75969999982044,
+          "p95": 488.0374999998603
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 399.55569999990985,
+          "p95": 440.18859999999404
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 783.4799000001512,
+          "p95": 898.1720000000205
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 228.69109999993816,
+          "p95": 297.74709999980405
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 643.4266999999527,
+          "p95": 676.1170999999158
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 384.8338999999687,
+          "p95": 472.76780000003055
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 541821,
+        "p95": 541821
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 3144,
+        "p95": 3144
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "reactCommitDurationMs": {
+        "n": 3577,
+        "p50": 1.0999999642372131,
+        "p95": 22.300000071525574
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 642.0999997854233,
+        "p95": 686.2999998927116
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "variant": "after",
+      "metrics": {
+        "direct-first-authorized-kanban": {
+          "n": 30,
+          "p50": 432.91870000003837,
+          "p95": 523.4251999999397
+        },
+        "direct-four-first-pages": {
+          "n": 30,
+          "p50": 666.1644999999553,
+          "p95": 759.6274999999441
+        },
+        "list-to-kanban-first": {
+          "n": 30,
+          "p50": 254.54340000008233,
+          "p95": 298.09499999997206
+        },
+        "list-to-kanban-four": {
+          "n": 30,
+          "p50": 413.9216000000015,
+          "p95": 484.5087000001222
+        },
+        "detail-first-authorized-summary": {
+          "n": 30,
+          "p50": 420.14999999990687,
+          "p95": 525.404499999946
+        },
+        "detail-reopen-authorized-summary": {
+          "n": 30,
+          "p50": 397.50230000005104,
+          "p95": 442.8469000000041
+        },
+        "rapid-switch-final-summary": {
+          "n": 30,
+          "p50": 798.4407999999821,
+          "p95": 879.620699999854
+        },
+        "column-pagination": {
+          "n": 30,
+          "p50": 229.95860000001267,
+          "p95": 263.36049999995157
+        },
+        "filter-authorized-kanban": {
+          "n": 30,
+          "p50": 635.2724999999627,
+          "p95": 702.3725000000559
+        },
+        "refresh-with-draft": {
+          "n": 30,
+          "p50": 400.41049999999814,
+          "p95": 490.26069999998435
+        }
+      },
+      "journeys": 30,
+      "failures": 0,
+      "draftFailures": 0,
+      "focusFailures": 30,
+      "clientRequestFailures": null,
+      "requestCounts": {
+        "n": 30,
+        "p50": 59,
+        "p95": 59
+      },
+      "responseBodyBytes": {
+        "n": 30,
+        "p50": 541821,
+        "p95": 541821
+      },
+      "bindingCalls": {
+        "n": 30,
+        "p50": 1708,
+        "p95": 1708
+      },
+      "snapshots": {
+        "n": 30,
+        "p50": 6,
+        "p95": 6
+      },
+      "reactCommitDurationMs": {
+        "n": 3521,
+        "p50": 1.100000023841858,
+        "p95": 25.000000059604645
+      },
+      "reactRenderTotalPerJourneyMs": {
+        "n": 30,
+        "p50": 654.6999999284744,
+        "p95": 706.199999153614
+      }
+    }
+  ]
+}

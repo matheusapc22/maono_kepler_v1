@@ -48,3 +48,6 @@ playwright/auth.json
 # Reproducible local CC17 benchmark output; CI publishes it as an artifact.
 .tmp/cc17/
 .tmp/cc18/
+
+.tmp/ticket-performance/
+dist-ticket-performance/

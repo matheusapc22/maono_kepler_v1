@@ -1,0 +1,4725 @@
+{
+  "sourceSha": "f4a49ea5098ce1cbbbab6468c5e7496fcb781c4f",
+  "baselineSha": "381c93256d985b0ae39722128fc4ad54f17f025f",
+  "trackedWorktreeDirty": false,
+  "patchSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "scopeModuleSha256": "6468e612946f7b37bb46052294b1266e0f354ade3a35eb0e66633ea67cd087e1",
+  "runtime": "v24.15.0",
+  "samples": 30,
+  "delayMs": 0,
+  "environment": "local actual route handlers with in-memory SQLite; paired alternating order; no remote D1",
+  "limitations": [
+    "bindingMs is cumulative across possibly overlapping spans, not SQL time or wall time",
+    "adapterDurationMs includes Node SQLite and instrumentation overhead",
+    "rows_read, rows_written and D1 SQL duration unavailable",
+    "list-first means new snapshot/request, not a cold Worker process",
+    "First warm-up pair excluded per scenario",
+    "No payloads, SQL parameters or cookies recorded"
+  ],
+  "results": [
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.263300000000072,
+            "p95": 28.625
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.858199999998988,
+            "p95": 17.088699999999335
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.478399999999965,
+            "p95": 22.718899999999962
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.073699999999917,
+            "p95": 14.000999999999976
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.499099999999999,
+            "p95": 19.898199999999633
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.197700000000623,
+            "p95": 12.353299999999763
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.450200000000223,
+            "p95": 15.951600000000326
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 7.567899999999099,
+            "p95": 11.61330000000089
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.758400000000165,
+            "p95": 22.36239999999998
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21889,
+            "p95": 21889
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.33869999999888,
+            "p95": 14.867600000000039
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.26279999999997,
+            "p95": 17.60660000000007
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21889,
+            "p95": 21889
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 7.231799999999566,
+            "p95": 12.125700000000961
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.37270000000035,
+            "p95": 22.69320000000016
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3392,
+            "p95": 3392
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.345699999998487,
+            "p95": 16.387699999994766
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.749399999999696,
+            "p95": 16.645200000000386
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3392,
+            "p95": 3392
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.38490000000229,
+            "p95": 13.174300000000585
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.343699999999444,
+            "p95": 28.327300000000832
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.406700000001365,
+            "p95": 19.7699999999968
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.859599999999773,
+            "p95": 24.131800000000112
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.449100000004364,
+            "p95": 17.999400000003334
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 18.450600000000122,
+            "p95": 35.236400000000685
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 27.680300000004536,
+            "p95": 41.0349000000042
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 126,
+            "p95": 126
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.108699999999772,
+            "p95": 27.813000000000102
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.219399999997222,
+            "p95": 20.742699999996148
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 37,
+            "p95": 37
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.929300000000694,
+            "p95": 16.600800000000163
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.931699999999182,
+            "p95": 12.072199999996883
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 10.477899999999863,
+            "p95": 19.8695000000007
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 6.892499999996289,
+            "p95": 10.568500000000313
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.26720000000023,
+            "p95": 22.506199999999808
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.628500000000713,
+            "p95": 16.32890000000043
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.32089999999971,
+            "p95": 18.995499999999993
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 7.794300000004114,
+            "p95": 13.389899999998306
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.350099999999657,
+            "p95": 21.627800000000207
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21889,
+            "p95": 21889
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.824899999997797,
+            "p95": 16.16030000000501
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.2450000000008,
+            "p95": 19.190300000000207
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21889,
+            "p95": 21889
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 7.15669999999227,
+            "p95": 11.963500000001659
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.863600000000588,
+            "p95": 17.421700000000783
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3392,
+            "p95": 3392
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.585700000008728,
+            "p95": 14.797399999995832
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 10.913500000000568,
+            "p95": 14.771600000000035
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3392,
+            "p95": 3392
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.389099999998507,
+            "p95": 11.783799999990151
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.756999999999607,
+            "p95": 17.03230000000076
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.481000000005224,
+            "p95": 13.152599999992162
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.506499999999505,
+            "p95": 15.70010000000002
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21708,
+            "p95": 21708
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.2245000000039,
+            "p95": 10.790700000003199
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.36540000000059,
+            "p95": 25.702400000000125
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 25.753900000014255,
+            "p95": 41.828599999997095
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 125,
+            "p95": 125
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.931400000001304,
+            "p95": 25.03479999999945
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.446699999996781,
+            "p95": 16.842899999994188
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 36,
+            "p95": 36
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 18.96810000000005,
+            "p95": 28.055700000000797
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 13.10449999998491,
+            "p95": 21.799600000014834
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 17.900299999999334,
+            "p95": 24.2604999999985
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 13.537199999998847,
+            "p95": 18.206399999997302
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.138499999999112,
+            "p95": 25.862999999999374
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.404400000008536,
+            "p95": 19.559900000009293
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.283199999999852,
+            "p95": 22.99029999999948
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.019499999996697,
+            "p95": 16.3038000000015
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.222599999999147,
+            "p95": 18.603000000000975
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 22067,
+            "p95": 22067
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.997600000009697,
+            "p95": 11.273999999997613
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.267100000000937,
+            "p95": 18.884000000000015
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 22067,
+            "p95": 22067
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.030299999993076,
+            "p95": 12.208500000004278
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.63090000000011,
+            "p95": 23.76050000000032
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3570,
+            "p95": 3570
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.806800000000294,
+            "p95": 20.29689999999755
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 9.347700000000259,
+            "p95": 16.883600000001024
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3570,
+            "p95": 3570
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 7.294399999995221,
+            "p95": 13.697200000007797
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.750299999999697,
+            "p95": 28.807999999999083
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.589600000017526,
+            "p95": 22.826199999990422
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.781000000002678,
+            "p95": 23.929200000000492
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.607699999993201,
+            "p95": 18.611699999999473
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.937200000000303,
+            "p95": 24.59100000000035
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 22.58249999997861,
+            "p95": 38.95670000001337
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 126,
+            "p95": 126
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.357199999998556,
+            "p95": 19.397800000002462
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.168600000029983,
+            "p95": 17.58929999996326
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 37,
+            "p95": 37
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.830500000000029,
+            "p95": 25.943300000002637
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.512199999997392,
+            "p95": 20.299399999992602
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.465700000000652,
+            "p95": 22.03979999999865
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.181600000014441,
+            "p95": 16.366600000008475
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.30279999999766,
+            "p95": 21.803799999997864
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.103300000002491,
+            "p95": 16.970000000004802
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.417600000000675,
+            "p95": 20.30279999999766
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.024699999976292,
+            "p95": 14.717699999997421
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.645100000001548,
+            "p95": 29.41189999999915
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 22067,
+            "p95": 22067
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.091100000008737,
+            "p95": 22.68189999999595
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.478900000001886,
+            "p95": 27.345100000002276
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 22067,
+            "p95": 22067
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.897600000003877,
+            "p95": 15.606399999986024
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.639200000001438,
+            "p95": 25.096000000001368
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3570,
+            "p95": 3570
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.61590000000433,
+            "p95": 21.46490000000631
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.128899999999703,
+            "p95": 16.69759999999951
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3570,
+            "p95": 3570
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.508500000007189,
+            "p95": 13.648299999982555
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 18.059800000002724,
+            "p95": 27.930100000001403
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 14.113699999998062,
+            "p95": 22.26699999999255
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.153399999999237,
+            "p95": 25.224300000001676
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21886,
+            "p95": 21886
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.419499999996333,
+            "p95": 16.56000000000131
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.857599999999366,
+            "p95": 22.051799999997456
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 20.938299999968876,
+            "p95": 33.45620000000781
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 125,
+            "p95": 125
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 9.859599999999773,
+            "p95": 20.781299999998737
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.90750000000844,
+            "p95": 15.088999999999942
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 36,
+            "p95": 36
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.002599999999802,
+            "p95": 23.435600000000704
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.691099999981816,
+            "p95": 18.169199999996636
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.477699999999459,
+            "p95": 30.778299999998126
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.593699999975797,
+            "p95": 17.18780000001061
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.073800000001938,
+            "p95": 15.46480000000156
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.16439999997965,
+            "p95": 12.236100000001898
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.523799999999028,
+            "p95": 16.69419999999809
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.625400000011723,
+            "p95": 10.224600000005012
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.323199999998906,
+            "p95": 19.16740000000209
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21707,
+            "p95": 21707
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.558600000014849,
+            "p95": 13.39539999997578
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 10.917600000000675,
+            "p95": 16.666699999997945
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21707,
+            "p95": 21707
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 7.911099999990256,
+            "p95": 11.479099999993196
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.327300000000832,
+            "p95": 19.311400000002322
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21699,
+            "p95": 21699
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.02539999999135,
+            "p95": 14.635600000008708
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.551199999998062,
+            "p95": 16.886200000000827
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21699,
+            "p95": 21699
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.236900000010792,
+            "p95": 12.585499999993772
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.882699999998295,
+            "p95": 25.277200000000448
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.920300000008865,
+            "p95": 20.415499999995518
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.09690000000046,
+            "p95": 26.61119999999937
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.613000000004831,
+            "p95": 21.25219999998444
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.723300000001473,
+            "p95": 23.720499999999447
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 22.30220000000554,
+            "p95": 36.8664000000208
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 126,
+            "p95": 126
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.10320000000138,
+            "p95": 19.97139999999854
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.931499999984226,
+            "p95": 15.911400000011781
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 37,
+            "p95": 37
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.22780000000057,
+            "p95": 25.07039999999688
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.19989999999234,
+            "p95": 19.464499999998225
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.754300000000512,
+            "p95": 17.458200000000943
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.681699999993725,
+            "p95": 12.771299999993062
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.51600000000326,
+            "p95": 22.492099999999482
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.33969999997862,
+            "p95": 18.481400000000576
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.314000000002125,
+            "p95": 21.707800000000134
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.507300000001123,
+            "p95": 16.498500000019703
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.60389999999461,
+            "p95": 19.245999999999185
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21707,
+            "p95": 21707
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.396100000019942,
+            "p95": 13.325200000024779
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.093700000004901,
+            "p95": 15.456300000001647
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21707,
+            "p95": 21707
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.074599999985367,
+            "p95": 11.074800000009418
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 12.70629999999801,
+            "p95": 20.960800000000745
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21699,
+            "p95": 21699
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 9.741899999964517,
+            "p95": 15.427899999995134
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.267600000006496,
+            "p95": 16.96770000000106
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21699,
+            "p95": 21699
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 8.193999999981315,
+            "p95": 12.713499999998021
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.916699999994307,
+            "p95": 19.240300000004936
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 81,
+            "p95": 81
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.664200000013807,
+            "p95": 16.03710000000865
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.355900000002293,
+            "p95": 21.470399999998335
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21788,
+            "p95": 21788
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 47,
+            "p95": 47
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.352500000029977,
+            "p95": 17.1842999999717
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 24,
+            "p95": 24
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "false",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 19.45440000000235,
+            "p95": 26.221400000002177
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 29.225699999951757,
+            "p95": 41.13029999995342
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 125,
+            "p95": 125
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.144000000000233,
+            "p95": 18.02049999999872
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.059700000012526,
+            "p95": 16.98990000000049
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 36,
+            "p95": 36
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 24.259899999997288,
+            "p95": 30.08640000000014
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 20.8441000000239,
+            "p95": 25.697499999914726
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 23.149499999999534,
+            "p95": 33.53639999999723
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 19.56289999994624,
+            "p95": 27.481400000026042
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.755599999996775,
+            "p95": 23.009400000002643
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.707199999989825,
+            "p95": 18.827799999999115
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.376499999998487,
+            "p95": 19.2528999999995
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.202700000016193,
+            "p95": 14.81019999999262
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.3466000000044,
+            "p95": 23.71639999999752
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21885,
+            "p95": 21885
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.940200000040932,
+            "p95": 18.984900000010384
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.39379999999801,
+            "p95": 24.00130000000354
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21885,
+            "p95": 21885
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.760699999984354,
+            "p95": 18.421000000016647
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.70980000000418,
+            "p95": 30.608500000002095
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21877,
+            "p95": 21877
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 13.107399999986228,
+            "p95": 24.867600000055972
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 14.189800000000105,
+            "p95": 25.460800000000745
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21877,
+            "p95": 21877
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.029900000008638,
+            "p95": 20.082399999984773
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 28.457099999999627,
+            "p95": 43.83009999999922
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 24.613500000057684,
+            "p95": 37.950800000005984
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 22.126900000002934,
+            "p95": 34.08260000000155
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 18.209699999984878,
+            "p95": 29.570099999975355
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 23.679700000000594,
+            "p95": 30.85670000000391
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 174,
+            "p95": 174
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 36.949999999967986,
+            "p95": 42.64659999997821
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 126,
+            "p95": 126
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 17.94789999999921,
+            "p95": 23.732199999998556
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 3540,
+            "p95": 3540
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 85,
+            "p95": 85
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 16.457700000006298,
+            "p95": 19.223699999995006
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 37,
+            "p95": 37
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-first",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 24.49369999999908,
+            "p95": 61.19640000000072
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 20.95339999999851,
+            "p95": 34.46649999996589
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 22.785600000002887,
+            "p95": 33.69690000000264
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 19.002999999989697,
+            "p95": 27.788699999982782
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "list-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 19.03740000000107,
+            "p95": 30.99260000000504
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 15.24110000001383,
+            "p95": 24.44830000001093
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.99880000000121,
+            "p95": 24.03689999999915
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.559399999998277,
+            "p95": 18.508899999993446
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-reuse",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.830900000000838,
+            "p95": 25.068599999998696
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21885,
+            "p95": 21885
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 13.136099999959697,
+            "p95": 20.326500000031956
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 16.002599999999802,
+            "p95": 23.425100000000384
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21885,
+            "p95": 21885
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 11.927499999990687,
+            "p95": 18.900700000012876
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "queue-page2",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.414199999999255,
+            "p95": 21.49659999999858
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21877,
+            "p95": 21877
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 96,
+            "p95": 96
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 12.287999999985914,
+            "p95": 17.669200000018463
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 13.330399999998917,
+            "p95": 20.99620000000141
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21877,
+            "p95": 21877
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 55,
+            "p95": 55
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.324499999980617,
+            "p95": 16.420700000009674
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "filter-new",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 27.040099999998347,
+            "p95": 41.39630000000034
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 99,
+            "p95": 99
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 97,
+            "p95": 97
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 21.11909999999625,
+            "p95": 35.85399999999936
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 70,
+            "p95": 70
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 22.095099999998638,
+            "p95": 30.33759999999893
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 21966,
+            "p95": 21966
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 58,
+            "p95": 58
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 56,
+            "p95": 56
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 18.456900000011956,
+            "p95": 25.441200000022945
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 29,
+            "p95": 29
+          }
+        }
+      }
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "scenario": "detail",
+      "flags": {
+        "MAONO_TICKET_TRIAGE_ENABLED": "true",
+        "MAONO_TICKET_COMMANDS_ENABLED": "true",
+        "MAONO_RUNTIME_ENV": "local",
+        "MAONO_TICKET_SELECTIVE_ACCESS_ENABLED": "true",
+        "MAONO_TICKET_CONVERSATIONS_ENABLED": "true",
+        "MAONO_TICKET_RESUMABLE_UPLOADS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATIONS_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_CONSUMER_ENABLED": "true",
+        "MAONO_TICKET_NOTIFICATION_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_NOTIFICATION_START_AT": "2026-01-01T00:00:00.000Z",
+        "MAONO_TICKET_METRICS_ENABLED": "true",
+        "MAONO_TICKET_METRICS_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_SLA_ENABLED": "true",
+        "MAONO_TICKET_SLA_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORTS_ENABLED": "true",
+        "MAONO_TICKET_EXPORT_ORGANIZATION_IDS": "1,2",
+        "MAONO_TICKET_EXPORT_TTL_SECONDS": "3600",
+        "MAONO_TICKET_EXPORT_MAX_ROWS": "1000",
+        "MAONO_TICKET_EXPORT_MAX_BYTES": "10485760",
+        "MAONO_TICKET_EXPORT_MAX_JOBS_PER_ORG": "10",
+        "MAONO_TICKET_EXPORT_MAX_ATTEMPTS": "3",
+        "MAONO_TICKET_EXPORT_CSV_PROFILE": "text-v1",
+        "MAONO_TICKET_FLOW_ENABLED": "true",
+        "MAONO_TICKET_FLOW_ORGANIZATION_IDS": "1"
+      },
+      "summary": {
+        "before": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 15.769200000002456,
+            "p95": 34.94499999999971
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 171,
+            "p95": 171
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 24.729799999971874,
+            "p95": 46.41820000008738
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 125,
+            "p95": 125
+          }
+        },
+        "after": {
+          "elapsedMs": {
+            "n": 30,
+            "p50": 11.581700000002456,
+            "p95": 25.897499999999127
+          },
+          "bytes": {
+            "n": 30,
+            "p50": 2120,
+            "p95": 2120
+          },
+          "sqlCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingCalls": {
+            "n": 30,
+            "p50": 82,
+            "p95": 82
+          },
+          "bindingMs": {
+            "n": 30,
+            "p50": 10.533400000000256,
+            "p95": 17.55910000003496
+          },
+          "schemaCalls": {
+            "n": 30,
+            "p50": 36,
+            "p95": 36
+          }
+        }
+      }
+    }
+  ]
+}

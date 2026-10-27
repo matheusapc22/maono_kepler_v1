@@ -229,7 +229,7 @@
   background: linear-gradient(180deg, #ffe09a, #e8b958);
 }
 
-.ticket-secondary-action:hover:not(:disabled),
+.ticket-secondary-action:hover:not(:disabled):not([aria-disabled="true"]),
 .ticket-table-action:hover:not(:disabled),
 .ticket-load-more:hover:not(:disabled),
 .ticket-pagination button:hover:not(:disabled),
@@ -242,6 +242,7 @@
 
 .ticket-primary-action:disabled,
 .ticket-secondary-action:disabled,
+.ticket-secondary-action[aria-disabled="true"],
 .ticket-table-action:disabled,
 .ticket-load-more:disabled,
 .ticket-filter-clear:disabled,

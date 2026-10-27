@@ -2,6 +2,7 @@ import { restoreApprovedPreviewPipeline } from "./helpers/project-thumbnail-pres
 import { restoreAdminProjectsProgressiveLoading } from "./helpers/admin-projects-progressive-preservation.mjs";
 import { restoreMaonoSelect } from "./helpers/maono-select-preservation.mjs";
 import { restoreTicketVisualExtraction } from './helpers/ticket-visual-preservation.mjs';
+import { restoreTicketRefreshFocusStyles } from './helpers/ticket-refresh-focus-preservation.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -162,7 +163,8 @@ test('organization chevron is a single rotating vector; every other trigger and 
 
 test('chevron refinement preserves every unrelated style declaration', () => {
   const entries = [];
-  css.walkDecls(node => {
+  const preservedCss = postcss.parse(restoreTicketRefreshFocusStyles(read('src/pages/Projects/projects.css')));
+  preservedCss.walkDecls(node => {
     if (node.parent.selector?.includes('.mm-organization-chevron')) return;
     entries.push([node.parent.selector, node.parent.parent.type === 'atrule' ? node.parent.parent.params : null, node.prop, node.value, node.important || false]);
   });

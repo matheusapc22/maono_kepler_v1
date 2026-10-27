@@ -1,0 +1,1654 @@
+{
+  "schemaVersion": 1,
+  "label": "baseline",
+  "sourceSha": "381c93256d985b0ae39722128fc4ad54f17f025f",
+  "runtime": "v24.15.0",
+  "platform": "win32",
+  "createdAt": "2026-10-26T19:32:56.036Z",
+  "bindingDelayMs": 0,
+  "environment": "isolated node:sqlite; actual HTTP handlers; no remote network",
+  "unavailable": [
+    "D1 remote latency",
+    "D1 SQL duration",
+    "rows_read",
+    "rows_written",
+    "browser timings",
+    "server serialization span"
+  ],
+  "overhead": "performance.now + query hashing per binding; same instrumentation for both variants; adapter duration includes wrapper overhead",
+  "runs": [
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "owner",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "owner",
+        "elapsedMs": 26.74479999999994,
+        "consumeBodyMs": 0.9581000000000586,
+        "status": 200,
+        "bytes": 21708,
+        "sqlCalls": 81,
+        "bindingCalls": 81,
+        "bindingMs": 10.102299999999786,
+        "schemaCalls": 58
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 17.88709999999992,
+              "p95": 21.816100000000006
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21708,
+              "p95": 21708
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 12.569899999999961,
+              "p95": 15.697400000000243
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 12.373299999999972,
+              "p95": 18.760300000000143
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21889,
+              "p95": 21889
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 8.20559999999955,
+              "p95": 12.047799999999597
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 13.669599999999946,
+              "p95": 16.841900000000123
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3392,
+              "p95": 3392
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 11.132899999999609,
+              "p95": 13.753499999999576
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 14.12350000000015,
+              "p95": 20.208500000000186
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21708,
+              "p95": 21708
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 9.94709999999941,
+              "p95": 14.36389999999983
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 19.141200000000026,
+              "p95": 23.221799999999803
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3540,
+              "p95": 3540
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 29.748499999998785,
+              "p95": 36.064100000005055
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 126,
+              "p95": 126
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    },
+    {
+      "records": 80,
+      "flow": false,
+      "profile": "viewer",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "viewer",
+        "elapsedMs": 20.37689999999975,
+        "consumeBodyMs": 0.07360000000016953,
+        "status": 200,
+        "bytes": 21708,
+        "sqlCalls": 81,
+        "bindingCalls": 81,
+        "bindingMs": 15.943899999999303,
+        "schemaCalls": 58
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 12.2516999999998,
+              "p95": 18.486499999999978
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21708,
+              "p95": 21708
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 8.542199999998502,
+              "p95": 12.063399999999092
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 15.429299999999785,
+              "p95": 19.92320000000018
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21889,
+              "p95": 21889
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 11.093500000002678,
+              "p95": 12.98490000000129
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 12.740200000000186,
+              "p95": 18.010800000000017
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3392,
+              "p95": 3392
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 10.462900000004993,
+              "p95": 14.06840000000102
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 16.556499999999687,
+              "p95": 22.740600000000086
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21708,
+              "p95": 21708
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 12.07039999999779,
+              "p95": 14.865399999999681
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 17.141999999999825,
+              "p95": 25.472499999999854
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 2120,
+              "p95": 2120
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 26.91800000000603,
+              "p95": 29.103000000004613
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 125,
+              "p95": 125
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "owner",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "owner",
+        "elapsedMs": 20.759000000000015,
+        "consumeBodyMs": 0.07269999999971333,
+        "status": 200,
+        "bytes": 21886,
+        "sqlCalls": 99,
+        "bindingCalls": 97,
+        "bindingMs": 16.335600000005797,
+        "schemaCalls": 70
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 16.370300000000498,
+              "p95": 24.063200000000506
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21886,
+              "p95": 21886
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 12.121699999995144,
+              "p95": 17.41269999999986
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 17.051300000000083,
+              "p95": 22.15270000000055
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 22067,
+              "p95": 22067
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 12.80590000000393,
+              "p95": 14.90990000000329
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 14.367199999999684,
+              "p95": 19.469900000000052
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3570,
+              "p95": 3570
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 12.03809999999703,
+              "p95": 13.748999999997977
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 19.94880000000012,
+              "p95": 24.4966000000004
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21886,
+              "p95": 21886
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 99,
+              "p95": 99
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 97,
+              "p95": 97
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 15.485499999997046,
+              "p95": 18.854600000000573
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 18.13889999999992,
+              "p95": 32.40939999999864
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3540,
+              "p95": 3540
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 28.94279999999162,
+              "p95": 47.14650000001711
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 126,
+              "p95": 126
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    },
+    {
+      "records": 80,
+      "flow": true,
+      "profile": "viewer",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "viewer",
+        "elapsedMs": 17.452100000000428,
+        "consumeBodyMs": 0.12880000000041036,
+        "status": 200,
+        "bytes": 21886,
+        "sqlCalls": 99,
+        "bindingCalls": 97,
+        "bindingMs": 13.578700000001845,
+        "schemaCalls": 70
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 13.36369999999988,
+              "p95": 18.77089999999953
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21886,
+              "p95": 21886
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 9.691800000000512,
+              "p95": 14.302700000003824
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 14.847799999999552,
+              "p95": 20.34979999999996
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 22067,
+              "p95": 22067
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 10.665299999991475,
+              "p95": 15.615999999998166
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 11.614799999999377,
+              "p95": 17.61700000000019
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3570,
+              "p95": 3570
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 9.748099999986152,
+              "p95": 14.864700000016455
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 16.028299999999945,
+              "p95": 26.467399999999543
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21886,
+              "p95": 21886
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 99,
+              "p95": 99
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 97,
+              "p95": 97
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 12.68609999999535,
+              "p95": 16.723999999994703
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 14.771999999999025,
+              "p95": 18.05119999999988
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 2120,
+              "p95": 2120
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 23.16509999999107,
+              "p95": 28.6898000000092
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 125,
+              "p95": 125
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "owner",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "owner",
+        "elapsedMs": 13.432700000001205,
+        "consumeBodyMs": 0.04890000000159489,
+        "status": 200,
+        "bytes": 21788,
+        "sqlCalls": 81,
+        "bindingCalls": 81,
+        "bindingMs": 10.063900000002832,
+        "schemaCalls": 58
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 18.395399999999427,
+              "p95": 23.575599999998303
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21788,
+              "p95": 21788
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 14.13570000000982,
+              "p95": 17.769400000010137
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 18.17489999999998,
+              "p95": 24.832300000000032
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21707,
+              "p95": 21707
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 13.862300000009782,
+              "p95": 18.276000000005297
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 14.637399999999616,
+              "p95": 18.131499999999505
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21699,
+              "p95": 21699
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 11.042300000008254,
+              "p95": 13.733100000008562
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 14.931699999999182,
+              "p95": 25.396300000000338
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21788,
+              "p95": 21788
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 12.18489999999656,
+              "p95": 20.939399999999296
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 18.147800000000643,
+              "p95": 25.270399999999427
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3540,
+              "p95": 3540
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 27.53369999998904,
+              "p95": 34.53269999999611
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 126,
+              "p95": 126
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    },
+    {
+      "records": 800,
+      "flow": false,
+      "profile": "viewer",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "viewer",
+        "elapsedMs": 14.576399999999921,
+        "consumeBodyMs": 0.047299999998358544,
+        "status": 200,
+        "bytes": 21788,
+        "sqlCalls": 81,
+        "bindingCalls": 81,
+        "bindingMs": 11.270800000002055,
+        "schemaCalls": 58
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 13.930700000000797,
+              "p95": 21.08680000000095
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21788,
+              "p95": 21788
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 10.779699999999139,
+              "p95": 15.181900000001406
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 14.381900000000314,
+              "p95": 21.163300000000163
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21707,
+              "p95": 21707
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 10.2405999999919,
+              "p95": 15.407400000000052
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 15.223899999999048,
+              "p95": 20.644200000002456
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21699,
+              "p95": 21699
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 11.780499999988024,
+              "p95": 15.512899999983347
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 19.83139999999912,
+              "p95": 27.975500000000466
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21788,
+              "p95": 21788
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 81,
+              "p95": 81
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 16.137400000006892,
+              "p95": 18.39629999997851
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 58,
+              "p95": 58
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 18.164700000001176,
+              "p95": 24.621500000001106
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 2120,
+              "p95": 2120
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 28.828800000010233,
+              "p95": 39.30650000000969
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 125,
+              "p95": 125
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "owner",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "owner",
+        "elapsedMs": 29.403300000001764,
+        "consumeBodyMs": 0.062300000001414446,
+        "status": 200,
+        "bytes": 21966,
+        "sqlCalls": 99,
+        "bindingCalls": 97,
+        "bindingMs": 24.906900000009045,
+        "schemaCalls": 70
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 20.99750000000131,
+              "p95": 36.27000000000044
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21966,
+              "p95": 21966
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 16.8142000000189,
+              "p95": 25.163899999999558
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 20.188900000001013,
+              "p95": 31.096299999997427
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21885,
+              "p95": 21885
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 16.329299999993964,
+              "p95": 19.597100000017235
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 19.573600000003353,
+              "p95": 25.5154999999977
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21877,
+              "p95": 21877
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 15.81729999999152,
+              "p95": 19.926700000018172
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 27.012799999996787,
+              "p95": 36.80610000000161
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21966,
+              "p95": 21966
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 99,
+              "p95": 99
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 97,
+              "p95": 97
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 22.806000000000495,
+              "p95": 31.703000000004977
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 16.961899999998423,
+              "p95": 24.199400000001333
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 3540,
+              "p95": 3540
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 174,
+              "p95": 174
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 26.636699999970006,
+              "p95": 39.18430000001899
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 126,
+              "p95": 126
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    },
+    {
+      "records": 800,
+      "flow": true,
+      "profile": "viewer",
+      "firstRequest": {
+        "kind": "list",
+        "profile": "viewer",
+        "elapsedMs": 26.22780000000057,
+        "consumeBodyMs": 0.046999999998661224,
+        "status": 200,
+        "bytes": 21966,
+        "sqlCalls": 99,
+        "bindingCalls": 97,
+        "bindingMs": 22.086100000033184,
+        "schemaCalls": 70
+      },
+      "conditions": [
+        {
+          "scenario": "list-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 20.482899999999063,
+              "p95": 23.618899999997666
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21966,
+              "p95": 21966
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 16.361100000020087,
+              "p95": 19.336800000004587
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-reuse",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 20.434400000001915,
+              "p95": 25.97360000000117
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21885,
+              "p95": 21885
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 16.50250000001688,
+              "p95": 20.927699999985634
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "queue-page2",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 19.754300000000512,
+              "p95": 25.633099999999104
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21877,
+              "p95": 21877
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 96,
+              "p95": 96
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 15.978000000002794,
+              "p95": 18.427700000000186
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "filter-fresh",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 27.02469999999812,
+              "p95": 31.823199999998906
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 21966,
+              "p95": 21966
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 99,
+              "p95": 99
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 97,
+              "p95": 97
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 23.241600000004837,
+              "p95": 26.840700000015204
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 70,
+              "p95": 70
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        },
+        {
+          "scenario": "detail",
+          "summary": {
+            "elapsedMs": {
+              "n": 30,
+              "p50": 18.727600000001985,
+              "p95": 27.26810000000114
+            },
+            "bytes": {
+              "n": 30,
+              "p50": 2120,
+              "p95": 2120
+            },
+            "sqlCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingCalls": {
+              "n": 30,
+              "p50": 171,
+              "p95": 171
+            },
+            "bindingMs": {
+              "n": 30,
+              "p50": 28.432800000020507,
+              "p95": 43.30919999999605
+            },
+            "schemaCalls": {
+              "n": 30,
+              "p50": 125,
+              "p95": 125
+            }
+          },
+          "failures": 0,
+          "aborts": 0
+        }
+      ]
+    }
+  ],
+  "sampleRetention": "30 raw samples per condition retained outside Git; this report contains summaries only"
+}
