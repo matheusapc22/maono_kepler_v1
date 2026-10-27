@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-10-27T21:26:20.850635+00:00",
+  "prior_head": "b7485405d6dec1c15be45b8eebfbed4f44c77952",
+  "branch": "chore/product-lint-maintenance",
+  "status": "Draft; CI of follow-up commit not yet observed. Carto blocked, not changed.",
+  "ci_failures_reproduced": {
+    "users_job": 122461318034,
+    "project_pages_job": 122461316290,
+    "ticket_center_job": 122461315507,
+    "foundation_job": 122461315006,
+    "distinct_assertions": 7,
+    "progressive_job": 122461315271,
+    "cc07_job": 122461314468,
+    "cc07_diagnostic": "TS2614 SqlPanel root export; exact installed version was not recorded in that job"
+  },
+  "before": {
+    "file": "lint-contract-followup-before.log",
+    "bytes": 28542,
+    "sha256": "d7501e911a7476b06998543f7c8628bf4d46873814a1699a17b639086796a509",
+    "tests": 42,
+    "pass": 37,
+    "fail": 5,
+    "skipped": 0
+  },
+  "after": {
+    "file": "lint-contract-followup-after.log",
+    "bytes": 7991,
+    "sha256": "df226382d979105717eaa45c92bd6e2c446c8524786f42ce301eb8374369c355",
+    "tests": 80,
+    "pass": 80,
+    "fail": 0,
+    "skipped": 0,
+    "strict_original_git_baseline_required": true
+  },
+  "admin_before": {
+    "file": "lint-contract-followup-admin-before.log",
+    "bytes": 4773,
+    "sha256": "2bd4aaaab50e9a0823c3bb4e557b4c046ae99c05bc966d44b860801a1ecbb6cb",
+    "tests": 18,
+    "pass": 16,
+    "fail": 2,
+    "skipped": 0
+  },
+  "final": {
+    "file": "lint-contract-followup-final.log",
+    "bytes": 10055,
+    "sha256": "9ccbf2934d9f0ccceb3286c8b96628ebf50798931984747b7ec0e8a8e849f3b6",
+    "tests": 98,
+    "pass": 98,
+    "fail": 0,
+    "skipped": 0,
+    "strict_original_git_baseline_required": true,
+    "includes_previous_80": true
+  },
+  "expanded": {
+    "file": "lint-contract-followup-progressive.log",
+    "bytes": 90655,
+    "sha256": "4321f27d354c1ff3e554bde252807642f2d77ae3c975d8f1d46bed5590904bb1",
+    "tests": 269,
+    "pass": 257,
+    "fail": 12,
+    "skipped": 0,
+    "accepted": false,
+    "failure_files": [
+      "tests/project-header-preservation.test.mjs",
+      "tests/projects-fallback-scope.test.mjs",
+      "tests/roadmap-loading.test.mjs",
+      "tests/ticket-document-progressive-loading.test.mjs",
+      "tests/ticket-optional-progressive-loading.test.mjs"
+    ],
+    "notes": "Windows run includes URL.pathname resolution errors and CRLF-sensitive comparisons. These tests were not relaxed. New Linux CI remains pending; do not claim the expanded run passed."
+  },
+  "clean_layer_contracts": {
+    "file": "lint-contract-followup-clean-layer.log",
+    "bytes": 1123,
+    "sha256": "a0d2f06d8d1b2b219bbc3762c152394f0e74036123ff616dda621ab6d3e2b958",
+    "tests": 9,
+    "pass": 9,
+    "fail": 0,
+    "skipped": 0,
+    "overlaps_with_80": true
+  },
+  "typecheck": {
+    "file": "lint-contract-followup-types.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "exit_code": 0,
+    "command": "tsc -p tsconfig.app.json --incremental --pretty false",
+    "environment": "Windows Node24, clean Kepler3.2.0 snapshot"
+  },
+  "hook_lint": {
+    "file": "lint-contract-followup-hook-lint.json",
+    "bytes": 9007,
+    "sha256": "92060e899ff1591364ad7b5a1b6c043779330b337907416933ea27174bc4c373",
+    "errors": 0,
+    "warnings": 3
+  },
+  "runtime_and_sdk_probes": {
+    "priorHead": "b7485405d6dec1c15be45b8eebfbed4f44c77952",
+    "base": "e47deac18888195b945a244dadb9e27c5902638f",
+    "observedAtUtc": "2026-10-27T21:21:04.601Z",
+    "runtimeEquality": [
+      {
+        "file": "src/pages/Kepler/hooks/use-point-clustering.ts",
+        "revision": "e47deac18888195b945a244dadb9e27c5902638f",
+        "method": "TypeScript 5.8.3 ES2022/ESNext ReactJSX emission then JS printer; comments removed",
+        "sha256": "20b0debf165420af0147d986a91fe8ed8076142ccb26677d8be85add5c9c6a9b"
+      },
+      {
+        "file": "src/pages/Projects/projects-api.ts",
+        "revision": "69abc1fd0e0040d5a01b526972ac251343e3aa5d",
+        "method": "TypeScript 5.8.3 ES2022/ESNext ReactJSX emission then JS printer; comments removed",
+        "sha256": "45a14a075826ff7cb74d59f40d107b7910c7f51a942568f36d462ae976877e8d"
+      },
+      {
+        "file": "src/pages/ProjectsSidebar.tsx",
+        "revision": "69abc1fd0e0040d5a01b526972ac251343e3aa5d",
+        "method": "TypeScript 5.8.3 ES2022/ESNext ReactJSX emission then JS printer; comments removed",
+        "sha256": "c6204e5efda09ce90a3f5b61d45615c29ee75a6920c667d22ffaef51ba5a243d"
+      }
+    ],
+    "sdkProbes": [
+      {
+        "version": "3.2.6",
+        "moduleName": "@kepler.gl/duckdb",
+        "diagnostics": [
+          {
+            "code": 2614,
+            "message": "Module '\"@kepler.gl/duckdb\"' has no exported member 'SqlPanel'. Did you mean to use 'import SqlPanel from \"@kepler.gl/duckdb\"' instead?"
+          }
+        ],
+        "packageSha256": "e1823b2115319c5bcb2ad9fbb103c2eefea3b7f380b8b54d2ed1c93a737e7379"
+      },
+      {
+        "version": "3.2.6",
+        "moduleName": "@kepler.gl/duckdb/components",
+        "diagnostics": [],
+        "packageSha256": "e1823b2115319c5bcb2ad9fbb103c2eefea3b7f380b8b54d2ed1c93a737e7379"
+      },
+      {
+        "version": "3.2.0",
+        "moduleName": "@kepler.gl/duckdb",
+        "diagnostics": [],
+        "packageSha256": "efd6216952ba576b4568bfddbd66d30b0f4e67924b819ecbcbaa87b8dc525af1"
+      },
+      {
+        "version": "3.2.0",
+        "moduleName": "@kepler.gl/duckdb/components",
+        "diagnostics": [
+          {
+            "code": 2307,
+            "message": "Cannot find module '@kepler.gl/duckdb/components' or its corresponding type declarations."
+          }
+        ],
+        "packageSha256": "efd6216952ba576b4568bfddbd66d30b0f4e67924b819ecbcbaa87b8dc525af1"
+      }
+    ]
+  },
+  "cc07_resolution": {
+    "command": "npm --prefix isolated-folder install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund --maxsockets=1 --prefer-offline",
+    "exit_code": 0,
+    "packages_installed": false,
+    "versions": {
+      "@kepler.gl/duckdb": "3.2.0",
+      "@kepler.gl/utils": "3.2.0",
+      "@loaders.gl/schema": "4.3.4",
+      "apache-arrow": "21.0.0",
+      "typescript": "5.8.3"
+    },
+    "log": {
+      "file": "lint-cc07-resolution.log",
+      "bytes": 21,
+      "sha256": "38bcbb5cd1d6d31e5750d2ee6c4a2da1c42b4815a84c1d71ff127ecc5317ef8e"
+    },
+    "generated_lock": {
+      "file": "lint-cc07-resolution/package-lock.json",
+      "bytes": 839892,
+      "sha256": "6b838d209ac0588f5448f920efcecc6bea035f5b1a02c2f12f9776a7ea85c050"
+    },
+    "limit": "Local metadata resolution and previous clean installation verified. New Linux CC07 workflow and browser still require CI. Lock snapshot is generated from unchanged versioned inputs and retained per run; not a newly committed dependency update."
+  },
+  "unchanged_controls": [
+    "package.json",
+    "yarn.lock",
+    "eslint.config.js",
+    "tsconfig.app.json",
+    "tsconfig.node.json",
+    "scripts/user-error-sink-baseline.json",
+    "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+    "tests/fixtures/**"
+  ],
+  "limits": [
+    "No local build or browser in this round: CPU/browser window reserved to Painel.",
+    "Bridge integration controls React scheduling; not a ReactDOM/browser acceptance test.",
+    "Global lint on b748540 CI remains one Carto error and 29 warnings; pending authorization for denied expanded Carto patch.",
+    "No merge, auto-merge, remote migrations, flags, Production or CI cancellation."
+  ],
+  "manifest": [
+    {
+      "path": ".github/workflows/cc07-notice-board.yml",
+      "sha256": "1f14c8920b66ee889184291915ca66896a982ffebc160bbdc16ae86d8a37f2d7"
+    },
+    {
+      "path": ".github/workflows/product-lint-maintenance.yml",
+      "sha256": "1b11bf850073ed064780be132f6185e5a0367dfc395b86f3007a3bde06654d2c"
+    },
+    {
+      "path": "docs/ops/product-lint-maintenance.md",
+      "sha256": "0a2a665ec628d6a6d2d80c443c80d09c2d5d056b7ddb88cdd564047293234a97"
+    },
+    {
+      "path": "src/pages/Kepler/hooks/use-point-clustering.ts",
+      "sha256": "4599e7aea3adb51486ac60b7d653f5a46d88ec18ec040751ecd2b7723df49c19"
+    },
+    {
+      "path": "tests/admin-progressive-loading.test.mjs",
+      "sha256": "f48d1116d3e1862901fb077305e8b9cf002daf684bf4668fe0ee12a427a72fd1"
+    },
+    {
+      "path": "tests/maono-layer-workflow-placement.test.mjs",
+      "sha256": "b38132772d019989556dc8c3999ad822b2f6b5458e1084f637e480aa907155f3"
+    },
+    {
+      "path": "tests/project-pages-contract.test.mjs",
+      "sha256": "a283873a76f0e19ee84e7ae4ffaa8459f5be62145eb09ab3e3adc4bc7ff594f7"
+    },
+    {
+      "path": "tests/projects-section-loading.test.mjs",
+      "sha256": "5436317da2f35526cdc0eb3c23769b5a330e46b17e1900ee404462fa608e4bf5"
+    },
+    {
+      "path": "docs/ops/product-lint-contract-followup.json",
+      "sha256": null,
+      "self": true
+    }
+  ]
+}

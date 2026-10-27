@@ -13,6 +13,8 @@ on:
       - 'tests/browser/fixtures/notice-board*'
       - 'playwright.notices.config.ts'
       - 'vite.notice-board.config.ts'
+      - 'package.json'
+      - 'yarn.lock'
       - '.github/workflows/cc07-notice-board.yml'
 permissions:
   contents: read
@@ -28,7 +30,24 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - run: npm install --legacy-peer-deps --no-audit --no-fund --package-lock=false
+      - name: Resolve the versioned yarn lock and install its npm snapshot
+        run: |
+          lock_dir=$(mktemp -d "${RUNNER_TEMP}/cc07-lock.XXXXXX")
+          cp package.json yarn.lock "$lock_dir/"
+          npm --prefix "$lock_dir" install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          cp "$lock_dir/package-lock.json" ./package-lock.json
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          git diff --exit-code -- package.json yarn.lock
+      - name: Record installed SDK versions
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          console.log('Node', process.version);
+          for (const name of ['@kepler.gl/duckdb', '@kepler.gl/utils', '@loaders.gl/schema', 'apache-arrow', 'typescript']) {
+            const pkg = JSON.parse(fs.readFileSync(`node_modules/${name}/package.json`, 'utf8'));
+            console.log(name, pkg.version);
+          }
+          NODE
       - run: node node_modules/typescript/bin/tsc -b --pretty false
       - run: npx eslint src/components/notices tests/browser/notice-board.spec.ts tests/browser/fixtures/notice-board.tsx playwright.notices.config.ts vite.notice-board.config.ts
       - run: npx playwright install --with-deps chromium
@@ -38,5 +57,7 @@ jobs:
         if: always()
         with:
           name: cc07-notice-board-${{ github.sha }}
-          path: test-results/
+          path: |
+            test-results/
+            package-lock.json
           retention-days: 7

@@ -23,8 +23,12 @@ jobs:
   preserved-module-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      PROJECT_PAGES_REQUIRE_BASELINE: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -46,6 +50,10 @@ jobs:
           node --experimental-strip-types --test --test-concurrency=1
           tests/lint-module-extraction.test.mjs
           tests/lint-public-entrypoints.test.mjs
+          tests/projects-section-loading.test.mjs
+          tests/admin-progressive-loading.test.mjs
+          tests/project-pages-contract.test.mjs
+          tests/maono-layer-workflow-placement.test.mjs
           tests/dropbox-provider-login.test.mjs
           tests/foursquare-provider-contract.test.mjs
           tests/legacy-ingestion-contract.test.mjs

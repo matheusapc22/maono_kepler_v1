@@ -219,7 +219,11 @@ export function usePointClustering() {
   ]);
 
   const updateLayerPolicy = useCallback(
-    (...[pointLayerId, patch, pointCount]: Parameters<typeof updatePointClusterLayerPolicy>) => {
+    (
+      pointLayerId: Parameters<typeof updatePointClusterLayerPolicy>[0],
+      patch: Parameters<typeof updatePointClusterLayerPolicy>[1],
+      pointCount?: Parameters<typeof updatePointClusterLayerPolicy>[2],
+    ) => {
       updatePointClusterLayerPolicy(
         pointLayerId,
         patch,
