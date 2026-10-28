@@ -2,7 +2,7 @@
 
 Base: `e47deac18888195b945a244dadb9e27c5902638f` (`mano_kepler_v1`). Branch: `chore/product-lint-maintenance`. A PR254 de Organizações permanece separada em `270b3dd9aae8aeb36d26e6c236774ff259b553b2`.
 
-**Draft: lint global ainda falha.** Resultado local em 27/10/2026: um erro no Carto e 29 avisos, contra 109 erros e 44 avisos na base. Nenhuma regra, severidade, opção do compilador ou assertion foi relaxada. Avisos de hooks remanescentes não foram corrigidos mecanicamente.
+**Draft: validação local concluída; CI do novo SHA e ensaio conjunto ainda precisam de confirmação.** Lint global: zero erros e 28 avisos; TypeScript e build aprovados. O patch Carto específico foi autorizado, aceito pela revisão e aplicado. Nenhuma regra, severidade, opção do compilador ou assertion foi relaxada. As seções anteriores à validação final registram snapshots históricos, inclusive falhas e negativas já superadas.
 
 ## Implementação
 
@@ -89,14 +89,62 @@ Dois casos adicionais executam os formatadores reais e as declarações reais do
 
 Os dois arquivos passaram com **39 pass, zero falhas/skips** tanto na worktree quanto no snapshot com dependências do lock. As contagens se sobrepõem. O job de contratos da manutenção inclui ambos em toda PR de produto. Não se repete TypeScript ou build por esta mudança exclusiva em testes/workflow/documentação; o próximo CI Linux confirma o conjunto. [Evidências e manifesto desta rodada](product-lint-expanded-contracts.json). CC07 no SHA `09f8f3bc` ainda aguardava runner no momento desta validação local; Carto continua bloqueado, sem nova alteração de descrição pública da PR.
 
+## Classificação das 12 falhas locais no Windows
+
+A comparação usou snapshots independentes da base `e47deac` e do candidato `9852f5e6`, Node 24.15.0, as mesmas dependências instaladas e o mesmo padrão CRLF do checkout (`core.autocrlf=true`). Os cinco arquivos de teste tinham bytes idênticos nas duas revisões. Ambos reproduziram **39 pass/12 fail**, com os mesmos nomes de falha; nenhuma das 12 foi introduzida pela manutenção.
+
+| Casos | Quantidade | Causa comprovada e correção |
+| --- | --- | --- |
+| Preservação do header de Projects | 6 | Leitura CRLF contra blobs/hashes históricos LF; o leitor agora usa a representação LF do Git. |
+| Escopo e injeção do CSS de fallback | 2 | Literal lido com CRLF divergia do hash LF e do texto normalizado pela avaliação JavaScript; o fixture normaliza somente os finais de linha. |
+| Inversão dos módulos opcionais | 1 | Mesmo descompasso CRLF/LF antes da inversão exata. |
+| Render inicial do Roadmap | 1 | `URL.pathname` não é caminho nativo no Windows; conversão com `fileURLToPath` e import com `pathToFileURL`. |
+| Inicialização dos testes de Documentos | 1 | Mesmo erro de caminho, incluindo diretório temporário, import e separadores dos filtros existentes do esbuild. |
+| Render dos módulos opcionais | 1 | `resolveDir` recebia pathname de URL; agora recebe caminho nativo. |
+
+Não foram recalculados hashes nem removidas assertions. As mutações de CSS, seletor, endpoint, ACL e payload continuam rejeitadas. A limpeza dos diretórios temporários verifica que o destino fica no diretório esperado. Os dois filtros do esbuild em Documentos preservam o stub de preview e a exportação de teste já existentes; somente seus separadores de caminho passaram a reconhecer Windows e POSIX.
+
+Com o mesmo ajuste de harness aplicado a ambos os snapshots, **base e candidato passaram 68/68, sem skips**. A falha de inicialização de Documentos deixa de contar como um teste falho e 18 casos antes bloqueados passam a executar: aumento líquido de 17, de 51 para 68. A repetição da rodada ampliada original passou **286/286, sem skips**, contra 257 pass/12 fail anteriormente. Esses resultados classificam e resolvem as 12 falhas locais; não demonstram, por si, integração remota ou aceite de navegador. [Comparação reproduzível, hashes dos logs e manifesto](product-lint-windows-portability.json).
+
+Na primeira rodada, anterior ao patch Carto, TypeScript e build passaram no snapshot com dependências do lock; o Vite transformou 12.124 módulos e terminou em 11 min 39 s. Uma comparação de 587 arquivos confirmou código, fixtures e configurações correspondentes à candidata, normalizando somente finais de linha. A matriz local Progressive Loading iniciou 573 casos, com um worker e timeouts originais. A interrupção pelo usuário encerrou a sessão após **352 aprovações observadas: Chromium 191/191 e Firefox 161/191**, sem marcador de falha no log. Não houve JSON terminal nem código de saída disponível, portanto naquele momento o gate de navegador estava **incompleto**: faltavam resultados de 30 casos Firefox e dos 191 WebKit. O runner/servidor local deixou de ser encontrado na verificação posterior; não foi reiniciado. CC07, programado para depois, não foi executado. As capturas Admin 1440 e 390 px foram inspecionadas sem cortes visíveis, sem alegação de equivalência à referência visual ausente.
+
+Naquele checkpoint, o reparo Windows ainda estava **não commitado**, sobre `9852f5e6`. Até aquele checkpoint não havia novo push nem alteração da descrição pública. O coordenador informou posteriormente CI terminal nesse SHA: 35 checks aprovados e apenas lint falho; ProjectPages terminou em 27/10/2026 às 22:50:49 UTC. Não se repetiu esse CI. A tentativa Carto com nova autorização também foi rejeitada antes de executar; o [registro da proposta](product-lint-carto-proposal.md) preserva a razão e os hashes. Naquela etapa nenhuma mudança do adaptador havia sido aplicada.
+
+## Validação final do Carto e conclusão local no Windows
+
+Foi aplicado somente o diff Carto aprovado, SHA-256 `4c8679bd7cbc3d643781749289b754fa27b85a30e77369b636c0f646f08987ee`. O arquivo mantém SHA-256 CRLF `2e26ee67f1f533391fa69d7eaad2621e25e57f4eebccd3021bf9e1ad336f1c6b` (LF do Git: `538247cfd2687cd3b7de0d31a770dc657823da80eebea8743e16237b3dce8fec`). Não houve edição adicional do produto nesta rodada. A base real de Provider e os argumentos do toolkit foram preservados; login/logout, recibos, privacidade e erros são cobertos por contratos isolados.
+
+| Verificação local | Resultado |
+| --- | --- |
+| Lint global, regras existentes | 0 erros, 28 avisos; exit 0 |
+| TypeScript, configuração existente e dependências do lock | Pass |
+| Build Vite com o patch aplicado | Pass; 12.124 módulos, 7 min 46 s |
+| Contratos Carto | 22/22 em cada uma das instalações Kepler 3.2.6 e 3.2.0; contagens sobrepostas |
+| Contratos relacionados: providers, extração, exports e scanner | 76/76, sem skips; inclui os 22 Carto |
+| SDK Carto real no Chromium | 7 verificações; construtor sem client ID, rejeição sem cliente, usuário ausente, CSV/data container nativos, FileReader e URL privada; zero requisições externas |
+| Auditoria estrita de mensagens | 3.222 ocorrências, zero divergências |
+| Classificação e correção das 12 falhas Windows | Base e candidato: 68/68; rodada ampliada: 286/286, sem skips |
+| Continuação Firefox | 30/30, sem falhas, skips ou flaky; build anterior ao Carto |
+| WebKit sobre build final, primeira execução | 126 aprovações observadas antes da desconexão + 63 pass/2 fail na continuação terminal; falhas de foco diagnosticadas abaixo |
+| Foco após correção do harness, três engines | 30/30: 2 casos teclado, 2 mouse e 6 cancelamentos por engine; sem falhas, skips ou flaky |
+| CC07: avisos e notificações Chromium | 15/15, sem falhas, skips ou flaky |
+
+O scanner passou de seis para duas referências sintáticas a `error.message` no Carto porque a variável validada `message` é reutilizada. Somente essa entrada foi reduzida de 6 para 2 no baseline; não há tolerância adicional, mudança de regra ou regeneração ampla. Isso não representa remoção de quatro exposições de erro ao usuário. Os contratos verificam a propagação das mensagens esperadas e a ausência de conteúdo bruto no console.
+
+A matriz Progressive Loading de 573 casos foi reconciliada por nome/projeto: 352 aprovações observadas antes da primeira interrupção, mais 30 Firefox em continuação terminal. WebKit preservou 126 aprovações observadas antes da desconexão; ausência de runner e porta foi confirmada antes de executar somente os 65 casos restantes, com 63 pass e duas falhas de foco. Chromium 191 e Firefox 191 usaram o build anterior ao Carto; as fases WebKit usaram o build final. **Não foi uma execução única terminal, nem houve repetição completa dos três engines após o Carto.** O CI do novo SHA deve confirmar sua própria matriz. O teste adicional do SDK real não fez OAuth, uso de conta ou gravação remota; seus ajustes de preparação e logs falhos foram preservados no relatório.
+
+As duas falhas foram reproduzidas com captura de eventos: no WebKit deste Windows, mousedown mudou o foco do botão para o ancestral focável antes de onClick. O hook, os dois painéis e o spec anterior são idênticos aos da base; não houve build completo separado da base para esse diagnóstico. O teste misturava foco programático com ativação por mouse. A correção usa Enter para o contrato de teclado, preservando todas as assertions originais, e acrescenta dois casos de mouse que capturam a decisão nativa de foco antes de React e exigem sua preservação. Os seis casos de não roubar foco após outra interação permanecem. Não há exceção por engine, skip, timeout aumentado ou alteração do produto. A matriz focal de 30 casos passou nos três engines. A suíte completa passa a ter 579 casos, mas não foi repetida integralmente localmente. [Eventos, inversão exata do teste, comparação de fontes e resultados](product-lint-focus-validation.json).
+
+Os seis arquivos de teste adicionados ao workflow de manutenção executam em toda PR para `mano_kepler_v1`, sem filtro de caminhos; timeout, regras e exigência do baseline histórico permanecem. A comparação Windows e os artefatos verificáveis estão em [product-lint-windows-portability.json](product-lint-windows-portability.json) e [product-lint-carto-validation.json](product-lint-carto-validation.json). Os resultados não são aceite de Preview, Produção ou integração conjunta das PRs254–261. Nenhum merge, auto-merge, migration ou flag remota foi executado.
+
 ## Arquivos compartilhados e integração das outras PRs
 
 Revisar conflitos nas entradas e implementações de `src/auth/session`, `src/components/loading/LoadingProvider`, `src/components/access/OrganizationPermissionManager`, `src/pages/Projects`, `MapPanelContext` e `KeplerEngineAdapterProvider`. Não substituir versões de Usuários/Projetos pelo arquivo desta manutenção. Aplicar a separação de imports sobre a versão final de cada implementação e repetir seus contratos. O manifesto inicial foi preservado em `product-lint-maintenance-validation.json`; o atualizado está em `product-lint-ci-compatibility.json`.
 
 Não foram alterados endpoints, migrations, ACLs, credenciais ou flags. Não houve merge, auto-merge ou operação em Produção. A branch e worktree funcional de Organizações foram preservadas.
 
-## Bloqueio e reversão
+## Reversão
 
-O patch ampliado do Carto foi **rejeitado pela revisão automática de aprovação**, não aplicado e não repetido. A [proposta específica](product-lint-carto-proposal.md) identifica as mudanças de comportamento que aguardam autorização. O único erro global está nesse módulo; o arquivo conserva somente a correção mecânica de callback já feita no primeiro commit de manutenção.
+As negativas anteriores do Carto foram superadas por autorização específica do diff e por uma nova tentativa aceita. A [identidade do patch e seu histórico](product-lint-carto-proposal.md) e a [validação local](product-lint-carto-validation.json) registram os limites. O lint local está aprovado; isso não substitui o CI do novo SHA nem autoriza este executor a fazer o merge.
 
 Enquanto não integrada, a reversão é encerrar a PR draft mantendo o checkpoint disponível. Se integrada futuramente, reverter os commits desta manutenção em ordem inversa e validar imports/consumidores conjuntamente; não remover módulos extraídos isoladamente. Não há reversão de dados ou migration nesta frente.

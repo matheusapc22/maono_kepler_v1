@@ -175,7 +175,7 @@ test("a previous organization's delayed availability cannot reveal modules in th
 });
 
 
-for (const key of ["feedback", "metrics"] as const) test(`confirmed ${key} availability keeps refresh mounted, open and focused`, async ({ page }) => {
+for (const key of ["feedback", "metrics"] as const) test(`confirmed ${key} availability keeps keyboard refresh mounted, open and focused`, async ({ page }) => {
   let refreshing = false;
   const pending = deferred();
   const state = await setup(page, async current => {
@@ -189,7 +189,9 @@ for (const key of ["feedback", "metrics"] as const) test(`confirmed ${key} avail
   const button = panel.getByRole("button", { name: key === "feedback" ? "Atualizar pesquisas" : "Consultar métricas", exact: true });
   await button.focus();
   refreshing = true;
-  await button.click();
+  // Pointer activation may move focus to the focusable ancestor before onClick
+  // in WebKit. Exercise keyboard focus restoration with keyboard activation.
+  await button.press("Enter");
   await expect(button).toBeDisabled();
   await expect(panel).toHaveAttribute("open", "");
   expect(await original!.evaluate(node => node.isConnected)).toBe(true);
@@ -199,6 +201,45 @@ for (const key of ["feedback", "metrics"] as const) test(`confirmed ${key} avail
   await expect(button).toBeFocused();
   expect(await original!.evaluate(node => node.isConnected)).toBe(true);
   await checkDiagnostics(state);
+});
+
+for (const key of ["feedback", "metrics"] as const) test(`confirmed ${key} availability keeps pointer refresh mounted and preserves native focus`, async ({ page }) => {
+  let refreshing = false;
+  const pending = deferred();
+  const state = await setup(page, async current => {
+    if (current === key && refreshing) await pending.promise;
+    return { enabled: true };
+  });
+  await openCentral(page);
+  const panel = page.locator(panels.find(panel => panel.key === key)!.selector);
+  await panel.locator("summary").first().click();
+  const original = await panel.elementHandle();
+  const button = panel.getByRole("button", { name: key === "feedback" ? "Atualizar pesquisas" : "Consultar métricas", exact: true });
+  await button.focus();
+  // Capture the browser's native focus decision before React handles the click.
+  // No browser-specific exception: a focused button must recover, while a
+  // pointer-selected ancestor must not have its focus stolen by completion.
+  const activation = await page.evaluateHandle(() => {
+    let current: Element | null = null;
+    document.addEventListener("click", () => { current = document.activeElement; }, { capture: true, once: true });
+    return { get current() { return current; } };
+  });
+  try {
+    refreshing = true;
+    await button.click();
+    await expect(button).toBeDisabled();
+    await expect(panel).toHaveAttribute("open", "");
+    expect(await original!.evaluate(node => node.isConnected)).toBe(true);
+    expect(await activation.evaluate(record => record.current?.isConnected)).toBe(true);
+    pending.release();
+    await expect(button).toBeEnabled();
+    await expect(panel).toHaveAttribute("open", "");
+    await expect.poll(() => activation.evaluate(record => record.current === document.activeElement)).toBe(true);
+    expect(await original!.evaluate(node => node.isConnected)).toBe(true);
+    await checkDiagnostics(state);
+  } finally {
+    await activation.dispose();
+  }
 });
 
 for (const key of ["knowledge", "cases"] as const) test(`confirmed ${key} mutation retry retains idempotency and recovered detail`, async ({ page }) => {

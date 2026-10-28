@@ -1,0 +1,544 @@
+{
+  "observed_at_utc": "2026-10-27T22:47:50.927715+00:00",
+  "scope": "Windows portability comparison, with later Carto application and browser continuation explicitly recorded below",
+  "refs": {
+    "base": "e47deac18888195b945a244dadb9e27c5902638f",
+    "candidate": "9852f5e6edee4647ef1bb35c62b828a04742e700"
+  },
+  "environment": {
+    "os": "Windows",
+    "node": "v24.15.0",
+    "checkout_core_autocrlf": true,
+    "comparison_dependencies": "Both independent snapshots use the exact same existing node_modules via normal ancestor lookup (Kepler 3.2.6); no junctions or install.",
+    "browser_build_dependencies": "Separate lint-ci-clean installation resolved from the original versioned package.json and yarn.lock: Kepler 3.2.0, loaders schema 4.3.4, apache-arrow 21.0.0, TypeScript 5.8.3.",
+    "ci_difference": "CI uses Linux/Node 22; local results do not substitute for the Linux workflow or its install procedure."
+  },
+  "comparison_method": {
+    "sources": "git archive of exact base and candidate; checkout-equivalent CRLF on the same text files; original production sources retained separately.",
+    "test_bytes_identical_before": true,
+    "test_sha256_before": {
+      "tests/project-header-preservation.test.mjs": "bb75db6dff183c02bd15507a6a89cd2fa5930db5aaaee2ef8c418559658c5b91",
+      "tests/projects-fallback-scope.test.mjs": "575a783311b94f0f24a91fbeabaa49df62abac1aa0ef3effaaf0abb38734420f",
+      "tests/roadmap-loading.test.mjs": "96589b3d4b2d6b3181cda0598693ca649f181117d2e827bebdc129ad9b316c96",
+      "tests/ticket-document-progressive-loading.test.mjs": "aeacb180a23a7377355297861ad5b6ba6b9d3f090d66be3e6daaafff993915d2",
+      "tests/ticket-optional-progressive-loading.test.mjs": "17b87daa85f952f8479ea4a2955bebc736e1303df47070f4c6a289ec5a8d763e"
+    },
+    "after": "Copy only the five changed test/helper files into both snapshots; no production source replaced.",
+    "baseline_required": true,
+    "command": "PROJECT_PAGES_REQUIRE_BASELINE=1 node --max-old-space-size=1024 --experimental-strip-types --test --test-reporter=tap --test-concurrency=1 tests/project-header-preservation.test.mjs tests/projects-fallback-scope.test.mjs tests/roadmap-loading.test.mjs tests/ticket-document-progressive-loading.test.mjs tests/ticket-optional-progressive-loading.test.mjs"
+  },
+  "classification": [
+    {
+      "count": 6,
+      "scope": "Project header preservation",
+      "cause": "CRLF checkout versus historical LF Git blobs/hashes; includes inverse and mutation checks",
+      "fix": "Canonical LF at the source reader; historical hash literals and assertions retained"
+    },
+    {
+      "count": 2,
+      "scope": "Projects fallback CSS",
+      "cause": "CRLF literal versus historical LF hash and JavaScript-normalized runtime string",
+      "fix": "Canonical LF at the existing shared fixture reader"
+    },
+    {
+      "count": 1,
+      "scope": "Ticket optional exact inverse",
+      "cause": "CRLF source before exact preservation inverse",
+      "fix": "Canonical LF at the source reader"
+    },
+    {
+      "count": 1,
+      "scope": "Roadmap initial render",
+      "cause": "URL.pathname is not a Windows native path for esbuild/temp directory/import",
+      "fix": "fileURLToPath and pathToFileURL; validated cleanup parent"
+    },
+    {
+      "count": 1,
+      "scope": "Ticket Documents module bootstrap",
+      "cause": "URL.pathname/temp/import plus POSIX-only separators in the two existing esbuild filters",
+      "fix": "Native paths and URL import; both separators; existing preview stub and test-only export retained; validated cleanup parent"
+    },
+    {
+      "count": 1,
+      "scope": "Ticket optional initial render",
+      "cause": "URL.pathname passed as esbuild resolveDir",
+      "fix": "fileURLToPath"
+    }
+  ],
+  "before": {
+    "base": {
+      "exit_code": 1,
+      "tests": 51,
+      "pass": 39,
+      "fail": 12,
+      "skipped": 0,
+      "failures": [
+        "approved header inverse preserves every other byte of src/pages/Projects/components/ProjectPagesUi.tsx",
+        "approved header inverse preserves every other byte of src/pages/Projects/components/ProjectPages.css",
+        "approved header inverse preserves every other byte of src/pages/Projects/components/project-page-query.ts",
+        "approved header inverse preserves every other byte of src/pages/Projects/components/ProjectsSection.tsx",
+        "header normalization precedes the old loading inverse without changing its pinned baseline",
+        "header inverse rejects missing and duplicated edits instead of accepting partial matches",
+        "legacy declarations, neutral resets and media queries remain byte-identical to baseline 42a97e9",
+        "injects the stylesheet with its existing stable ID",
+        "the initial render distinguishes authorized loading, no organization and denied permission",
+        "tests\\\\ticket-document-progressive-loading.test.mjs",
+        "all optional modules require server-confirmed availability before exposing ready controls",
+        "optional corrections reverse exactly without loosening original selector contracts"
+      ],
+      "log": "windows-contract-base-before.tap",
+      "bytes": 75815,
+      "sha256": "55d9a295d795c76805b9d45075600aaa7a765ae66fce5230c53824a924d9950e"
+    },
+    "candidate": {
+      "exit_code": 1,
+      "tests": 51,
+      "pass": 39,
+      "fail": 12,
+      "skipped": 0,
+      "failures": [
+        "approved header inverse preserves every other byte of src/pages/Projects/components/ProjectPagesUi.tsx",
+        "approved header inverse preserves every other byte of src/pages/Projects/components/ProjectPages.css",
+        "approved header inverse preserves every other byte of src/pages/Projects/components/project-page-query.ts",
+        "approved header inverse preserves every other byte of src/pages/Projects/components/ProjectsSection.tsx",
+        "header normalization precedes the old loading inverse without changing its pinned baseline",
+        "header inverse rejects missing and duplicated edits instead of accepting partial matches",
+        "legacy declarations, neutral resets and media queries remain byte-identical to baseline 42a97e9",
+        "injects the stylesheet with its existing stable ID",
+        "the initial render distinguishes authorized loading, no organization and denied permission",
+        "tests\\\\ticket-document-progressive-loading.test.mjs",
+        "all optional modules require server-confirmed availability before exposing ready controls",
+        "optional corrections reverse exactly without loosening original selector contracts"
+      ],
+      "log": "windows-contract-candidate-before.tap",
+      "bytes": 75951,
+      "sha256": "b9490a573236f90f50470269cb5514b9a5879105c95bd7eb33c7e2d813aab923"
+    }
+  },
+  "same_failure_names": true,
+  "after": {
+    "base": {
+      "exit_code": 0,
+      "tests": 68,
+      "pass": 68,
+      "fail": 0,
+      "skipped": 0,
+      "failures": [],
+      "log": "windows-contract-base-after.tap",
+      "bytes": 395191,
+      "sha256": "8052e3a2c2d8b25f1e089cbbd3a1975b1f590a10d16351da352625faaf0a8a50"
+    },
+    "candidate": {
+      "exit_code": 0,
+      "tests": 68,
+      "pass": 68,
+      "fail": 0,
+      "skipped": 0,
+      "failures": [],
+      "log": "windows-contract-candidate-after.tap",
+      "bytes": 400141,
+      "sha256": "4dd76bebd10563d095d0b98450d41306c973407e364a8ea4a24078eb7220eb8e"
+    }
+  },
+  "case_count_explanation": "51 to 68: Documents module bootstrap failure no longer counts as one failed test, and 18 previously blocked cases execute, a net increase of 17. Expanded suite correspondingly goes from 269 to 286.",
+  "newly_reachable_existing_cases": [
+    "ticket initial table retains genuine headers and footer without fabricating an empty result",
+    "ticket cached refresh retains rows and errors/empty results have no residual skeleton",
+    "document pending list reserves real columns and pagination, and expansion retains settled rows",
+    "document grid uses file identities and metadata cards, never a generic table",
+    "queue initial counts stay unknown, settled refresh preserves cards, and load more expands only",
+    "calendar keeps month navigation and weekday/date geometry while only events wait",
+    "detail placeholders expose stable summary labels without interactive fake fields",
+    "request guards, query reset and in-place queue refresh are independent of animation",
+    "queue reveal predicate ignores unrelated mutation history but preserves current-query atomicity",
+    "static first stage masks actual known text and retains all accessible labels",
+    "fast ready response remains in volatile presentation only until parent releases its initial gate",
+    "detail holds presentation without delaying real dependent children or changing request state",
+    "staging identities are query/access only and first-queue failure cancels unfinished queues",
+    "detail dialog retains an accessible loading name while its volatile title is masked",
+    "volatile assignee names wait for content reveal while a deep-link selection retains its exact ID",
+    "direct ticket deep-link seeds detail pending before its first commit",
+    "Kanban owns no artificial clock and consumes only the stable owner stage while queues reveal independently",
+    "a cancelled Kanban stage never revives on fast retry but real pending rows remain"
+  ],
+  "replaced_module_failure": [
+    "tests\\\\ticket-document-progressive-loading.test.mjs"
+  ],
+  "expanded_after": {
+    "tests": 286,
+    "pass": 286,
+    "fail": 0,
+    "skipped": 0,
+    "file": "windows-expanded-after.tap",
+    "bytes": 411537,
+    "sha256": "2c848da8961946fc4c6abf7e384b25668f9225df493e0fb12e2722c1e8da88a5"
+  },
+  "assertion_audit": [
+    {
+      "file": "tests/project-header-preservation.test.mjs",
+      "originalAssertions": 14,
+      "currentAssertions": 14,
+      "addedAssertions": [],
+      "historicalHashLiteralsUnchanged": true
+    },
+    {
+      "file": "tests/helpers/projects-fallback-fixture.mjs",
+      "originalAssertions": 12,
+      "currentAssertions": 12,
+      "addedAssertions": [],
+      "historicalHashLiteralsUnchanged": true
+    },
+    {
+      "file": "tests/roadmap-loading.test.mjs",
+      "originalAssertions": 63,
+      "currentAssertions": 64,
+      "addedAssertions": [
+        "assert.equal(dirname(directory), resolve(fileURLToPath(new URL(\"../\", import.meta.url))))"
+      ],
+      "historicalHashLiteralsUnchanged": true
+    },
+    {
+      "file": "tests/ticket-document-progressive-loading.test.mjs",
+      "originalAssertions": 112,
+      "currentAssertions": 113,
+      "addedAssertions": [
+        "assert.equal(dirname(directory), resolve(fileURLToPath(root)))"
+      ],
+      "historicalHashLiteralsUnchanged": true
+    },
+    {
+      "file": "tests/ticket-optional-progressive-loading.test.mjs",
+      "originalAssertions": 26,
+      "currentAssertions": 26,
+      "addedAssertions": [],
+      "historicalHashLiteralsUnchanged": true
+    }
+  ],
+  "assertion_audit_artifact": {
+    "file": "windows-contract-assertion-preservation.json",
+    "bytes": 1176,
+    "sha256": "75cf05626f0ec9a0b29caa1cd9e24905d07bc214b6d81f0afd2070131ea07180"
+  },
+  "additional_evidence": [
+    {
+      "file": "windows-contract-comparison-setup.json",
+      "bytes": 2381,
+      "sha256": "2ac74f599d6db809b2617041097eeedabd748fbac76f1694e915e782dce04c0a"
+    },
+    {
+      "file": "windows-contract-comparison-before.json",
+      "bytes": 5623,
+      "sha256": "f2cf4e4f4fa4cd5459f6768cd3196dd69635b207d29a3e6c196f9d11b6efe8c5"
+    },
+    {
+      "file": "windows-contract-comparison-after.json",
+      "bytes": 3201,
+      "sha256": "6091875601309b75d231b749b9ca6ce322ac272c4f59dc77cafb2783b78649ba"
+    }
+  ],
+  "build_and_browser": {
+    "typescript": {
+      "exit_code": 0,
+      "command": "node --max-old-space-size=2048 node_modules/typescript/bin/tsc -b --pretty false"
+    },
+    "build": {
+      "exit_code": 0,
+      "command": "node --max-old-space-size=4096 node_modules/vite/bin/vite.js build",
+      "flags": {
+        "VITE_MAONO_MAP_SHELL_V1": "true",
+        "VITE_MAONO_LAYER_MANAGER_V1": "true",
+        "VITE_MAONO_MAP_OVERLAY_V1": "true"
+      },
+      "modules_transformed": 12124,
+      "vite_duration": "11m 39s",
+      "log": {
+        "file": "windows-maintenance-build.log",
+        "bytes": 32005,
+        "sha256": "f013d34d52da6cbbfee6847e65ef13d74b06fea48d687fccdf76328909d20acc"
+      },
+      "warnings": "Externalized modules/exports, ignored directive and large chunks; no threshold changed."
+    },
+    "source_verification": {
+      "files_compared": 587,
+      "normalized_line_endings": true,
+      "drift": [],
+      "manifest_sha256": "6a65607df4e018abe5044db99b8f8a1beeb576912056d8143b617476d5399a0c"
+    },
+    "progressive_loading": {
+      "status": "interrupted; incomplete",
+      "planned_cases": 573,
+      "passed_observed": 352,
+      "by_project_passed_observed": {
+        "chromium": 191,
+        "firefox": 161
+      },
+      "failure_markers_observed": 0,
+      "command": "CI=1 node node_modules/@playwright/test/cli.js test --config=playwright.progressive-loading.config.ts --reporter=list,json",
+      "workers": 1,
+      "exit_code": null,
+      "terminal_json_created": false,
+      "log": {
+        "file": "windows-progressive-browser.log",
+        "bytes": 60604,
+        "sha256": "af9ffecc3549d65b6fa3b6e2c3a7a7045f29a16d35a678b6ee7f388b37517278"
+      },
+      "last_log_update_utc": "2026-10-27T22:45:09Z",
+      "interruption": "Tool returned aborted by user. Subsequent control call returned Unknown process id 51169. Read-only process and port verification found no matching runner/known worker/server and no listener on 4191. No restart attempted.",
+      "remaining": "30 Firefox cases and 191 WebKit cases have no observed result in this run.",
+      "coverage_verified_against_full_test_list": {
+        "planned": 573,
+        "passed_observed": 352,
+        "unobserved": 221,
+        "remaining_by_file": [
+          {
+            "project": "firefox",
+            "file": "ticket-documents-progressive-loading.spec.ts",
+            "cases": 3
+          },
+          {
+            "project": "firefox",
+            "file": "ticket-optional-progressive-loading.spec.ts",
+            "cases": 27
+          },
+          {
+            "project": "webkit",
+            "file": "admin-progressive-loading.spec.ts",
+            "cases": 15
+          },
+          {
+            "project": "webkit",
+            "file": "admin-workspace.spec.ts",
+            "cases": 12
+          },
+          {
+            "project": "webkit",
+            "file": "projects-progressive-loading.spec.ts",
+            "cases": 25
+          },
+          {
+            "project": "webkit",
+            "file": "projects-theme-regression.spec.ts",
+            "cases": 53
+          },
+          {
+            "project": "webkit",
+            "file": "roadmap-progressive-loading.spec.ts",
+            "cases": 11
+          },
+          {
+            "project": "webkit",
+            "file": "ticket-documents-progressive-loading.spec.ts",
+            "cases": 48
+          },
+          {
+            "project": "webkit",
+            "file": "ticket-optional-progressive-loading.spec.ts",
+            "cases": 27
+          }
+        ],
+        "artifact": "windows-progressive-browser-coverage.json",
+        "sha256": "69ffe62e7a3572835ad43536514e41a8cc1ff5424525dad0bc65d05c90268cc1"
+      }
+    },
+    "cc07_browser_consumers": {
+      "status": "not run",
+      "reason": "Scheduled after Progressive Loading; not started after user interruption."
+    },
+    "boundary": "Local Windows/Node24 with synthetic controlled HTTP only. Partial browser output is not a complete browser gate, remote CI, Preview or Production acceptance.",
+    "visual_review": {
+      "observed": "Admin ready screenshots at 1440px and390px inspected with visible text/cards/actions and no clipping. No claim of equivalence to an absent approved reference image."
+    }
+  },
+  "workflow": "The five affected test files are added to the existing preserved-module-contracts step, which runs on every product-branch PR without path filters; existing compiler options and baseline requirement retained.",
+  "manifest": [
+    "tests/project-header-preservation.test.mjs",
+    "tests/helpers/projects-fallback-fixture.mjs",
+    "tests/roadmap-loading.test.mjs",
+    "tests/ticket-document-progressive-loading.test.mjs",
+    "tests/ticket-optional-progressive-loading.test.mjs",
+    ".github/workflows/product-lint-maintenance.yml",
+    "docs/ops/product-lint-maintenance.md",
+    "docs/ops/product-lint-windows-portability.json",
+    "docs/ops/product-lint-carto-proposal.md"
+  ],
+  "limits": [
+    "No product regression introduced by this maintenance was found among these 12 failures; this does not establish all application behavior.",
+    "No historical baseline/hash recalibration, removed assertion, timeout increase, rule change, or new provider stub.",
+    "No merge, auto-merge, remote migration, remote flag change, Production acceptance, CI cancellation, or additional PR description edit.",
+    "Earlier Carto denials are historical. Exact later authorization was accepted; details in product-lint-carto-validation.json. No merge readiness inferred."
+  ],
+  "ci_snapshot_from_parent": {
+    "observed_at_utc": "2026-10-27T22:22:00Z",
+    "head": "9852f5e6edee4647ef1bb35c62b828a04742e700",
+    "pass": 34,
+    "fail": 1,
+    "running": 1,
+    "failure": "product-lint / Carto authorization pending",
+    "running_check": "ProjectPages",
+    "independently_repolled": false
+  },
+  "publication": {
+    "status": "Prepared for coherent code/test/evidence commit; remote CI requires the subsequently published SHA",
+    "previous_head": "9852f5e6edee4647ef1bb35c62b828a04742e700"
+  },
+  "ci_terminal_report_from_parent": {
+    "head": "9852f5e6edee4647ef1bb35c62b828a04742e700",
+    "pass": 35,
+    "fail": 1,
+    "running": 0,
+    "last_completed_check": "ProjectPages",
+    "last_check_completed_at_utc": "2026-10-27T22:50:49Z",
+    "failure": "product-lint / Carto",
+    "independently_repolled": false
+  },
+  "carto_reapproval_attempt": {
+    "status": "denied before execution",
+    "command": "python .\\type-lint-carto.py --apply",
+    "attempts_after_new_evidence": 1,
+    "reason": "This applies a broad, behavior-changing Carto production-code patch affecting OAuth/logout, map persistence, privacy URL handling, and error paths; no trusted user authorization for this exact mutation is present.",
+    "target": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+    "target_sha256_unchanged": "b7dd0e3186b05ce8dbdbcbdda45e8f80794ace1cb194692643d952f1f6a277d9",
+    "proposed_source_sha256": "538247cfd2687cd3b7de0d31a770dc657823da80eebea8743e16237b3dce8fec",
+    "proposed_artifacts": [
+      "carto-provider.proposed.ts",
+      "carto-provider.proposed.diff",
+      "carto-proposal-metadata.json"
+    ],
+    "applied": false,
+    "retried": false
+  },
+  "active_work": {
+    "build": false,
+    "browser": false,
+    "installation": false,
+    "ci_monitor": false,
+    "last_command": "All recorded local validation finished; publication and new-SHA CI handled separately."
+  },
+  "carto_exact_approval_attempt": {
+    "target": "src/pages/Kepler/cloud-providers/carto/carto-provider.ts",
+    "diff_sha256_crlf": "4c8679bd7cbc3d643781749289b754fa27b85a30e77369b636c0f646f08987ee",
+    "source_sha256_crlf": "2e26ee67f1f533391fa69d7eaad2621e25e57f4eebccd3021bf9e1ad336f1c6b",
+    "source_sha256_lf": "538247cfd2687cd3b7de0d31a770dc657823da80eebea8743e16237b3dce8fec",
+    "approval_review": "accepted after exact new authorization; single execution exited 0; no additional product-source edit"
+  },
+  "browser_continuation": {
+    "original_case_observations": 573,
+    "original_observed_pass": 571,
+    "original_failed": 2,
+    "pre_carto": {
+      "chromium_pass": 191,
+      "firefox_pass": 191
+    },
+    "post_carto": {
+      "webkit_executed": 191,
+      "webkit_initial_pass": 189,
+      "webkit_initial_fail": 2
+    },
+    "original_interrupted_run": {
+      "observed_pass": 352,
+      "terminal_json": false,
+      "terminal_exit": null
+    },
+    "webkit_transport_interruption": {
+      "observed_pass": 126,
+      "terminal_json": false,
+      "terminal_exit": null,
+      "resume": 65,
+      "runner_absence": "Checked native process commands and port4191 before resuming; session4865 no longer registered",
+      "coverage": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\webkit-after-disconnect-coverage.json",
+        "bytes": 35764,
+        "sha256": "926cbd1104ba99e7fd338a7de0e9cdea9a14429642806872abc3ff8ec2d12b60"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-progressive-webkit-resume.log",
+        "bytes": 19869,
+        "sha256": "136208466084eb4e842eed8efe8525e4f23cd2d4195743cceeb8c2778dfb2596"
+      }
+    },
+    "continuations": {
+      "firefox": 30,
+      "webkit_observed_before_transport_loss": 126,
+      "webkit_terminal_after_recovery": {
+        "pass": 63,
+        "fail": 2
+      }
+    },
+    "focus_followup": {
+      "pass": 30,
+      "fail": 0,
+      "skip": 0,
+      "per_engine": 10,
+      "expanded_full_suite_cases": 579
+    },
+    "limitation": "Original573-case observations include two diagnosed focus-test failures, resolved by the30-case follow-up. Not one uninterrupted terminal gate. The expanded579-case full matrix was not rerun locally. Not all engines rerun after Carto. New-SHA CI remains authoritative for its own full matrix."
+  },
+  "browser_continuation_reports": {
+    "firefox": {
+      "stats": {
+        "startTime": "2026-10-27T23:10:21.988Z",
+        "duration": 254623.986,
+        "expected": 30,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "json": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-progressive-firefox-resume.json",
+        "bytes": 41568,
+        "sha256": "9d11bad18be0a8d54394c91572646adf4dde15ccbc9d7fc78597fdf477f6ced4"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-progressive-firefox-resume.log",
+        "bytes": 5723,
+        "sha256": "0edcb05da44604d6a7d511b9b1506345d669cec38940b5005729f06c40a4bfd5"
+      },
+      "source": "before exact Carto patch"
+    },
+    "webkit": {
+      "stats": {
+        "startTime": "2026-10-28T00:00:33.005Z",
+        "duration": 694201.399,
+        "expected": 63,
+        "skipped": 0,
+        "unexpected": 2,
+        "flaky": 0
+      },
+      "json": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-webkit-after-disconnect.json",
+        "bytes": 91612,
+        "sha256": "d64d0cdf0ad8ca9267abfdf153d7677fc444c1f3ffcd454fcd8a7a1ab8a2869f"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-webkit-after-disconnect.log",
+        "bytes": 18707,
+        "sha256": "1663fb70afde832c684dd34abdf6480c961a64c62a47e3d9cb8b9a31cbc4d9e7"
+      },
+      "source": "exact approved Carto patch and unchanged earlier maintenance sources",
+      "initial_failure_resolution": "Two focus assertions diagnosed with event traces; keyboard input corrected and pointer coverage added. All30 focus cases pass on Chromium/Firefox/WebKit; see product-lint-focus-validation.json. Initial failure evidence retained."
+    },
+    "notices": {
+      "stats": {
+        "startTime": "2026-10-28T00:12:48.531Z",
+        "duration": 24838.418,
+        "expected": 15,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "json": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-notices-browser.json",
+        "bytes": 18320,
+        "sha256": "ea6faeb7467d2217526957947678b0d975c290ec4d3130184283d1d4268afbfe"
+      },
+      "log": {
+        "path": "C:\\Users\\maono\\Documents\\Codex\\2026-10-26\\task-4\\windows-notices-browser.log",
+        "bytes": 2770,
+        "sha256": "a2c4634fc7dc1ae10c6ebb2c162524b7e151cf8506401e77198196a98b79d440"
+      },
+      "source": "exact approved Carto patch and unchanged earlier maintenance sources"
+    }
+  },
+  "current_status": "Local validation completed after focus harness follow-up; product-lint-focus-validation.json records original failures and30/30 recovery. New-SHA CI and combined rehearsal remain separate.",
+  "continuation_observed_at_utc": "2026-10-28T00:24:28.671481+00:00"
+}

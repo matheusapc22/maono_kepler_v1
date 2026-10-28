@@ -56,8 +56,14 @@ jobs:
           tests/maono-layer-workflow-placement.test.mjs
           tests/maono-map-legend.test.mjs
           tests/password-management.test.mjs
+          tests/project-header-preservation.test.mjs
+          tests/projects-fallback-scope.test.mjs
+          tests/roadmap-loading.test.mjs
+          tests/ticket-document-progressive-loading.test.mjs
+          tests/ticket-optional-progressive-loading.test.mjs
           tests/dropbox-provider-login.test.mjs
           tests/foursquare-provider-contract.test.mjs
+          tests/carto-provider-contract.test.mjs
           tests/legacy-ingestion-contract.test.mjs
           tests/maono-select-migration.test.mjs
           tests/map-add-data-sidebar.test.mjs
