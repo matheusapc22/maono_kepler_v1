@@ -1,3 +1,4 @@
+import { restoreAdminProjectsInventory } from './admin-projects-inventory-preservation.mjs';
 import assert from 'node:assert/strict';
 import { restoreOrganizationManagement } from './organization-management-preservation.mjs';
 
@@ -47,6 +48,7 @@ const changes = [
 export function restoreApprovedAdminWorkspace(path, source) {
   source = restoreOrganizationManagement(path, source);
   if (path !== 'src/pages/Admin.tsx') return source;
+  source = restoreAdminProjectsInventory(path, source);
   for (const { before, after } of changes) {
     assert.equal(source.split(after).length - 1, 1, `exact approved Admin workspace edit: ${path}`);
     source = source.replace(after, before);
