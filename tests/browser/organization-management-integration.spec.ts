@@ -1,33 +1,80 @@
 import {test as base,expect} from '@playwright/test';
+import {readFileSync} from 'node:fs';
 import {persistenceFixture} from '../helpers/project-persistence-fixture.mjs';
-import {onRequest as management} from '../../functions/api/admin/organization-management/[[path]].js';
-import {onRequest as session} from '../../functions/api/session.js';
+import {organizationManagementBrowserServer} from '../helpers/organization-management-browser-server.mjs';
 
-// Browser transport is intercepted locally, but sessions, ACL, the management
+// Native browser HTTP stays on loopback; sessions, ACL, the management
 // route, lifecycle and SQL execute unchanged. Only Dropbox HTTP is simulated.
 // No real user, provider, D1 binding or deployed environment is involved.
-const test=base.extend<{backend:ReturnType<typeof persistenceFixture>}>({
-  backend:async({page},runFixture)=>{
+type Backend=ReturnType<typeof persistenceFixture>&{http:Awaited<ReturnType<typeof organizationManagementBrowserServer>>};
+const test=base.extend<{backend:Backend;managementFlag:string;schemaBefore0042:boolean;sessionPresent:boolean;nativeTransport:void}>({
+  managementFlag:['true',{option:true}],
+  schemaBefore0042:[false,{option:true}],
+  sessionPresent:[true,{option:true}],
+  baseURL:async({backend},runFixture)=>runFixture(backend.http.origin),
+  backend:async({managementFlag,schemaBefore0042},runFixture,testInfo)=>{
     const cleanup:Array<()=>void>=[];
-    const backend=persistenceFixture({after:(fn:()=>void)=>cleanup.push(fn)});
-    backend.env.ORGANIZATION_MANAGEMENT_V1='true';
+    const schema=readFileSync(new URL('../../schema.sql',import.meta.url),'utf8').split('-- Organization management (migration 0042)');
+    expect(schema).toHaveLength(2);
+    const backend=persistenceFixture({after:(fn:()=>void)=>cleanup.push(fn)},schemaBefore0042?{schemaSql:schema[0]}:{});
+    backend.env.ORGANIZATION_MANAGEMENT_V1=managementFlag;
     backend.db.exec("UPDATE users SET role='super_admin' WHERE id=1; UPDATE organizations SET dropbox_root_path='/projects/'||slug");
-    await page.context().addCookies([{name:'maono_session',value:'offline-session-1',domain:'127.0.0.1',path:'/',httpOnly:true,sameSite:'Lax'}]);
-    await page.route(url=>!['127.0.0.1','localhost'].includes(url.hostname),route=>route.abort());
-    await page.route('**/api/**',async route=>{
-      const input=route.request(),url=new URL(input.url());
-      const request=new Request(input.url(),{method:input.method(),headers:input.headers(),body:input.postData()});
-      if(url.pathname==='/api/session'||url.pathname.startsWith('/api/admin/organization-management/')){
-        const response=await (url.pathname==='/api/session'?session:management)({env:backend.env,request});
-        await route.fulfill({status:response.status,headers:Object.fromEntries(response.headers),body:await response.text()});
-      }else if(input.method()==='GET'){
-        await route.fulfill({json:{ok:true,enabled:false,notifications:[],unreadCount:0}});
-      }else{
-        throw new Error(`Unexpected browser mutation: ${input.method()} ${url.pathname}`);
-      }
-    });
-    try{await runFixture(backend);}finally{await page.unrouteAll({behavior:'wait'});for(const fn of cleanup.reverse())fn();}
+    let http:Awaited<ReturnType<typeof organizationManagementBrowserServer>>|undefined;
+    try{http=await organizationManagementBrowserServer(backend.env,String(testInfo.project.use.baseURL));await runFixture({...backend,http});expect(http.errors).toEqual([]);}
+    finally{await http?.close();for(const fn of cleanup.reverse())fn();}
   },
+  nativeTransport:[async({page,backend,sessionPresent},runFixture)=>{
+    if(sessionPresent)await page.context().addCookies([{name:'maono_session',value:'offline-session-1',domain:'127.0.0.1',path:'/',httpOnly:true,sameSite:'Lax'}]);
+    await page.route(url=>!['127.0.0.1','localhost'].includes(url.hostname),route=>route.abort());
+    try{await runFixture();expect(backend.http.requests.some(request=>request.path==='/api/session'&&request.cookiePresent===sessionPresent)).toBe(true);}
+    finally{await page.unrouteAll({behavior:'wait'});}
+  },{auto:true}],
+});
+
+test.describe('transporte nativo sem cookie de sessão',()=>{
+  test.use({sessionPresent:false});
+  test('mantém a negativa de sessão e não fabrica acesso ao workspace',async({page,backend})=>{
+    const before=backend.db.prepare('SELECT total_changes() AS writes').get().writes;
+    const sessionResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/session');
+    await page.goto('/admin?section=organizations');
+    expect((await (await sessionResponse).json()).authenticated).toBe(false);
+    await expect(page.getByRole('heading',{name:'ACESSE SUA CONTA',exact:true})).toBeVisible();
+    expect(backend.http.requests.some(request=>request.path.startsWith('/api/admin/organization-management/'))).toBe(false);
+    expect(backend.db.prepare('SELECT total_changes() AS writes').get().writes).toBe(before);
+    expect(backend.calls).toHaveLength(0);
+  });
+});
+
+for(const scenario of [
+  {name:'API desativada',flag:'false',oldSchema:false,status:503},
+  {name:'schema anterior à 0042',flag:'true',oldSchema:true,status:503},
+]) test.describe(`UI compilada ON com ${scenario.name}`,()=>{
+  test.use({managementFlag:scenario.flag,schemaBefore0042:scenario.oldSchema});
+  test('expõe indisponibilidade e rejeita cadastro sem escrita ou sucesso fictício',async({page,backend})=>{
+    const before=backend.db.prepare('SELECT total_changes() AS writes').get().writes;
+    const read=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/admin/organization-management/organizations');
+    await page.goto('/admin?section=organizations');
+    expect((await read).status()).toBe(scenario.status);
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('button',{name:'Offline A',exact:true})).toHaveCount(0);
+    await expect(page.getByText('Consulta não concluída',{exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Nova organização',exact:false})).toBeDisabled();
+    // A restored form URL must still fail at the server boundary. Do not force
+    // activation of the disabled creation control or fabricate capabilities.
+    await page.goto('/admin?section=organizations&org_mode=create');
+    const dialog=page.getByRole('dialog');
+    await dialog.getByLabel('Nome',{exact:true}).fill('Cadastro não disponível');
+    await dialog.getByLabel('E-mail do responsável',{exact:false}).fill('other@offline.invalid');
+    await dialog.getByRole('checkbox',{name:'Confirmo o cadastro',exact:false}).check();
+    const write=page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname==='/api/admin/organization-management/operations');
+    await dialog.getByRole('button',{name:'Criar organização',exact:true}).click();
+    expect((await write).status()).toBe(scenario.status);
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await expect(dialog.getByText('Concluído',{exact:true})).toHaveCount(0);
+    expect(backend.db.prepare('SELECT total_changes() AS writes').get().writes).toBe(before);
+    expect(backend.calls).toHaveLength(0);
+    expect(backend.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  });
 });
 
 test('cadastro compilado grava organização, responsável e operação pelo handler real',async({page,backend})=>{
